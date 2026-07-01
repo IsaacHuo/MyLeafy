@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.isaachuo.leafy</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>leafy</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MyLeafy 需要访问照片，以便你选择社区头像和发帖图片。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MyLeafy 需要保存反馈群图片到相册，方便你扫码加入反馈群。</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MyLeafy 需要访问日历，以便把课表导出到本地日历，并在重复导出时更新已写入的课程。</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MyLeafy 需要使用当前位置，以便在课表页显示天气并给出出行建议。</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>AppIconCandyPink</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AppIconCandyPink</string>
+				</array>
+			</dict>
+			<key>AppIconTiffanyBlue</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AppIconTiffanyBlue</string>
+				</array>
+			</dict>
+		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon</string>
+			</array>
+		</dict>
+	</dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>newjwxt.bjfu.edu.cn</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+					<key>NSIncludesSubdomains</key>
+					<true/>
+				</dict>
+				<key>gradms.bjfu.edu.cn</key>
+				<dict>
+					<key>NSExceptionAllowsInsecureHTTPLoads</key>
+					<true/>
+					<key>NSIncludesSubdomains</key>
+					<true/>
+				</dict>
+			</dict>
+		</dict>
+	<key>SUPABASE_COMMUNITY_BOOTSTRAP_FUNCTION</key>
+	<string>community-bootstrap-user</string>
+	<key>SUPABASE_COMMUNITY_API_BASE_URL</key>
+	<string>$(SUPABASE_COMMUNITY_API_BASE_URL)</string>
+	<key>SUPABASE_COMMUNITY_EDGE_REGION</key>
+	<string>$(SUPABASE_COMMUNITY_EDGE_REGION)</string>
+	<key>SUPABASE_COMMUNITY_FEED_FUNCTION</key>
+	<string>$(SUPABASE_COMMUNITY_FEED_FUNCTION)</string>
+	<key>SUPABASE_WEATHER_FUNCTION</key>
+	<string>$(SUPABASE_WEATHER_FUNCTION)</string>
+	<key>SUPABASE_CAMPUS_AI_FUNCTION</key>
+	<string>$(SUPABASE_CAMPUS_AI_FUNCTION)</string>
+	<key>SUPABASE_PUBLISHABLE_KEY</key>
+	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+</dict>
+</plist>
