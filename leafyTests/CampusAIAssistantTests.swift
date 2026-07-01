@@ -1,0 +1,920 @@
+import SwiftData
+import WebKit
+import XCTest
+@testable import Leafy
+
+final class CampusAIAssistantTests: XCTestCase {
+    func testSettingsStoreDefaultsToAllContextScopesAndCustomPrompt() throws {
+        let suiteName = "CampusAIAssistantTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let initial = CampusAISettingsStore.load(userDefaults: defaults)
+        XCTAssertEqual(initial.selectedProviderID, .deepSeek)
+        XCTAssertEqual(initial.selectedProvider, CampusAIProviderCatalog.deepSeek)
+        XCTAssertTrue(CampusAIServiceMode.allCases.contains(initial.serviceMode))
+        XCTAssertEqual(initial.systemPrompt, CampusAISettingsStore.defaultSystemPrompt)
+        XCTAssertTrue(initial.contextSettings.includesTimetable)
+        XCTAssertTrue(initial.contextSettings.includesMedicalLedger)
+        XCTAssertTrue(initial.contextSettings.includesCommunityCache)
+
+        var changed = initial
+        changed.systemPrompt = "请优先用列表回答"
+        changed.contextSettings.includesMedicalLedger = false
+        CampusAISettingsStore.save(changed, userDefaults: defaults)
+
+        let reloaded = CampusAISettingsStore.load(userDefaults: defaults)
+        XCTAssertEqual(reloaded.systemPrompt, "请优先用列表回答")
+        XCTAssertFalse(reloaded.contextSettings.includesMedicalLedger)
+
+        let reset = CampusAISettingsStore.reset(userDefaults: defaults)
+        XCTAssertEqual(reset, .defaultValue)
+    }
+
+    func testProviderCatalogDefaultsToDeepSeekV4Flash() {
+        XCTAssertEqual(CampusAIProviderCatalog.all, [.init(
+            id: .deepSeek,
+            displayName: "DeepSeek",
+            modelIdentifier: "deepseek-v4-flash",
+            modelDisplayName: "DeepSeek V4 Flash",
+            baseURLString: "https://api.deepseek.com"
+        )])
+        XCTAssertEqual(CampusAIProviderCatalog.defaultProvider, CampusAIProviderCatalog.deepSeek)
+    }
+
+    func testSettingsStoreMigratesLegacyPromptAndContextOnly() throws {
+        let suiteName = "CampusAIAssistantTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let legacyJSON = """
+        {
+          "systemPrompt": "旧版 Prompt",
+          "baseURLString": "https://legacy.example.com/v1",
+          "contextSettings": {
+            "includesTimetable": true,
+            "includesGrades": true,
+            "includesExamsAndPlans": true,
+            "includesLearningWorkspace": true,
+            "includesPostgraduateAndCareer": true,
+            "includesHonorsFitnessQuality": true,
+            "includesMedicalLedger": false,
+            "includesCommunityCache": true
+          }
+        }
+        """
+        defaults.set(Data(legacyJSON.utf8), forKey: "campusAI.userSettings.v1")
+
+        let settings = CampusAISettingsStore.load(userDefaults: defaults)
+        XCTAssertEqual(settings.selectedProviderID, .deepSeek)
+        XCTAssertTrue(CampusAIServiceMode.allCases.contains(settings.serviceMode))
+        XCTAssertEqual(settings.systemPrompt, "旧版 Prompt")
+        XCTAssertFalse(settings.contextSettings.includesMedicalLedger)
+        XCTAssertNil(defaults.data(forKey: "campusAI.userSettings.v1"))
+        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v2"))
+    }
+
+    func testLegacyKeychainAccountsAreRemovedOnce() throws {
+        let suiteName = "CampusAIAssistantTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var deletedAccounts: [String] = []
+
+        try CampusAIKeychainStore.removeLegacyKeysIfNeeded(userDefaults: defaults) { account in
+            deletedAccounts.append(account)
+            return 0
+        }
+
+        XCTAssertEqual(Set(deletedAccounts), Set(CampusAIKeychainStore.legacyAccounts))
+
+        deletedAccounts.removeAll()
+        try CampusAIKeychainStore.removeLegacyKeysIfNeeded(userDefaults: defaults) { account in
+            deletedAccounts.append(account)
+            return 0
+        }
+        XCTAssertTrue(deletedAccounts.isEmpty)
+    }
+
+    func testExperimentalNoticeAcknowledgementUsesIndependentStorageKey() throws {
+        let suiteName = "CampusAIAssistantTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let key = "campusAI.experimentalNoticeAcknowledged.v1"
+        XCTAssertNil(defaults.object(forKey: key))
+
+        defaults.set(true, forKey: key)
+        XCTAssertTrue(defaults.bool(forKey: key))
+
+        let settings = CampusAISettingsStore.load(userDefaults: defaults)
+        XCTAssertEqual(settings, .defaultValue)
+        XCTAssertTrue(defaults.bool(forKey: key))
+    }
+
+    func testContextBuilderIncludesBroadLocalContextAndKeepsUploadedFileBodiesOut() throws {
+        let now = SemesterConfig.startOfSemesterDate.addingTimeInterval(10 * 60 * 60)
+        let schedule = SemesterConfig.weekAndDay(for: now)
+        let course = Course(
+            courseName: "数据结构",
+            teacher: "王老师",
+            room: "二教 205",
+            location: "教学楼",
+            dayOfWeek: schedule.day,
+            weeks: [schedule.week],
+            duration: [1, 2]
+        )
+        let nextWeekCourse = Course(
+            courseName: "大学物理",
+            teacher: "李老师",
+            room: "三教 101",
+            location: "教学楼",
+            dayOfWeek: 5,
+            weeks: [schedule.week + 1],
+            duration: [3, 4]
+        )
+        let grade = Grade(term: "2025-2026-1", courseName: "高等数学", credit: "4", score: "92", type: "必修")
+        let examDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 3, to: now))
+        let exam = ExamArrangement(
+            id: 1,
+            courseID: "math",
+            name: "高等数学期末",
+            date: DateFormatters.queryDate.string(from: examDate),
+            start: "09:00",
+            end: "11:00",
+            location: "主楼 112"
+        )
+        let teachingPlan = TeachingPlanSection(
+            term: "第1学期",
+            courses: [
+                TeachingPlanCourse(
+                    id: 1,
+                    period: "1",
+                    name: "大学英语",
+                    unit: "外语学院",
+                    credit: 2,
+                    duration: "32",
+                    type: "必修",
+                    exam: "考试"
+                )
+            ]
+        )
+        let trainingProgram = TrainingProgramDocument(
+            title: "本科培养方案",
+            sections: [TrainingProgramSection(id: "intro", title: "培养目标", body: "掌握专业基础。")],
+            creditRequirements: [
+                GraduationCreditRequirement(
+                    id: "public",
+                    category: "公共选修",
+                    courseName: "公共选修课",
+                    requiredCredits: 8,
+                    plannedCredits: 8,
+                    isAggregate: true
+                )
+            ]
+        )
+        let countdown = CustomCountdownEvent(
+            title: "四六级报名",
+            targetDate: try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 5, to: now))
+        )
+        let material = LearningMaterialDocument(
+            title: "数据结构复习资料",
+            note: "只发送这条用户备注",
+            categoryRawValue: LearningMaterialCategory.exam.rawValue,
+            courseName: "数据结构",
+            originalFilename: "do-not-send-file-name.pdf",
+            localFilename: "private-local-path.pdf",
+            contentTypeIdentifier: "com.adobe.pdf"
+        )
+        let medicalEntry = MedicalLedgerEntry(
+            hospitalName: "北医三院",
+            department: "皮肤科",
+            diagnosisNote: "敏感诊断",
+            totalExpense: 120,
+            statusRawValue: MedicalLedgerStatus.organizing.rawValue
+        )
+
+        let context = CampusAIContextBuilder.build(
+            courses: [course, nextWeekCourse],
+            courseNotes: [CourseNote(courseKey: course.stableCourseKey, text: "实验报告要提前写。")],
+            grades: [grade],
+            gradeRankings: [
+                GradeRankingRecord(
+                    term: "全部学期",
+                    rankingRange: "专业",
+                    rank: 12,
+                    totalCount: 120,
+                    percentile: 0.1,
+                    metricText: "GPA",
+                    rawFields: [:]
+                )
+            ],
+            exams: [exam],
+            teachingPlan: [teachingPlan],
+            trainingProgram: trainingProgram,
+            gradeCreditSummary: GradeCreditSummary(
+                totalCredits: 32,
+                requiredCredits: 160,
+                professionalElectiveCredits: 4,
+                professionalMajorElectiveCredits: 4,
+                professionalCrossMajorElectiveCredits: 0,
+                publicElectiveCredits: 2,
+                officialGPA: 3.8,
+                officialWeightedAverage: 91,
+                officialCreditPoint: nil,
+                publicElectiveBuckets: [],
+                rawFields: [:]
+            ),
+            countdowns: [countdown],
+            learningMaterials: [material],
+            learningProjects: [LearningProject(title: "期末复习", goal: "两周内完成知识点梳理")],
+            learningTasks: [LearningProjectTask(title: "刷树题", note: "每天 3 道")],
+            studyRecords: [
+                StudyTimeRecord(
+                    startedAt: now,
+                    endedAt: now.addingTimeInterval(45 * 60),
+                    content: "复习链表",
+                    location: "图书馆"
+                )
+            ],
+            postgraduateTargets: [PostgraduateTarget(school: "北京林业大学", major: "计算机技术")],
+            careerResumes: [
+                CareerResumeDocument(
+                    title: "产品实习简历",
+                    note: "需要突出校园项目",
+                    originalFilename: "resume-private.pdf",
+                    localFilename: "resume-local.pdf",
+                    contentTypeIdentifier: "com.adobe.pdf"
+                )
+            ],
+            careerTasks: [CareerTask(title: "投递暑期实习", note: "先改作品集")],
+            careerOpportunities: [CareerOpportunity(title: "AI 产品实习", organization: "Example")],
+            honors: [
+                HonorRecord(
+                    title: "三好学生",
+                    originalFilename: "honor-private.pdf",
+                    localFilename: "honor-local.pdf",
+                    contentTypeIdentifier: "com.adobe.pdf"
+                )
+            ],
+            fitnessTests: [FitnessTestRecord(itemRawValue: FitnessTestItem.sprint50m.rawValue, value: 7.2, unitRawValue: FitnessTestUnit.second.rawValue)],
+            qualityRecords: [ComprehensiveQualityRecord(collegeName: "信息学院", academicStandardScore: 90)],
+            qualityComponents: [ComprehensiveQualityComponentEntry(collegeName: "信息学院", componentRawValue: "德育", rawScore: 10)],
+            qualityEvidence: [
+                ComprehensiveQualityEvidenceDocument(
+                    collegeName: "信息学院",
+                    componentRawValue: "德育",
+                    title: "志愿证明",
+                    originalFilename: "quality-private.pdf",
+                    localFilename: "quality-local.pdf",
+                    contentTypeIdentifier: "com.adobe.pdf"
+                )
+            ],
+            medicalEntries: [medicalEntry],
+            medicalPhotos: [MedicalLedgerPhoto(entryID: medicalEntry.id.uuidString, originalFilename: "invoice.jpg", localFilename: "invoice-local.jpg")],
+            communityPosts: [
+                CommunityPost(
+                    id: UUID(),
+                    authorID: UUID(),
+                    title: "校园 App 比赛规划",
+                    body: "公开帖子摘要",
+                    category: "校园",
+                    isAnonymous: true,
+                    commentCount: 2,
+                    likeCount: 3,
+                    status: "published",
+                    createdAt: "2026-06-25T00:00:00Z",
+                    updatedAt: "2026-06-25T00:00:00Z",
+                    viewerHasLiked: false,
+                    author: nil,
+                    images: []
+                )
+            ],
+            now: now
+        )
+
+        XCTAssertTrue(context.hasReadableAcademicData)
+        XCTAssertEqual(context.timetable.today.map { $0.name }, ["数据结构"])
+        XCTAssertTrue(context.timetable.allCourses.map { $0.name }.contains("大学物理"))
+        XCTAssertTrue(context.dataBoundary.contains { $0.contains("timetable.allCourses 是当前设备已缓存的全学期课程集合") })
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "全学期课表" }?.itemCount, 2)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "本地保存数据" }?.state, .localOnly)
+        XCTAssertEqual(context.timetable.courseNotes.first?.text, "实验报告要提前写。")
+        XCTAssertEqual(context.exams.map { $0.name }, ["高等数学期末"])
+        XCTAssertEqual(context.grades.courseCount, 1)
+        XCTAssertEqual(context.grades.rankings.first?.rank, 12)
+        XCTAssertEqual(context.teachingPlan.first?.courses, ["大学英语（2.0 学分）"])
+        XCTAssertEqual(context.trainingProgram?.title, "本科培养方案")
+        XCTAssertEqual(context.countdowns.map { $0.title }, ["四六级报名"])
+        XCTAssertEqual(context.learningWorkspace.materials.first?.title, "数据结构复习资料")
+        XCTAssertEqual(context.medicalLedger.photoCount, 1)
+        XCTAssertEqual(context.communityCache.posts.first?.title, "校园 App 比赛规划")
+
+        let encoded = try XCTUnwrap(String(data: JSONEncoder().encode(context), encoding: .utf8))
+        XCTAssertTrue(encoded.contains("只发送这条用户备注"))
+        XCTAssertTrue(encoded.contains("PDF"))
+        XCTAssertFalse(encoded.contains("private-local-path.pdf"))
+        XCTAssertFalse(encoded.contains("do-not-send-file-name.pdf"))
+        XCTAssertFalse(encoded.contains("invoice-local.jpg"))
+        XCTAssertFalse(encoded.contains("resume-local.pdf"))
+    }
+
+    func testContextBuilderReportsSourceStatusFreshnessAndMissingData() throws {
+        let now = SemesterConfig.startOfSemesterDate.addingTimeInterval(10 * 60 * 60)
+        let syncDate = Date(timeIntervalSince1970: 1_234_567)
+        let syncString = ISO8601DateFormatter().string(from: syncDate)
+        let course = Course(
+            courseName: "大学英语",
+            teacher: "张老师",
+            room: "一教 101",
+            location: "教学楼",
+            dayOfWeek: 1,
+            weeks: [1, 2, 3],
+            duration: [1, 2]
+        )
+        let grade = Grade(term: "2025-2026-1", courseName: "大学英语", credit: "2", score: "88", type: "必修")
+        let exam = ExamArrangement(
+            id: 1,
+            courseID: "eng",
+            name: "大学英语期末",
+            date: DateFormatters.queryDate.string(from: now.addingTimeInterval(86_400)),
+            start: "09:00",
+            end: "11:00",
+            location: "一教 101"
+        )
+        let teachingPlan = TeachingPlanSection(
+            term: "第1学期",
+            courses: [
+                TeachingPlanCourse(id: 1, period: "1", name: "大学英语", unit: "外语学院", credit: 2, duration: "32", type: "必修", exam: "考试")
+            ]
+        )
+        let trainingProgram = TrainingProgramDocument(
+            title: "培养方案",
+            sections: [TrainingProgramSection(id: "goal", title: "培养目标", body: "测试")],
+            creditRequirements: [
+                GraduationCreditRequirement(id: "total", category: "总学分", courseName: "毕业要求", requiredCredits: 160, plannedCredits: 160, isAggregate: true)
+            ]
+        )
+
+        let context = CampusAIContextBuilder.build(
+            courses: [course],
+            grades: [grade],
+            gradeRankings: [
+                GradeRankingRecord(term: "全部学期", rankingRange: "专业", rank: 1, totalCount: 30, percentile: 0.03, metricText: "GPA", rawFields: [:])
+            ],
+            exams: [exam],
+            teachingPlan: [teachingPlan],
+            trainingProgram: trainingProgram,
+            gradeCreditSummary: GradeCreditSummary(
+                totalCredits: 20,
+                requiredCredits: 160,
+                professionalElectiveCredits: 0,
+                professionalMajorElectiveCredits: 0,
+                professionalCrossMajorElectiveCredits: 0,
+                publicElectiveCredits: 2,
+                officialGPA: 3.6,
+                officialWeightedAverage: 88,
+                officialCreditPoint: nil,
+                publicElectiveBuckets: [],
+                rawFields: [:]
+            ),
+            countdowns: [],
+            timetableLastSyncAt: syncDate,
+            gradeDetailsLastSyncAt: syncDate,
+            gradeSupplementalLastSyncAt: syncDate,
+            examScheduleLastSyncAt: syncDate,
+            teachingPlanLastSyncAt: syncDate,
+            trainingProgramLastSyncAt: syncDate,
+            now: now
+        )
+
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "全学期课表" }?.state, .available)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "全学期课表" }?.lastSyncAt, syncString)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "成绩明细" }?.itemCount, 1)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "成绩排名和学分汇总" }?.itemCount, 2)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "考试安排" }?.state, .available)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "教学计划" }?.itemCount, 1)
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "培养方案" }?.itemCount, 1)
+
+        let missingContext = CampusAIContextBuilder.build(
+            courses: [],
+            grades: [],
+            exams: [],
+            teachingPlan: [],
+            trainingProgram: nil,
+            countdowns: [],
+            now: now
+        )
+        XCTAssertEqual(missingContext.sourceStatus.first { $0.scope == "全学期课表" }?.state, .missing)
+        XCTAssertEqual(missingContext.sourceStatus.first { $0.scope == "成绩明细" }?.state, .missing)
+        XCTAssertEqual(missingContext.sourceStatus.first { $0.scope == "本地保存数据" }?.state, .localOnly)
+    }
+
+    func testContextBuilderToleratesDuplicateStableCourseKeys() {
+        let firstCourse = Course(
+            courseName: "数据结构",
+            teacher: "王老师",
+            room: "二教 205",
+            location: "教学楼",
+            dayOfWeek: 2,
+            weeks: [1],
+            duration: [1, 2]
+        )
+        let duplicateCourse = Course(
+            courseName: "数据结构",
+            teacher: "王老师",
+            room: "二教 205",
+            location: "教学楼",
+            dayOfWeek: 2,
+            weeks: [2],
+            duration: [1, 2]
+        )
+        XCTAssertEqual(firstCourse.stableCourseKey, duplicateCourse.stableCourseKey)
+
+        let context = CampusAIContextBuilder.build(
+            courses: [firstCourse, duplicateCourse],
+            courseNotes: [
+                CourseNote(courseKey: firstCourse.stableCourseKey, text: "记得复习链表")
+            ],
+            grades: [],
+            exams: [],
+            teachingPlan: [],
+            trainingProgram: nil,
+            countdowns: [],
+            now: SemesterConfig.startOfSemesterDate
+        )
+
+        XCTAssertEqual(context.timetable.allCourses.count, 2)
+        XCTAssertEqual(context.timetable.courseNotes.first?.courseName, "数据结构")
+    }
+
+    func testContextSettingsCanDisableSensitiveScopes() throws {
+        var settings = CampusAIContextSettings.defaultValue
+        settings.includesMedicalLedger = false
+        settings.includesLearningWorkspace = false
+
+        let context = CampusAIContextBuilder.build(
+            courses: [],
+            grades: [],
+            exams: [],
+            teachingPlan: [],
+            trainingProgram: nil,
+            countdowns: [],
+            learningMaterials: [
+                LearningMaterialDocument(
+                    title: "关闭后不应出现",
+                    originalFilename: "source.pdf",
+                    localFilename: "local.pdf",
+                    contentTypeIdentifier: "com.adobe.pdf"
+                )
+            ],
+            medicalEntries: [MedicalLedgerEntry(hospitalName: "关闭后不应出现")],
+            settings: settings
+        )
+
+        let encoded = try XCTUnwrap(String(data: JSONEncoder().encode(context), encoding: .utf8))
+        XCTAssertTrue(context.omittedScopes.contains("学习空间"))
+        XCTAssertTrue(context.omittedScopes.contains("医疗台账"))
+        XCTAssertEqual(context.sourceStatus.first { $0.scope == "本地保存数据" }?.itemCount, 0)
+        XCTAssertFalse(encoded.contains("关闭后不应出现"))
+    }
+
+    func testChatCompletionsRequestBuilderUsesOpenAICompatiblePayload() throws {
+        let request = CampusAIRequest(
+            message: "明天上什么课？",
+            context: minimalAIContext(),
+            recentMessages: [CampusAIChatMessage(role: .assistant, text: "你好")],
+            userSystemPrompt: "请用列表回答"
+        )
+
+        let urlRequest = try CampusAIService.makeChatCompletionsRequest(
+            for: request,
+            baseURLString: CampusAIProviderCatalog.deepSeek.baseURLString,
+            apiKey: "test-api-key"
+        )
+        XCTAssertEqual(urlRequest.url?.absoluteString, "https://api.deepseek.com/chat/completions")
+        XCTAssertEqual(urlRequest.httpMethod, "POST")
+        XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "Authorization"), "Bearer test-api-key")
+        XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "Accept"), "text/event-stream")
+        XCTAssertEqual(urlRequest.value(forHTTPHeaderField: "Content-Type"), "application/json")
+
+        let bodyData = try XCTUnwrap(urlRequest.httpBody)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+        XCTAssertEqual(body["model"] as? String, CampusAIProviderCatalog.deepSeek.modelIdentifier)
+        XCTAssertEqual(body["stream"] as? Bool, true)
+        let streamOptions = try XCTUnwrap(body["stream_options"] as? [String: Any])
+        XCTAssertEqual(streamOptions["include_usage"] as? Bool, true)
+        let thinking = try XCTUnwrap(body["thinking"] as? [String: Any])
+        XCTAssertEqual(thinking["type"] as? String, "enabled")
+        XCTAssertEqual((body["max_tokens"] as? NSNumber)?.intValue, 1800)
+        let temperature = (body["temperature"] as? NSNumber)?.doubleValue ?? -1
+        XCTAssertEqual(temperature, 0.2, accuracy: 0.001)
+
+        let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages.count, 2)
+        XCTAssertEqual(messages.first?["role"] as? String, "system")
+        XCTAssertTrue(String(describing: messages.first?["content"] ?? "").contains("中文 Markdown"))
+        XCTAssertTrue(String(describing: messages.first?["content"] ?? "").contains("请用列表回答"))
+
+        let userContentText = try XCTUnwrap(messages.last?["content"] as? String)
+        let userContentData = Data(userContentText.utf8)
+        let userContent = try XCTUnwrap(JSONSerialization.jsonObject(with: userContentData) as? [String: Any])
+        XCTAssertEqual(userContent["message"] as? String, "明天上什么课？")
+        XCTAssertNotNil(userContent["context"])
+        XCTAssertNotNil(userContent["context_settings"])
+        let recentMessages = try XCTUnwrap(userContent["recent_messages"] as? [[String: Any]])
+        XCTAssertEqual(recentMessages.first?["role"] as? String, "assistant")
+        XCTAssertEqual(recentMessages.first?["text"] as? String, "你好")
+    }
+
+    func testChatCompletionsPayloadUsesRequestModelIdentifier() throws {
+        let request = CampusAIRequest(
+            message: "总结一下最近安排",
+            context: minimalAIContext(),
+            recentMessages: [],
+            model: "custom-model-id"
+        )
+
+        let payload = try CampusAIService.chatCompletionsPayload(for: request)
+
+        XCTAssertEqual(payload.model, "custom-model-id")
+    }
+
+    func testAPIKeyResolverUsesSelectedProviderKey() throws {
+        let resolver = CampusAIAPIKeyResolver(
+            userAPIKey: { providerID in providerID == .deepSeek ? "user-key" : nil }
+        )
+        let resolved = try resolver.resolve(for: .defaultValue)
+
+        XCTAssertEqual(resolved, "user-key")
+    }
+
+    func testAPIKeyResolverRequiresLocalProviderKey() {
+        let resolver = CampusAIAPIKeyResolver(userAPIKey: { _ in nil })
+
+        XCTAssertThrowsError(try resolver.resolve(for: .defaultValue)) { error in
+            XCTAssertEqual(error as? CampusAIServiceError, .missingAPIKey)
+        }
+    }
+
+    func testSystemPromptIsBroaderButKeepsBoundaries() {
+        let prompt = CampusAIService.systemPrompt(userPrompt: "请顺便给生活建议")
+
+        XCTAssertTrue(prompt.contains("校园学习与生活助手"))
+        XCTAssertTrue(prompt.contains("一般建议"))
+        XCTAssertTrue(prompt.contains("本机缓存"))
+        XCTAssertTrue(prompt.contains("PDF"))
+        XCTAssertTrue(prompt.contains("本地文件路径"))
+        XCTAssertTrue(prompt.contains("不提供诊断"))
+        XCTAssertTrue(prompt.contains("中文 Markdown"))
+        XCTAssertTrue(prompt.contains("请顺便给生活建议"))
+    }
+
+    func testRequestBuilderRejectsInvalidBaseURL() {
+        XCTAssertThrowsError(
+            try CampusAIService.chatCompletionsURL(baseURLString: "http://api.deepseek.com")
+        ) { error in
+            XCTAssertEqual(error.localizedDescription, "Base URL 设置不正确，请使用 HTTPS 地址。")
+        }
+    }
+
+    func testSSEParserHandlesOpenAICompatibleSplitDeltaCommentsAndDone() throws {
+        var parser = CampusAISSEParser()
+        var events = try parser.append(Data(": KEEPALIVE\n\n".utf8))
+        XCTAssertTrue(events.isEmpty)
+
+        events = try parser.append(Data("data: {\"choices\":[{\"delta\":{\"content\":\"# 标题\"}}]}\n\n".utf8))
+        XCTAssertEqual(events, [.delta("# 标题")])
+
+        events = try parser.append(Data("data: {\"choices\":[{\"delta\":{\"content\":\"\\n- 第一".utf8))
+        XCTAssertTrue(events.isEmpty)
+
+        events = try parser.append(Data("点\"}}]}\n\ndata: [DONE]\n\n".utf8))
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(events.first, .delta("\n- 第一点"))
+        if case .done(let response) = events.last {
+            XCTAssertEqual(response.answer, "# 标题\n- 第一点")
+            XCTAssertNil(response.suggestedTitle)
+            XCTAssertNil(response.summary)
+        } else {
+            XCTFail("expected done event")
+        }
+
+        XCTAssertTrue(try parser.finish().isEmpty)
+    }
+
+    func testSSEParserHandlesDeepSeekReasoningUsageOnlyCRLFAndFinishReason() throws {
+        var parser = CampusAISSEParser()
+
+        var events = try parser.append(Data("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"先看课表\"},\"finish_reason\":null}]}\r\n\r\n".utf8))
+        XCTAssertEqual(events, [.reasoningDelta("先看课表")])
+
+        events = try parser.append(Data("data: {\"choices\":[{\"delta\":{\"content\":\"明天有两节课。\"},\"finish_reason\":\"stop\"}]}\r\n\r\n".utf8))
+        XCTAssertEqual(events, [.delta("明天有两节课。")])
+
+        events = try parser.append(Data("data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}\r\n\r\n".utf8))
+        XCTAssertTrue(events.isEmpty)
+
+        events = try parser.append(Data("data: [DONE]\r\n\r\n".utf8))
+        XCTAssertEqual(events.count, 1)
+        if case .done(let response) = events.first {
+            XCTAssertEqual(response.answer, "明天有两节课。")
+            XCTAssertEqual(response.reasoning, "先看课表")
+            XCTAssertEqual(response.finishReason, "stop")
+        } else {
+            XCTFail("expected done event")
+        }
+    }
+
+    func testSSEParserHandlesMultilineDataEvent() throws {
+        var parser = CampusAISSEParser()
+        let block = """
+        data: {
+        data:   "choices": [
+        data:     {"delta": {"content": "多行 JSON"}}
+        data:   ]
+        data: }
+
+        """
+
+        let events = try parser.append(Data((block + "\n").utf8))
+
+        XCTAssertEqual(events, [.delta("多行 JSON")])
+    }
+
+    func testSSEParserPreservesSplitUnicodeBytes() throws {
+        var parser = CampusAISSEParser()
+        let data = Data("data: {\"choices\":[{\"delta\":{\"content\":\"明天\"}}]}\n\n".utf8)
+        let splitIndex = try XCTUnwrap(data.firstIndex(of: 0xE6)).advanced(by: 1)
+
+        var events = try parser.append(Data(data[..<splitIndex]))
+        XCTAssertTrue(events.isEmpty)
+
+        events = try parser.append(Data(data[splitIndex...]))
+        XCTAssertEqual(events, [.delta("明天")])
+    }
+
+    func testRealDeepSeekSSEFixtureDecodesAcrossRawByteChunks() throws {
+        let bundle = Bundle(for: type(of: self))
+        let fixtureURL = bundle.url(
+            forResource: "deepseek-v4-flash-stream",
+            withExtension: "sse",
+            subdirectory: "Fixtures"
+        ) ?? bundle.url(forResource: "deepseek-v4-flash-stream", withExtension: "sse")
+        let data = try Data(contentsOf: XCTUnwrap(fixtureURL))
+        var parser = CampusAISSEParser()
+        var events: [CampusAIStreamEvent] = []
+
+        for start in stride(from: data.startIndex, to: data.endIndex, by: 4_096) {
+            let end = min(start + 4_096, data.endIndex)
+            events.append(contentsOf: try parser.append(Data(data[start..<end])))
+        }
+        events.append(contentsOf: try parser.finish())
+
+        let response = try XCTUnwrap(events.compactMap { event -> CampusAIResponse? in
+            if case .done(let response) = event {
+                return response
+            }
+            return nil
+        }.last)
+        XCTAssertEqual(response.answer, "测试成功")
+        XCTAssertFalse(response.reasoning.isEmpty)
+        XCTAssertEqual(response.finishReason, "stop")
+    }
+
+    func testProviderEventsDecodeCompleteJSONResponse() throws {
+        let body = """
+        {
+          "choices": [
+            {
+              "message": {
+                "reasoning_content": "先判断上下文",
+                "content": "这是完整 JSON 响应。"
+              },
+              "finish_reason": "stop"
+            }
+          ]
+        }
+        """
+
+        let events = try CampusAIService.providerEvents(from: body)
+
+        XCTAssertEqual(events.count, 3)
+        XCTAssertEqual(events[0], .reasoningDelta("先判断上下文"))
+        XCTAssertEqual(events[1], .delta("这是完整 JSON 响应。"))
+        if case .done(let response) = events[2] {
+            XCTAssertEqual(response.answer, "这是完整 JSON 响应。")
+            XCTAssertEqual(response.reasoning, "先判断上下文")
+            XCTAssertEqual(response.finishReason, "stop")
+        } else {
+            XCTFail("expected done event")
+        }
+    }
+
+    func testProviderEventsRejectBrokenResponse() {
+        XCTAssertThrowsError(try CampusAIService.providerEvents(from: "not-json"))
+    }
+
+    func testCampusAIMessageDefaultsReasoningText() {
+        let message = CampusAIMessage(
+            conversationID: UUID().uuidString,
+            roleRawValue: CampusAIMessageRole.assistant.rawValue,
+            text: "回答"
+        )
+
+        XCTAssertEqual(message.reasoningText, "")
+    }
+
+    func testMarkdownRendererUsesLocalResourcesAndSecurityPolicy() {
+        let html = CampusAIMarkdownHTML.baseDocument
+
+        XCTAssertTrue(html.contains("Content-Security-Policy"))
+        XCTAssertTrue(html.contains("script-src 'self'"))
+        XCTAssertTrue(html.contains("img-src https:"))
+        XCTAssertFalse(html.contains("https://"))
+        XCTAssertTrue(CampusAIMarkdownHTML.requiredResourceNames.contains("renderer.js"))
+        XCTAssertTrue(CampusAIMarkdownHTML.requiredResourceNames.contains("purify.min.js"))
+        XCTAssertTrue(CampusAIMarkdownHTML.requiredResourceNames.contains("katex.min.js"))
+    }
+
+    @MainActor
+    func testMarkdownWebRendererRendersAndSanitizesFixture() async throws {
+        XCTAssertTrue(CampusAIMarkdownHTML.hasRequiredResources())
+
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: .init(x: 0, y: 0, width: 390, height: 800), configuration: configuration)
+        let loaded = expectation(description: "markdown renderer loaded")
+        let navigationDelegate = CampusAIMarkdownTestNavigationDelegate(expectation: loaded)
+        webView.navigationDelegate = navigationDelegate
+        webView.loadHTMLString(
+            CampusAIMarkdownHTML.baseDocument,
+            baseURL: CampusAIMarkdownHTML.rendererDirectory()
+        )
+        await fulfillment(of: [loaded], timeout: 8)
+        if let error = navigationDelegate.error {
+            throw error
+        }
+
+        let markdown = """
+        # 标题
+        **加粗**、~~删除线~~与 [安全链接](https://example.com)
+
+        - [x] 已完成
+        - [ ] 未完成
+
+        | 列 A | 列 B |
+        | --- | --- |
+        | 1 | 2 |
+
+        ```swift
+        let value = 42
+        ```
+
+        公式：$E = mc^2$
+
+        脚注引用[^note]
+
+        [^note]: 脚注内容
+
+        <b>允许的 HTML</b>
+        <script>window.unsafe = true</script>
+        <iframe src="https://example.com"></iframe>
+        <img src="javascript:alert(1)" onerror="alert(1)">
+        <img src="https://example.invalid/image.png" alt="remote image">
+        <a href="javascript:alert(1)">危险链接</a>
+        """
+        let literal = CampusAIMarkdownHTML.javascriptStringLiteral(markdown)
+        _ = try await webView.evaluateJavaScript("window.LeafyMarkdown.render(\(literal));")
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        let result = try await webView.evaluateJavaScript(
+            """
+            JSON.stringify({
+              h1: document.querySelectorAll('h1').length,
+              bold: document.querySelectorAll('strong').length,
+              deleted: document.querySelectorAll('del, s').length,
+              tasks: document.querySelectorAll('.task-marker').length,
+              table: document.querySelectorAll('table').length,
+              code: document.querySelectorAll('.code-block').length,
+              math: document.querySelectorAll('.katex').length,
+              footnotes: document.querySelectorAll('.footnotes').length,
+              safeHTML: document.querySelectorAll('b').length,
+              httpsImages: document.querySelectorAll('img[src^="https://"]').length,
+              scripts: document.querySelectorAll('#content script').length,
+              iframes: document.querySelectorAll('iframe').length,
+              eventHandlers: document.querySelectorAll('[onerror]').length,
+              javascriptURLs: document.querySelectorAll('[href^="javascript:"], [src^="javascript:"]').length
+            })
+            """
+        )
+        let json = try XCTUnwrap(result as? String)
+        let data = Data(json.utf8)
+        let counts = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Int])
+
+        XCTAssertEqual(counts["h1"], 1)
+        XCTAssertEqual(counts["bold"], 1)
+        XCTAssertEqual(counts["deleted"], 1)
+        XCTAssertEqual(counts["tasks"], 2)
+        XCTAssertEqual(counts["table"], 1)
+        XCTAssertEqual(counts["code"], 1)
+        XCTAssertEqual(counts["math"], 1)
+        XCTAssertEqual(counts["footnotes"], 1)
+        XCTAssertEqual(counts["safeHTML"], 1)
+        XCTAssertEqual(counts["httpsImages"], 1)
+        XCTAssertEqual(counts["scripts"], 0)
+        XCTAssertEqual(counts["iframes"], 0)
+        XCTAssertEqual(counts["eventHandlers"], 0)
+        XCTAssertEqual(counts["javascriptURLs"], 0)
+    }
+
+    func testSSEParserSurfacesRedactedProviderErrors() {
+        var parser = CampusAISSEParser()
+        let rawKey = "246114398185460a8f995bf98286645f.FNCxO5AoHHZgaUbO"
+
+        XCTAssertThrowsError(
+            try parser.append(Data("data: {\"error\":{\"message\":\"provider failed with \(rawKey)\"}}\n\n".utf8))
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("[redacted]"))
+            XCTAssertFalse(error.localizedDescription.contains(rawKey))
+        }
+    }
+
+    func testProviderErrorRedactionRemovesSecrets() {
+        let rawKey = "246114398185460a8f995bf98286645f.FNCxO5AoHHZgaUbO"
+        let message = CampusAIService.redactProviderError("failed with \(rawKey) and sk-test_secret_123")
+
+        XCTAssertTrue(message.contains("[redacted]"))
+        XCTAssertTrue(message.contains("sk-redacted"))
+        XCTAssertFalse(message.contains(rawKey))
+        XCTAssertFalse(message.contains("sk-test_secret_123"))
+    }
+
+    func testActionValidationAcceptsSupportedDraftsAndRejectsUnknownRoutes() {
+        let openRoute = CampusAIActionDraft(
+            kind: .openAcademicRoute,
+            title: "",
+            payload: CampusAIActionPayload(route: "grades")
+        )
+        let invalidRoute = CampusAIActionDraft(
+            kind: .openAcademicRoute,
+            title: "打开未知页面",
+            payload: CampusAIActionPayload(route: "medicalLedger")
+        )
+
+        XCTAssertEqual(CampusAIActionValidation.validate(openRoute)?.payload.route, "grades")
+        XCTAssertNil(CampusAIActionValidation.validate(invalidRoute))
+    }
+
+    func testActionValidationAcceptsCountdownsAndRejectsInvalidDates() {
+        let countdown = CampusAIActionDraft(
+            kind: .createCountdown,
+            title: "",
+            payload: CampusAIActionPayload(countdownTitle: "期末考试", targetDate: "2026-07-01")
+        )
+        let invalidCountdown = CampusAIActionDraft(
+            kind: .createCountdown,
+            title: "创建倒计时",
+            payload: CampusAIActionPayload(countdownTitle: "期末考试", targetDate: "not-a-date")
+        )
+
+        XCTAssertEqual(CampusAIActionValidation.validate(countdown)?.payload.countdownTitle, "期末考试")
+        XCTAssertNil(CampusAIActionValidation.validate(invalidCountdown))
+    }
+
+    func testActionValidationAcceptsTimetableRemindersAndRejectsInvalidCells() {
+        let reminder = CampusAIActionDraft(
+            kind: .createTimetableReminder,
+            title: "",
+            payload: CampusAIActionPayload(
+                week: 2,
+                dayOfWeek: 3,
+                period: 5,
+                endPeriod: 6,
+                title: "提交实验报告",
+                minutesBefore: -5
+            )
+        )
+        let invalidReminder = CampusAIActionDraft(
+            kind: .createTimetableReminder,
+            title: "创建课表提醒",
+            payload: CampusAIActionPayload(week: 0, dayOfWeek: 8, period: 99, title: "坏数据")
+        )
+
+        let validated = CampusAIActionValidation.validate(reminder)
+        XCTAssertEqual(validated?.payload.title, "提交实验报告")
+        XCTAssertEqual(validated?.payload.minutesBefore, 0)
+        XCTAssertNil(CampusAIActionValidation.validate(invalidReminder))
+    }
+
+    private func minimalAIContext() -> CampusAIContextPayload {
+        CampusAIContextBuilder.build(
+            courses: [],
+            grades: [],
+            exams: [],
+            teachingPlan: [],
+            trainingProgram: nil,
+            countdowns: [],
+            now: SemesterConfig.startOfSemesterDate
+        )
+    }
+}
