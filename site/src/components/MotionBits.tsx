@@ -1,0 +1,142 @@
+import React, { PropsWithChildren } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+
+export function StaggerReveal({ children, className }: PropsWithChildren<{ className?: string }>) {
+  const shouldReduceMotion = useReducedMotion();
+
+  if (shouldReduceMotion) {
+    return <div className={className}>{children}</div>;
+  }
+
+  return (
+    <motion.div
+      className={className}
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: {},
+        visible: {
+          transition: {
+            staggerChildren: 0.1
+          }
+        }
+      }}
+    >
+      {React.Children.map(children, (child) => (
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 16 },
+            visible: {
+              opacity: 1,
+              y: 0,
+              transition: { duration: 0.72, ease: [0.16, 1, 0.3, 1] }
+            }
+          }}
+        >
+          {child}
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+}
+
+export const FloatingStatus = React.memo(function FloatingStatus() {
+  const shouldReduceMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute right-4 top-4 hidden rounded-md border border-black/10 bg-white/90 px-3 py-2 text-xs font-medium text-text shadow-soft backdrop-blur md:block"
+      animate={shouldReduceMotion ? undefined : { y: [0, -5, 0], opacity: [0.92, 1, 0.92] }}
+      transition={
+        shouldReduceMotion
+          ? undefined
+          : {
+              duration: 4.8,
+              repeat: Infinity,
+              type: "spring",
+              stiffness: 100,
+              damping: 20
+            }
+      }
+    >
+      <span className="mr-2 inline-block h-2 w-2 rounded-full bg-primary align-middle shadow-[0_0_0_4px_rgba(79,143,103,0.16)]" />
+      今日课表已缓存
+    </motion.div>
+  );
+});
+
+export const MetricRail = React.memo(function MetricRail() {
+  const shouldReduceMotion = useReducedMotion();
+  const metrics = [
+    ["课表", "当前周"],
+    ["成绩", "教务直连"],
+    ["社区", "匿名会话"],
+    ["评教", "星级统计"],
+    ["反馈", "App 内提交"]
+  ];
+
+  return (
+    <div className="overflow-hidden border-y border-black/10 bg-white py-3">
+      <motion.div
+        className="mx-auto flex max-w-7xl flex-wrap gap-3 px-4 md:px-6"
+        initial={shouldReduceMotion ? undefined : { opacity: 0 }}
+        animate={shouldReduceMotion ? undefined : { opacity: 1 }}
+        transition={shouldReduceMotion ? undefined : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {metrics.map(([label, value]) => (
+          <div
+            key={label}
+            className="flex min-w-40 items-center justify-between gap-7 rounded-md border border-black/10 bg-paper px-4 py-3"
+          >
+            <span className="text-sm font-medium text-text/60">{label}</span>
+            <span className="text-sm font-medium text-text">{value}</span>
+          </div>
+        ))}
+      </motion.div>
+    </div>
+  );
+});
+
+export function TapButton({
+  children,
+  className,
+  href,
+  onClick,
+  disabled = false
+}: PropsWithChildren<{
+  className?: string;
+  href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}>) {
+  const shouldReduceMotion = useReducedMotion();
+  const classes = `inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-center text-sm font-medium transition-[background-color,border-color,color,transform,box-shadow] duration-200 disabled:cursor-progress disabled:opacity-70 ${className ?? ""}`;
+
+  if (href) {
+    return (
+      <motion.a
+        href={href}
+        className={classes}
+        whileHover={shouldReduceMotion ? undefined : { y: -1 }}
+        whileTap={shouldReduceMotion ? undefined : { scale: 0.98, y: 1 }}
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {children}
+      </motion.a>
+    );
+  }
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={classes}
+      whileHover={shouldReduceMotion ? undefined : { y: -1 }}
+      whileTap={shouldReduceMotion ? undefined : { scale: 0.98, y: 1 }}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+    </motion.button>
+  );
+}

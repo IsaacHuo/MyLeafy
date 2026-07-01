@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "include": [
+    "/share/community/post/*",
+    "/share/timetable/*"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/app-icon.png",
+    "/leaf-mark.png",
+    "/media/*",
+    "/.well-known/*"
+  ]
+}

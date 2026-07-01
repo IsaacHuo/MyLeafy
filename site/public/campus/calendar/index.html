@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyLeafy 校历</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      :root {
+        color: #171717;
+        background: #f7f7f3;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: #f7f7f3;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(23, 23, 23, 0.1);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(16px);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 650;
+      }
+
+      a {
+        color: #24543a;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      main {
+        padding: 16px;
+      }
+
+      .image-frame {
+        overflow: auto;
+        border: 1px solid rgba(23, 23, 23, 0.1);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 18px 50px rgba(23, 23, 23, 0.06);
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      @media (min-width: 860px) {
+        main {
+          padding: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>校历</h1>
+      <a href="/campus/calendar.jpg">打开原图</a>
+    </header>
+    <main>
+      <div class="image-frame">
+        <img src="/campus/calendar.jpg" alt="北京林业大学校历" />
+      </div>
+    </main>
+  </body>
+</html>

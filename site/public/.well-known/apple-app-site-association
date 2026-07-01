@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "G229WP43HH.com.isaachuo.leafy",
+        "paths": [
+          "/share/community/post/*",
+          "/share/timetable/*"
+        ]
+      }
+    ]
+  }
+}
