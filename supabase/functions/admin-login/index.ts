@@ -1,6 +1,7 @@
 import {
   appendAuditLog,
   createAdminClient,
+  errorResponse,
   json,
   mapFunctionError,
   normalizeText,
@@ -19,7 +20,7 @@ Deno.serve(async (request) => {
   }
 
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return errorResponse(405, "method_not_allowed", "Method not allowed.", { retryable: false });
   }
 
   try {
@@ -28,7 +29,7 @@ Deno.serve(async (request) => {
     const password = typeof body.password === "string" ? body.password : "";
 
     if (!username || !password) {
-      return json({ error: "账号和密码不能为空。" }, 400);
+      return errorResponse(400, "bad_request", "账号和密码不能为空。");
     }
 
     const adminClient = createAdminClient();
@@ -42,12 +43,16 @@ Deno.serve(async (request) => {
       const message = error.message.includes("ADMIN_INVALID_CREDENTIALS")
         ? "账号或密码错误。"
         : error.message;
-      return json({ error: message }, error.message.includes("ADMIN_INVALID_CREDENTIALS") ? 401 : 500);
+      return errorResponse(
+        error.message.includes("ADMIN_INVALID_CREDENTIALS") ? 401 : 500,
+        error.message.includes("ADMIN_INVALID_CREDENTIALS") ? "unauthorized" : "backend_unavailable",
+        message,
+      );
     }
 
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.token) {
-      return json({ error: "账号或密码错误。" }, 401);
+      return errorResponse(401, "unauthorized", "账号或密码错误。");
     }
 
     const requestInfo = {

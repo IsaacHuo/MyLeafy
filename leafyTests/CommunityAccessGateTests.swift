@@ -34,6 +34,19 @@ final class CommunityAccessGateTests: XCTestCase {
     }
 
     @MainActor
+    func testCommunityEntrySurfacesTermsCheckFailure() async {
+        let session = FakeCommunitySession(currentUserID: UUID())
+        let terms = FakeTermsChecker(accepted: false, failureMessage: "条款检查失败")
+        let gate = CommunityAccessGate(sessionManager: session, termsChecker: terms)
+
+        let result = await gate.evaluate(.communityEntry)
+        let checkCount = await terms.checkCount()
+
+        XCTAssertEqual(result, .failed("条款检查失败"))
+        XCTAssertEqual(checkCount, 1)
+    }
+
+    @MainActor
     func testPostCreationRequiresProfileBeforeTermsCheck() async {
         let session = FakeCommunitySession(currentUserID: UUID(), requiresProfileCompletion: true)
         let terms = FakeTermsChecker(accepted: false)
@@ -414,14 +427,19 @@ private final class FakeCommunitySession: CommunitySessionManaging {
 
 private actor FakeTermsChecker: CommunityTermsChecking {
     private let accepted: Bool
+    private let failureMessage: String?
     private var checks = 0
 
-    init(accepted: Bool) {
+    init(accepted: Bool, failureMessage: String? = nil) {
         self.accepted = accepted
+        self.failureMessage = failureMessage
     }
 
     func hasAcceptedCurrentTerms() async throws -> Bool {
         checks += 1
+        if let failureMessage {
+            throw CommunityRepositoryTestError.failure(failureMessage)
+        }
         return accepted
     }
 

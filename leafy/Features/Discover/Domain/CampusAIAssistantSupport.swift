@@ -108,6 +108,60 @@ nonisolated struct CampusAIActionPayload: Codable, Hashable {
         self.note = note
         self.minutesBefore = minutesBefore
     }
+
+    enum CodingKeys: String, CodingKey {
+        case route
+        case countdownTitle
+        case countdownTitleSnake = "countdown_title"
+        case targetDate
+        case targetDateSnake = "target_date"
+        case week
+        case dayOfWeek
+        case dayOfWeekSnake = "day_of_week"
+        case period
+        case endPeriod
+        case endPeriodSnake = "end_period"
+        case title
+        case location
+        case note
+        case minutesBefore
+        case minutesBeforeSnake = "minutes_before"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        route = try container.decodeIfPresent(String.self, forKey: .route)
+        countdownTitle = try container.decodeIfPresent(String.self, forKey: .countdownTitle)
+            ?? container.decodeIfPresent(String.self, forKey: .countdownTitleSnake)
+        targetDate = try container.decodeIfPresent(String.self, forKey: .targetDate)
+            ?? container.decodeIfPresent(String.self, forKey: .targetDateSnake)
+        week = try container.decodeIfPresent(Int.self, forKey: .week)
+        dayOfWeek = try container.decodeIfPresent(Int.self, forKey: .dayOfWeek)
+            ?? container.decodeIfPresent(Int.self, forKey: .dayOfWeekSnake)
+        period = try container.decodeIfPresent(Int.self, forKey: .period)
+        endPeriod = try container.decodeIfPresent(Int.self, forKey: .endPeriod)
+            ?? container.decodeIfPresent(Int.self, forKey: .endPeriodSnake)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        location = try container.decodeIfPresent(String.self, forKey: .location)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        minutesBefore = try container.decodeIfPresent(Int.self, forKey: .minutesBefore)
+            ?? container.decodeIfPresent(Int.self, forKey: .minutesBeforeSnake)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(route, forKey: .route)
+        try container.encodeIfPresent(countdownTitle, forKey: .countdownTitle)
+        try container.encodeIfPresent(targetDate, forKey: .targetDate)
+        try container.encodeIfPresent(week, forKey: .week)
+        try container.encodeIfPresent(dayOfWeek, forKey: .dayOfWeek)
+        try container.encodeIfPresent(period, forKey: .period)
+        try container.encodeIfPresent(endPeriod, forKey: .endPeriod)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(note, forKey: .note)
+        try container.encodeIfPresent(minutesBefore, forKey: .minutesBefore)
+    }
 }
 
 nonisolated struct CampusAIActionDraft: Identifiable, Codable, Hashable {
@@ -213,7 +267,7 @@ nonisolated enum CampusAIActionValidation {
         normalized.payload.dayOfWeek = day
         normalized.payload.period = period
         if let endPeriod = normalized.payload.endPeriod,
-           TimetablePeriodSchedule.slot(for: endPeriod) == nil {
+           (endPeriod < period || TimetablePeriodSchedule.slot(for: endPeriod) == nil) {
             normalized.payload.endPeriod = nil
         }
         normalized.payload.title = title
@@ -482,7 +536,7 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         self.finishReason = finishReason
         self.suggestedTitle = suggestedTitle
         self.summary = summary
-        self.actions = actions
+        self.actions = CampusAIActionValidation.validated(actions)
     }
 
     init(from decoder: Decoder) throws {
@@ -2065,7 +2119,8 @@ nonisolated struct CampusAISSEParser {
                         reasoning: reasoning,
                         finishReason: payload.finishReason,
                         suggestedTitle: payload.suggestedTitle,
-                        summary: payload.summary
+                        summary: payload.summary,
+                        actions: payload.actions ?? []
                     )
                 )
             ]
@@ -2128,6 +2183,7 @@ nonisolated private struct CampusAIManagedStreamPayload: Decodable {
     let finishReason: String?
     let suggestedTitle: String?
     let summary: String?
+    let actions: [CampusAIActionDraft]?
     let error: String?
     let quota: CampusAIQuotaSnapshot?
 
@@ -2139,6 +2195,7 @@ nonisolated private struct CampusAIManagedStreamPayload: Decodable {
         case finishReason = "finish_reason"
         case suggestedTitle = "suggested_title"
         case summary
+        case actions
         case error
         case quota
     }
@@ -2187,6 +2244,45 @@ nonisolated struct CampusAIChatCompletionsPayload: Encodable, Hashable {
     }
 }
 
+nonisolated struct CampusAIActionPlannerPayload: Encodable, Hashable {
+    let model: String
+    let messages: [Message]
+    let stream: Bool
+    let temperature: Double
+    let maxTokens: Int
+    let user: String?
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case stream
+        case temperature
+        case maxTokens = "max_tokens"
+        case user
+    }
+
+    struct Message: Encodable, Hashable {
+        let role: String
+        let content: String
+    }
+}
+
+nonisolated private struct CampusAIActionPlannerProviderResponse: Decodable {
+    let choices: [Choice]?
+
+    struct Choice: Decodable {
+        let message: Message?
+    }
+
+    struct Message: Decodable {
+        let content: String?
+    }
+}
+
+nonisolated private struct CampusAIActionPlannerResult: Decodable {
+    let actions: [CampusAIActionDraft]
+}
+
 nonisolated struct CampusAIService {
     var streamInvoke: @Sendable (CampusAIRequest, CampusAIUserSettings) -> AsyncThrowingStream<CampusAIStreamEvent, Error>
 
@@ -2231,7 +2327,6 @@ nonisolated struct CampusAIService {
         if response.reasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             response.reasoning = accumulatedReasoning
         }
-        response.actions = []
         return response
     }
 
@@ -2284,6 +2379,16 @@ nonisolated struct CampusAIService {
                         apiKey: apiKey
                     )
                     let (bytes, response) = try await URLSession.shared.bytes(for: urlRequest)
+                    var finalResponse: CampusAIResponse?
+                    let yieldProviderEvents: ([CampusAIStreamEvent]) -> Void = { events in
+                        for event in events {
+                            if case .done(let response) = event {
+                                finalResponse = response
+                            } else {
+                                continuation.yield(event)
+                            }
+                        }
+                    }
                     guard let httpResponse = response as? HTTPURLResponse else {
                         throw CampusAIServiceError.invalidProviderResponse
                     }
@@ -2303,27 +2408,28 @@ nonisolated struct CampusAIService {
                             try Task.checkCancellation()
                             chunk.append(byte)
                             if chunk.count >= 4_096 {
-                                for event in try parser.append(chunk) {
-                                    continuation.yield(event)
-                                }
+                                yieldProviderEvents(try parser.append(chunk))
                                 chunk.removeAll(keepingCapacity: true)
                             }
                         }
 
                         if !chunk.isEmpty {
-                            for event in try parser.append(chunk) {
-                                continuation.yield(event)
-                            }
+                            yieldProviderEvents(try parser.append(chunk))
                         }
 
-                        for event in try parser.finish() {
-                            continuation.yield(event)
-                        }
+                        yieldProviderEvents(try parser.finish())
                     } else {
                         let body = try await providerBody(from: bytes)
-                        for event in try providerEvents(from: body) {
-                            continuation.yield(event)
-                        }
+                        yieldProviderEvents(try providerEvents(from: body))
+                    }
+                    if var finalResponse {
+                        finalResponse.actions = await directPlannedActions(
+                            request: request,
+                            answer: finalResponse.answer,
+                            settings: settings,
+                            apiKey: apiKey
+                        )
+                        continuation.yield(.done(finalResponse))
                     }
                     continuation.finish()
                 } catch is CancellationError {
@@ -2410,6 +2516,22 @@ nonisolated struct CampusAIService {
         return urlRequest
     }
 
+    static func makeActionPlannerRequest(
+        for request: CampusAIRequest,
+        answer: String,
+        baseURLString: String,
+        apiKey: String
+    ) throws -> URLRequest {
+        let url = try chatCompletionsURL(baseURLString: baseURLString)
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try providerJSONEncoder().encode(actionPlannerPayload(for: request, answer: answer))
+        return urlRequest
+    }
+
     static func makeManagedFunctionRequest(
         for request: CampusAIRequest,
         settings: CampusAIUserSettings
@@ -2484,6 +2606,33 @@ nonisolated struct CampusAIService {
         )
     }
 
+    static func actionPlannerPayload(
+        for request: CampusAIRequest,
+        answer: String
+    ) throws -> CampusAIActionPlannerPayload {
+        let userContent = CampusAIActionPlannerUserContent(
+            message: request.message,
+            answer: answer,
+            context: request.context,
+            contextSettings: request.contextSettings
+        )
+        guard let userContentString = String(data: try providerJSONEncoder().encode(userContent), encoding: .utf8) else {
+            throw CampusAIServiceError.invalidProviderResponse
+        }
+
+        return CampusAIActionPlannerPayload(
+            model: request.model,
+            messages: [
+                .init(role: "system", content: actionPlannerSystemPrompt()),
+                .init(role: "user", content: userContentString)
+            ],
+            stream: false,
+            temperature: 0,
+            maxTokens: 700,
+            user: nil
+        )
+    }
+
     static func systemPrompt(userPrompt: String) -> String {
         let customPrompt = userPrompt.nonEmptyTrimmed.map { String($0.prefix(3000)) }
         return [
@@ -2496,6 +2645,99 @@ nonisolated struct CampusAIService {
             "回复必须是中文 Markdown。优先使用短标题、列表、加粗和清晰分段；不要输出 JSON，不要输出动作草稿。",
             customPrompt.map { "用户自定义偏好：\n\($0)" }
         ].compactMap { $0 }.joined(separator: "\n")
+    }
+
+    static func actionPlannerSystemPrompt() -> String {
+        [
+            "你是 MyLeafy 的动作规划器，只能输出 JSON，不能输出 Markdown、解释、代码块或多余文本。",
+            "根据用户问题、AI 已生成回答和本机上下文，最多生成 3 个需要用户确认后执行的动作。",
+            "只有用户明确想打开页面、设置倒计时、设置课表提醒，或回答中明显需要这一步时才生成动作；否则返回 {\"actions\":[]}。",
+            "支持 kind：openAcademicRoute、createCountdown、createTimetableReminder。",
+            "openAcademicRoute.payload.route 只能是 grades、gradeAnalytics、examSchedule、scheduleReports、customCountdowns、teachingPlan、trainingProgram。",
+            "createCountdown.payload 必须包含 countdownTitle 和 targetDate，targetDate 使用 yyyy-MM-dd。",
+            "createTimetableReminder.payload 必须包含 week、dayOfWeek、period、title；dayOfWeek 为 1 到 7，minutesBefore 必须大于等于 0。",
+            "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
+            "输出格式必须是 {\"actions\":[{\"kind\":\"...\",\"title\":\"...\",\"detail\":\"...\",\"payload\":{...}}]}。"
+        ].joined(separator: "\n")
+    }
+
+    private static func directPlannedActions(
+        request: CampusAIRequest,
+        answer: String,
+        settings: CampusAIUserSettings,
+        apiKey: String
+    ) async -> [CampusAIActionDraft] {
+        do {
+            let urlRequest = try makeActionPlannerRequest(
+                for: request,
+                answer: answer,
+                baseURLString: settings.selectedProvider.baseURLString,
+                apiKey: apiKey
+            )
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode)
+            else {
+                return []
+            }
+            return try actionPlannerActions(fromProviderResponseData: data)
+        } catch {
+            return []
+        }
+    }
+
+    static func actionPlannerActions(fromProviderResponseData data: Data) throws -> [CampusAIActionDraft] {
+        let response = try providerJSONDecoder().decode(CampusAIActionPlannerProviderResponse.self, from: data)
+        guard let content = response.choices?.compactMap({ $0.message?.content }).first(where: { !$0.isEmpty }) else {
+            return []
+        }
+        return actionPlannerActions(fromContent: content)
+    }
+
+    static func actionPlannerActions(fromContent content: String) -> [CampusAIActionDraft] {
+        let candidates = actionPlannerJSONCandidates(from: content)
+        let decoder = providerJSONDecoder()
+        for candidate in candidates {
+            let data = Data(candidate.utf8)
+            if let result = try? decoder.decode(CampusAIActionPlannerResult.self, from: data) {
+                return Array(CampusAIActionValidation.validated(result.actions).prefix(3))
+            }
+            if let actions = try? decoder.decode([CampusAIActionDraft].self, from: data) {
+                return Array(CampusAIActionValidation.validated(actions).prefix(3))
+            }
+        }
+        return []
+    }
+
+    private static func actionPlannerJSONCandidates(from content: String) -> [String] {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unfenced: String
+        if trimmed.hasPrefix("```") {
+            let lines = trimmed
+                .replacingOccurrences(of: "\r\n", with: "\n")
+                .split(separator: "\n", omittingEmptySubsequences: false)
+            unfenced = lines
+                .dropFirst()
+                .dropLast(lines.last?.trimmingCharacters(in: .whitespacesAndNewlines) == "```" ? 1 : 0)
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            unfenced = trimmed
+        }
+
+        var candidates = [unfenced]
+        if let start = unfenced.firstIndex(of: "{"), let end = unfenced.lastIndex(of: "}"), start <= end {
+            candidates.append(String(unfenced[start...end]))
+        }
+        if let start = unfenced.firstIndex(of: "["), let end = unfenced.lastIndex(of: "]"), start <= end {
+            candidates.append(String(unfenced[start...end]))
+        }
+        var seen = Set<String>()
+        return candidates.filter { candidate in
+            guard !candidate.isEmpty, !seen.contains(candidate) else { return false }
+            seen.insert(candidate)
+            return true
+        }
     }
 
     static func redactProviderError(_ value: String) -> String {
@@ -2516,6 +2758,10 @@ nonisolated struct CampusAIService {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return encoder
+    }
+
+    private static func providerJSONDecoder() -> JSONDecoder {
+        JSONDecoder()
     }
 
     private static func providerErrorBody(from bytes: URLSession.AsyncBytes) async throws -> String {
@@ -2608,6 +2854,78 @@ nonisolated private struct CampusAIProviderUserContent: Encodable {
     struct RecentMessage: Encodable, Hashable {
         let role: String
         let text: String
+    }
+}
+
+nonisolated private struct CampusAIActionPlannerUserContent: Encodable {
+    let message: String
+    let answer: String
+    let context: CampusAIContextPayload
+    let contextSettings: CampusAIContextSettings
+    let supportedActions: [SupportedAction]
+    let safetyBoundary: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case answer
+        case context
+        case contextSettings = "context_settings"
+        case supportedActions = "supported_actions"
+        case safetyBoundary = "safety_boundary"
+    }
+
+    init(
+        message: String,
+        answer: String,
+        context: CampusAIContextPayload,
+        contextSettings: CampusAIContextSettings
+    ) {
+        self.message = message
+        self.answer = answer
+        self.context = context
+        self.contextSettings = contextSettings
+        supportedActions = [
+            .init(
+                kind: CampusAIActionKind.openAcademicRoute.rawValue,
+                requiredPayloadFields: ["route"],
+                allowedValues: [
+                    "route": CampusAIAcademicRouteID.allCases.map(\.rawValue)
+                ]
+            ),
+            .init(
+                kind: CampusAIActionKind.createCountdown.rawValue,
+                requiredPayloadFields: ["countdownTitle", "targetDate"],
+                allowedValues: [
+                    "targetDate": ["yyyy-MM-dd"]
+                ]
+            ),
+            .init(
+                kind: CampusAIActionKind.createTimetableReminder.rawValue,
+                requiredPayloadFields: ["week", "dayOfWeek", "period", "title"],
+                allowedValues: [
+                    "week": ["1...\(SemesterConfig.supportedWeeks)"],
+                    "dayOfWeek": ["1...7"],
+                    "period": TimetablePeriodSchedule.slots.map { String($0.period) }
+                ]
+            )
+        ]
+        safetyBoundary = [
+            "所有动作都只生成待确认草稿，不会自动执行。",
+            "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
+            "缺少必要 payload 字段或字段无法从上下文确定时，返回空 actions。"
+        ]
+    }
+
+    struct SupportedAction: Encodable, Hashable {
+        let kind: String
+        let requiredPayloadFields: [String]
+        let allowedValues: [String: [String]]
+
+        enum CodingKeys: String, CodingKey {
+            case kind
+            case requiredPayloadFields = "required_payload_fields"
+            case allowedValues = "allowed_values"
+        }
     }
 }
 

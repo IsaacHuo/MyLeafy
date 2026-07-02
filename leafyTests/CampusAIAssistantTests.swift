@@ -906,6 +906,94 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertNil(CampusAIActionValidation.validate(invalidReminder))
     }
 
+    func testActionPayloadDecodesSnakeCaseFields() throws {
+        let data = Data(
+            """
+            {
+              "countdown_title": "期末考试",
+              "target_date": "2026-07-01",
+              "day_of_week": 3,
+              "end_period": 6,
+              "minutes_before": 10
+            }
+            """.utf8
+        )
+
+        let payload = try JSONDecoder().decode(CampusAIActionPayload.self, from: data)
+
+        XCTAssertEqual(payload.countdownTitle, "期末考试")
+        XCTAssertEqual(payload.targetDate, "2026-07-01")
+        XCTAssertEqual(payload.dayOfWeek, 3)
+        XCTAssertEqual(payload.endPeriod, 6)
+        XCTAssertEqual(payload.minutesBefore, 10)
+    }
+
+    func testManagedDonePayloadDecodesActions() throws {
+        var parser = CampusAISSEParser()
+        let raw = """
+        data: {"type":"done","answer":"已整理。","actions":[{"kind":"open_academic_route","title":"","payload":{"route":"trainingProgram"}},{"kind":"create_countdown","title":"创建倒计时","payload":{"countdown_title":"期末考试","target_date":"2026-07-01"}}]}
+
+        """
+
+        let events = try parser.append(Data(raw.utf8))
+        let response = try XCTUnwrap(events.compactMap { event -> CampusAIResponse? in
+            if case .done(let response) = event {
+                return response
+            }
+            return nil
+        }.first)
+
+        XCTAssertEqual(response.actions.count, 2)
+        XCTAssertEqual(response.actions.first?.kind, .openAcademicRoute)
+        XCTAssertEqual(response.actions.first?.payload.route, "trainingProgram")
+        XCTAssertEqual(response.actions.last?.payload.countdownTitle, "期末考试")
+    }
+
+    func testCampusAIServiceSendPreservesActions() async throws {
+        let action = CampusAIActionDraft(
+            kind: .openAcademicRoute,
+            title: "打开培养方案",
+            payload: CampusAIActionPayload(route: "trainingProgram")
+        )
+        let service = CampusAIService { _, _ in
+            AsyncThrowingStream { continuation in
+                continuation.yield(.delta("已整理。"))
+                continuation.yield(.done(CampusAIResponse(answer: "已整理。", actions: [action])))
+                continuation.finish()
+            }
+        }
+
+        let response = try await service.send(
+            message: "帮我打开培养方案",
+            context: minimalAIContext(),
+            recentMessages: []
+        )
+
+        XCTAssertEqual(response.answer, "已整理。")
+        XCTAssertEqual(response.actions, [action])
+    }
+
+    func testActionPlannerExtractsAndValidatesJSONActions() {
+        let content = """
+        ```json
+        {
+          "actions": [
+            {"kind":"create_timetable_reminder","title":"","detail":"提醒提交实验报告","payload":{"week":2,"day_of_week":3,"period":5,"end_period":4,"title":"提交实验报告","minutes_before":-5}},
+            {"kind":"open_academic_route","title":"","payload":{"route":"medicalLedger"}}
+          ]
+        }
+        ```
+        """
+
+        let actions = CampusAIService.actionPlannerActions(fromContent: content)
+
+        XCTAssertEqual(actions.count, 1)
+        XCTAssertEqual(actions.first?.kind, .createTimetableReminder)
+        XCTAssertEqual(actions.first?.payload.title, "提交实验报告")
+        XCTAssertNil(actions.first?.payload.endPeriod)
+        XCTAssertEqual(actions.first?.payload.minutesBefore, 0)
+    }
+
     private func minimalAIContext() -> CampusAIContextPayload {
         CampusAIContextBuilder.build(
             courses: [],

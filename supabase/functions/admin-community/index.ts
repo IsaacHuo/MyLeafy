@@ -8,9 +8,7 @@ import {
   normalizeDate,
   normalizeText,
   readJSON,
-  requireOperator,
   requirePost,
-  requireSuperAdmin,
 } from "../_shared/admin-core.ts";
 
 type ActionRequest = {
@@ -31,50 +29,123 @@ const postgraduateSourceKinds = [
 
 const postgraduateTrustLevels = ["official", "curated", "verified_user"];
 
-const mutatingActions = new Set([
-  "moderatePost",
-  "bulkModeratePosts",
-  "moderatePoll",
-  "reviewPollDeletion",
-  "pinPost",
-  "unpinPost",
-  "moderateComment",
-  "bulkModerateComments",
-  "muteProfile",
-  "unmuteProfile",
-  "resolveModerationReport",
-  "updateFeedback",
-  "createAnnouncement",
-  "updateAnnouncement",
-  "upsertPostgraduateSource",
-  "setPostgraduateSourceStatus",
-  "approvePostgraduateSuggestion",
-  "rejectPostgraduateSuggestion",
-  "approveCatalogSuggestion",
-  "rejectCatalogSuggestion",
-  "upsertTeacher",
-  "setTeacherStatus",
-  "upsertCourse",
-  "setCourseStatus",
-  "upsertDish",
-  "setDishStatus",
-  "approveCampusRequest",
-  "rejectCampusRequest",
-  "deleteTeacherRating",
-  "deleteDishRating",
-  "upsertSemesterRuntimeConfig",
-  "createAdmin",
-  "updateAdmin",
-  "disableAdmin",
-]);
+type AdminActionPermission = "viewer" | "operator" | "super_admin";
+type AdminActionDomain =
+  | "community-social"
+  | "moderation"
+  | "catalog-ratings"
+  | "timetable-sharing"
+  | "campus-runtime"
+  | "campus-ai"
+  | "admin";
+type AuditTarget = { type?: string | null; id?: string | number | null };
+type AdminActionHandler = (
+  context: AdminContext,
+  params: Record<string, unknown>,
+) => Promise<unknown> | unknown;
 
-const superAdminActions = new Set([
-  "listAdmins",
-  "createAdmin",
-  "updateAdmin",
-  "disableAdmin",
-  "listAuditLogs",
-]);
+type AdminActionMetadata = {
+  domain: AdminActionDomain;
+  handler: AdminActionHandler;
+  permission: AdminActionPermission;
+  mutating: boolean;
+  auditTarget: (params: Record<string, unknown>) => AuditTarget;
+  inputSchema: string;
+};
+
+const actionRegistry = {
+  overview: defineAction("overview", overview, { domain: "admin" }),
+  listCampuses: defineAction("listCampuses", listCampuses, { domain: "campus-runtime" }),
+  listCampusRequests: defineAction("listCampusRequests", listCampusRequests, { domain: "campus-runtime" }),
+  approveCampusRequest: defineAction("approveCampusRequest", approveCampusRequest, { domain: "campus-runtime", permission: "operator", mutating: true }),
+  rejectCampusRequest: defineAction("rejectCampusRequest", rejectCampusRequest, { domain: "campus-runtime", permission: "operator", mutating: true }),
+  listPosts: defineAction("listPosts", listPosts, { domain: "community-social" }),
+  previewCommunityFeed: defineAction("previewCommunityFeed", previewCommunityFeed, { domain: "community-social" }),
+  getPost: defineAction("getPost", getPost, { domain: "community-social" }),
+  moderatePost: defineAction("moderatePost", moderatePost, { domain: "moderation", permission: "operator", mutating: true }),
+  bulkModeratePosts: defineAction("bulkModeratePosts", bulkModeratePosts, { domain: "moderation", permission: "operator", mutating: true }),
+  listPolls: defineAction("listPolls", listPolls, { domain: "community-social" }),
+  getPoll: defineAction("getPoll", getPoll, { domain: "community-social" }),
+  moderatePoll: defineAction("moderatePoll", moderatePoll, { domain: "moderation", permission: "operator", mutating: true }),
+  reviewPollDeletion: defineAction("reviewPollDeletion", reviewPollDeletion, { domain: "moderation", permission: "operator", mutating: true }),
+  listPostPins: defineAction("listPostPins", listPostPins, { domain: "community-social" }),
+  pinPost: defineAction("pinPost", pinPost, { domain: "community-social", permission: "operator", mutating: true }),
+  unpinPost: defineAction("unpinPost", unpinPost, { domain: "community-social", permission: "operator", mutating: true }),
+  listComments: defineAction("listComments", listComments, { domain: "community-social" }),
+  listModerationReports: defineAction("listModerationReports", listModerationReports, { domain: "moderation" }),
+  resolveModerationReport: defineAction("resolveModerationReport", resolveModerationReport, { domain: "moderation", permission: "operator", mutating: true }),
+  moderateComment: defineAction("moderateComment", moderateComment, { domain: "moderation", permission: "operator", mutating: true }),
+  bulkModerateComments: defineAction("bulkModerateComments", bulkModerateComments, { domain: "moderation", permission: "operator", mutating: true }),
+  listProfiles: defineAction("listProfiles", listProfiles, { domain: "community-social" }),
+  getProfile: defineAction("getProfile", getProfile, { domain: "community-social" }),
+  muteProfile: defineAction("muteProfile", muteProfile, { domain: "moderation", permission: "operator", mutating: true }),
+  unmuteProfile: defineAction("unmuteProfile", unmuteProfile, { domain: "moderation", permission: "operator", mutating: true }),
+  listFeedback: defineAction("listFeedback", listFeedback, { domain: "admin" }),
+  updateFeedback: defineAction("updateFeedback", updateFeedback, { domain: "admin", permission: "operator", mutating: true }),
+  listAnnouncements: defineAction("listAnnouncements", listAnnouncements, { domain: "admin" }),
+  createAnnouncement: defineAction("createAnnouncement", createAnnouncement, { domain: "admin", permission: "operator", mutating: true }),
+  updateAnnouncement: defineAction("updateAnnouncement", updateAnnouncement, { domain: "admin", permission: "operator", mutating: true }),
+  listPostgraduateSources: defineAction("listPostgraduateSources", listPostgraduateSources, { domain: "catalog-ratings" }),
+  upsertPostgraduateSource: defineAction("upsertPostgraduateSource", upsertPostgraduateSource, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  setPostgraduateSourceStatus: defineAction("setPostgraduateSourceStatus", setPostgraduateSourceStatus, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listPostgraduateSuggestions: defineAction("listPostgraduateSuggestions", listPostgraduateSuggestions, { domain: "catalog-ratings" }),
+  approvePostgraduateSuggestion: defineAction("approvePostgraduateSuggestion", approvePostgraduateSuggestion, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  rejectPostgraduateSuggestion: defineAction("rejectPostgraduateSuggestion", rejectPostgraduateSuggestion, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listCatalogSuggestions: defineAction("listCatalogSuggestions", listCatalogSuggestions, { domain: "catalog-ratings" }),
+  approveCatalogSuggestion: defineAction("approveCatalogSuggestion", approveCatalogSuggestion, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  rejectCatalogSuggestion: defineAction("rejectCatalogSuggestion", rejectCatalogSuggestion, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listTeachers: defineAction("listTeachers", listTeachers, { domain: "catalog-ratings" }),
+  upsertTeacher: defineAction("upsertTeacher", upsertTeacher, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  setTeacherStatus: defineAction("setTeacherStatus", setTeacherStatus, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listCourses: defineAction("listCourses", listCourses, { domain: "catalog-ratings" }),
+  upsertCourse: defineAction("upsertCourse", upsertCourse, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  setCourseStatus: defineAction("setCourseStatus", setCourseStatus, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listDishes: defineAction("listDishes", listDishes, { domain: "catalog-ratings" }),
+  upsertDish: defineAction("upsertDish", upsertDish, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  setDishStatus: defineAction("setDishStatus", setDishStatus, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listTeacherRatings: defineAction("listTeacherRatings", listTeacherRatings, { domain: "catalog-ratings" }),
+  listDishRatings: defineAction("listDishRatings", listDishRatings, { domain: "catalog-ratings" }),
+  deleteTeacherRating: defineAction("deleteTeacherRating", deleteTeacherRating, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  deleteDishRating: defineAction("deleteDishRating", deleteDishRating, { domain: "catalog-ratings", permission: "operator", mutating: true }),
+  listSemesterRuntimeConfigs: defineAction("listSemesterRuntimeConfigs", listSemesterRuntimeConfigs, { domain: "campus-runtime" }),
+  upsertSemesterRuntimeConfig: defineAction("upsertSemesterRuntimeConfig", upsertSemesterRuntimeConfig, { domain: "campus-runtime", permission: "operator", mutating: true }),
+  listAdmins: defineAction("listAdmins", listAdmins, { domain: "admin", permission: "super_admin" }),
+  createAdmin: defineAction("createAdmin", createAdmin, { domain: "admin", permission: "super_admin", mutating: true }),
+  updateAdmin: defineAction("updateAdmin", updateAdmin, { domain: "admin", permission: "super_admin", mutating: true }),
+  disableAdmin: defineAction("disableAdmin", disableAdmin, { domain: "admin", permission: "super_admin", mutating: true }),
+  listAuditLogs: defineAction("listAuditLogs", listAuditLogs, { domain: "admin", permission: "super_admin" }),
+} satisfies Record<string, AdminActionMetadata>;
+
+function defineAction(
+  action: string,
+  handler: AdminActionHandler,
+  metadata: {
+    domain: AdminActionDomain;
+    permission?: AdminActionPermission;
+    mutating?: boolean;
+    auditTarget?: (params: Record<string, unknown>) => AuditTarget;
+    inputSchema?: string;
+  },
+): AdminActionMetadata {
+  return {
+    domain: metadata.domain,
+    handler,
+    permission: metadata.permission ?? "viewer",
+    mutating: metadata.mutating ?? false,
+    auditTarget: metadata.auditTarget ?? ((params) => inferTarget(action, params)),
+    inputSchema: metadata.inputSchema ?? `${action}Params`,
+  };
+}
+
+function authorizeAction(context: AdminContext, metadata: AdminActionMetadata) {
+  if (metadata.permission === "super_admin" && context.admin.role !== "super_admin") {
+    throw new HttpError(403, "Super admin permission is required.");
+  }
+
+  if (metadata.permission === "operator" && context.admin.role === "viewer") {
+    throw new HttpError(403, "This admin account is read-only.");
+  }
+}
 
 Deno.serve(async (request) => {
   const methodResponse = requirePost(request);
@@ -93,152 +164,24 @@ Deno.serve(async (request) => {
     const params = body.params ?? {};
 
     if (!action) {
-      return json({ error: "Missing admin action." }, 400);
+      throw new HttpError(400, "Missing admin action.");
     }
 
-    if (mutatingActions.has(action)) {
-      requireOperator(context);
+    const metadata = actionRegistry[action as keyof typeof actionRegistry];
+    if (!metadata) {
+      throw new HttpError(400, `Unknown admin action: ${action}`);
     }
 
-    if (superAdminActions.has(action)) {
-      requireSuperAdmin(context);
-    }
+    authorizeAction(context, metadata);
 
-    const data = await handleAction(context, action, params);
-    await appendAuditLog(context, action, params, inferTarget(action, params));
+    const data = await metadata.handler(context, params);
+    await appendAuditLog(context, action, params, metadata.auditTarget(params));
 
     return json({ data });
   } catch (error) {
     return mapFunctionError(error);
   }
 });
-
-async function handleAction(context: AdminContext, action: string, params: Record<string, unknown>) {
-  switch (action) {
-    case "overview":
-      return overview(context, params);
-    case "listCampuses":
-      return listCampuses(context, params);
-    case "listCampusRequests":
-      return listCampusRequests(context, params);
-    case "approveCampusRequest":
-      return approveCampusRequest(context, params);
-    case "rejectCampusRequest":
-      return rejectCampusRequest(context, params);
-    case "listPosts":
-      return listPosts(context, params);
-    case "previewCommunityFeed":
-      return previewCommunityFeed(context, params);
-    case "getPost":
-      return getPost(context, params);
-    case "moderatePost":
-      return moderatePost(context, params);
-    case "bulkModeratePosts":
-      return bulkModeratePosts(context, params);
-    case "listPolls":
-      return listPolls(context, params);
-    case "getPoll":
-      return getPoll(context, params);
-    case "moderatePoll":
-      return moderatePoll(context, params);
-    case "reviewPollDeletion":
-      return reviewPollDeletion(context, params);
-    case "listPostPins":
-      return listPostPins(context, params);
-    case "pinPost":
-      return pinPost(context, params);
-    case "unpinPost":
-      return unpinPost(context, params);
-    case "listComments":
-      return listComments(context, params);
-    case "listModerationReports":
-      return listModerationReports(context, params);
-    case "resolveModerationReport":
-      return resolveModerationReport(context, params);
-    case "moderateComment":
-      return moderateComment(context, params);
-    case "bulkModerateComments":
-      return bulkModerateComments(context, params);
-    case "listProfiles":
-      return listProfiles(context, params);
-    case "getProfile":
-      return getProfile(context, params);
-    case "muteProfile":
-      return muteProfile(context, params);
-    case "unmuteProfile":
-      return unmuteProfile(context, params);
-    case "listFeedback":
-      return listFeedback(context, params);
-    case "updateFeedback":
-      return updateFeedback(context, params);
-    case "listAnnouncements":
-      return listAnnouncements(context, params);
-    case "createAnnouncement":
-      return createAnnouncement(context, params);
-    case "updateAnnouncement":
-      return updateAnnouncement(context, params);
-    case "listPostgraduateSources":
-      return listPostgraduateSources(context, params);
-    case "upsertPostgraduateSource":
-      return upsertPostgraduateSource(context, params);
-    case "setPostgraduateSourceStatus":
-      return setPostgraduateSourceStatus(context, params);
-    case "listPostgraduateSuggestions":
-      return listPostgraduateSuggestions(context, params);
-    case "approvePostgraduateSuggestion":
-      return approvePostgraduateSuggestion(context, params);
-    case "rejectPostgraduateSuggestion":
-      return rejectPostgraduateSuggestion(context, params);
-    case "listCatalogSuggestions":
-      return listCatalogSuggestions(context, params);
-    case "approveCatalogSuggestion":
-      return approveCatalogSuggestion(context, params);
-    case "rejectCatalogSuggestion":
-      return rejectCatalogSuggestion(context, params);
-    case "listTeachers":
-      return listTeachers(context, params);
-    case "upsertTeacher":
-      return upsertTeacher(context, params);
-    case "setTeacherStatus":
-      return setTeacherStatus(context, params);
-    case "listCourses":
-      return listCourses(context, params);
-    case "upsertCourse":
-      return upsertCourse(context, params);
-    case "setCourseStatus":
-      return setCourseStatus(context, params);
-    case "listDishes":
-      return listDishes(context, params);
-    case "upsertDish":
-      return upsertDish(context, params);
-    case "setDishStatus":
-      return setDishStatus(context, params);
-    case "listTeacherRatings":
-      return listTeacherRatings(context, params);
-    case "listDishRatings":
-      return listDishRatings(context, params);
-    case "deleteTeacherRating":
-      return deleteTeacherRating(context, params);
-    case "deleteDishRating":
-      return deleteDishRating(context, params);
-    case "listSemesterRuntimeConfigs":
-      return listSemesterRuntimeConfigs(context, params);
-    case "upsertSemesterRuntimeConfig":
-      return upsertSemesterRuntimeConfig(context, params);
-    case "listAdmins":
-      return listAdmins(context, params);
-    case "createAdmin":
-      return createAdmin(context, params);
-    case "updateAdmin":
-      return updateAdmin(context, params);
-    case "disableAdmin":
-      return disableAdmin(context, params);
-    case "listAuditLogs":
-      return listAuditLogs(context, params);
-    default:
-      throw new HttpError(400, `Unknown admin action: ${action}`);
-  }
-}
 
 async function overview(context: AdminContext, params: Record<string, unknown>) {
   const client = context.adminClient;

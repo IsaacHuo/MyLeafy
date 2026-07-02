@@ -1,5 +1,6 @@
 import {
   authenticateAdmin,
+  errorResponse,
   json,
   mapFunctionError,
   okOptions,
@@ -11,7 +12,7 @@ Deno.serve(async (request) => {
   }
 
   if (request.method !== "GET" && request.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return errorResponse(405, "method_not_allowed", "Method not allowed.", { retryable: false });
   }
 
   try {

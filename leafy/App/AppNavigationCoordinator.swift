@@ -67,6 +67,7 @@ final class AppNavigationCoordinator: ObservableObject {
     @Published var selectedRootTab: RootTab = .timetable
     @Published var selectedAcademicTab: AcademicPrimaryTab = .cultivation
     @Published var requestedAcademicRoute: AcademicRoute?
+    @Published var requestedAcademicDetailRoute: AcademicDetailRoute?
     @Published var requestedClassroomLookup: ClassroomLookupRequest?
     @Published var requestedProfileRoute: ProfileRoute?
     @Published var requestedTimetableInviteCode: String?
@@ -91,6 +92,14 @@ final class AppNavigationCoordinator: ObservableObject {
         selectedRootTab = .academics
         deferRouteRequest {
             self.requestedAcademicRoute = route
+        }
+    }
+
+    func openAcademicDetailRoute(_ route: AcademicDetailRoute) {
+        selectedAcademicTab = route.tab
+        selectedRootTab = .academics
+        deferRouteRequest {
+            self.requestedAcademicDetailRoute = route
         }
     }
 
@@ -154,6 +163,7 @@ final class AppNavigationCoordinator: ObservableObject {
 
     private func deferRouteRequest(_ request: @escaping @MainActor () -> Void) {
         requestedAcademicRoute = nil
+        requestedAcademicDetailRoute = nil
         requestedClassroomLookup = nil
         requestedProfileRoute = nil
         deferredRouteRequestTask?.cancel()

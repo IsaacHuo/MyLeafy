@@ -4,7 +4,7 @@ import {
   SignedDataVerifier,
 } from "npm:@apple/app-store-server-library@3.1.0";
 
-export const campusAIProductID = "com.isaachuo.leafy.ai.monthly";
+export const campusAIProductID = "com.isaachuo.leafy.ai.weekly";
 
 export type VerifiedAppTransaction = {
   appTransactionID: string;

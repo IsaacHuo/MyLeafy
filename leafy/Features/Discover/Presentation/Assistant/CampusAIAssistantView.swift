@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CampusAIAssistantView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @AppStorage(Self.experimentalNoticeAcknowledgedKey) private var experimentalNoticeAcknowledged = false
@@ -43,6 +44,13 @@ struct CampusAIAssistantView: View {
     private var selectedMessages: [CampusAIMessage] {
         guard let key = selectedConversationKey else { return [] }
         return messages.filter { $0.conversationID == key }
+    }
+
+    private func actionRecords(for message: CampusAIMessage) -> [CampusAIActionRecord] {
+        actionRecords.filter {
+            $0.conversationID == message.conversationID &&
+                $0.messageID == message.id.uuidString
+        }
     }
 
     private var contextPayload: CampusAIContextPayload {
@@ -243,9 +251,16 @@ struct CampusAIAssistantView: View {
                         ForEach(selectedMessages) { message in
                             CampusAIMessageRow(
                                 message: message,
+                                actions: actionRecords(for: message),
                                 isStreaming: isSending
                                     && selectedMessages.last?.id == message.id
-                                    && message.roleRawValue == CampusAIMessageRole.assistant.rawValue
+                                    && message.roleRawValue == CampusAIMessageRole.assistant.rawValue,
+                                executeAction: { action in
+                                    Task {
+                                        await executeActionRecord(action)
+                                    }
+                                },
+                                cancelAction: cancelActionRecord
                             )
                                 .id(message.id)
                         }
@@ -667,6 +682,11 @@ struct CampusAIAssistantView: View {
                     if let summary = response.summary?.nonEmptyTrimmed {
                         conversation.summary = summary
                     }
+                    persistActionRecords(
+                        response.actions,
+                        conversationID: conversationKey,
+                        messageID: assistantMessage.id.uuidString
+                    )
                 case .error(let message):
                     throw CampusAIServiceError.providerRejected(message)
                 }
@@ -712,6 +732,163 @@ struct CampusAIAssistantView: View {
         if selectedConversationID == conversation.id {
             selectedConversationID = conversations.first(where: { $0.id != conversation.id })?.id
         }
+        try? modelContext.save()
+    }
+
+    private func persistActionRecords(
+        _ drafts: [CampusAIActionDraft],
+        conversationID: String,
+        messageID: String
+    ) {
+        guard !drafts.isEmpty else { return }
+        guard !actionRecords.contains(where: { $0.conversationID == conversationID && $0.messageID == messageID }) else {
+            return
+        }
+        let encoder = JSONEncoder()
+        for draft in CampusAIActionValidation.validated(drafts).prefix(3) {
+            guard let payloadData = try? encoder.encode(draft.payload),
+                  let payloadJSON = String(data: payloadData, encoding: .utf8)
+            else { continue }
+            modelContext.insert(
+                CampusAIActionRecord(
+                    conversationID: conversationID,
+                    messageID: messageID,
+                    kindRawValue: draft.kind.rawValue,
+                    title: draft.title,
+                    detail: draft.detail,
+                    payloadJSON: payloadJSON,
+                    statusRawValue: CampusAIActionStatus.pending.rawValue
+                )
+            )
+        }
+    }
+
+    @MainActor
+    private func cancelActionRecord(_ record: CampusAIActionRecord) {
+        guard record.status == .pending else { return }
+        record.statusRawValue = CampusAIActionStatus.cancelled.rawValue
+        record.updatedAt = Date()
+        try? modelContext.save()
+    }
+
+    @MainActor
+    private func executeActionRecord(_ record: CampusAIActionRecord) async {
+        guard record.status == .pending else { return }
+        guard let draft = record.actionDraft,
+              let validated = CampusAIActionValidation.validate(draft)
+        else {
+            markAction(record, status: .failed)
+            operationAlert = .failure("动作内容无效，无法执行。")
+            return
+        }
+
+        do {
+            switch validated.kind {
+            case .openAcademicRoute:
+                try executeOpenAcademicRoute(validated)
+            case .createCountdown:
+                try executeCreateCountdown(validated)
+            case .createTimetableReminder:
+                try await executeCreateTimetableReminder(validated)
+            }
+            markAction(record, status: .completed)
+        } catch {
+            markAction(record, status: .failed)
+            operationAlert = .failure(error.localizedDescription)
+        }
+    }
+
+    private func executeOpenAcademicRoute(_ draft: CampusAIActionDraft) throws {
+        guard let routeID = CampusAIActionValidation.routeID(for: draft) else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        appNavigation.openAcademicDetailRoute(routeID.detailRoute)
+        operationAlert = .success("已打开\(routeID.title)。")
+    }
+
+    private func executeCreateCountdown(_ draft: CampusAIActionDraft) throws {
+        guard let title = draft.payload.countdownTitle?.nonEmptyTrimmed,
+              let targetDate = CampusAIActionValidation.countdownDate(for: draft)
+        else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        var events = CustomCountdownStore.load()
+        events.append(CustomCountdownEvent(title: title, targetDate: targetDate))
+        CustomCountdownStore.save(events)
+        operationAlert = .success("已创建倒计时：\(title)。")
+    }
+
+    @MainActor
+    private func executeCreateTimetableReminder(_ draft: CampusAIActionDraft) async throws {
+        guard let week = draft.payload.week,
+              let dayOfWeek = draft.payload.dayOfWeek,
+              let period = draft.payload.period,
+              let title = draft.payload.title?.nonEmptyTrimmed
+        else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        let endPeriod = draft.payload.endPeriod.flatMap { $0 >= period ? $0 : nil }
+        let cellKey = TimetableCellReminder.cellKey(week: week, dayOfWeek: dayOfWeek, period: period)
+        let descriptor = FetchDescriptor<TimetableCellReminder>(
+            predicate: #Predicate { reminder in
+                reminder.cellKey == cellKey
+            }
+        )
+        let existingReminders = try modelContext.fetch(descriptor)
+        let reminder: TimetableCellReminder
+        if let existing = existingReminders.first {
+            TimetableNotificationManager.cancelReminder(for: existing)
+            existing.week = week
+            existing.dayOfWeek = dayOfWeek
+            existing.period = period
+            existing.endPeriod = endPeriod
+            existing.cellKey = cellKey
+            existing.title = title
+            existing.location = TimetableCellReminder.normalizedOptionalText(draft.payload.location ?? "")
+            existing.note = TimetableCellReminder.normalizedOptionalText(draft.payload.note ?? "")
+            existing.startsAt = TimetablePeriodSchedule.startDate(week: week, dayOfWeek: dayOfWeek, period: period)
+            existing.endsAt = TimetablePeriodSchedule.endDate(week: week, dayOfWeek: dayOfWeek, period: endPeriod ?? period)
+            existing.minutesBefore = max(0, draft.payload.minutesBefore ?? 0)
+            existing.updatedAt = Date()
+            reminder = existing
+        } else {
+            let newReminder = TimetableCellReminder(
+                week: week,
+                dayOfWeek: dayOfWeek,
+                period: period,
+                endPeriod: endPeriod,
+                title: title,
+                location: draft.payload.location ?? "",
+                note: draft.payload.note ?? "",
+                startsAt: TimetablePeriodSchedule.startDate(week: week, dayOfWeek: dayOfWeek, period: period),
+                endsAt: TimetablePeriodSchedule.endDate(week: week, dayOfWeek: dayOfWeek, period: endPeriod ?? period),
+                minutesBefore: max(0, draft.payload.minutesBefore ?? 0)
+            )
+            modelContext.insert(newReminder)
+            reminder = newReminder
+        }
+
+        for duplicate in existingReminders.dropFirst() {
+            TimetableNotificationManager.cancelReminder(for: duplicate)
+            modelContext.delete(duplicate)
+        }
+
+        try modelContext.save()
+        do {
+            let scheduled = try await TimetableNotificationManager.applyReminder(for: reminder)
+            operationAlert = .success(
+                scheduled
+                    ? "已创建课表提醒：\(title)。"
+                    : "已创建课表提醒：\(title)。"
+            )
+        } catch {
+            operationAlert = .success("已创建课表提醒：\(title)。通知注册失败，可稍后在系统设置中检查通知权限。")
+        }
+    }
+
+    private func markAction(_ record: CampusAIActionRecord, status: CampusAIActionStatus) {
+        record.statusRawValue = status.rawValue
+        record.updatedAt = Date()
         try? modelContext.save()
     }
 
@@ -775,11 +952,51 @@ struct CampusAIAssistantView: View {
     }
 }
 
+private enum CampusAIActionExecutionError: LocalizedError {
+    case invalidPayload
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPayload:
+            return "动作内容无效，无法执行。"
+        }
+    }
+}
+
+private extension CampusAIActionRecord {
+    var status: CampusAIActionStatus {
+        CampusAIActionStatus(rawValue: statusRawValue) ?? .pending
+    }
+
+    var kind: CampusAIActionKind? {
+        CampusAIActionKind(rawValue: kindRawValue)
+    }
+
+    var payload: CampusAIActionPayload? {
+        guard let data = payloadJSON.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(CampusAIActionPayload.self, from: data)
+    }
+
+    var actionDraft: CampusAIActionDraft? {
+        guard let kind, let payload else { return nil }
+        return CampusAIActionDraft(
+            id: id.uuidString,
+            kind: kind,
+            title: title,
+            detail: detail,
+            payload: payload
+        )
+    }
+}
+
 private struct CampusAIMessageRow: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
     let message: CampusAIMessage
+    let actions: [CampusAIActionRecord]
     let isStreaming: Bool
+    let executeAction: (CampusAIActionRecord) -> Void
+    let cancelAction: (CampusAIActionRecord) -> Void
     @State private var isReasoningExpanded = false
 
     private var isUser: Bool {
@@ -857,6 +1074,19 @@ private struct CampusAIMessageRow: View {
                 } else {
                     CampusAIMessageMarkdown(markdown: message.text, isStreaming: isStreaming)
                 }
+
+                if !actions.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(actions) { action in
+                            CampusAIActionCard(
+                                action: action,
+                                executeAction: executeAction,
+                                cancelAction: cancelAction
+                            )
+                        }
+                    }
+                    .padding(.top, 2)
+                }
             }
             .font(.body)
             .foregroundStyle(AppTheme.primaryText)
@@ -894,6 +1124,133 @@ private struct CampusAITypingRow: View {
     }
 }
 
+private struct CampusAIActionCard: View {
+    let action: CampusAIActionRecord
+    let executeAction: (CampusAIActionRecord) -> Void
+    let cancelAction: (CampusAIActionRecord) -> Void
+
+    private var isPending: Bool {
+        action.status == .pending
+    }
+
+    private var kindTitle: String {
+        switch action.kind {
+        case .openAcademicRoute:
+            return "打开页面"
+        case .createCountdown:
+            return "创建倒计时"
+        case .createTimetableReminder:
+            return "创建课表提醒"
+        case nil:
+            return "待确认动作"
+        }
+    }
+
+    private var statusText: String {
+        switch action.status {
+        case .pending:
+            return "待确认"
+        case .completed:
+            return "已执行"
+        case .cancelled:
+            return "已取消"
+        case .failed:
+            return "执行失败"
+        }
+    }
+
+    private var iconName: String {
+        switch action.kind {
+        case .openAcademicRoute:
+            return "arrow.up.right.square"
+        case .createCountdown:
+            return "calendar.badge.clock"
+        case .createTimetableReminder:
+            return "bell.badge"
+        case nil:
+            return "sparkles"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: iconName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 28, height: 28)
+                    .background(AppTheme.accent.opacity(0.12), in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(kindTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+
+                    Text(action.title.nonEmptyTrimmed ?? kindTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppTheme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let detail = action.detail.nonEmptyTrimmed {
+                        Text(detail)
+                            .font(.footnote)
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: AppSpacing.micro)
+
+                Text(statusText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(statusForeground)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(statusForeground.opacity(0.12), in: Capsule())
+            }
+
+            if isPending {
+                HStack(spacing: 8) {
+                    Button {
+                        executeAction(action)
+                    } label: {
+                        Label("执行", systemImage: "checkmark")
+                            .font(.footnote.weight(.semibold))
+                            .frame(height: 30)
+                            .padding(.horizontal, 10)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button(role: .cancel) {
+                        cancelAction(action)
+                    } label: {
+                        Label("取消", systemImage: "xmark")
+                            .font(.footnote.weight(.semibold))
+                            .frame(height: 30)
+                            .padding(.horizontal, 10)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .padding(12)
+        .background(AppTheme.softFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var statusForeground: Color {
+        switch action.status {
+        case .pending:
+            return AppTheme.accent
+        case .completed:
+            return .green
+        case .cancelled:
+            return AppTheme.secondaryText
+        case .failed:
+            return AppTheme.danger
+        }
+    }
+}
+
 private struct CampusAITypingDots: View {
     var body: some View {
         HStack(spacing: 5) {
@@ -922,12 +1279,17 @@ private struct CampusAIMessageMarkdown: View {
 }
 
 private struct CampusAISettingsView: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     @Binding var settings: CampusAIUserSettings
     @State private var configuredProviderIDs: Set<CampusAIProviderID> = []
     @StateObject private var subscriptionStore = CampusAISubscriptionStore()
     @State private var isPaywallPresented = false
+
+    private var contextSnapshot: CampusAIContextPayload {
+        CampusAIContextBuilder.build(modelContext: modelContext, settings: settings.contextSettings)
+    }
 
     var body: some View {
         NavigationStack {
@@ -1010,6 +1372,10 @@ private struct CampusAISettingsView: View {
 
                     Button("全部开启") {
                         settings.contextSettings = .defaultValue
+                    }
+
+                    ForEach(contextSnapshot.sourceStatus, id: \.scope) { status in
+                        CampusAIContextSourceStatusRow(status: status)
                     }
                 } header: {
                     Text("上下文范围")
@@ -1118,6 +1484,69 @@ private struct CampusAIProviderListRow: View {
     }
 }
 
+private struct CampusAIContextSourceStatusRow: View {
+    let status: CampusAIContextSourceStatus
+
+    private var stateText: String {
+        switch status.state {
+        case .available:
+            return "可用"
+        case .missing:
+            return "缺失"
+        case .disabled:
+            return "已关闭"
+        case .localOnly:
+            return "本地"
+        }
+    }
+
+    private var stateColor: Color {
+        switch status.state {
+        case .available:
+            return .green
+        case .missing:
+            return .orange
+        case .disabled:
+            return AppTheme.secondaryText
+        case .localOnly:
+            return AppTheme.accent
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(status.scope)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Spacer(minLength: AppSpacing.micro)
+
+                Text(stateText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(stateColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(stateColor.opacity(0.12), in: Capsule())
+            }
+
+            Text(statusSummary)
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusSummary: String {
+        let countText = "条目 \(status.itemCount)"
+        if let lastSyncAt = status.lastSyncAt?.nonEmptyTrimmed {
+            return "\(countText) · \(lastSyncAt)"
+        }
+        return "\(countText) · \(status.note)"
+    }
+}
+
 private struct CampusAIProviderSettingsView: View {
     let provider: CampusAIProviderDescriptor
     @Binding var selectedProviderID: CampusAIProviderID
@@ -1212,7 +1641,7 @@ private struct CampusAISubscriptionPaywallView: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(AppTheme.accent)
 
-                        Text("每月 120 次 Leafy 托管 AI 查询，自动续费。")
+                        Text("每周 50 次 Leafy 托管 AI 查询，自动续费。")
                             .font(.subheadline)
                             .foregroundStyle(AppTheme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1223,7 +1652,8 @@ private struct CampusAISubscriptionPaywallView: View {
                 Section {
                     LabeledContent("当前额度", value: quotaText)
                     LabeledContent("免费额度", value: "10 次/月")
-                    LabeledContent("订阅额度", value: "120 次/月")
+                    LabeledContent("订阅额度", value: store.subscriptionQuotaText)
+                    LabeledContent("商品 ID", value: store.productID)
                 }
 
                 Section {
@@ -1257,6 +1687,7 @@ private struct CampusAISubscriptionPaywallView: View {
                         Text(errorMessage)
                             .font(.footnote)
                             .foregroundStyle(AppTheme.danger)
+                            .textSelection(.enabled)
                     }
                 }
             }
@@ -1278,16 +1709,16 @@ private struct CampusAISubscriptionPaywallView: View {
 
     private var priceText: String {
         guard let displayPrice = store.displayPrice else {
-            return "正在读取价格"
+            return store.isLoading ? "正在读取价格" : "价格未读取"
         }
-        return "\(displayPrice)/月"
+        return "\(displayPrice)/\(store.billingPeriodText)"
     }
 
     private var purchaseTitle: String {
         guard let displayPrice = store.displayPrice else {
             return "订阅"
         }
-        return "订阅 \(displayPrice)/月"
+        return "订阅 \(displayPrice)/\(store.billingPeriodText)"
     }
 
     private var quotaText: String {

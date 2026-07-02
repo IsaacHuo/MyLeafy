@@ -11,16 +11,21 @@ nonisolated struct CommunityFeedCache: CommunityFeedCaching {
     private static let key = "community.feed.placeholderCache"
 
     func load(query: CommunityFeedQuery) -> [CommunityPost] {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey(for: query)) else { return [] }
-        return (try? JSONDecoder().decode([CommunityPost].self, from: data)) ?? []
+        guard let data = UserDefaults.standard.data(forKey: Self.cacheKey(for: query)) else { return [] }
+        do {
+            return try JSONDecoder().decode([CommunityPost].self, from: data)
+        } catch {
+            CommunityDiagnostics.log.error("Community feed cache decode failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
 
     func save(_ posts: [CommunityPost], query: CommunityFeedQuery) {
         guard let data = try? JSONEncoder().encode(posts) else { return }
-        UserDefaults.standard.set(data, forKey: cacheKey(for: query))
+        UserDefaults.standard.set(data, forKey: Self.cacheKey(for: query))
     }
 
-    private func cacheKey(for query: CommunityFeedQuery) -> String {
+    static func cacheKey(for query: CommunityFeedQuery) -> String {
         CampusScopedDefaults.key("\(CommunityFeedCache.key).\(query.cacheKey)")
     }
 }
@@ -74,6 +79,15 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     func load(mode: CommunityFeedLoadMode = .cacheFirst, query: CommunityFeedQuery = .default) async {
+        guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
+            CommunityDiagnostics.log.info("CommunityFeedViewModel.load skipped by diagnostics")
+            isLoading = false
+            isLoadingMore = false
+            hasMoreItems = false
+            errorMessage = nil
+            return
+        }
+
         let loadID = UUID()
         activeLoadID = loadID
 
@@ -171,6 +185,11 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     func loadMoreIfNeeded() async {
+        guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
+            CommunityDiagnostics.log.info("CommunityFeedViewModel.loadMore skipped by diagnostics")
+            hasMoreItems = false
+            return
+        }
         guard !isLoading, !isLoadingMore, hasMoreItems else { return }
         guard let nextQuery = nextPageQuery() else {
             hasMoreItems = false

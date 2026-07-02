@@ -10,8 +10,8 @@ nonisolated enum LeafyExternalLinks {
     /// Library seat reservation portal.
     static let librarySeat = make("https://seat.bjfu.edu.cn/jsq-v/#/main/index")
 
-    /// Author's personal blog.
-    static let authorBlog = make("https://huoweifang.cn/zh/")
+    /// Project introduction page (open source).
+    static let authorBlog = make("https://huoweifang.cn/zh/projects/leafy.html")
 
     private static func make(_ string: String) -> URL {
         guard let url = URL(string: string) else {

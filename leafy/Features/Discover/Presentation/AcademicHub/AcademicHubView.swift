@@ -107,12 +107,16 @@ struct AcademicHubView: View {
             .onChange(of: appNavigation.requestedAcademicRoute) { _, route in
                 handleAcademicRouteRequest(route)
             }
+            .onChange(of: appNavigation.requestedAcademicDetailRoute) { _, route in
+                handleAcademicDetailRouteRequest(route)
+            }
             .onChange(of: appNavigation.requestedClassroomLookup) { _, request in
                 handleClassroomLookupRequest(request)
             }
             .onAppear {
                 sanitizeSelectedTab()
                 handleAcademicRouteRequest(appNavigation.requestedAcademicRoute)
+                handleAcademicDetailRouteRequest(appNavigation.requestedAcademicDetailRoute)
                 handleClassroomLookupRequest(appNavigation.requestedClassroomLookup)
             }
         }
@@ -271,6 +275,39 @@ struct AcademicHubView: View {
         }
 
         appNavigation.requestedAcademicRoute = nil
+    }
+
+    @MainActor
+    private func handleAcademicDetailRouteRequest(_ route: AcademicDetailRoute?) {
+        guard let route else { return }
+        guard
+            route.tab.isVisible(
+                isCustomCampus: isCustomCampus,
+                isCommunityEnabled: isCommunityEnabled,
+                isMedicalEnabled: isMedicalEnabled,
+                campusID: campusID),
+            CampusAcademicVisibility.isRouteVisible(
+                route,
+                isCustomCampus: isCustomCampus,
+                isCommunityEnabled: isCommunityEnabled,
+                isMedicalEnabled: isMedicalEnabled
+            )
+        else {
+            appNavigation.requestedAcademicDetailRoute = nil
+            sanitizeSelectedTab()
+            return
+        }
+
+        navigationPath.removeAll()
+        let changesSelectedTab = selectedTab != route.tab
+        isHandlingExternalRoute = changesSelectedTab
+        selectedTab = route.tab
+        openRoute(route)
+        if !changesSelectedTab {
+            isHandlingExternalRoute = false
+        }
+
+        appNavigation.requestedAcademicDetailRoute = nil
     }
 
     @MainActor

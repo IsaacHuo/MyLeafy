@@ -36,6 +36,33 @@ type CampusAIRequest = {
   contextSettings?: unknown;
 };
 
+type CampusAIActionKind =
+  | "openAcademicRoute"
+  | "createCountdown"
+  | "createTimetableReminder";
+
+type CampusAIActionPayload = {
+  route?: string;
+  countdownTitle?: string;
+  targetDate?: string;
+  week?: number;
+  dayOfWeek?: number;
+  period?: number;
+  endPeriod?: number;
+  title?: string;
+  location?: string;
+  note?: string;
+  minutesBefore?: number;
+};
+
+type CampusAIActionDraft = {
+  id?: string;
+  kind: CampusAIActionKind;
+  title?: string;
+  detail?: string;
+  payload?: CampusAIActionPayload;
+};
+
 type DeepSeekUsage = {
   prompt_tokens?: number;
   prompt_cache_hit_tokens?: number;
@@ -76,6 +103,10 @@ export async function handler(request: Request): Promise<Response> {
   const authResult = await authenticateUser(adminClient, request);
   if (!authResult.ok) {
     return json({ error: authResult.error }, authResult.status);
+  }
+
+  if (deepSeekAPIKeys().length === 0) {
+    return json({ error: "AI 服务未配置 DeepSeek API Key。" }, 500);
   }
 
   const body = await readJSON<CampusAIRequest>(request);
@@ -163,6 +194,13 @@ export async function handler(request: Request): Promise<Response> {
           usage = nextUsage;
         },
       });
+      const actionPlan = await planActions(
+        body,
+        message,
+        result.answer,
+        signal,
+      );
+      usage = mergeUsage(usage, actionPlan.usage);
 
       completed = true;
       enqueueSSE(controller, {
@@ -172,6 +210,7 @@ export async function handler(request: Request): Promise<Response> {
         finish_reason: result.finishReason,
         suggested_title: shortTitle(message),
         summary: "",
+        actions: actionPlan.actions,
       });
 
       await completeUsage(adminClient, {
@@ -179,7 +218,8 @@ export async function handler(request: Request): Promise<Response> {
         status: "success",
         counted: result.answer.length > 0,
         requestCharCount,
-        responseCharCount: result.answer.length,
+        responseCharCount: result.answer.length +
+          safeJSONStringify(actionPlan.actions).length,
         usage,
         errorCode: null,
       });
@@ -232,35 +272,157 @@ async function streamDeepSeek(
     onUsage: (usage: DeepSeekUsage) => void;
   },
 ): Promise<{ answer: string; reasoning: string; finishReason: string | null }> {
-  const apiKey = Deno.env.get("DEEPSEEK_API_KEY")?.trim();
-  if (!apiKey) {
-    throw new Error("Missing DEEPSEEK_API_KEY.");
+  const apiKeys = deepSeekAPIKeys();
+  if (apiKeys.length === 0) {
+    throw new Error("Missing DEEPSEEK_API_KEY or DEEPSEEK_API_KEYS.");
   }
 
-  const response = await fetch(deepSeekChatCompletionsURL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    },
-    body: JSON.stringify(deepSeekPayload(body, message)),
-    signal,
-  });
+  const payload = JSON.stringify(deepSeekPayload(body, message));
+  let lastError: Error | null = null;
+  for (const [index, apiKey] of apiKeys.entries()) {
+    let response: Response;
+    try {
+      response = await fetch(deepSeekChatCompletionsURL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: payload,
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted || index === apiKeys.length - 1) throw error;
+      lastError = new Error(redactProviderError(errorMessage(error)));
+      console.warn(
+        `campus-ai-assistant: DeepSeek key ${
+          index + 1
+        }/${apiKeys.length} failed before stream; trying fallback`,
+        lastError.message,
+      );
+      continue;
+    }
 
-  if (!response.ok) {
-    const responseText = await response.text();
-    throw new Error(
-      `DeepSeek returned ${response.status}: ${
-        redactProviderError(responseText)
-      }`,
-    );
+    if (!response.ok) {
+      const responseText = await response.text();
+      const error = new Error(
+        `DeepSeek key ${
+          index + 1
+        }/${apiKeys.length} returned ${response.status}: ${
+          redactProviderError(responseText)
+        }`,
+      );
+      if (
+        index < apiKeys.length - 1 &&
+        shouldRetryDeepSeekStatus(response.status)
+      ) {
+        lastError = error;
+        console.warn(
+          "campus-ai-assistant: DeepSeek key failed before stream; trying fallback",
+          error.message,
+        );
+        continue;
+      }
+      throw error;
+    }
+    if (!response.body) {
+      throw new Error("DeepSeek response did not include a stream body.");
+    }
+    return await readDeepSeekStream(response, callbacks);
   }
-  if (!response.body) {
+
+  throw lastError ?? new Error("DeepSeek request failed.");
+}
+
+async function planActions(
+  body: CampusAIRequest,
+  message: string,
+  answer: string,
+  signal: AbortSignal,
+): Promise<{ actions: CampusAIActionDraft[]; usage: DeepSeekUsage }> {
+  if (!answer.trim()) return { actions: [], usage: {} };
+
+  try {
+    const payload = JSON.stringify(actionPlannerPayload(body, message, answer));
+    const apiKeys = deepSeekAPIKeys();
+    let lastError: Error | null = null;
+    for (const [index, apiKey] of apiKeys.entries()) {
+      let response: Response;
+      try {
+        response = await fetch(deepSeekChatCompletionsURL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: payload,
+          signal,
+        });
+      } catch (error) {
+        if (signal.aborted || index === apiKeys.length - 1) throw error;
+        lastError = new Error(redactProviderError(errorMessage(error)));
+        console.warn(
+          `campus-ai-assistant: DeepSeek action planner key ${
+            index + 1
+          }/${apiKeys.length} failed before response; trying fallback`,
+          lastError.message,
+        );
+        continue;
+      }
+
+      const responseText = await response.text();
+      if (!response.ok) {
+        const error = new Error(
+          `DeepSeek action planner key ${
+            index + 1
+          }/${apiKeys.length} returned ${response.status}: ${
+            redactProviderError(responseText)
+          }`,
+        );
+        if (
+          index < apiKeys.length - 1 &&
+          shouldRetryDeepSeekStatus(response.status)
+        ) {
+          lastError = error;
+          console.warn(
+            "campus-ai-assistant: DeepSeek action planner key failed; trying fallback",
+            error.message,
+          );
+          continue;
+        }
+        throw error;
+      }
+
+      return parseActionPlannerProviderResponse(responseText);
+    }
+
+    throw lastError ?? new Error("DeepSeek action planner failed.");
+  } catch (error) {
+    if (!signal.aborted) {
+      console.warn(
+        "campus-ai-assistant: action planning failed",
+        redactProviderError(errorMessage(error)),
+      );
+    }
+    return { actions: [], usage: {} };
+  }
+}
+
+async function readDeepSeekStream(
+  response: Response,
+  callbacks: {
+    onDelta: (delta: string) => void;
+    onReasoningDelta: (delta: string) => void;
+    onUsage: (usage: DeepSeekUsage) => void;
+  },
+): Promise<{ answer: string; reasoning: string; finishReason: string | null }> {
+  const body = response.body;
+  if (!body) {
     throw new Error("DeepSeek response did not include a stream body.");
   }
-
-  const reader = response.body.getReader();
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let answer = "";
@@ -335,6 +497,71 @@ export function deepSeekPayload(body: CampusAIRequest, message: string) {
   };
 }
 
+export function actionPlannerPayload(
+  body: CampusAIRequest,
+  message: string,
+  answer: string,
+) {
+  return {
+    model: defaultModel,
+    messages: [
+      {
+        role: "system",
+        content: actionPlannerSystemPrompt(),
+      },
+      {
+        role: "user",
+        content: safeJSONStringify({
+          message,
+          answer,
+          context: body.context ?? {},
+          context_settings: body.context_settings ?? body.contextSettings ?? {},
+          supported_actions: [
+            {
+              kind: "openAcademicRoute",
+              required_payload_fields: ["route"],
+              allowed_values: {
+                route: [
+                  "grades",
+                  "gradeAnalytics",
+                  "examSchedule",
+                  "scheduleReports",
+                  "customCountdowns",
+                  "teachingPlan",
+                  "trainingProgram",
+                ],
+              },
+            },
+            {
+              kind: "createCountdown",
+              required_payload_fields: ["countdownTitle", "targetDate"],
+              allowed_values: { targetDate: ["yyyy-MM-dd"] },
+            },
+            {
+              kind: "createTimetableReminder",
+              required_payload_fields: ["week", "dayOfWeek", "period", "title"],
+              allowed_values: {
+                week: ["1...30"],
+                dayOfWeek: ["1...7"],
+                period: ["1...12"],
+              },
+            },
+          ],
+          safety_boundary: [
+            "所有动作都只生成待确认草稿，不会自动执行。",
+            "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
+            "缺少必要 payload 字段或字段无法从上下文确定时，返回空 actions。",
+          ],
+        }),
+      },
+    ],
+    stream: false,
+    temperature: 0,
+    max_tokens: 700,
+    user: userCacheKey(body.app_transaction_id),
+  };
+}
+
 export function systemPrompt(userSystemPrompt?: string | null) {
   const customPrompt = normalizeText(userSystemPrompt)
     ?.slice(0, maxUserSystemPromptLength);
@@ -345,9 +572,23 @@ export function systemPrompt(userSystemPrompt?: string | null) {
     "不要声称读取了未提供的数据，不要声称读取了用户上传文件正文、图片像素、OCR、PDF、Word、PPT、表格或本地文件路径。",
     "社区内容只可当作用户当前设备已缓存的公开 feed 摘要，不要推断私信、身份资料或未缓存远端内容。",
     "医疗台账只能做整理、提醒、流程梳理和材料核对，不提供诊断、治疗、用药或医疗决策建议。",
-    "回复必须是中文 Markdown。优先使用短标题、列表、加粗和清晰分段；不要输出 JSON，不要输出动作草稿。",
+    "回复必须是中文 Markdown。优先使用短标题、列表、加粗和清晰分段；不要在正文输出 JSON 或动作草稿，动作会由单独规划器生成。",
     customPrompt ? `用户自定义偏好：\n${customPrompt}` : "",
   ].filter(Boolean).join("\n");
+}
+
+export function actionPlannerSystemPrompt() {
+  return [
+    "你是 MyLeafy 的动作规划器，只能输出 JSON，不能输出 Markdown、解释、代码块或多余文本。",
+    "根据用户问题、AI 已生成回答和本机上下文，最多生成 3 个需要用户确认后执行的动作。",
+    '只有用户明确想打开页面、设置倒计时、设置课表提醒，或回答中明显需要这一步时才生成动作；否则返回 {"actions":[]}。',
+    "支持 kind：openAcademicRoute、createCountdown、createTimetableReminder。",
+    "openAcademicRoute.payload.route 只能是 grades、gradeAnalytics、examSchedule、scheduleReports、customCountdowns、teachingPlan、trainingProgram。",
+    "createCountdown.payload 必须包含 countdownTitle 和 targetDate，targetDate 使用 yyyy-MM-dd。",
+    "createTimetableReminder.payload 必须包含 week、dayOfWeek、period、title；dayOfWeek 为 1 到 7，minutesBefore 必须大于等于 0。",
+    "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
+    '输出格式必须是 {"actions":[{"kind":"...","title":"...","detail":"...","payload":{...}}]}。',
+  ].join("\n");
 }
 
 export function campusAIResponseFormat() {
@@ -428,6 +669,237 @@ export function processDeepSeekSSEBlock(
     if (reasoning) callbacks.onReasoningDelta(reasoning);
     const content = stringValue(delta.content);
     if (content) callbacks.onDelta(content);
+  }
+}
+
+export function parseActionPlannerProviderResponse(
+  responseText: string,
+): { actions: CampusAIActionDraft[]; usage: DeepSeekUsage } {
+  const payload = JSON.parse(responseText) as Record<string, unknown>;
+  const usagePayload = objectValue(payload.usage);
+  const usage = usagePayload ? deepSeekUsage(usagePayload) : {};
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const content = choices
+    .map((choice) => objectValue(choice))
+    .map((choice) => objectValue(choice?.message))
+    .map((message) => stringValue(message?.content))
+    .find((value) => !!value) ?? "";
+
+  return {
+    actions: parseActionPlannerActions(content),
+    usage,
+  };
+}
+
+export function parseActionPlannerActions(content: string) {
+  for (const candidate of actionPlannerJSONCandidates(content)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const rawActions = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.actions)
+        ? parsed.actions
+        : [];
+      const actions = rawActions
+        .map((item: unknown) => validateActionDraft(item))
+        .filter((
+          item: CampusAIActionDraft | null,
+        ): item is CampusAIActionDraft => item !== null);
+      if (actions.length > 0 || rawActions.length === 0) {
+        return actions.slice(0, 3);
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return [];
+}
+
+function actionPlannerJSONCandidates(content: string) {
+  let trimmed = content.trim();
+  if (trimmed.startsWith("```")) {
+    const lines = trimmed.replaceAll("\r\n", "\n").split("\n");
+    if (lines.length > 1) {
+      if (lines.at(-1)?.trim() === "```") lines.pop();
+      lines.shift();
+      trimmed = lines.join("\n").trim();
+    }
+  }
+
+  const candidates = [trimmed];
+  const objectStart = trimmed.indexOf("{");
+  const objectEnd = trimmed.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd >= objectStart) {
+    candidates.push(trimmed.slice(objectStart, objectEnd + 1));
+  }
+  const arrayStart = trimmed.indexOf("[");
+  const arrayEnd = trimmed.lastIndexOf("]");
+  if (arrayStart >= 0 && arrayEnd >= arrayStart) {
+    candidates.push(trimmed.slice(arrayStart, arrayEnd + 1));
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+function validateActionDraft(value: unknown): CampusAIActionDraft | null {
+  const record = objectValue(value);
+  if (!record) return null;
+  const rawKind = stringValue(record.kind);
+  const kind = normalizeActionKind(rawKind);
+  if (!kind) return null;
+
+  const payloadRecord = objectValue(record.payload) ?? {};
+  const payload = normalizeActionPayload(payloadRecord);
+  const draft: CampusAIActionDraft = {
+    id: stringValue(record.id) ?? crypto.randomUUID(),
+    kind,
+    title: stringValue(record.title) ?? "",
+    detail: stringValue(record.detail) ?? "",
+    payload,
+  };
+
+  switch (kind) {
+    case "openAcademicRoute":
+      return validateOpenAcademicRoute(draft);
+    case "createCountdown":
+      return validateCreateCountdown(draft);
+    case "createTimetableReminder":
+      return validateCreateTimetableReminder(draft);
+  }
+}
+
+function normalizeActionKind(value: string | null): CampusAIActionKind | null {
+  switch (value) {
+    case "openAcademicRoute":
+    case "open_academic_route":
+      return "openAcademicRoute";
+    case "createCountdown":
+    case "create_countdown":
+      return "createCountdown";
+    case "createTimetableReminder":
+    case "create_timetable_reminder":
+      return "createTimetableReminder";
+    default:
+      return null;
+  }
+}
+
+function normalizeActionPayload(
+  payload: Record<string, unknown>,
+): CampusAIActionPayload {
+  return {
+    route: stringValue(payload.route) ?? undefined,
+    countdownTitle: stringValue(payload.countdownTitle) ??
+      stringValue(payload.countdown_title) ?? undefined,
+    targetDate: stringValue(payload.targetDate) ??
+      stringValue(payload.target_date) ?? undefined,
+    week: integerValue(payload.week) ?? undefined,
+    dayOfWeek: integerValue(payload.dayOfWeek) ??
+      integerValue(payload.day_of_week) ?? undefined,
+    period: integerValue(payload.period) ?? undefined,
+    endPeriod: integerValue(payload.endPeriod) ??
+      integerValue(payload.end_period) ?? undefined,
+    title: stringValue(payload.title) ?? undefined,
+    location: stringValue(payload.location) ?? undefined,
+    note: stringValue(payload.note) ?? undefined,
+    minutesBefore: integerValue(payload.minutesBefore) ??
+      integerValue(payload.minutes_before) ?? undefined,
+  };
+}
+
+function validateOpenAcademicRoute(
+  draft: CampusAIActionDraft,
+): CampusAIActionDraft | null {
+  const route = draft.payload?.route;
+  const allowedRoutes = new Set([
+    "grades",
+    "gradeAnalytics",
+    "examSchedule",
+    "scheduleReports",
+    "customCountdowns",
+    "teachingPlan",
+    "trainingProgram",
+  ]);
+  if (!route || !allowedRoutes.has(route)) return null;
+  return {
+    ...draft,
+    title: normalizeText(draft.title) ?? `打开${academicRouteTitle(route)}`,
+    payload: { route },
+  };
+}
+
+function validateCreateCountdown(
+  draft: CampusAIActionDraft,
+): CampusAIActionDraft | null {
+  const title = normalizeText(draft.payload?.countdownTitle) ??
+    normalizeText(draft.payload?.title);
+  const targetDate = normalizeText(draft.payload?.targetDate);
+  if (!title || !targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+    return null;
+  }
+  return {
+    ...draft,
+    title: normalizeText(draft.title) ?? "创建倒计时",
+    payload: {
+      countdownTitle: title,
+      targetDate,
+    },
+  };
+}
+
+function validateCreateTimetableReminder(
+  draft: CampusAIActionDraft,
+): CampusAIActionDraft | null {
+  const week = draft.payload?.week;
+  const dayOfWeek = draft.payload?.dayOfWeek;
+  const period = draft.payload?.period;
+  const title = normalizeText(draft.payload?.title);
+  if (
+    !week || week < 1 || week > 30 ||
+    !dayOfWeek || dayOfWeek < 1 || dayOfWeek > 7 ||
+    !period || period < 1 || period > 12 ||
+    !title
+  ) {
+    return null;
+  }
+  const endPeriod =
+    draft.payload?.endPeriod && draft.payload.endPeriod >= period &&
+      draft.payload.endPeriod <= 12
+      ? draft.payload.endPeriod
+      : undefined;
+  return {
+    ...draft,
+    title: normalizeText(draft.title) ?? "创建课表提醒",
+    payload: {
+      week,
+      dayOfWeek,
+      period,
+      endPeriod,
+      title,
+      location: normalizeText(draft.payload?.location) ?? undefined,
+      note: normalizeText(draft.payload?.note) ?? undefined,
+      minutesBefore: Math.max(0, draft.payload?.minutesBefore ?? 0),
+    },
+  };
+}
+
+function academicRouteTitle(route: string) {
+  switch (route) {
+    case "grades":
+      return "成绩查询";
+    case "gradeAnalytics":
+      return "成绩分析";
+    case "examSchedule":
+      return "考试与日程";
+    case "scheduleReports":
+      return "日程推送";
+    case "customCountdowns":
+      return "自定义倒计时";
+    case "teachingPlan":
+      return "教学计划";
+    case "trainingProgram":
+      return "培养方案";
+    default:
+      return "学业页面";
   }
 }
 
@@ -581,6 +1053,55 @@ function makeAdminClient() {
   });
 }
 
+export function deepSeekAPIKeys() {
+  const keys: string[] = [];
+  appendDeepSeekAPIKeys(keys, Deno.env.get("DEEPSEEK_API_KEY"));
+  appendDeepSeekAPIKeys(keys, Deno.env.get("DEEPSEEK_API_KEYS"));
+  for (let index = 1; index <= 10; index += 1) {
+    appendDeepSeekAPIKeys(keys, Deno.env.get(`DEEPSEEK_API_KEY_${index}`));
+  }
+  return Array.from(new Set(keys));
+}
+
+function appendDeepSeekAPIKeys(keys: string[], value: string | undefined) {
+  for (const key of parseDeepSeekAPIKeys(value)) {
+    if (key.length > 0) keys.push(key);
+  }
+}
+
+export function parseDeepSeekAPIKeys(value: string | undefined) {
+  const raw = value?.trim();
+  if (!raw) return [];
+
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => typeof item === "string" ? item.trim() : "")
+          .filter(Boolean);
+      }
+    } catch {
+      // Fall back to delimiter parsing below.
+    }
+  }
+
+  return raw
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function shouldRetryDeepSeekStatus(status: number) {
+  return status === 401 ||
+    status === 403 ||
+    status === 408 ||
+    status === 409 ||
+    status === 425 ||
+    status === 429 ||
+    status >= 500;
+}
+
 async function readJSON<T>(request: Request): Promise<T> {
   try {
     return await request.json() as T;
@@ -633,6 +1154,21 @@ function estimatedCostUSD(usage: DeepSeekUsage) {
   const output = usage.completion_tokens ?? 0;
   return (cacheMissInput * inputCacheMissCostPerMillion +
     output * outputCostPerMillion) / 1_000_000;
+}
+
+function mergeUsage(lhs: DeepSeekUsage, rhs: DeepSeekUsage): DeepSeekUsage {
+  return {
+    prompt_tokens: (lhs.prompt_tokens ?? 0) + (rhs.prompt_tokens ?? 0),
+    prompt_cache_hit_tokens: (lhs.prompt_cache_hit_tokens ?? 0) +
+      (rhs.prompt_cache_hit_tokens ?? 0),
+    prompt_cache_miss_tokens: (lhs.prompt_cache_miss_tokens ?? 0) +
+      (rhs.prompt_cache_miss_tokens ?? 0),
+    completion_tokens: (lhs.completion_tokens ?? 0) +
+      (rhs.completion_tokens ?? 0),
+    reasoning_tokens: (lhs.reasoning_tokens ?? 0) +
+      (rhs.reasoning_tokens ?? 0),
+    total_tokens: (lhs.total_tokens ?? 0) + (rhs.total_tokens ?? 0),
+  };
 }
 
 function campusIDFromContext(context: unknown): string {

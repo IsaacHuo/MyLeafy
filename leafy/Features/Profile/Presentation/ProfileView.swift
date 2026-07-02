@@ -259,7 +259,7 @@ struct ProfileView: View {
         Button {
             browserItem = ProfileBrowserItem(url: LeafyExternalLinks.authorBlog)
         } label: {
-            profileRow(icon: "safari.fill", title: "作者博客", detail: "如您需要，可直接联系我")
+            profileRow(icon: "safari.fill", title: "项目介绍", detail: "此项目的开源页面")
         }
     }
 

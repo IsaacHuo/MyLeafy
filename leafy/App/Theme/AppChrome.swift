@@ -120,7 +120,7 @@ struct LeafyGlassGroup<Content: View>: View {
 
     var body: some View {
         #if os(iOS)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             GlassEffectContainer(spacing: spacing) {
                 content()
             }
@@ -188,7 +188,7 @@ extension View {
         isInteractive: Bool = false
     ) -> some View {
         #if os(iOS)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             let glass = tint.map { Glass.regular.tint($0) } ?? Glass.regular
             if isInteractive {
                 self.glassEffect(glass.interactive(), in: shape)

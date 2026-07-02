@@ -1,6 +1,7 @@
 import {
   corsHeaders,
   createAdminContext,
+  errorResponse,
   json,
   normalizeDate,
   normalizeLevel,
@@ -24,7 +25,7 @@ Deno.serve(async (request) => {
   }
 
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return errorResponse(405, "method_not_allowed", "Method not allowed.", { retryable: false });
   }
 
   const context = await createAdminContext(request);
@@ -41,23 +42,23 @@ Deno.serve(async (request) => {
   const expiresAt = normalizeDate(body.expires_at);
 
   if (!title) {
-    return json({ error: "标题不能为空。" }, 400);
+    return errorResponse(400, "bad_request", "标题不能为空。");
   }
 
   if (!content) {
-    return json({ error: "正文不能为空。" }, 400);
+    return errorResponse(400, "bad_request", "正文不能为空。");
   }
 
   if (title.length > 120) {
-    return json({ error: "标题最多 120 个字符。" }, 400);
+    return errorResponse(400, "bad_request", "标题最多 120 个字符。");
   }
 
   if (content.length > 4000) {
-    return json({ error: "正文最多 4000 个字符。" }, 400);
+    return errorResponse(400, "bad_request", "正文最多 4000 个字符。");
   }
 
   if (expiresAt && publishedAt && new Date(expiresAt).getTime() <= new Date(publishedAt).getTime()) {
-    return json({ error: "过期时间必须晚于发布时间。" }, 400);
+    return errorResponse(400, "bad_request", "过期时间必须晚于发布时间。");
   }
 
   const { data, error } = await context.adminClient
@@ -75,7 +76,7 @@ Deno.serve(async (request) => {
     .single();
 
   if (error) {
-    return json({ error: error.message }, 500);
+    return errorResponse(500, "backend_unavailable", error.message);
   }
 
   return json({ announcement: data });

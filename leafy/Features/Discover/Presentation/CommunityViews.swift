@@ -1,4 +1,5 @@
 import Combine
+import OSLog
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -243,15 +244,21 @@ struct RealCommunitySectionView: View {
                     .padding(.bottom, 40)
                 }
                 .refreshable {
+                    guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
+                        CommunityDiagnostics.log.info("Community feed refresh skipped by diagnostics")
+                        return
+                    }
                     await viewModel.load(mode: .refresh, query: feedQuery)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task(id: refreshID) {
+            CommunityDiagnostics.log.info("Community terms task began")
             await refreshTermsState()
         }
         .task(id: feedTaskID) {
+            CommunityDiagnostics.log.info("Community feed task began for query \(feedQuery.cacheKey, privacy: .public)")
             await loadFeedForCurrentQuery()
         }
         .sheet(isPresented: $showingTermsSheet) {
@@ -452,6 +459,11 @@ struct RealCommunitySectionView: View {
 
     @MainActor
     private func refreshTermsState() async {
+        guard !CommunityDiagnosticsOptions.disablesTermsGate else {
+            CommunityDiagnostics.log.info("Community terms task skipped by diagnostics")
+            hasAcceptedTerms = true
+            return
+        }
         switch await communityAccessGate.evaluate(.communityEntry) {
         case .allowed:
             hasAcceptedTerms = true
@@ -467,6 +479,10 @@ struct RealCommunitySectionView: View {
     }
 
     private func loadFeedForCurrentQuery() async {
+        guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
+            CommunityDiagnostics.log.info("Community feed load skipped by diagnostics")
+            return
+        }
         guard await CommunityFeedSearchDebounce.waitIfNeeded(for: feedQuery) else { return }
         await viewModel.load(query: feedQuery)
     }

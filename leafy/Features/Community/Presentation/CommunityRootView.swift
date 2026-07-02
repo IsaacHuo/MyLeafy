@@ -1,4 +1,5 @@
 import Combine
+import OSLog
 import QuickLook
 import Supabase
 import SwiftUI
@@ -26,19 +27,30 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
     }
 
     func start(profileID: UUID) {
+        guard !CommunityDiagnosticsOptions.disablesNotifications else {
+            CommunityDiagnostics.log.info("Community notification badge start skipped by diagnostics")
+            stop(reset: true)
+            return
+        }
         guard self.profileID != profileID else { return }
 
+        CommunityDiagnostics.log.info("Community notification badge start for profile \(profileID.uuidString, privacy: .public)")
         stop(reset: false)
         self.profileID = profileID
         let subscriptionID = UUID()
         self.subscriptionID = subscriptionID
         scheduleRefresh()
-        realtimeTask = Task { [weak self] in
-            await self?.subscribeToNotificationChanges(profileID: profileID, subscriptionID: subscriptionID)
+        if CommunityDiagnosticsOptions.disablesNotificationRealtime {
+            CommunityDiagnostics.log.info("Community notification realtime subscription skipped by diagnostics")
+        } else {
+            realtimeTask = Task { [weak self] in
+                await self?.subscribeToNotificationChanges(profileID: profileID, subscriptionID: subscriptionID)
+            }
         }
     }
 
     func stop(reset: Bool) {
+        CommunityDiagnostics.log.debug("Community notification badge stop reset=\(reset, privacy: .public)")
         realtimeTask?.cancel()
         realtimeTask = nil
         scheduledRefreshTask?.cancel()
@@ -57,12 +69,17 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
     }
 
     func refresh() async {
+        guard !CommunityDiagnosticsOptions.disablesNotifications else {
+            unreadCount = 0
+            return
+        }
         guard profileID != nil else {
             unreadCount = 0
             return
         }
 
         do {
+            CommunityDiagnostics.log.info("Community notification badge refresh started")
             unreadCount = try await CommunityTimeout.run(
                 seconds: 6,
                 message: "未读通知加载超时。"
@@ -71,6 +88,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
             }
         } catch {
             guard !Task.isCancelled else { return }
+            CommunityDiagnostics.log.error("Community notification badge refresh failed: \(error.localizedDescription, privacy: .public)")
             unreadCount = 0
         }
     }
@@ -86,6 +104,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
 
     private func subscribeToNotificationChanges(profileID: UUID, subscriptionID: UUID) async {
         do {
+            CommunityDiagnostics.log.info("Community notification realtime subscription starting")
             try await repository.ensureAnonymousSession()
             guard !Task.isCancelled else { return }
             guard self.subscriptionID == subscriptionID else { return }
@@ -128,12 +147,14 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
             }
 
             try await channel.subscribeWithError()
+            CommunityDiagnostics.log.info("Community notification realtime subscription active")
 
             while !Task.isCancelled && self.subscriptionID == subscriptionID {
                 try await Task.sleep(for: .seconds(60))
             }
         } catch {
             guard !Task.isCancelled else { return }
+            CommunityDiagnostics.log.error("Community notification realtime subscription failed: \(error.localizedDescription, privacy: .public)")
             await refresh()
         }
     }
@@ -181,9 +202,14 @@ struct CommunityRootView: View {
     }
 
     var body: some View {
+        let _ = CommunityDiagnostics.log.debug("CommunityRootView body evaluated; feedVisible=\(shouldShowCommunityFeed, privacy: .public) options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
         NavigationStack {
             ZStack(alignment: .top) {
-                if shouldShowCommunityFeed {
+                if CommunityDiagnosticsOptions.usesEmptyShell {
+                    CommunityDiagnosticsShellView()
+                        .leafyAdaptiveContentWidth(maxWidth: 560, horizontalPadding: AppSpacing.page)
+                        .padding(.top, 72)
+                } else if shouldShowCommunityFeed {
                     RealCommunitySectionView(
                         selectedCategory: $selectedCommunityCategory,
                         isShowingHotPosts: $isShowingHotPosts,
@@ -280,14 +306,23 @@ struct CommunityRootView: View {
             }
             .leafyOperationAlert($operationAlert)
             .task {
+                CommunityDiagnostics.log.info("CommunityRootView startup task began; options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
+                guard !CommunityDiagnosticsOptions.disablesRootStartup else {
+                    CommunityDiagnostics.log.info("CommunityRootView startup task skipped by diagnostics")
+                    return
+                }
                 sessionManager.startBootstrapIfNeeded()
+                guard !CommunityDiagnosticsOptions.disablesNotifications else {
+                    CommunityDiagnostics.log.info("CommunityRootView notification refresh skipped by diagnostics")
+                    return
+                }
                 Task {
                     try? await Task.sleep(for: .milliseconds(800))
                     await refreshUnreadNotificationCount()
                 }
             }
             .onChange(of: showingNotifications) { _, isShowing in
-                if !isShowing {
+                if !isShowing, !CommunityDiagnosticsOptions.disablesNotifications {
                     Task { await refreshUnreadNotificationCount() }
                 }
             }
@@ -296,6 +331,7 @@ struct CommunityRootView: View {
                 Task { await openRequestedCommunityPost(id: postID) }
             }
             .onAppear {
+                CommunityDiagnostics.log.info("CommunityRootView appeared")
                 guard let postID = appNavigation.requestedCommunityPostID else { return }
                 Task { await openRequestedCommunityPost(id: postID) }
             }
@@ -463,6 +499,10 @@ struct CommunityRootView: View {
 
     @MainActor
     private func refreshUnreadNotificationCount() async {
+        guard !CommunityDiagnosticsOptions.disablesNotifications else {
+            notificationBadgeViewModel.stop(reset: true)
+            return
+        }
         await notificationBadgeViewModel.refresh()
     }
 
@@ -481,6 +521,29 @@ struct CommunityRootView: View {
             appNavigation.requestedCommunityPostID = nil
             communityActionError = error.localizedDescription
         }
+    }
+}
+
+private struct CommunityDiagnosticsShellView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.compact) {
+            Image(systemName: "stethoscope")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 48, height: 48)
+                .background(AppTheme.accentSoft, in: Circle())
+
+            Text("社区诊断空壳")
+                .leafyHeadline()
+                .foregroundStyle(AppTheme.primaryText)
+
+            Text("已跳过社区会话、条款、Feed 和通知启动链路。")
+                .leafyBody()
+                .foregroundStyle(AppTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(AppSpacing.section)
+        .leafyCardStyle()
     }
 }
 
@@ -880,7 +943,7 @@ private struct CommunityNativeGlassGroup<Content: View>: View {
 
     var body: some View {
         #if os(iOS)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             GlassEffectContainer(spacing: spacing) {
                 content()
             }
@@ -900,7 +963,7 @@ private extension View {
         isInteractive: Bool
     ) -> some View {
         #if os(iOS)
-        if #available(iOS 26.0, *) {
+        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             let glass = isInteractive ? Glass.regular.interactive() : Glass.regular
             self.glassEffect(glass, in: shape)
         } else {

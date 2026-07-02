@@ -200,6 +200,7 @@ actor TimetableSharingService {
 
     func createInvite() async throws -> TimetableInvite {
         _ = try await requireCompletedProfile()
+        try await requireTimetableSharingCapability()
         let client = try LeafySupabase.shared.requireClient()
 
         var lastError: Error?
@@ -230,6 +231,7 @@ actor TimetableSharingService {
 
     func acceptInvite(code: String) async throws -> SharedTimetableSnapshot {
         _ = try await requireCompletedProfile()
+        try await requireTimetableSharingCapability()
         let client = try LeafySupabase.shared.requireClient()
         let normalized = normalizeInviteCode(code)
 
@@ -250,6 +252,7 @@ actor TimetableSharingService {
 
     func revokeShare(viewerID: UUID) async throws {
         let profile = try await requireCompletedProfile()
+        try await requireTimetableSharingCapability()
         let client = try LeafySupabase.shared.requireClient()
 
         do {
@@ -266,6 +269,7 @@ actor TimetableSharingService {
 
     func stopSharing() async throws {
         _ = try await requireCompletedProfile()
+        try await requireTimetableSharingCapability()
         let client = try LeafySupabase.shared.requireClient()
 
         do {
@@ -279,6 +283,7 @@ actor TimetableSharingService {
 
     func leaveShare(ownerID: UUID) async throws {
         _ = try await requireCompletedProfile()
+        try await requireTimetableSharingCapability()
         let client = try LeafySupabase.shared.requireClient()
 
         do {
@@ -302,6 +307,19 @@ actor TimetableSharingService {
         }
 
         return profile
+    }
+
+    private nonisolated func requireTimetableSharingCapability() async throws {
+        do {
+            let capabilities = try await SupabaseBackendClient.shared.capabilities()
+            if !capabilities.supports(.timetableSharing) {
+                throw TimetableSharingError.backend("共享课表服务正在更新，请稍后重试。")
+            }
+        } catch let error as TimetableSharingError {
+            throw error
+        } catch {
+            return
+        }
     }
 
     private func completedProfileIfAvailable() async throws -> CommunityProfile? {

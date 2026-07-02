@@ -29,12 +29,40 @@ export type AdminContext = {
   };
 };
 
+export type BackendErrorCode =
+  | "bad_request"
+  | "unauthorized"
+  | "forbidden"
+  | "not_found"
+  | "method_not_allowed"
+  | "conflict"
+  | "rate_limited"
+  | "backend_unavailable"
+  | "internal_error";
+
+export type BackendErrorEnvelope = {
+  code: BackendErrorCode;
+  message: string;
+  retryable: boolean;
+  details?: unknown;
+};
+
 export class HttpError extends Error {
   status: number;
+  code?: BackendErrorCode;
+  retryable?: boolean;
+  details?: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    options: { code?: BackendErrorCode; retryable?: boolean; details?: unknown } = {},
+  ) {
     super(message);
     this.status = status;
+    this.code = options.code;
+    this.retryable = options.retryable;
+    this.details = options.details;
   }
 }
 
@@ -50,6 +78,25 @@ export function json(payload: unknown, status = 200) {
 
 export function okOptions() {
   return new Response("ok", { headers: corsHeaders });
+}
+
+export function errorResponse(
+  status: number,
+  code: BackendErrorCode,
+  message: string,
+  options: { retryable?: boolean; details?: unknown } = {},
+) {
+  const errorEnvelope: BackendErrorEnvelope = {
+    code,
+    message,
+    retryable: options.retryable ?? defaultRetryable(status),
+  };
+
+  if (options.details !== undefined) {
+    errorEnvelope.details = options.details;
+  }
+
+  return json({ error: message, errorEnvelope }, status);
 }
 
 export async function readJSON<T>(request: Request): Promise<T> {
@@ -75,7 +122,7 @@ export function createAdminClient(): any {
 export async function authenticateAdmin(request: Request): Promise<AdminContext | Response> {
   const token = bearerToken(request);
   if (!token) {
-    return json({ error: "Missing admin session token." }, 401);
+    return errorResponse(401, "unauthorized", "Missing admin session token.");
   }
 
   const tokenHash = await sha256Hex(token);
@@ -89,11 +136,11 @@ export async function authenticateAdmin(request: Request): Promise<AdminContext 
     .maybeSingle();
 
   if (sessionError) {
-    return json({ error: sessionError.message }, 500);
+    return errorResponse(500, "backend_unavailable", sessionError.message);
   }
 
   if (!session || session.revoked_at || new Date(session.expires_at).getTime() <= Date.now()) {
-    return json({ error: "Admin session expired or invalid." }, 401);
+    return errorResponse(401, "unauthorized", "Admin session expired or invalid.");
   }
 
   const { data: admin, error: adminError } = await adminClient
@@ -103,11 +150,11 @@ export async function authenticateAdmin(request: Request): Promise<AdminContext 
     .maybeSingle();
 
   if (adminError) {
-    return json({ error: adminError.message }, 500);
+    return errorResponse(500, "backend_unavailable", adminError.message);
   }
 
   if (!admin || !admin.active) {
-    return json({ error: "Admin account is disabled." }, 403);
+    return errorResponse(403, "forbidden", "Admin account is disabled.");
   }
 
   await adminClient
@@ -145,7 +192,7 @@ export function requirePost(request: Request): Response | null {
     return okOptions();
   }
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return errorResponse(405, "method_not_allowed", "Method not allowed.", { retryable: false });
   }
   return null;
 }
@@ -183,11 +230,32 @@ export function normalizeDate(value: unknown): string | null {
 
 export function mapFunctionError(error: unknown) {
   if (error instanceof HttpError) {
-    return json({ error: error.message }, error.status);
+    return errorResponse(
+      error.status,
+      error.code ?? statusToErrorCode(error.status),
+      error.message,
+      { retryable: error.retryable, details: error.details },
+    );
   }
 
   const message = error instanceof Error ? error.message : "Unknown admin error.";
-  return json({ error: message }, 500);
+  return errorResponse(500, "internal_error", message);
+}
+
+function statusToErrorCode(status: number): BackendErrorCode {
+  if (status === 400) return "bad_request";
+  if (status === 401) return "unauthorized";
+  if (status === 403) return "forbidden";
+  if (status === 404) return "not_found";
+  if (status === 405) return "method_not_allowed";
+  if (status === 409) return "conflict";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "backend_unavailable";
+  return "internal_error";
+}
+
+function defaultRetryable(status: number) {
+  return status === 429 || status >= 500;
 }
 
 function bearerToken(request: Request): string | null {

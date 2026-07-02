@@ -1,6 +1,7 @@
 import {
   corsHeaders,
   createAdminContext,
+  errorResponse,
   json,
 } from "../_shared/admin-announcements.ts";
 
@@ -10,7 +11,7 @@ Deno.serve(async (request) => {
   }
 
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return errorResponse(405, "method_not_allowed", "Method not allowed.", { retryable: false });
   }
 
   const context = await createAdminContext(request);
@@ -25,7 +26,7 @@ Deno.serve(async (request) => {
     .limit(100);
 
   if (error) {
-    return json({ error: error.message }, 500);
+    return errorResponse(500, "backend_unavailable", error.message);
   }
 
   return json({ announcements: data ?? [] });

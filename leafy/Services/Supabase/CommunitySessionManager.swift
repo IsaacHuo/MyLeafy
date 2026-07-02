@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OSLog
 import Supabase
 import SwiftUI
 
@@ -42,24 +43,30 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func restoreProfileIfPossible() async {
+        CommunityDiagnostics.log.info("Community session restore requested")
         guard currentAuthUserID != nil else {
+            CommunityDiagnostics.log.info("Community session restore skipped: no auth user")
             profile = nil
             return
         }
 
         if profile != nil {
+            CommunityDiagnostics.log.info("Community session restore skipped: profile already loaded")
             return
         }
 
         do {
             profile = try await service.fetchCurrentProfile()
             bootstrapError = nil
+            CommunityDiagnostics.log.info("Community session restore finished; hasProfile=\((self.profile != nil), privacy: .public)")
         } catch {
             bootstrapError = error.localizedDescription
+            CommunityDiagnostics.log.error("Community session restore failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     func bootstrapCommunityUser(force: Bool = false) async {
+        CommunityDiagnostics.log.info("Community bootstrap requested force=\(force, privacy: .public)")
         if let activeBootstrapTask {
             await waitForBootstrapTask(activeBootstrapTask)
             return
@@ -73,6 +80,7 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func startBootstrapIfNeeded(force: Bool = false) {
+        CommunityDiagnostics.log.info("Community bootstrap startIfNeeded requested force=\(force, privacy: .public)")
         guard activeBootstrapTask == nil else { return }
 
         let eduID = ActiveCampusContext.networkManager.authenticatedEduID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -107,11 +115,13 @@ final class CommunitySessionManager: ObservableObject {
             activeBootstrapTask = nil
             isBootstrapping = false
             bootstrapError = error.localizedDescription
+            CommunityDiagnostics.log.error("Community bootstrap wait failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     private func performBootstrapCommunityUser(force: Bool) async {
         guard !Task.isCancelled else { return }
+        CommunityDiagnostics.log.info("Community bootstrap started force=\(force, privacy: .public)")
         isBootstrapping = true
         defer {
             isBootstrapping = false
@@ -130,6 +140,7 @@ final class CommunitySessionManager: ObservableObject {
             guard currentAuthUserID != nil else {
                 profile = nil
                 bootstrapError = CommunityServiceError.missingAuthenticatedUser.localizedDescription
+                CommunityDiagnostics.log.error("Community bootstrap failed: missing authenticated user")
                 return
             }
 
@@ -138,6 +149,7 @@ final class CommunitySessionManager: ObservableObject {
             guard !eduID.isEmpty else {
                 self.profile = nil
                 bootstrapError = CommunityServiceError.schoolSessionMissing.localizedDescription
+                CommunityDiagnostics.log.error("Community bootstrap failed: missing school session")
                 return
             }
 
@@ -161,8 +173,10 @@ final class CommunitySessionManager: ObservableObject {
 
             self.profile = profile
             self.bootstrapError = nil
+            CommunityDiagnostics.log.info("Community bootstrap finished for profile \(profile.id.uuidString, privacy: .public)")
         } catch {
             self.bootstrapError = error.localizedDescription
+            CommunityDiagnostics.log.error("Community bootstrap failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

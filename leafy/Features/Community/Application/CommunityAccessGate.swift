@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 enum CommunityAccessRequirement: Sendable {
     case communityEntry
@@ -49,6 +50,7 @@ struct CommunityAccessGate {
         _ requirement: CommunityAccessRequirement,
         forceBootstrap: Bool = false
     ) async -> CommunityAccessResult {
+        CommunityDiagnostics.log.info("Community access gate evaluating \(String(describing: requirement), privacy: .public) forceBootstrap=\(forceBootstrap, privacy: .public)")
         await sessionManager.restoreProfileIfPossible()
         await sessionManager.bootstrapCommunityUser(force: forceBootstrap)
 
@@ -56,15 +58,18 @@ struct CommunityAccessGate {
             && ActiveCampusContext.identity?.isCustom != true
         if let bootstrapError = sessionManager.bootstrapError,
            !(isBuiltInBJFUCommunity && sessionManager.currentUserID != nil) {
+            CommunityDiagnostics.log.error("Community access gate failed after bootstrap: \(bootstrapError, privacy: .public)")
             return .failed(bootstrapError)
         }
 
         guard sessionManager.currentUserID != nil else {
+            CommunityDiagnostics.log.error("Community access gate failed: missing authenticated user")
             return .failed(CommunityServiceError.missingAuthenticatedUser.localizedDescription)
         }
 
         let requiresSchoolCommunityApproval = ActiveCampusContext.identity?.isCustom == true
         guard !requiresSchoolCommunityApproval || sessionManager.hasApprovedCommunityAccess else {
+            CommunityDiagnostics.log.error("Community access gate failed: school community unavailable")
             return .failed(communityUnavailableMessage)
         }
 
@@ -85,10 +90,11 @@ struct CommunityAccessGate {
 
     private func termsResult() async -> CommunityAccessResult {
         do {
-            return try await termsChecker.hasAcceptedCurrentTerms()
-                ? .allowed
-                : .requiresTermsAcceptance
+            let accepted = try await termsChecker.hasAcceptedCurrentTerms()
+            CommunityDiagnostics.log.info("Community access gate terms result accepted=\(accepted, privacy: .public)")
+            return accepted ? .allowed : .requiresTermsAcceptance
         } catch {
+            CommunityDiagnostics.log.error("Community access gate terms check failed: \(error.localizedDescription, privacy: .public)")
             return .failed(error.localizedDescription)
         }
     }

@@ -6,6 +6,7 @@ import Supabase
 nonisolated enum CampusAIManagedEntitlementError: LocalizedError {
     case appTransactionUnavailable
     case productUnavailable
+    case productNotReturned(productID: String)
     case purchasePending
     case purchaseCancelled
 
@@ -15,6 +16,8 @@ nonisolated enum CampusAIManagedEntitlementError: LocalizedError {
             return "无法验证当前 App 安装记录，请稍后再试。"
         case .productUnavailable:
             return "Leafy AI 订阅暂时不可用。"
+        case .productNotReturned(let productID):
+            return "StoreKit 没有返回 Leafy AI 周订阅商品（\(productID)）。请确认 App Store Connect 已为 com.isaachuo.leafy 创建同 ID 的自动续订订阅，周期为 1 周，付费协议/税务/银行信息可用，商品价格、地区和本地化信息已填写，并使用 TestFlight 或 Sandbox 环境测试。"
         case .purchasePending:
             return "购买正在等待确认。"
         case .purchaseCancelled:
@@ -29,7 +32,7 @@ nonisolated struct CampusAIAppTransactionPayload: Hashable {
 }
 
 nonisolated enum CampusAIManagedEntitlementClient {
-    static let monthlyProductID = "com.isaachuo.leafy.ai.monthly"
+    static let weeklyProductID = "com.isaachuo.leafy.ai.weekly"
     private static let entitlementFunctionName = "campus-ai-entitlement"
 
     static func appTransactionPayload() async throws -> CampusAIAppTransactionPayload {
@@ -47,7 +50,7 @@ nonisolated enum CampusAIManagedEntitlementClient {
     static func currentSubscriptionJWS() async -> String? {
         for await result in Transaction.currentEntitlements {
             guard let transaction = try? result.payloadValue,
-                  transaction.productID == monthlyProductID,
+                  transaction.productID == weeklyProductID,
                   transaction.revocationDate == nil
             else {
                 continue
@@ -136,28 +139,64 @@ final class CampusAISubscriptionStore: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
 
+    var productID: String {
+        product?.id ?? CampusAIManagedEntitlementClient.weeklyProductID
+    }
+
     var displayPrice: String? {
         product?.displayPrice
+    }
+
+    var billingPeriodText: String {
+        guard let period = product?.subscription?.subscriptionPeriod else {
+            return "周"
+        }
+        return period.leafyLocalizedText
+    }
+
+    var subscriptionQuotaText: String {
+        "50 次/\(billingPeriodText)"
     }
 
     func refresh() async {
         isLoading = true
         defer { isLoading = false }
+
+        var messages: [String] = []
+
         do {
-            let products = try await Product.products(for: [CampusAIManagedEntitlementClient.monthlyProductID])
-            product = products.first
-            let transactionJWS = await CampusAIManagedEntitlementClient.currentSubscriptionJWS()
-            isPurchased = transactionJWS != nil
-            quota = try await CampusAIManagedEntitlementClient.sync(transactionJWS: transactionJWS)
-            errorMessage = nil
+            let products = try await Product.products(for: [CampusAIManagedEntitlementClient.weeklyProductID])
+            product = products.first { $0.id == CampusAIManagedEntitlementClient.weeklyProductID }
+            if product == nil {
+                messages.append(
+                    CampusAIManagedEntitlementError
+                        .productNotReturned(productID: CampusAIManagedEntitlementClient.weeklyProductID)
+                        .localizedDescription
+                )
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            product = nil
+            messages.append("读取 Leafy AI 订阅价格失败：\(error.localizedDescription)")
         }
+
+        let transactionJWS = await CampusAIManagedEntitlementClient.currentSubscriptionJWS()
+        isPurchased = transactionJWS != nil
+
+        do {
+            quota = try await CampusAIManagedEntitlementClient.sync(transactionJWS: transactionJWS)
+        } catch {
+            quota = nil
+            messages.append("同步 Leafy 托管额度失败：\(error.localizedDescription)")
+        }
+
+        errorMessage = messages.isEmpty ? nil : messages.joined(separator: "\n\n")
     }
 
     func purchase() async {
         guard let product else {
-            errorMessage = CampusAIManagedEntitlementError.productUnavailable.localizedDescription
+            errorMessage = CampusAIManagedEntitlementError
+                .productNotReturned(productID: CampusAIManagedEntitlementClient.weeklyProductID)
+                .localizedDescription
             return
         }
 
@@ -202,4 +241,23 @@ final class CampusAISubscriptionStore: ObservableObject {
 nonisolated private func nonEmptyTrimmed(_ value: String?) -> String? {
     let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return trimmed.isEmpty ? nil : trimmed
+}
+
+private extension Product.SubscriptionPeriod {
+    var leafyLocalizedText: String {
+        let unitText: String
+        switch unit {
+        case .day:
+            unitText = "天"
+        case .week:
+            unitText = "周"
+        case .month:
+            unitText = "月"
+        case .year:
+            unitText = "年"
+        @unknown default:
+            unitText = "周期"
+        }
+        return value == 1 ? unitText : "\(value)\(unitText)"
+    }
 }

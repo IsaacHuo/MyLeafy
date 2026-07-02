@@ -11,17 +11,25 @@ type AdminContext = {
   userID: string;
 };
 
+type BackendErrorCode =
+  | "bad_request"
+  | "unauthorized"
+  | "forbidden"
+  | "method_not_allowed"
+  | "backend_unavailable"
+  | "internal_error";
+
 export async function createAdminContext(request: Request): Promise<AdminContext | Response> {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader) {
-    return json({ error: "Missing Authorization header." }, 401);
+    return errorResponse(401, "unauthorized", "Missing Authorization header.");
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return json({ error: "Missing Supabase environment variables." }, 500);
+    return errorResponse(500, "backend_unavailable", "Missing Supabase environment variables.");
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -37,7 +45,7 @@ export async function createAdminContext(request: Request): Promise<AdminContext
   } = await userClient.auth.getUser();
 
   if (userError || !user) {
-    return json({ error: userError?.message ?? "Supabase session missing or invalid." }, 401);
+    return errorResponse(401, "unauthorized", userError?.message ?? "Supabase session missing or invalid.");
   }
 
   const { data: adminUser, error: adminError } = await adminClient
@@ -47,11 +55,11 @@ export async function createAdminContext(request: Request): Promise<AdminContext
     .maybeSingle();
 
   if (adminError) {
-    return json({ error: adminError.message }, 500);
+    return errorResponse(500, "backend_unavailable", adminError.message);
   }
 
   if (!adminUser) {
-    return json({ error: "You are not allowed to manage site announcements." }, 403);
+    return errorResponse(403, "forbidden", "You are not allowed to manage site announcements.");
   }
 
   return { adminClient, userID: user.id };
@@ -65,6 +73,25 @@ export function json(payload: unknown, status = 200) {
       ...corsHeaders,
     },
   });
+}
+
+export function errorResponse(
+  status: number,
+  code: BackendErrorCode,
+  message: string,
+  options: { retryable?: boolean; details?: unknown } = {},
+) {
+  const errorEnvelope: { code: BackendErrorCode; message: string; retryable: boolean; details?: unknown } = {
+    code,
+    message,
+    retryable: options.retryable ?? (status >= 500),
+  };
+
+  if (options.details !== undefined) {
+    errorEnvelope.details = options.details;
+  }
+
+  return json({ error: message, errorEnvelope }, status);
 }
 
 export async function readJSON<T>(request: Request): Promise<T> {

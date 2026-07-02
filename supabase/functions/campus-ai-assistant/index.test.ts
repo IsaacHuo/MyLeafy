@@ -1,8 +1,14 @@
 import {
+  actionPlannerPayload,
+  actionPlannerSystemPrompt,
   campusAIResponseFormat,
+  deepSeekAPIKeys,
   deepSeekPayload,
   drainDeepSeekSSEBuffer,
   handler,
+  parseActionPlannerActions,
+  parseActionPlannerProviderResponse,
+  parseDeepSeekAPIKeys,
   processDeepSeekSSEBlock,
   redactProviderError,
   systemPrompt,
@@ -84,8 +90,125 @@ Deno.test("campus-ai-assistant declares DeepSeek V4 Flash streaming Markdown pay
   );
 });
 
+Deno.test("campus-ai-assistant builds non-stream JSON-only action planner payload", () => {
+  const payload = actionPlannerPayload(
+    {
+      app_transaction_id: "app-tx-1",
+      context: { campusID: "bjfu", currentWeek: 2 },
+      context_settings: { includesTimetable: true },
+    },
+    "帮我打开培养方案",
+    "可以查看培养方案。",
+  ) as Record<string, unknown>;
+  const messages = payload.messages as Array<Record<string, unknown>>;
+
+  assert(payload.model === "deepseek-v4-flash", "expected DeepSeek V4 Flash");
+  assert(payload.stream === false, "expected non-stream planner request");
+  assert(payload.temperature === 0, "expected deterministic planner");
+  assert(
+    String(messages[0].content).includes("只能输出 JSON"),
+    "expected JSON-only planner prompt",
+  );
+  assert(
+    String(messages[1].content).includes("supported_actions"),
+    "expected supported action schema",
+  );
+});
+
+Deno.test("campus-ai-assistant parses and validates action planner output", () => {
+  const actions = parseActionPlannerActions(`
+  \`\`\`json
+  {
+    "actions": [
+      {"kind":"open_academic_route","title":"","payload":{"route":"trainingProgram"}},
+      {"kind":"create_countdown","title":"创建倒计时","payload":{"countdown_title":"期末考试","target_date":"2026-07-01"}},
+      {"kind":"open_academic_route","title":"打开医疗台账","payload":{"route":"medicalLedger"}}
+    ]
+  }
+  \`\`\`
+  `);
+
+  assert(actions.length === 2, "expected invalid route to be filtered");
+  assert(actions[0].kind === "openAcademicRoute", "expected normalized kind");
+  assert(
+    actions[0].payload?.route === "trainingProgram",
+    "expected trainingProgram route",
+  );
+  assert(
+    actions[1].payload?.countdownTitle === "期末考试",
+    "expected snake_case payload to normalize",
+  );
+});
+
+Deno.test("campus-ai-assistant parses planner usage from provider response", () => {
+  const parsed = parseActionPlannerProviderResponse(JSON.stringify({
+    choices: [
+      {
+        message: {
+          content:
+            '{"actions":[{"kind":"create_timetable_reminder","title":"","payload":{"week":2,"day_of_week":3,"period":5,"title":"提交实验报告","minutes_before":-5}}]}',
+        },
+      },
+    ],
+    usage: {
+      prompt_tokens: 10,
+      prompt_cache_miss_tokens: 7,
+      completion_tokens: 4,
+      total_tokens: 14,
+    },
+  }));
+
+  assert(parsed.actions.length === 1, "expected one valid reminder action");
+  assert(
+    parsed.actions[0].payload?.minutesBefore === 0,
+    "expected reminder minutes to clamp",
+  );
+  assert(parsed.usage.total_tokens === 14, "expected usage to parse");
+});
+
+Deno.test("campus-ai-assistant supports multiple DeepSeek API key secret formats", () => {
+  const envKeys = [
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_API_KEYS",
+    "DEEPSEEK_API_KEY_1",
+    "DEEPSEEK_API_KEY_2",
+  ];
+  const previous = Object.fromEntries(
+    envKeys.map((key) => [key, Deno.env.get(key)]),
+  );
+
+  try {
+    for (const key of envKeys) Deno.env.delete(key);
+    Deno.env.set("DEEPSEEK_API_KEY", "sk-primary");
+    Deno.env.set("DEEPSEEK_API_KEYS", '["sk-a", "sk-b", "sk-a"]');
+    Deno.env.set("DEEPSEEK_API_KEY_1", "sk-c");
+    Deno.env.set("DEEPSEEK_API_KEY_2", "sk-b");
+
+    assert(
+      JSON.stringify(deepSeekAPIKeys()) ===
+        JSON.stringify(["sk-primary", "sk-a", "sk-b", "sk-c"]),
+      "expected ordered unique DeepSeek keys",
+    );
+    assert(
+      JSON.stringify(parseDeepSeekAPIKeys("sk-1, sk-2\nsk-3; sk-4")) ===
+        JSON.stringify(["sk-1", "sk-2", "sk-3", "sk-4"]),
+      "expected delimiter parsing",
+    );
+  } finally {
+    for (const key of envKeys) {
+      const value = previous[key];
+      if (value === undefined) {
+        Deno.env.delete(key);
+      } else {
+        Deno.env.set(key, value);
+      }
+    }
+  }
+});
+
 Deno.test("campus-ai-assistant prompt keeps file bodies out of scope and allows ledger organization only", () => {
   const prompt = systemPrompt();
+  const plannerPrompt = actionPlannerSystemPrompt();
 
   assert(prompt.includes("本机缓存"), "expected local cached scope");
   assert(
@@ -99,6 +222,11 @@ Deno.test("campus-ai-assistant prompt keeps file bodies out of scope and allows 
   assert(
     prompt.includes("不提供诊断"),
     "medical diagnosis advice should remain out of scope",
+  );
+  assert(
+    plannerPrompt.includes("需要用户确认后执行") &&
+      plannerPrompt.includes("不能输出 Markdown"),
+    "expected action planner safety prompt",
   );
 });
 

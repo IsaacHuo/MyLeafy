@@ -472,6 +472,12 @@ actor CommunityService {
         let client = try LeafySupabase.shared.requireClient()
         let config = try LeafySupabase.shared.requireConfig()
         let session = try await client.auth.session
+        let feedCapability = await backendFeatureSupport(.communityFeed)
+
+        if feedCapability == false {
+            CommunityDiagnostics.log.info("Community feed capability unavailable, using legacy PostgREST feed")
+            return try await fetchPostsLegacy(query: query)
+        }
 
         if let apiBaseURL = config.communityAPIBaseURL {
             do {
@@ -483,7 +489,7 @@ actor CommunityService {
                 )
                 return response.posts.map { postWithPublicStorageURLs($0, config: config) }
             } catch {
-                if shouldFallbackToLegacyCommunityFeed(error) {
+                if feedCapability == nil && shouldFallbackToLegacyCommunityFeed(error) {
                     CommunityDiagnostics.log.info("Community feed API unavailable, falling back to legacy PostgREST feed")
                     return try await fetchPostsLegacy(query: query)
                 }
@@ -508,7 +514,7 @@ actor CommunityService {
 
             return response.posts.map { postWithPublicStorageURLs($0, config: config) }
         } catch let error as FunctionsError {
-            if shouldFallbackToLegacyCommunityFeed(error) {
+            if feedCapability == nil && shouldFallbackToLegacyCommunityFeed(error) {
                 CommunityDiagnostics.log.info("Community feed function unavailable, falling back to legacy PostgREST feed")
                 return try await fetchPostsLegacy(query: query)
             }
@@ -1047,6 +1053,12 @@ actor CommunityService {
         guard client.auth.currentUser != nil else {
             throw CommunityServiceError.missingAuthenticatedUser
         }
+        let rpcCapability = await backendRPCSupport("toggle_post_like_v1")
+
+        if rpcCapability == false {
+            CommunityDiagnostics.log.info("toggle_post_like_v1 capability unavailable, using legacy like mutation")
+            return try await togglePostLikeLegacy(postID: postID)
+        }
 
         let record: CommunityPost
         do {
@@ -1058,7 +1070,7 @@ actor CommunityService {
                 .execute()
                 .value
         } catch {
-            if shouldFallbackToLegacyCommunityMutation(error) {
+            if rpcCapability == nil && shouldFallbackToLegacyCommunityMutation(error) {
                 CommunityDiagnostics.log.info("toggle_post_like_v1 unavailable, falling back to legacy like mutation")
                 return try await togglePostLikeLegacy(postID: postID)
             }
@@ -1074,6 +1086,12 @@ actor CommunityService {
         guard client.auth.currentUser != nil else {
             throw CommunityServiceError.missingAuthenticatedUser
         }
+        let rpcCapability = await backendRPCSupport("toggle_post_favorite_v1")
+
+        if rpcCapability == false {
+            CommunityDiagnostics.log.info("toggle_post_favorite_v1 capability unavailable, using legacy favorite mutation")
+            return try await togglePostFavoriteLegacy(postID: postID)
+        }
 
         let record: CommunityPost
         do {
@@ -1085,7 +1103,7 @@ actor CommunityService {
                 .execute()
                 .value
         } catch {
-            if shouldFallbackToLegacyCommunityMutation(error) {
+            if rpcCapability == nil && shouldFallbackToLegacyCommunityMutation(error) {
                 CommunityDiagnostics.log.info("toggle_post_favorite_v1 unavailable, falling back to legacy favorite mutation")
                 return try await togglePostFavoriteLegacy(postID: postID)
             }
@@ -3047,6 +3065,24 @@ actor CommunityService {
             )
     }
 
+    private nonisolated func backendFeatureSupport(_ feature: BackendFeature) async -> Bool? {
+        do {
+            return try await SupabaseBackendClient.shared.capabilities().supports(feature)
+        } catch {
+            CommunityDiagnostics.log.info("Backend capabilities unavailable: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private nonisolated func backendRPCSupport(_ name: String) async -> Bool? {
+        do {
+            return try await SupabaseBackendClient.shared.capabilities().supportsRPC(name)
+        } catch {
+            CommunityDiagnostics.log.info("Backend RPC capability unavailable for \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     private nonisolated func shouldFallbackToLegacyCommunityFeed(_ error: Error) -> Bool {
         if let functionsError = error as? FunctionsError {
             return shouldFallbackToLegacyCommunityFeed(functionsError)
@@ -3060,7 +3096,11 @@ actor CommunityService {
         case .relayError:
             return true
         case .httpError(let code, let data):
-            let message = (try? JSONDecoder().decode(EdgeFunctionErrorPayload.self, from: data).error) ?? String(data: data, encoding: .utf8) ?? ""
+            let payload = try? JSONDecoder().decode(EdgeFunctionErrorPayload.self, from: data)
+            let message = payload?.errorEnvelope?.message
+                ?? payload?.error
+                ?? String(data: data, encoding: .utf8)
+                ?? ""
             return code == 404
                 || code == 503
                 || isMissingCommunityFeedCapability(message)
@@ -3103,18 +3143,11 @@ actor CommunityService {
     }
 
     private nonisolated func mapFunctionsError(_ error: FunctionsError) -> CommunityServiceError {
-        switch error {
-        case .relayError:
-            return .edgeFunctionRejected("社区函数调用失败，请稍后重试。")
-        case .httpError(let code, let data):
-            if let payload = try? JSONDecoder().decode(EdgeFunctionErrorPayload.self, from: data),
-               let message = payload.error?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !message.isEmpty {
-                return .edgeFunctionRejected(message)
-            }
-
-            return .edgeFunctionRejected("社区函数返回了 \(code) 错误。")
-        }
+        let envelope = SupabaseBackendClient.shared.mapFunctionsError(
+            error,
+            fallbackMessage: "社区函数调用失败，请稍后重试。"
+        )
+        return .edgeFunctionRejected(envelope.message)
     }
 
     private func mapCreatePostError(_ error: Error) -> CommunityServiceError {
@@ -3166,6 +3199,7 @@ actor CommunityService {
 
 private nonisolated struct EdgeFunctionErrorPayload: Decodable, Sendable {
     let error: String?
+    let errorEnvelope: BackendErrorEnvelope?
 }
 
 private nonisolated enum CommunityCampusRequestAction: String, Encodable, Sendable {

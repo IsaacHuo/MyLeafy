@@ -1,0 +1,12 @@
+schemaVersion: 1
+sessionDefaults:
+  projectPath: /Users/yingwu/Developer/projects/leafy/leafy.xcodeproj
+  scheme: leafy
+  configuration: Debug
+  simulatorId: 8755D305-27F4-4463-9298-7EA230ED4F32
+  simulatorPlatform: iOS Simulator
+  useLatestOS: true
+  derivedDataPath: /tmp/leafy-codex-deriveddata-iphone17pro
+  preferXcodebuild: true
+  bundleId: com.isaachuo.leafy
+  simulatorName: iPhone 17 Pro

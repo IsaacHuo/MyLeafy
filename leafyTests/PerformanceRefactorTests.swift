@@ -1061,6 +1061,30 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     @MainActor
+    func testCommunityFeedInitialFailureSurfacesRecoverableError() async {
+        let repository = FakeCommunityRepository()
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+
+        await repository.setFetchError(.failure("初次加载失败"))
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.posts.isEmpty)
+        XCTAssertTrue(viewModel.items.isEmpty)
+        XCTAssertEqual(viewModel.errorMessage, "初次加载失败")
+    }
+
+    func testCommunityFeedCacheDropsCorruptPayload() {
+        let query = CommunityFeedQuery(search: "corrupt-\(UUID().uuidString)")
+        let key = CommunityFeedCache.cacheKey(for: query)
+        UserDefaults.standard.set(Data("not-json".utf8), forKey: key)
+        defer {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        XCTAssertEqual(CommunityFeedCache().load(query: query), [])
+    }
+
+    @MainActor
     func testCommunityFeedMutationsUpdatePostsAndCache() async {
         let authorID = UUID()
         let firstPin = makeCommunityPostPin(postID: UUID(), priority: 7)

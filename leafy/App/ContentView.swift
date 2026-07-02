@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import OSLog
 import SwiftUI
 
 struct ContentView: View {
@@ -35,15 +36,18 @@ struct ContentView: View {
             .tint(AppTheme.accent(for: themeColorPreference))
             .environmentObject(appNavigation)
             .onAppear {
+                CommunityDiagnostics.log.info("ContentView appeared with selected tab \(String(describing: appNavigation.selectedRootTab), privacy: .public)")
                 sanitizeUnavailableRootTab()
             }
             .onChange(of: appNavigation.selectedRootTab) { _, newTab in
+                CommunityDiagnostics.log.info("Root tab changed to \(String(describing: newTab), privacy: .public)")
                 handleRootTabChange(to: newTab)
             }
             .onChange(of: isTimeScopePresented) { _, isPresented in
                 handleTimeScopePresentationChange(isPresented)
             }
             .task {
+                CommunityDiagnostics.log.info("ContentView startup task began; communityEnabled=\(isCommunityEnabled, privacy: .public) options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
                 if isCommunityEnabled {
                     await restoreCommunityNotificationBadge()
                 }
@@ -216,6 +220,11 @@ struct ContentView: View {
             communityNotificationBadgeViewModel.stop(reset: true)
             return
         }
+        guard !CommunityDiagnosticsOptions.disablesNotifications else {
+            CommunityDiagnostics.log.info("Community notification badge restore skipped by diagnostics")
+            communityNotificationBadgeViewModel.stop(reset: true)
+            return
+        }
         communitySessionManager.startBootstrapIfNeeded()
         await communitySessionManager.restoreProfileIfPossible()
         syncCommunityNotificationBadgeSubscription(profileID: communitySessionManager.currentUserID)
@@ -225,6 +234,10 @@ struct ContentView: View {
     @MainActor
     private func syncCommunityNotificationBadgeSubscription(profileID: UUID?) {
         guard isCommunityEnabled else {
+            communityNotificationBadgeViewModel.stop(reset: true)
+            return
+        }
+        guard !CommunityDiagnosticsOptions.disablesNotifications else {
             communityNotificationBadgeViewModel.stop(reset: true)
             return
         }
