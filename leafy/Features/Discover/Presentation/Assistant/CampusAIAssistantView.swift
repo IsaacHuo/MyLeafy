@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import WebKit
 
 struct CampusAIAssistantView: View {
     @Environment(\.modelContext) private var modelContext
@@ -75,6 +76,8 @@ struct CampusAIAssistantView: View {
             if isHistoryPresented {
                 historyOverlay
             }
+
+            clearHistoryAlertHost
         }
         .background(AppTheme.cardElevated)
         .onAppear {
@@ -82,6 +85,7 @@ struct CampusAIAssistantView: View {
             presentExperimentalNoticeIfNeeded()
             refreshConfiguredProviders()
             refreshManagedQuotaIfNeeded()
+            pruneOrphanedDeliverableArtifacts()
         }
         .onChange(of: conversations.map(\.id)) { _, _ in
             selectInitialConversationIfNeeded()
@@ -130,6 +134,21 @@ struct CampusAIAssistantView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composerBar
         }
+    }
+
+    private var clearHistoryAlertHost: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .alert("清空全部对话？", isPresented: $isClearHistoryConfirmationPresented) {
+                Button("取消", role: .cancel) {}
+                Button("清空全部历史", role: .destructive) {
+                    clearAllHistory()
+                }
+            } message: {
+                Text("这只会删除当前设备上的 Leafy 聊天记录。")
+            }
     }
 
     private var topBar: some View {
@@ -329,6 +348,10 @@ struct CampusAIAssistantView: View {
     private var composerBar: some View {
         LeafyGlassGroup(spacing: AppSpacing.micro) {
             HStack(alignment: .bottom, spacing: 10) {
+                webSearchToggleButton
+                    .padding(.leading, 8)
+                    .padding(.bottom, 7)
+
                 TextField("询问 Leafy", text: $draftText, axis: .vertical)
                     .focused($isComposerFocused)
                     .lineLimit(1...5)
@@ -337,7 +360,7 @@ struct CampusAIAssistantView: View {
                     .onSubmit {
                         submitDraft()
                     }
-                    .padding(.leading, 18)
+                    .padding(.leading, 2)
                     .padding(.trailing, 8)
                     .padding(.vertical, 14)
 
@@ -364,13 +387,49 @@ struct CampusAIAssistantView: View {
                 .accessibilityLabel(isSending ? "停止生成" : "发送给 Leafy")
             }
             .leafyGlassSurface(
-                in: Capsule(),
+                in: RoundedRectangle(cornerRadius: 24, style: .continuous),
                 fallbackFill: AppTheme.cardElevated.opacity(0.92)
             )
         }
         .padding(.horizontal, AppSpacing.page)
         .padding(.top, AppSpacing.micro)
         .padding(.bottom, AppSpacing.compact)
+    }
+
+    private var webSearchToggleButton: some View {
+        Button {
+            toggleWebSearchForComposer()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: isWebSearchActive ? "globe.asia.australia.fill" : "globe")
+                    .font(.system(size: 15, weight: .semibold))
+
+                if isWebSearchActive {
+                    Text("联网")
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(isWebSearchActive ? AppTheme.textOnAccent(for: themeColorPreference) : AppTheme.secondaryText)
+            .frame(height: 34)
+            .padding(.horizontal, isWebSearchActive ? 10 : 0)
+            .frame(minWidth: 34)
+            .background(
+                isWebSearchActive
+                    ? AppTheme.accent(for: themeColorPreference)
+                    : AppTheme.softFill.opacity(userSettings.serviceMode == .leafyManaged ? 0.95 : 0.48),
+                in: Capsule()
+            )
+            .opacity(userSettings.serviceMode == .leafyManaged ? 1 : 0.58)
+        }
+        .buttonStyle(.plain)
+        .disabled(userSettings.serviceMode != .leafyManaged || isSending)
+        .accessibilityLabel(isWebSearchActive ? "关闭联网搜索" : "开启联网搜索")
+        .accessibilityValue(isWebSearchActive ? "已开启" : "已关闭")
+    }
+
+    private var isWebSearchActive: Bool {
+        userSettings.serviceMode == .leafyManaged && userSettings.webSearchEnabled
     }
 
     private var historyOverlay: some View {
@@ -381,7 +440,7 @@ struct CampusAIAssistantView: View {
             let bottomInset = proxy.safeAreaInsets.bottom + RootFloatingTabBar.reservedHeight(controlScale: leafyControlScale) + AppSpacing.micro
             let panelHeight = max(280, proxy.size.height - topInset - bottomInset)
 
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .topLeading) {
                 Color.clear
                     .contentShape(Rectangle())
                     .ignoresSafeArea()
@@ -389,9 +448,19 @@ struct CampusAIAssistantView: View {
                         isHistoryPresented = false
                     }
 
+                Color.clear
+                    .frame(width: panelWidth, height: panelHeight)
+                    .contentShape(Rectangle())
+                    .onTapGesture {}
+                    .padding(.leading, horizontalInset)
+                    .padding(.top, topInset)
+                    .zIndex(1)
+
                 historyPanel
                     .frame(width: panelWidth, height: panelHeight)
-                    .offset(x: horizontalInset, y: (topInset - bottomInset) / 2)
+                    .padding(.leading, horizontalInset)
+                    .padding(.top, topInset)
+                    .zIndex(2)
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
@@ -408,17 +477,20 @@ struct CampusAIAssistantView: View {
                 Spacer(minLength: AppSpacing.micro)
 
                 Button(role: .destructive) {
+                    isComposerFocused = false
                     isClearHistoryConfirmationPresented = true
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(conversations.isEmpty ? AppTheme.tertiaryText : AppTheme.danger)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(conversations.isEmpty)
                 .accessibilityLabel("清空历史")
                 .leafyGlassSurface(in: Circle(), isInteractive: true)
+                .contentShape(Circle())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, AppSpacing.page)
@@ -445,14 +517,6 @@ struct CampusAIAssistantView: View {
             in: RoundedRectangle(cornerRadius: 28, style: .continuous),
             fallbackFill: AppTheme.cardElevated.opacity(0.92)
         )
-        .alert("清空全部对话？", isPresented: $isClearHistoryConfirmationPresented) {
-            Button("取消", role: .cancel) {}
-            Button("清空全部历史", role: .destructive) {
-                clearAllHistory()
-            }
-        } message: {
-            Text("这只会删除当前设备上的 Leafy 聊天记录。")
-        }
         .shadow(color: .black.opacity(0.16), radius: 24, x: 8, y: 10)
     }
 
@@ -551,6 +615,12 @@ struct CampusAIAssistantView: View {
         refreshManagedQuotaIfNeeded()
     }
 
+    private func toggleWebSearchForComposer() {
+        guard userSettings.serviceMode == .leafyManaged, !isSending else { return }
+        userSettings.webSearchEnabled.toggle()
+        CampusAISettingsStore.save(userSettings)
+    }
+
     private func refreshConfiguredProviders() {
         configuredProviderIDs = CampusAIKeychainStore.configuredProviderIDs()
         if userSettings.serviceMode == .ownAPIKey,
@@ -588,6 +658,7 @@ struct CampusAIAssistantView: View {
     private func sendCurrentDraft() async {
         let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isSending else { return }
+        let requestSettings = userSettings
         defer {
             isSending = false
             activeStreamTask = nil
@@ -601,7 +672,7 @@ struct CampusAIAssistantView: View {
         }()
 
         let conversationKey = conversation.id.uuidString
-        let context = contextPayload
+        let context = CampusAIContextBuilder.build(modelContext: modelContext, settings: requestSettings.contextSettings)
         let userMessage = CampusAIMessage(
             conversationID: conversationKey,
             roleRawValue: CampusAIMessageRole.user.rawValue,
@@ -636,7 +707,7 @@ struct CampusAIAssistantView: View {
                 message: text,
                 context: context,
                 recentMessages: Array(recentMessages),
-                settings: userSettings
+                settings: requestSettings
             ) {
                 try Task.checkCancellation()
                 switch event {
@@ -705,6 +776,9 @@ struct CampusAIAssistantView: View {
                     if !response.agentTrace.isEmpty {
                         agentMetadata.agentTrace = response.agentTrace
                     }
+                    if !response.deliverables.isEmpty {
+                        agentMetadata.deliverables = response.deliverables
+                    }
                     persistAgentMetadata(agentMetadata, for: assistantMessage)
                     persistActionRecords(
                         response.actions,
@@ -750,6 +824,7 @@ struct CampusAIAssistantView: View {
             modelContext.delete(action)
         }
         for message in messages where message.conversationID == key {
+            try? CampusAIDeliverableFileBuilder.removeArtifacts(for: message.id)
             modelContext.delete(message)
         }
         modelContext.delete(conversation)
@@ -928,6 +1003,7 @@ struct CampusAIAssistantView: View {
     }
 
     private func clearAllHistory() {
+        try? CampusAIDeliverableFileBuilder.removeAllArtifacts()
         for action in actionRecords {
             modelContext.delete(action)
         }
@@ -939,6 +1015,13 @@ struct CampusAIAssistantView: View {
         }
         selectedConversationID = nil
         try? modelContext.save()
+    }
+
+    private func pruneOrphanedDeliverableArtifacts() {
+        let retainedMessageIDs = Set(messages.map(\.id))
+        Task.detached {
+            try? CampusAIDeliverableFileBuilder.pruneArtifacts(keeping: retainedMessageIDs)
+        }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
@@ -991,6 +1074,8 @@ struct CampusAIAssistantView: View {
         switch tool.name {
         case "web.search":
             title = "联网搜索"
+        case "official.document.search":
+            title = "官方资料检索"
         case "delegate.subtask":
             title = "子任务"
         case "action.plan":
@@ -1164,6 +1249,14 @@ private struct CampusAIMessageRow: View {
                     CampusAICitationList(citations: agentMetadata.citations)
                 }
 
+                if !agentMetadata.deliverables.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(agentMetadata.deliverables) { deliverable in
+                            CampusAIDeliverableCard(deliverable: deliverable, messageID: message.id)
+                        }
+                    }
+                }
+
                 if !agentMetadata.agentTrace.isEmpty {
                     CampusAIAgentTraceDisclosure(
                         steps: agentMetadata.agentTrace,
@@ -1293,6 +1386,253 @@ private struct CampusAICitationList: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+    }
+}
+
+private struct CampusAIDeliverableCard: View {
+    let deliverable: CampusAIDeliverable
+    let messageID: UUID
+
+    @State private var previewItem: CampusAIDeliverablePreviewItem?
+    @State private var fileError: String?
+
+    private var availableFormats: [CampusAIDeliverableFileFormat] {
+        let formats = deliverable.formats.isEmpty ? CampusAIDeliverableFileFormat.allCases : deliverable.formats
+        return CampusAIDeliverableFileFormat.allCases.filter { formats.contains($0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "folder.badge.gearshape")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(deliverable.title.nonEmptyTrimmed ?? "学校官方资料包")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppTheme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(deliverable.summary.nonEmptyTrimmed ?? "已整理官方来源和附件链接。")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                ForEach(availableFormats) { format in
+                    Button {
+                        open(format)
+                    } label: {
+                        Text(format.displayTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.primaryText)
+                            .frame(minWidth: 64)
+                            .frame(height: 30)
+                            .background(AppTheme.cardElevated.opacity(0.82), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if !deliverable.sources.isEmpty {
+                Divider().opacity(0.26)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("官方来源与附件", systemImage: "link")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+
+                    ForEach(deliverable.sources.prefix(3)) { source in
+                        sourceBlock(source)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(AppTheme.softFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .sheet(item: $previewItem) { item in
+            CampusAIDeliverablePreviewSheet(item: item)
+        }
+        .alert("无法生成资料包", isPresented: fileErrorBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(fileError ?? "请稍后重试。")
+        }
+    }
+
+    private var fileErrorBinding: Binding<Bool> {
+        Binding(
+            get: { fileError != nil },
+            set: { isPresented in
+                if !isPresented {
+                    fileError = nil
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func sourceBlock(_ source: CampusAIDeliverableSource) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if let url = URL(string: source.url), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                Link(destination: url) {
+                    sourceHeader(source)
+                }
+            } else {
+                sourceHeader(source)
+            }
+
+            if let detail = (source.summary?.nonEmptyTrimmed ?? source.excerpt?.nonEmptyTrimmed) {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !source.attachments.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(source.attachments.prefix(6)) { attachment in
+                        attachmentLink(attachment)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func sourceHeader(_ source: CampusAIDeliverableSource) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(source.title.nonEmptyTrimmed ?? source.url)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppTheme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text([source.siteName?.nonEmptyTrimmed, Self.scoreText(source.trustScore)].compactMap { $0 }.joined(separator: " · "))
+                .font(.caption2)
+                .foregroundStyle(AppTheme.tertiaryText)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func attachmentLink(_ attachment: CampusAIDeliverableAttachment) -> some View {
+        if let url = URL(string: attachment.url), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            Link(destination: url) {
+                HStack(spacing: 6) {
+                    Image(systemName: "paperclip")
+                        .font(.caption2.weight(.semibold))
+                    Text(attachment.title.nonEmptyTrimmed ?? attachment.url)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Text(attachment.fileType.uppercased())
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppTheme.tertiaryText)
+                }
+                .foregroundStyle(AppTheme.primaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func open(_ format: CampusAIDeliverableFileFormat) {
+        do {
+            let url = try CampusAIDeliverableFileBuilder.writeFile(
+                for: deliverable,
+                messageID: messageID,
+                format: format
+            )
+            previewItem = CampusAIDeliverablePreviewItem(
+                title: format.displayTitle,
+                format: format,
+                url: url
+            )
+        } catch {
+            fileError = error.localizedDescription
+        }
+    }
+
+    private static func scoreText(_ score: Double) -> String {
+        "可信度 \(Int((max(0, min(score, 1)) * 100).rounded()))%"
+    }
+}
+
+private struct CampusAIDeliverablePreviewItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let format: CampusAIDeliverableFileFormat
+    let url: URL
+}
+
+private struct CampusAIDeliverablePreviewSheet: View {
+    let item: CampusAIDeliverablePreviewItem
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if item.format == .html {
+                    CampusAIHTMLArtifactPreview(url: item.url)
+                } else {
+                    CampusAITextArtifactPreview(url: item.url)
+                }
+            }
+            .navigationTitle(item.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: item.url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("分享资料包")
+                }
+            }
+        }
+    }
+}
+
+private struct CampusAIHTMLArtifactPreview: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        WKWebView(frame: .zero)
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+    }
+}
+
+private struct CampusAITextArtifactPreview: View {
+    let url: URL
+
+    @State private var text = ""
+    @State private var errorText: String?
+
+    var body: some View {
+        ScrollView {
+            Text(errorText ?? text)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(errorText == nil ? AppTheme.primaryText : AppTheme.danger)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(AppSpacing.page)
+        }
+        .background(AppTheme.cardElevated)
+        .task(id: url) {
+            do {
+                text = try String(contentsOf: url, encoding: .utf8)
+                errorText = nil
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
     }
 }
 
@@ -1519,7 +1859,6 @@ private struct CampusAIMessageMarkdown: View {
 }
 
 private struct CampusAISettingsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     @Binding var settings: CampusAIUserSettings
@@ -1527,102 +1866,71 @@ private struct CampusAISettingsView: View {
     @StateObject private var subscriptionStore = CampusAISubscriptionStore()
     @State private var isPaywallPresented = false
 
-    private var contextSnapshot: CampusAIContextPayload {
-        CampusAIContextBuilder.build(modelContext: modelContext, settings: settings.contextSettings)
-    }
-
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("模式", selection: $settings.serviceMode) {
-                        ForEach(CampusAIServiceMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
+                    NavigationLink {
+                        CampusAIServiceSettingsPage(
+                            settings: $settings,
+                            subscriptionStore: subscriptionStore,
+                            isPaywallPresented: $isPaywallPresented
+                        )
+                    } label: {
+                        CampusAISettingsNavigationRow(
+                            systemImage: "sparkles",
+                            title: "服务与联网",
+                            detail: serviceSummary,
+                            status: settings.serviceMode.shortTitle
+                        )
                     }
 
-                    if settings.serviceMode == .leafyManaged {
-                        LabeledContent("额度", value: quotaText)
-
-                        Toggle("联网搜索", isOn: $settings.webSearchEnabled)
-
-                        Button {
-                            isPaywallPresented = true
-                        } label: {
-                            Label("升级 Leafy AI", systemImage: "sparkles")
-                        }
-
-                        Button {
-                            Task { await subscriptionStore.restorePurchases() }
-                        } label: {
-                            Label("恢复购买", systemImage: "arrow.clockwise")
-                        }
+                    NavigationLink {
+                        CampusAIAPIKeySettingsPage(
+                            settings: $settings,
+                            configuredProviderIDs: configuredProviderIDs,
+                            refreshConfiguredProviders: refreshConfiguredProviders
+                        )
+                    } label: {
+                        CampusAISettingsNavigationRow(
+                            systemImage: "key.fill",
+                            title: "自备 API Key",
+                            detail: apiKeySummary,
+                            status: configuredProviderIDs.contains(settings.selectedProviderID) ? "已配置" : "未配置"
+                        )
                     }
                 } header: {
-                    Text("服务模式")
+                    Text("AI 服务")
                 } footer: {
-                    Text("联网搜索只在 Leafy 托管模式下生效。自备 Key 模式不会消耗 Leafy 托管额度，也不会使用服务端搜索 API。")
+                    Text("自备 Key 可使用非联网 agent 能力；Leafy 托管额外提供额度和联网搜索。")
                 }
 
                 Section {
-                    ForEach(CampusAIProviderCatalog.all) { provider in
-                        NavigationLink {
-                            CampusAIProviderSettingsView(
-                                provider: provider,
-                                selectedProviderID: $settings.selectedProviderID,
-                                onAPIKeyChanged: refreshConfiguredProviders
-                            )
-                        } label: {
-                            CampusAIProviderListRow(
-                                provider: provider,
-                                isConfigured: configuredProviderIDs.contains(provider.id),
-                                isSelected: settings.selectedProviderID == provider.id
-                            )
-                        }
+                    NavigationLink {
+                        CampusAIPromptSettingsPage(settings: $settings)
+                    } label: {
+                        CampusAISettingsNavigationRow(
+                            systemImage: "text.alignleft",
+                            title: "回答偏好",
+                            detail: promptSummary,
+                            status: settings.systemPrompt == CampusAISettingsStore.defaultSystemPrompt ? "默认" : "已自定义"
+                        )
+                    }
+
+                    NavigationLink {
+                        CampusAIContextSettingsPage(settings: $settings)
+                    } label: {
+                        CampusAISettingsNavigationRow(
+                            systemImage: "switch.2",
+                            title: "本机上下文",
+                            detail: contextSummary,
+                            status: "\(enabledContextScopeCount)/8"
+                        )
                     }
                 } header: {
-                    Text("使用已有 API Key")
+                    Text("回答配置")
                 } footer: {
-                    Text("DeepSeek API Key 只保存在当前设备 Keychain，使用此模式不会消耗 Leafy 托管额度。")
-                }
-
-                Section {
-                    TextEditor(text: $settings.systemPrompt)
-                        .font(.body)
-                        .frame(minHeight: 150)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    Button("恢复默认 Prompt") {
-                        settings.systemPrompt = CampusAISettingsStore.defaultSystemPrompt
-                    }
-                } header: {
-                    Text("System Prompt")
-                } footer: {
-                    Text("这里会作为用户偏好追加到 Leafy 的基础安全提示词后。本机全局保存，所有新对话都会使用当前设置。")
-                }
-
-                Section {
-                    Toggle("课表和提醒", isOn: $settings.contextSettings.includesTimetable)
-                    Toggle("成绩和排名", isOn: $settings.contextSettings.includesGrades)
-                    Toggle("考试和培养计划", isOn: $settings.contextSettings.includesExamsAndPlans)
-                    Toggle("学习空间", isOn: $settings.contextSettings.includesLearningWorkspace)
-                    Toggle("考研和职业规划", isOn: $settings.contextSettings.includesPostgraduateAndCareer)
-                    Toggle("荣誉、体测和综测", isOn: $settings.contextSettings.includesHonorsFitnessQuality)
-                    Toggle("医疗台账", isOn: $settings.contextSettings.includesMedicalLedger)
-                    Toggle("社区公开缓存", isOn: $settings.contextSettings.includesCommunityCache)
-
-                    Button("全部开启") {
-                        settings.contextSettings = .defaultValue
-                    }
-
-                    ForEach(contextSnapshot.sourceStatus, id: \.scope) { status in
-                        CampusAIContextSourceStatusRow(status: status)
-                    }
-                } header: {
-                    Text("上下文范围")
-                } footer: {
-                    Text("上传文件、图片、OCR、PDF/Word/PPT/表格正文和本地文件路径不会进入上下文；只会使用标题、备注、分类、文件类型和更新时间等元数据。")
+                    Text("这些设置只影响后续请求，不会改写已有对话内容。")
                 }
 
                 Section("历史记录") {
@@ -1676,12 +1984,242 @@ private struct CampusAISettingsView: View {
         return "\(quota.remaining)/\(quota.limit)"
     }
 
+    private var serviceSummary: String {
+        switch settings.serviceMode {
+        case .leafyManaged:
+            return "额度 \(quotaText) · 联网\(settings.webSearchEnabled ? "开启" : "关闭")"
+        case .ownAPIKey:
+            return "使用 \(settings.selectedProvider.modelDisplayName)，不消耗 Leafy 托管额度"
+        }
+    }
+
+    private var apiKeySummary: String {
+        "\(settings.selectedProvider.displayName) · \(settings.selectedProvider.modelDisplayName)"
+    }
+
+    private var promptSummary: String {
+        settings.systemPrompt == CampusAISettingsStore.defaultSystemPrompt
+            ? "使用 Leafy 默认回答偏好"
+            : "已追加自定义偏好"
+    }
+
+    private var contextSummary: String {
+        "允许 \(enabledContextScopeCount) 类本机数据进入上下文"
+    }
+
+    private var enabledContextScopeCount: Int {
+        [
+            settings.contextSettings.includesTimetable,
+            settings.contextSettings.includesGrades,
+            settings.contextSettings.includesExamsAndPlans,
+            settings.contextSettings.includesLearningWorkspace,
+            settings.contextSettings.includesPostgraduateAndCareer,
+            settings.contextSettings.includesHonorsFitnessQuality,
+            settings.contextSettings.includesMedicalLedger,
+            settings.contextSettings.includesCommunityCache
+        ].filter { $0 }.count
+    }
+
     private func refreshConfiguredProviders() {
         configuredProviderIDs = CampusAIKeychainStore.configuredProviderIDs()
         if settings.serviceMode == .ownAPIKey,
            !configuredProviderIDs.contains(settings.selectedProviderID) {
             settings.serviceMode = .leafyManaged
         }
+    }
+}
+
+private struct CampusAISettingsNavigationRow: View {
+    let systemImage: String
+    let title: String
+    let detail: String
+    let status: String
+
+    var body: some View {
+        HStack(spacing: AppSpacing.compact) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .frame(width: 28, height: 28)
+                .background(AppTheme.accent.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: AppSpacing.compact)
+
+            Text(status)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.tertiaryText)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct CampusAIServiceSettingsPage: View {
+    @Binding var settings: CampusAIUserSettings
+    @ObservedObject var subscriptionStore: CampusAISubscriptionStore
+    @Binding var isPaywallPresented: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("模式", selection: $settings.serviceMode) {
+                    ForEach(CampusAIServiceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+
+                if settings.serviceMode == .leafyManaged {
+                    LabeledContent("额度", value: quotaText)
+                    Toggle("联网搜索", isOn: $settings.webSearchEnabled)
+                } else {
+                    LabeledContent("联网搜索", value: "不可用")
+                    LabeledContent("Agent Mode", value: "可用")
+                }
+            } header: {
+                Text("服务模式")
+            } footer: {
+                Text("自备 API Key 可使用非联网 agent 能力。联网搜索和官方资料检索只在 Leafy 托管模式下生效。")
+            }
+
+            if settings.serviceMode == .leafyManaged {
+                Section {
+                    Button {
+                        isPaywallPresented = true
+                    } label: {
+                        Label("升级 Leafy AI", systemImage: "sparkles")
+                    }
+
+                    Button {
+                        Task { await subscriptionStore.restorePurchases() }
+                    } label: {
+                        Label("恢复购买", systemImage: "arrow.clockwise")
+                    }
+                } header: {
+                    Text("订阅")
+                }
+            }
+        }
+        .navigationTitle("服务与联网")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var quotaText: String {
+        guard let quota = subscriptionStore.quota else {
+            return subscriptionStore.isLoading ? "同步中" : "未同步"
+        }
+        return "\(quota.remaining)/\(quota.limit)"
+    }
+}
+
+private struct CampusAIAPIKeySettingsPage: View {
+    @Binding var settings: CampusAIUserSettings
+    let configuredProviderIDs: Set<CampusAIProviderID>
+    let refreshConfiguredProviders: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(CampusAIProviderCatalog.all) { provider in
+                    NavigationLink {
+                        CampusAIProviderSettingsView(
+                            provider: provider,
+                            selectedProviderID: $settings.selectedProviderID,
+                            onAPIKeyChanged: refreshConfiguredProviders
+                        )
+                    } label: {
+                        CampusAIProviderListRow(
+                            provider: provider,
+                            isConfigured: configuredProviderIDs.contains(provider.id),
+                            isSelected: settings.selectedProviderID == provider.id
+                        )
+                    }
+                }
+            } footer: {
+                Text("API Key 只保存在当前设备 Keychain。自备 Key 不消耗 Leafy 托管额度，也不会使用服务端联网搜索。")
+            }
+        }
+        .navigationTitle("自备 API Key")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: refreshConfiguredProviders)
+    }
+}
+
+private struct CampusAIPromptSettingsPage: View {
+    @Binding var settings: CampusAIUserSettings
+
+    var body: some View {
+        Form {
+            Section {
+                TextEditor(text: $settings.systemPrompt)
+                    .font(.body)
+                    .frame(minHeight: 180)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                Button("恢复默认 Prompt") {
+                    settings.systemPrompt = CampusAISettingsStore.defaultSystemPrompt
+                }
+            } header: {
+                Text("System Prompt")
+            } footer: {
+                Text("这里会作为用户偏好追加到 Leafy 的基础安全提示词后。本机全局保存，所有新对话都会使用当前设置。")
+            }
+        }
+        .navigationTitle("回答偏好")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct CampusAIContextSettingsPage: View {
+    @Environment(\.modelContext) private var modelContext
+    @Binding var settings: CampusAIUserSettings
+
+    private var contextSnapshot: CampusAIContextPayload {
+        CampusAIContextBuilder.build(modelContext: modelContext, settings: settings.contextSettings)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("课表和提醒", isOn: $settings.contextSettings.includesTimetable)
+                Toggle("成绩和排名", isOn: $settings.contextSettings.includesGrades)
+                Toggle("考试和培养计划", isOn: $settings.contextSettings.includesExamsAndPlans)
+                Toggle("学习空间", isOn: $settings.contextSettings.includesLearningWorkspace)
+                Toggle("考研和职业规划", isOn: $settings.contextSettings.includesPostgraduateAndCareer)
+                Toggle("荣誉、体测和综测", isOn: $settings.contextSettings.includesHonorsFitnessQuality)
+                Toggle("医疗台账", isOn: $settings.contextSettings.includesMedicalLedger)
+                Toggle("社区公开缓存", isOn: $settings.contextSettings.includesCommunityCache)
+
+                Button("全部开启") {
+                    settings.contextSettings = .defaultValue
+                }
+            } header: {
+                Text("允许进入上下文的数据")
+            } footer: {
+                Text("上传文件、图片、OCR、PDF/Word/PPT/表格正文和本地文件路径不会进入上下文；只会使用标题、备注、分类、文件类型和更新时间等元数据。")
+            }
+
+            Section("当前数据状态") {
+                ForEach(contextSnapshot.sourceStatus, id: \.scope) { status in
+                    CampusAIContextSourceStatusRow(status: status)
+                }
+            }
+        }
+        .navigationTitle("本机上下文")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -394,7 +394,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
             selectedProviderID: CampusAIProviderCatalog.defaultProvider.id,
             systemPrompt: CampusAISettingsStore.defaultSystemPrompt,
             contextSettings: .defaultValue,
-            webSearchEnabled: true
+            webSearchEnabled: false
         )
     }
 
@@ -403,7 +403,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
         selectedProviderID: CampusAIProviderID = CampusAIProviderCatalog.defaultProvider.id,
         systemPrompt: String,
         contextSettings: CampusAIContextSettings,
-        webSearchEnabled: Bool = true
+        webSearchEnabled: Bool = false
     ) {
         self.serviceMode = serviceMode
         self.selectedProviderID = selectedProviderID
@@ -430,7 +430,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
             CampusAISettingsStore.defaultSystemPrompt
         contextSettings = try container.decodeIfPresent(CampusAIContextSettings.self, forKey: .contextSettings) ??
             .defaultValue
-        webSearchEnabled = try container.decodeIfPresent(Bool.self, forKey: .webSearchEnabled) ?? true
+        webSearchEnabled = try container.decodeIfPresent(Bool.self, forKey: .webSearchEnabled) ?? false
     }
 
     var selectedProvider: CampusAIProviderDescriptor {
@@ -509,7 +509,7 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         userSystemPrompt: String = CampusAISettingsStore.defaultSystemPrompt,
         contextSettings: CampusAIContextSettings = .defaultValue,
         agentMode: CampusAIAgentMode = .auto,
-        webSearchEnabled: Bool = true
+        webSearchEnabled: Bool = false
     ) {
         self.requestID = requestID
         self.message = message
@@ -587,6 +587,485 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
     }
 }
 
+nonisolated enum CampusAIDeliverableFileFormat: String, Codable, CaseIterable, Hashable, Identifiable {
+    case html
+    case markdown
+    case txt
+
+    var id: String { rawValue }
+
+    var displayTitle: String {
+        switch self {
+        case .html:
+            return "HTML"
+        case .markdown:
+            return "Markdown"
+        case .txt:
+            return "TXT"
+        }
+    }
+
+    var fileExtension: String {
+        switch self {
+        case .html:
+            return "html"
+        case .markdown:
+            return "md"
+        case .txt:
+            return "txt"
+        }
+    }
+}
+
+nonisolated struct CampusAIDeliverableAttachment: Identifiable, Codable, Hashable {
+    var title: String
+    var url: String
+    var fileType: String
+
+    var id: String { url }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case url
+        case fileType
+        case fileTypeSnake = "file_type"
+    }
+
+    init(title: String, url: String, fileType: String) {
+        self.title = title
+        self.url = url
+        self.fileType = fileType
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        url = try container.decodeIfPresent(String.self, forKey: .url) ?? ""
+        fileType = try container.decodeIfPresent(String.self, forKey: .fileType)
+            ?? container.decodeIfPresent(String.self, forKey: .fileTypeSnake)
+            ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(url, forKey: .url)
+        try container.encode(fileType, forKey: .fileType)
+    }
+}
+
+nonisolated struct CampusAIDeliverableSource: Identifiable, Codable, Hashable {
+    var id: String
+    var title: String
+    var url: String
+    var siteName: String?
+    var summary: String?
+    var excerpt: String?
+    var trustScore: Double
+    var attachments: [CampusAIDeliverableAttachment]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case url
+        case siteName
+        case siteNameSnake = "site_name"
+        case summary
+        case excerpt
+        case trustScore
+        case trustScoreSnake = "trust_score"
+        case attachments
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        url: String,
+        siteName: String? = nil,
+        summary: String? = nil,
+        excerpt: String? = nil,
+        trustScore: Double = 0,
+        attachments: [CampusAIDeliverableAttachment] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.url = url
+        self.siteName = siteName
+        self.summary = summary
+        self.excerpt = excerpt
+        self.trustScore = trustScore
+        self.attachments = attachments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        url = try container.decodeIfPresent(String.self, forKey: .url) ?? ""
+        siteName = try container.decodeIfPresent(String.self, forKey: .siteName)
+            ?? container.decodeIfPresent(String.self, forKey: .siteNameSnake)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        excerpt = try container.decodeIfPresent(String.self, forKey: .excerpt)
+        trustScore = try container.decodeIfPresent(Double.self, forKey: .trustScore)
+            ?? container.decodeIfPresent(Double.self, forKey: .trustScoreSnake)
+            ?? 0
+        attachments = (try container.decodeIfPresent([CampusAIDeliverableAttachment].self, forKey: .attachments) ?? [])
+            .filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(url, forKey: .url)
+        try container.encodeIfPresent(siteName, forKey: .siteName)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(excerpt, forKey: .excerpt)
+        try container.encode(trustScore, forKey: .trustScore)
+        try container.encode(attachments, forKey: .attachments)
+    }
+}
+
+nonisolated struct CampusAIDeliverable: Identifiable, Codable, Hashable {
+    var id: String
+    var title: String
+    var query: String
+    var summary: String
+    var generatedAt: String
+    var sources: [CampusAIDeliverableSource]
+    var formats: [CampusAIDeliverableFileFormat]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case query
+        case summary
+        case generatedAt
+        case generatedAtSnake = "generated_at"
+        case sources
+        case formats
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        query: String,
+        summary: String,
+        generatedAt: String,
+        sources: [CampusAIDeliverableSource],
+        formats: [CampusAIDeliverableFileFormat] = CampusAIDeliverableFileFormat.allCases
+    ) {
+        self.id = id
+        self.title = title
+        self.query = query
+        self.summary = summary
+        self.generatedAt = generatedAt
+        self.sources = sources
+        self.formats = formats
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        query = try container.decodeIfPresent(String.self, forKey: .query) ?? ""
+        summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? ""
+        generatedAt = try container.decodeIfPresent(String.self, forKey: .generatedAt)
+            ?? container.decodeIfPresent(String.self, forKey: .generatedAtSnake)
+            ?? ""
+        sources = (try container.decodeIfPresent([CampusAIDeliverableSource].self, forKey: .sources) ?? [])
+            .filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let rawFormats = try container.decodeIfPresent([String].self, forKey: .formats) ?? []
+        formats = rawFormats.compactMap { CampusAIDeliverableFileFormat(rawValue: $0.lowercased()) }
+        if formats.isEmpty {
+            formats = CampusAIDeliverableFileFormat.allCases
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(query, forKey: .query)
+        try container.encode(summary, forKey: .summary)
+        try container.encode(generatedAt, forKey: .generatedAt)
+        try container.encode(sources, forKey: .sources)
+        try container.encode(formats.map(\.rawValue), forKey: .formats)
+    }
+}
+
+nonisolated enum CampusAIDeliverableFileBuilder {
+    static func cacheRoot(fileManager: FileManager = .default) throws -> URL {
+        let caches = try fileManager.url(
+            for: .cachesDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return caches.appendingPathComponent("CampusAIArtifacts", isDirectory: true)
+    }
+
+    static func writeFile(
+        for deliverable: CampusAIDeliverable,
+        messageID: UUID,
+        format: CampusAIDeliverableFileFormat,
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        let root: URL
+        if let rootDirectory {
+            root = rootDirectory
+        } else {
+            root = try cacheRoot(fileManager: fileManager)
+        }
+        let directory = root.appendingPathComponent(messageID.uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let fileName = sanitizedFileStem(deliverable.title.nonEmptyTrimmed ?? "CampusAIArtifacts")
+            + "."
+            + format.fileExtension
+        let fileURL = directory.appendingPathComponent(fileName, isDirectory: false)
+        try content(for: deliverable, format: format).write(to: fileURL, atomically: true, encoding: .utf8)
+        return fileURL
+    }
+
+    static func removeArtifacts(
+        for messageID: UUID,
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        let directory = try artifactsDirectory(
+            for: messageID,
+            rootDirectory: rootDirectory,
+            fileManager: fileManager
+        )
+        guard fileManager.fileExists(atPath: directory.path) else { return }
+        try fileManager.removeItem(at: directory)
+    }
+
+    static func removeAllArtifacts(
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        let root: URL
+        if let rootDirectory {
+            root = rootDirectory
+        } else {
+            root = try cacheRoot(fileManager: fileManager)
+        }
+        guard fileManager.fileExists(atPath: root.path) else { return }
+        try fileManager.removeItem(at: root)
+    }
+
+    static func pruneArtifacts(
+        keeping messageIDs: Set<UUID>,
+        rootDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) throws {
+        let root: URL
+        if let rootDirectory {
+            root = rootDirectory
+        } else {
+            root = try cacheRoot(fileManager: fileManager)
+        }
+        guard fileManager.fileExists(atPath: root.path) else { return }
+        let directories = try fileManager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        for directory in directories {
+            let values = try directory.resourceValues(forKeys: [.isDirectoryKey])
+            guard values.isDirectory == true,
+                  let id = UUID(uuidString: directory.lastPathComponent),
+                  !messageIDs.contains(id)
+            else { continue }
+            try fileManager.removeItem(at: directory)
+        }
+    }
+
+    static func content(for deliverable: CampusAIDeliverable, format: CampusAIDeliverableFileFormat) -> String {
+        switch format {
+        case .html:
+            return htmlDocument(for: deliverable)
+        case .markdown:
+            return markdownDocument(for: deliverable)
+        case .txt:
+            return textDocument(for: deliverable)
+        }
+    }
+
+    static func htmlDocument(for deliverable: CampusAIDeliverable) -> String {
+        let sourceSections = deliverable.sources.enumerated().map { index, source in
+            let attachments = source.attachments.isEmpty
+                ? "<p class=\"muted\">未识别到附件链接。</p>"
+                : """
+                <ul class="attachments">
+                \(source.attachments.map { attachment in
+                    """
+                    <li><a href="\(attributeEscape(attachment.url))">\(htmlEscape(attachment.title.nonEmptyTrimmed ?? attachment.url))</a><span>\(htmlEscape(attachment.fileType.uppercased()))</span></li>
+                    """
+                }.joined(separator: "\n"))
+                </ul>
+                """
+            return """
+            <section class="source">
+              <h2>\(index + 1). <a href="\(attributeEscape(source.url))">\(htmlEscape(source.title.nonEmptyTrimmed ?? source.url))</a></h2>
+              <p class="meta">\(htmlEscape([source.siteName?.nonEmptyTrimmed, scoreText(source.trustScore)].compactMap { $0 }.joined(separator: " · ")))</p>
+              \(paragraphHTML(source.summary?.nonEmptyTrimmed ?? source.excerpt?.nonEmptyTrimmed))
+              <h3>附件</h3>
+              \(attachments)
+            </section>
+            """
+        }.joined(separator: "\n")
+
+        return """
+        <!doctype html>
+        <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>\(htmlEscape(deliverable.title.nonEmptyTrimmed ?? "学校官方资料包"))</title>
+          <style>
+            body { font: -apple-system-body; margin: 0; padding: 28px; color: #17201a; background: #fbfdfb; }
+            main { max-width: 820px; margin: 0 auto; }
+            header { border-bottom: 1px solid #dfe7df; padding-bottom: 18px; margin-bottom: 20px; }
+            h1 { font-size: 28px; line-height: 1.2; margin: 0 0 12px; }
+            h2 { font-size: 18px; line-height: 1.35; margin: 0 0 8px; }
+            h3 { font-size: 14px; margin: 14px 0 8px; color: #4f6557; }
+            p { line-height: 1.62; }
+            a { color: #216e45; text-decoration-thickness: 0.08em; }
+            .meta, .muted { color: #68766c; font-size: 13px; }
+            .source { background: #ffffff; border: 1px solid #dfe7df; border-radius: 14px; padding: 16px; margin: 14px 0; }
+            .attachments { padding-left: 20px; margin: 6px 0 0; }
+            .attachments li { margin: 7px 0; }
+            .attachments span { display: inline-block; margin-left: 8px; color: #68766c; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <main>
+            <header>
+              <h1>\(htmlEscape(deliverable.title.nonEmptyTrimmed ?? "学校官方资料包"))</h1>
+              <p class="meta">查询：\(htmlEscape(deliverable.query))</p>
+              <p class="meta">生成时间：\(htmlEscape(deliverable.generatedAt))</p>
+              \(paragraphHTML(deliverable.summary.nonEmptyTrimmed))
+            </header>
+            \(sourceSections.isEmpty ? "<p class=\"muted\">未找到可交付的官方来源。</p>" : sourceSections)
+          </main>
+        </body>
+        </html>
+        """
+    }
+
+    static func markdownDocument(for deliverable: CampusAIDeliverable) -> String {
+        let sources = deliverable.sources.enumerated().map { index, source in
+            let attachments = source.attachments.isEmpty
+                ? "- 附件：未识别到附件链接"
+                : source.attachments.map {
+                    "- 附件：[\(markdownEscape($0.title.nonEmptyTrimmed ?? $0.url))](\($0.url))（\($0.fileType.uppercased())）"
+                }.joined(separator: "\n")
+            return """
+            \(index + 1). [\(markdownEscape(source.title.nonEmptyTrimmed ?? source.url))](\(source.url))
+               - 来源：\([source.siteName?.nonEmptyTrimmed, scoreText(source.trustScore)].compactMap { $0 }.joined(separator: " · "))
+               - 摘要：\(markdownEscape(source.summary?.nonEmptyTrimmed ?? source.excerpt?.nonEmptyTrimmed ?? "暂无摘要"))
+            \(attachments.split(separator: "\n").map { "   \($0)" }.joined(separator: "\n"))
+            """
+        }.joined(separator: "\n\n")
+
+        return """
+        # \(markdownEscape(deliverable.title.nonEmptyTrimmed ?? "学校官方资料包"))
+
+        - 查询：\(markdownEscape(deliverable.query))
+        - 生成时间：\(markdownEscape(deliverable.generatedAt))
+
+        \(markdownEscape(deliverable.summary.nonEmptyTrimmed ?? "已整理官方来源和附件链接。"))
+
+        ## 官方来源
+
+        \(sources.isEmpty ? "未找到可交付的官方来源。" : sources)
+        """
+    }
+
+    static func textDocument(for deliverable: CampusAIDeliverable) -> String {
+        let sources = deliverable.sources.enumerated().map { index, source in
+            let attachments = source.attachments.isEmpty
+                ? "附件：未识别到附件链接"
+                : source.attachments.map { "附件：\($0.title.nonEmptyTrimmed ?? $0.url) [\($0.fileType.uppercased())]\n\($0.url)" }.joined(separator: "\n")
+            return """
+            \(index + 1). \(source.title.nonEmptyTrimmed ?? source.url)
+            \(source.url)
+            \([source.siteName?.nonEmptyTrimmed, scoreText(source.trustScore)].compactMap { $0 }.joined(separator: " · "))
+            \(source.summary?.nonEmptyTrimmed ?? source.excerpt?.nonEmptyTrimmed ?? "暂无摘要")
+            \(attachments)
+            """
+        }.joined(separator: "\n\n")
+
+        return """
+        \(deliverable.title.nonEmptyTrimmed ?? "学校官方资料包")
+
+        查询：\(deliverable.query)
+        生成时间：\(deliverable.generatedAt)
+
+        \(deliverable.summary.nonEmptyTrimmed ?? "已整理官方来源和附件链接。")
+
+        官方来源
+        \(sources.isEmpty ? "未找到可交付的官方来源。" : sources)
+        """
+    }
+
+    private static func sanitizedFileStem(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let collapsed = String(scalars)
+            .replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "- "))
+        return String((collapsed.nonEmptyTrimmed ?? "CampusAIArtifacts").prefix(64))
+    }
+
+    private static func artifactsDirectory(
+        for messageID: UUID,
+        rootDirectory: URL?,
+        fileManager: FileManager
+    ) throws -> URL {
+        let root: URL
+        if let rootDirectory {
+            root = rootDirectory
+        } else {
+            root = try cacheRoot(fileManager: fileManager)
+        }
+        return root.appendingPathComponent(messageID.uuidString, isDirectory: true)
+    }
+
+    private static func paragraphHTML(_ value: String?) -> String {
+        guard let value else { return "" }
+        return "<p>\(htmlEscape(value))</p>"
+    }
+
+    private static func scoreText(_ score: Double) -> String {
+        "可信度 \(Int((max(0, min(score, 1)) * 100).rounded()))%"
+    }
+
+    private static func htmlEscape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    private static func attributeEscape(_ value: String) -> String {
+        htmlEscape(value)
+    }
+
+    private static func markdownEscape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "[", with: "\\[")
+            .replacingOccurrences(of: "]", with: "\\]")
+    }
+}
+
 nonisolated struct CampusAIAgentTraceStep: Identifiable, Codable, Hashable {
     var id: String
     var kind: String
@@ -641,8 +1120,49 @@ nonisolated struct CampusAIMessageAgentMetadata: Codable, Hashable {
     var statusText: String?
     var citations: [CampusAICitation]
     var agentTrace: [CampusAIAgentTraceStep]
+    var deliverables: [CampusAIDeliverable]
 
-    static let empty = CampusAIMessageAgentMetadata(statusText: nil, citations: [], agentTrace: [])
+    static let empty = CampusAIMessageAgentMetadata(statusText: nil, citations: [], agentTrace: [], deliverables: [])
+
+    enum CodingKeys: String, CodingKey {
+        case statusText
+        case statusTextSnake = "status_text"
+        case citations
+        case agentTrace
+        case agentTraceSnake = "agent_trace"
+        case deliverables
+    }
+
+    init(
+        statusText: String? = nil,
+        citations: [CampusAICitation] = [],
+        agentTrace: [CampusAIAgentTraceStep] = [],
+        deliverables: [CampusAIDeliverable] = []
+    ) {
+        self.statusText = statusText
+        self.citations = citations
+        self.agentTrace = agentTrace
+        self.deliverables = deliverables
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        statusText = try container.decodeIfPresent(String.self, forKey: .statusText)
+            ?? container.decodeIfPresent(String.self, forKey: .statusTextSnake)
+        citations = try container.decodeIfPresent([CampusAICitation].self, forKey: .citations) ?? []
+        agentTrace = try container.decodeIfPresent([CampusAIAgentTraceStep].self, forKey: .agentTrace)
+            ?? container.decodeIfPresent([CampusAIAgentTraceStep].self, forKey: .agentTraceSnake)
+            ?? []
+        deliverables = try container.decodeIfPresent([CampusAIDeliverable].self, forKey: .deliverables) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(statusText, forKey: .statusText)
+        try container.encode(citations, forKey: .citations)
+        try container.encode(agentTrace, forKey: .agentTrace)
+        try container.encode(deliverables, forKey: .deliverables)
+    }
 }
 
 nonisolated struct CampusAIResponse: Codable, Hashable {
@@ -654,6 +1174,7 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
     var actions: [CampusAIActionDraft]
     var citations: [CampusAICitation]
     var agentTrace: [CampusAIAgentTraceStep]
+    var deliverables: [CampusAIDeliverable]
 
     enum CodingKeys: String, CodingKey {
         case answer
@@ -665,6 +1186,7 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         case citations
         case agentTrace
         case agentTraceSnake = "agent_trace"
+        case deliverables
     }
 
     init(
@@ -675,7 +1197,8 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         summary: String? = nil,
         actions: [CampusAIActionDraft] = [],
         citations: [CampusAICitation] = [],
-        agentTrace: [CampusAIAgentTraceStep] = []
+        agentTrace: [CampusAIAgentTraceStep] = [],
+        deliverables: [CampusAIDeliverable] = []
     ) {
         self.answer = answer
         self.reasoning = reasoning
@@ -685,6 +1208,7 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         self.actions = CampusAIActionValidation.validated(actions)
         self.citations = citations.filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         self.agentTrace = agentTrace
+        self.deliverables = deliverables
     }
 
     init(from decoder: Decoder) throws {
@@ -702,6 +1226,7 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         agentTrace = try container.decodeIfPresent([CampusAIAgentTraceStep].self, forKey: .agentTrace)
             ?? container.decodeIfPresent([CampusAIAgentTraceStep].self, forKey: .agentTraceSnake)
             ?? []
+        deliverables = try container.decodeIfPresent([CampusAIDeliverable].self, forKey: .deliverables) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -714,6 +1239,7 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         try container.encode(actions, forKey: .actions)
         try container.encode(citations, forKey: .citations)
         try container.encode(agentTrace, forKey: .agentTrace)
+        try container.encode(deliverables, forKey: .deliverables)
     }
 }
 
@@ -2303,7 +2829,8 @@ nonisolated struct CampusAISSEParser {
                         summary: payload.summary,
                         actions: payload.actions ?? [],
                         citations: payload.citations ?? [],
-                        agentTrace: payload.agentTrace ?? payload.agentTraceSnake ?? []
+                        agentTrace: payload.agentTrace ?? payload.agentTraceSnake ?? [],
+                        deliverables: payload.deliverables ?? []
                     )
                 )
             ]
@@ -2370,6 +2897,7 @@ nonisolated private struct CampusAIManagedStreamPayload: Decodable {
     let citations: [CampusAICitation]?
     let agentTrace: [CampusAIAgentTraceStep]?
     let agentTraceSnake: [CampusAIAgentTraceStep]?
+    let deliverables: [CampusAIDeliverable]?
     let step: CampusAIAgentTraceStep?
     let tool: CampusAIAgentToolEvent?
     let citation: CampusAICitation?
@@ -2388,6 +2916,7 @@ nonisolated private struct CampusAIManagedStreamPayload: Decodable {
         case citations
         case agentTrace
         case agentTraceSnake = "agent_trace"
+        case deliverables
         case step
         case tool
         case citation
@@ -2546,7 +3075,7 @@ nonisolated struct CampusAIService {
             model: settings.selectedProvider.modelIdentifier,
             userSystemPrompt: settings.effectiveSystemPrompt,
             contextSettings: settings.contextSettings,
-            agentMode: settings.webSearchEnabled ? .auto : .off,
+            agentMode: .auto,
             webSearchEnabled: settings.webSearchEnabled
         )
         return streamInvoke(request, settings)
@@ -2571,6 +3100,20 @@ nonisolated struct CampusAIService {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    let usesDirectAgent = shouldRunDirectAgent(request)
+                    var directAgentTrace: [CampusAIAgentTraceStep] = []
+                    if usesDirectAgent {
+                        let planningStep = directAgentStep(
+                            id: "direct-agent-planner",
+                            title: "任务拆解",
+                            detail: "使用自备 API Key 进行非联网 agent 规划。",
+                            status: "completed"
+                        )
+                        directAgentTrace.append(planningStep)
+                        continuation.yield(.agentStatus("正在拆解任务"))
+                        continuation.yield(.agentStep(planningStep))
+                    }
+
                     let apiKey = try CampusAIAPIKeyResolver().resolve(for: settings)
                     let urlRequest = try makeChatCompletionsRequest(
                         for: request,
@@ -2622,12 +3165,46 @@ nonisolated struct CampusAIService {
                         yieldProviderEvents(try providerEvents(from: body))
                     }
                     if var finalResponse {
+                        if usesDirectAgent {
+                            let synthesisStep = directAgentStep(
+                                id: "direct-agent-synthesis",
+                                title: "整合回答",
+                                detail: "结合本机上下文生成回答。",
+                                status: "completed"
+                            )
+                            directAgentTrace.append(synthesisStep)
+                            continuation.yield(.agentStep(synthesisStep))
+                            continuation.yield(.agentStatus("正在规划动作"))
+                            continuation.yield(.agentTool(.init(name: "action.plan", status: "running")))
+                        }
                         finalResponse.actions = await directPlannedActions(
                             request: request,
                             answer: finalResponse.answer,
                             settings: settings,
                             apiKey: apiKey
                         )
+                        if usesDirectAgent {
+                            let actionStep = directAgentStep(
+                                id: "direct-agent-action-plan",
+                                title: "动作规划",
+                                detail: finalResponse.actions.isEmpty
+                                    ? "没有生成需要确认的动作卡片。"
+                                    : "已生成 \(finalResponse.actions.count) 个待确认动作。",
+                                status: finalResponse.actions.isEmpty ? "skipped" : "completed",
+                                tool: "action.plan"
+                            )
+                            directAgentTrace.append(actionStep)
+                            continuation.yield(.agentTool(.init(
+                                name: "action.plan",
+                                status: "completed",
+                                resultCount: finalResponse.actions.count
+                            )))
+                            continuation.yield(.agentStep(actionStep))
+                            finalResponse.agentTrace = mergeAgentTrace(
+                                finalResponse.agentTrace,
+                                directAgentTrace
+                            )
+                        }
                         continuation.yield(.done(finalResponse))
                     }
                     continuation.finish()
@@ -2713,6 +3290,58 @@ nonisolated struct CampusAIService {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try providerJSONEncoder().encode(chatCompletionsPayload(for: request))
         return urlRequest
+    }
+
+    static func shouldRunDirectAgent(_ request: CampusAIRequest) -> Bool {
+        guard request.agentMode == .auto else { return false }
+        let text = request.message.lowercased()
+        return [
+            "拆解",
+            "规划",
+            "计划",
+            "比较",
+            "分析",
+            "结合",
+            "安排",
+            "方案",
+            "多步",
+            "提醒",
+            "倒计时",
+            "打开"
+        ].contains { text.contains($0) }
+    }
+
+    private static func directAgentStep(
+        id: String,
+        title: String,
+        detail: String,
+        status: String,
+        tool: String? = nil,
+        role: String? = nil
+    ) -> CampusAIAgentTraceStep {
+        CampusAIAgentTraceStep(
+            id: id,
+            kind: tool == nil ? "agent" : "tool",
+            title: title,
+            detail: detail,
+            status: status,
+            tool: tool,
+            role: role,
+            timestamp: ISO8601DateFormatter().string(from: Date())
+        )
+    }
+
+    private static func mergeAgentTrace(
+        _ existing: [CampusAIAgentTraceStep],
+        _ additional: [CampusAIAgentTraceStep]
+    ) -> [CampusAIAgentTraceStep] {
+        var seen = Set(existing.map(\.id))
+        var merged = existing
+        for step in additional where !seen.contains(step.id) {
+            seen.insert(step.id)
+            merged.append(step)
+        }
+        return merged
     }
 
     static func makeActionPlannerRequest(
@@ -2836,10 +3465,11 @@ nonisolated struct CampusAIService {
         let customPrompt = userPrompt.nonEmptyTrimmed.map { String($0.prefix(3000)) }
         return [
             "你是 MyLeafy 的校园学习与生活助手，当前是测试功能。",
-            "优先根据请求中提供的本机缓存或本地保存上下文回答；可以补充明确标注为一般建议的常识，但不要把常识伪装成本机数据。",
-            "数据不足时直接说明缺少哪些上下文。",
+            "回答要直接、具体、可执行；能给结论就先给结论，不要反复解释内部数据来源。",
+            "可以结合已提供的课程、考试、学习、提醒和个人事项上下文，也可以补充合理的一般建议；不要把不确定内容说成事实。",
+            "缺少关键信息时，用一句话说明缺什么，并给出用户下一步能做的选择。",
             "不要声称读取了未提供的数据，不要声称读取了用户上传文件正文、图片像素、OCR、PDF、Word、PPT、表格或本地文件路径。",
-            "社区内容只可当作用户当前设备已缓存的公开 feed 摘要，不要推断私信、身份资料或未缓存远端内容。",
+            "不要推断私信、身份资料、未提供的远端内容或后台登录后的内容。",
             "医疗台账只能做整理、提醒、流程梳理和材料核对，不提供诊断、治疗、用药或医疗决策建议。",
             "回复必须是中文 Markdown。优先使用短标题、列表、加粗和清晰分段；不要输出 JSON，不要输出动作草稿。",
             customPrompt.map { "用户自定义偏好：\n\($0)" }
@@ -2853,6 +3483,7 @@ nonisolated struct CampusAIService {
             "只有用户明确想打开页面、设置倒计时、设置课表提醒，或回答中明显需要这一步时才生成动作；否则返回 {\"actions\":[]}。",
             "支持 kind：openAcademicRoute、createCountdown、createTimetableReminder。",
             "openAcademicRoute.payload.route 只能是 grades、gradeAnalytics、examSchedule、scheduleReports、customCountdowns、teachingPlan、trainingProgram。",
+            "用户想新建、添加或管理日程/提醒，但缺少创建课表提醒所需的周次、星期、节次时，生成 openAcademicRoute：一般日程用 examSchedule，倒计时或重要日期用 customCountdowns，推送或报告用 scheduleReports。",
             "createCountdown.payload 必须包含 countdownTitle 和 targetDate，targetDate 使用 yyyy-MM-dd。",
             "createTimetableReminder.payload 必须包含 week、dayOfWeek、period、title；dayOfWeek 为 1 到 7，minutesBefore 必须大于等于 0。",
             "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
@@ -2877,12 +3508,42 @@ nonisolated struct CampusAIService {
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode)
             else {
-                return []
+                return fallbackActionDrafts(for: request, answer: answer)
             }
-            return try actionPlannerActions(fromProviderResponseData: data)
+            let actions = try actionPlannerActions(fromProviderResponseData: data)
+            return actions.isEmpty ? fallbackActionDrafts(for: request, answer: answer) : actions
         } catch {
-            return []
+            return fallbackActionDrafts(for: request, answer: answer)
         }
+    }
+
+    static func fallbackActionDrafts(
+        for request: CampusAIRequest,
+        answer: String = ""
+    ) -> [CampusAIActionDraft] {
+        let text = [request.message, answer]
+            .joined(separator: "\n")
+            .lowercased()
+        let hasCreateIntent = ["新建", "添加", "创建", "设置", "安排"].contains { text.contains($0) }
+        let hasScheduleIntent = ["日程", "提醒", "事项", "待办", "安排"].contains { text.contains($0) }
+        guard hasCreateIntent, hasScheduleIntent else { return [] }
+
+        let route: CampusAIAcademicRouteID
+        if text.contains("倒计时") || text.contains("重要日期") || text.contains("纪念日") {
+            route = .customCountdowns
+        } else if text.contains("推送") || text.contains("报告") {
+            route = .scheduleReports
+        } else {
+            route = .examSchedule
+        }
+        return [
+            CampusAIActionDraft(
+                kind: .openAcademicRoute,
+                title: "打开\(route.title)",
+                detail: "前往\(route.title)继续创建或管理日程。",
+                payload: CampusAIActionPayload(route: route.rawValue)
+            )
+        ]
     }
 
     static func actionPlannerActions(fromProviderResponseData data: Data) throws -> [CampusAIActionDraft] {
