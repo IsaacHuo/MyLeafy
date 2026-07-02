@@ -15,6 +15,7 @@ struct LeafyApp: App {
     @StateObject private var networkManager = ActiveCampusContext.networkManager
     @StateObject private var appNavigation = AppNavigationCoordinator()
     @StateObject private var communityNotificationBadgeViewModel = CommunityNotificationBadgeViewModel()
+    @StateObject private var externalImportCoordinator = ExternalLearningMaterialImportCoordinator()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.requestReview) private var requestReview
     @AppStorage("appFontSizePreference") private var appDisplaySizePreferenceRaw = AppDisplaySizePreference.standard.rawValue
@@ -32,6 +33,10 @@ struct LeafyApp: App {
 
     private var sharedModelContainer: ModelContainer {
         modelContainerSetup.container
+    }
+
+    private var isAuthenticatedForExternalImport: Bool {
+        networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
     }
 
     private var displaySizePreference: AppDisplaySizePreference {
@@ -77,12 +82,23 @@ struct LeafyApp: App {
             }
             .id(modelContainerRevision)
             .onOpenURL { url in
+                if externalImportCoordinator.handle(url: url, isAuthenticated: isAuthenticatedForExternalImport) {
+                    return
+                }
+
                 if CustomCampusAuthCallback.isCallback(url) {
                     Task { await handleCustomCampusAuthCallback(url) }
                     return
                 }
 
                 appNavigation.handle(url: url)
+            }
+            .sheet(item: $externalImportCoordinator.activeBatch) { batch in
+                ExternalLearningMaterialImportSheet(
+                    batch: batch,
+                    coordinator: externalImportCoordinator,
+                    appNavigation: appNavigation
+                )
             }
             .alert(L10n.text("本地缓存已恢复", language: .zhHans), isPresented: Binding(
                 get: { modelRecoveryMessage != nil },
@@ -100,6 +116,14 @@ struct LeafyApp: App {
             } message: {
                 Text(authCallbackMessage ?? "")
             }
+            .alert("无法导入学习资料", isPresented: Binding(
+                get: { externalImportCoordinator.alertMessage != nil },
+                set: { if !$0 { externalImportCoordinator.alertMessage = nil } }
+            )) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(externalImportCoordinator.alertMessage ?? "")
+            }
             .tint(themeColorPreference.swatchColor)
             .preferredColorScheme(appearancePreference.preferredColorScheme)
             .animation(appearanceAnimation, value: appAppearancePreferenceRaw)
@@ -116,6 +140,10 @@ struct LeafyApp: App {
                 refreshWidgetSnapshot()
                 refreshScheduleReportNotifications()
                 prefetchSchoolData(trigger: .foreground)
+                externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
+            }
+            .onChange(of: networkManager.hasCachedIdentity) { _, _ in
+                externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
             }
             .onChange(of: appThemeColorPreferenceRaw) { _, _ in
                 syncThemeAppearance()
@@ -135,6 +163,7 @@ struct LeafyApp: App {
                     refreshSemesterRuntimeConfig()
                     refreshScheduleReportNotifications()
                     prefetchSchoolData(trigger: .foreground)
+                    externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
                 }
                 if newPhase != .active {
                     reviewRequestTask?.cancel()
@@ -195,6 +224,7 @@ struct LeafyApp: App {
                 return
             }
             networkManager.persistCustomCampusAuthSession(session)
+            externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
             authCallbackMessage = L10n.text(
                 "邮箱验证已完成，已登录通用入口账号 %@。",
                 language: .zhHans,

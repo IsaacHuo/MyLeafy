@@ -132,6 +132,13 @@ nonisolated enum AcademicRoute: Hashable, Sendable {
     case scheduleReports
 }
 
+nonisolated enum LearningWorkspaceInitialTab: String, Hashable, Sendable {
+    case overview
+    case materials
+    case tasks
+    case records
+}
+
 nonisolated enum AcademicDetailRoute: Hashable, Sendable {
     case grades
     case gradeAnalytics
@@ -146,7 +153,7 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
     case classroomLookup(building: String, room: String)
     case campusHeatmap
     case studyTimeRecords
-    case learningWorkspace(LearningWorkspaceDestination)
+    case learningWorkspace(LearningWorkspaceDestination, initialTab: LearningWorkspaceInitialTab = .overview)
     case sunshineRun
     case fitnessTestRecords
     case sportsVenues

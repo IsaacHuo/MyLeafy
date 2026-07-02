@@ -814,6 +814,19 @@ private enum LearningWorkspaceDetailTab: String, CaseIterable, Identifiable {
     case records = "记录"
 
     var id: String { rawValue }
+
+    init(initialTab: LearningWorkspaceInitialTab) {
+        switch initialTab {
+        case .overview:
+            self = .overview
+        case .materials:
+            self = .materials
+        case .tasks:
+            self = .tasks
+        case .records:
+            self = .records
+        }
+    }
 }
 
 struct LearningWorkspaceDetailView: View {
@@ -849,6 +862,11 @@ struct LearningWorkspaceDetailView: View {
     @State private var alertMessage: String?
     @State private var workspaceIndex = LearningWorkspaceIndex.empty
     @State private var workspaceIndexSignature = LearningWorkspaceIndexSignature()
+
+    init(destination: LearningWorkspaceDestination, initialTab: LearningWorkspaceInitialTab = .overview) {
+        self.destination = destination
+        self._selectedTab = State(initialValue: LearningWorkspaceDetailTab(initialTab: initialTab))
+    }
 
     private var project: LearningProject? {
         guard case .project(let id) = destination else { return nil }

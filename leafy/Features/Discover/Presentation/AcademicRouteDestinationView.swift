@@ -39,8 +39,8 @@ struct AcademicRouteDestinationView: View {
             CampusHeatmapView()
         case .studyTimeRecords:
             StudyTimeRecordsView()
-        case .learningWorkspace(let destination):
-            LearningWorkspaceDetailView(destination: destination)
+        case .learningWorkspace(let destination, let initialTab):
+            LearningWorkspaceDetailView(destination: destination, initialTab: initialTab)
         case .sunshineRun:
             SunshineRunView()
         case .fitnessTestRecords:

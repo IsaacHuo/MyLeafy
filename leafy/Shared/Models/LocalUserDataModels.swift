@@ -576,7 +576,7 @@ enum LearningMaterialFileStore {
         UTType(filenameExtension: "csv") ?? .data
     ]
 
-    static func importFile(from sourceURL: URL) throws -> StoredFile {
+    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil) throws -> StoredFile {
         let didAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -595,7 +595,8 @@ enum LearningMaterialFileStore {
         }
         try fileManager.copyItem(at: sourceURL, to: destinationURL)
 
-        let contentType = UTType(filenameExtension: sourceURL.pathExtension)
+        let contentType = contentTypeIdentifier.flatMap(UTType.init)
+            ?? UTType(filenameExtension: sourceURL.pathExtension)
             ?? sourceURL.resourceContentType
             ?? .data
         return StoredFile(
