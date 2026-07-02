@@ -330,6 +330,11 @@ nonisolated enum CampusAIServiceMode: String, Codable, CaseIterable, Hashable, I
     }
 }
 
+nonisolated enum CampusAIAgentMode: String, Codable, Hashable {
+    case auto
+    case off
+}
+
 nonisolated struct CampusAIProviderDescriptor: Hashable, Identifiable {
     let id: CampusAIProviderID
     let displayName: String
@@ -381,13 +386,15 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
     var selectedProviderID: CampusAIProviderID
     var systemPrompt: String
     var contextSettings: CampusAIContextSettings
+    var webSearchEnabled: Bool
 
     static var defaultValue: CampusAIUserSettings {
         CampusAIUserSettings(
             serviceMode: CampusAIKeychainStore.hasAPIKey() ? .ownAPIKey : .leafyManaged,
             selectedProviderID: CampusAIProviderCatalog.defaultProvider.id,
             systemPrompt: CampusAISettingsStore.defaultSystemPrompt,
-            contextSettings: .defaultValue
+            contextSettings: .defaultValue,
+            webSearchEnabled: true
         )
     }
 
@@ -395,12 +402,14 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
         serviceMode: CampusAIServiceMode = .leafyManaged,
         selectedProviderID: CampusAIProviderID = CampusAIProviderCatalog.defaultProvider.id,
         systemPrompt: String,
-        contextSettings: CampusAIContextSettings
+        contextSettings: CampusAIContextSettings,
+        webSearchEnabled: Bool = true
     ) {
         self.serviceMode = serviceMode
         self.selectedProviderID = selectedProviderID
         self.systemPrompt = systemPrompt
         self.contextSettings = contextSettings
+        self.webSearchEnabled = webSearchEnabled
     }
 
     enum CodingKeys: String, CodingKey {
@@ -408,6 +417,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
         case selectedProviderID
         case systemPrompt
         case contextSettings
+        case webSearchEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -420,6 +430,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
             CampusAISettingsStore.defaultSystemPrompt
         contextSettings = try container.decodeIfPresent(CampusAIContextSettings.self, forKey: .contextSettings) ??
             .defaultValue
+        webSearchEnabled = try container.decodeIfPresent(Bool.self, forKey: .webSearchEnabled) ?? true
     }
 
     var selectedProvider: CampusAIProviderDescriptor {
@@ -486,6 +497,8 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
     let model: String
     let userSystemPrompt: String
     let contextSettings: CampusAIContextSettings
+    let agentMode: CampusAIAgentMode
+    let webSearchEnabled: Bool
 
     init(
         requestID: UUID = UUID(),
@@ -494,7 +507,9 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         recentMessages: [CampusAIChatMessage],
         model: String = CampusAIProviderCatalog.defaultProvider.modelIdentifier,
         userSystemPrompt: String = CampusAISettingsStore.defaultSystemPrompt,
-        contextSettings: CampusAIContextSettings = .defaultValue
+        contextSettings: CampusAIContextSettings = .defaultValue,
+        agentMode: CampusAIAgentMode = .auto,
+        webSearchEnabled: Bool = true
     ) {
         self.requestID = requestID
         self.message = message
@@ -503,7 +518,131 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         self.model = model
         self.userSystemPrompt = String(userSystemPrompt.prefix(3000))
         self.contextSettings = contextSettings
+        self.agentMode = agentMode
+        self.webSearchEnabled = webSearchEnabled
     }
+}
+
+nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
+    var id: String
+    var title: String
+    var url: String
+    var siteName: String?
+    var snippet: String?
+    var summary: String?
+    var publishedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case url
+        case siteName
+        case siteNameSnake = "site_name"
+        case snippet
+        case summary
+        case publishedAt
+        case publishedAtSnake = "published_at"
+    }
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        url: String,
+        siteName: String? = nil,
+        snippet: String? = nil,
+        summary: String? = nil,
+        publishedAt: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.url = url
+        self.siteName = siteName
+        self.snippet = snippet
+        self.summary = summary
+        self.publishedAt = publishedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        url = try container.decodeIfPresent(String.self, forKey: .url) ?? ""
+        siteName = try container.decodeIfPresent(String.self, forKey: .siteName)
+            ?? container.decodeIfPresent(String.self, forKey: .siteNameSnake)
+        snippet = try container.decodeIfPresent(String.self, forKey: .snippet)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
+            ?? container.decodeIfPresent(String.self, forKey: .publishedAtSnake)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(url, forKey: .url)
+        try container.encodeIfPresent(siteName, forKey: .siteName)
+        try container.encodeIfPresent(snippet, forKey: .snippet)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(publishedAt, forKey: .publishedAt)
+    }
+}
+
+nonisolated struct CampusAIAgentTraceStep: Identifiable, Codable, Hashable {
+    var id: String
+    var kind: String
+    var title: String
+    var detail: String?
+    var status: String
+    var tool: String?
+    var role: String?
+    var timestamp: String?
+}
+
+nonisolated struct CampusAIAgentToolEvent: Codable, Hashable {
+    var name: String
+    var status: String
+    var detail: String?
+    var resultCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case status
+        case detail
+        case resultCount
+        case resultCountSnake = "result_count"
+    }
+
+    init(name: String, status: String, detail: String? = nil, resultCount: Int? = nil) {
+        self.name = name
+        self.status = status
+        self.detail = detail
+        self.resultCount = resultCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? ""
+        detail = try container.decodeIfPresent(String.self, forKey: .detail)
+        resultCount = try container.decodeIfPresent(Int.self, forKey: .resultCount)
+            ?? container.decodeIfPresent(Int.self, forKey: .resultCountSnake)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(detail, forKey: .detail)
+        try container.encodeIfPresent(resultCount, forKey: .resultCount)
+    }
+}
+
+nonisolated struct CampusAIMessageAgentMetadata: Codable, Hashable {
+    var statusText: String?
+    var citations: [CampusAICitation]
+    var agentTrace: [CampusAIAgentTraceStep]
+
+    static let empty = CampusAIMessageAgentMetadata(statusText: nil, citations: [], agentTrace: [])
 }
 
 nonisolated struct CampusAIResponse: Codable, Hashable {
@@ -513,6 +652,8 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
     var suggestedTitle: String?
     var summary: String?
     var actions: [CampusAIActionDraft]
+    var citations: [CampusAICitation]
+    var agentTrace: [CampusAIAgentTraceStep]
 
     enum CodingKeys: String, CodingKey {
         case answer
@@ -521,6 +662,9 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         case suggestedTitle = "suggested_title"
         case summary
         case actions
+        case citations
+        case agentTrace
+        case agentTraceSnake = "agent_trace"
     }
 
     init(
@@ -529,7 +673,9 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         finishReason: String? = nil,
         suggestedTitle: String? = nil,
         summary: String? = nil,
-        actions: [CampusAIActionDraft] = []
+        actions: [CampusAIActionDraft] = [],
+        citations: [CampusAICitation] = [],
+        agentTrace: [CampusAIAgentTraceStep] = []
     ) {
         self.answer = answer
         self.reasoning = reasoning
@@ -537,6 +683,8 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         self.suggestedTitle = suggestedTitle
         self.summary = summary
         self.actions = CampusAIActionValidation.validated(actions)
+        self.citations = citations.filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        self.agentTrace = agentTrace
     }
 
     init(from decoder: Decoder) throws {
@@ -549,6 +697,23 @@ nonisolated struct CampusAIResponse: Codable, Hashable {
         actions = CampusAIActionValidation.validated(
             try container.decodeIfPresent([CampusAIActionDraft].self, forKey: .actions) ?? []
         )
+        citations = (try container.decodeIfPresent([CampusAICitation].self, forKey: .citations) ?? [])
+            .filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        agentTrace = try container.decodeIfPresent([CampusAIAgentTraceStep].self, forKey: .agentTrace)
+            ?? container.decodeIfPresent([CampusAIAgentTraceStep].self, forKey: .agentTraceSnake)
+            ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(answer, forKey: .answer)
+        try container.encode(reasoning, forKey: .reasoning)
+        try container.encodeIfPresent(finishReason, forKey: .finishReason)
+        try container.encodeIfPresent(suggestedTitle, forKey: .suggestedTitle)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encode(actions, forKey: .actions)
+        try container.encode(citations, forKey: .citations)
+        try container.encode(agentTrace, forKey: .agentTrace)
     }
 }
 
@@ -1969,6 +2134,10 @@ nonisolated enum CampusAIStreamEvent: Equatable {
     case delta(String)
     case reasoningDelta(String)
     case quota(CampusAIQuotaSnapshot)
+    case agentStatus(String)
+    case agentStep(CampusAIAgentTraceStep)
+    case agentTool(CampusAIAgentToolEvent)
+    case agentCitation(CampusAICitation)
     case done(CampusAIResponse)
     case error(String)
 }
@@ -2108,6 +2277,18 @@ nonisolated struct CampusAISSEParser {
         case "quota":
             guard let quota = payload.quota else { return [] }
             return [.quota(quota)]
+        case "agent_status":
+            let text = payload.text ?? ""
+            return text.isEmpty ? [] : [.agentStatus(text)]
+        case "agent_step":
+            guard let step = payload.step else { return [] }
+            return [.agentStep(step)]
+        case "agent_tool":
+            guard let tool = payload.tool else { return [] }
+            return [.agentTool(tool)]
+        case "agent_citation":
+            guard let citation = payload.citation else { return [] }
+            return [.agentCitation(citation)]
         case "done":
             emittedDone = true
             let answer = payload.answer ?? accumulatedAnswer
@@ -2120,7 +2301,9 @@ nonisolated struct CampusAISSEParser {
                         finishReason: payload.finishReason,
                         suggestedTitle: payload.suggestedTitle,
                         summary: payload.summary,
-                        actions: payload.actions ?? []
+                        actions: payload.actions ?? [],
+                        citations: payload.citations ?? [],
+                        agentTrace: payload.agentTrace ?? payload.agentTraceSnake ?? []
                     )
                 )
             ]
@@ -2184,6 +2367,12 @@ nonisolated private struct CampusAIManagedStreamPayload: Decodable {
     let suggestedTitle: String?
     let summary: String?
     let actions: [CampusAIActionDraft]?
+    let citations: [CampusAICitation]?
+    let agentTrace: [CampusAIAgentTraceStep]?
+    let agentTraceSnake: [CampusAIAgentTraceStep]?
+    let step: CampusAIAgentTraceStep?
+    let tool: CampusAIAgentToolEvent?
+    let citation: CampusAICitation?
     let error: String?
     let quota: CampusAIQuotaSnapshot?
 
@@ -2196,6 +2385,12 @@ nonisolated private struct CampusAIManagedStreamPayload: Decodable {
         case suggestedTitle = "suggested_title"
         case summary
         case actions
+        case citations
+        case agentTrace
+        case agentTraceSnake = "agent_trace"
+        case step
+        case tool
+        case citation
         case error
         case quota
     }
@@ -2314,6 +2509,8 @@ nonisolated struct CampusAIService {
                 accumulatedReasoning += text
             case .quota:
                 break
+            case .agentStatus, .agentStep, .agentTool, .agentCitation:
+                break
             case .done(let response):
                 finalResponse = response
             case .error(let message):
@@ -2348,7 +2545,9 @@ nonisolated struct CampusAIService {
             recentMessages: recentMessages,
             model: settings.selectedProvider.modelIdentifier,
             userSystemPrompt: settings.effectiveSystemPrompt,
-            contextSettings: settings.contextSettings
+            contextSettings: settings.contextSettings,
+            agentMode: settings.webSearchEnabled ? .auto : .off,
+            webSearchEnabled: settings.webSearchEnabled
         )
         return streamInvoke(request, settings)
     }
@@ -2939,6 +3138,8 @@ nonisolated private struct CampusAIManagedFunctionRequest: Encodable {
     let recentMessages: [CampusAIChatMessage]
     let userSystemPrompt: String
     let contextSettings: CampusAIContextSettings
+    let agentMode: CampusAIAgentMode
+    let webSearchEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case requestID = "request_id"
@@ -2950,6 +3151,8 @@ nonisolated private struct CampusAIManagedFunctionRequest: Encodable {
         case recentMessages = "recent_messages"
         case userSystemPrompt = "user_system_prompt"
         case contextSettings = "context_settings"
+        case agentMode = "agent_mode"
+        case webSearchEnabled = "web_search_enabled"
     }
 
     init(
@@ -2967,6 +3170,8 @@ nonisolated private struct CampusAIManagedFunctionRequest: Encodable {
         self.recentMessages = request.recentMessages
         self.userSystemPrompt = request.userSystemPrompt
         self.contextSettings = request.contextSettings
+        self.agentMode = request.agentMode
+        self.webSearchEnabled = request.webSearchEnabled
     }
 }
 

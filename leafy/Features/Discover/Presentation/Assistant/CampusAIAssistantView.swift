@@ -101,18 +101,6 @@ struct CampusAIAssistantView: View {
         }
         .onDisappear(perform: cancelStreaming)
         .confirmationDialog(
-            "清空全部对话？",
-            isPresented: $isClearHistoryConfirmationPresented,
-            titleVisibility: .visible
-        ) {
-            Button("清空全部历史", role: .destructive) {
-                clearAllHistory()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("这只会删除当前设备上的 Leafy 聊天记录。")
-        }
-        .confirmationDialog(
             "删除这个对话？",
             isPresented: conversationDeletionBinding,
             titleVisibility: .visible
@@ -289,6 +277,9 @@ struct CampusAIAssistantView: View {
             .onChange(of: selectedMessages.map(\.reasoningText)) { _, _ in
                 scrollToBottom(proxy)
             }
+            .onChange(of: selectedMessages.map(\.agentMetadataJSON)) { _, _ in
+                scrollToBottom(proxy)
+            }
             .onChange(of: isSending) { _, _ in
                 scrollToBottom(proxy)
             }
@@ -454,6 +445,14 @@ struct CampusAIAssistantView: View {
             in: RoundedRectangle(cornerRadius: 28, style: .continuous),
             fallbackFill: AppTheme.cardElevated.opacity(0.92)
         )
+        .alert("清空全部对话？", isPresented: $isClearHistoryConfirmationPresented) {
+            Button("取消", role: .cancel) {}
+            Button("清空全部历史", role: .destructive) {
+                clearAllHistory()
+            }
+        } message: {
+            Text("这只会删除当前设备上的 Leafy 聊天记录。")
+        }
         .shadow(color: .black.opacity(0.16), radius: 24, x: 8, y: 10)
     }
 
@@ -631,6 +630,7 @@ struct CampusAIAssistantView: View {
         do {
             var streamedAnswer = ""
             var streamedReasoning = ""
+            var agentMetadata = CampusAIMessageAgentMetadata.empty
             var lastSaveAt = Date.distantPast
             for try await event in service.stream(
                 message: text,
@@ -658,6 +658,22 @@ struct CampusAIAssistantView: View {
                     }
                 case .quota(let quota):
                     quotaSnapshot = quota
+                case .agentStatus(let status):
+                    agentMetadata.statusText = status
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentStep(let step):
+                    if !agentMetadata.agentTrace.contains(where: { $0.id == step.id }) {
+                        agentMetadata.agentTrace.append(step)
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentTool(let tool):
+                    agentMetadata.statusText = Self.agentToolStatusText(tool)
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentCitation(let citation):
+                    if !agentMetadata.citations.contains(where: { $0.url == citation.url }) {
+                        agentMetadata.citations.append(citation)
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
                 case .done(let response):
                     if streamedReasoning.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                        let reasoning = response.reasoning.nonEmptyTrimmed {
@@ -682,6 +698,14 @@ struct CampusAIAssistantView: View {
                     if let summary = response.summary?.nonEmptyTrimmed {
                         conversation.summary = summary
                     }
+                    agentMetadata.statusText = nil
+                    if !response.citations.isEmpty {
+                        agentMetadata.citations = response.citations
+                    }
+                    if !response.agentTrace.isEmpty {
+                        agentMetadata.agentTrace = response.agentTrace
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
                     persistActionRecords(
                         response.actions,
                         conversationID: conversationKey,
@@ -761,6 +785,17 @@ struct CampusAIAssistantView: View {
                 )
             )
         }
+    }
+
+    private func persistAgentMetadata(
+        _ metadata: CampusAIMessageAgentMetadata,
+        for message: CampusAIMessage
+    ) {
+        guard let data = try? JSONEncoder().encode(metadata),
+              let json = String(data: data, encoding: .utf8)
+        else { return }
+        message.agentMetadataJSON = json
+        try? modelContext.save()
     }
 
     @MainActor
@@ -950,6 +985,36 @@ struct CampusAIAssistantView: View {
             return nil
         }
     }
+
+    private static func agentToolStatusText(_ tool: CampusAIAgentToolEvent) -> String {
+        let title: String
+        switch tool.name {
+        case "web.search":
+            title = "联网搜索"
+        case "delegate.subtask":
+            title = "子任务"
+        case "action.plan":
+            title = "动作规划"
+        default:
+            title = "工具"
+        }
+
+        switch tool.status {
+        case "running":
+            return "\(title)进行中"
+        case "completed":
+            if let resultCount = tool.resultCount, resultCount > 0 {
+                return "\(title)完成，找到 \(resultCount) 条结果"
+            }
+            return "\(title)完成"
+        case "failed":
+            return "\(title)失败，继续生成回答"
+        case "skipped":
+            return "\(title)已跳过"
+        default:
+            return title
+        }
+    }
 }
 
 private enum CampusAIActionExecutionError: LocalizedError {
@@ -989,6 +1054,17 @@ private extension CampusAIActionRecord {
     }
 }
 
+extension CampusAIMessage {
+    var agentMetadata: CampusAIMessageAgentMetadata {
+        guard let data = agentMetadataJSON.data(using: .utf8),
+              let metadata = try? JSONDecoder().decode(CampusAIMessageAgentMetadata.self, from: data)
+        else {
+            return .empty
+        }
+        return metadata
+    }
+}
+
 private struct CampusAIMessageRow: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
@@ -998,6 +1074,7 @@ private struct CampusAIMessageRow: View {
     let executeAction: (CampusAIActionRecord) -> Void
     let cancelAction: (CampusAIActionRecord) -> Void
     @State private var isReasoningExpanded = false
+    @State private var isTraceExpanded = false
 
     private var isUser: Bool {
         message.roleRawValue == CampusAIMessageRole.user.rawValue
@@ -1009,6 +1086,10 @@ private struct CampusAIMessageRow: View {
 
     private var reasoningText: String {
         message.reasoningText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var agentMetadata: CampusAIMessageAgentMetadata {
+        message.agentMetadata
     }
 
     var body: some View {
@@ -1075,6 +1156,21 @@ private struct CampusAIMessageRow: View {
                     CampusAIMessageMarkdown(markdown: message.text, isStreaming: isStreaming)
                 }
 
+                if let statusText = agentMetadata.statusText?.nonEmptyTrimmed, isStreaming {
+                    CampusAIAgentStatusPill(text: statusText)
+                }
+
+                if !agentMetadata.citations.isEmpty {
+                    CampusAICitationList(citations: agentMetadata.citations)
+                }
+
+                if !agentMetadata.agentTrace.isEmpty {
+                    CampusAIAgentTraceDisclosure(
+                        steps: agentMetadata.agentTrace,
+                        isExpanded: $isTraceExpanded
+                    )
+                }
+
                 if !actions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(actions) { action in
@@ -1120,6 +1216,150 @@ private struct CampusAITypingRow: View {
             .background(AppTheme.softFill, in: Capsule())
 
             Spacer(minLength: 46)
+        }
+    }
+}
+
+private struct CampusAIAgentStatusPill: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProgressView()
+                .controlSize(.small)
+            Text(text)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(AppTheme.secondaryText)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(AppTheme.softFill.opacity(0.72), in: Capsule())
+    }
+}
+
+private struct CampusAICitationList: View {
+    let citations: [CampusAICitation]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("引用来源", systemImage: "link")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.secondaryText)
+
+            ForEach(citations.prefix(6)) { citation in
+                citationRow(citation)
+            }
+        }
+        .padding(12)
+        .background(AppTheme.softFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func citationRow(_ citation: CampusAICitation) -> some View {
+        if let url = URL(string: citation.url), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            Link(destination: url) {
+                citationContent(citation)
+            }
+        } else {
+            citationContent(citation)
+        }
+    }
+
+    private func citationContent(_ citation: CampusAICitation) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(citation.title.nonEmptyTrimmed ?? citation.url)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppTheme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            let sourceText = [citation.siteName?.nonEmptyTrimmed, citation.publishedAt?.nonEmptyTrimmed]
+                .compactMap { $0 }
+                .joined(separator: " · ")
+            if !sourceText.isEmpty {
+                Text(sourceText)
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.tertiaryText)
+                    .lineLimit(1)
+            }
+
+            if let summary = (citation.summary?.nonEmptyTrimmed ?? citation.snippet?.nonEmptyTrimmed) {
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct CampusAIAgentTraceDisclosure: View {
+    let steps: [CampusAIAgentTraceStep]
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(steps.prefix(12)) { step in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: iconName(for: step))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(color(for: step))
+                            .frame(width: 18, height: 18)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.primaryText)
+
+                            if let detail = step.detail?.nonEmptyTrimmed {
+                                Text(detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(AppTheme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 6)
+        } label: {
+            Label("执行链路", systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .tint(AppTheme.secondaryText)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(AppTheme.softFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func iconName(for step: CampusAIAgentTraceStep) -> String {
+        switch step.status {
+        case "completed":
+            return "checkmark.circle.fill"
+        case "failed":
+            return "exclamationmark.triangle.fill"
+        case "skipped":
+            return "minus.circle.fill"
+        default:
+            return "circle.dotted"
+        }
+    }
+
+    private func color(for step: CampusAIAgentTraceStep) -> Color {
+        switch step.status {
+        case "completed":
+            return .green
+        case "failed":
+            return AppTheme.danger
+        case "skipped":
+            return AppTheme.secondaryText
+        default:
+            return AppTheme.accent
         }
     }
 }
@@ -1304,6 +1544,8 @@ private struct CampusAISettingsView: View {
                     if settings.serviceMode == .leafyManaged {
                         LabeledContent("额度", value: quotaText)
 
+                        Toggle("联网搜索", isOn: $settings.webSearchEnabled)
+
                         Button {
                             isPaywallPresented = true
                         } label: {
@@ -1319,7 +1561,7 @@ private struct CampusAISettingsView: View {
                 } header: {
                     Text("服务模式")
                 } footer: {
-                    Text("有 DeepSeek API Key 时可直接使用自备 Key；没有 Key 时使用 Leafy 托管额度。请求失败不会自动切换模式。")
+                    Text("联网搜索只在 Leafy 托管模式下生效。自备 Key 模式不会消耗 Leafy 托管额度，也不会使用服务端搜索 API。")
                 }
 
                 Section {

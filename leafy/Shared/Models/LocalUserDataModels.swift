@@ -1028,6 +1028,7 @@ final class CampusAIMessage {
     var roleRawValue: String
     var text: String
     var reasoningText: String
+    var agentMetadataJSON: String
     var createdAt: Date
 
     init(
@@ -1036,6 +1037,7 @@ final class CampusAIMessage {
         roleRawValue: String,
         text: String,
         reasoningText: String = "",
+        agentMetadataJSON: String = "",
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -1043,6 +1045,7 @@ final class CampusAIMessage {
         self.roleRawValue = roleRawValue
         self.text = text
         self.reasoningText = reasoningText
+        self.agentMetadataJSON = agentMetadataJSON
         self.createdAt = createdAt
     }
 }
