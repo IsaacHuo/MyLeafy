@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { parse as parseHTML } from "npm:node-html-parser@6.1.13";
 import {
   normalizeText,
   verifyAppTransactionJWS,
@@ -20,8 +21,12 @@ const maxRecentMessages = 10;
 const maxUserSystemPromptLength = 3000;
 const maxAgentToolCalls = 6;
 const maxAgentSearchCalls = 3;
+const maxAgentOfficialSearchCalls = 1;
 const maxAgentSubtasks = 3;
 const maxAgentSearchResults = 8;
+const maxOfficialDocumentPages = 3;
+const maxOfficialDocumentBytes = 2 * 1024 * 1024;
+const officialDocumentFetchTimeoutMs = 8_000;
 const inputCacheMissCostPerMillion = 0.14;
 const outputCostPerMillion = 0.28;
 const encoder = new TextEncoder();
@@ -72,7 +77,11 @@ type CampusAIActionDraft = {
   payload?: CampusAIActionPayload;
 };
 
-type AgentToolName = "web_search" | "delegate_subtask" | "action_plan";
+type AgentToolName =
+  | "web_search"
+  | "official_document_search"
+  | "delegate_subtask"
+  | "action_plan";
 
 type AgentToolCall = {
   name: AgentToolName;
@@ -87,6 +96,35 @@ type AgentCitation = {
   snippet?: string;
   summary?: string;
   publishedAt?: string;
+};
+
+type CampusAIDeliverableFormat = "html" | "markdown" | "txt";
+
+type CampusAIDeliverableAttachment = {
+  title: string;
+  url: string;
+  fileType: string;
+};
+
+type CampusAIDeliverableSource = {
+  id: string;
+  title: string;
+  url: string;
+  siteName?: string;
+  summary?: string;
+  excerpt?: string;
+  trustScore: number;
+  attachments: CampusAIDeliverableAttachment[];
+};
+
+type CampusAIDeliverable = {
+  id: string;
+  title: string;
+  query: string;
+  summary: string;
+  generatedAt: string;
+  sources: CampusAIDeliverableSource[];
+  formats: CampusAIDeliverableFormat[];
 };
 
 type AgentTraceStep = {
@@ -112,6 +150,11 @@ type AgentSearchResult = {
   citations: AgentCitation[];
 };
 
+type AgentOfficialDocumentResult = {
+  query: string;
+  deliverable: CampusAIDeliverable;
+};
+
 type AgentSubtaskResult = {
   role: "researcher" | "campusAnalyst" | "operatorPlanner";
   task: string;
@@ -125,6 +168,7 @@ type DeepSeekStreamResult = {
   usage?: DeepSeekUsage;
   citations?: AgentCitation[];
   agentTrace?: AgentTraceStep[];
+  deliverables?: CampusAIDeliverable[];
 };
 
 type AgentCallbacks = {
@@ -245,6 +289,7 @@ export async function handler(request: Request): Promise<Response> {
     let usage: DeepSeekUsage = {};
     let citations: AgentCitation[] = [];
     let agentTrace: AgentTraceStep[] = [];
+    let deliverables: CampusAIDeliverable[] = [];
     let completed = false;
 
     try {
@@ -297,6 +342,7 @@ export async function handler(request: Request): Promise<Response> {
         ...agentTrace,
         ...(result.agentTrace ?? []),
       ]);
+      deliverables = deduplicateDeliverables(result.deliverables ?? []);
 
       const actionPlan = await planActions(
         body,
@@ -316,6 +362,7 @@ export async function handler(request: Request): Promise<Response> {
         summary: "",
         actions: actionPlan.actions,
         citations,
+        deliverables,
         agentTrace,
         agent_trace: agentTrace,
       });
@@ -328,6 +375,7 @@ export async function handler(request: Request): Promise<Response> {
         responseCharCount: result.answer.length +
           safeJSONStringify(actionPlan.actions).length +
           safeJSONStringify(citations).length +
+          safeJSONStringify(deliverables).length +
           safeJSONStringify(agentTrace).length,
         usage,
         errorCode: null,
@@ -351,6 +399,7 @@ export async function handler(request: Request): Promise<Response> {
         requestCharCount,
         responseCharCount: answer.length + reasoning.length +
           safeJSONStringify(citations).length +
+          safeJSONStringify(deliverables).length +
           safeJSONStringify(agentTrace).length,
         usage,
         errorCode: signal.aborted
@@ -377,8 +426,10 @@ export function shouldRunManagedAgent(body: CampusAIRequest, message: string) {
   const mode = normalizeText(body.agent_mode) ??
     normalizeText(body.agentMode) ?? "auto";
   if (mode === "off") return false;
-  if (!webSearchEnabled(body)) return false;
-  return shouldSearchWeb(message) || shouldDelegate(message);
+  const allowWebSearch = webSearchEnabled(body);
+  return (allowWebSearch &&
+    (shouldSearchWeb(message) || shouldSearchOfficialDocument(message))) ||
+    shouldDelegate(message);
 }
 
 function webSearchEnabled(body: CampusAIRequest) {
@@ -413,6 +464,42 @@ export function shouldSearchWeb(message: string) {
   ].some((keyword) => text.includes(keyword));
 }
 
+export function shouldSearchOfficialDocument(message: string) {
+  const text = message.toLowerCase();
+  const hasOfficialIntent = [
+    "官网",
+    "官方",
+    "教务处",
+    "学院",
+    "政策",
+    "保研",
+    "推免",
+    "论文",
+    "格式",
+    "附件",
+    "模板",
+    "下载",
+    "通知",
+    "办法",
+    "规定",
+  ].some((keyword) => text.includes(keyword));
+  const hasDocumentIntent = [
+    "网页",
+    "链接",
+    "入口",
+    "资料",
+    "文件",
+    "查",
+    "找",
+    "搜索",
+    "给我",
+    "打开",
+    "哪里",
+    "在哪",
+  ].some((keyword) => text.includes(keyword));
+  return hasOfficialIntent && hasDocumentIntent;
+}
+
 function shouldDelegate(message: string) {
   const text = message.toLowerCase();
   return [
@@ -437,6 +524,7 @@ async function runAgentDeepSeek(
   const agentSignal = agentTimeoutSignal(signal);
   const trace: AgentTraceStep[] = [];
   const citations: AgentCitation[] = [];
+  const deliverables: CampusAIDeliverable[] = [];
   const searchResults: AgentSearchResult[] = [];
   const subtaskResults: AgentSubtaskResult[] = [];
   let usage: DeepSeekUsage = {};
@@ -543,6 +631,60 @@ async function runAgentDeepSeek(
         }
         break;
       }
+      case "official_document_search": {
+        const query = officialDocumentQuery(
+          body,
+          toolCall.arguments.query,
+          message,
+        );
+        callbacks.onAgentStatus?.("正在查找官方资料");
+        emitTool({
+          name: "official.document.search",
+          status: "running",
+          detail: query,
+        });
+        try {
+          const result = await officialDocumentSearch(
+            body,
+            query,
+            message,
+            agentSignal,
+          );
+          deliverables.push(result.deliverable);
+          const resultCitations = citationsFromDeliverable(result.deliverable);
+          searchResults.push({ query, citations: resultCitations });
+          for (const citation of resultCitations) emitCitation(citation);
+          emitTool({
+            name: "official.document.search",
+            status: "completed",
+            detail: query,
+            resultCount: result.deliverable.sources.length,
+          });
+          emitStep(agentStep(
+            "tool",
+            "官方资料检索",
+            result.deliverable.sources.length > 0
+              ? `已找到 ${result.deliverable.sources.length} 个可信官方页面。`
+              : "没有找到可信官方页面。",
+            result.deliverable.sources.length > 0 ? "completed" : "skipped",
+            { tool: "official.document.search" },
+          ));
+        } catch (error) {
+          emitTool({
+            name: "official.document.search",
+            status: "failed",
+            detail: redactProviderError(errorMessage(error)),
+          });
+          emitStep(agentStep(
+            "tool",
+            "官方资料检索失败",
+            "本次回答将不生成资料包。",
+            "failed",
+            { tool: "official.document.search" },
+          ));
+        }
+        break;
+      }
       case "delegate_subtask": {
         const role = normalizeDelegateRole(toolCall.arguments.role);
         const task = normalizeText(toolCall.arguments.task);
@@ -625,6 +767,7 @@ async function runAgentDeepSeek(
     searchResults,
     subtaskResults,
     citations,
+    deliverables,
     agentSignal,
     callbacks,
   );
@@ -636,6 +779,7 @@ async function runAgentDeepSeek(
     usage,
     citations: deduplicateCitations(citations),
     agentTrace: trace,
+    deliverables: deduplicateDeliverables(deliverables),
   };
 }
 
@@ -680,10 +824,16 @@ export function agentToolPlannerPayload(
           recent_messages: recentMessagesFromBody(body).slice(
             -maxRecentMessages,
           ),
-          available_tools: ["web.search", "delegate.subtask", "action.plan"],
+          available_tools: [
+            "web.search",
+            "official.document.search",
+            "delegate.subtask",
+            "action.plan",
+          ],
           limits: {
             max_tool_calls: maxAgentToolCalls,
             max_search_calls: maxAgentSearchCalls,
+            max_official_document_search_calls: maxAgentOfficialSearchCalls,
             max_subtasks: maxAgentSubtasks,
           },
         }),
@@ -701,8 +851,9 @@ export function agentToolPlannerPayload(
 function agentPlannerSystemPrompt() {
   return [
     "你是 MyLeafy 的 agent planner。你只负责决定是否调用工具，不直接回答用户。",
-    "可用工具只有 web.search、delegate.subtask、action.plan；没有必要时不要调用工具。",
+    "可用工具只有 web.search、official.document.search、delegate.subtask、action.plan；没有必要时不要调用工具。",
     "需要最新、最近、通知、政策、官网、出处或联网信息时调用 web.search。",
+    "用户要找学校、学院、专业、教务处、政策、保研/推免、论文格式、附件、模板、下载、办法或规定的官方网页时，优先调用 official.document.search。",
     "需要拆解、比较、结合本机上下文安排方案时，可委派最多 3 个子任务。",
     "如果用户明确要求打开页面、设置倒计时或课表提醒，可调用 action.plan；最终动作仍由独立规划器生成。",
     "不要请求删除、修改成绩或课表原始数据、社区发帖评论、后台登录、医疗决策或自动远程抓取。",
@@ -730,6 +881,25 @@ function agentToolDefinitions() {
               minimum: 1,
               maximum: maxAgentSearchResults,
               description: "Number of results to fetch.",
+            },
+          },
+          required: ["query"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "official_document_search",
+        description:
+          "Find trusted official school pages and attachments, then return a deliverable packet.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The official document search query.",
             },
           },
           required: ["query"],
@@ -851,6 +1021,9 @@ function normalizeToolName(value: string | null): AgentToolName | null {
     case "web_search":
     case "web.search":
       return "web_search";
+    case "official_document_search":
+    case "official.document.search":
+      return "official_document_search";
     case "delegate_subtask":
     case "delegate.subtask":
       return "delegate_subtask";
@@ -868,6 +1041,7 @@ export function normalizeAgentToolCalls(
 ) {
   const normalized: AgentToolCall[] = [];
   let searchCount = 0;
+  let officialSearchCount = 0;
   let subtaskCount = 0;
   for (const toolCall of toolCalls) {
     if (normalized.length >= maxAgentToolCalls) break;
@@ -892,6 +1066,23 @@ export function normalizeAgentToolCalls(
               5,
             ),
           },
+        });
+        break;
+      }
+      case "official_document_search": {
+        if (
+          !options.allowWebSearch ||
+          officialSearchCount >= maxAgentOfficialSearchCalls
+        ) {
+          break;
+        }
+        const query = normalizeText(toolCall.arguments.query) ??
+          normalizeSearchQuery(options.message);
+        if (!query) break;
+        officialSearchCount += 1;
+        normalized.push({
+          name: "official_document_search",
+          arguments: { query },
         });
         break;
       }
@@ -921,6 +1112,20 @@ export function normalizeAgentToolCalls(
 
   if (
     options.allowWebSearch &&
+    officialSearchCount === 0 &&
+    shouldSearchOfficialDocument(options.message) &&
+    normalized.length < maxAgentToolCalls
+  ) {
+    normalized.unshift({
+      name: "official_document_search",
+      arguments: {
+        query: normalizeSearchQuery(options.message) ?? options.message,
+      },
+    });
+  }
+
+  if (
+    options.allowWebSearch &&
     searchCount === 0 &&
     shouldSearchWeb(options.message) &&
     normalized.length < maxAgentToolCalls
@@ -934,11 +1139,21 @@ export function normalizeAgentToolCalls(
       },
     });
   }
-  return normalized.slice(0, maxAgentToolCalls);
+  return normalized
+    .sort((left, right) => agentToolPriority(left) - agentToolPriority(right))
+    .slice(0, maxAgentToolCalls);
 }
 
 function heuristicAgentToolCalls(message: string): AgentToolCall[] {
   const calls: AgentToolCall[] = [];
+  if (shouldSearchOfficialDocument(message)) {
+    calls.push({
+      name: "official_document_search",
+      arguments: {
+        query: normalizeSearchQuery(message) ?? message,
+      },
+    });
+  }
   if (shouldSearchWeb(message)) {
     calls.push({
       name: "web_search",
@@ -959,6 +1174,21 @@ function heuristicAgentToolCalls(message: string): AgentToolCall[] {
     });
   }
   return calls;
+}
+
+function agentToolPriority(toolCall: AgentToolCall) {
+  switch (toolCall.name) {
+    case "official_document_search":
+      return 0;
+    case "web_search":
+      return 1;
+    case "delegate_subtask":
+      return 2;
+    case "action_plan":
+      return 3;
+    default:
+      return 4;
+  }
 }
 
 function normalizeSearchQuery(message: string) {
@@ -1070,6 +1300,273 @@ export function parseBochaSearchResponse(responseText: string, query = "") {
   return deduplicateCitations(citations);
 }
 
+function officialDocumentQuery(
+  body: CampusAIRequest,
+  requestedQuery: unknown,
+  message: string,
+) {
+  const query = normalizeText(requestedQuery) ??
+    normalizeSearchQuery(message) ??
+    message;
+  const campusName = campusNameFromContext(body.context);
+  if (!campusName || query.includes(campusName)) return query;
+  return `${campusName} ${query}`.slice(0, 180);
+}
+
+async function officialDocumentSearch(
+  body: CampusAIRequest,
+  query: string,
+  userMessage: string,
+  signal: AbortSignal,
+): Promise<AgentOfficialDocumentResult> {
+  const freshness = officialDocumentFreshness(userMessage);
+  const citations = await webSearch(
+    query,
+    freshness,
+    maxAgentSearchResults,
+    signal,
+  );
+  const candidates = citations
+    .filter((citation) => isSafePublicHTTPURL(citation.url))
+    .map((citation) => ({
+      citation,
+      trustScore: officialDocumentTrustScore(citation, body.context),
+    }))
+    .filter((candidate) => candidate.trustScore >= 45)
+    .sort((lhs, rhs) => rhs.trustScore - lhs.trustScore)
+    .slice(0, maxOfficialDocumentPages);
+
+  const sources: CampusAIDeliverableSource[] = [];
+  for (const candidate of candidates) {
+    if (signal.aborted) throw new DOMException("Agent timeout", "AbortError");
+    const source = await fetchOfficialDocumentSource(
+      candidate.citation,
+      candidate.trustScore,
+      signal,
+    );
+    if (source) sources.push(source);
+  }
+
+  const deliverable = officialDocumentDeliverable(query, sources);
+  return { query, deliverable };
+}
+
+export function officialDocumentFreshness(message: string) {
+  const text = message.toLowerCase();
+  if (
+    ["最新", "最近", "今天", "现在", "实时", "近期"].some((keyword) =>
+      text.includes(keyword)
+    )
+  ) {
+    return "oneMonth";
+  }
+  return "noLimit";
+}
+
+async function fetchOfficialDocumentSource(
+  citation: AgentCitation,
+  trustScore: number,
+  parentSignal: AbortSignal,
+): Promise<CampusAIDeliverableSource | null> {
+  const timeout = AbortSignal.timeout(officialDocumentFetchTimeoutMs);
+  const signal = "any" in AbortSignal
+    ? AbortSignal.any([parentSignal, timeout])
+    : parentSignal;
+  let response: Response;
+  try {
+    response = await fetch(citation.url, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MyLeafy/1.0",
+      },
+      redirect: "follow",
+      signal,
+    });
+  } catch {
+    return fallbackOfficialSource(citation, trustScore);
+  }
+
+  if (!response.ok) return fallbackOfficialSource(citation, trustScore);
+  const responseURL = response.url || citation.url;
+  if (!isSafePublicHTTPURL(responseURL)) return null;
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (
+    contentType && !contentType.includes("text/html") &&
+    !contentType.includes("application/xhtml")
+  ) {
+    return fallbackOfficialSource(citation, trustScore);
+  }
+
+  const html = await boundedResponseText(response, maxOfficialDocumentBytes);
+  if (!html) return fallbackOfficialSource(citation, trustScore);
+  return extractOfficialDocumentSourceFromHTML(
+    html,
+    responseURL,
+    citation,
+    trustScore,
+  );
+}
+
+async function boundedResponseText(response: Response, maxBytes: number) {
+  const body = response.body;
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      try {
+        await reader.cancel();
+      } catch {
+        // Ignore cancellation failures.
+      }
+      break;
+    }
+    chunks.push(value);
+  }
+
+  const data = new Uint8Array(
+    chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0),
+  );
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: false }).decode(data);
+}
+
+export function extractOfficialDocumentSourceFromHTML(
+  html: string,
+  pageURL: string,
+  citation: AgentCitation,
+  trustScore: number,
+): CampusAIDeliverableSource | null {
+  if (!isSafePublicHTTPURL(pageURL)) return null;
+  const root = parseHTML(html);
+  const canonicalURL = canonicalURLFromHTML(root, pageURL);
+  const url = isSafePublicHTTPURL(canonicalURL) ? canonicalURL : pageURL;
+  const title = normalizeText(root.querySelector("title")?.text) ??
+    citation.title;
+  const bodyText = normalizeText(root.querySelector("body")?.structuredText) ??
+    normalizeText(root.structuredText) ??
+    citation.summary ??
+    citation.snippet ??
+    "";
+  const excerpt = bodyText.slice(0, 260);
+  const attachments = extractOfficialDocumentAttachments(root, url);
+
+  return {
+    id: `official-${hashString(url)}`,
+    title,
+    url,
+    siteName: citation.siteName,
+    summary: citation.summary ?? citation.snippet,
+    excerpt,
+    trustScore,
+    attachments,
+  };
+}
+
+function canonicalURLFromHTML(
+  root: ReturnType<typeof parseHTML>,
+  pageURL: string,
+) {
+  for (const link of root.querySelectorAll("link")) {
+    const rel = link.getAttribute("rel")?.toLowerCase() ?? "";
+    if (!rel.split(/\s+/).includes("canonical")) continue;
+    const href = link.getAttribute("href");
+    if (!href) continue;
+    const absolute = absoluteURL(href, pageURL);
+    if (absolute) return absolute;
+  }
+  return pageURL;
+}
+
+function extractOfficialDocumentAttachments(
+  root: ReturnType<typeof parseHTML>,
+  pageURL: string,
+) {
+  const attachments: CampusAIDeliverableAttachment[] = [];
+  const seen = new Set<string>();
+  for (const anchor of root.querySelectorAll("a")) {
+    const href = anchor.getAttribute("href");
+    if (!href) continue;
+    const url = absoluteURL(href, pageURL);
+    if (!url || !isSafePublicHTTPURL(url)) continue;
+    const fileType = attachmentFileType(url);
+    if (!fileType) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    attachments.push({
+      title: normalizeText(anchor.structuredText) ??
+        normalizeText(anchor.text) ??
+        filenameFromURL(url) ??
+        `${fileType} 附件`,
+      url,
+      fileType,
+    });
+    if (attachments.length >= 12) break;
+  }
+  return attachments;
+}
+
+function fallbackOfficialSource(
+  citation: AgentCitation,
+  trustScore: number,
+): CampusAIDeliverableSource | null {
+  if (!isSafePublicHTTPURL(citation.url)) return null;
+  return {
+    id: `official-${hashString(citation.url)}`,
+    title: citation.title,
+    url: citation.url,
+    siteName: citation.siteName,
+    summary: citation.summary ?? citation.snippet,
+    excerpt: citation.summary ?? citation.snippet,
+    trustScore,
+    attachments: [],
+  };
+}
+
+export function officialDocumentDeliverable(
+  query: string,
+  sources: CampusAIDeliverableSource[],
+): CampusAIDeliverable {
+  const attachmentCount = sources.reduce(
+    (sum, source) => sum + source.attachments.length,
+    0,
+  );
+  const summary = sources.length > 0
+    ? `已整理 ${sources.length} 个官方来源，包含 ${attachmentCount} 个附件链接。`
+    : "未找到可信官方来源，请尝试补充学校、学院或政策名称。";
+  return {
+    id: `deliverable-${
+      hashString(`${query}|${sources.map((source) => source.url).join("|")}`)
+    }`,
+    title: "官方资料包",
+    query,
+    summary,
+    generatedAt: new Date().toISOString(),
+    sources,
+    formats: ["html", "markdown", "txt"],
+  };
+}
+
+function citationsFromDeliverable(deliverable: CampusAIDeliverable) {
+  return deliverable.sources.map((source, index) => ({
+    id: `official-citation-${hashString(`${source.url}|${index}`)}`,
+    title: source.title,
+    url: source.url,
+    siteName: source.siteName,
+    summary: source.summary ?? source.excerpt,
+  } satisfies AgentCitation));
+}
+
 async function runDelegatedSubtask(
   body: CampusAIRequest,
   message: string,
@@ -1121,6 +1618,7 @@ async function streamDeepSeekAgentSynthesis(
   searchResults: AgentSearchResult[],
   subtaskResults: AgentSubtaskResult[],
   citations: AgentCitation[],
+  deliverables: CampusAIDeliverable[],
   signal: AbortSignal,
   callbacks: AgentCallbacks,
 ): Promise<DeepSeekStreamResult> {
@@ -1135,6 +1633,7 @@ async function streamDeepSeekAgentSynthesis(
     searchResults,
     subtaskResults,
     citations,
+    deliverables,
   ));
   let lastError: Error | null = null;
   for (const [index, apiKey] of apiKeys.entries()) {
@@ -1177,6 +1676,7 @@ export function agentSynthesisPayload(
   searchResults: AgentSearchResult[],
   subtaskResults: AgentSubtaskResult[],
   citations: AgentCitation[],
+  deliverables: CampusAIDeliverable[] = [],
 ) {
   const recentMessages = recentMessagesFromBody(body)
     .slice(-maxRecentMessages)
@@ -1207,6 +1707,7 @@ export function agentSynthesisPayload(
           web_search_results: searchResults,
           subtask_results: subtaskResults,
           citations,
+          official_document_deliverables: deliverables,
         }),
       },
     ],
@@ -1229,6 +1730,7 @@ function agentSynthesisSystemPrompt(
     hasCitations
       ? "使用联网结果时，必须在相关句子后用 Markdown 链接标注来源，优先引用输入 citations 中的 URL。"
       : "本次没有可用联网搜索结果；如果问题需要最新信息，请明确说明未使用联网结果。",
+    "如果输入包含 official_document_deliverables，请简要说明已整理资料包；不要把 HTML、Markdown 或 TXT 文件全文复制到回答正文。",
     "不要输出工具调用 JSON、内部 trace 或动作草稿。",
   ].join("\n");
 }
@@ -1444,7 +1946,13 @@ async function planActions(
         throw error;
       }
 
-      return parseActionPlannerProviderResponse(responseText);
+      const planned = parseActionPlannerProviderResponse(responseText);
+      return {
+        actions: planned.actions.length > 0
+          ? planned.actions
+          : fallbackActionDrafts(body, message, answer),
+        usage: planned.usage,
+      };
     }
 
     throw lastError ?? new Error("DeepSeek action planner failed.");
@@ -1455,8 +1963,41 @@ async function planActions(
         redactProviderError(errorMessage(error)),
       );
     }
-    return { actions: [], usage: {} };
+    return { actions: fallbackActionDrafts(body, message, answer), usage: {} };
   }
+}
+
+export function fallbackActionDrafts(
+  _body: CampusAIRequest,
+  message: string,
+  answer = "",
+): CampusAIActionDraft[] {
+  const text = `${message}\n${answer}`.toLowerCase();
+  const hasCreateIntent = ["新建", "添加", "创建", "设置", "安排"].some((
+    keyword,
+  ) => text.includes(keyword));
+  const hasScheduleIntent = ["日程", "提醒", "事项", "待办", "安排"].some((
+    keyword,
+  ) => text.includes(keyword));
+  if (!hasCreateIntent || !hasScheduleIntent) return [];
+
+  const route = text.includes("倒计时") || text.includes("重要日期") ||
+      text.includes("纪念日")
+    ? "customCountdowns"
+    : text.includes("推送") || text.includes("报告")
+    ? "scheduleReports"
+    : "examSchedule";
+  const title = route === "customCountdowns"
+    ? "打开自定义倒计时"
+    : route === "scheduleReports"
+    ? "打开日程推送"
+    : "打开考试与日程";
+  return [{
+    kind: "openAcademicRoute",
+    title,
+    detail: `前往${title.replace(/^打开/, "")}继续创建或管理日程。`,
+    payload: { route },
+  }];
 }
 
 async function readDeepSeekStream(
@@ -1599,7 +2140,7 @@ export function actionPlannerPayload(
           safety_boundary: [
             "所有动作都只生成待确认草稿，不会自动执行。",
             "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
-            "缺少必要 payload 字段或字段无法从上下文确定时，返回空 actions。",
+            "缺少 createTimetableReminder 必要字段时不要编造；如果用户是在新建或管理日程/提醒，改用 openAcademicRoute 打开对应页面。",
           ],
         }),
       },
@@ -1616,10 +2157,11 @@ export function systemPrompt(userSystemPrompt?: string | null) {
     ?.slice(0, maxUserSystemPromptLength);
   return [
     "你是 MyLeafy 的校园学习与生活助手，当前是测试功能。",
-    "优先根据请求中提供的本机缓存或本地保存上下文回答；可以补充明确标注为一般建议的常识，但不要把常识伪装成本机数据。",
-    "数据不足时直接说明缺少哪些上下文。",
+    "回答要直接、具体、可执行；能给结论就先给结论，不要反复解释内部数据来源。",
+    "可以结合已提供的课程、考试、学习、提醒和个人事项上下文，也可以补充合理的一般建议；不要把不确定内容说成事实。",
+    "缺少关键信息时，用一句话说明缺什么，并给出用户下一步能做的选择。",
     "不要声称读取了未提供的数据，不要声称读取了用户上传文件正文、图片像素、OCR、PDF、Word、PPT、表格或本地文件路径。",
-    "社区内容只可当作用户当前设备已缓存的公开 feed 摘要，不要推断私信、身份资料或未缓存远端内容。",
+    "不要推断私信、身份资料、未提供的远端内容或后台登录后的内容。",
     "医疗台账只能做整理、提醒、流程梳理和材料核对，不提供诊断、治疗、用药或医疗决策建议。",
     "回复必须是中文 Markdown。优先使用短标题、列表、加粗和清晰分段；不要在正文输出 JSON 或动作草稿，动作会由单独规划器生成。",
     customPrompt ? `用户自定义偏好：\n${customPrompt}` : "",
@@ -1633,6 +2175,7 @@ export function actionPlannerSystemPrompt() {
     '只有用户明确想打开页面、设置倒计时、设置课表提醒，或回答中明显需要这一步时才生成动作；否则返回 {"actions":[]}。',
     "支持 kind：openAcademicRoute、createCountdown、createTimetableReminder。",
     "openAcademicRoute.payload.route 只能是 grades、gradeAnalytics、examSchedule、scheduleReports、customCountdowns、teachingPlan、trainingProgram。",
+    "用户想新建、添加或管理日程/提醒，但缺少创建课表提醒所需的周次、星期、节次时，生成 openAcademicRoute：一般日程用 examSchedule，倒计时或重要日期用 customCountdowns，推送或报告用 scheduleReports。",
     "createCountdown.payload 必须包含 countdownTitle 和 targetDate，targetDate 使用 yyyy-MM-dd。",
     "createTimetableReminder.payload 必须包含 week、dayOfWeek、period、title；dayOfWeek 为 1 到 7，minutesBefore 必须大于等于 0。",
     "不要生成删除、修改成绩或课表原始数据、医疗决策、社区发帖评论、远程抓取、后台登录等动作。",
@@ -2208,6 +2751,18 @@ function deduplicateCitations(citations: AgentCitation[]) {
   return result;
 }
 
+function deduplicateDeliverables(deliverables: CampusAIDeliverable[]) {
+  const seen = new Set<string>();
+  const result: CampusAIDeliverable[] = [];
+  for (const deliverable of deliverables) {
+    const key = deliverable.id || deliverable.query;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(deliverable);
+  }
+  return result;
+}
+
 function deduplicateTrace(steps: AgentTraceStep[]) {
   const seen = new Set<string>();
   const result: AgentTraceStep[] = [];
@@ -2237,6 +2792,157 @@ function isHTTPURL(value: string) {
     return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
+  }
+}
+
+export function isSafePublicHTTPURL(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    const hostname = url.hostname.toLowerCase();
+    if (
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname === "0.0.0.0" ||
+      hostname === "::" ||
+      hostname === "::1"
+    ) {
+      return false;
+    }
+    if (isPrivateIPv4(hostname) || isPrivateIPv6(hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isPrivateIPv4(hostname: string) {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return false;
+  const parts = hostname.split(".").map((part) => Number(part));
+  if (parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return true;
+  }
+  const [a, b] = parts;
+  return a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254);
+}
+
+function isPrivateIPv6(hostname: string) {
+  const normalized = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return normalized === "::1" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe80:");
+}
+
+export function officialDocumentTrustScore(
+  citation: AgentCitation,
+  context: unknown = {},
+) {
+  const host = safeHost(citation.url);
+  if (!host) return 0;
+  const campusID = campusIDFromContext(context);
+  const campusName = campusNameFromContext(context);
+  let score = 0;
+
+  if (campusID === "bjfu") {
+    if (bjfuOfficialHosts.has(host)) {
+      score = 100;
+    } else if (host.endsWith(".bjfu.edu.cn") || host === "bjfu.edu.cn") {
+      score = 88;
+    }
+  }
+
+  if (score === 0) {
+    if (host.endsWith(".edu.cn") || host.endsWith(".edu")) score = 60;
+    if (host.includes("edu")) score = Math.max(score, 45);
+  }
+
+  const haystack = [
+    citation.title,
+    citation.siteName,
+    citation.summary,
+    citation.snippet,
+    citation.url,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (campusName && haystack.includes(campusName.toLowerCase())) {
+    score += 8;
+  }
+  if (
+    /(官方|教务处|研究生院|学院|通知|政策|办法|规定|附件|下载)/.test(haystack)
+  ) {
+    score += 6;
+  }
+  return Math.min(100, score);
+}
+
+const bjfuOfficialHosts = new Set([
+  "jwc.bjfu.edu.cn",
+  "graduate.bjfu.edu.cn",
+  "www.bjfu.edu.cn",
+  "news.bjfu.edu.cn",
+  "zsb.bjfu.edu.cn",
+  "it.bjfu.edu.cn",
+  "nic.bjfu.edu.cn",
+  "lib.bjfu.edu.cn",
+  "xyy.bjfu.edu.cn",
+  "sports.bjfu.edu.cn",
+  "blzf.bjfu.edu.cn",
+  "zhbzb.bjfu.edu.cn",
+]);
+
+function safeHost(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function absoluteURL(href: string, baseURL: string) {
+  try {
+    const url = new URL(href, baseURL).toString();
+    return isSafePublicHTTPURL(url) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function attachmentFileType(url: string) {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    const match = pathname.match(/\.([a-z0-9]+)$/);
+    const ext = match?.[1];
+    if (!ext) return null;
+    const allowed = new Set([
+      "pdf",
+      "doc",
+      "docx",
+      "xls",
+      "xlsx",
+      "ppt",
+      "pptx",
+      "txt",
+    ]);
+    return allowed.has(ext) ? ext.toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+function filenameFromURL(url: string) {
+  try {
+    const pathname = new URL(url).pathname;
+    const last = decodeURIComponent(
+      pathname.split("/").filter(Boolean).at(-1) ?? "",
+    );
+    return normalizeText(last);
+  } catch {
+    return null;
   }
 }
 
@@ -2272,6 +2978,16 @@ function campusIDFromContext(context: unknown): string {
     if (campusID) return campusID;
   }
   return "unknown";
+}
+
+function campusNameFromContext(context: unknown): string {
+  if (context && typeof context === "object") {
+    const campusName = normalizeText(
+      (context as Record<string, unknown>).campusName,
+    );
+    if (campusName) return campusName;
+  }
+  return "";
 }
 
 function shortTitle(message: string) {
