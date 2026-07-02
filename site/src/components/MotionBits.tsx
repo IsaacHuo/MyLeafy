@@ -60,7 +60,7 @@ export const FloatingStatus = React.memo(function FloatingStatus() {
       }
     >
       <span className="mr-2 inline-block h-2 w-2 rounded-full bg-primary align-middle shadow-[0_0_0_4px_rgba(79,143,103,0.16)]" />
-      今日课表已缓存
+      Today's timetable cached
     </motion.div>
   );
 });
@@ -68,11 +68,11 @@ export const FloatingStatus = React.memo(function FloatingStatus() {
 export const MetricRail = React.memo(function MetricRail() {
   const shouldReduceMotion = useReducedMotion();
   const metrics = [
-    ["课表", "当前周"],
-    ["成绩", "教务直连"],
-    ["社区", "匿名会话"],
-    ["评教", "星级统计"],
-    ["反馈", "App 内提交"]
+    ["Timetable", "Current week"],
+    ["Grades", "Academic sync"],
+    ["Community", "Anonymous session"],
+    ["Ratings", "Star summaries"],
+    ["Feedback", "In-app submit"]
   ];
 
   return (

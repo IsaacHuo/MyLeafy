@@ -6,17 +6,23 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "#4F8F67",
-          strong: "#2F6B45",
-          ink: "#24543A",
-          wash: "#EEF7F1",
-          soft: "#F6FBF7"
+          DEFAULT: "#4E8261",
+          strong: "#315F45",
+          ink: "#244B37",
+          wash: "#EAF3EC",
+          soft: "#F6FAF6"
         },
         secondary: {
-          DEFAULT: "#F5F5F3",
-          ink: "#6B6B63",
-          wash: "#F7F7F5",
-          soft: "#FBFBFA"
+          DEFAULT: "#D8CC8F",
+          ink: "#6D6234",
+          wash: "#F4EFCF",
+          soft: "#FBF7E5"
+        },
+        leaf: {
+          deep: "#1E4F3E",
+          mid: "#4E8261",
+          light: "#8DAA6E",
+          paper: "#D8CC8F"
         },
         neutral: {
           50: "#F9FAFB",
@@ -34,23 +40,23 @@ const config: Config = {
         danger: "#B42318",
         info: "#4F8F67",
         surface: "#FFFFFF",
-        "surface-high": "#F7F7F5",
-        "surface-low": "#E8E8E3",
-        text: "#171717",
+        "surface-high": "#F8F5EA",
+        "surface-low": "#ECE5CC",
+        text: "#18201A",
         paper: {
-          DEFAULT: "#FAFAF8",
-          muted: "#F1F1ED"
+          DEFAULT: "#FCFAF1",
+          muted: "#F4EFD9"
         }
       },
       boxShadow: {
-        soft: "0 10px 30px rgba(23, 23, 23, 0.08)",
-        lift: "0 24px 70px rgba(23, 23, 23, 0.08)",
-        primary: "0 18px 46px rgba(79, 143, 103, 0.22)",
+        soft: "0 10px 30px rgba(24, 32, 26, 0.08)",
+        lift: "0 24px 70px rgba(24, 32, 26, 0.10)",
+        primary: "0 18px 46px rgba(78, 130, 97, 0.22)",
         line: "inset 0 0 0 1px rgba(23, 23, 23, 0.08)"
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "\"Segoe UI\"", "sans-serif"],
-        display: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "BlinkMacSystemFont", "\"Segoe UI\"", "sans-serif"],
+        sans: ["Lora", "Georgia", "\"Times New Roman\"", "serif"],
+        display: ["Lora", "Georgia", "\"Times New Roman\"", "serif"],
         mono: ["SFMono-Regular", "Consolas", "\"Liberation Mono\"", "monospace"]
       }
     }

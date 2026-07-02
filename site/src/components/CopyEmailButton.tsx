@@ -27,7 +27,7 @@ export function CopyEmailButton({ email }: { email: string }) {
   }
 
   const Icon = state === "copied" ? CheckCircle : state === "error" ? WarningCircle : Copy;
-  const label = state === "copying" ? "复制中" : state === "copied" ? "已复制" : state === "error" ? "复制失败" : "复制邮箱";
+  const label = state === "copying" ? "Copying" : state === "copied" ? "Copied" : state === "error" ? "Copy failed" : "Copy email";
   const toneClass =
     state === "copied"
       ? "border border-success bg-success text-white hover:bg-success"

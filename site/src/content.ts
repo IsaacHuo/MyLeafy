@@ -28,32 +28,31 @@ export const site = {
   appStoreUrl: "https://apps.apple.com/cn/search?term=MyLeafy%20%E5%8C%97%E4%BA%AC%E6%9E%97%E4%B8%9A%E5%A4%A7%E5%AD%A6",
   privacyChoicesUrl: "https://myleafy.space/privacy#privacy-rights",
   supportEmail: "support@myleafy.space",
-  operatorName: "MyLeafy 开发者",
-  operatorNote: "公开开发者名称以 App Store 产品页显示为准。",
-  updatedAt: "2026 年 6 月 24 日"
+  operatorName: "MyLeafy Developer",
+  operatorNote: "The public developer name is the one shown on the App Store product page.",
+  updatedAt: "June 24, 2026"
 };
 
 export const navItems = [
-  { label: "Product", href: "/#product" },
-  { label: "Data", href: "/#data" },
-  { label: "Community", href: "/#community" },
+  { label: "Home", href: "/" },
+  { label: "Features", href: "/features" },
   { label: "Support", href: "/support" },
   { label: "Privacy", href: "/privacy" }
 ];
 
 export const appStoreLinks = [
-  { label: "技术支持网址", value: site.supportUrl },
-  { label: "隐私政策网址", value: site.privacyUrl },
+  { label: "Support URL", value: site.supportUrl },
+  { label: "Privacy Policy URL", value: site.privacyUrl },
   { label: "Marketing URL", value: site.homeUrl },
   { label: "User Privacy Choices URL", value: site.privacyChoicesUrl }
 ];
 
 export const capabilityStats = [
-  { label: "课表", value: "当前周缓存" },
-  { label: "教务", value: "校园网直连" },
-  { label: "社区", value: "校园交流" },
-  { label: "隐私", value: "边界清晰" },
-  { label: "支持", value: "App 内反馈" }
+  { label: "Campus", value: "Beijing Forestry University" },
+  { label: "Default tab", value: "Timetable" },
+  { label: "Academic data", value: "Zhengfang system" },
+  { label: "Community", value: "Supabase" },
+  { label: "Support", value: "In-app feedback" }
 ];
 
 export const productCards: Array<{
@@ -66,89 +65,141 @@ export const productCards: Array<{
   {
     icon: CalendarBlank,
     label: "Timetable",
-    title: "打开后先看今天",
-    body: "当前周、今日课程、课程详情、课前提醒和最近一次同步状态放在同一个入口。",
-    detail: "离线可看"
+    title: "Today comes first",
+    body: "Current week, today's classes, class details, exams, and reminders stay centered around the timetable.",
+    detail: "Default"
   },
   {
     icon: GraduationCap,
     label: "Academics",
-    title: "学业工具集中收口",
-    body: "成绩、考试、荣誉记录、教学计划、培养方案和空教室都可以在学业入口查看。",
-    detail: "教务直连"
+    title: "Academic tools stay together",
+    body: "Grades, exams, study plans, degree requirements, credits, and classroom lookup live in the Academics tab.",
+    detail: "Direct"
   },
   {
     icon: ChatsCircle,
     label: "Community",
-    title: "校园讨论有边界",
-    body: "帖子、评论、点赞、收藏、公告和通知由社区服务承接，和教务密码分开处理。",
-    detail: "匿名会话"
+    title: "Community is separate from login",
+    body: "Posts, images, comments, likes, bookmarks, notices, and notifications are stored in MyLeafy Community, separate from school sessions.",
+    detail: "Campus"
   },
   {
     icon: UserCircle,
     label: "Profile",
-    title: "个人资料与常用入口",
-    body: "共享课表、个性化、主题、缓存同步、反馈和隐私入口都放在我的页面。",
-    detail: "设备优先"
+    title: "Settings and safety in one place",
+    body: "Shared timetables, themes, cache sync, links, data safety, support, and privacy controls live in Profile.",
+    detail: "Device"
   },
   {
     icon: Star,
     label: "Ratings",
-    title: "评教保持轻量",
-    body: "课程和教师评分以星级统计呈现，帮助同学快速了解整体反馈。",
-    detail: "低负担"
+    title: "Lightweight ratings",
+    body: "Course and teacher ratings use star summaries for quick context without turning feedback into a heavy workflow.",
+    detail: "Simple"
   },
   {
     icon: BellSimple,
     label: "Feedback",
-    title: "问题可以带上下文",
-    body: "App 内反馈可附带设备、版本、登录状态和最近同步时间，定位同步异常更快。",
-    detail: "少来回"
+    title: "Reports include context",
+    body: "In-app feedback can include device, system, app version, login state, and last sync time.",
+    detail: "Faster"
   },
   {
     icon: LockKey,
     label: "Privacy",
-    title: "把来源讲清楚",
-    body: "学校教务、本机缓存、社区服务和官网托管分开说明，使用前就能了解数据来源。",
-    detail: "可解释"
+    title: "Data sources are listed",
+    body: "School academic data, local cache, community service, and website hosting are listed separately.",
+    detail: "Clear"
   },
   {
     icon: Cloud,
-    label: "Hosting",
-    title: "官网保持静态透明",
-    body: "公开站承接介绍、支持、隐私政策和 App Store 链接，信息保持简单清楚。",
-    detail: "无 Cookie"
+    label: "Links",
+    title: "Public links stay stable",
+    body: "Support, privacy policy, marketing URL, and privacy choices links are available for App Store Connect.",
+    detail: "Public"
   }
 ];
 
 export const appScreenshots = [
   {
     label: "Timetable",
-    title: "课表",
-    body: "当前周课程、今日日期和底部主入口清晰呈现。",
+    title: "Timetable",
+    body: "Current week, today's classes, class details, and reminders are the first layer.",
     image: "/media/leafy-shot-timetable.png",
-    alt: "MyLeafy 课表页截图"
+    alt: "MyLeafy timetable screen"
   },
   {
     label: "Community",
-    title: "社区",
-    body: "学习交流、闲聊和公告以轻量卡片组织。",
+    title: "Community",
+    body: "Feed, categories, trending posts, notices, and notifications stay in a separate tab.",
     image: "/media/leafy-shot-community.png",
-    alt: "MyLeafy 社区页截图"
+    alt: "MyLeafy community screen"
   },
   {
     label: "Academics",
-    title: "学业",
-    body: "成绩、考试和荣誉记录作为独立学业入口。",
+    title: "Academics",
+    body: "Grades, exams, classrooms, calendar, academic plans, and ratings are grouped together.",
     image: "/media/leafy-shot-academics.png",
-    alt: "MyLeafy 学业页截图"
+    alt: "MyLeafy academics screen"
   },
   {
     label: "Profile",
-    title: "我的",
-    body: "共享课表、个性化、缓存和支持入口集中在资料页。",
+    title: "Profile",
+    body: "Shared timetables, theme, cache sync, support, and privacy controls are in Profile.",
     image: "/media/leafy-shot-profile.png",
-    alt: "MyLeafy 我的页截图"
+    alt: "MyLeafy profile screen"
+  }
+];
+
+export const featureShowcases = [
+  {
+    label: "Timetable",
+    title: "Weekly timetable",
+    body: "Open MyLeafy and see the week at a glance, with classes arranged around the real rhythm of the school day.",
+    image: "/media/feature-calendar.jpg",
+    alt: "Weekly timetable in MyLeafy"
+  },
+  {
+    label: "Themes",
+    title: "Custom timetable colors",
+    body: "Pick a theme color and keep course blocks clear, calm, and easy to scan.",
+    image: "/media/feature-color.jpg",
+    alt: "Custom timetable colors in MyLeafy"
+  },
+  {
+    label: "Community",
+    title: "Campus community",
+    body: "Browse campus posts, search discussions, follow notices, and join everyday conversations.",
+    image: "/media/feature-community.jpg",
+    alt: "MyLeafy campus community"
+  },
+  {
+    label: "Grades",
+    title: "Grades overview",
+    body: "Review GPA, weighted average, credits, risk courses, and term results in one place.",
+    image: "/media/feature-grades.jpg",
+    alt: "Grades overview in MyLeafy"
+  },
+  {
+    label: "Credits",
+    title: "Credit progress",
+    body: "Track graduation credit requirements and category progress against the current study plan.",
+    image: "/media/feature-credits.jpg",
+    alt: "Credit progress in MyLeafy"
+  },
+  {
+    label: "Assessment",
+    title: "Quality score estimate",
+    body: "Estimate comprehensive quality score with academic records, activity material, and local inputs.",
+    image: "/media/feature-quality-score.jpg",
+    alt: "Quality score estimate in MyLeafy"
+  },
+  {
+    label: "Sharing",
+    title: "Shared timetable",
+    body: "Publish a read-only timetable snapshot and share it with a seven-day invite code.",
+    image: "/media/feature-share-timetable.jpg",
+    alt: "Shared timetable in MyLeafy"
   }
 ];
 
@@ -159,18 +210,18 @@ export const workflowCards: Array<{
 }> = [
   {
     icon: DeviceMobile,
-    title: "面向每天打开的手机场景",
-    body: "MyLeafy 围绕学生每天会打开的入口组织内容，让课表、学业、社区和个人功能更容易找到。"
+    title: "Built for frequent checks",
+    body: "Timetable first, community separate, academic tools grouped, profile for settings and safety."
   },
   {
     icon: Database,
-    title: "数据来源分层展示",
-    body: "学校页面、本机缓存、社区服务和静态官网分工清楚，用户可以了解每类数据的来源和用途。"
+    title: "Data boundaries are explicit",
+    body: "School academic system, local SwiftData cache, MyLeafy Community, and Cloudflare static hosting are listed separately."
   },
   {
     icon: Lifebuoy,
-    title: "支持入口可直接用于 App Store",
-    body: "技术支持、隐私政策、Marketing URL 和隐私选择链接都保持公开、稳定、可提交。"
+    title: "Support and privacy stay public",
+    body: "Support URL, privacy policy, marketing URL, and privacy choices URL are stable public links."
   }
 ];
 
@@ -182,71 +233,71 @@ export const featureBands: Array<{
 }> = [
   {
     icon: CalendarBlank,
-    label: "课表",
-    title: "打开后先看今天",
-    body: "课表是默认首页。MyLeafy 展示当前周课程、今日摘要、课程详情和最近一次成功同步的数据，用于教务系统不可用时兜底。"
+    label: "Timetable",
+    title: "Open to today's schedule",
+    body: "The timetable is the default tab, with current week, daily summary, class details, and latest successful sync."
   },
   {
     icon: GraduationCap,
-    label: "发现",
-    title: "教务工具集中到一个入口",
-    body: "成绩、考试安排、教学培养、自习室、校历、通知、社区和评教放在发现页，底部只保留课表、发现和我的三个主入口。"
+    label: "Academics",
+    title: "Academic tools in one tab",
+    body: "Grades, exams, academic plans, classrooms, calendar, and ratings are grouped in Academics."
   },
   {
     icon: UserCircle,
-    label: "我的",
-    title: "资料、收藏和支持收口",
-    body: "我的页管理社区资料、发帖记录、点赞评论、共享课表、常用链接、主题色、深色模式、缓存同步、数据安全和联系入口。"
+    label: "Profile",
+    title: "Profile, sharing, and support",
+    body: "Profile manages shared timetables, personal content, links, themes, cache sync, data safety, and support."
   },
   {
     icon: ChatsCircle,
-    label: "社区",
-    title: "校园讨论连接社区服务",
-    body: "社区资料、帖子、图片、评论、点赞、通知、公告、反馈、评教和你主动发布的共享课表快照由 MyLeafy 社区服务承接。"
+    label: "Community",
+    title: "Campus discussion",
+    body: "Profiles, posts, images, comments, likes, notices, feedback, ratings, and shared snapshots are stored in MyLeafy Community."
   }
 ];
 
 export const homeDataBoundaries = [
   {
-    label: "学校教务",
-    value: "强智系统",
-    body: "登录、课表、成绩、考试、教学计划、培养方案和空教室来自学校教务页面。"
+    label: "School system",
+    value: "Zhengfang",
+    body: "Login, timetable, grades, exams, academic plans, degree requirements, and classroom lookup come from the school system."
   },
   {
-    label: "本机缓存",
+    label: "Local cache",
     value: "SwiftData",
-    body: "最近同步的课程、成绩、备注、提醒、收藏和倒计时保存在当前设备。"
+    body: "Recently synced classes, grades, notes, reminders, bookmarks, and countdowns are stored on the current device."
   },
   {
-    label: "社区服务",
+    label: "Community service",
     value: "Supabase",
-    body: "资料、帖子、评论、点赞、通知、公告、反馈、评教评分和你主动发布的共享课表快照保存在 MyLeafy 社区服务。"
+    body: "Profiles, posts, comments, likes, notifications, notices, feedback, ratings, and shared timetable snapshots are stored in MyLeafy Community."
   },
   {
-    label: "官网托管",
+    label: "Website hosting",
     value: "Cloudflare",
-    body: "本网站用于公开介绍、技术支持和隐私政策，同时提供 App Store 所需的公开链接。"
+    body: "Product information, support, privacy policy, and App Store public links."
   }
 ];
 
 export const resourceLinks = [
   {
-    title: "技术支持",
-    body: "登录、同步、解析、社区或评教问题都可以从这里开始。",
+    title: "Support",
+    body: "Login, sync, parsing, community, ratings, and shared timetable issues.",
     href: site.supportUrl,
-    cta: "打开支持页"
+    cta: "Open support"
   },
   {
-    title: "隐私政策",
-    body: "查看 MyLeafy 如何处理教务登录、本地缓存、社区和反馈数据。",
+    title: "Privacy Policy",
+    body: "How MyLeafy handles school login, local cache, community data, feedback, and sharing.",
     href: site.privacyUrl,
-    cta: "阅读政策"
+    cta: "Read policy"
   },
   {
-    title: "隐私选择",
-    body: "访问、更正、删除社区资料或反馈内容的请求入口。",
+    title: "Privacy Choices",
+    body: "Access, correction, and deletion requests for community profile, feedback, or content data.",
     href: site.privacyChoicesUrl,
-    cta: "查看选择"
+    cta: "View choices"
   }
 ];
 
@@ -254,28 +305,27 @@ export const footerGroups = [
   {
     title: "Product",
     links: [
-      { label: "课表", href: "/#product" },
-      { label: "学业", href: "/#product" },
-      { label: "社区", href: "/#community" },
-      { label: "共享课表", href: "/share/timetable" }
+      { label: "Features", href: "/features" },
+      { label: "Data sources", href: "/features#data" },
+      { label: "Shared timetable", href: "/share/timetable" }
     ]
   },
   {
     title: "Resources",
     links: [
-      { label: "技术支持", href: "/support" },
-      { label: "App 内反馈", href: "/support#in-app" },
-      { label: "数据边界", href: "/#data" },
-      { label: "联系邮箱", href: `mailto:${site.supportEmail}` }
+      { label: "Support", href: "/support" },
+      { label: "In-app feedback", href: "/support#in-app" },
+      { label: "Data boundaries", href: "/features#data" },
+      { label: "Email", href: `mailto:${site.supportEmail}` }
     ]
   },
   {
     title: "Legal",
     links: [
-      { label: "隐私政策", href: "/privacy" },
-      { label: "隐私选择", href: "/privacy#privacy-rights" },
-      { label: "第三方服务", href: "/privacy#third-party" },
-      { label: "保存与删除", href: "/privacy#retention" }
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Privacy Choices", href: "/privacy#privacy-rights" },
+      { label: "Third-party services", href: "/privacy#third-party" },
+      { label: "Retention", href: "/privacy#retention" }
     ]
   },
   {
@@ -285,11 +335,11 @@ export const footerGroups = [
 ];
 
 export const supportChecklist = [
-  "设备型号，例如 iPhone 15、iPad Air 或 Apple 芯片 Mac。",
-  "iOS、iPadOS 或 macOS 版本，以及 MyLeafy App 版本。",
-  "出现问题的页面路径，例如 发现 -> 成绩。",
-  "最近一次同步时间，以及错误提示截图或文字。",
-  "是否连接校园网、是否重新登录过学校教务。"
+  "Device model, such as iPhone 15, iPad Air, or an Apple silicon Mac.",
+  "iOS, iPadOS, or macOS version, plus the MyLeafy app version.",
+  "The screen path where the issue appears, such as Academics -> Grades.",
+  "Last sync time, plus the visible error message or screenshot text.",
+  "Whether you are on campus network and whether you have re-signed into the school system."
 ];
 
 export const supportTopics: Array<{
@@ -299,23 +349,23 @@ export const supportTopics: Array<{
 }> = [
   {
     icon: Lifebuoy,
-    title: "技术支持",
-    body: "通过邮件或 App 内意见反馈提交问题。建议附上页面路径、错误提示、设备型号和 App 版本。"
+    title: "Technical support",
+    body: "Send email or use in-app feedback. Include screen path, error message, device model, and app version when possible."
   },
   {
     icon: DeviceMobile,
-    title: "App 内入口",
-    body: "进入 我的 -> 支持 -> 意见反馈，可以附带设备型号、系统版本、App 版本、登录状态和最近同步时间。"
+    title: "In-app feedback",
+    body: "Open Profile -> Support -> Feedback to include device model, system version, app version, login state, and last sync time."
   },
   {
     icon: WarningCircle,
-    title: "教务异常",
-    body: "学校网络不可达、登录态过期或页面结构变化都可能导致同步失败。建议先重新登录并重试同步。"
+    title: "Academic sync issues",
+    body: "School network outages, expired sessions, and school page changes can cause sync failures. Re-sign in and retry sync first."
   },
   {
     icon: Trash,
-    title: "数据请求",
-    body: "需要访问、更正或删除社区资料、帖子、反馈等数据时，可以从 App 内反馈，也可以发送邮件说明。"
+    title: "Data requests",
+    body: "For access, correction, or deletion requests for community profile, posts, or feedback, use in-app feedback or email."
   }
 ];
 
@@ -326,23 +376,23 @@ export const privacySummaryCards: Array<{
 }> = [
   {
     icon: LockKey,
-    title: "教务登录独立处理",
-    body: "教务密码用于向学校强智教务系统发起登录请求，社区功能使用独立的 MyLeafy 社区会话。"
+    title: "School login is separate",
+    body: "The school password is used to request login from the Zhengfang academic system. Community features use a separate MyLeafy session."
   },
   {
     icon: Database,
-    title: "本地缓存用于离线查看",
-    body: "课表、成绩、课程备注、提醒、收藏和同步状态会保存在当前设备。iPhone、iPad 与 Mac 的本地缓存相互独立，不通过 iCloud 同步。"
+    title: "Local cache supports offline viewing",
+    body: "Timetable, grades, notes, reminders, bookmarks, and sync state are stored on the current device. iPhone, iPad, and Mac caches are separate."
   },
   {
     icon: Cloud,
-    title: "社区数据由 MyLeafy 社区服务承接",
-    body: "昵称、头像、帖子、评论、点赞、通知、反馈、评教评分和你主动发布的共享课表快照会保存到 MyLeafy 社区服务。"
+    title: "Community data is stored in MyLeafy Community",
+    body: "Nickname, avatar, posts, comments, likes, notifications, feedback, ratings, and shared timetable snapshots are stored in MyLeafy Community."
   },
   {
     icon: ShieldCheck,
-    title: "隐私边界清晰",
-    body: "官网用于公开介绍、技术支持和隐私政策说明。MyLeafy 会在隐私政策中更新新增的数据处理方式。"
+    title: "Public policy and support links",
+    body: "The support email and privacy policy are available at myleafy.space. New data processing will be reflected in the privacy policy."
   }
 ];
 
@@ -353,84 +403,84 @@ export const privacySections: Array<{
   items: string[];
 }> = [
   {
-    title: "我们处理的数据",
+    title: "Data We Process",
     icon: Database,
     items: [
-      "学校教务数据：学号、验证码、学校会话 Cookie、课表、成绩、考试安排、教学计划、培养方案、空教室和指定教室占用等数据来自学校强智教务系统。",
-      "登录凭据：教务密码用于向学校强智教务系统提交登录请求；本网站不收集教务密码。",
-      "本地缓存：最近同步的课程、成绩、课程备注、课前提醒、常用自习室、常用链接、自定义倒计时、主题偏好、同步时间和失败提示会保存在当前设备。iPhone、iPad 与 Mac 各自保存本地副本，不通过 iCloud 同步，也不会从 iPhone 容器读取 Mac 数据。",
-      "社区资料：匿名社区会话、绑定的教务学号、显示名、昵称、头像、专业、年级、邮箱验证状态和资料更新时间会用于社区身份。",
-      "社区内容：帖子、图片、评论、点赞、通知、公告阅读记录、教师星级评分和评分汇总会保存在 MyLeafy 社区服务。",
-      "共享课表：首次发布需要你在 App 内手动触发；发布后，课表同步成功时会更新已发布的共享快照。快照包含课程名、老师、地点、周次、节次、学期和发布时间。",
-      "反馈信息：你提交的反馈内容、可选联系方式，以及设备类型、系统版本、App 版本、登录状态和最近课表同步时间会用于定位问题；Mac 版不会读取主机名或系统账号。",
-      "照片与文件：MyLeafy 只在你主动选择社区头像、发帖图片或课表底图时读取所选照片；Mac 版通过系统打开或保存面板访问你明确选择的文件。",
-      "定位与日历：定位仅用于天气和出行建议；日历权限仅在你主动导出课表或提醒时使用。拒绝权限不会影响社区、成绩等无关功能。"
+      "School academic data: student ID, captcha, school session cookies, timetable, grades, exams, academic plans, degree requirements, available classrooms, and classroom occupancy come from the Zhengfang academic system.",
+      "Login credentials: the school password is submitted to the Zhengfang academic system for login. This website does not collect the school password.",
+      "Local cache: recently synced classes, grades, class notes, reminders, favorite classrooms, links, countdowns, theme preferences, sync time, and failure messages are stored on the current device. iPhone, iPad, and Mac keep separate local copies.",
+      "Community profile: anonymous community session, bound school student ID, display name, nickname, avatar, major, grade, email verification state, and profile update time are used for community identity.",
+      "Community content: posts, images, comments, likes, notice read state, teacher star ratings, and rating summaries are stored in MyLeafy Community.",
+      "Shared timetable: sharing is created manually in the app. Shared snapshots include course name, teacher, location, week range, class period, semester, and publish time.",
+      "Feedback: submitted feedback, optional contact information, device type, system version, app version, login state, and latest timetable sync time are used for support.",
+      "Photos and files: MyLeafy reads selected photos only when you choose a community avatar, post image, or timetable background. On Mac, files are accessed through system open or save panels.",
+      "Location and calendar: location is used only for weather and commute suggestions. Calendar permission is used only when you export timetable or reminders."
     ]
   },
   {
-    title: "使用目的",
+    title: "Purposes",
     icon: BookOpen,
     items: [
-      "向学校教务系统请求并展示课表、成绩、考试、教学培养和空教室信息。",
-      "在设备上缓存最近一次成功同步的数据，支持离线查看和学校服务不可用时的兜底。",
-      "提供社区资料、发帖、图片上传、评论、点赞、通知、公告、反馈和评教功能。",
-      "在你主动发布后，允许你通过 7 天过期、单次使用的邀请码授权他人只读查看课程快照，并在后续课表同步成功时更新已共享内容。",
-      "处理技术支持请求，排查同步失败、登录异常、解析失败、社区服务不可用等问题。",
-      "维护社区安全，包括内容删除、禁言限制、发帖频率限制、图片数量限制和后台审计。"
+      "Request and display timetable, grades, exams, academic plans, and classroom information from the school system.",
+      "Cache the latest successful sync on device for offline viewing.",
+      "Provide community profile, posting, image upload, comments, likes, notifications, notices, feedback, and ratings.",
+      "Let you share a read-only timetable snapshot with a seven-day, single-use invite code after you choose to publish it.",
+      "Handle support requests for sync failures, login issues, parsing failures, and community service issues.",
+      "Maintain community safety through deletion, posting limits, image limits, and admin audit logs."
     ]
   },
   {
     id: "third-party",
-    title: "第三方服务",
+    title: "Third-party Services",
     icon: Cloud,
     items: [
-      "北京林业大学强智教务系统用于学校登录和教务数据查询。",
-      "Supabase 用于 MyLeafy 社区服务，包括匿名认证、数据库、私有图片存储、Edge Functions、社区通知、反馈、评教、共享课表和运营后台。",
-      "Cloudflare 用于 myleafy.space 的 DNS、静态站点托管和 support@myleafy.space 邮件转发。",
-      "Apple 系统能力用于 App 分发、照片与文件选择、定位、日历、系统分享、通知和本地存储。"
+      "Beijing Forestry University Zhengfang academic system is used for school login and academic data lookup.",
+      "Supabase is used for MyLeafy Community, including anonymous auth, database, private image storage, Edge Functions, notifications, feedback, ratings, shared timetables, and admin tools.",
+      "Cloudflare is used for myleafy.space DNS, static hosting, and support@myleafy.space email routing.",
+      "Apple system capabilities are used for app distribution, photo and file selection, location, calendar, system sharing, notifications, and local storage."
     ]
   },
   {
     id: "retention",
-    title: "保存与删除",
+    title: "Retention And Deletion",
     icon: Trash,
     items: [
-      "设备本地数据保存在你的当前设备。iPhone、iPad 与 Mac 的缓存相互独立；你可以在 App 的缓存与同步页面清理课表、成绩、备注、提醒、收藏和相关缓存。",
-      "退出登录会清理学校会话和社区会话；为方便离线查看，本地课表和成绩缓存可能继续保留，直到你主动清理。",
-      "共享课表关系可以由分享者撤销或停止共享，也可以由查看者移除；未使用的邀请码过期或停止共享后会失效。",
-      "社区帖子和评论删除通常以软删除或状态更新方式处理，以保持通知、审计和社区安全记录的一致性。",
-      "你可以通过 App 内意见反馈或发送邮件到 support@myleafy.space 请求访问、更正或删除与你相关的社区资料、反馈和内容。"
+      "Local device data stays on the current device. iPhone, iPad, and Mac caches are separate. You can clear timetable, grades, notes, reminders, bookmarks, and related cache in the app.",
+      "Signing out clears the school session and community session. Local timetable and grade cache may remain for offline viewing until you clear it.",
+      "Shared timetable access can be revoked by the sharer or removed by the viewer. Unused invite codes expire automatically.",
+      "Community posts and comments may be soft-deleted or status-updated to keep notifications, audit logs, and safety records consistent.",
+      "You can request access, correction, or deletion of community profile, feedback, or content data through in-app feedback or support@myleafy.space."
     ]
   },
   {
     id: "privacy-rights",
-    title: "隐私选择与权利",
+    title: "Privacy Choices And Rights",
     icon: ShieldCheck,
     items: [
-      "完善社区资料由你自行选择；发帖、评论和点赞前需要完成社区昵称。",
-      "共享课表由你自行发布；发布后也可以随时停止共享或撤销某个同学的查看权限。",
-      "照片、文件、定位和日历权限由你自行授权；课表、成绩、教学培养、自习室和社区等无关功能可以独立使用。",
-      "你可以在邮件中说明要访问、更正或删除的数据范围。为了防止误删，我们可能需要你通过 App 内已登录状态或其他合理方式确认身份。",
-      "如果 MyLeafy 未来接入网站分析、广告、支付、订阅、第三方登录或新的数据处理方，本政策会在上线前更新。"
+      "Completing a community profile is your choice, but posting, commenting, and liking require a community nickname.",
+      "Shared timetables are published by you. You can stop sharing or revoke a viewer at any time.",
+      "Photo, file, location, and calendar permissions are controlled by you. Timetable, grades, academic tools, and community features can be used independently where permission is not needed.",
+      "In a request, describe the data you want to access, correct, or delete. We may ask you to confirm identity through the signed-in app state or another reasonable method.",
+      "If MyLeafy later adds analytics, ads, payments, subscriptions, third-party login, or new data processors, this policy will be updated before launch."
     ]
   },
   {
-    title: "安全与限制",
+    title: "Security And Limits",
     icon: WarningCircle,
     items: [
-      "MyLeafy 会尽量用最小范围处理数据，但学校教务页面结构变化、校园网络限制或第三方服务故障可能影响可用性。",
-      "提交支持请求时，建议只提供定位问题所需的信息，避免发送教务密码、验证码或完整身份证件。",
-      "社区图片通过私有存储和签名链接读取，但你仍应避免上传包含他人隐私的信息。"
+      "MyLeafy uses limited data for the stated features, but school page changes, campus network restrictions, and third-party service outages may affect availability.",
+      "Do not send school passwords, captchas, or full identity documents in support requests.",
+      "Community images are stored privately and read through signed links, but avoid uploading other people's private information."
     ]
   },
   {
-    title: "联系我们",
+    title: "Contact",
     icon: EnvelopeSimple,
     items: [
-      `技术支持和隐私请求邮箱：${site.supportEmail}。`,
-      "你也可以在 App 内进入 我的 -> 支持 -> 意见反馈 提交问题。",
-      `运营者：${site.operatorName}。${site.operatorNote}`,
-      `本政策最近更新：${site.updatedAt}。`
+      `Support and privacy requests: ${site.supportEmail}.`,
+      "You can also open Profile -> Support -> Feedback in the app.",
+      `Operator: ${site.operatorName}. ${site.operatorNote}`,
+      `Last updated: ${site.updatedAt}.`
     ]
   }
 ];
@@ -443,26 +493,26 @@ export const metadataNotes: Array<{
   {
     icon: Browser,
     title: "Cloudflare Pages",
-    body: "Root directory 设置为 site，Build command 设置为 npm run build，Output directory 设置为 dist。"
+    body: "Root directory: site. Build command: npm run build. Output directory: dist."
   },
   {
     icon: EnvelopeSimple,
     title: "Email Routing",
-    body: "将 support@myleafy.space 转发到实际收件邮箱后，再把支持网址提交到 App Store Connect。"
+    body: "Forward support@myleafy.space through Cloudflare Email Routing, then submit the support URL to App Store Connect."
   },
   {
     icon: Images,
-    title: "公开联系入口",
-    body: "官网承接说明、支持邮箱和隐私政策入口，反馈内容可以通过邮件或 App 内反馈提交。"
+    title: "Public Contact",
+    body: "Support email and privacy policy links are publicly accessible."
   },
   {
     icon: BellSimple,
-    title: "App 内反馈",
-    body: "需要附带设备信息的问题，优先通过 App 内意见反馈提交，方便定位版本和同步状态。"
+    title: "In-app Feedback",
+    body: "Use in-app feedback for issues that need device and sync context."
   },
   {
     icon: Star,
-    title: "评教边界",
-    body: "评教当前统计 1 到 5 星评分，用于呈现课程和教师的整体反馈。"
+    title: "Ratings",
+    body: "Ratings currently use one-to-five star summaries."
   }
 ];
