@@ -1,6 +1,6 @@
-# Leafy Website
+# MyLeafy Website
 
-Leafy 的 App Store 技术支持和隐私政策静态站。
+MyLeafy 的 App Store 技术支持和隐私政策静态站。
 
 ## Local
 

@@ -4,7 +4,7 @@ Use this checklist for the Guideline 2.3.6 rejection about inaccurate Age Rating
 
 ## App Store Connect Changes
 
-- Go to `Apps -> Leafy -> General -> App Information -> Age Ratings -> Edit`.
+- Go to `Apps -> MyLeafy -> General -> App Information -> Age Ratings -> Edit`.
 - In `In-App Controls`, set `Parental Controls` to `None`.
 - In `In-App Controls`, set `Age Assurance` to `None`.
 - Keep truthful content descriptors for anonymous UGC, messaging/community interactions, and any other actual content.
@@ -13,7 +13,7 @@ Use this checklist for the Guideline 2.3.6 rejection about inaccurate Age Rating
 
 ## Review Notes
 
-We corrected the Age Rating metadata in App Store Connect. Leafy does not include Apple-defined Parental Controls or Age Assurance mechanisms, so both selections are now set to `None`.
+We corrected the Age Rating metadata in App Store Connect. MyLeafy does not include Apple-defined Parental Controls or Age Assurance mechanisms, so both selections are now set to `None`.
 
 The app's higher age rating is retained to accurately reflect anonymous user-generated community features and moderation requirements. This higher rating is not based on Parental Controls or Age Assurance.
 

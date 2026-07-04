@@ -1,10 +1,10 @@
-# Leafy UI 设计总结
+# MyLeafy UI 设计总结
 
-本文档总结 Leafy 原生 iOS App 与小组件的界面设计。内容以当前 SwiftUI 实现和项目 UI 规范为准，不展开官网、后台控制台或数据库管理界面。
+本文档总结 MyLeafy 原生 iOS App 与小组件的界面设计。内部代码、组件和部分资源仍沿用 Leafy 命名；内容以当前 SwiftUI 实现和项目 UI 规范为准，不展开官网、后台控制台或数据库管理界面。
 
 ## 1. 整体视觉方向
 
-Leafy 的 UI 目标是轻量、原生、低噪声的校园工具感：
+MyLeafy 的 UI 目标是轻量、原生、低噪声的北林校园工具感：
 
 - 以 SwiftUI 系统控件为基础，优先使用 `NavigationStack`、`TabView`、`List`、`sheet`、`Menu`、`Alert`、`Picker`、`Toggle` 和 `ContentUnavailableView`。
 - 页面背景使用系统 grouped background 叠加低透明度主题渐变。
@@ -16,6 +16,7 @@ Leafy 的 UI 目标是轻量、原生、低噪声的校园工具感：
 整体气质：
 
 - 课表页强调“快速确认今天安排”。
+- Leafy AI 页强调“轻量提问和动作确认”。
 - 社区页强调“信息流和互动动作清楚可见”。
 - 学业页强调“工具集合但不拥挤”。
 - 我的页强调“系统设置感和安全边界”。
@@ -116,19 +117,19 @@ App 图标：
 
 根结构：
 
+- Leafy：SF Symbol `sparkles`。
 - 课表：SF Symbol `calendar`。
 - 社区：SF Symbol `person.2`。
 - 学业：SF Symbol `book.closed`。
 - 我的：SF Symbol `person`。
 
-iOS 18 及以上：
+iOS 26 及以上：
 
 - 使用系统 `TabView`。
-- 额外使用动态动作 Tab 承接当前页面的快捷操作。
 - 社区 Tab 支持未读 badge。
-- iOS 26 使用系统 tab bar 外观并禁止最小化行为。
+- 使用系统 tab bar 外观并禁止最小化行为。
 
-iOS 17：
+iOS 17 到 iOS 25：
 
 - 隐藏系统 tab bar。
 - 使用底部自定义 `RootFloatingTabBar`。
@@ -137,8 +138,9 @@ iOS 17：
 - 选中 Tab 使用主题色和胶囊选中背景。
 - 社区未读用小红点提示，不使用复杂数字徽章。
 
-动态动作按钮：
+自定义浮动动作按钮：
 
+- Leafy AI 页保持当前助手操作入口。
 - 课表页显示时钟图标，打开时间视角。
 - 社区页显示筛选图标，展开社区工具面板。
 - 学业页显示当前学业分类图标或关闭图标，展开/收起学业切换面板。

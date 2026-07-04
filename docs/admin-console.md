@@ -1,6 +1,6 @@
-# Leafy 运营后台
+# MyLeafy 运营后台
 
-Leafy 的社区运营后台挂在官网 `/admin`，代码位于 `site/src/admin/`。后台前端只调用 Supabase Edge Functions，不保存或暴露 `service_role`。
+MyLeafy 的社区运营后台挂在官网 `/admin`，代码位于 `site/src/admin/`。后台前端只调用 Supabase Edge Functions，不保存或暴露 `service_role`。
 
 ## 1. 技术栈
 

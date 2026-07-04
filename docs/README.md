@@ -1,12 +1,12 @@
 # MyLeafy 文档中心
 
-本目录集中维护 MyLeafy 的项目文档。内部代码名仍为 Leafy；根目录 `README.md` 只保留项目简介和入口链接，其余项目自有 Markdown 都应放在这里。
+本目录集中维护 MyLeafy 的项目文档。MyLeafy 当前面向北京林业大学；内部代码名、target 和多数类型名仍为 Leafy。根目录保留入口 README 和阶段性 App/UI 总结，其余项目文档都应放在这里。
 
 ## 推荐阅读顺序
 
 1. [项目总览](overview.md)：先理解产品定位、已落地能力、数据源和当前边界。
 2. [架构说明](architecture.md)：再看 App、教务直连、解析、SwiftData、Supabase 的分层与数据流。
-3. [App 设计](app-design.md)：确认登录、课表、社区、学业、我的、评教等页面结构。
+3. [App 设计](app-design.md)：确认登录、Leafy AI、课表、社区、学业、我的、评教等页面结构。
 4. [UI 风格指南](ui-style-guide.md)：落 UI 前对齐主题、间距、控件和状态展示。
 5. [Supabase 接入](supabase.md)：配置社区、通知、评教和 Edge Functions。
 6. [运营后台](admin-console.md)：配置 Web 后台和社区运营能力。
@@ -34,7 +34,7 @@
 ## 维护约定
 
 - 文档统一使用中文。
-- 不再新增根目录级 Markdown，根目录 `README.md` 除外。
+- 不再新增根目录级 Markdown；入口说明、App 功能总结和 UI 设计总结除外。
 - 文档内链接优先使用相对路径，不写本机绝对路径。
 - 当前实现写入 `overview.md` / `architecture.md`；未来计划写入 `roadmap.md`。
 - 过期但仍有参考价值的分析文档放入 `archive/`，不要混入主文档流。

@@ -5,7 +5,7 @@ Use this checklist when submitting build `1.0 (17)` for Guideline 1.2 review.
 ## App Store Connect Checklist
 
 - Set the app age rating to `18+` by using `Override to Higher Age Rating` if the questionnaire calculates a lower rating.
-- In `In-App Controls`, set both `Parental Controls` and `Age Assurance` to `None`; Leafy does not provide those Apple-defined mechanisms.
+- In `In-App Controls`, set both `Parental Controls` and `Age Assurance` to `None`; MyLeafy does not provide those Apple-defined mechanisms.
 - Add a custom EULA or terms URL in App Store Connect.
 - Mention the community safety changes in Review Notes.
 - Deploy the Supabase migration before review.
@@ -13,17 +13,17 @@ Use this checklist when submitting build `1.0 (17)` for Guideline 1.2 review.
 
 ## Custom EULA / Community Terms
 
-Leafy has zero tolerance for objectionable content and abusive users. By using community features, users agree not to post, upload, comment, or share content that is abusive, harassing, threatening, hateful, sexually explicit, illegal, spam, fraudulent, or that exposes private personal information. Users also agree not to impersonate others, evade moderation, or abuse anonymous posting.
+MyLeafy has zero tolerance for objectionable content and abusive users. By using community features, users agree not to post, upload, comment, or share content that is abusive, harassing, threatening, hateful, sexually explicit, illegal, spam, fraudulent, or that exposes private personal information. Users also agree not to impersonate others, evade moderation, or abuse anonymous posting.
 
-Leafy may filter, reject, hide, or delete objectionable posts and comments. Users can report posts, comments, users, and inappropriate activity from inside the app. Reported content may be removed from public feeds immediately while reviewed. Users can block abusive users, and blocked users' content will be hidden from the blocker.
+MyLeafy may filter, reject, hide, or delete objectionable posts and comments. Users can report posts, comments, users, and inappropriate activity from inside the app. Reported content may be removed from public feeds immediately while reviewed. Users can block abusive users, and blocked users' content will be hidden from the blocker.
 
-Leafy will review reports of objectionable content within 24 hours. When a violation is confirmed, Leafy will remove or hide the offending content and eject, ban, mute, or otherwise restrict the user who provided it.
+MyLeafy will review reports of objectionable content within 24 hours. When a violation is confirmed, MyLeafy will remove or hide the offending content and eject, ban, mute, or otherwise restrict the user who provided it.
 
 For community safety reports, contact `support@myleafy.space` or use `我的 -> 支持 -> 举报与反馈 -> 社区安全` in the app.
 
 ## Review Notes Draft
 
-We updated Leafy to comply with Guideline 1.2 for anonymous user-generated content.
+We updated MyLeafy to comply with Guideline 1.2 for anonymous user-generated content.
 
 - Age rating is configured as 18+ to reflect anonymous UGC and moderation requirements. `Parental Controls` and `Age Assurance` are set to `None`.
 - Users must agree to community terms before using posting or commenting features. The terms state zero tolerance for objectionable content and abusive users.
@@ -36,4 +36,4 @@ We updated Leafy to comply with Guideline 1.2 for anonymous user-generated conte
 - The in-app support screen includes `举报与反馈`, where users can choose `社区安全`, and the support screen shows `support@myleafy.space`.
 - The admin console now includes a report queue with 24-hour SLA visibility, actions to hide content, mute users, resolve or reject reports, and audit logging.
 
-Reviewer path: open the Discover/community feed, attempt to compose or comment, accept the community terms, use the `...` menu on a post or comment to report/block/delete, and open `我的 -> 支持 -> 举报与反馈` for contact/reporting information.
+Reviewer path: open the community feed, attempt to compose or comment, accept the community terms, use the `...` menu on a post or comment to report/block/delete, and open `我的 -> 支持 -> 举报与反馈` for contact/reporting information.

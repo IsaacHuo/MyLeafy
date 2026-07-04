@@ -1,4 +1,4 @@
-# Supabase Schema Ledger
+# MyLeafy Supabase Schema Ledger
 
 Last updated: 2026-07-01
 

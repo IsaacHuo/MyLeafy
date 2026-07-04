@@ -1,10 +1,10 @@
-# Leafy UI 风格指南
+# MyLeafy UI 风格指南
 
-本文档记录当前 Leafy 的 UI 风格和组件使用约定。页面结构见 [App 设计](app-design.md)。
+本文档记录当前 MyLeafy 的 UI 风格和组件使用约定；内部代码和部分组件仍沿用 Leafy 命名。页面结构见 [App 设计](app-design.md)。
 
 ## 1. 视觉方向
 
-Leafy 的视觉目标是轻量、原生、低噪声：
+MyLeafy 的视觉目标是轻量、原生、低噪声：
 
 - 使用 SwiftUI 系统控件作为基础。
 - 页面背景使用系统分组背景叠加低透明度主题渐变。
@@ -134,7 +134,7 @@ Leafy 的视觉目标是轻量、原生、低噪声：
 
 根导航：
 
-- 固定 `课表 / 社区 / 学业 / 我的` 四个 Tab。
+- 固定 `Leafy / 课表 / 社区 / 学业 / 我的` 五个 Tab。
 - `ContentView` 使用系统 `TabView` 承载页面。
 - 使用系统 tab bar；iOS 26 以上由系统提供 Liquid Glass 外观。
 

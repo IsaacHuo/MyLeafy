@@ -1,13 +1,14 @@
 # MyLeafy 项目总览
 
-MyLeafy 是一个通用型校园应用；内部代码名、target 和类型命名继续使用 Leafy。当前首个上线校园是北京林业大学，教务能力直接连接北林强智系统，并用 Supabase 承接社区、通知、反馈、评教、共享课表和运营后台。
+MyLeafy 是当前面向北京林业大学学生的校园工具 App；内部代码名、target 和类型命名继续使用 Leafy。教务能力直接连接北林强智系统，并用 Supabase 承接社区、通知、反馈、评教、共享课表、Leafy AI 托管额度和运营后台。
 
 目标学校教务站点：`http://newjwxt.bjfu.edu.cn`
 
 ## 1. 当前定位
 
-MyLeafy 当前是一个以课表为核心的校园 App：
+MyLeafy 当前是一个以课表为核心的北林校园 App：
 
+- `Leafy`：AI 助手入口，基于当前设备上的学业数据回答问题并规划有限动作。
 - `课表`：默认首页，展示当前周课程、日程摘要和课程详情。
 - `社区`：集中帖子流、发布、通知、公告和社区互动。
 - `学业`：集中成绩、考试、教学培养、自习室、校历和评教。
@@ -35,8 +36,9 @@ MyLeafy 当前是一个以课表为核心的校园 App：
 
 ### App 体验
 
-- 四个根 Tab：课表、社区、学业、我的。
-- 系统 SwiftUI TabView 底部 Tab。
+- 五个根 Tab：Leafy、课表、社区、学业、我的。
+- iOS 26 使用系统 tab bar，iOS 17 到 iOS 25 使用自定义浮动 Tab Bar。
+- Leafy AI 设置、自备 Key / 托管模式和本机对话记录。
 - 课表周视图、周次切换、刷新、课程详情 sheet。
 - 今日课程摘要、单日课程分享图、天气信息。
 - 学业页横向胶囊导航。
@@ -84,7 +86,7 @@ MyLeafy 当前是一个以课表为核心的校园 App：
 ```text
 leafy/
 ├── App/                  # App 启动、根导航、主题和生命周期
-├── Features/             # Auth、Timetable、Discover、Profile
+├── Features/             # Auth、Timetable、Discover、Community、Profile
 ├── Services/             # 教务直连、Supabase、诊断、WebView 兜底
 ├── Parsers/              # HTMLParser 和调试解析
 ├── Shared/Models/        # 社区 DTO、本地数据模型
@@ -125,6 +127,7 @@ docs/
 | 社区资料 / 帖子 / 评论 / 点赞 / 收藏 | Supabase | 匿名会话绑定教务学号 |
 | 通知 / 公告 / 反馈 | Supabase | 数据库 + Edge Functions |
 | 评教 | Supabase | 老师名录手动导入，星级评分 |
+| Leafy AI 托管额度 | Supabase Edge Functions | Auth 校验、额度和用量记录 |
 | 运营后台 | Supabase Edge Functions | 高权限管理操作 |
 
 ## 6. 当前风险和待优化点
