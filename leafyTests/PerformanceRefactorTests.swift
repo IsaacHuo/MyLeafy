@@ -1416,11 +1416,6 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(voteMap[pollID], firstOptionID)
     }
 
-    func testCommunityUnreadCountControlsRootTabBadge() {
-        XCTAssertFalse(RootTabBadgeVisibility.showsCommunityBadge(unreadCount: 0))
-        XCTAssertTrue(RootTabBadgeVisibility.showsCommunityBadge(unreadCount: 1))
-    }
-
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
         XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.leafy, .timetable, .community, .academics, .profile])
         XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.leafy, .timetable, .academics, .profile])

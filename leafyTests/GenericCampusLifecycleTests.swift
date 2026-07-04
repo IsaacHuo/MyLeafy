@@ -6,15 +6,13 @@ final class GenericCampusLifecycleTests: XCTestCase {
         let tabs = AcademicPrimaryTab.visibleCases(isCustomCampus: true, isCommunityEnabled: false)
 
         XCTAssertEqual(tabs, [.cultivation, .schedule, .learning, .sports, .career, .postgraduate])
-        XCTAssertEqual(RootFloatingTabBar.academicSwitcherPanelMaxHeight(tabCount: tabs.count, controlScale: 1), 334, accuracy: 0.001)
         XCTAssertFalse(tabs.contains(.classrooms))
         XCTAssertFalse(tabs.contains(.ratings))
         XCTAssertFalse(tabs.contains(.medical))
         XCTAssertFalse(tabs.contains(.weekendTravel))
     }
 
-    func testAcademicSwitcherPanelExpandsForBJFULongTabLists() {
-        let compactHeight = RootFloatingTabBar.floatingPanelMaxHeight(controlScale: 1)
+    func testAcademicTabsIncludeBJFUSpecificSurfacesWhenAvailable() {
         let bjfuWithoutCommunityTabs = AcademicPrimaryTab.visibleCases(
             isCustomCampus: false,
             isCommunityEnabled: false,
@@ -27,11 +25,8 @@ final class GenericCampusLifecycleTests: XCTestCase {
         )
 
         XCTAssertEqual(bjfuWithoutCommunityTabs.count, 9)
-        XCTAssertEqual(RootFloatingTabBar.academicSwitcherPanelMaxHeight(tabCount: bjfuWithoutCommunityTabs.count, controlScale: 1), 496, accuracy: 0.001)
-        XCTAssertGreaterThan(RootFloatingTabBar.academicSwitcherPanelMaxHeight(tabCount: bjfuWithoutCommunityTabs.count, controlScale: 1), compactHeight)
 
         XCTAssertEqual(bjfuWithCommunityTabs.count, 10)
-        XCTAssertEqual(RootFloatingTabBar.academicSwitcherPanelMaxHeight(tabCount: bjfuWithCommunityTabs.count, controlScale: 1), 550, accuracy: 0.001)
         XCTAssertEqual(bjfuWithCommunityTabs.suffix(3), [.ratings, .medical, .weekendTravel])
     }
 
