@@ -1422,12 +1422,12 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .leafy, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .leafy, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.leafy, .timetable, .community, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.leafy, .timetable, .academics, .profile])
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .leafy, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.leafy, .timetable, .community, .academics, .profile])
     }
 
     func testCampusIdentityScopeKeySeparatesSchoolPortalAndCustomSupabase() {
@@ -1871,7 +1871,7 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "所得学分" }).value, "未缓存")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "课表" }).detail, "暂无同步记录")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "本地数据" }).value, "0 条备注 / 0 个收藏")
-        XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "学习相关" }).value, "0 个项目 / 0 份资料")
+        XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "学习空间" }).value, "0 个空间 / 0 份资料")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "体测记录" }).value, "0 条记录")
     }
 
@@ -1905,8 +1905,8 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "所得学分" }).value, "42.5 学分")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "考试安排" }).value, "2 条考试")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "本地数据" }).detail, "11 个提醒")
-        XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "学习相关" }).value, "2 个项目 / 8 份资料")
-        XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "学习相关" }).detail, "10 个任务 / 11 条记录")
+        XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "学习空间" }).value, "2 个空间 / 8 份资料")
+        XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "学习空间" }).detail, "10 个任务 / 11 条记录")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "体测记录" }).value, "9 条记录")
         XCTAssertTrue(try XCTUnwrap(summary.rows.first { $0.title == "课表" }).detail.contains("最近同步："))
     }

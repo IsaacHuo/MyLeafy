@@ -11,6 +11,7 @@ import {
   fallbackActionDrafts,
   handler,
   isSafePublicHTTPURL,
+  localRetrievalDeliverables,
   normalizeAgentToolCalls,
   officialDocumentDeliverable,
   officialDocumentFreshness,
@@ -70,6 +71,15 @@ Deno.test("campus-ai-assistant declares DeepSeek V4 Flash streaming Markdown pay
     user_system_prompt: "请用列表回答",
     context: { campusID: "bjfu", timetable: { allCourses: [] } },
     context_settings: { includesTimetable: true },
+    capabilities: { localSearchEnabled: true, webSearchEnabled: false },
+    local_retrieval: {
+      results: [{
+        domain: "learning",
+        title: "学习任务：刷题",
+        summary: "每天 3 道",
+        source_id: "learning.task.1",
+      }],
+    },
     recent_messages: [{ role: "assistant", text: "你好" }],
   }, "明天上什么课？") as Record<string, unknown>;
   const messages = payload.messages as Array<Record<string, unknown>>;
@@ -80,6 +90,10 @@ Deno.test("campus-ai-assistant declares DeepSeek V4 Flash streaming Markdown pay
   );
   assert(payload.model === "deepseek-v4-flash", "expected DeepSeek V4 Flash");
   assert(payload.stream === true, "expected stream true");
+  assert(
+    !("max_tokens" in payload),
+    "answer payload should not cap output tokens",
+  );
   assert(
     JSON.stringify(payload.stream_options) ===
       JSON.stringify({ include_usage: true }),
@@ -102,6 +116,15 @@ Deno.test("campus-ai-assistant declares DeepSeek V4 Flash streaming Markdown pay
       !String(payload.user).includes("app-tx-1"),
     "provider user cache key should not expose raw app transaction ID",
   );
+  const userContent = JSON.parse(String(messages[1].content));
+  assert(
+    userContent.capabilities.localSearchEnabled === true,
+    "expected capabilities in user content",
+  );
+  assert(
+    userContent.local_retrieval.results[0].title === "学习任务：刷题",
+    "expected local retrieval in user content",
+  );
 });
 
 Deno.test("campus-ai-assistant builds non-stream JSON-only action planner payload", () => {
@@ -110,6 +133,10 @@ Deno.test("campus-ai-assistant builds non-stream JSON-only action planner payloa
       app_transaction_id: "app-tx-1",
       context: { campusID: "bjfu", currentWeek: 2 },
       context_settings: { includesTimetable: true },
+      capabilities: { actionPlanningEnabled: true },
+      local_retrieval: {
+        results: [{ title: "考试：高等数学", summary: "主楼 112" }],
+      },
     },
     "帮我打开培养方案",
     "可以查看培养方案。",
@@ -126,6 +153,14 @@ Deno.test("campus-ai-assistant builds non-stream JSON-only action planner payloa
   assert(
     String(messages[1].content).includes("supported_actions"),
     "expected supported action schema",
+  );
+  assert(
+    String(messages[1].content).includes("local_retrieval"),
+    "expected local retrieval in action planner payload",
+  );
+  assert(
+    String(messages[1].content).includes("medicalLedger"),
+    "expected expanded route schema",
   );
 });
 
@@ -155,6 +190,10 @@ Deno.test("campus-ai-assistant enables managed agent only for search or multi-st
     !shouldRunManagedAgent({ agent_mode: "off" }, "最近有什么通知？"),
     "agent_mode off should force fast path",
   );
+  assert(
+    !shouldRunManagedAgent({}, "帮我搜索一下北林最近通知"),
+    "missing web_search_enabled should default to fast path",
+  );
 });
 
 Deno.test("campus-ai-assistant builds DeepSeek tool planner payload", () => {
@@ -163,6 +202,8 @@ Deno.test("campus-ai-assistant builds DeepSeek tool planner payload", () => {
       app_transaction_id: "app-tx-1",
       context: { campusID: "bjfu", currentWeek: 2 },
       context_settings: { includesTimetable: true },
+      capabilities: { localSearchEnabled: true },
+      local_retrieval: { results: [{ title: "本周考试", summary: "周三" }] },
       recent_messages: [{ role: "user", text: "你好" }],
     },
     "帮我查一下北林最近通知并结合课表安排",
@@ -179,6 +220,11 @@ Deno.test("campus-ai-assistant builds DeepSeek tool planner payload", () => {
       JSON.stringify(tools).includes("delegate_subtask") &&
       JSON.stringify(tools).includes("action_plan"),
     "expected tool definitions",
+  );
+  assert(
+    String((payload.messages as Array<Record<string, unknown>>)[1].content)
+      .includes("local_retrieval"),
+    "expected local retrieval in tool planner content",
   );
 });
 
@@ -388,13 +434,71 @@ Deno.test("campus-ai-assistant builds official document deliverable", () => {
     deliverables: [deliverable],
   });
 
-  assert(deliverable.formats.includes("html"), "expected html format");
-  assert(deliverable.formats.includes("markdown"), "expected markdown format");
-  assert(deliverable.formats.includes("txt"), "expected txt format");
+  assert(
+    deliverable.formats.join(",") === "html",
+    "unspecified artifact format should default to html",
+  );
+  const explicitFormats = officialDocumentDeliverable(
+    "北京林业大学 论文格式 Markdown TXT",
+    deliverable.sources,
+  );
+  assert(
+    explicitFormats.formats.join(",") === "markdown,txt",
+    "explicit artifact formats should be preserved",
+  );
   assert(
     donePayload.includes("official-1") &&
       donePayload.includes("thesis-template.docx"),
     "expected done payload to serialize deliverables",
+  );
+});
+
+Deno.test("campus-ai-assistant builds local retrieval deliverable", () => {
+  const deliverables = localRetrievalDeliverables(
+    {
+      local_retrieval: {
+        results: [{
+          domain: "learning",
+          title: "学习任务：整理论文提纲",
+          summary: "周五前完成 <初稿>",
+          source_id: "learning.task.1",
+        }],
+      },
+    },
+    "请导出 HTML Markdown TXT 资料包",
+    "已整理 <任务>。",
+  );
+
+  assert(deliverables.length === 1, "expected one local deliverable");
+  assert(
+    deliverables[0].formats.join(",") === "html,markdown,txt",
+    "expected all artifact formats",
+  );
+  assert(
+    deliverables[0].sources[0].url.startsWith("leafy://local/learning/"),
+    "expected local source URL",
+  );
+  assert(
+    deliverables[0].sources[0].siteName === "Leafy 学习资料",
+    "expected local domain title",
+  );
+  const defaultDeliverables = localRetrievalDeliverables(
+    {
+      local_retrieval: {
+        results: [{
+          domain: "learning",
+          title: "学习任务：整理论文提纲",
+          summary: "周五前完成",
+          source_id: "learning.task.1",
+        }],
+      },
+    },
+    "请导出资料包",
+    "已整理。",
+  );
+  assert(
+    defaultDeliverables[0].formats.join(",") === "html",
+    "unspecified local artifact format should default to html",
   );
 });
 
@@ -424,7 +528,13 @@ Deno.test("campus-ai-assistant handles missing Bocha API key before network", as
 
 Deno.test("campus-ai-assistant synthesis payload carries citations and search results", () => {
   const payload = agentSynthesisPayload(
-    { app_transaction_id: "app-tx-1", context: { campusID: "bjfu" } },
+    {
+      app_transaction_id: "app-tx-1",
+      context: { campusID: "bjfu" },
+      local_retrieval: {
+        results: [{ title: "学习任务：刷题", summary: "每天 3 道" }],
+      },
+    },
     "总结通知",
     [{
       query: "北林通知",
@@ -445,6 +555,10 @@ Deno.test("campus-ai-assistant synthesis payload carries citations and search re
 
   assert(payload.stream === true, "expected streamed synthesis");
   assert(
+    !("max_tokens" in payload),
+    "synthesis payload should not cap output tokens",
+  );
+  assert(
     String(messages[0].content).includes("Markdown 链接标注来源"),
     "expected citation instruction",
   );
@@ -452,6 +566,10 @@ Deno.test("campus-ai-assistant synthesis payload carries citations and search re
     String(messages[1].content).includes("web_search_results") &&
       String(messages[1].content).includes("subtask_results"),
     "expected agent inputs",
+  );
+  assert(
+    String(messages[1].content).includes("local_retrieval"),
+    "expected local retrieval in synthesis payload",
   );
 });
 
@@ -462,13 +580,14 @@ Deno.test("campus-ai-assistant parses and validates action planner output", () =
     "actions": [
       {"kind":"open_academic_route","title":"","payload":{"route":"trainingProgram"}},
       {"kind":"create_countdown","title":"创建倒计时","payload":{"countdown_title":"期末考试","target_date":"2026-07-01"}},
-      {"kind":"open_academic_route","title":"打开医疗台账","payload":{"route":"medicalLedger"}}
+      {"kind":"open_academic_route","title":"打开医疗台账","payload":{"route":"medicalLedger"}},
+      {"kind":"open_academic_route","title":"打开未知页面","payload":{"route":"communityPost"}}
     ]
   }
   \`\`\`
   `);
 
-  assert(actions.length === 2, "expected invalid route to be filtered");
+  assert(actions.length === 3, "expected invalid route to be filtered");
   assert(actions[0].kind === "openAcademicRoute", "expected normalized kind");
   assert(
     actions[0].payload?.route === "trainingProgram",
@@ -477,6 +596,10 @@ Deno.test("campus-ai-assistant parses and validates action planner output", () =
   assert(
     actions[1].payload?.countdownTitle === "期末考试",
     "expected snake_case payload to normalize",
+  );
+  assert(
+    actions[2].payload?.route === "medicalLedger",
+    "expected expanded medical route",
   );
 });
 

@@ -138,7 +138,6 @@ final class GenericCampusLifecycleTests: XCTestCase {
             bestMonths: [1, 2, 6],
             estimatedBudgetYuan: 300...700,
             highlights: ["海河", "五大道", "古文化街", "津湾", "南市", "北安桥"],
-            suggestedPace: "测试"
         )
 
         let longDestination = WeekendDestination(
@@ -152,7 +151,6 @@ final class GenericCampusLifecycleTests: XCTestCase {
             bestMonths: [1, 2, 6],
             estimatedBudgetYuan: 450...900,
             highlights: ["草原天路东线", "崇礼奥林匹克公园", "大境门历史街区", "张北草原音乐节", "太舞滑雪小镇", "康保草原"],
-            suggestedPace: "测试"
         )
 
         XCTAssertEqual(shortDestination.seasonText, "1/2/6")

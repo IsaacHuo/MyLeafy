@@ -2,6 +2,12 @@ import XCTest
 @testable import Leafy
 
 final class ScheduleReportTests: XCTestCase {
+    private struct LegacyCountdownEvent: Codable {
+        let id: String
+        let title: String
+        let targetDate: Date
+    }
+
     func testSettingsDefaultToDisabledModes() {
         let settings = ScheduleReportSettings()
 
@@ -34,6 +40,26 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertEqual(loaded.setting(for: .eveningReport).hour, 23)
         XCTAssertEqual(loaded.setting(for: .eveningReport).minute, 0)
         XCTAssertEqual(loaded.scheduledNotificationIDs, ["one", "two"])
+    }
+
+    func testCustomScheduleStoreMigratesLegacyCountdownsOnce() throws {
+        let defaults = try makeDefaults()
+        let keys = CustomScheduleStore.storageKeysForTesting()
+        let targetDate = try makeDateTime("2026-03-11 12:00")
+        let legacyEvents = [
+            LegacyCountdownEvent(id: "cet", title: "四级报名", targetDate: targetDate)
+        ]
+        defaults.set(try JSONEncoder().encode(legacyEvents), forKey: keys.legacy)
+
+        let migrated = CustomScheduleStore.load(defaults: defaults)
+        let repeated = CustomScheduleStore.load(defaults: defaults)
+
+        XCTAssertEqual(migrated.count, 1)
+        XCTAssertEqual(migrated.first?.id, "cet")
+        XCTAssertEqual(migrated.first?.title, "四级报名")
+        XCTAssertEqual(migrated.first?.startsAt, targetDate)
+        XCTAssertEqual(repeated, migrated)
+        XCTAssertNotNil(defaults.data(forKey: keys.current))
     }
 
     func testPlannerBuildsMorningEveningAndDigestDraftsWithStableIDs() throws {
@@ -82,6 +108,8 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertTrue(evening.body.contains("明天 2 节课：计算机网络、数据结构"))
         XCTAssertFalse(evening.body.contains("第一节"))
         XCTAssertTrue(exam.body.contains("未来 7 天有 1 场考试"))
+        XCTAssertEqual(countdown.title, "重要日期提醒")
+        XCTAssertTrue(countdown.body.contains("未来 7 天有 1 个重要日期"))
         XCTAssertTrue(countdown.body.contains("四级报名"))
         XCTAssertEqual(drafts.map(\.id), repeatedDrafts.map(\.id))
     }
