@@ -88,6 +88,14 @@ struct ContentView: View {
     private var nativeTabView: some View {
         TabView(selection: nativeRootTabSelection) {
             Tab(
+                RootTab.leafy.title(language: leafyLanguage),
+                systemImage: RootTab.leafy.systemImage,
+                value: RootTab.leafy
+            ) {
+                CampusAIAssistantView()
+            }
+
+            Tab(
                 RootTab.timetable.title(language: leafyLanguage),
                 systemImage: RootTab.timetable.systemImage,
                 value: RootTab.timetable
@@ -106,14 +114,6 @@ struct ContentView: View {
                     )
                 }
                 .badge(communityNotificationBadgeViewModel.unreadCount)
-            }
-
-            Tab(
-                RootTab.leafy.title(language: leafyLanguage),
-                systemImage: RootTab.leafy.systemImage,
-                value: RootTab.leafy
-            ) {
-                CampusAIAssistantView()
             }
 
             Tab(
@@ -148,6 +148,13 @@ struct ContentView: View {
 
     private var legacyFloatingTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
+            CampusAIAssistantView()
+                .toolbar(.hidden, for: .tabBar)
+                .tabItem {
+                    Label(RootTab.leafy.title(language: leafyLanguage), systemImage: RootTab.leafy.systemImage)
+                }
+                .tag(RootTab.leafy)
+
             TimetableView(isTimeScopePresented: $isTimeScopePresented)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem {
@@ -166,13 +173,6 @@ struct ContentView: View {
                     .badge(communityNotificationBadgeViewModel.unreadCount)
                     .tag(RootTab.community)
             }
-
-            CampusAIAssistantView()
-                .toolbar(.hidden, for: .tabBar)
-                .tabItem {
-                    Label(RootTab.leafy.title(language: leafyLanguage), systemImage: RootTab.leafy.systemImage)
-                }
-                .tag(RootTab.leafy)
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
                 .toolbar(.hidden, for: .tabBar)

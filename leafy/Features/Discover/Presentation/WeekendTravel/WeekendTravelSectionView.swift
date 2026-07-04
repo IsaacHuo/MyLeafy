@@ -108,21 +108,19 @@ private struct WeekendDestinationCard: View {
     var body: some View {
         AcademicDetailCard {
             VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                HStack(alignment: .top, spacing: AppSpacing.compact) {
-                    LeafyIconBadge(systemName: "tram.fill", tint: AppTheme.accentSecondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .center, spacing: AppSpacing.compact) {
+                        LeafyIconBadge(systemName: "tram.fill", tint: AppTheme.accentSecondary)
 
-                    VStack(alignment: .leading, spacing: 5) {
                         Text(destination.cityName)
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
-
-                        Text(destination.tagline)
-                            .leafySubheadline()
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Spacer(minLength: AppSpacing.compact)
+                    Text(destination.tagline)
+                        .leafySubheadline()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 LazyVGrid(
@@ -137,11 +135,6 @@ private struct WeekendDestinationCard: View {
                     WeekendMetricTile(title: "预算", value: destination.budgetText)
                     WeekendMetricTile(title: "季节", value: destination.seasonText)
                 }
-
-                Text(destination.suggestedPace)
-                    .leafySubheadline()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {

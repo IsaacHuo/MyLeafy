@@ -17,7 +17,7 @@ enum RootTab: Hashable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.timetable, .community, .leafy, .academics, .profile]
+        [.leafy, .timetable, .community, .academics, .profile]
     }
 
     static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {

@@ -17,7 +17,7 @@ struct MedicalMattersSectionView: View {
                         .foregroundStyle(AppTheme.accentEmphasis)
                         .frame(width: 24, height: 24)
 
-                    Text("政策快照和个人台账均只保存在本机，Leafy 不上传医疗数据，也不会连接后端更新政策。")
+                    Text("个人台账均只保存在本机，Leafy 只做资料收集并提供参考参考，不上传医疗数据，也不会实时更新政策。")
                         .leafySubheadline()
                         .foregroundStyle(AppTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -61,11 +61,11 @@ struct MedicalPolicyView: View {
     private var sourceCard: some View {
         AcademicDetailCard {
             VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                Label("本地政策快照", systemImage: "doc.text.fill")
+                Label("本地政策", systemImage: "doc.text.fill")
                     .leafyHeadline()
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text("来源：\(snapshot.sourceTitle)。政策快照更新于 \(snapshot.policyUpdatedAt)，校医院基础信息更新于 \(snapshot.hospitalInfoUpdatedAt)。")
+                Text("来源：\(snapshot.sourceTitle)。政策更新于 \(snapshot.policyUpdatedAt)，校医院基础信息更新于 \(snapshot.hospitalInfoUpdatedAt)。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -215,7 +215,7 @@ struct MedicalScenarioAssistantView: View {
                 }
             }
 
-            AcademicDetailFooterText(text: "情景助手根据本地政策快照整理，实际报销以校医院和学校最新通知为准。")
+            AcademicDetailFooterText(text: "情景助手根据参考政策整理，实际报销以校医院和学校最新通知为准。")
         }
         .navigationTitle("情景助手")
         .leafyInlineNavigationTitle()

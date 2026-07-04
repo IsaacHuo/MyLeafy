@@ -11,26 +11,18 @@ import AppKit
 #endif
 
 struct SportsVenuesView: View {
-    @State private var selectedVenue: SportsVenue?
-
     var body: some View {
         AcademicDetailScrollContainer {
             SportsVenueNoticeCard()
 
             ForEach(SportsVenueData.groups) { group in
-                SportsVenueGroupSection(group: group) { venue in
-                    selectedVenue = venue
-                }
+                SportsVenueGroupSection(group: group)
             }
 
             AcademicDetailFooterText(text: "场馆信息根据当前整理版本展示，不包含实时占用状态。")
         }
         .navigationTitle("场馆开放")
         .leafyInlineNavigationTitle()
-        .sheet(item: $selectedVenue) { venue in
-            SportsVenueDetailSheet(venue: venue)
-                .presentationDetents([.medium, .large])
-        }
     }
 }
 
@@ -54,7 +46,6 @@ private struct SportsVenueNoticeCard: View {
 
 private struct SportsVenueGroupSection: View {
     let group: SportsVenueGroup
-    let selectVenue: (SportsVenue) -> Void
 
     private var venueRows: [[SportsVenue]] {
         stride(from: 0, to: group.venues.count, by: 2).map { index in
@@ -70,11 +61,14 @@ private struct SportsVenueGroupSection: View {
                 ForEach(Array(venueRows.enumerated()), id: \.offset) { _, row in
                     HStack(alignment: .top, spacing: AppSpacing.compact) {
                         ForEach(row) { venue in
-                            SportsVenueTile(
-                                venue: venue
-                            ) {
-                                selectVenue(venue)
+                            NavigationLink {
+                                SportsVenueDetailView(venue: venue)
+                            } label: {
+                                SportsVenueTile(venue: venue)
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("查看\(venue.title)")
+                            .accessibilityElement(children: .combine)
                             .frame(maxWidth: .infinity, alignment: .top)
                         }
 
@@ -94,136 +88,118 @@ private struct SportsVenueTile: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
     let venue: SportsVenue
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 8) {
-                    Text(venue.title)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(AppTheme.primaryText)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.82)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(venue.title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Image(systemName: "chevron.right.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppTheme.tertiaryText)
-                }
-
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                        .frame(width: 16)
-
-                    Text(venue.location)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.82)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                Spacer(minLength: 2)
-
-                if !venue.tags.isEmpty {
-                    SportsVenueTagRow(tags: Array(venue.tags.prefix(2)))
-                }
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.tertiaryText)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                    .stroke(AppTheme.separator.opacity(0.35), lineWidth: 1)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                    .frame(width: 16)
+
+                Text(venue.location)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Spacer(minLength: 2)
+
+            if !venue.tags.isEmpty {
+                SportsVenueTagRow(tags: Array(venue.tags.prefix(2)))
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("查看\(venue.title)")
-        .accessibilityElement(children: .combine)
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                .stroke(AppTheme.separator.opacity(0.35), lineWidth: 1)
+        }
     }
 }
 
-private struct SportsVenueDetailSheet: View {
+private struct SportsVenueDetailView: View {
     let venue: SportsVenue
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.card) {
-                    AcademicDetailCard {
-                        VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Image(systemName: "mappin.and.ellipse")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+        AcademicDetailScrollContainer {
+            AcademicDetailCard {
+                VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
 
-                                Text(venue.location)
-                                    .leafySubheadline()
-                                    .foregroundStyle(AppTheme.secondaryText)
-                            }
-
-                            if !venue.tags.isEmpty {
-                                SportsVenueTagRow(tags: venue.tags)
-                            }
-                        }
+                        Text(venue.location)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    AcademicDetailCard {
-                        VStack(alignment: .leading, spacing: AppSpacing.micro) {
-                            ForEach(Array(venue.details.enumerated()), id: \.offset) { _, detail in
-                                SportsVenueDetailLine(title: detail.title, value: detail.value)
-                            }
-                        }
+                    if !venue.tags.isEmpty {
+                        SportsVenueTagRow(tags: venue.tags)
                     }
+                }
+            }
 
-                    if !venue.fees.isEmpty {
-                        AcademicDetailCard {
-                            VStack(alignment: .leading, spacing: AppSpacing.micro) {
-                                Text("收费标准")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(AppTheme.primaryText)
-
-                                ForEach(Array(venue.fees.enumerated()), id: \.offset) { index, fee in
-                                    if index > 0 {
-                                        AcademicDetailDivider()
-                                    }
-                                    SportsVenueFeeRow(fee: fee)
-                                }
-                            }
-                        }
+            AcademicDetailCard {
+                VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                    ForEach(Array(venue.details.enumerated()), id: \.offset) { _, detail in
+                        SportsVenueDetailLine(title: detail.title, value: detail.value)
                     }
+                }
+            }
 
-                    if !venue.notes.isEmpty {
-                        AcademicDetailCard {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("备注")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(AppTheme.primaryText)
+            if !venue.fees.isEmpty {
+                AcademicDetailCard {
+                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                        Text("收费标准")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(AppTheme.primaryText)
 
-                                ForEach(venue.notes, id: \.self) { note in
-                                    SportsVenueNoteLine(text: note)
-                                }
+                        ForEach(Array(venue.fees.enumerated()), id: \.offset) { index, fee in
+                            if index > 0 {
+                                AcademicDetailDivider()
                             }
+                            SportsVenueFeeRow(fee: fee)
                         }
                     }
                 }
-                .padding(AppSpacing.page)
             }
-            .navigationTitle(venue.title)
-            .leafyInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") {
-                        dismiss()
+
+            if !venue.notes.isEmpty {
+                AcademicDetailCard {
+                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                        Text("备注")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(AppTheme.primaryText)
+
+                        ForEach(venue.notes, id: \.self) { note in
+                            SportsVenueNoteLine(text: note)
+                        }
                     }
                 }
             }
         }
+        .navigationTitle(venue.title)
+        .leafyInlineNavigationTitle()
     }
 }
 
@@ -234,12 +210,12 @@ private struct SportsVenueTagRow: View {
         HStack(spacing: 7) {
             ForEach(tags, id: \.self) { tag in
                 Text(tag)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .padding(.horizontal, 8)
-                    .frame(height: 28)
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
                     .background(AppTheme.softFill, in: Capsule())
             }
         }
@@ -253,12 +229,11 @@ private struct SportsVenueDetailLine: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .microCaption()
-                .fontWeight(.semibold)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AppTheme.secondaryText)
 
             Text(value)
-                .leafySubheadline()
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(AppTheme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -272,7 +247,7 @@ private struct SportsVenueFeeRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(fee.title)
-                .font(.subheadline.weight(.semibold))
+                .font(.headline.weight(.semibold))
                 .foregroundStyle(AppTheme.primaryText)
 
             ForEach(Array(fee.lines.enumerated()), id: \.offset) { _, line in
@@ -294,7 +269,7 @@ private struct SportsVenueNoteLine: View {
                 .padding(.top, 7)
 
             Text(text)
-                .leafySubheadline()
+                .font(.body)
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
