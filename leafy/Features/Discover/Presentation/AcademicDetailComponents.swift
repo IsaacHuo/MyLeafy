@@ -1,11 +1,6 @@
 import SwiftUI
 
-enum AcademicDetailChrome {
-    static let bottomFloatingReserve: CGFloat = 44
-}
-
 struct AcademicDetailScrollContainer<Content: View>: View {
-    @Environment(\.leafyControlScale) private var leafyControlScale
     @State private var initialLayoutRefreshID = UUID()
     @State private var didScheduleInitialLayoutRefresh = false
 
@@ -47,7 +42,7 @@ struct AcademicDetailScrollContainer<Content: View>: View {
     }
 
     private var bottomSpacing: CGFloat {
-        RootFloatingTabBar.reservedHeight(controlScale: leafyControlScale) + AcademicDetailChrome.bottomFloatingReserve
+        AppSpacing.card
     }
 
     private func refreshInitialLayout() {

@@ -59,7 +59,6 @@ struct TimetableView: View {
     @State private var timetableLayoutMetricsCache = TimetableLayoutMetricsCache()
     @State private var timetableDayMetadataCache = TimetableDayMetadataCache()
     @State private var timetableAgendaItemCache = TimetableAgendaItemCache()
-    @State private var isQuickAccessMenuPresented = false
     @State private var isWeatherAdvicePresented = false
     @State private var cachedTimetableWeather: TimetableWeatherSnapshot?
     @State private var customCountdownEvents = CustomScheduleStore.load()
@@ -71,7 +70,6 @@ struct TimetableView: View {
     )
     @State private var timetableBackgroundImage: UIImage?
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
-    @State private var quickAccessNavigationTask: Task<Void, Never>?
 
     @AppStorage("hasSeenTimetableOnboarding") private var hasSeenTimetableOnboarding = false
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
@@ -214,27 +212,7 @@ struct TimetableView: View {
             .navigationDestination(isPresented: $isTimetableProcessingPresented) {
                 TimetableProcessingView()
             }
-            .overlay {
-                if isQuickAccessMenuPresented {
-                    Color.black.opacity(0.001)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
-                                isQuickAccessMenuPresented = false
-                            }
-                        }
-                }
-            }
-            .overlay(alignment: .topLeading) {
-                if isQuickAccessMenuPresented {
-                    quickAccessPanel
-                        .padding(.leading, AppSpacing.page)
-                        .padding(.top, 2 * leafyControlScale)
-                        .transition(.scale(scale: 0.98, anchor: .topLeading).combined(with: .opacity))
-                }
-            }
             .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isAwayFromCurrentSchedule)
-            .animation(.spring(response: 0.22, dampingFraction: 0.9), value: isQuickAccessMenuPresented)
         }
     }
 
@@ -657,16 +635,50 @@ struct TimetableView: View {
     }
 
     private var quickAccessMenu: some View {
-        Button {
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
-                isQuickAccessMenuPresented.toggle()
+        Menu {
+            if isCustomCampus {
+                Button {
+                    isTimetableProcessingPresented = true
+                } label: {
+                    Label("课表处理", systemImage: "slider.horizontal.3")
+                }
+            } else {
+                Button {
+                    appNavigation.openTimetableSharing()
+                } label: {
+                    Label("共享课表", systemImage: "person.2.fill")
+                }
+            }
+
+            if !isCustomCampus {
+                Button {
+                    appNavigation.openAcademicRoute(.emptyClassroom)
+                } label: {
+                    Label("空闲教室", systemImage: "building.2.crop.circle")
+                }
+            }
+
+            Button {
+                presentFreeScheduleSheet()
+            } label: {
+                Label("添加日程", systemImage: "calendar.badge.plus")
+            }
+
+            Button {
+                isExportSheetPresented = true
+            } label: {
+                Label("导出课表", systemImage: "square.and.arrow.up")
+            }
+
+            Button {
+                isTimeScopePresented = true
+            } label: {
+                Label("时间视图", systemImage: "clock")
             }
         } label: {
-            toolbarCircleLabel(systemName: "slider.horizontal.3")
+            toolbarIconLabel(systemName: "slider.horizontal.3")
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("首页快捷入口")
-        .accessibilityAddTraits(isQuickAccessMenuPresented ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -675,130 +687,32 @@ struct TimetableView: View {
             Button {
                 isWeatherAdvicePresented = true
             } label: {
-                weatherCapsuleLabel(cachedTimetableWeather.timetableCapsuleText)
+                weatherTextLabel(cachedTimetableWeather.timetableCapsuleText)
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("天气建议，\(cachedTimetableWeather.timetableCapsuleText)")
         } else {
             Button {
                 isWeatherAdvicePresented = true
             } label: {
-                toolbarCircleLabel(systemName: "cloud.sun")
+                toolbarIconLabel(systemName: "cloud.sun")
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("天气建议")
         }
     }
 
-    @ViewBuilder
-    private func toolbarCircleLabel(systemName: String) -> some View {
-        let label = Image(systemName: systemName)
+    private func toolbarIconLabel(systemName: String) -> some View {
+        Image(systemName: systemName)
             .font(.system(size: 17 * leafyControlScale, weight: .semibold))
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-            .frame(width: 44 * leafyControlScale, height: 44 * leafyControlScale)
-            .contentShape(Circle())
-
-        if #available(iOS 26.0, *) {
-            label
-        } else {
-            label.leafyGlassSurface(in: Circle(), isInteractive: true)
-        }
     }
 
-    @ViewBuilder
-    private func weatherCapsuleLabel(_ text: String) -> some View {
-        let label = Text(text)
+    private func weatherTextLabel(_ text: String) -> some View {
+        Text(text)
             .font(.body)
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(1)
-            .padding(.horizontal, 12 * leafyControlScale)
-            .frame(height: 44 * leafyControlScale)
-            .contentShape(Capsule())
-
-        if #available(iOS 26.0, *) {
-            label
-        } else {
-            label.leafyGlassSurface(in: Capsule(), isInteractive: true)
-        }
-    }
-
-    private var quickAccessPanel: some View {
-        VStack(alignment: .leading, spacing: 2 * leafyControlScale) {
-            if isCustomCampus {
-                quickAccessPanelRow(title: "课表处理", systemImage: "slider.horizontal.3") {
-                    isTimetableProcessingPresented = true
-                }
-            } else {
-                quickAccessPanelRow(title: "共享课表", systemImage: "person.2.fill") {
-                    appNavigation.openTimetableSharing()
-                }
-            }
-
-            if !isCustomCampus {
-                quickAccessPanelRow(title: "空闲教室", systemImage: "building.2.crop.circle") {
-                    appNavigation.openAcademicRoute(.emptyClassroom)
-                }
-            }
-
-            quickAccessPanelRow(title: "添加日程", systemImage: "calendar.badge.plus") {
-                presentFreeScheduleSheet()
-            }
-
-            quickAccessPanelRow(title: "导出课表", systemImage: "square.and.arrow.up") {
-                isExportSheetPresented = true
-            }
-
-            quickAccessPanelRow(title: "时间视图", systemImage: "clock") {
-                isTimeScopePresented = true
-            }
-        }
-        .padding(7 * leafyControlScale)
-        .fixedSize(horizontal: true, vertical: false)
-        .leafyGlassSurface(
-            in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous),
-            fallbackFill: Color(uiColor: .systemBackground).opacity(0.92)
-        )
-        .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 10)
-    }
-
-    private func quickAccessPanelRow(
-        title: String,
-        systemImage: String,
-        action: @escaping @MainActor () -> Void
-    ) -> some View {
-        Button {
-            navigateAfterQuickAccessMenuDismissal(action)
-        } label: {
-            HStack(spacing: 12 * leafyControlScale) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 17 * leafyControlScale, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent(for: themeColorPreference))
-                    .frame(width: 24 * leafyControlScale, height: 24 * leafyControlScale)
-
-                Text(title)
-                    .font(.system(size: 16 * leafyControlScale, weight: .regular))
-                    .foregroundStyle(AppTheme.primaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
-            .padding(.horizontal, 9 * leafyControlScale)
-            .padding(.vertical, 9 * leafyControlScale)
-            .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-    }
-
-    private func navigateAfterQuickAccessMenuDismissal(_ action: @escaping @MainActor () -> Void) {
-        isQuickAccessMenuPresented = false
-        quickAccessNavigationTask?.cancel()
-        quickAccessNavigationTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(80))
-            guard !Task.isCancelled else { return }
-            action()
-        }
     }
 
     private func presentFreeScheduleSheet() {
@@ -1218,7 +1132,7 @@ struct TimetableView: View {
                     }
                 }
                 .padding(.horizontal, AppSpacing.page)
-                .padding(.bottom, RootFloatingTabBar.reservedHeight(controlScale: leafyControlScale) + AppSpacing.page)
+                .padding(.bottom, AppSpacing.page)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

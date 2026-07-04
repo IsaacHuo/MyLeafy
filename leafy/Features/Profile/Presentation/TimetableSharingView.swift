@@ -953,7 +953,7 @@ private struct SharedTimetableGridDetailView: View {
                     }
                 }
                 .padding(.horizontal, AppSpacing.page)
-                .padding(.bottom, RootFloatingTabBar.reservedHeight(controlScale: leafyControlScale) + AppSpacing.page)
+                .padding(.bottom, AppSpacing.page)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

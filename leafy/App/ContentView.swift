@@ -10,7 +10,6 @@ import OSLog
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.scenePhase) private var scenePhase
@@ -74,7 +73,7 @@ struct ContentView: View {
         if #available(iOS 26.0, *) {
             nativeTabShell
         } else {
-            legacyFloatingTabShell
+            legacyNativeTabShell
         }
     }
 
@@ -146,19 +145,17 @@ struct ContentView: View {
         )
     }
 
-    private var legacyFloatingTabShell: some View {
+    private var legacyNativeTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
             CampusAIAssistantView()
-                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Label(RootTab.leafy.title(language: leafyLanguage), systemImage: RootTab.leafy.systemImage)
                 }
                 .tag(RootTab.leafy)
 
             TimetableView(isTimeScopePresented: $isTimeScopePresented)
-                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
-                    Label(RootTab.timetable.title(language: leafyLanguage), systemImage: "calendar")
+                    Label(RootTab.timetable.title(language: leafyLanguage), systemImage: RootTab.timetable.systemImage)
                 }
                 .tag(RootTab.timetable)
 
@@ -166,41 +163,26 @@ struct ContentView: View {
                 CommunityRootView(
                     notificationBadgeViewModel: communityNotificationBadgeViewModel
                 )
-                    .toolbar(.hidden, for: .tabBar)
                     .tabItem {
-                        Label(RootTab.community.title(language: leafyLanguage), systemImage: "person.2")
+                        Label(RootTab.community.title(language: leafyLanguage), systemImage: RootTab.community.systemImage)
                     }
                     .badge(communityNotificationBadgeViewModel.unreadCount)
                     .tag(RootTab.community)
             }
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
-                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
-                    Label(RootTab.academics.title(language: leafyLanguage), systemImage: "book.closed")
+                    Label(RootTab.academics.title(language: leafyLanguage), systemImage: RootTab.academics.systemImage)
                 }
                 .tag(RootTab.academics)
 
             ProfileView()
-                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
-                    Label(RootTab.profile.title(language: leafyLanguage), systemImage: "person")
+                    Label(RootTab.profile.title(language: leafyLanguage), systemImage: RootTab.profile.systemImage)
                 }
                 .tag(RootTab.profile)
         }
-        .toolbar(.hidden, for: .tabBar)
         .tint(AppTheme.accent(for: themeColorPreference))
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear
-                .frame(height: RootFloatingTabBar.reservedHeight(controlScale: leafyControlScale))
-        }
-        .overlay(alignment: .bottom) {
-            RootFloatingTabBar(
-                selectedTab: $appNavigation.selectedRootTab,
-                communityUnreadCount: communityNotificationBadgeViewModel.unreadCount,
-                isCommunityEnabled: isCommunityEnabled
-            )
-        }
     }
 
     private func handleRootTabChange(to newTab: RootTab) {
