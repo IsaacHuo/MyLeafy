@@ -19,6 +19,7 @@ nonisolated struct SupabaseConfig {
     let publishableKey: String
     let bootstrapFunctionName: String
     let feedFunctionName: String
+    let emailLookupFunctionName: String
     let weatherFunctionName: String
     let campusAIFunctionName: String
     let edgeRegion: String
@@ -29,6 +30,7 @@ nonisolated struct SupabaseConfig {
         let rawKey = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_PUBLISHABLE_KEY"))
         let bootstrapFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_BOOTSTRAP_FUNCTION"))
         let feedFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_FEED_FUNCTION"))
+        let emailLookupFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_EMAIL_LOOKUP_FUNCTION"))
         let weatherFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_WEATHER_FUNCTION"))
         let campusAIFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_CAMPUS_AI_FUNCTION"))
         let edgeRegion = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_EDGE_REGION"))
@@ -47,6 +49,7 @@ nonisolated struct SupabaseConfig {
             publishableKey: rawKey,
             bootstrapFunctionName: bootstrapFunctionName.isEmpty ? "community-bootstrap-user" : bootstrapFunctionName,
             feedFunctionName: feedFunctionName.isEmpty ? "community-feed" : feedFunctionName,
+            emailLookupFunctionName: emailLookupFunctionName.isEmpty ? "campus-email-lookup" : emailLookupFunctionName,
             weatherFunctionName: weatherFunctionName.isEmpty ? "campus-weather" : weatherFunctionName,
             campusAIFunctionName: campusAIFunctionName.isEmpty ? "campus-ai-assistant" : campusAIFunctionName,
             edgeRegion: edgeRegion.isEmpty ? "ap-northeast-1" : edgeRegion,

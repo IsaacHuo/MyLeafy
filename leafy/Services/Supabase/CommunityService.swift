@@ -365,12 +365,16 @@ actor CommunityService {
             throw CommunityServiceError.missingAuthenticatedUser
         }
 
-        let email = trimmedText(input.email) ?? ""
-        guard isValidEmail(email) else {
+        let email = CommunityEmailBinding.normalizedEmail(input.email)
+        guard CommunityEmailBinding.isValidEmail(email) else {
             throw CommunityServiceError.invalidEmail
         }
 
-        _ = try await client.auth.update(user: UserAttributes(email: email))
+        do {
+            _ = try await client.auth.update(user: UserAttributes(email: email), redirectTo: LeafySupabase.authCallbackURL)
+        } catch {
+            throw mapEmailAuthError(error)
+        }
 
         let now = ISO8601DateFormatter().string(from: Date())
         let update = CommunityPendingEmailUpdate(
@@ -392,13 +396,65 @@ actor CommunityService {
         return profile
     }
 
+    func verifyEmailBinding(input: CommunityEmailVerificationInput) async throws -> CommunityProfile {
+        let client = try LeafySupabase.shared.requireClient()
+        guard client.auth.currentUser != nil else {
+            throw CommunityServiceError.missingAuthenticatedUser
+        }
+        guard let currentProfile = try await fetchCurrentProfile() else {
+            throw CommunityServiceError.missingAuthenticatedUser
+        }
+
+        let email = CommunityEmailBinding.normalizedEmail(input.email)
+        guard CommunityEmailBinding.isValidEmail(email) else {
+            throw CommunityServiceError.invalidEmail
+        }
+        guard !input.code.isEmpty else {
+            throw CommunityServiceError.edgeFunctionRejected("请输入邮件验证码。")
+        }
+
+        do {
+            _ = try await client.auth.verifyOTP(
+                email: email,
+                token: input.code,
+                type: .emailChange,
+                redirectTo: LeafySupabase.authCallbackURL
+            )
+        } catch {
+            throw mapEmailAuthError(error)
+        }
+
+        let update = CommunityVerifiedEmailUpdate(
+            boundEmail: email,
+            pendingBoundEmail: nil,
+            emailVerificationSentAt: nil,
+            updatedAt: ISO8601DateFormatter().string(from: Date())
+        )
+
+        do {
+            _ = try await client
+                .from("profiles")
+                .update(update)
+                .eq("id", value: currentProfile.id.uuidString)
+                .execute()
+        } catch {
+            throw mapEmailAuthError(error)
+        }
+
+        guard let profile = try await fetchProfile(id: currentProfile.id, client: client) else {
+            throw CommunityServiceError.missingAuthenticatedUser
+        }
+
+        return profile
+    }
+
     func syncVerifiedEmailFromAuth() async throws -> CommunityProfile? {
         let client = try LeafySupabase.shared.requireClient()
         let user = try await client.auth.user()
         guard let currentProfile = try await fetchCurrentProfile() else {
             throw CommunityServiceError.missingAuthenticatedUser
         }
-        guard let verifiedEmail = trimmedText(user.email),
+        guard let verifiedEmail = trimmedText(user.email).map(CommunityEmailBinding.normalizedEmail),
               user.emailConfirmedAt != nil else {
             return currentProfile
         }
@@ -3038,16 +3094,51 @@ actor CommunityService {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func mapEmailAuthError(_ error: Error) -> CommunityServiceError {
+        if let serviceError = error as? CommunityServiceError {
+            return serviceError
+        }
+
+        if let authError = error as? AuthError {
+            switch authError.errorCode {
+            case .otpExpired:
+                return .edgeFunctionRejected("验证码已失效，请重新发送。")
+            case .overEmailSendRateLimit, .overRequestRateLimit:
+                return .edgeFunctionRejected("验证码发送太频繁，请稍后再试。")
+            case .emailExists, .userAlreadyExists, .conflict:
+                return .edgeFunctionRejected("这个邮箱已被其他账号绑定或注册，请换一个邮箱。")
+            case .emailProviderDisabled, .otpDisabled:
+                return .edgeFunctionRejected("当前邮箱验证服务暂不可用，请稍后再试。")
+            default:
+                let message = authError.message
+                if message.localizedCaseInsensitiveContains("otp")
+                    || message.localizedCaseInsensitiveContains("token")
+                    || message.localizedCaseInsensitiveContains("code") {
+                    return .edgeFunctionRejected("验证码不正确，请核对邮件中的数字后重试。")
+                }
+                if message.localizedCaseInsensitiveContains("email") {
+                    return .edgeFunctionRejected(message)
+                }
+            }
+        }
+
+        let message = error.localizedDescription
+        if message.localizedCaseInsensitiveContains("EMAIL_NOT_VERIFIED") {
+            return .edgeFunctionRejected("邮箱尚未完成验证，请输入邮件验证码。")
+        }
+        if message.contains("23505")
+            || message.localizedCaseInsensitiveContains("profiles_bound_email_unique")
+            || message.localizedCaseInsensitiveContains("duplicate key") {
+            return .edgeFunctionRejected("这个邮箱已被其他账号绑定或注册，请换一个邮箱。")
+        }
+        return .edgeFunctionRejected(message)
+    }
+
     private func isDuplicateCatalogSuggestion(_ error: Error) -> Bool {
         let message = error.localizedDescription.lowercased()
         return message.contains("23505")
             || message.contains("duplicate key")
             || message.contains("idx_catalog_suggestions_open_unique")
-    }
-
-    private func isValidEmail(_ email: String) -> Bool {
-        let pattern = #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#
-        return email.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private nonisolated func isMissingSchemaColumn(_ error: Error, column: String) -> Bool {

@@ -229,6 +229,16 @@ final class CommunitySessionManager: ObservableObject {
         bootstrapError = nil
     }
 
+    func verifyEmailBinding(input: CommunityEmailVerificationInput) async throws {
+        let updatedProfile = try await service.verifyEmailBinding(input: input)
+        profile = updatedProfile
+        bootstrapError = nil
+    }
+
+    func verifyEmailBinding(email: String, code: String) async throws {
+        try await verifyEmailBinding(input: CommunityEmailVerificationInput(email: email, code: code))
+    }
+
     func syncVerifiedEmailFromAuth() async {
         do {
             if let updatedProfile = try await service.syncVerifiedEmailFromAuth() {

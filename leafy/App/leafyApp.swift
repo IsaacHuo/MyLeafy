@@ -223,6 +223,14 @@ struct LeafyApp: App {
             guard let session = try await CustomCampusAuthService().restoreSession(from: url) else {
                 return
             }
+            if networkManager.hasCachedIdentity, ActiveCampusContext.identity?.isCustom != true {
+                await CommunitySessionManager.shared.syncVerifiedEmailFromAuth()
+                authCallbackMessage = L10n.text(
+                    "邮箱验证已完成，已同步绑定状态。",
+                    language: .zhHans
+                )
+                return
+            }
             networkManager.persistCustomCampusAuthSession(session)
             externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
             authCallbackMessage = L10n.text(

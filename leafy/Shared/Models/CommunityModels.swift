@@ -1466,8 +1466,37 @@ nonisolated struct CommunityProfileUpdateInput: Sendable {
     }
 }
 
+nonisolated enum CommunityEmailBinding {
+    static func normalizedEmail(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func normalizedCode(_ value: String) -> String {
+        value.filter(\.isNumber)
+    }
+
+    static func isValidEmail(_ email: String) -> Bool {
+        let pattern = #"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$"#
+        return email.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
 nonisolated struct CommunityEmailBindingInput: Sendable {
     let email: String
+
+    init(email: String) {
+        self.email = CommunityEmailBinding.normalizedEmail(email)
+    }
+}
+
+nonisolated struct CommunityEmailVerificationInput: Sendable {
+    let email: String
+    let code: String
+
+    init(email: String, code: String) {
+        self.email = CommunityEmailBinding.normalizedEmail(email)
+        self.code = CommunityEmailBinding.normalizedCode(code)
+    }
 }
 
 nonisolated struct TeacherProfile: Codable, Identifiable, Hashable, Sendable {
