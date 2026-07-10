@@ -238,7 +238,7 @@ struct ProfileView: View {
             NavigationLink {
                 ProfileEmailBindingView()
             } label: {
-                profileRow(icon: "envelope.badge.fill", title: "绑定邮箱", detail: "通知和登录别名")
+                profileRow(icon: "envelope.badge.fill", title: "绑定邮箱", detail: "接收服务通知")
             }
         }
 

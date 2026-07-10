@@ -92,7 +92,6 @@ final class WeatherServicingTests: XCTestCase {
             publishableKey: "test-key",
             bootstrapFunctionName: "community-bootstrap-user",
             feedFunctionName: "community-feed",
-            emailLookupFunctionName: "campus-email-lookup",
             weatherFunctionName: "campus-weather",
             campusAIFunctionName: "campus-ai-assistant",
             edgeRegion: "ap-northeast-1",

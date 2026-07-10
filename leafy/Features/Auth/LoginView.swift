@@ -277,7 +277,7 @@ struct LoginView: View {
 
     private var loginForm: some View {
         VStack(spacing: 0) {
-            TextField(L10n.text(isCustomCampusSelected ? "邮箱" : "学号或已绑定邮箱", language: leafyLanguage), text: $username)
+            TextField(L10n.text(isCustomCampusSelected ? "邮箱" : "学号", language: leafyLanguage), text: $username)
                 .leafyUsernameInput(isEmail: isCustomCampusSelected)
                 .padding(.horizontal, 16 * leafyControlScale)
                 .frame(height: scaledFieldHeight)
@@ -639,7 +639,7 @@ struct LoginView: View {
             }
 
             let portal = selectedPortal
-            let loginAccount = try await schoolLoginAccount(for: username)
+            let loginAccount = username.trimmingCharacters(in: .whitespacesAndNewlines)
             let success = try await schoolNetworkManager.performLogin(
                 account: loginAccount,
                 password: password,
@@ -670,17 +670,6 @@ struct LoginView: View {
                 captchaCode = ""
             }
         }
-    }
-
-    private func schoolLoginAccount(for identifier: String) async throws -> String {
-        let trimmedIdentifier = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard CampusEmailAliasLoginService.isEmailIdentifier(trimmedIdentifier) else {
-            return trimmedIdentifier
-        }
-        return try await CampusEmailAliasLoginService().resolveEduID(
-            email: trimmedIdentifier,
-            campusID: selectedCampus.id
-        )
     }
 
     private func performCustomAuth() async throws {

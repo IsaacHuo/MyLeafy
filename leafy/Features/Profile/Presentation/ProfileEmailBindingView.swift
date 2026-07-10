@@ -255,7 +255,7 @@ struct ProfileEmailBindingView: View {
     private func sendCode() async {
         guard !isSendingCode else { return }
         guard CommunityEmailBinding.isValidEmail(normalizedEmail) else {
-            alertMessage = CampusEmailAliasLoginError.invalidEmail.localizedDescription
+            alertMessage = CommunityServiceError.invalidEmail.localizedDescription
             return
         }
 
@@ -278,7 +278,7 @@ struct ProfileEmailBindingView: View {
     private func verifyCode() async {
         guard !isVerifyingCode else { return }
         guard CommunityEmailBinding.isValidEmail(normalizedEmail) else {
-            alertMessage = CampusEmailAliasLoginError.invalidEmail.localizedDescription
+            alertMessage = CommunityServiceError.invalidEmail.localizedDescription
             return
         }
         guard CommunityEmailBinding.isCompleteVerificationCode(normalizedCode) else {

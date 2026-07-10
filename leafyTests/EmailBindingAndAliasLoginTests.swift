@@ -1,8 +1,7 @@
-import Supabase
 import XCTest
 @testable import Leafy
 
-final class EmailBindingAndAliasLoginTests: XCTestCase {
+final class EmailBindingTests: XCTestCase {
     func testEmailBindingNormalizesEmailAndCode() {
         XCTAssertEqual(
             CommunityEmailBinding.normalizedEmail("  Student.Name+Leafy@Example.COM  "),
@@ -47,56 +46,4 @@ final class EmailBindingAndAliasLoginTests: XCTestCase {
         )
     }
 
-    func testLoginIdentifierDetectsEmailAliasCandidates() {
-        XCTAssertTrue(CampusEmailAliasLoginService.isEmailIdentifier(" student@example.com "))
-        XCTAssertTrue(CampusEmailAliasLoginService.isEmailIdentifier("student@"))
-        XCTAssertFalse(CampusEmailAliasLoginService.isEmailIdentifier("20260001"))
-        XCTAssertFalse(CampusEmailAliasLoginService.isEmailIdentifier(" 20260001 "))
-    }
-
-    func testAliasLoginMapsNotFoundEnvelope() {
-        let payload = Data("""
-        {
-          "error": "没有找到这个邮箱对应的北林学号；请先用学号登录并绑定邮箱。",
-          "errorEnvelope": {
-            "code": "not_found",
-            "message": "没有找到这个邮箱对应的北林学号；请先用学号登录并绑定邮箱。",
-            "retryable": false
-          }
-        }
-        """.utf8)
-
-        let error = CampusEmailAliasLoginService.mapFunctionsErrorForTesting(
-            .httpError(code: 404, data: payload)
-        )
-
-        XCTAssertEqual(error.localizedDescription, CampusEmailAliasLoginError.notBound.localizedDescription)
-    }
-
-    func testAliasLoginMapsInvalidEmailEnvelope() {
-        let payload = Data("""
-        {
-          "errorEnvelope": {
-            "code": "bad_request",
-            "message": "请输入有效的邮箱地址。",
-            "retryable": false
-          }
-        }
-        """.utf8)
-
-        let error = CampusEmailAliasLoginService.mapFunctionsErrorForTesting(
-            .httpError(code: 400, data: payload)
-        )
-
-        XCTAssertEqual(error.localizedDescription, CampusEmailAliasLoginError.invalidEmail.localizedDescription)
-    }
-
-    func testAliasLoginMapsBackendUnavailable() {
-        let error = CampusEmailAliasLoginService.mapFunctionsErrorForTesting(.relayError)
-
-        XCTAssertEqual(
-            error.localizedDescription,
-            CampusEmailAliasLoginError.backendUnavailable("邮箱别名服务暂时不可用，请稍后再试。").localizedDescription
-        )
-    }
 }
