@@ -118,6 +118,8 @@ supabase/.env.*
 # Public website
 site/node_modules/
 site/dist/
+site/playwright-report/
+site/test-results/
 site/.env
 site/.env.*
 !site/.env.example

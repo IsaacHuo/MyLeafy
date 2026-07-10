@@ -1,4 +1,6 @@
-export type AdminRole = "super_admin" | "operator" | "viewer";
+import type { AdminRole } from "./contracts";
+
+export type { AdminRole } from "./contracts";
 
 export type AdminAccount = {
   id: string;
