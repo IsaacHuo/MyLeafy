@@ -1,6 +1,6 @@
 # MyLeafy Supabase Schema Ledger
 
-Last updated: 2026-07-01
+Last updated: 2026-07-10
 
 This ledger records the deployed schema facts that the app relies on. It is not
 a replacement for migrations, and existing migration history should not be
@@ -18,7 +18,7 @@ contract.
 | `timetable-sharing` | Timetable snapshots, invite codes, share members, owner/viewer state changes | `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | Campuses, campus membership requests, semester and national calendar runtime configs | `campus-request`, `current_profile_campus_id`, campus request admin actions |
 | `campus-ai` | AI usage, quota reservations, managed entitlements, App Store notification sync | `campus-ai-assistant`, `campus-ai-entitlement`, `app-store-server-notifications`, private quota RPCs |
-| `admin` | Admin accounts, sessions, audit logs, overview analytics, announcements, feedback | `admin-login`, `admin-me`, `admin-logout`, `admin-community`, announcement wrappers |
+| `admin` | Admin accounts, sessions, login attempts, audit logs, overview analytics, announcements, feedback | `admin-login`, `admin-me`, `admin-logout`, `admin-community`, announcement wrappers |
 
 ## Compatibility Rules
 
@@ -66,7 +66,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 | `timetable-sharing` | `timetable_snapshots`, `timetable_invites`, `timetable_share_members` |
 | `campus-runtime` | `campuses`, `campus_membership_requests`, `semester_runtime_configs`, `national_calendar_runtime_configs`, `campus_weather_cache` |
 | `campus-ai` | `private.campus_ai_usage_events`, `private.campus_ai_entitlements` |
-| `admin` | `admin_accounts`, `admin_sessions`, `admin_audit_logs`, `site_announcements`, `feedback_submissions` |
+| `admin` | `admin_accounts`, `admin_sessions`, `admin_login_attempts`, `admin_audit_logs`, `site_announcements`, `feedback_submissions` |
 
 ## Core RPCs
 
@@ -75,9 +75,9 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 | `community-social` | `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_post_favorite_v1`, `create_community_notification`, `unblock_community_user` |
 | `community-social` polls | `my_authored_community_polls_v1`, `my_voted_community_polls_v1`, `request_delete_community_poll_v1`, `delete_own_community_poll_v1` |
 | `timetable-sharing` | `can_view_timetable_snapshot`, `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
-| `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config` |
+| `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config`, `admin_upsert_semester_runtime_config`, `admin_upsert_national_calendar_runtime_config` |
 | `campus-ai` | `private.campus_ai_quota_snapshot`, `private.reserve_campus_ai_quota`, `private.complete_campus_ai_usage`, `private.sync_campus_ai_entitlement` |
-| `admin` | `admin_login`, `admin_create_account`, `admin_update_account`, `admin_daily_counts`, `admin_activity_heatmap`, `admin_category_mix`, `admin_top_content` |
+| `admin` | `admin_login`, `admin_create_account`, `admin_update_account`, `admin_login_rate_limit_status`, `admin_cleanup_login_attempts`, `admin_daily_counts`, `admin_activity_heatmap`, `admin_category_mix`, `admin_top_content` |
 
 ## Edge Functions
 
@@ -151,3 +151,26 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260627125947_campus_ai_managed_entitlements.sql`
 - `20260701090000_backend_capabilities_v1.sql`
 - `20260702022000_campus_ai_weekly_subscription.sql`
+- `20260704090000_campus_email_lookup.sql`
+- `20260710120000_admin_security_runtime.sql`
+
+## Admin Security and Runtime Invariants
+
+- `admin_login_attempts` has RLS enabled and no App-facing policy or grant.
+  Only `service_role` may query, insert, or delete rows. Rate-limit and cleanup
+  RPCs revoke `PUBLIC`, `anon`, and `authenticated` execute access.
+- Failed admin logins use a rolling 15-minute budget: five failures for the
+  normalized username and IP pair, or twenty failures for the IP across
+  usernames. Successful logins are retained for audit context but do not spend
+  either failure budget.
+- `leafy-admin-login-attempts-retention` runs daily and removes rows older than
+  90 days through `admin_cleanup_login_attempts`.
+- `admin_audit_logs` carries nullable `request_id`, `outcome`, `duration_ms`,
+  and `error_code` metadata. Existing audit writers remain forward-compatible.
+- Semester and national-calendar activation must use their service-role-only
+  admin upsert RPCs. Both serialize activation with transaction advisory locks.
+  Semester writes also cooperate with the existing automatic reconcile guard
+  and never activate a future semester early.
+- Admin global-search indexes use `pg_trgm` for substring lookup and a
+  full-text GIN index for post content. They add no App table privileges and do
+  not change existing RLS policies.
