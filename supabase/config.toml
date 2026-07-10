@@ -32,6 +32,14 @@ jwt_expiry = 3600
 enable_signup = true
 enable_anonymous_sign_ins = true
 
+[auth.email]
+otp_length = 6
+otp_expiry = 3600
+
+[auth.email.template.email_change]
+subject = "MyLeafy 绑定邮箱验证码"
+content_path = "./supabase/templates/email-change-otp.html"
+
 [edge_runtime]
 enabled = true
 policy = "oneshot"
