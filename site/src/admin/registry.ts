@@ -58,7 +58,12 @@ export const adminActionNames = [
   "createAdmin",
   "updateAdmin",
   "disableAdmin",
-  "listAuditLogs"
+  "listAuditLogs",
+  "globalSearch",
+  "listAdminSessions",
+  "revokeAdminSession",
+  "listNationalCalendarRuntimeConfigs",
+  "upsertNationalCalendarRuntimeConfig"
 ] as const;
 
 export type AdminActionName = (typeof adminActionNames)[number];

@@ -77,11 +77,12 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 | `timetable-sharing` | `can_view_timetable_snapshot`, `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config`, `admin_upsert_semester_runtime_config`, `admin_upsert_national_calendar_runtime_config` |
 | `campus-ai` | `private.campus_ai_quota_snapshot`, `private.reserve_campus_ai_quota`, `private.complete_campus_ai_usage`, `private.sync_campus_ai_entitlement` |
-| `admin` | `admin_login`, `admin_create_account`, `admin_update_account`, `admin_login_rate_limit_status`, `admin_cleanup_login_attempts`, `admin_daily_counts`, `admin_activity_heatmap`, `admin_category_mix`, `admin_top_content` |
+| `admin` | `admin_login`, `admin_create_account`, `admin_update_account`, `admin_login_rate_limit_status`, `admin_begin_login_attempt`, `admin_finish_login_attempt`, `admin_cleanup_login_attempts`, `admin_daily_counts`, `admin_activity_heatmap`, `admin_category_mix`, `admin_top_content` |
 
 ## Edge Functions
 
 - `admin-community`
+- `admin-export`
 - `admin-login`
 - `admin-me`
 - `admin-logout`
@@ -157,12 +158,15 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 ## Admin Security and Runtime Invariants
 
 - `admin_login_attempts` has RLS enabled and no App-facing policy or grant.
-  Only `service_role` may query, insert, or delete rows. Rate-limit and cleanup
+  Only `service_role` may query, insert, update, or delete rows. Rate-limit and cleanup
   RPCs revoke `PUBLIC`, `anon`, and `authenticated` execute access.
 - Failed admin logins use a rolling 15-minute budget: five failures for the
   normalized username and IP pair, or twenty failures for the IP across
   usernames. Successful logins are retained for audit context but do not spend
   either failure budget.
+- `admin_begin_login_attempt` serializes checks and insertion by IP;
+  `admin_finish_login_attempt` records the final result. Rate-limited requests
+  are retained for audit but do not extend the rolling failure window.
 - `leafy-admin-login-attempts-retention` runs daily and removes rows older than
   90 days through `admin_cleanup_login_attempts`.
 - `admin_audit_logs` carries nullable `request_id`, `outcome`, `duration_ms`,
@@ -174,3 +178,6 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - Admin global-search indexes use `pg_trgm` for substring lookup and a
   full-text GIN index for post content. They add no App table privileges and do
   not change existing RLS policies.
+- Admin Edge actions preserve all 60 legacy names and add `globalSearch`,
+  session listing/revocation, and national-calendar listing/upsert. CSV export
+  is isolated in `admin-export` with server-side resource and field allowlists.

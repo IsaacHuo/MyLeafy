@@ -1,158 +1,115 @@
 # MyLeafy 运营后台
 
-MyLeafy 的社区运营后台挂在官网 `/admin`，代码位于 `site/src/admin/`。后台前端只调用 Supabase Edge Functions，不保存或暴露 `service_role`。
+生产后台位于 `/admin`。官网仍是 Vite 应用，后台代码通过 `lazy()` 独立加载；后台使用 React-admin 5、MUI 和按模块加载的 ECharts 6，不影响官网首屏包。
 
-## 1. 技术栈
+## 架构与安全边界
 
-- React 18
-- TypeScript
-- Vite
-- `lucide-react`
+浏览器只请求 Cloudflare Pages Function：
 
-本地调试和生产构建都使用官网项目：
+- `POST /api/admin/login`
+- `GET /api/admin/me`
+- `POST /api/admin/logout`
+- `POST /api/admin/actions`
+- `POST /api/admin/export`
 
-```bash
-cd site
-npm install
-npm run dev
-npm run build
-npm run preview
-```
+登录成功后，Pages Function 把 12 小时 Supabase 管理会话写入 `leafy_admin_session` Cookie：`HttpOnly; Secure; SameSite=Strict; Path=/api/admin`。响应不会把 token 返回给 JavaScript；新后台启动时还会删除旧版 `leafy-admin-session` localStorage token。
 
-`npm run build` 会先执行 `tsc --noEmit`，再执行 Vite build。
+所有 API 请求校验同源和 `X-Leafy-Admin-CSRF: 1`，并携带 request ID。只有 401 清理本地身份；403、网络错误和后端错误保留会话并显示错误和 request ID。Edge Function 仍是最终认证、角色授权、校园范围、参数校验和审计边界，不修改普通 App 用户 RLS。
 
-## 2. 环境配置
+## 环境变量
 
-复制环境变量模板：
-
-```bash
-cd site
-cp .env.example .env
-```
-
-填写：
+Cloudflare Pages 的 Production 和 Preview 环境配置：
 
 ```text
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+ADMIN_PROXY_SECRET=<至少 32 字节随机值>
 ```
 
-后台前端只使用 publishable key。高权限逻辑必须放在 Supabase Edge Functions 内。
-
-## 3. 后端前置条件
-
-至少需要：
-
-- 已执行 `supabase/migrations/20260428000200_admin_console.sql`。
-- 已执行 `supabase/migrations/20260428000300_admin_console_pgcrypto_search_path.sql`。
-- 已执行 `supabase/migrations/20260508000100_admin_analytics.sql`。
-- 已部署后台相关 Edge Functions。
-- 已创建第一位超级管理员。
-
-部署函数：
+同一个 `ADMIN_PROXY_SECRET` 写入 Supabase Edge Function secrets：
 
 ```bash
+supabase secrets set ADMIN_PROXY_SECRET='<same-random-secret>'
+```
+
+本地 Pages Function 调试使用 `site/.dev.vars`（不要提交）：
+
+```text
+SUPABASE_URL=...
+SUPABASE_PUBLISHABLE_KEY=...
+ADMIN_PROXY_SECRET=...
+```
+
+```bash
+cd site
+npm ci
+npm run dev:pages
+```
+
+普通 `npm run dev` 只启动 Vite，适合用 mock API 进行前端测试；真实登录需要 Pages Function 链路。
+
+## 角色与资源
+
+- `viewer`：总览、搜索、列表和详情；不能写入、批量操作或导出。
+- `operator`：现有运营动作；可导出内容、举报、公告和名录白名单资源。
+- `super_admin`：全部能力，并可管理管理员、会话、审计及敏感导出。
+
+后台资源分为：总览/手册，学校与社区内容，考研与名录，学期/国家日历运行配置，以及管理员/会话/审计。学校页保留“申请/学校空间”页签，考研页保留“公开来源/用户线索”页签。列表筛选、排序和分页写入 URL，分页为 20/50/100。
+
+帖子页保留详情、全局/分类置顶、取消置顶、批量下架/恢复和客户端 Feed 预览。删除、禁言、审核、会话撤销等操作使用带影响说明和校验的对话框，不使用原生 `prompt`/`confirm`，也不做乐观更新。
+
+全局搜索长度为 2–100 字符，覆盖帖子、评论、用户、反馈、教师、课程、菜品和考研来源；每类最多 8 条、总计最多 40 条，继承当前角色和校园范围，摘要不返回邮箱、联系方式或学号。
+
+CSV 导出只接受 `{ resource, filters, sort? }`。`admin-export` 使用服务端资源/字段白名单、校园和角色校验，最多返回 10,000 行，输出 UTF-8 BOM，并防止电子表格公式注入。每次导出记录资源、范围和行数。
+
+## 数据库与函数部署
+
+部署顺序固定为：前向 migration → 兼容 Edge Functions → Cloudflare 环境变量/Pages Function → 网站。
+
+```bash
+supabase db push
 supabase functions deploy admin-login
 supabase functions deploy admin-me
 supabase functions deploy admin-logout
 supabase functions deploy admin-community
-supabase functions deploy admin-list-announcements
-supabase functions deploy admin-publish-announcement
-supabase functions deploy admin-update-announcement
+supabase functions deploy admin-export
 ```
 
-创建第一位超级管理员：
+本次 migration 是 `20260710120000_admin_security_runtime.sql`，包含登录限流、90 天保留、审计元数据、搜索索引及学期/国家日历原子激活 RPC。`admin_login_attempts` 只授权 `service_role`。
+
+如果 CLI 远程连接失败，在 Supabase Dashboard 按顺序操作：
+
+1. SQL Editor 新建查询，完整执行 migration 文件并确认无错误。
+2. Edge Functions 分别部署上述五个目录；在 Secrets 中设置 `ADMIN_PROXY_SECRET`。
+3. Cloudflare Pages Settings → Variables and Secrets 设置三个变量，重新部署网站。
+4. 不要在浏览器或普通用户角色中配置 `service_role`。
+
+## 验证、发布与回滚
+
+本地检查：
 
 ```bash
-export SUPABASE_DB_URL='postgresql://...'
-export ADMIN_USERNAME='admin'
-export ADMIN_PASSWORD='replace-with-a-long-password'
-export ADMIN_DISPLAY_NAME='Leafy Admin'
-bash supabase/scripts/create-admin-account.sh
+cd site
+npm run typecheck
+npm test
+npm run build
+npm run test:e2e
+
+cd ..
+deno check supabase/functions/admin-login/index.ts \
+  supabase/functions/admin-me/index.ts \
+  supabase/functions/admin-logout/index.ts \
+  supabase/functions/admin-community/index.ts \
+  supabase/functions/admin-export/index.ts
+deno test --allow-read=supabase/functions/admin-community/index.ts \
+  supabase/functions/_shared/admin-permissions.test.ts \
+  supabase/functions/_shared/admin-csv.test.ts \
+  supabase/functions/admin-community/admin-community.contract.test.ts
+bash supabase/tests/verify_admin_security_runtime_migration.sh
+supabase db reset
+supabase test db
 ```
 
-## 4. 模块
+生产部署后用三种角色做只读冒烟，并执行一项可逆写操作核对 `request_id`、`outcome`、`duration_ms` 和 `audit_logged`。浏览器 Application 面板中不得出现后台 token。
 
-当前后台模块：
-
-- 手册：后台日常处理顺序、置顶操作规则、权限边界和常用动作速查。
-- 总览：运营健康、审核压力、反馈 SLA、内容质量和教师评分关注项。
-- 帖子 / 评论：检索、日期筛选、分页、查看详情、置顶、分类置顶、取消置顶、客户端 Feed 预览、下架、恢复、批量下架和批量恢复。
-- 用户：资料检索、日期筛选、分页、详情抽屉、禁言、解除禁言、近期内容和相关审计。
-- 反馈：查看、日期筛选、分页、标记已看、关闭。
-- 公告：发布、草稿、下线。
-- 教师 / 评分：教师名录管理、隐藏恢复、评分明细日期筛选、分页和删除。
-- 管理员 / 日志：超级管理员创建账号、停用账号、查看审计日志，日志支持动作和日期筛选。
-
-总览请求 `admin-community` 的 `overview` action，参数为：
-
-```json
-{
-  "days": 30,
-  "timezone": "Asia/Shanghai"
-}
-```
-
-`days` 只使用 `7`、`30`、`90` 三档；前端默认使用浏览器时区。趋势数据来自只读 RPC：`admin_daily_counts`、`admin_activity_heatmap`、`admin_category_mix`、`admin_top_content`。新前端优先消费 `overview.summary` 分组字段；当远端函数尚未部署新版本时，会从旧 `cards` 和 `analytics` 字段降级生成同样的总览结构。
-
-批量数据库操作只暴露受控 action：
-
-- `bulkModeratePosts({ ids, status, reason })`
-- `bulkModerateComments({ ids, status, reason })`
-- `pinPost({ postID, scope, category, priority, startsAt, endsAt, reason })`
-- `unpinPost({ id })`
-- `listPostPins({ postID, status, scope })`
-- `getProfile({ id })`
-
-不提供 raw SQL 或任意表编辑器。
-
-### 帖子置顶工作流
-
-1. 在 `帖子` 页筛选 `已发布` 帖子。
-2. 选择 `全局置顶` 或 `分类置顶`。
-3. 设置整数优先级；数值越大越靠前，优先级相同时开始时间更新的置顶更靠前。
-4. 分类置顶必须填写分类；全局置顶不绑定分类。
-5. 开始时间留空时由服务端按当前时间生效；结束时间留空表示长期有效。
-6. 提交后用帖子页底部的 `客户端 Feed 预览` 检查实际排序；iOS 社区列表会显示 `置顶` 或 `分类置顶` 标识。
-
-置顶只允许作用于 `published` 帖子。取消置顶会把对应 `community_post_pins` 记录标记为 `inactive`，不会删除历史记录。
-
-### 帖子审核与举报工作流
-
-- 图片帖发布时不再进入人工预审；图片上传成功后会自动发布。
-- 用户举报帖子后，帖子会先从普通 Feed 下架为 `hidden`，同时生成 `open` 状态的举报记录进入后台审核队列。
-- 管理员在 `举报` 页确认后，可以维持下架、恢复内容或进一步禁言用户。
-
-## 5. 安全边界
-
-- 前端不持有 `service_role`。
-- 登录、会话校验和管理操作都通过 Edge Functions。
-- 管理员密码不写入仓库。
-- 管理员操作需要写入审计日志。
-- 普通社区 RLS 不应为后台前端放宽；后台能力由服务端函数承担。
-
-## 6. 和 iOS App 的关系
-
-后台和 iOS App 使用同一个 Supabase 项目：
-
-- iOS App 使用匿名会话和 RLS 操作自己的数据。
-- 后台使用管理员会话调用 Edge Functions。
-- 后台可处理 App 产生的帖子、评论、用户、反馈、公告、教师和评分数据。
-
-后台不参与强智教务登录、课表抓取、成绩抓取或 HTML 解析。
-
-## 7. 部署入口
-
-生产站点部署在 Cloudflare Pages：
-
-- Root directory: `site`
-- Build command: `npm run build`
-- Output directory: `dist`
-- Admin URL: `https://myleafy.space/admin`
-
-后台能力涉及 Edge Function 或 migration 变化时，至少同步部署：
-
-```bash
-supabase functions deploy admin-community
-supabase functions deploy community-feed
-```
+失败时回滚 Cloudflare Pages 和 Edge Functions 到上一部署；数据库 migration 保持向前兼容，不做破坏性回滚。回滚后旧前端仍可调用保留的 60 个 action 名称。

@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-leafy-admin-proxy, x-leafy-client-ip",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -23,6 +23,9 @@ export type AdminContext = {
   adminClient: any;
   admin: AdminAccount;
   tokenHash: string;
+  sessionExpiresAt: string;
+  requestId: string;
+  startedAt: number;
   requestInfo: {
     ipAddress: string | null;
     userAgent: string | null;
@@ -166,6 +169,9 @@ export async function authenticateAdmin(request: Request): Promise<AdminContext 
     adminClient,
     admin: admin as AdminAccount,
     tokenHash,
+    sessionExpiresAt: session.expires_at,
+    requestId: request.headers.get("x-request-id") || crypto.randomUUID(),
+    startedAt: Date.now(),
     requestInfo,
   };
 }
@@ -175,8 +181,9 @@ export async function appendAuditLog(
   action: string,
   params: Record<string, unknown> = {},
   target?: { type?: string | null; id?: string | number | null },
-) {
-  await context.adminClient.from("admin_audit_logs").insert({
+  options: { outcome?: "success" | "failure"; errorCode?: string | null } = {},
+): Promise<boolean> {
+  const { error } = await context.adminClient.from("admin_audit_logs").insert({
     admin_id: context.admin.id,
     action,
     target_type: target?.type ?? null,
@@ -184,7 +191,30 @@ export async function appendAuditLog(
     params: redactSensitive(params),
     ip_address: context.requestInfo.ipAddress,
     user_agent: context.requestInfo.userAgent,
+    request_id: context.requestId,
+    outcome: options.outcome ?? "success",
+    duration_ms: Math.max(0, Date.now() - context.startedAt),
+    error_code: options.errorCode ?? null,
   });
+
+  if (error) {
+    console.error(JSON.stringify({
+      event: "admin_audit_failed",
+      request_id: context.requestId,
+      action,
+      error: error.message,
+    }));
+    return false;
+  }
+  return true;
+}
+
+export function actionMeta(context: AdminContext, auditLogged: boolean) {
+  return {
+    request_id: context.requestId,
+    audit_logged: auditLogged,
+    duration_ms: Math.max(0, Date.now() - context.startedAt),
+  };
 }
 
 export function requirePost(request: Request): Response | null {
@@ -242,6 +272,13 @@ export function mapFunctionError(error: unknown) {
   return errorResponse(500, "internal_error", message);
 }
 
+export function errorCodeFor(error: unknown): BackendErrorCode {
+  if (error instanceof HttpError) {
+    return error.code ?? statusToErrorCode(error.status);
+  }
+  return "internal_error";
+}
+
 function statusToErrorCode(status: number): BackendErrorCode {
   if (status === 400) return "bad_request";
   if (status === 401) return "unauthorized";
@@ -296,7 +333,15 @@ function redactSensitive(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, item]) => {
         const lowerKey = key.toLowerCase();
-        if (lowerKey.includes("password") || lowerKey.includes("token")) {
+        if (
+          lowerKey.includes("password")
+          || lowerKey.includes("token")
+          || lowerKey.includes("secret")
+          || lowerKey === "search"
+          || lowerKey === "query"
+          || lowerKey.includes("contact")
+          || lowerKey.includes("email")
+        ) {
           return [key, "[redacted]"];
         }
         return [key, redactSensitive(item)];

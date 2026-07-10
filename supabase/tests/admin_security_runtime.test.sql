@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(44);
+select plan(52);
 
 select ok(
   to_regclass('public.admin_login_attempts') is not null,
@@ -18,6 +18,7 @@ select ok(
 select ok(
   has_table_privilege('service_role', 'public.admin_login_attempts', 'SELECT')
     and has_table_privilege('service_role', 'public.admin_login_attempts', 'INSERT')
+    and has_table_privilege('service_role', 'public.admin_login_attempts', 'UPDATE')
     and has_table_privilege('service_role', 'public.admin_login_attempts', 'DELETE'),
   'service_role can query, record, and clean login attempts'
 );
@@ -92,6 +93,16 @@ select ok(
 );
 
 select ok(
+  to_regprocedure('public.admin_begin_login_attempt(text,inet,timestamp with time zone)') is not null,
+  'atomic login-attempt begin function exists'
+);
+
+select ok(
+  to_regprocedure('public.admin_finish_login_attempt(uuid,boolean,text)') is not null,
+  'login-attempt finish function exists'
+);
+
+select ok(
   to_regprocedure('public.admin_upsert_semester_runtime_config(uuid,text,text,date,integer,text,jsonb,boolean,uuid)') is not null,
   'semester runtime upsert function exists'
 );
@@ -104,6 +115,8 @@ select ok(
 select ok(
   has_function_privilege('service_role', 'public.admin_login_rate_limit_status(text,inet,timestamp with time zone)', 'EXECUTE')
     and has_function_privilege('service_role', 'public.admin_cleanup_login_attempts(timestamp with time zone)', 'EXECUTE')
+    and has_function_privilege('service_role', 'public.admin_begin_login_attempt(text,inet,timestamp with time zone)', 'EXECUTE')
+    and has_function_privilege('service_role', 'public.admin_finish_login_attempt(uuid,boolean,text)', 'EXECUTE')
     and has_function_privilege('service_role', 'public.admin_upsert_semester_runtime_config(uuid,text,text,date,integer,text,jsonb,boolean,uuid)', 'EXECUTE')
     and has_function_privilege('service_role', 'public.admin_upsert_national_calendar_runtime_config(uuid,integer,jsonb,jsonb,boolean,uuid)', 'EXECUTE'),
   'service_role can execute every new admin RPC'
@@ -114,6 +127,10 @@ select ok(
     and not has_function_privilege('authenticated', 'public.admin_login_rate_limit_status(text,inet,timestamp with time zone)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.admin_cleanup_login_attempts(timestamp with time zone)', 'EXECUTE')
     and not has_function_privilege('authenticated', 'public.admin_cleanup_login_attempts(timestamp with time zone)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.admin_begin_login_attempt(text,inet,timestamp with time zone)', 'EXECUTE')
+    and not has_function_privilege('authenticated', 'public.admin_begin_login_attempt(text,inet,timestamp with time zone)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.admin_finish_login_attempt(uuid,boolean,text)', 'EXECUTE')
+    and not has_function_privilege('authenticated', 'public.admin_finish_login_attempt(uuid,boolean,text)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.admin_upsert_semester_runtime_config(uuid,text,text,date,integer,text,jsonb,boolean,uuid)', 'EXECUTE')
     and not has_function_privilege('authenticated', 'public.admin_upsert_semester_runtime_config(uuid,text,text,date,integer,text,jsonb,boolean,uuid)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.admin_upsert_national_calendar_runtime_config(uuid,integer,jsonb,jsonb,boolean,uuid)', 'EXECUTE')
@@ -129,6 +146,8 @@ select ok(
       and routine_name in (
         'admin_login_rate_limit_status',
         'admin_cleanup_login_attempts',
+        'admin_begin_login_attempt',
+        'admin_finish_login_attempt',
         'admin_upsert_semester_runtime_config',
         'admin_upsert_national_calendar_runtime_config'
       )
@@ -146,8 +165,10 @@ select ok(
 select ok(to_regclass('public.idx_profiles_admin_search_trgm') is not null, 'profile admin-search trigram index exists');
 select ok(to_regclass('public.idx_posts_admin_search_trgm') is not null, 'post admin-search trigram index exists');
 select ok(to_regclass('public.idx_posts_admin_search_fts') is not null, 'post admin-search full-text index exists');
+select ok(to_regclass('public.idx_comments_admin_search_trgm') is not null, 'comment admin-search trigram index exists');
 select ok(to_regclass('public.idx_teachers_admin_search_trgm') is not null, 'teacher admin-search trigram index exists');
 select ok(to_regclass('public.idx_course_catalog_admin_search_trgm') is not null, 'course admin-search trigram index exists');
+select ok(to_regclass('public.idx_postgraduate_sources_admin_search_trgm') is not null, 'postgraduate source admin-search trigram index exists');
 
 delete from public.admin_login_attempts
 where ip_address in ('203.0.113.10'::inet, '203.0.113.20'::inet, '203.0.113.30'::inet);
@@ -197,6 +218,21 @@ select ok(
 select ok(
   (select retry_after is not null from public.admin_login_rate_limit_status('task2-user', '203.0.113.10', timestamptz '2026-07-10 00:15:00+00')),
   'a limited login receives a retry time'
+);
+
+select ok(
+  (select attempt_id is not null and not is_rate_limited
+   from public.admin_begin_login_attempt('task2-atomic', '203.0.113.30', timestamptz '2026-07-10 00:20:00+00')),
+  'atomic begin registers one permitted attempt'
+);
+
+select ok(
+  public.admin_finish_login_attempt(
+    (select id from public.admin_login_attempts where username = 'task2-atomic' order by attempted_at desc limit 1),
+    true,
+    null
+  ),
+  'finish updates the registered attempt result'
 );
 
 select ok(
@@ -319,6 +355,25 @@ select is(
 select ok(
   (select is_active from public.national_calendar_runtime_configs where year = 2099),
   'national-calendar RPC activates the requested row'
+);
+
+do $$
+begin
+  perform public.admin_upsert_national_calendar_runtime_config(
+    null, 2100, '[]'::jsonb, '[]'::jsonb, false, null
+  );
+end
+$$;
+
+select is(
+  (select count(*) from public.national_calendar_runtime_configs where is_active),
+  1::bigint,
+  'an inactive national-calendar save preserves exactly one active row'
+);
+
+select ok(
+  not (select is_active from public.national_calendar_runtime_configs where year = 2100),
+  'an inactive national-calendar save does not replace the active row'
 );
 
 select * from finish();

@@ -1,6 +1,10 @@
 import {
   appendAuditLog,
+  actionMeta,
+  AdminContext,
   authenticateAdmin,
+  errorCodeFor,
+  HttpError,
   json,
   mapFunctionError,
   requirePost,
@@ -12,20 +16,32 @@ Deno.serve(async (request) => {
     return methodResponse;
   }
 
+  let context: AdminContext | null = null;
   try {
-    const context = await authenticateAdmin(request);
-    if (context instanceof Response) {
-      return context;
+    const authenticated = await authenticateAdmin(request);
+    if (authenticated instanceof Response) {
+      return authenticated;
     }
+    context = authenticated;
 
-    await appendAuditLog(context, "logout", {});
-    await context.adminClient
+    const { data, error } = await context.adminClient
       .from("admin_sessions")
       .update({ revoked_at: new Date().toISOString() })
-      .eq("token_hash", context.tokenHash);
+      .eq("token_hash", context.tokenHash)
+      .select("token_hash")
+      .maybeSingle();
+    if (error) throw new HttpError(500, error.message);
+    if (!data) throw new HttpError(404, "Admin session not found.");
 
-    return json({ ok: true });
+    const auditLogged = await appendAuditLog(context, "logout", {});
+    return json({ data: { ok: true }, meta: actionMeta(context, auditLogged) });
   } catch (error) {
+    if (context) {
+      await appendAuditLog(context, "logout", {}, undefined, {
+        outcome: "failure",
+        errorCode: errorCodeFor(error),
+      });
+    }
     return mapFunctionError(error);
   }
 });

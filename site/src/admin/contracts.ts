@@ -1,5 +1,16 @@
 export type AdminRole = "super_admin" | "operator" | "viewer";
 
+export type AdminAccount = {
+  id: string;
+  username: string;
+  display_name: string;
+  role: AdminRole;
+  active: boolean;
+  last_login_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 // admin-community action metadata uses the minimum permitted role as its permission value.
 export type AdminPermission = AdminRole;
 
@@ -36,10 +47,11 @@ export type GlobalSearchRequest = {
 export type GlobalSearchResult = {
   resource: string;
   id: string | number;
-  label: string;
-  description?: string;
-  href?: string;
-  metadata?: Record<string, unknown>;
+  title: string;
+  subtitle?: string;
+  status?: string;
+  updated_at: string;
+  path: string;
 };
 
 export type GlobalSearchResponse = ApiResponse<readonly GlobalSearchResult[]>;
@@ -48,12 +60,10 @@ export type ExportFormat = "csv";
 
 export type ExportRequest = {
   resource: string;
-  format: ExportFormat;
+  format?: ExportFormat;
   filters?: Record<string, unknown>;
   sort?: {
     field: string;
     order: "ASC" | "DESC";
   };
-  fields?: readonly string[];
-  ids?: readonly (string | number)[];
 };

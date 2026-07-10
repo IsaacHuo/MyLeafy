@@ -1,0 +1,21 @@
+body.leafy-admin-active {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f7f9f8;
+}
+
+.leafy-admin-active #root {
+  min-height: 100vh;
+}
+
+.RaLayout-content {
+  max-width: 1800px;
+  margin-inline: auto;
+}
+
+@media (max-width: 760px) {
+  .RaLayout-content {
+    padding-inline: 8px !important;
+  }
+}

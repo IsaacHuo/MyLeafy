@@ -30,7 +30,7 @@ alter table public.admin_login_attempts enable row level security;
 revoke all privileges on table public.admin_login_attempts
 from public, anon, authenticated, service_role;
 
-grant select, insert, delete on table public.admin_login_attempts
+grant select, insert, update, delete on table public.admin_login_attempts
 to service_role;
 
 comment on table public.admin_login_attempts is
@@ -89,24 +89,23 @@ where outcome is not null;
 
 create index if not exists idx_profiles_admin_search_trgm
 on public.profiles
-using gin (
-  (lower(
-    coalesce(edu_id, '') || ' ' ||
-    coalesce(nickname, '') || ' ' ||
-    coalesce(display_name, '') || ' ' ||
-    coalesce(bound_email, '')
-  )) extensions.gin_trgm_ops
-);
+using gin (nickname extensions.gin_trgm_ops);
+
+create index if not exists idx_profiles_admin_display_name_trgm
+on public.profiles using gin (display_name extensions.gin_trgm_ops);
+create index if not exists idx_profiles_admin_edu_id_trgm
+on public.profiles using gin (edu_id extensions.gin_trgm_ops);
+create index if not exists idx_profiles_admin_bound_email_trgm
+on public.profiles using gin (bound_email extensions.gin_trgm_ops);
 
 create index if not exists idx_posts_admin_search_trgm
 on public.posts
-using gin (
-  (lower(
-    coalesce(title, '') || ' ' ||
-    coalesce(body, '') || ' ' ||
-    coalesce(category, '')
-  )) extensions.gin_trgm_ops
-);
+using gin (title extensions.gin_trgm_ops);
+
+create index if not exists idx_posts_admin_body_trgm
+on public.posts using gin (body extensions.gin_trgm_ops);
+create index if not exists idx_posts_admin_category_trgm
+on public.posts using gin (category extensions.gin_trgm_ops);
 
 create index if not exists idx_posts_admin_search_fts
 on public.posts
@@ -117,6 +116,10 @@ using gin (
   )
 );
 
+create index if not exists idx_comments_admin_search_trgm
+on public.comments
+using gin (body extensions.gin_trgm_ops);
+
 create index if not exists idx_teachers_admin_search_trgm
 on public.teachers
 using gin (search_text extensions.gin_trgm_ops);
@@ -125,31 +128,32 @@ create index if not exists idx_course_catalog_admin_search_trgm
 on public.course_catalog
 using gin (search_text extensions.gin_trgm_ops);
 
+create index if not exists idx_postgraduate_sources_admin_search_trgm
+on public.postgraduate_sources
+using gin (search_text extensions.gin_trgm_ops);
+
 create index if not exists idx_campuses_admin_search_trgm
 on public.campuses
-using gin (
-  (lower(
-    coalesce(id, '') || ' ' ||
-    coalesce(display_name, '') || ' ' ||
-    coalesce(short_name, '')
-  )) extensions.gin_trgm_ops
-);
+using gin (display_name extensions.gin_trgm_ops);
+
+create index if not exists idx_campuses_admin_short_name_trgm
+on public.campuses using gin (short_name extensions.gin_trgm_ops);
 
 create index if not exists idx_site_announcements_admin_search_trgm
 on public.site_announcements
-using gin (
-  (lower(coalesce(title, '') || ' ' || coalesce(body, ''))) extensions.gin_trgm_ops
-);
+using gin (title extensions.gin_trgm_ops);
+
+create index if not exists idx_site_announcements_admin_body_trgm
+on public.site_announcements using gin (body extensions.gin_trgm_ops);
 
 create index if not exists idx_feedback_submissions_admin_search_trgm
 on public.feedback_submissions
-using gin (
-  (lower(
-    coalesce(body, '') || ' ' ||
-    coalesce(contact, '') || ' ' ||
-    coalesce(issue_type, '')
-  )) extensions.gin_trgm_ops
-);
+using gin (body extensions.gin_trgm_ops);
+
+create index if not exists idx_feedback_submissions_admin_contact_trgm
+on public.feedback_submissions using gin (contact extensions.gin_trgm_ops);
+create index if not exists idx_feedback_submissions_admin_issue_type_trgm
+on public.feedback_submissions using gin (issue_type extensions.gin_trgm_ops);
 
 do $$
 begin
@@ -189,6 +193,7 @@ as $$
     from public.admin_login_attempts as attempts
     cross join normalized
     where attempts.succeeded = false
+      and attempts.error_code is distinct from 'rate_limited'
       and attempts.ip_address = p_ip_address
       and attempts.attempted_at > normalized.checked_at - interval '15 minutes'
       and attempts.attempted_at <= normalized.checked_at
@@ -257,6 +262,68 @@ begin
 
   get diagnostics deleted_count = row_count;
   return deleted_count;
+end;
+$$;
+
+create or replace function public.admin_begin_login_attempt(
+  p_username text,
+  p_ip_address inet,
+  p_at timestamptz default now()
+)
+returns table (
+  attempt_id uuid,
+  is_rate_limited boolean,
+  retry_after timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  status record;
+  created_id uuid;
+begin
+  if nullif(btrim(coalesce(p_username, '')), '') is null or p_ip_address is null then
+    raise exception 'ADMIN_LOGIN_ATTEMPT_IDENTITY_REQUIRED';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('leafy.admin-login:' || p_ip_address::text, 0));
+  select * into status
+  from public.admin_login_rate_limit_status(p_username, p_ip_address, p_at);
+
+  if status.is_rate_limited then
+    insert into public.admin_login_attempts (username, ip_address, succeeded, error_code, attempted_at)
+    values (p_username, p_ip_address, false, 'rate_limited', coalesce(p_at, now()))
+    returning id into created_id;
+    return query select created_id, true, status.retry_after;
+    return;
+  end if;
+
+  insert into public.admin_login_attempts (username, ip_address, succeeded, attempted_at)
+  values (p_username, p_ip_address, false, coalesce(p_at, now()))
+  returning id into created_id;
+
+  return query select created_id, false, null::timestamptz;
+end;
+$$;
+
+create or replace function public.admin_finish_login_attempt(
+  p_attempt_id uuid,
+  p_succeeded boolean,
+  p_error_code text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update public.admin_login_attempts
+  set
+    succeeded = coalesce(p_succeeded, false),
+    error_code = case when coalesce(p_succeeded, false) then null else nullif(btrim(p_error_code), '') end
+  where id = p_attempt_id;
+  return found;
 end;
 $$;
 
@@ -415,7 +482,7 @@ begin
     set
       holidays = excluded.holidays,
       solar_terms = excluded.solar_terms,
-      is_active = false,
+      is_active = national_calendar_runtime_configs.is_active,
       updated_by = excluded.updated_by
     returning * into saved;
   else
@@ -424,7 +491,7 @@ begin
       year = p_year,
       holidays = coalesce(p_holidays, '[]'::jsonb),
       solar_terms = coalesce(p_solar_terms, '[]'::jsonb),
-      is_active = false,
+      is_active = configs.is_active,
       updated_by = p_actor_id
     where configs.id = p_id
     returning configs.* into saved;
@@ -448,6 +515,13 @@ begin
       updated_by = p_actor_id
     where configs.id = saved.id
     returning configs.* into saved;
+  elsif not exists (
+    select 1 from public.national_calendar_runtime_configs where is_active = true
+  ) then
+    update public.national_calendar_runtime_configs as configs
+    set is_active = true, updated_by = p_actor_id
+    where configs.id = saved.id
+    returning configs.* into saved;
   end if;
 
   return saved;
@@ -458,6 +532,10 @@ revoke all on function public.admin_login_rate_limit_status(text, inet, timestam
 from public, anon, authenticated, service_role;
 revoke all on function public.admin_cleanup_login_attempts(timestamptz)
 from public, anon, authenticated, service_role;
+revoke all on function public.admin_begin_login_attempt(text, inet, timestamptz)
+from public, anon, authenticated, service_role;
+revoke all on function public.admin_finish_login_attempt(uuid, boolean, text)
+from public, anon, authenticated, service_role;
 revoke all on function public.admin_upsert_semester_runtime_config(uuid, text, text, date, integer, text, jsonb, boolean, uuid)
 from public, anon, authenticated, service_role;
 revoke all on function public.admin_upsert_national_calendar_runtime_config(uuid, integer, jsonb, jsonb, boolean, uuid)
@@ -466,6 +544,10 @@ from public, anon, authenticated, service_role;
 grant execute on function public.admin_login_rate_limit_status(text, inet, timestamptz)
 to service_role;
 grant execute on function public.admin_cleanup_login_attempts(timestamptz)
+to service_role;
+grant execute on function public.admin_begin_login_attempt(text, inet, timestamptz)
+to service_role;
+grant execute on function public.admin_finish_login_attempt(uuid, boolean, text)
 to service_role;
 grant execute on function public.admin_upsert_semester_runtime_config(uuid, text, text, date, integer, text, jsonb, boolean, uuid)
 to service_role;

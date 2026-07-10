@@ -5,6 +5,7 @@ import {
   mapFunctionError,
   okOptions,
 } from "../_shared/admin-core.ts";
+import { permissionsForRole } from "../_shared/admin-permissions.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -21,7 +22,11 @@ Deno.serve(async (request) => {
       return context;
     }
 
-    return json({ admin: context.admin });
+    return json({
+      admin: context.admin,
+      permissions: permissionsForRole(context.admin.role),
+      session: { expires_at: context.sessionExpiresAt },
+    });
   } catch (error) {
     return mapFunctionError(error);
   }

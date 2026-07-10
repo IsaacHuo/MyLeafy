@@ -139,12 +139,12 @@ App 层通过窄仓储协议使用社区能力：Feed、帖子详情、投票、
 
 ## 7. 运营后台
 
-运营后台挂在官网 `/admin`，前端代码在 `site/src/admin/`。后台前端只调用 Supabase Edge Functions，不保存 `service_role`。后台函数负责登录、会话、社区管理、公告和审计等高权限操作。
+运营后台挂在官网 `/admin`，前端代码在 `site/src/admin/`，以 React-admin/MUI 独立懒加载。浏览器只调用 Cloudflare `/api/admin/*` 同域代理；12 小时 Supabase 管理 token 存在 HttpOnly Cookie 中，不进入 JavaScript storage。代理再调用 Supabase Edge Functions，由函数负责认证、权限、校园范围、受控导出和审计。
 
 后台与 iOS App 共享同一 Supabase 项目，但权限边界不同：
 
 - iOS App 使用 publishable key、匿名会话和 RLS。
-- 后台前端使用 publishable key 调 Edge Functions。
+- Cloudflare Pages Function 使用服务端 publishable key 调 Edge Functions，并用共享代理 secret 保护登录入口。
 - Edge Functions 端使用服务端权限执行管理操作。
 
 社区置顶链路由 `community_post_pins`、`community_feed_v1`、`admin-community` 的 `pinPost` / `unpinPost` / `previewCommunityFeed` action，以及 iOS 社区列表的置顶标识共同组成。后台手册页记录日常运营顺序、置顶规则和权限边界。

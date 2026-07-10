@@ -67,8 +67,88 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type-check website and admin
+        run: npm run typecheck
+
+      - name: Run website and admin unit tests
+        run: npm test
+
       - name: Build website
         run: npm run build
+
+  site-e2e:
+    name: Website browser tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Chromium and WebKit tests
+        run: npm run test:e2e
+
+  supabase-functions:
+    name: Supabase function contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check admin Edge Functions
+        run: |
+          deno check \
+            supabase/functions/admin-login/index.ts \
+            supabase/functions/admin-me/index.ts \
+            supabase/functions/admin-logout/index.ts \
+            supabase/functions/admin-community/index.ts \
+            supabase/functions/admin-export/index.ts
+
+      - name: Run admin permissions tests
+        run: deno test --allow-read=supabase/functions/admin-community/index.ts supabase/functions/_shared/admin-permissions.test.ts supabase/functions/_shared/admin-csv.test.ts supabase/functions/admin-community/admin-community.contract.test.ts
+
+      - name: Verify migration contracts
+        run: bash supabase/tests/verify_admin_security_runtime_migration.sh
+
+  supabase-database:
+    name: Supabase database tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      - name: Reset database from migrations
+        run: supabase db reset --local
+
+      - name: Run database tests
+        run: supabase test db
 
   xcode-project:
     name: Xcode project metadata

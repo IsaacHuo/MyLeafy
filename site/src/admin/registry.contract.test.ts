@@ -61,11 +61,16 @@ const legacyAdminActionNames = [
   "createAdmin",
   "updateAdmin",
   "disableAdmin",
-  "listAuditLogs"
+  "listAuditLogs",
+  "globalSearch",
+  "listAdminSessions",
+  "revokeAdminSession",
+  "listNationalCalendarRuntimeConfigs",
+  "upsertNationalCalendarRuntimeConfig"
 ] as const;
 
 describe("admin action registry contract", () => {
-  it("preserves every legacy admin-community action name", () => {
+  it("preserves every legacy action and registers the approved additions", () => {
     expect(adminActionNames).toEqual(legacyAdminActionNames);
   });
 });
