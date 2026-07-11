@@ -93,7 +93,7 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertEqual(
             cityNames,
             Set([
-                "天津", "沧州", "石家庄（正定）", "唐山", "保定", "张家口", "承德",
+                "天津", "沧州", "石家庄（正定古城）", "唐山", "保定", "张家口", "承德",
                 "太原", "秦皇岛", "青岛", "大同", "济南", "平遥"
             ])
         )
