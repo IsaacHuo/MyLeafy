@@ -19,7 +19,9 @@
 | [overview.md](overview.md) | 项目定位、系统组成、能力、所有权和发展方向 | 所有人 |
 | [architecture.md](architecture.md) | 技术分层、数据流、外部系统和架构约束 | iOS/后端开发者 |
 | [app-design.md](app-design.md) | 产品目标、导航、核心页面和全局状态 | 产品与客户端开发者 |
+| [Leafy_APP功能总结.md](Leafy_APP功能总结.md) | iOS App 与小组件的完整功能清单 | 产品、测试与客户端开发者 |
 | [ui-style-guide.md](ui-style-guide.md) | 主题、字体、间距、组件、动效和可访问性 | 设计与客户端开发者 |
+| [Leafy_UI设计总结.md](Leafy_UI设计总结.md) | 当前 iOS 页面与组件的设计实现总结 | 设计与客户端开发者 |
 | [supabase.md](supabase.md) | Auth、Database、RLS、Storage、Functions 和联调 | 后端与客户端开发者 |
 | [admin-console.md](admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 | Web/后端开发者 |
 | [contributing.md](contributing.md) | 协作流程、测试与安全要求 | 贡献者 |
