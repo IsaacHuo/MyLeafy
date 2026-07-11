@@ -84,3 +84,6 @@ verify_jwt = false
 
 [functions.admin-community]
 verify_jwt = false
+
+[functions.admin-export]
+verify_jwt = false

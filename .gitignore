@@ -119,9 +119,12 @@ supabase/.env.*
 # Public website
 site/node_modules/
 site/dist/
+site/playwright-report/
+site/test-results/
 site/.env
 site/.env.*
 !site/.env.example
+site/.dev.vars
 
 # Local Xcode build settings
 Config/Leafy.local.xcconfig

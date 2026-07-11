@@ -11,14 +11,15 @@ npm run build
 npm run preview
 ```
 
-`/admin` 是生产社区运营后台入口，包含手册、总览、内容审核、帖子置顶、客户端 Feed 预览、反馈、公告、名录和管理员模块。后台登录需要配置：
+`/admin` 是独立懒加载的 React-admin 生产运营后台。浏览器只调用 `/api/admin/*` 同域 Pages Function，Supabase 管理 token 只保存在 HttpOnly Cookie 中。后台 Pages Function 需要配置：
 
 ```text
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_URL=...
+SUPABASE_PUBLISHABLE_KEY=...
+ADMIN_PROXY_SECRET=...
 ```
 
-这两个变量用于后台和分享页调用 Supabase Edge Functions。分享页会通过 `share-preview` 获取脱敏卡片摘要。
+`ADMIN_PROXY_SECRET` 必须同时配置为 Supabase Edge Function secret。分享页继续通过 `share-preview` 获取脱敏卡片摘要；完整后台部署说明见 `docs/admin-console.md`。
 
 置顶和客户端 Feed 预览依赖已部署的 `admin-community`、`community-feed` Edge Functions，以及包含 `community_post_pins` 和 `community_feed_v1` 的最新 migrations。帖子和共享课表链接卡片依赖已部署的 `share-preview` Edge Function。
 
@@ -31,7 +32,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=...
 - Support URL: `https://myleafy.space/support`
 - Privacy Policy URL: `https://myleafy.space/privacy`
 - Admin URL: `https://myleafy.space/admin`
-- Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
-- Pages Functions also read `SUPABASE_URL` when available, and fall back to `VITE_SUPABASE_URL`.
+- Admin Pages Function variables: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ADMIN_PROXY_SECRET`
+- Legacy `VITE_*` values仅供分享 Pages Function 兼容，不再被后台浏览器代码读取。
 
 `support@myleafy.space` 应通过 Cloudflare Email Routing 转发到实际收件邮箱。

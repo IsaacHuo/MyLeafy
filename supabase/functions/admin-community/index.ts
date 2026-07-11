@@ -1,8 +1,10 @@
 import {
   AdminContext,
+  actionMeta,
   appendAuditLog,
   authenticateAdmin,
   HttpError,
+  errorCodeFor,
   json,
   mapFunctionError,
   normalizeDate,
@@ -114,6 +116,11 @@ const actionRegistry = {
   updateAdmin: defineAction("updateAdmin", updateAdmin, { domain: "admin", permission: "super_admin", mutating: true }),
   disableAdmin: defineAction("disableAdmin", disableAdmin, { domain: "admin", permission: "super_admin", mutating: true }),
   listAuditLogs: defineAction("listAuditLogs", listAuditLogs, { domain: "admin", permission: "super_admin" }),
+  globalSearch: defineAction("globalSearch", globalSearch, { domain: "admin" }),
+  listAdminSessions: defineAction("listAdminSessions", listAdminSessions, { domain: "admin", permission: "super_admin" }),
+  revokeAdminSession: defineAction("revokeAdminSession", revokeAdminSession, { domain: "admin", permission: "super_admin", mutating: true }),
+  listNationalCalendarRuntimeConfigs: defineAction("listNationalCalendarRuntimeConfigs", listNationalCalendarRuntimeConfigs, { domain: "campus-runtime" }),
+  upsertNationalCalendarRuntimeConfig: defineAction("upsertNationalCalendarRuntimeConfig", upsertNationalCalendarRuntimeConfig, { domain: "campus-runtime", permission: "operator", mutating: true }),
 } satisfies Record<string, AdminActionMetadata>;
 
 function defineAction(
@@ -153,15 +160,20 @@ Deno.serve(async (request) => {
     return methodResponse;
   }
 
+  let context: AdminContext | null = null;
+  let action: string | null = null;
+  let params: Record<string, unknown> = {};
+
   try {
-    const context = await authenticateAdmin(request);
-    if (context instanceof Response) {
-      return context;
+    const authenticated = await authenticateAdmin(request);
+    if (authenticated instanceof Response) {
+      return authenticated;
     }
+    context = authenticated;
 
     const body = await readJSON<ActionRequest>(request);
-    const action = normalizeText(body.action);
-    const params = body.params ?? {};
+    action = normalizeText(body.action);
+    params = body.params ?? {};
 
     if (!action) {
       throw new HttpError(400, "Missing admin action.");
@@ -175,10 +187,16 @@ Deno.serve(async (request) => {
     authorizeAction(context, metadata);
 
     const data = await metadata.handler(context, params);
-    await appendAuditLog(context, action, params, metadata.auditTarget(params));
+    const auditLogged = await appendAuditLog(context, action, params, metadata.auditTarget(params));
 
-    return json({ data });
+    return json({ data, meta: actionMeta(context, auditLogged) });
   } catch (error) {
+    if (context && action) {
+      await appendAuditLog(context, action, params, inferTarget(action, params), {
+        outcome: "failure",
+        errorCode: errorCodeFor(error),
+      });
+    }
     return mapFunctionError(error);
   }
 });
@@ -1876,7 +1894,6 @@ async function listPostgraduateSources(context: AdminContext, params: Record<str
     query = query.ilike("search_text", `%${likeText(search).toLowerCase()}%`);
   }
 
-  query = applyCampusIDFilter(query, params);
   const { data, count, error } = await query;
   if (error) {
     throw new HttpError(500, error.message);
@@ -1945,7 +1962,6 @@ async function listPostgraduateSuggestions(context: AdminContext, params: Record
     query = query.ilike("search_text", `%${likeText(search).toLowerCase()}%`);
   }
 
-  query = applyCampusIDFilter(query, params);
   query = applyDateFilters(query, params, "created_at");
 
   const { data, count, error } = await query;
@@ -2567,62 +2583,26 @@ async function upsertSemesterRuntimeConfig(context: AdminContext, params: Record
   const supportedWeeks = numberParam(params, "supportedWeeks") ?? numberParam(params, "supported_weeks") ?? 20;
   const graduateTimetableTermCode = requiredText(params, "graduateTimetableTermCode", "graduate_timetable_term_code");
   const calendarEvents = calendarEventsParam(params);
-  const isActive = booleanParam(params, "isActive") ?? booleanParam(params, "is_active");
+  const isActive = booleanParam(params, "isActive") ?? booleanParam(params, "is_active") ?? false;
+  const campusID = scopedCampusID(params) ?? "bjfu";
 
   if (supportedWeeks < 1 || supportedWeeks > 30) {
     throw new HttpError(400, "Supported weeks must be between 1 and 30.");
   }
 
-  const payload: Record<string, unknown> = {
-    semester_id: semesterID,
-    semester_start_date: semesterStartDate,
-    supported_weeks: supportedWeeks,
-    graduate_timetable_term_code: graduateTimetableTermCode,
-    calendar_events: calendarEvents,
-    updated_by: context.admin.id,
-  };
-  const campusID = scopedCampusID(params);
-  if (campusID) {
-    payload.campus_id = campusID;
-  }
-  if (!id || isActive !== null) {
-    payload.is_active = isActive === true ? false : isActive ?? false;
-  }
-
-  const query = id
-    ? context.adminClient.from("semester_runtime_configs").update(payload).eq("id", id)
-    : context.adminClient.from("semester_runtime_configs").insert({ ...payload, created_by: context.admin.id });
-
-  const { data: saved, error } = await query.select().single();
-  if (error) {
-    throw new HttpError(500, error.message);
-  }
-
-  if (!isActive) {
-    return saved;
-  }
-
-  const { error: deactivateError } = await context.adminClient
-    .from("semester_runtime_configs")
-    .update({ is_active: false, updated_by: context.admin.id })
-    .neq("id", saved.id);
-
-  if (deactivateError) {
-    throw new HttpError(500, deactivateError.message);
-  }
-
-  const { data: active, error: activateError } = await context.adminClient
-    .from("semester_runtime_configs")
-    .update({ is_active: true, updated_by: context.admin.id })
-    .eq("id", saved.id)
-    .select()
-    .single();
-
-  if (activateError) {
-    throw new HttpError(500, activateError.message);
-  }
-
-  return active;
+  const { data, error } = await context.adminClient.rpc("admin_upsert_semester_runtime_config", {
+    p_id: id,
+    p_campus_id: campusID,
+    p_semester_id: semesterID,
+    p_semester_start_date: semesterStartDate,
+    p_supported_weeks: supportedWeeks,
+    p_graduate_timetable_term_code: graduateTimetableTermCode,
+    p_calendar_events: calendarEvents,
+    p_is_active: isActive,
+    p_actor_id: context.admin.id,
+  });
+  if (error) throw new HttpError(500, error.message);
+  return data;
 }
 
 async function listDishes(context: AdminContext, params: Record<string, unknown>) {
@@ -2859,6 +2839,153 @@ async function listAdmins(context: AdminContext, params: Record<string, unknown>
   }
 
   return { items: data ?? [], total: count ?? 0, page, pageSize };
+}
+
+async function globalSearch(context: AdminContext, params: Record<string, unknown>) {
+  const query = requiredText(params, "query", "search");
+  if (query.length < 2 || query.length > 100) {
+    throw new HttpError(400, "Search query must contain between 2 and 100 characters.");
+  }
+
+  const requested = Array.isArray(params.resources)
+    ? new Set(params.resources.filter((value): value is string => typeof value === "string"))
+    : null;
+  const wants = (resource: string) => !requested || requested.has(resource);
+  const scoped = { search: query, page: 0, pageSize: 8, campusID: params.campusID };
+
+  const searches = await Promise.all([
+    wants("posts") ? listPosts(context, { ...scoped, status: "all" }) : emptyList(),
+    wants("comments") ? listComments(context, { ...scoped, status: "all" }) : emptyList(),
+    wants("profiles") ? listProfiles(context, scoped) : emptyList(),
+    wants("feedback") ? listFeedback(context, { ...scoped, status: "all" }) : emptyList(),
+    wants("teachers") ? listTeachers(context, { ...scoped, status: "all" }) : emptyList(),
+    wants("courses") ? listCourses(context, { ...scoped, status: "all" }) : emptyList(),
+    wants("dishes") ? listDishes(context, { ...scoped, status: "all" }) : emptyList(),
+    wants("postgraduate") ? listPostgraduateSources(context, { search: query, page: 0, pageSize: 8, status: "all" }) : emptyList(),
+  ]);
+
+  const [posts, comments, profiles, feedback, teachers, courses, dishes, postgraduate] = searches;
+  return [
+    ...posts.items.map((item: any) => searchResult("posts", item.id, item.title || item.body, item.category, item.status, item.updated_at ?? item.created_at)),
+    ...comments.items.map((item: any) => searchResult("comments", item.id, item.body, item.post?.title, item.status, item.updated_at ?? item.created_at)),
+    ...profiles.items.map((item: any) => searchResult("profiles", item.id, item.nickname || item.display_name || "未命名用户", item.community_campus_id, item.muted_until ? "muted" : "active", item.updated_at ?? item.created_at)),
+    ...feedback.items.map((item: any) => searchResult("feedback", item.id, item.body, item.issue_type, item.status, item.reviewed_at ?? item.created_at)),
+    ...teachers.items.map((item: any) => searchResult("teachers", item.id, item.name, item.unit, item.status, item.updated_at)),
+    ...courses.items.map((item: any) => searchResult("courses", item.id, item.name, [item.unit, item.category].filter(Boolean).join(" · "), item.status, item.updated_at)),
+    ...dishes.items.map((item: any) => searchResult("dishes", item.id, item.name, item.location, item.status, item.updated_at)),
+    ...postgraduate.items.map((item: any) => searchResult("postgraduate", item.id, item.title, item.source_kind, item.status, item.updated_at ?? item.created_at)),
+  ].slice(0, 40);
+}
+
+async function listAdminSessions(context: AdminContext, params: Record<string, unknown>) {
+  const { from, to, page, pageSize } = pagination(params);
+  let query: any = context.adminClient
+    .from("admin_sessions")
+    .select("token_hash, admin_id, expires_at, last_seen_at, revoked_at, created_at", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const status = textParam(params, "status");
+  if (status === "active") query = query.is("revoked_at", null).gt("expires_at", new Date().toISOString());
+  if (status === "revoked") query = query.not("revoked_at", "is", null);
+  const adminID = textParam(params, "adminID") ?? textParam(params, "admin_id");
+  if (adminID) query = query.eq("admin_id", adminID);
+
+  const { data, count, error } = await query;
+  if (error) throw new HttpError(500, error.message);
+  const admins = await fetchAdminMap(context.adminClient, (data ?? []).map((item: any) => item.admin_id));
+  return {
+    items: (data ?? []).map((item: any) => ({
+      id: item.token_hash,
+      admin_id: item.admin_id,
+      admin: admins.get(item.admin_id) ?? null,
+      expires_at: item.expires_at,
+      last_seen_at: item.last_seen_at,
+      revoked_at: item.revoked_at,
+      created_at: item.created_at,
+      is_current: item.token_hash === context.tokenHash,
+    })),
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+async function revokeAdminSession(context: AdminContext, params: Record<string, unknown>) {
+  const id = requiredText(params, "id");
+  const { data, error } = await context.adminClient
+    .from("admin_sessions")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("token_hash", id)
+    .is("revoked_at", null)
+    .select("token_hash, admin_id, revoked_at")
+    .maybeSingle();
+  if (error) throw new HttpError(500, error.message);
+  if (!data) throw new HttpError(404, "Admin session not found or already revoked.");
+  return { id: data.token_hash, admin_id: data.admin_id, revoked_at: data.revoked_at };
+}
+
+async function listNationalCalendarRuntimeConfigs(context: AdminContext, params: Record<string, unknown>) {
+  const { from, to, page, pageSize } = pagination(params);
+  const { data, count, error } = await context.adminClient
+    .from("national_calendar_runtime_configs")
+    .select("*", { count: "exact" })
+    .order("is_active", { ascending: false })
+    .order("year", { ascending: false })
+    .range(from, to);
+  if (error) throw new HttpError(500, error.message);
+  return { items: data ?? [], total: count ?? 0, page, pageSize };
+}
+
+async function upsertNationalCalendarRuntimeConfig(context: AdminContext, params: Record<string, unknown>) {
+  const year = numberParam(params, "year");
+  if (!year || !Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new HttpError(400, "Year must be an integer between 2000 and 2100.");
+  }
+  const { data, error } = await context.adminClient.rpc("admin_upsert_national_calendar_runtime_config", {
+    p_id: textParam(params, "id"),
+    p_year: year,
+    p_holidays: jsonArrayParam(params.holidays, "holidays"),
+    p_solar_terms: jsonArrayParam(params.solarTerms ?? params.solar_terms, "solarTerms"),
+    p_is_active: booleanParam(params, "isActive") ?? booleanParam(params, "is_active") ?? false,
+    p_actor_id: context.admin.id,
+  });
+  if (error) throw new HttpError(500, error.message);
+  return data;
+}
+
+function emptyList() {
+  return Promise.resolve({ items: [] as any[], total: 0, page: 0, pageSize: 8 });
+}
+
+function searchResult(resource: string, id: unknown, title: unknown, subtitle: unknown, status: unknown, updatedAt: unknown) {
+  return {
+    resource,
+    id: String(id),
+    title: searchBrief(title, 100),
+    subtitle: searchBrief(subtitle, 120) || undefined,
+    status: typeof status === "string" ? status : undefined,
+    updated_at: typeof updatedAt === "string" ? updatedAt : new Date(0).toISOString(),
+    path: `/admin/${resource}?filter=${encodeURIComponent(JSON.stringify({ search: searchBrief(title, 100) }))}`,
+  };
+}
+
+function searchBrief(value: unknown, max: number) {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function jsonArrayParam(value: unknown, field: string) {
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new HttpError(400, `${field} must be valid JSON.`);
+    }
+  }
+  if (!Array.isArray(parsed)) throw new HttpError(400, `${field} must be an array.`);
+  return parsed;
 }
 
 async function createAdmin(context: AdminContext, params: Record<string, unknown>) {
