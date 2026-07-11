@@ -2,7 +2,7 @@
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-migration="$repo_root/supabase/migrations/20260710120000_admin_security_runtime.sql"
+migration="$repo_root/supabase/migrations/20260710121000_admin_security_runtime.sql"
 
 if [ ! -f "$migration" ]; then
   echo "missing Task 2 migration: $migration" >&2

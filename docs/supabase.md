@@ -121,8 +121,8 @@ SUPABASE_PUBLISHABLE_KEY = sb_publishable_xxx
 51. `20260701090000_backend_capabilities_v1.sql`
 52. `20260702022000_campus_ai_weekly_subscription.sql`
 53. `20260704090000_campus_email_lookup.sql`
-54. `20260710120000_admin_security_runtime.sql`
-55. `20260710121000_drop_campus_email_lookup.sql`
+54. `20260710120000_drop_campus_email_lookup.sql`
+55. `20260710121000_admin_security_runtime.sql`
 
 `20260605005826_campus_scope_v1.sql` 会建立 `campuses` 表，并把社区、共享课表、运营内容、学期配置等核心表补上 `campus_id`。当前只 seed `bjfu`，但 RLS、profile 绑定和 Feed RPC 已按校园隔离。
 

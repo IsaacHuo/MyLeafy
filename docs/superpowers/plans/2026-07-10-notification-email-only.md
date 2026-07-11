@@ -93,7 +93,7 @@ Run the repository-wide `rg` check and `build_sim`. Expected: no forbidden refer
 
 **Files:**
 - Delete: `supabase/functions/campus-email-lookup/index.ts`
-- Create: `supabase/migrations/20260710121000_drop_campus_email_lookup.sql`
+- Create: `supabase/migrations/20260710120000_drop_campus_email_lookup.sql`
 - Modify: `docs/supabase.md`
 - Delete: `docs/superpowers/specs/2026-07-10-email-binding-otp-delivery-design.md`
 - Delete: `docs/superpowers/plans/2026-07-10-email-binding-otp-delivery.md`

@@ -153,7 +153,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260701090000_backend_capabilities_v1.sql`
 - `20260702022000_campus_ai_weekly_subscription.sql`
 - `20260704090000_campus_email_lookup.sql`
-- `20260710120000_admin_security_runtime.sql`
+- `20260710121000_admin_security_runtime.sql`
 
 ## Admin Security and Runtime Invariants
 

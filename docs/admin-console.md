@@ -75,7 +75,7 @@ supabase functions deploy admin-community
 supabase functions deploy admin-export
 ```
 
-本次 migration 是 `20260710120000_admin_security_runtime.sql`，包含登录限流、90 天保留、审计元数据、搜索索引及学期/国家日历原子激活 RPC。`admin_login_attempts` 只授权 `service_role`。
+本次 migration 是 `20260710121000_admin_security_runtime.sql`，包含登录限流、90 天保留、审计元数据、搜索索引及学期/国家日历原子激活 RPC。`admin_login_attempts` 只授权 `service_role`。
 
 如果 CLI 远程连接失败，在 Supabase Dashboard 按顺序操作：
 
