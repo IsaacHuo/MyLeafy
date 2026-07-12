@@ -308,10 +308,10 @@ struct TimetableTimeScopeView: View {
                     .leafyGlassSurface(in: Circle(), isInteractive: true)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("返回课表")
+            .accessibilityLabel("返回时间日程")
 
             VStack(alignment: .leading, spacing: 4 * leafyControlScale) {
-                Text("时间视角")
+                Text("年度视图")
                     .font(.system(size: 26 * leafyControlScale, weight: .bold))
                     .foregroundStyle(AppTheme.primaryText)
                 Text(displayedSnapshot.currentDateText)

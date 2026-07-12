@@ -16,7 +16,6 @@ struct ContentView: View {
     @ObservedObject var appNavigation: AppNavigationCoordinator
     @ObservedObject var communityNotificationBadgeViewModel: CommunityNotificationBadgeViewModel
     @ObservedObject private var communitySessionManager = CommunitySessionManager.shared
-    @State private var isTimeScopePresented = false
 
     init(
         appNavigation: AppNavigationCoordinator,
@@ -41,9 +40,6 @@ struct ContentView: View {
             .onChange(of: appNavigation.selectedRootTab) { _, newTab in
                 CommunityDiagnostics.log.info("Root tab changed to \(String(describing: newTab), privacy: .public)")
                 handleRootTabChange(to: newTab)
-            }
-            .onChange(of: isTimeScopePresented) { _, isPresented in
-                handleTimeScopePresentationChange(isPresented)
             }
             .task {
                 CommunityDiagnostics.log.info("ContentView startup task began; communityEnabled=\(isCommunityEnabled, privacy: .public) options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
@@ -99,7 +95,7 @@ struct ContentView: View {
                 systemImage: RootTab.timetable.systemImage,
                 value: RootTab.timetable
             ) {
-                TimetableView(isTimeScopePresented: $isTimeScopePresented)
+                TimetableView()
             }
 
             if isCommunityEnabled {
@@ -153,7 +149,7 @@ struct ContentView: View {
                 }
                 .tag(RootTab.leafy)
 
-            TimetableView(isTimeScopePresented: $isTimeScopePresented)
+            TimetableView()
                 .tabItem {
                     Label(RootTab.timetable.title(language: leafyLanguage), systemImage: RootTab.timetable.systemImage)
                 }
@@ -189,11 +185,6 @@ struct ContentView: View {
         if newTab == .community, !isCommunityEnabled {
             appNavigation.selectedRootTab = .timetable
         }
-    }
-
-    private func handleTimeScopePresentationChange(_ isPresented: Bool) {
-        guard !isPresented else { return }
-        appNavigation.selectedRootTab = .timetable
     }
 
     @MainActor

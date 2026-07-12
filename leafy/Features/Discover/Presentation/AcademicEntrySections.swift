@@ -45,6 +45,9 @@ struct TeachingCultivationSectionView: View {
 }
 
 struct ScheduleSectionView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
+    @State private var isYearViewPresented = false
+
     let openRoute: (AcademicDetailRoute) -> Void
 
     private var isCustomCampus: Bool {
@@ -73,11 +76,25 @@ struct ScheduleSectionView: View {
                 openRoute(.scheduleReports)
             }
 
+            ToolEntryCard(title: "年度视图", subtitle: "查看全年月份、学期周次和假期分布", icon: "calendar") {
+                isYearViewPresented = true
+            }
+
             if !isCustomCampus {
                 ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息资源", icon: "calendar.badge.clock") {
                     openRoute(.schoolCalendar)
                 }
             }
+        }
+        .leafyFullScreenCover(isPresented: $isYearViewPresented) {
+            TimetableTimeScopeView(
+                snapshot: TimetableTimeScopeSnapshot.make(
+                    currentWeek: SemesterConfig.currentWeek(),
+                    referenceDate: Date(),
+                    language: leafyLanguage
+                ),
+                onDismiss: { isYearViewPresented = false }
+            )
         }
     }
 }

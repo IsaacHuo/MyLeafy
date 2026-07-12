@@ -36,7 +36,6 @@ struct TimetableView: View {
     @Query private var occurrenceNotes: [CourseOccurrenceNote]
     @Query private var courseReminderSettings: [CourseReminderSetting]
 
-    @Binding private var isTimeScopePresented: Bool
     @State private var networkManager = ActiveCampusContext.networkManager
     @State private var isFetching = false
     @State private var alertMessage = ""
@@ -47,6 +46,7 @@ struct TimetableView: View {
     @State private var courseNotePreview: CourseNotePreview?
     @State private var isExportSheetPresented = false
     @State private var isTimetableProcessingPresented = false
+    @State private var isQuickAccessPresented = false
     @State private var currentWeek: Int = SemesterConfig.currentWeek()
     @State private var scrollToWeek: Int? = SemesterConfig.currentWeek()
     @State private var isAwayFromCurrentSchedule = false
@@ -111,10 +111,6 @@ struct TimetableView: View {
 
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
-    }
-
-    init(isTimeScopePresented: Binding<Bool> = .constant(false)) {
-        _isTimeScopePresented = isTimeScopePresented
     }
 
     private var visibleDays: [Int] {
@@ -244,9 +240,6 @@ struct TimetableView: View {
 
     private var rootPresentationLifecycle: some View {
         rootNavigation
-        .leafyFullScreenCover(isPresented: $isTimeScopePresented) {
-            timeScopePage
-        }
         .task {
             await handleInitialTask()
             await maintainTimetableWeatherPreview()
@@ -403,22 +396,6 @@ struct TimetableView: View {
             return "通用入口的课表、成绩和考试安排来自你手动导入的 CSV 文件；数据只保存在本机当前账号作用域内。"
         }
         return "课表、成绩和考试安排来自学校教务系统；课表和成绩缓存保存在本机，离线时仍可查看。社区资料和你主动发布的内容会保存到 \(AppBrand.displayName) 的社区服务。"
-    }
-
-    private var timeScopePage: some View {
-        TimetableTimeScopeView(
-            snapshot: TimetableTimeScopeSnapshot.make(
-                currentWeek: currentWeek,
-                referenceDate: Date(),
-                language: leafyLanguage
-            ),
-            onDismiss: dismissTimeScope
-        )
-    }
-
-    private func dismissTimeScope() {
-        appNavigation.selectedRootTab = .timetable
-        isTimeScopePresented = false
     }
 
     private func handleInitialTask() async {
@@ -635,38 +612,69 @@ struct TimetableView: View {
     }
 
     private var quickAccessMenu: some View {
-        Menu {
+        Button {
+            isQuickAccessPresented.toggle()
+        } label: {
+            toolbarIconLabel(systemName: "slider.horizontal.3")
+        }
+        .popover(
+            isPresented: $isQuickAccessPresented,
+            attachmentAnchor: .point(.bottomLeading),
+            arrowEdge: .top
+        ) {
+            quickAccessPopoverContent
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(.clear)
+        }
+        .accessibilityLabel("首页快捷入口")
+    }
+
+    private var quickAccessPopoverContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
             if isCustomCampus {
-                Button("课表处理") {
+                quickAccessPopoverButton("课表处理") {
                     isTimetableProcessingPresented = true
                 }
             } else {
-                Button("共享课表") {
+                quickAccessPopoverButton("共享课表") {
                     appNavigation.openTimetableSharing()
                 }
             }
 
             if !isCustomCampus {
-                Button("空闲教室") {
+                quickAccessPopoverButton("空闲教室") {
                     appNavigation.openAcademicRoute(.emptyClassroom)
                 }
             }
 
-            Button("添加日程") {
+            quickAccessPopoverButton("添加日程") {
                 presentFreeScheduleSheet()
             }
 
-            Button("导出课表") {
+            quickAccessPopoverButton("导出课表") {
                 isExportSheetPresented = true
             }
-
-            Button("时间视图") {
-                isTimeScopePresented = true
-            }
-        } label: {
-            toolbarIconLabel(systemName: "slider.horizontal.3")
         }
-        .accessibilityLabel("首页快捷入口")
+        .fixedSize(horizontal: true, vertical: true)
+        .leafyGlassSurface(
+            in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+        )
+        .padding(5 * leafyControlScale)
+    }
+
+    private func quickAccessPopoverButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button {
+            isQuickAccessPresented = false
+            action()
+        } label: {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(AppTheme.primaryText)
+                .padding(.horizontal, 18 * leafyControlScale)
+                .padding(.vertical, 12 * leafyControlScale)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
