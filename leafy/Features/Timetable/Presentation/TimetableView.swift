@@ -637,43 +637,31 @@ struct TimetableView: View {
     private var quickAccessMenu: some View {
         Menu {
             if isCustomCampus {
-                Button {
+                Button("课表处理") {
                     isTimetableProcessingPresented = true
-                } label: {
-                    Label("课表处理", systemImage: "slider.horizontal.3")
                 }
             } else {
-                Button {
+                Button("共享课表") {
                     appNavigation.openTimetableSharing()
-                } label: {
-                    Label("共享课表", systemImage: "person.2.fill")
                 }
             }
 
             if !isCustomCampus {
-                Button {
+                Button("空闲教室") {
                     appNavigation.openAcademicRoute(.emptyClassroom)
-                } label: {
-                    Label("空闲教室", systemImage: "building.2.crop.circle")
                 }
             }
 
-            Button {
+            Button("添加日程") {
                 presentFreeScheduleSheet()
-            } label: {
-                Label("添加日程", systemImage: "calendar.badge.plus")
             }
 
-            Button {
+            Button("导出课表") {
                 isExportSheetPresented = true
-            } label: {
-                Label("导出课表", systemImage: "square.and.arrow.up")
             }
 
-            Button {
+            Button("时间视图") {
                 isTimeScopePresented = true
-            } label: {
-                Label("时间视图", systemImage: "clock")
             }
         } label: {
             toolbarIconLabel(systemName: "slider.horizontal.3")

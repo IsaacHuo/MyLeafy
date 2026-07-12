@@ -107,6 +107,40 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         }
     }
 
+    func testWeatherAttributionRoundTripsMarkURLsAndDecodesLegacyCache() throws {
+        let attribution = TimetableWeatherAttribution(
+            serviceName: "Apple Weather",
+            legalPageURL: URL(string: "https://example.com/legal")!,
+            combinedMarkLightURL: URL(string: "https://example.com/light.svg"),
+            combinedMarkDarkURL: URL(string: "https://example.com/dark.svg")
+        )
+
+        let decoded = try JSONDecoder().decode(
+            TimetableWeatherAttribution.self,
+            from: JSONEncoder().encode(attribution)
+        )
+        XCTAssertEqual(decoded, attribution)
+
+        let legacyData = Data(#"{"serviceName":"Weather","legalPageURL":"https://example.com/legal"}"#.utf8)
+        let legacy = try JSONDecoder().decode(TimetableWeatherAttribution.self, from: legacyData)
+        XCTAssertNil(legacy.combinedMarkLightURL)
+        XCTAssertNil(legacy.combinedMarkDarkURL)
+    }
+
+    func testUpcomingHourlyForecastSortsFiltersAndLimitsHours() {
+        let now = classStartDate
+        let snapshot = makeSnapshot(hours: [
+            makeHour(date: now.addingTimeInterval(3 * 3600), temperature: 23, condition: "晴"),
+            makeHour(date: now.addingTimeInterval(-2 * 3600), temperature: 18, condition: "晴"),
+            makeHour(date: now.addingTimeInterval(3600), temperature: 21, condition: "多云"),
+            makeHour(date: now.addingTimeInterval(2 * 3600), temperature: 22, condition: "雨")
+        ])
+
+        let hours = snapshot.upcomingHourlyForecast(now: now, limit: 2)
+
+        XCTAssertEqual(hours.map(\.temperature), [21, 22])
+    }
+
     func testScheduleItemsKeepOnlyTodayCurrentWeekFutureItems() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
         let currentCourse = Course(courseName: "高等数学", teacher: "王老师", room: "一教 101", dayOfWeek: 1, weeks: [1], duration: [1, 2])

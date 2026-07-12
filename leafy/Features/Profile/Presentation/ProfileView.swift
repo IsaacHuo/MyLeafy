@@ -226,20 +226,20 @@ struct ProfileView: View {
             profileRow(icon: "book.closed.fill", title: "说明与安全", detail: "使用手册")
         }
 
-        Button {
-            feedbackInitialIssueType = "问题反馈"
-            feedbackInitialBody = ""
-            showingFeedbackSheet = true
-        } label: {
-            profileRow(icon: "bubble.left.and.bubble.right.fill", title: "举报与反馈", detail: "建议和问题反馈")
-        }
-
         if isCommunityEnabled, !isCustomCampus, ActiveCampusContext.descriptor.id == .bjfu {
             NavigationLink {
                 ProfileEmailBindingView()
             } label: {
                 profileRow(icon: "envelope.badge.fill", title: "绑定邮箱", detail: "接收服务通知")
             }
+        }
+
+        Button {
+            feedbackInitialIssueType = "问题反馈"
+            feedbackInitialBody = ""
+            showingFeedbackSheet = true
+        } label: {
+            profileRow(icon: "bubble.left.and.bubble.right.fill", title: "举报与反馈", detail: "建议和问题反馈")
         }
 
         Button {

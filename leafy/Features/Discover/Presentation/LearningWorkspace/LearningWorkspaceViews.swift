@@ -20,6 +20,10 @@ private enum LearningProjectDeletionText {
     static let cancelAction = "取消"
     static let keepContentsSuccess = "学习空间已删除，内容已移到其他。"
     static let deleteAllSuccess = "学习空间和内容已删除！"
+    static let clearFixedTitle = "清空学习空间？"
+    static let clearFixedMessage = "将删除这个固定学习空间中的全部资料文件、任务和学习记录，空间本身会保留。此操作无法恢复。"
+    static let clearFixedAction = "清空全部内容"
+    static let clearFixedSuccess = "学习空间内容已清空！"
 }
 
 private enum LearningWorkspaceListItem: Identifiable {
@@ -876,6 +880,7 @@ struct LearningWorkspaceDetailView: View {
     @State private var editingProject: LearningProject?
     @State private var projectPendingDeletion: LearningProject?
     @State private var projectPendingFullDeletion: LearningProject?
+    @State private var fixedWorkspacePendingClearing: LearningMaterialCategory?
     @State private var operationAlert: LeafyOperationAlert?
     @State private var alertMessage: String?
     @State private var workspaceIndex = LearningWorkspaceIndex.empty
@@ -951,6 +956,17 @@ struct LearningWorkspaceDetailView: View {
                         }
                         Button(role: .destructive) {
                             projectPendingDeletion = project
+                        } label: {
+                            Label("删除学习空间", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .accessibilityLabel("更多学习空间操作")
+                } else if let category = destination.fixedCategory {
+                    Menu {
+                        Button(role: .destructive) {
+                            fixedWorkspacePendingClearing = category
                         } label: {
                             Label("删除学习空间", systemImage: "trash")
                         }
@@ -1044,6 +1060,24 @@ struct LearningWorkspaceDetailView: View {
             Button(LearningProjectDeletionText.cancelAction, role: .cancel) {}
         } message: {
             Text(LearningProjectDeletionText.fullDeleteMessage)
+        }
+        .confirmationDialog(
+            LearningProjectDeletionText.clearFixedTitle,
+            isPresented: Binding(
+                get: { fixedWorkspacePendingClearing != nil },
+                set: { if !$0 { fixedWorkspacePendingClearing = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(LearningProjectDeletionText.clearFixedAction, role: .destructive) {
+                if let category = fixedWorkspacePendingClearing {
+                    clearFixedWorkspace(category)
+                }
+                fixedWorkspacePendingClearing = nil
+            }
+            Button(LearningProjectDeletionText.cancelAction, role: .cancel) {}
+        } message: {
+            Text(LearningProjectDeletionText.clearFixedMessage)
         }
         .confirmationDialog("删除这份学习资料？", isPresented: Binding(
             get: { materialPendingDeletion != nil },
@@ -1469,6 +1503,21 @@ struct LearningWorkspaceDetailView: View {
                 modelContext: modelContext
             )
             dismiss()
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
+        }
+    }
+
+    private func clearFixedWorkspace(_ category: LearningMaterialCategory) {
+        do {
+            try LearningProjectContentRelocation.deleteContents(
+                in: .fixed(category),
+                materials: materials,
+                tasks: tasks,
+                records: records,
+                modelContext: modelContext
+            )
+            operationAlert = .success(LearningProjectDeletionText.clearFixedSuccess)
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }

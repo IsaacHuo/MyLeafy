@@ -8,9 +8,9 @@ nonisolated enum AcademicPrimaryTab: String, CaseIterable, Identifiable, Equatab
     case sports = "体育相关"
     case career = "职业规划"
     case postgraduate = "考研信息"
-    case ratings = "评价相关"
     case medical = "医疗事项"
     case weekendTravel = "周末去哪"
+    case ratings = "评价相关"
 
     var id: String { rawValue }
 

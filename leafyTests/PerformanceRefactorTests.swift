@@ -4,6 +4,7 @@ import UIKit
 import ImageIO
 import UniformTypeIdentifiers
 import Supabase
+import SwiftData
 @testable import Leafy
 
 final class PerformanceRefactorTests: XCTestCase {
@@ -1246,6 +1247,27 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertNotEqual(hotQuery.cacheKey, CommunityFeedQuery(search: "图书馆").cacheKey)
     }
 
+    @MainActor
+    func testCommunityFeedPollFilterSkipsPostsAndOnlyReturnsPublishedPolls() async {
+        let publishedPoll = makeCommunityPoll(question: "去哪里自习？")
+        let pendingPoll = makeCommunityPoll(question: "待审核", status: "pending_review")
+        let repository = FakeCommunityRepository(
+            postResponses: [[makeCommunityPost(title: "不应请求")]],
+            pollResponses: [[pendingPoll, publishedPoll]]
+        )
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+        let query = CommunityFeedQuery(contentFilter: .polls)
+
+        await viewModel.load(query: query)
+
+        let fetchedPostQueries = await repository.fetchedPostQueries()
+        XCTAssertEqual(fetchedPostQueries, [])
+        XCTAssertEqual(viewModel.posts, [])
+        XCTAssertEqual(viewModel.items, [.poll(publishedPoll)])
+        XCTAssertFalse(viewModel.hasMoreItems)
+        XCTAssertNotEqual(query.cacheKey, CommunityFeedQuery.default.cacheKey)
+    }
+
     func testCommunityFeedOrderingPrioritizesPinnedPosts() {
         let lowID = UUID()
         let highID = UUID()
@@ -2457,6 +2479,61 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(other.totalDuration, 1800)
     }
 
+    @MainActor
+    func testDeletingFixedWorkspaceContentsLeavesOtherDestinationsUntouched() throws {
+        let schema = Schema([
+            LearningMaterialDocument.self,
+            LearningProjectTask.self,
+            StudyTimeRecord.self
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let projectID = UUID()
+        let now = Date()
+
+        let targetMaterial = LearningMaterialDocument(
+            title: "考试资料",
+            categoryRawValue: LearningMaterialCategory.exam.rawValue,
+            originalFilename: "exam.pdf",
+            localFilename: "missing-\(UUID().uuidString).pdf",
+            contentTypeIdentifier: UTType.pdf.identifier
+        )
+        let otherMaterial = LearningMaterialDocument(
+            title: "其他资料",
+            categoryRawValue: LearningMaterialCategory.other.rawValue,
+            originalFilename: "other.pdf",
+            localFilename: "missing-\(UUID().uuidString).pdf",
+            contentTypeIdentifier: UTType.pdf.identifier
+        )
+        let projectTask = LearningProjectTask(projectID: projectID.uuidString, title: "项目任务")
+        let targetTask = LearningProjectTask(categoryRawValue: LearningMaterialCategory.exam.rawValue, title: "考试任务")
+        let targetRecord = StudyTimeRecord(
+            categoryRawValue: LearningMaterialCategory.exam.rawValue,
+            startedAt: now,
+            endedAt: now.addingTimeInterval(1800),
+            content: "复习",
+            location: "图书馆"
+        )
+
+        [targetMaterial, otherMaterial].forEach(context.insert)
+        [projectTask, targetTask].forEach(context.insert)
+        context.insert(targetRecord)
+        try context.save()
+
+        try LearningProjectContentRelocation.deleteContents(
+            in: .fixed(.exam),
+            materials: [targetMaterial, otherMaterial],
+            tasks: [projectTask, targetTask],
+            records: [targetRecord],
+            modelContext: context
+        )
+
+        XCTAssertEqual(try context.fetch(FetchDescriptor<LearningMaterialDocument>()).map(\.id), [otherMaterial.id])
+        XCTAssertEqual(try context.fetch(FetchDescriptor<LearningProjectTask>()).map(\.id), [projectTask.id])
+        XCTAssertTrue(try context.fetch(FetchDescriptor<StudyTimeRecord>()).isEmpty)
+    }
+
     func testLearningMaterialDisplayTypeUsesContentTypeAndFilename() {
         XCTAssertEqual(
             LearningMaterialDocument.displayType(contentTypeIdentifier: UTType.pdf.identifier, originalFilename: "exam.pdf"),
@@ -2612,6 +2689,7 @@ private actor FakeCommunityRepository: CommunityRepository {
     private var favoriteResponses: [UUID: CommunityPost] = [:]
     private var votePollResponses: [UUID: CommunityPoll] = [:]
     private var pollFetchLimits: [Int] = []
+    private var postFetchQueries: [CommunityFeedQuery] = []
     private var catalogSuggestionInputs: [CatalogSuggestionInput] = []
 
     init(postResponses: [[CommunityPost]] = [[]], pollResponses: [[CommunityPoll]] = [[]]) {
@@ -2658,6 +2736,10 @@ private actor FakeCommunityRepository: CommunityRepository {
         pollFetchLimits
     }
 
+    func fetchedPostQueries() -> [CommunityFeedQuery] {
+        postFetchQueries
+    }
+
     func submittedCatalogSuggestions() -> [CatalogSuggestionInput] {
         catalogSuggestionInputs
     }
@@ -2665,6 +2747,7 @@ private actor FakeCommunityRepository: CommunityRepository {
     func ensureAnonymousSession() async throws {}
 
     func fetchPosts(query: CommunityFeedQuery) async throws -> [CommunityPost] {
+        postFetchQueries.append(query)
         if let fetchError {
             throw fetchError
         }

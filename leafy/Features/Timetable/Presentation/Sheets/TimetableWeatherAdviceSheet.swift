@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -18,6 +19,7 @@ struct TimetableWeatherAdviceSheet: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var loadState: TimetableWeatherAdviceLoadState = .idle
 
     var body: some View {
@@ -159,6 +161,7 @@ struct TimetableWeatherAdviceSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             weatherHeader(snapshot)
+            hourlyForecastSection(snapshot.upcomingHourlyForecast())
             suggestionsSection(summary.suggestions)
 
             if !summary.scheduleItems.isEmpty {
@@ -170,22 +173,103 @@ struct TimetableWeatherAdviceSheet: View {
     }
 
     private func weatherHeader(_ snapshot: TimetableWeatherSnapshot) -> some View {
-        HStack(alignment: .center, spacing: 14 * leafyControlScale) {
-            LeafyIconBadge(
-                systemName: snapshot.symbolName.isEmpty ? "cloud.sun" : snapshot.symbolName,
-                tint: AppTheme.accent(for: themeColorPreference)
-            )
+        HStack(alignment: .center, spacing: 18 * leafyControlScale) {
+            Image(systemName: snapshot.symbolName.isEmpty ? "cloud.sun" : snapshot.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 52 * leafyControlScale, weight: .medium))
+                .frame(width: 64 * leafyControlScale, height: 64 * leafyControlScale)
 
-            VStack(alignment: .leading, spacing: 4 * leafyControlScale) {
-                Text(snapshot.displayText)
-                    .title2()
+            VStack(alignment: .leading, spacing: 3 * leafyControlScale) {
+                Text("\(Int(snapshot.temperature.rounded()))°")
+                    .font(.system(size: 42 * leafyControlScale, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.primaryText)
+                Text(snapshot.condition)
+                    .leafyHeadline()
+                    .foregroundStyle(AppTheme.secondaryText)
                 Text("更新于 \(DateFormatters.headerWithTime.string(from: snapshot.observedAt))")
                     .microCaption()
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
             Spacer(minLength: 0)
+        }
+        .padding(18 * leafyControlScale)
+        .leafyCardStyle()
+    }
+
+    private func hourlyForecastSection(_ hours: [TimetableHourlyWeather]) -> some View {
+        return VStack(alignment: .leading, spacing: 14 * leafyControlScale) {
+            Text("未来 12 小时")
+                .leafyHeadline()
+                .foregroundStyle(AppTheme.primaryText)
+
+            if !hours.isEmpty {
+                VStack(alignment: .leading, spacing: 14 * leafyControlScale) {
+                    Chart(hours, id: \.date) { hour in
+                        LineMark(
+                            x: .value("时间", hour.date),
+                            y: .value("温度", hour.temperature)
+                        )
+                        .foregroundStyle(AppTheme.accent(for: themeColorPreference))
+                        .interpolationMethod(.catmullRom)
+
+                        PointMark(
+                            x: .value("时间", hour.date),
+                            y: .value("温度", hour.temperature)
+                        )
+                        .foregroundStyle(AppTheme.accent(for: themeColorPreference))
+                    }
+                    .chartXAxis(.hidden)
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                            AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.7))
+                            AxisValueLabel {
+                                if let temperature = value.as(Double.self) {
+                                    Text("\(Int(temperature.rounded()))°")
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: 116 * leafyControlScale)
+                    .accessibilityLabel("未来 12 小时温度趋势")
+
+                    Chart(hours, id: \.date) { hour in
+                        BarMark(
+                            x: .value("时间", hour.date),
+                            y: .value("降水概率", hour.precipitationChance)
+                        )
+                        .foregroundStyle(AppTheme.accent(for: themeColorPreference).opacity(0.65))
+                        .cornerRadius(3)
+                    }
+                    .chartYScale(domain: 0...1)
+                    .chartXAxis(.hidden)
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: [0, 0.5, 1]) { value in
+                            AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.7))
+                            AxisValueLabel {
+                                if let chance = value.as(Double.self) {
+                                    Text(chance.formatted(.percent.precision(.fractionLength(0))))
+                                }
+                            }
+                        }
+                    }
+                    .frame(height: 76 * leafyControlScale)
+                    .accessibilityLabel("未来 12 小时降水概率")
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10 * leafyControlScale) {
+                        ForEach(hours, id: \.date) { hour in
+                            TimetableHourlyWeatherCard(hour: hour)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            } else {
+                Text("暂无逐小时预报")
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
         }
         .padding(18 * leafyControlScale)
         .leafyCardStyle()
@@ -242,10 +326,25 @@ struct TimetableWeatherAdviceSheet: View {
     }
 
     private func attributionFooter(_ attribution: TimetableWeatherAttribution) -> some View {
-        HStack(spacing: 6 * leafyControlScale) {
-            Text("数据来源：\(attribution.serviceName)")
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
+        HStack(spacing: 8 * leafyControlScale) {
+            if let markURL = colorScheme == .dark
+                ? attribution.combinedMarkDarkURL
+                : attribution.combinedMarkLightURL {
+                AsyncImage(url: markURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFit()
+                } placeholder: {
+                    Text("数据来源：\(attribution.serviceName)")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                .frame(maxWidth: 110 * leafyControlScale, maxHeight: 18 * leafyControlScale, alignment: .leading)
+            } else {
+                Text("数据来源：\(attribution.serviceName)")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
 
             Link("法律信息", destination: attribution.legalPageURL)
                 .microCaption()
@@ -318,6 +417,36 @@ struct TimetableWeatherAdviceSheet: View {
 
     private func openAppSettings() {
         LeafySystemSettings.openApplicationSettings()
+    }
+}
+
+private struct TimetableHourlyWeatherCard: View {
+    @Environment(\.leafyControlScale) private var leafyControlScale
+
+    let hour: TimetableHourlyWeather
+
+    var body: some View {
+        VStack(spacing: 6 * leafyControlScale) {
+            Text(hour.date.formatted(.dateTime.hour()))
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+            Image(systemName: hour.symbolName.isEmpty ? "cloud.sun" : hour.symbolName)
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 22 * leafyControlScale))
+            Text("\(Int(hour.temperature.rounded()))°")
+                .leafySubheadline()
+                .foregroundStyle(AppTheme.primaryText)
+            Label(
+                hour.precipitationChance.formatted(.percent.precision(.fractionLength(0))),
+                systemImage: "drop.fill"
+            )
+            .font(.caption2)
+            .foregroundStyle(AppTheme.secondaryText)
+        }
+        .frame(width: 64 * leafyControlScale)
+        .padding(.vertical, 10 * leafyControlScale)
+        .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 

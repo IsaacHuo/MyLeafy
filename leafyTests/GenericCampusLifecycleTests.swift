@@ -27,7 +27,7 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertEqual(bjfuWithoutCommunityTabs.count, 9)
 
         XCTAssertEqual(bjfuWithCommunityTabs.count, 10)
-        XCTAssertEqual(bjfuWithCommunityTabs.suffix(3), [.ratings, .medical, .weekendTravel])
+        XCTAssertEqual(bjfuWithCommunityTabs.suffix(3), [.medical, .weekendTravel, .ratings])
     }
 
     func testCustomCampusRoutesHideBJFUSpecificToolsButKeepLocalLifecycleTools() {
@@ -168,7 +168,7 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertEqual(AcademicDetailRoute.medicalLedger.tab, .medical)
         XCTAssertEqual(
             AcademicPrimaryTab.allCases,
-            [.cultivation, .schedule, .classrooms, .learning, .sports, .career, .postgraduate, .ratings, .medical, .weekendTravel]
+            [.cultivation, .schedule, .classrooms, .learning, .sports, .career, .postgraduate, .medical, .weekendTravel, .ratings]
         )
     }
 

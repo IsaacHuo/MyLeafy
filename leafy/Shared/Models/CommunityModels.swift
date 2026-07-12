@@ -490,6 +490,12 @@ nonisolated enum CommunityFeedMode: Codable, Hashable, Sendable {
     }
 }
 
+nonisolated enum CommunityFeedContentFilter: String, Codable, Hashable, Sendable {
+    case all
+    case posts
+    case polls
+}
+
 nonisolated struct CommunityFeedQuery: Hashable, Sendable {
     static let `default` = CommunityFeedQuery()
     static let hot = CommunityFeedQuery(mode: .hot(days: CommunityFeedMode.defaultHotDays))
@@ -498,24 +504,36 @@ nonisolated struct CommunityFeedQuery: Hashable, Sendable {
     let search: String?
     let limit: Int
     let mode: CommunityFeedMode
+    let contentFilter: CommunityFeedContentFilter
 
-    init(category: String? = nil, search: String? = nil, limit: Int = 20, mode: CommunityFeedMode = .latest) {
+    init(
+        category: String? = nil,
+        search: String? = nil,
+        limit: Int = 20,
+        mode: CommunityFeedMode = .latest,
+        contentFilter: CommunityFeedContentFilter = .all
+    ) {
         let normalizedMode = mode.normalized
         self.mode = normalizedMode
         if normalizedMode.isHot {
             self.category = nil
             self.search = nil
             self.limit = CommunityFeedMode.hotLimit
+            self.contentFilter = .posts
         } else {
             self.category = Self.normalized(category)
             self.search = Self.normalized(search)
             self.limit = max(1, min(limit, 50))
+            self.contentFilter = self.category == nil && self.search == nil
+                ? contentFilter
+                : .posts
         }
     }
 
     var cacheKey: String {
         [
             mode.cacheKey,
+            contentFilter.rawValue,
             category ?? "all",
             search ?? "",
             String(limit)
@@ -527,7 +545,11 @@ nonisolated struct CommunityFeedQuery: Hashable, Sendable {
     }
 
     var includesPollsInFeed: Bool {
-        !mode.isHot && category == nil && !hasSearch
+        !mode.isHot && category == nil && !hasSearch && contentFilter != .posts
+    }
+
+    var includesPostsInFeed: Bool {
+        contentFilter != .polls
     }
 
     var hotDays: Int {

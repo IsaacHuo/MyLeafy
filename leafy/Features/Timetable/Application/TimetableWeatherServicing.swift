@@ -15,10 +15,14 @@ nonisolated struct TimetableHourlyWeather: Codable, Equatable, Sendable {
 nonisolated struct TimetableWeatherAttribution: Codable, Equatable, Sendable {
     let serviceName: String
     let legalPageURL: URL
+    let combinedMarkLightURL: URL?
+    let combinedMarkDarkURL: URL?
 
     static let appleWeather = TimetableWeatherAttribution(
         serviceName: "Weather",
-        legalPageURL: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
+        legalPageURL: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!,
+        combinedMarkLightURL: nil,
+        combinedMarkDarkURL: nil
     )
 }
 
@@ -36,6 +40,16 @@ nonisolated struct TimetableWeatherSnapshot: Codable, Equatable, Sendable {
 
     var timetableCapsuleText: String {
         "\(Int(temperature.rounded()))℃ \(timetableCapsuleCondition)"
+    }
+
+    func upcomingHourlyForecast(now: Date = Date(), limit: Int = 12) -> [TimetableHourlyWeather] {
+        let cutoff = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
+        return Array(
+            hourlyForecast
+                .filter { $0.date >= cutoff }
+                .sorted { $0.date < $1.date }
+                .prefix(max(0, limit))
+        )
     }
 
     private var timetableCapsuleCondition: String {
@@ -168,7 +182,9 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
             let attribution = try await service.attribution
             return TimetableWeatherAttribution(
                 serviceName: attribution.serviceName,
-                legalPageURL: attribution.legalPageURL
+                legalPageURL: attribution.legalPageURL,
+                combinedMarkLightURL: attribution.combinedMarkLightURL,
+                combinedMarkDarkURL: attribution.combinedMarkDarkURL
             )
         } catch {
             return .appleWeather

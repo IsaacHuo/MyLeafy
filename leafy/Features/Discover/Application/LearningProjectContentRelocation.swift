@@ -2,6 +2,34 @@ import Foundation
 import SwiftData
 
 enum LearningProjectContentRelocation {
+    static func deleteContents(
+        in destination: LearningWorkspaceDestination,
+        materials: [LearningMaterialDocument],
+        tasks: [LearningProjectTask],
+        records: [StudyTimeRecord],
+        modelContext: ModelContext
+    ) throws {
+        let scopedMaterials = materials.filter { $0.belongs(to: destination) }
+        let scopedTasks = tasks.filter { $0.belongs(to: destination) }
+        let scopedRecords = records.filter { $0.belongs(to: destination) }
+
+        for material in scopedMaterials {
+            try LearningMaterialFileStore.deleteFile(named: material.localFilename)
+        }
+
+        for material in scopedMaterials {
+            modelContext.delete(material)
+        }
+        for task in scopedTasks {
+            modelContext.delete(task)
+        }
+        for record in scopedRecords {
+            modelContext.delete(record)
+        }
+
+        try modelContext.save()
+    }
+
     static func moveToUnfiled(
         projectID: UUID,
         materials: [LearningMaterialDocument],

@@ -196,6 +196,9 @@ struct CommunityRootView: View {
     @State private var isTopicFilterPresented = false
     @State private var selectedCommunityCategory: String?
     @State private var isShowingHotPosts = false
+    @State private var communityFeedContentFilter: CommunityFeedContentFilter = .all
+    @State private var isCommunityFeedAtTop = true
+    @State private var communityTopicFilterHeight: CGFloat = 0
 
     init(notificationBadgeViewModel: CommunityNotificationBadgeViewModel) {
         self.notificationBadgeViewModel = notificationBadgeViewModel
@@ -213,6 +216,8 @@ struct CommunityRootView: View {
                     RealCommunitySectionView(
                         selectedCategory: $selectedCommunityCategory,
                         isShowingHotPosts: $isShowingHotPosts,
+                        contentFilter: $communityFeedContentFilter,
+                        isFeedAtTop: $isCommunityFeedAtTop,
                         selectedPost: $selectedPost,
                         hasAcceptedTerms: $hasAcceptedCommunityTerms,
                         requestProfileCompletion: {
@@ -346,7 +351,9 @@ struct CommunityRootView: View {
     }
 
     private var communityHeaderContentInset: CGFloat {
-        58 * leafyControlScale
+        let baseInset = 58 * leafyControlScale
+        guard isTopicFilterPresented, isCommunityFeedAtTop else { return baseInset }
+        return baseInset + communityTopicFilterHeight + 8 * leafyControlScale
     }
 
     @MainActor
@@ -417,8 +424,21 @@ struct CommunityRootView: View {
                 if isTopicFilterPresented {
                     CommunityTopicFilterBar(
                         selectedCategory: $selectedCommunityCategory,
-                        isShowingHotPosts: $isShowingHotPosts
+                        isShowingHotPosts: $isShowingHotPosts,
+                        contentFilter: $communityFeedContentFilter
                     )
+                    .background {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: CommunityTopicFilterHeightPreferenceKey.self,
+                                value: geometry.size.height
+                            )
+                        }
+                    }
+                    .onPreferenceChange(CommunityTopicFilterHeightPreferenceKey.self) { height in
+                        guard abs(communityTopicFilterHeight - height) > 0.5 else { return }
+                        communityTopicFilterHeight = height
+                    }
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
@@ -521,6 +541,14 @@ struct CommunityRootView: View {
             appNavigation.requestedCommunityPostID = nil
             communityActionError = error.localizedDescription
         }
+    }
+}
+
+private struct CommunityTopicFilterHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

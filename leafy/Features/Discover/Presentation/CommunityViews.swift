@@ -195,6 +195,8 @@ struct RealCommunitySectionView: View {
     @Environment(\.leafyDependencies) private var dependencies
     @Binding var selectedCategory: String?
     @Binding var isShowingHotPosts: Bool
+    @Binding var contentFilter: CommunityFeedContentFilter
+    @Binding var isFeedAtTop: Bool
     @Binding var selectedPost: CommunityPost?
     @Binding var hasAcceptedTerms: Bool?
     let requestProfileCompletion: () -> Void
@@ -215,7 +217,10 @@ struct RealCommunitySectionView: View {
         if isShowingHotPosts {
             return .hot
         }
-        return CommunityFeedQuery(category: selectedCategory)
+        return CommunityFeedQuery(
+            category: selectedCategory,
+            contentFilter: contentFilter
+        )
     }
 
     private var feedTaskID: CommunityFeedTaskID {
@@ -237,11 +242,29 @@ struct RealCommunitySectionView: View {
                 }
             } else {
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
-                        feedContent
+                    VStack(spacing: 0) {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: CommunityFeedTopPreferenceKey.self,
+                                value: geometry.frame(in: .named("community-feed-scroll")).minY
+                            )
+                        }
+                        .frame(height: 0)
+
+                        LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                            feedContent
+                        }
+                        .padding(.top, topContentInset + 10 * leafyControlScale)
+                        .padding(.bottom, 40)
                     }
-                    .padding(.top, topContentInset + 10 * leafyControlScale)
-                    .padding(.bottom, 40)
+                }
+                .coordinateSpace(name: "community-feed-scroll")
+                .onPreferenceChange(CommunityFeedTopPreferenceKey.self) { minY in
+                    let newValue = minY >= -(8 * leafyControlScale)
+                    guard isFeedAtTop != newValue else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        isFeedAtTop = newValue
+                    }
                 }
                 .refreshable {
                     guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
@@ -332,6 +355,10 @@ struct RealCommunitySectionView: View {
             CommunityErrorCard(message: errorMessage) {
                 Task { await viewModel.load(mode: .refresh, query: feedQuery) }
             }
+        } else if viewModel.items.isEmpty && feedQuery.contentFilter == .polls {
+            ContentUnavailableView("暂无投票", systemImage: "chart.bar.xaxis", description: Text("有同学发起新投票后会显示在这里。"))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
         } else if viewModel.items.isEmpty && feedQuery.category == nil && !feedQuery.hasSearch {
             if feedQuery.mode.isHot {
                 ContentUnavailableView("暂无热门帖子", systemImage: "flame", description: Text("近 30 天有新互动后会显示在这里。"))
@@ -690,6 +717,7 @@ struct CommunityPollDetailSheet: View {
 struct CommunityTopicFilterBar: View {
     @Binding var selectedCategory: String?
     @Binding var isShowingHotPosts: Bool
+    @Binding var contentFilter: CommunityFeedContentFilter
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -703,9 +731,16 @@ struct CommunityTopicFilterBar: View {
 
                 CommunityCategoryPill(
                     title: "全部帖子",
-                    isSelected: selectedCategory == nil && !isShowingHotPosts
+                    isSelected: selectedCategory == nil && !isShowingHotPosts && contentFilter == .all
                 ) {
                     selectCategory(nil)
+                }
+
+                CommunityCategoryPill(
+                    title: "投票",
+                    isSelected: contentFilter == .polls
+                ) {
+                    selectPolls()
                 }
 
                 ForEach(communityCategories, id: \.self) { category in
@@ -726,6 +761,7 @@ struct CommunityTopicFilterBar: View {
         withAnimation(.snappy) {
             isShowingHotPosts = false
             selectedCategory = category
+            contentFilter = category == nil ? .all : .posts
         }
     }
 
@@ -733,7 +769,24 @@ struct CommunityTopicFilterBar: View {
         withAnimation(.snappy) {
             selectedCategory = nil
             isShowingHotPosts = true
+            contentFilter = .posts
         }
+    }
+
+    private func selectPolls() {
+        withAnimation(.snappy) {
+            selectedCategory = nil
+            isShowingHotPosts = false
+            contentFilter = .polls
+        }
+    }
+}
+
+private struct CommunityFeedTopPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

@@ -137,12 +137,7 @@ final class CommunityFeedViewModel: ObservableObject {
             }
             guard !Task.isCancelled else { return }
 
-            async let postsRequest: [CommunityPost] = CommunityTimeout.run(
-                seconds: 10,
-                message: L10n.text("社区帖子加载超时，请检查网络后重试。")
-            ) { [repository] in
-                try await repository.fetchPosts(query: query)
-            }
+            async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: query)
             async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: query)
             let (loadedPosts, loadedPolls) = try await (postsRequest, pollsRequest)
             guard !Task.isCancelled else { return }
@@ -184,6 +179,17 @@ final class CommunityFeedViewModel: ObservableObject {
         }
     }
 
+    private func loadPostsIfNeeded(query: CommunityFeedQuery) async throws -> [CommunityPost] {
+        guard query.includesPostsInFeed else { return [] }
+
+        return try await CommunityTimeout.run(
+            seconds: 10,
+            message: L10n.text("社区帖子加载超时，请检查网络后重试。")
+        ) { [repository] in
+            try await repository.fetchPosts(query: query)
+        }
+    }
+
     func loadMoreIfNeeded() async {
         guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
             CommunityDiagnostics.log.info("CommunityFeedViewModel.loadMore skipped by diagnostics")
@@ -201,12 +207,7 @@ final class CommunityFeedViewModel: ObservableObject {
         defer { isLoadingMore = false }
 
         do {
-            async let postsRequest: [CommunityPost] = CommunityTimeout.run(
-                seconds: 10,
-                message: L10n.text("社区帖子加载超时，请检查网络后重试。")
-            ) { [repository] in
-                try await repository.fetchPosts(query: nextQuery)
-            }
+            async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: nextQuery)
             async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: nextQuery)
             let (loadedPosts, loadedPolls) = try await (postsRequest, pollsRequest)
             guard !Task.isCancelled, currentQuery == baseQuery else { return }
@@ -227,19 +228,21 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     private func nextPageQuery() -> CommunityFeedQuery? {
-        guard !currentQuery.mode.isHot else { return nil }
+        guard !currentQuery.mode.isHot, currentQuery.includesPostsInFeed else { return nil }
         guard currentQuery.limit < Self.maximumFeedLimit else { return nil }
 
         return CommunityFeedQuery(
             category: currentQuery.category,
             search: currentQuery.search,
             limit: min(currentQuery.limit + Self.pageSize, Self.maximumFeedLimit),
-            mode: currentQuery.mode
+            mode: currentQuery.mode,
+            contentFilter: currentQuery.contentFilter
         )
     }
 
     private func canLoadMore(after loadedPosts: [CommunityPost], query: CommunityFeedQuery) -> Bool {
-        !query.mode.isHot && query.limit < Self.maximumFeedLimit && loadedPosts.count >= query.limit
+        guard query.includesPostsInFeed else { return false }
+        return !query.mode.isHot && query.limit < Self.maximumFeedLimit && loadedPosts.count >= query.limit
     }
 
     func toggleLike(postID: UUID) async -> String? {
