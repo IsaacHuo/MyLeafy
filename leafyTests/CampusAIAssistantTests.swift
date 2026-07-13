@@ -1,9 +1,75 @@
 import SwiftData
+import UIKit
 import WebKit
 import XCTest
 @testable import Leafy
 
 final class CampusAIAssistantTests: XCTestCase {
+    func testResearchPDFExtractorReadsTextAndRejectsScansAndOversizedDocuments() throws {
+        let textPDF = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 300, height: 300)).pdfData { context in
+            context.beginPage()
+            NSString(string: "Leafy PDF 正文").draw(at: CGPoint(x: 20, y: 20), withAttributes: nil)
+        }
+        XCTAssertTrue(try CampusAIPDFTextExtractor.extract(data: textPDF).contains("Leafy PDF"))
+
+        let scanOnlyPDF = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 300, height: 300)).pdfData { context in
+            context.beginPage()
+            UIColor.black.setFill()
+            context.cgContext.fill(CGRect(x: 20, y: 20, width: 40, height: 40))
+        }
+        XCTAssertThrowsError(try CampusAIPDFTextExtractor.extract(data: scanOnlyPDF)) { error in
+            guard case CampusAIResearchAgentError.noPDFText = error else {
+                return XCTFail("Expected noPDFText, got \(error)")
+            }
+        }
+
+        XCTAssertThrowsError(try CampusAIPDFTextExtractor.extract(data: Data(count: 10 * 1024 * 1024 + 1))) { error in
+            guard case CampusAIResearchAgentError.documentTooLarge = error else {
+                return XCTFail("Expected documentTooLarge, got \(error)")
+            }
+        }
+    }
+
+    func testResearchModelPayloadsDoNotExposeSignedReceipts() throws {
+        let result = CampusAIToolSearchResult(
+            id: "result-1",
+            title: "通知",
+            url: "https://jwc.bjfu.edu.cn/notice.pdf",
+            displayHost: "jwc.bjfu.edu.cn",
+            snippet: "摘要",
+            publishedAt: nil,
+            sourceKind: "bjfu_official",
+            trustScore: 100,
+            readReceipt: "signed-search-receipt"
+        )
+        let resultJSON = try XCTUnwrap(String(data: JSONEncoder().encode(result.modelPayload), encoding: .utf8))
+        XCTAssertFalse(resultJSON.contains("receipt"))
+        XCTAssertFalse(resultJSON.contains("signed-search-receipt"))
+
+        let page = CampusAIToolReadPage(
+            id: "result-1",
+            title: "通知",
+            url: "https://jwc.bjfu.edu.cn/notice",
+            displayHost: "jwc.bjfu.edu.cn",
+            text: "不可信网页正文",
+            publishedAt: nil,
+            sourceKind: "bjfu_official",
+            trustScore: 100,
+            attachments: [
+                .init(
+                    id: "attachment-1",
+                    title: "附件.docx",
+                    url: "https://jwc.bjfu.edu.cn/attachment.docx",
+                    fileType: "DOCX",
+                    readReceipt: "signed-attachment-receipt"
+                )
+            ]
+        )
+        let pageJSON = try XCTUnwrap(String(data: JSONEncoder().encode(page.untrustedPayload), encoding: .utf8))
+        XCTAssertFalse(pageJSON.contains("receipt"))
+        XCTAssertFalse(pageJSON.contains("signed-attachment-receipt"))
+    }
+
     @MainActor
     func testLeafyWorkspaceReturnsToMostRecentNonLeafyTab() {
         let navigation = AppNavigationCoordinator()
@@ -44,7 +110,7 @@ final class CampusAIAssistantTests: XCTestCase {
 
         var legacyDefaultSettings = CampusAIUserSettings.defaultValue
         legacyDefaultSettings.systemPrompt = CampusAISettingsStore.legacyCampusDefaultSystemPrompt
-        defaults.set(try JSONEncoder().encode(legacyDefaultSettings), forKey: "campusAI.userSettings.v2")
+        defaults.set(try JSONEncoder().encode(legacyDefaultSettings), forKey: "campusAI.userSettings.v3")
 
         let migrated = CampusAISettingsStore.load(userDefaults: defaults)
         XCTAssertEqual(migrated.systemPrompt, CampusAISettingsStore.defaultSystemPrompt)
@@ -53,7 +119,7 @@ final class CampusAIAssistantTests: XCTestCase {
 
         var customSettings = CampusAIUserSettings.defaultValue
         customSettings.systemPrompt = "始终先问我一个澄清问题"
-        defaults.set(try JSONEncoder().encode(customSettings), forKey: "campusAI.userSettings.v2")
+        defaults.set(try JSONEncoder().encode(customSettings), forKey: "campusAI.userSettings.v3")
 
         XCTAssertEqual(
             CampusAISettingsStore.load(userDefaults: defaults).systemPrompt,
@@ -68,7 +134,7 @@ final class CampusAIAssistantTests: XCTestCase {
 
         var settings = CampusAIUserSettings.defaultValue
         settings.systemPrompt = CampusAISettingsStore.previousGeneralDefaultSystemPrompt
-        defaults.set(try JSONEncoder().encode(settings), forKey: "campusAI.userSettings.v2")
+        defaults.set(try JSONEncoder().encode(settings), forKey: "campusAI.userSettings.v3")
 
         let migrated = CampusAISettingsStore.load(userDefaults: defaults)
         XCTAssertEqual(migrated.systemPrompt, CampusAISettingsStore.defaultSystemPrompt)
@@ -243,12 +309,12 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertTrue(initial.contextSettings.includesTimetable)
         XCTAssertTrue(initial.contextSettings.includesMedicalLedger)
         XCTAssertTrue(initial.contextSettings.includesCommunityCache)
-        XCTAssertFalse(initial.webSearchEnabled)
+        XCTAssertTrue(initial.webSearchEnabled)
 
         var changed = initial
         changed.systemPrompt = "请优先用列表回答"
         changed.contextSettings.includesMedicalLedger = false
-        changed.webSearchEnabled = true
+        changed.webSearchEnabled = false
         CampusAISettingsStore.save(changed, userDefaults: defaults)
 
         let reloaded = CampusAISettingsStore.load(userDefaults: defaults)
@@ -304,9 +370,9 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertEqual(settings.serviceMode, .ownAPIKey)
         XCTAssertEqual(settings.systemPrompt, "旧版 Prompt")
         XCTAssertFalse(settings.contextSettings.includesMedicalLedger)
-        XCTAssertFalse(settings.webSearchEnabled)
+        XCTAssertTrue(settings.webSearchEnabled)
         XCTAssertNil(defaults.data(forKey: "campusAI.userSettings.v1"))
-        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v2"))
+        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v3"))
     }
 
     func testLegacyKeychainAccountsAreRemovedOnce() throws {
@@ -793,7 +859,7 @@ final class CampusAIAssistantTests: XCTestCase {
 
         XCTAssertEqual(capabilities["localSearchEnabled"] as? Bool, true)
         XCTAssertEqual(capabilities["artifactGenerationEnabled"] as? Bool, true)
-        XCTAssertEqual(capabilities["webSearchEnabled"] as? Bool, false)
+        XCTAssertEqual(capabilities["webSearchEnabled"] as? Bool, true)
         XCTAssertTrue(results.contains { String(describing: $0["title"] ?? "").contains("整理论文提纲") })
         XCTAssertFalse(userContentText.contains("localFilename"))
         XCTAssertFalse(userContentText.contains("private-local-path"))
@@ -882,8 +948,8 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertTrue(ownKey.localSearchEnabled)
         XCTAssertTrue(ownKey.actionPlanningEnabled)
         XCTAssertTrue(ownKey.artifactGenerationEnabled)
-        XCTAssertFalse(ownKey.webSearchEnabled)
-        XCTAssertFalse(ownKey.officialDocumentSearchEnabled)
+        XCTAssertTrue(ownKey.webSearchEnabled)
+        XCTAssertTrue(ownKey.officialDocumentSearchEnabled)
 
         let managedOff = CampusAICapabilitySet(serviceMode: .leafyManaged, webSearchEnabled: false)
         XCTAssertTrue(managedOff.nonWebAgentEnabled)
@@ -1804,7 +1870,7 @@ final class CampusAIAssistantTests: XCTestCase {
             "includesMedicalLedger":true,
             "includesCommunityCache":true
           },
-          "webSearchEnabled":true
+          "webSearchEnabled":false
         }
         """
         defaults.set(Data(legacyCurrentJSON.utf8), forKey: "campusAI.userSettings.v2")
@@ -1812,8 +1878,21 @@ final class CampusAIAssistantTests: XCTestCase {
         let settings = CampusAISettingsStore.load(userDefaults: defaults)
 
         XCTAssertEqual(settings.serviceMode, .ownAPIKey)
-        XCTAssertFalse(settings.webSearchEnabled)
+        XCTAssertTrue(settings.webSearchEnabled)
         XCTAssertEqual(settings.systemPrompt, "保留这个偏好")
+        XCTAssertNil(defaults.data(forKey: "campusAI.userSettings.v2"))
+        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v3"))
+    }
+
+    func testCurrentSettingsPreserveDisabledWebResearch() throws {
+        let suiteName = "CampusAIAssistantTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var current = CampusAIUserSettings.defaultValue
+        current.webSearchEnabled = false
+        defaults.set(try JSONEncoder().encode(current), forKey: "campusAI.userSettings.v3")
+
+        XCTAssertFalse(CampusAISettingsStore.load(userDefaults: defaults).webSearchEnabled)
     }
 
     func testArtifactIntentSupportsAutomaticAndForcedModes() {

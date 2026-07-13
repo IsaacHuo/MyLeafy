@@ -4,6 +4,10 @@ import {
   normalizeText,
   verifyAppTransactionJWS,
 } from "../_shared/campus-ai-billing.ts";
+import {
+  searchBJFUOfficial,
+  searchDuckDuckGoLite,
+} from "../_shared/campus-ai-web-tools.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,7 +17,6 @@ const corsHeaders = {
 };
 
 const deepSeekChatCompletionsURL = "https://api.deepseek.com/chat/completions";
-const bochaWebSearchURL = "https://api.bochaai.com/v1/web-search";
 const providerName = "deepseek";
 const defaultModel = "deepseek-v4-flash";
 const maxMessageLength = 1200;
@@ -1266,62 +1269,30 @@ function delegateRoleTitle(role: string) {
 
 export async function webSearch(
   query: string,
-  freshness: string,
+  _freshness: string,
   count: number,
   signal: AbortSignal,
 ) {
-  const apiKey = Deno.env.get("BOCHA_API_KEY")?.trim();
-  if (!apiKey) {
-    throw new Error("BOCHA_API_KEY is not configured.");
+  const signingSecret = Deno.env.get("CAMPUS_AI_TOOL_SIGNING_SECRET")?.trim();
+  if (!signingSecret) {
+    throw new Error("CAMPUS_AI_TOOL_SIGNING_SECRET is not configured.");
   }
-
-  const response = await fetch(bochaWebSearchURL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      query,
-      freshness,
-      summary: true,
-      count,
-    }),
+  const results = await searchDuckDuckGoLite(
+    query,
+    count,
+    "managed-agent",
+    signingSecret,
     signal,
-  });
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Bocha search returned ${response.status}: ${responseText.slice(0, 300)}`,
-    );
-  }
-  return parseBochaSearchResponse(responseText, query).slice(0, count);
-}
-
-export function parseBochaSearchResponse(responseText: string, query = "") {
-  const payload = JSON.parse(responseText) as Record<string, unknown>;
-  const pages = objectValue(payload.webPages);
-  const values = Array.isArray(pages?.value) ? pages.value : [];
-  const citations: AgentCitation[] = [];
-  for (const [index, item] of values.entries()) {
-    const record = objectValue(item);
-    if (!record) continue;
-    const url = stringValue(record.url);
-    const title = normalizeText(record.name) ?? normalizeText(record.title);
-    if (!url || !title || !isHTTPURL(url)) continue;
-    citations.push({
-      id: `web-${hashString(`${query}|${url}|${index}`)}`,
-      title,
-      url,
-      siteName: normalizeText(record.siteName) ?? undefined,
-      snippet: normalizeText(record.snippet) ?? undefined,
-      summary: normalizeText(record.summary) ?? undefined,
-      publishedAt: normalizeText(record.datePublished) ?? undefined,
-    });
-  }
-  return deduplicateCitations(citations);
+  );
+  return results.map((result) => ({
+    id: result.id,
+    title: result.title,
+    url: result.url,
+    siteName: result.source_kind === "bjfu_official"
+      ? "北京林业大学"
+      : result.display_host,
+    snippet: result.snippet,
+  } satisfies AgentCitation));
 }
 
 function officialDocumentQuery(
@@ -1343,13 +1314,24 @@ async function officialDocumentSearch(
   userMessage: string,
   signal: AbortSignal,
 ): Promise<AgentOfficialDocumentResult> {
-  const freshness = officialDocumentFreshness(userMessage);
-  const citations = await webSearch(
+  const signingSecret = Deno.env.get("CAMPUS_AI_TOOL_SIGNING_SECRET")?.trim();
+  if (!signingSecret) {
+    throw new Error("CAMPUS_AI_TOOL_SIGNING_SECRET is not configured.");
+  }
+  const officialResults = await searchBJFUOfficial(
     query,
-    freshness,
     maxAgentSearchResults,
+    "managed-agent",
+    signingSecret,
     signal,
   );
+  const citations = officialResults.map((result) => ({
+    id: result.id,
+    title: result.title,
+    url: result.url,
+    siteName: "北京林业大学",
+    snippet: result.snippet,
+  } satisfies AgentCitation));
   const candidates = citations
     .filter((citation) => isSafePublicHTTPURL(citation.url))
     .map((citation) => ({

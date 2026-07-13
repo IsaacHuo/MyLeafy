@@ -205,7 +205,7 @@ struct CampusAIMissingKeyPanel: View {
                 .font(.headline)
                 .foregroundStyle(AppTheme.primaryText)
 
-            Text("API Key 只保存在当前设备的 Keychain。Leafy 会把你允许的本机上下文随请求发送给 DeepSeek，不使用托管额度，也不会联网搜索。")
+            Text("API Key 只保存在当前设备的 Keychain。Leafy 会把你允许的本机上下文直接发送给 DeepSeek；联网研究只通过 Leafy Tool Gateway 执行公开搜索和网页读取。")
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)

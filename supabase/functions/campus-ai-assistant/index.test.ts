@@ -19,7 +19,6 @@ import {
   parseActionPlannerActions,
   parseActionPlannerProviderResponse,
   parseAgentToolCallsFromProviderResponse,
-  parseBochaSearchResponse,
   parseDeepSeekAPIKeys,
   processDeepSeekSSEBlock,
   redactProviderError,
@@ -289,39 +288,6 @@ Deno.test("campus-ai-assistant parses and limits agent tool calls", () => {
   );
 });
 
-Deno.test("campus-ai-assistant parses Bocha search citations", () => {
-  const citations = parseBochaSearchResponse(
-    JSON.stringify({
-      webPages: {
-        value: [
-          {
-            name: "北京林业大学通知",
-            url: "https://www.bjfu.edu.cn/notice/1",
-            siteName: "北京林业大学",
-            snippet: "通知摘要",
-            summary: "通知总结",
-            datePublished: "2026-07-02T00:00:00+08:00",
-          },
-          {
-            name: "重复",
-            url: "https://www.bjfu.edu.cn/notice/1",
-          },
-          {
-            name: "坏链接",
-            url: "javascript:alert(1)",
-          },
-        ],
-      },
-    }),
-    "北林通知",
-  );
-
-  assert(citations.length === 1, "expected duplicate and unsafe URLs filtered");
-  assert(citations[0].title === "北京林业大学通知", "expected title");
-  assert(citations[0].siteName === "北京林业大学", "expected site name");
-  assert(citations[0].publishedAt?.includes("2026"), "expected publish date");
-});
-
 Deno.test("campus-ai-assistant detects official document search intent", () => {
   assert(
     shouldSearchOfficialDocument("查北京林业大学论文格式官方网页和附件"),
@@ -502,26 +468,27 @@ Deno.test("campus-ai-assistant builds local retrieval deliverable", () => {
   );
 });
 
-Deno.test("campus-ai-assistant handles missing Bocha API key before network", async () => {
-  const previous = Deno.env.get("BOCHA_API_KEY");
+Deno.test("campus-ai-assistant handles missing tool signing secret before network", async () => {
+  const previous = Deno.env.get("CAMPUS_AI_TOOL_SIGNING_SECRET");
   try {
-    Deno.env.delete("BOCHA_API_KEY");
+    Deno.env.delete("CAMPUS_AI_TOOL_SIGNING_SECRET");
     let threw = false;
     try {
       await webSearch("北林通知", "oneMonth", 3, new AbortController().signal);
     } catch (error) {
       threw = true;
       assert(
-        error instanceof Error && error.message.includes("BOCHA_API_KEY"),
-        "expected missing Bocha key error",
+        error instanceof Error &&
+          error.message.includes("CAMPUS_AI_TOOL_SIGNING_SECRET"),
+        "expected missing tool signing secret error",
       );
     }
     assert(threw, "expected webSearch to reject without key");
   } finally {
     if (previous === undefined) {
-      Deno.env.delete("BOCHA_API_KEY");
+      Deno.env.delete("CAMPUS_AI_TOOL_SIGNING_SECRET");
     } else {
-      Deno.env.set("BOCHA_API_KEY", previous);
+      Deno.env.set("CAMPUS_AI_TOOL_SIGNING_SECRET", previous);
     }
   }
 });

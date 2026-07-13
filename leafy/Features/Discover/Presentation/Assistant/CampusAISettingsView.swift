@@ -27,10 +27,14 @@ struct CampusAISettingsView: View {
                             status: hasAPIKey ? "已配置" : "未配置"
                         )
                     }
+
+                    Toggle(isOn: $settings.webSearchEnabled) {
+                        Label("联网研究", systemImage: "globe")
+                    }
                 } header: {
                     Text("AI 服务")
                 } footer: {
-                    Text("当前仅支持自备 DeepSeek API Key。订阅、托管额度和联网搜索暂不开放。")
+                    Text("搜索由北林官网和零 Key 公开搜索入口提供；DeepSeek Key 仍只保存在本机。多轮研究会增加你自己的模型调用量。")
                 }
 
                 Section {
@@ -74,7 +78,7 @@ struct CampusAISettingsView: View {
                 }
 
                 Section("隐私与限制") {
-                    Text("Leafy 会把你的问题及已启用的本机上下文直接发送给 DeepSeek。API Key 不会写入设置文件；生成内容可能有错误，重要事项请以权威来源为准。")
+                    Text("Leafy 会把你的问题及已启用的本机上下文直接发送给 DeepSeek。开启联网研究后，搜索词会经过 Leafy Tool Gateway；API Key 和本机校园数据不会发送给该 Gateway。生成内容可能有错误，重要事项请核对来源。")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                         .textSelection(.enabled)
@@ -212,7 +216,7 @@ struct CampusAIAPIKeySetupView: View {
             }
 
             Section("数据说明") {
-                Text("请求会直接发送到 DeepSeek，不经过 Leafy 托管额度；当前不启用联网搜索。")
+                Text("模型请求直接发送到 DeepSeek，不经过 Leafy 托管额度。开启联网研究时，Leafy Tool Gateway 只执行搜索和网页读取，不会收到你的 DeepSeek API Key 或本机校园数据。")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
             }

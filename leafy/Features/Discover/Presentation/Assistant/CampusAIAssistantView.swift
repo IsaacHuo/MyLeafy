@@ -68,6 +68,7 @@ struct CampusAIAssistantView: View {
             presentExperimentalNoticeIfNeeded()
             refreshConfiguredProviders()
             pruneOrphanedDeliverableArtifacts()
+            markInterruptedResearchIfNeeded()
         }
         .onChange(of: conversations.map(\.id)) { _, _ in
             selectInitialConversationIfNeeded()
@@ -293,6 +294,32 @@ struct CampusAIAssistantView: View {
         userSettings = userSettings.normalizedForLocalRuntime
     }
 
+    private func markInterruptedResearchIfNeeded() {
+        guard !chatSession.isSending else { return }
+        var changed = false
+        for message in messages where message.roleRawValue == CampusAIMessageRole.assistant.rawValue {
+            var metadata = message.agentMetadata
+            let wasRunning = metadata.statusText?.nonEmptyTrimmed != nil
+            let hasNoAnswer = message.text.nonEmptyTrimmed == nil
+            guard wasRunning || hasNoAnswer else { continue }
+            let notice = "> 研究已中断。可以从上一条问题重新运行。"
+            if hasNoAnswer {
+                message.text = notice
+            } else if !message.text.contains("研究已中断") {
+                message.text += "\n\n\(notice)"
+            }
+            metadata.statusText = nil
+            if let data = try? JSONEncoder().encode(metadata),
+               let json = String(data: data, encoding: .utf8) {
+                message.agentMetadataJSON = json
+            }
+            changed = true
+        }
+        if changed {
+            persistModelContext(operation: "message.recover.interrupted", showsAlert: false)
+        }
+    }
+
     private func openAPIKeySetup() {
         isComposerFocused = false
         activeSheet = .apiKey
@@ -414,7 +441,9 @@ struct CampusAIAssistantView: View {
                     agentMetadata.statusText = Self.agentToolStatusText(tool)
                     persistAgentMetadata(agentMetadata, for: assistantMessage)
                 case .agentCitation(let citation):
-                    if !agentMetadata.citations.contains(where: { $0.url == citation.url }) {
+                    if let index = agentMetadata.citations.firstIndex(where: { $0.url == citation.url }) {
+                        agentMetadata.citations[index] = citation
+                    } else {
                         agentMetadata.citations.append(citation)
                     }
                     persistAgentMetadata(agentMetadata, for: assistantMessage)

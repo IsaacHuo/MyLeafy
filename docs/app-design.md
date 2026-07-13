@@ -175,7 +175,11 @@ Leafy AI 是辅助入口，不是替代所有功能的万能聊天框。
 - 明确区分本机学业数据、公开信息和模型推断。
 - 不把成绩、学号、课程备注等私密上下文写入社区。
 - 用户删除 API Key 后，历史内容可只读保留，但不能继续调用对应模型。
-- 当前仅开放用户自备 DeepSeek API Key，Key 保存在设备 Keychain；订阅、托管额度、服务模式选择和联网搜索暂不在 UI 或运行时开放。
+- 当前仅开放用户自备 DeepSeek API Key，Key 保存在设备 Keychain；订阅、托管额度和服务模式选择不在 UI 中开放。
+- 联网研究默认开启，并可在设置中关闭。iOS 端使用最多 6 轮的单工具 Agent Loop：校园政策优先检索北林官方 CMS，官方资料不足或明确涉及校外内容时使用 DuckDuckGo Lite，再按搜索结果 ID 读取网页或 PDF。
+- Tool Gateway 只接收搜索词、搜索结果 receipt 和 Supabase JWT，不接收 DeepSeek Key 或本机校园上下文；模型请求仍由 iOS 直连 DeepSeek。Gateway 使用记录只保留用户 ID、工具、状态、耗时、结果数和时间。
+- 免费搜索是 best-effort 能力，可能遇到限流、验证码、超时或页面结构变化。失败必须保留已取得来源，并明确标记未联网验证的范围，不能伪造来源或静默切换随机公共搜索实例。
+- 第一版分析公开 HTML 和带文本层的 PDF。PDF 最大 10 MB、读取前 100 页且最多向模型提供 40,000 字符；扫描 PDF 不做 OCR，DOC/DOCX/XLS/XLSX/PPT/PPTX 只作为可打开附件展示。
 - Key 配置页说明创建步骤，并提供 DeepSeek 官方 API Keys 页面链接；外部页面由系统浏览器打开。
 
 ### 6.3 Artifact

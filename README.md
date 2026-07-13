@@ -26,7 +26,7 @@ MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校
 |---|---|
 | 课表 | 周课表、课程详情、时间范围、日程叠加、提醒、分享图、小组件与共享课表 |
 | 学业 | 成绩、考试、教学计划、培养方案、空教室、校历、学习空间、体育与职业相关工具 |
-| Leafy AI | 根 Tab 内的 AI 对话；基于用户授权的本机学业上下文问答，并生成可阅读、可导出的 Artifact |
+| Leafy AI | 自备 DeepSeek Key 的迭代 Agent；可结合本机上下文、北林官方检索和零 Key 公开搜索生成带来源回答与 Artifact |
 | 社区 | 帖子、图片、评论、点赞、投票、通知、公告、个人内容与内容分享 |
 | 评价 | 教师、课程等结构化评分；数据能力按校园配置开放 |
 | 个性化 | 浅色/深色外观、主题色、显示密度、多语言与课表背景 |
@@ -42,6 +42,7 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 - 教务数据通过 `URLSession`、显式 Cookie 管理和 SwiftSoup 解析；课表链路在必要时使用 `WKWebView` 复现浏览器路径。
 - SwiftData 保存课表、成绩和用户侧本地数据；页面通过预计算投影与快照降低复杂网格的渲染成本。
 - Supabase Auth、PostgreSQL、Storage 与 Edge Functions 承载非教务业务；RLS、校园范围和资源所有权共同约束数据访问。
+- Leafy AI 的模型请求由 iOS 使用设备 Keychain 中的 DeepSeek Key 直连模型；`campus-ai-tools` 只执行带 JWT 的公开搜索、网页读取和 PDF 转发，不接收模型 Key 或本机校园上下文。
 - Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，管理会话不暴露给浏览器 JavaScript。
 
 详细边界、数据流和依赖方向见[架构说明](docs/architecture.md)。
@@ -128,6 +129,8 @@ npm run dev:pages
 supabase link --project-ref <project-ref>
 supabase db push
 supabase functions deploy community-bootstrap-user
+supabase secrets set CAMPUS_AI_TOOL_SIGNING_SECRET=<strong-random-secret>
+supabase functions deploy campus-ai-tools
 ```
 
 不要在 iOS、网站前端或公开配置中使用 `service_role`。完整说明见[Supabase 接入](docs/supabase.md)。
@@ -151,6 +154,9 @@ supabase functions deploy community-bootstrap-user
 - 教务系统不是稳定 API。页面结构、登录流程或网络策略变化可能使解析暂时失效。
 - 当前教务身份绑定由 App 在登录成功后发起；它不等同于服务端对学校身份进行独立证明。
 - 社区、评价和共享能力依赖正确部署的 Supabase schema、RLS 与 Edge Functions。
+- 联网研究默认开启，但可在 Leafy 设置中关闭。北林官网检索和 DuckDuckGo Lite 都是 best-effort 免费入口，可能限流、验证码或因页面结构变化暂时不可用；这条链路没有搜索供应商按次费用，但仍消耗 Supabase Edge Function 套餐额度。
+- 联网研究 v1 读取公开 HTML 和带文本层的 PDF（最大 10 MB、前 100 页、送入模型最多 40,000 字符）。Office 附件只提供打开入口；扫描 PDF 不做 OCR，也不会声称已分析正文。
+- 开启联网研究时，搜索词会经过 Leafy Tool Gateway。DeepSeek API Key 和用户允许的本机校园数据不会发送给该 Gateway；Gateway 的私有使用记录不保存原始搜索词或网页正文。
 - 教师与课程等目录型数据需要经过可信来源整理或后台审核，仓库不会自动保证数据完整性。
 - 这是持续演进中的校园产品，内部数据模型与未稳定接口可能变化。
 

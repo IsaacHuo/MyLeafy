@@ -94,6 +94,7 @@ final class WeatherServicingTests: XCTestCase {
             feedFunctionName: "community-feed",
             weatherFunctionName: "campus-weather",
             campusAIFunctionName: "campus-ai-assistant",
+            campusAIToolsFunctionName: "campus-ai-tools",
             edgeRegion: "ap-northeast-1",
             communityAPIBaseURL: nil
         )

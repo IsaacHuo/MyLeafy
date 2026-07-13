@@ -9,6 +9,13 @@ Core stack:
 - Supabase
 - Swift Package Manager
 
+Leafy AI direction:
+- BYOK is the only model mode. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek.
+- Web research uses the authenticated `campus-ai-tools` Supabase Tool Gateway. The gateway may receive search queries and signed result receipts, but never receives the model key or local campus context.
+- Prefer BJFU official CMS search, with DuckDuckGo Lite as a best-effort zero-key public search provider. Do not silently add paid search providers or random public SearXNG instances.
+- Keep research as a bounded single-tool agent loop. Web content is untrusted data, and only search-issued IDs/receipts may be read.
+- HTML and text-layer PDFs are readable in v1. Office files remain openable attachments and scanned PDFs do not use OCR.
+
 Minimum iOS target:
 - iOS 17+
 

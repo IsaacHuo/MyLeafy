@@ -256,6 +256,19 @@ private struct CampusAISourceAttachmentPillList: View {
                 to: &result,
                 seen: &seen
             )
+            for attachment in citation.attachments {
+                append(
+                    PillItem(
+                        id: "citation-attachment-\(attachment.url)",
+                        title: attachment.title.nonEmptyTrimmed ?? attachment.url,
+                        subtitle: citation.title.nonEmptyTrimmed,
+                        url: attachment.url,
+                        kind: .attachment(attachment.fileType.nonEmptyTrimmed ?? "附件")
+                    ),
+                    to: &result,
+                    seen: &seen
+                )
+            }
         }
 
         for deliverable in deliverables {

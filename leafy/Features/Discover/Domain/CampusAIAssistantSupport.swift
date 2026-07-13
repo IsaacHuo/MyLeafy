@@ -574,7 +574,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
             selectedProviderID: CampusAIProviderCatalog.defaultProvider.id,
             systemPrompt: CampusAISettingsStore.defaultSystemPrompt,
             contextSettings: .defaultValue,
-            webSearchEnabled: false
+            webSearchEnabled: true
         )
     }
 
@@ -583,13 +583,13 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
         selectedProviderID: CampusAIProviderID = CampusAIProviderCatalog.defaultProvider.id,
         systemPrompt: String,
         contextSettings: CampusAIContextSettings,
-        webSearchEnabled: Bool = false
+        webSearchEnabled: Bool = true
     ) {
         self.serviceMode = .ownAPIKey
         self.selectedProviderID = selectedProviderID
         self.systemPrompt = systemPrompt
         self.contextSettings = contextSettings
-        self.webSearchEnabled = false
+        self.webSearchEnabled = webSearchEnabled
     }
 
     enum CodingKeys: String, CodingKey {
@@ -610,8 +610,7 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
             CampusAISettingsStore.defaultSystemPrompt
         contextSettings = try container.decodeIfPresent(CampusAIContextSettings.self, forKey: .contextSettings) ??
             .defaultValue
-        _ = try container.decodeIfPresent(Bool.self, forKey: .webSearchEnabled)
-        webSearchEnabled = false
+        webSearchEnabled = try container.decodeIfPresent(Bool.self, forKey: .webSearchEnabled) ?? true
     }
 
     var selectedProvider: CampusAIProviderDescriptor {
@@ -626,7 +625,6 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
     var normalizedForLocalRuntime: CampusAIUserSettings {
         var normalized = self
         normalized.serviceMode = .ownAPIKey
-        normalized.webSearchEnabled = false
         return normalized
     }
 }
@@ -665,7 +663,7 @@ nonisolated struct CampusAICapabilitySet: Codable, Hashable {
     }
 
     init(serviceMode: CampusAIServiceMode, webSearchEnabled requestedWebSearch: Bool) {
-        let canUseWeb = serviceMode == .leafyManaged && requestedWebSearch
+        let canUseWeb = requestedWebSearch
         self.init(
             nonWebAgentEnabled: true,
             localSearchEnabled: true,
@@ -741,7 +739,8 @@ nonisolated enum CampusAISettingsStore {
     请用中文回答，默认简短直接，先给结论和下一步。可以围绕校园学习、生活安排和个人事项整理建议；信息不足时直接说缺什么，不要编造。
     """
 
-    private static let storageKey = "campusAI.userSettings.v2"
+    private static let storageKey = "campusAI.userSettings.v3"
+    private static let previousStorageKey = "campusAI.userSettings.v2"
     private static let legacyStorageKey = "campusAI.userSettings.v1"
 
     static func load(userDefaults: UserDefaults = .standard) -> CampusAIUserSettings {
@@ -752,6 +751,15 @@ nonisolated enum CampusAISettingsStore {
                 save(normalized, userDefaults: userDefaults)
             }
             return normalized
+        }
+
+        if let data = userDefaults.data(forKey: previousStorageKey),
+           var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
+            settings.webSearchEnabled = true
+            let migrated = migrateDefaultPrompt(in: settings.normalizedForLocalRuntime)
+            save(migrated, userDefaults: userDefaults)
+            userDefaults.removeObject(forKey: previousStorageKey)
+            return migrated
         }
 
         guard let legacyData = userDefaults.data(forKey: legacyStorageKey),
@@ -783,6 +791,7 @@ nonisolated enum CampusAISettingsStore {
 
     static func reset(userDefaults: UserDefaults = .standard) -> CampusAIUserSettings {
         userDefaults.removeObject(forKey: storageKey)
+        userDefaults.removeObject(forKey: previousStorageKey)
         userDefaults.removeObject(forKey: legacyStorageKey)
         return .defaultValue
     }
@@ -1601,6 +1610,7 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
     var snippet: String?
     var summary: String?
     var publishedAt: String?
+    var attachments: [CampusAIDeliverableAttachment]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -1612,6 +1622,7 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
         case summary
         case publishedAt
         case publishedAtSnake = "published_at"
+        case attachments
     }
 
     init(
@@ -1621,7 +1632,8 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
         siteName: String? = nil,
         snippet: String? = nil,
         summary: String? = nil,
-        publishedAt: String? = nil
+        publishedAt: String? = nil,
+        attachments: [CampusAIDeliverableAttachment] = []
     ) {
         self.id = id
         self.title = title
@@ -1630,6 +1642,7 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
         self.snippet = snippet
         self.summary = summary
         self.publishedAt = publishedAt
+        self.attachments = attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -1643,6 +1656,7 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
             ?? container.decodeIfPresent(String.self, forKey: .publishedAtSnake)
+        attachments = try container.decodeIfPresent([CampusAIDeliverableAttachment].self, forKey: .attachments) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1654,6 +1668,7 @@ nonisolated struct CampusAICitation: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(snippet, forKey: .snippet)
         try container.encodeIfPresent(summary, forKey: .summary)
         try container.encodeIfPresent(publishedAt, forKey: .publishedAt)
+        try container.encode(attachments, forKey: .attachments)
     }
 }
 
@@ -4325,10 +4340,14 @@ nonisolated struct CampusAIService {
         _ request: CampusAIRequest,
         settings: CampusAIUserSettings
     ) -> AsyncThrowingStream<CampusAIStreamEvent, Error> {
-        invokeDirectStream(request, settings: settings.normalizedForLocalRuntime)
+        let normalizedSettings = settings.normalizedForLocalRuntime
+        if CampusAIResearchIntent.shouldRun(request) {
+            return CampusAIResearchAgent.invokeStream(request, settings: normalizedSettings)
+        }
+        return invokeDirectStream(request, settings: normalizedSettings)
     }
 
-    private static func invokeDirectStream(
+    static func invokeDirectStream(
         _ request: CampusAIRequest,
         settings: CampusAIUserSettings
     ) -> AsyncThrowingStream<CampusAIStreamEvent, Error> {
