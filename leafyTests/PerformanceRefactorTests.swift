@@ -462,6 +462,19 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(courses.map(\.courseName).sorted(), ["数据结构", "森林生态学"])
         XCTAssertTrue(courses.contains { $0.location == "二教" && $0.room == "205" && $0.weeks.contains(18) }, debugDescription)
         XCTAssertTrue(courses.contains { $0.location == "二教" && $0.room == "301" && $0.weeks.contains(16) }, debugDescription)
+        XCTAssertFalse(courses.contains { $0.weeks.contains(20) })
+    }
+
+    func testRecognizedEmptyTimetableParsesAsEmptyCourseList() throws {
+        let html = """
+        <html><body><div id="kbcontent_1_1"></div></body></html>
+        """
+
+        XCTAssertEqual(try HTMLParser.parseTimetable(html: html).count, 0)
+    }
+
+    func testRecognizedEmptyGraduateTimetableParsesAsEmptyCourseList() throws {
+        XCTAssertEqual(try HTMLParser.parseTimetable(html: #"{"rows":[]}"#).count, 0)
     }
 
     func testTimetableParserSkipsOutOfRangeContentDayIDs() throws {
@@ -529,6 +542,35 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertTrue(manager.shouldUseCachedTimetableLandingURL(baseURL, preferredSemesterID: "2026-2027-1"))
         XCTAssertTrue(manager.shouldUseCachedTimetableLandingURL(currentURL, preferredSemesterID: "2026-2027-1"))
         XCTAssertFalse(manager.shouldUseCachedTimetableLandingURL(oldURL, preferredSemesterID: "2026-2027-1"))
+    }
+
+    @MainActor
+    func testTimetableSemesterValidationRejectsExplicitMismatch() throws {
+        let html = """
+        <html>
+          <body>
+            <select name="xnxq01id">
+              <option value="2025-2026-2" selected>旧学期</option>
+              <option value="2026-2027-1">新学期</option>
+            </select>
+            <div id="kbcontent_1_1">课程</div>
+          </body>
+        </html>
+        """
+
+        XCTAssertThrowsError(
+            try SchoolNetworkManager.shared.validateTimetableSemester(
+                html: html,
+                responseURL: nil,
+                expectedSemesterID: "2026-2027-1"
+            )
+        ) { error in
+            guard case SchoolNetworkError.timetableSemesterMismatch(let expected, let actual) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(expected, "2026-2027-1")
+            XCTAssertEqual(actual, "2025-2026-2")
+        }
     }
 
     func testTimetableBackgroundPaletteExtractsSoftColorsFromSolidImage() throws {

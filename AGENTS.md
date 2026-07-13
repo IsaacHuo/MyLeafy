@@ -9,6 +9,11 @@ Core stack:
 - Supabase
 - Swift Package Manager
 
+Timetable direction:
+- The BJFU timetable always renders a 20-week container. Course occurrences come only from the school response; unused weeks remain empty.
+- Runtime semester configuration selects the undergraduate semester ID, graduate term code, and first-week date without requiring an App Store release.
+- Undergraduate and graduate timetable refreshes must use the same observable cache and error semantics.
+
 Leafy AI direction:
 - BYOK is the only model mode. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek.
 - Web research uses the authenticated `campus-ai-tools` Supabase Tool Gateway. The gateway may receive search queries and signed result receipts, but never receives the model key or local campus context.

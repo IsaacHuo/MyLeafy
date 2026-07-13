@@ -199,6 +199,8 @@ private nonisolated struct RemoteSemesterRuntimeConfigRecord: Decodable, Sendabl
 }
 
 nonisolated struct SemesterConfig {
+    static let timetableWeekCapacity = 20
+
     static var sunshineRunExcludedWeeks: Set<Int> {
         AcademicCalendarEvents.nationalHolidayWeeks(
             semesterStart: startOfSemesterDate,
@@ -236,7 +238,7 @@ nonisolated struct SemesterConfig {
     }
 
     static var supportedWeeks: Int {
-        current.supportedWeeks
+        timetableWeekCapacity
     }
 
     @discardableResult
@@ -262,8 +264,8 @@ nonisolated struct SemesterConfig {
 
         if week < 1 {
             week = 1
-        } else if week > config.supportedWeeks {
-            week = config.supportedWeeks
+        } else if week > timetableWeekCapacity {
+            week = timetableWeekCapacity
         }
 
         return week
@@ -275,7 +277,7 @@ nonisolated struct SemesterConfig {
         let current = calendar.startOfDay(for: date)
         let days = calendar.dateComponents([.day], from: start, to: current).day ?? 0
 
-        let week = max(1, min(config.supportedWeeks, days / 7 + 1))
+        let week = max(1, min(timetableWeekCapacity, days / 7 + 1))
         let weekday = calendar.component(.weekday, from: current)
         let day = ((weekday + 5) % 7) + 1
         return (week, day)

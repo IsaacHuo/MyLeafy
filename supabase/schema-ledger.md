@@ -154,6 +154,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260702022000_campus_ai_weekly_subscription.sql`
 - `20260704090000_campus_email_lookup.sql`
 - `20260710121000_admin_security_runtime.sql`
+- `20260713190000_fix_next_semester_week_capacity.sql`
 
 ## Admin Security and Runtime Invariants
 
@@ -173,6 +174,8 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
   and `error_code` metadata. Existing audit writers remain forward-compatible.
 - Semester and national-calendar activation must use their service-role-only
   admin upsert RPCs. Both serialize activation with transaction advisory locks.
+- BJFU semester runtime rows use a fixed `supported_weeks = 20`; sparse course
+  weeks remain an iOS parsing and presentation concern.
   Semester writes also cooperate with the existing automatic reconcile guard
   and never activate a future semester early.
 - Admin global-search indexes use `pg_trgm` for substring lookup and a

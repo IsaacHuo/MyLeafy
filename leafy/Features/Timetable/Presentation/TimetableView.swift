@@ -414,11 +414,7 @@ struct TimetableView: View {
         }
         await refreshTimetableWeatherPreview()
         syncTimetableGridSnapshot()
-        if courses.isEmpty, networkManager.isLoggedIn {
-            await fetchAndParseTimetable(userInitiated: false)
-        } else {
-            syncReturnButtonVisibility()
-        }
+        syncReturnButtonVisibility()
     }
 
     private func handleAppear() {
@@ -1804,13 +1800,6 @@ struct TimetableView: View {
             }
 
             await MainActor.run {
-                guard !parsedCourseRecords.isEmpty else {
-                    isFetching = false
-                    alertMessage = L10n.text("未解析到任何课表数据", language: leafyLanguage)
-                    showAlert = true
-                    return
-                }
-
                 let newCourses = parsedCourseRecords.map { $0.makeCourse() }
                 let sharedCourses = newCourses.map(SharedTimetableCourse.init(course:))
 
@@ -1834,6 +1823,7 @@ struct TimetableView: View {
                 syncTimetableGridSnapshot()
                 TimetableCacheMetadata.lastSyncAt = Date()
                 TimetableCacheMetadata.lastFailureMessage = nil
+                TimetableCacheMetadata.lastSyncedSemesterID = semesterConfig.semesterID
                 AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
                 SchoolDataRefreshNotifier.post(.timetable)
                 Task {

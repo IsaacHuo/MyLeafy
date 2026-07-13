@@ -290,9 +290,11 @@ supabase functions deploy campus-ai-assistant
 
 - 同一时刻只有一个 active 学期配置。
 - 可提前创建下学期配置，但保持 inactive。
+- 北京林业大学课表固定呈现 20 周容器，`supported_weeks` 必须保持为 `20`；课程实际上课周次只服从教务响应。
 - 激活前必须从学校真实页面确认所有参数，不能根据年份猜测。
 - App 回退顺序为远程 active 配置、最近成功缓存、内置默认配置。
-- 远程配置失败不能清空本地课表。
+- 同一学期远程配置或课表刷新失败不能清空本地课表；学期配置成功切换后，旧课程不能映射到新学期日期。
+- 本科使用 `semester_id`，研究生使用 `graduate_timetable_term_code` 查询当前 active 学期；正常换学期不需要发布 App 版本。
 
 建议通过经过权限控制的后台 action 原子切换 active 配置，避免手工 SQL 产生短暂的多 active 状态。
 

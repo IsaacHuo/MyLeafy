@@ -29,6 +29,47 @@ extension SchoolNetworkManager {
         return markers.contains { html.contains($0) }
     }
 
+    func resolvedTimetableSemesterID(from html: String, responseURL: URL? = nil) -> String? {
+        if let responseURL,
+           let semesterID = URLComponents(url: responseURL, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "xnxq01id" })?
+            .value?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !semesterID.isEmpty {
+            return semesterID
+        }
+
+        guard let document = try? SwiftSoup.parse(html) else { return nil }
+        if let selected = try? document.select("select[name=xnxq01id] option[selected]").first(),
+           let value = try? selected.attr("value").trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty {
+            return value
+        }
+
+        if let hidden = try? document.select("input[name=xnxq01id]").first(),
+           let value = try? hidden.attr("value").trimmingCharacters(in: .whitespacesAndNewlines),
+           !value.isEmpty {
+            return value
+        }
+
+        return nil
+    }
+
+    func validateTimetableSemester(
+        html: String,
+        responseURL: URL?,
+        expectedSemesterID: String?
+    ) throws {
+        let expected = expectedSemesterID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !expected.isEmpty,
+              let actual = resolvedTimetableSemesterID(from: html, responseURL: responseURL),
+              actual != expected else {
+            return
+        }
+        throw SchoolNetworkError.timetableSemesterMismatch(expected: expected, actual: actual)
+    }
+
     func extractURLCandidates(from raw: String) -> [String] {
         let normalized = raw
             .replacingOccurrences(of: "\\/", with: "/")
@@ -174,12 +215,22 @@ extension SchoolNetworkManager {
     func fetchTimetableHTML(using request: URLRequest, preferredSemesterID: String? = nil) async throws -> (String, HTTPURLResponse) {
         let (pageHTML, response) = try await html(for: request)
         if isTimetablePage(pageHTML) {
+            try validateTimetableSemester(
+                html: pageHTML,
+                responseURL: response.url,
+                expectedSemesterID: preferredSemesterID
+            )
             return (pageHTML, response)
         }
 
         if let followUpRequest = try resolveTimetableRequest(from: pageHTML, preferredSemesterID: preferredSemesterID) {
             let (resolvedHTML, resolvedResponse) = try await html(for: followUpRequest)
             if isTimetablePage(resolvedHTML) {
+                try validateTimetableSemester(
+                    html: resolvedHTML,
+                    responseURL: resolvedResponse.url,
+                    expectedSemesterID: preferredSemesterID
+                )
                 return (resolvedHTML, resolvedResponse)
             }
             return (resolvedHTML, resolvedResponse)
@@ -190,12 +241,22 @@ extension SchoolNetworkManager {
             for candidate in try extractTimetableCandidateRequests(from: pageHTML, baseURL: responseURL) {
                 let (candidateHTML, candidateResponse) = try await html(for: candidate)
                 if isTimetablePage(candidateHTML) {
+                    try validateTimetableSemester(
+                        html: candidateHTML,
+                        responseURL: candidateResponse.url,
+                        expectedSemesterID: preferredSemesterID
+                    )
                     return (candidateHTML, candidateResponse)
                 }
 
                 if let followUpRequest = try resolveTimetableRequest(from: candidateHTML, preferredSemesterID: preferredSemesterID) {
                     let (resolvedHTML, resolvedResponse) = try await html(for: followUpRequest)
                     if isTimetablePage(resolvedHTML) {
+                        try validateTimetableSemester(
+                            html: resolvedHTML,
+                            responseURL: resolvedResponse.url,
+                            expectedSemesterID: preferredSemesterID
+                        )
                         return (resolvedHTML, resolvedResponse)
                     }
                 }
@@ -371,6 +432,11 @@ extension SchoolNetworkManager {
             }
 
             if isTimetablePage(mainHTML) {
+                try validateTimetableSemester(
+                    html: mainHTML,
+                    responseURL: mainResponse.url,
+                    expectedSemesterID: preferredSemesterID
+                )
                 return mainHTML
             }
 
@@ -406,6 +472,11 @@ extension SchoolNetworkManager {
                 _ = persistDebugHTML(renderedBootstrap.html, filename: "last_timetable_rendered_page.html")
 
                 if isTimetablePage(renderedBootstrap.html) {
+                    try validateTimetableSemester(
+                        html: renderedBootstrap.html,
+                        responseURL: renderedBootstrap.url,
+                        expectedSemesterID: preferredSemesterID
+                    )
                     return renderedBootstrap.html
                 }
 

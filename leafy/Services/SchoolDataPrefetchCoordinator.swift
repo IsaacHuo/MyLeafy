@@ -5,6 +5,7 @@ import SwiftData
 enum SchoolDataPrefetchTrigger: Equatable {
     case login
     case foreground
+    case semesterChanged
 }
 
 enum SchoolDataPrefetchSkipReason: Equatable {
@@ -13,7 +14,6 @@ enum SchoolDataPrefetchSkipReason: Equatable {
     case customCampus
     case missingIdentity
     case notLoggedIn
-    case nonUndergraduatePortal
     case successCooldown
     case failureCooldown
 }
@@ -75,12 +75,8 @@ final class SchoolDataPrefetchCoordinator {
         guard networkManager.isLoggedIn else {
             return .skipped(.notLoggedIn)
         }
-        guard networkManager.currentPortal == .undergraduate else {
-            return .skipped(.nonUndergraduatePortal)
-        }
-
         let startedAt = now()
-        if trigger != .login {
+        if trigger == .foreground {
             if let lastSuccessAt, startedAt.timeIntervalSince(lastSuccessAt) < Self.successCooldown {
                 return .skipped(.successCooldown)
             }

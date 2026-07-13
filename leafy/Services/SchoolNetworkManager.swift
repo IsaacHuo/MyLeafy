@@ -33,6 +33,7 @@ enum SchoolNetworkError: LocalizedError {
     case featureUnavailable(String)
     case timetableQueryFormNotFound(String)
     case timetableDataUnavailable(String)
+    case timetableSemesterMismatch(expected: String, actual: String)
     case classroomDataUnavailable(String)
 
     var errorDescription: String? {
@@ -49,6 +50,8 @@ enum SchoolNetworkError: LocalizedError {
             return L10n.text("未找到课表查询参数，服务端页面结构可能已变更。%@", detail)
         case .timetableDataUnavailable(let detail):
             return L10n.text("课表页面未返回可解析的数据。%@", detail)
+        case .timetableSemesterMismatch(let expected, let actual):
+            return L10n.text("教务返回的课表学期为 %@，与当前配置 %@ 不一致。请稍后重试。", actual, expected)
         case .classroomDataUnavailable(let detail):
             return L10n.text("空教室页面未返回可解析的数据。%@", detail)
         }

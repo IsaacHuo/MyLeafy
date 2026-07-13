@@ -13,7 +13,7 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         let config = SemesterRuntimeConfig(
             semesterID: "2026-2027-1",
             semesterStartDateString: "2026-09-07",
-            supportedWeeks: 18,
+            supportedWeeks: 20,
             graduateTimetableTermCode: "47",
             calendarEvents: [
                 SchoolCalendarEvent(id: "national-2026", title: "国庆", startDateString: "2026-10-01", endDateString: "2026-10-07", kind: .holiday)
@@ -38,7 +38,7 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         let config = SemesterRuntimeConfig(
             semesterID: "",
             semesterStartDateString: "2026-09-07",
-            supportedWeeks: 18,
+            supportedWeeks: 20,
             graduateTimetableTermCode: "47",
             calendarEvents: [],
             updatedAt: nil,
@@ -54,7 +54,7 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         let config = SemesterRuntimeConfig(
             semesterID: "2026-2027-1",
             semesterStartDateString: "2026-09-07",
-            supportedWeeks: 18,
+            supportedWeeks: 20,
             graduateTimetableTermCode: "47",
             calendarEvents: [],
             updatedAt: nil,
@@ -71,7 +71,7 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         let config = SemesterRuntimeConfig(
             semesterID: "2026-2027-1",
             semesterStartDateString: "2026-09-07",
-            supportedWeeks: 18,
+            supportedWeeks: 20,
             graduateTimetableTermCode: "47",
             calendarEvents: [],
             updatedAt: "2026-06-05T00:00:00Z",
@@ -82,8 +82,25 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         XCTAssertTrue(config.isUsable)
         XCTAssertEqual(config.semesterID, "2026-2027-1")
         XCTAssertEqual(config.graduateTimetableTermCode, "47")
+        XCTAssertEqual(SemesterConfig.supportedWeeks, 20)
         XCTAssertEqual(config.calendarEvents, [])
         XCTAssertEqual(SemesterConfig.currentWeek(date: start, config: config), 1)
+    }
+
+    func testTwentyWeekContainerDoesNotDependOnRemoteCourseHorizon() throws {
+        let config = SemesterRuntimeConfig(
+            semesterID: "2026-2027-1",
+            semesterStartDateString: "2026-09-07",
+            supportedWeeks: 19,
+            graduateTimetableTermCode: "47",
+            calendarEvents: [],
+            updatedAt: nil,
+            isActive: true
+        )
+        let weekTwentyStart = try XCTUnwrap(DateFormatters.queryDate.date(from: "2027-01-18"))
+
+        XCTAssertEqual(SemesterConfig.currentWeek(date: weekTwentyStart, config: config), 20)
+        XCTAssertEqual(SemesterConfig.weekAndDay(for: weekTwentyStart, config: config).week, 20)
     }
 
     func testCalendarEventDecodesSnakeCaseDates() throws {

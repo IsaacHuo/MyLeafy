@@ -3,7 +3,6 @@ import SwiftSoup
 
 nonisolated enum HTMLParserError: LocalizedError {
     case timetableTableNotFound
-    case noTimetableCourses
     case tableNotFound(String)
     case tableRowsUnparseable(String)
     
@@ -11,8 +10,6 @@ nonisolated enum HTMLParserError: LocalizedError {
         switch self {
         case .timetableTableNotFound:
             return "未找到课表表格，页面结构可能已变更"
-        case .noTimetableCourses:
-            return "页面已返回，但未解析到任何课程"
         case .tableNotFound(let name):
             return "未找到\(name)数据表格，页面结构可能已变更"
         case .tableRowsUnparseable(let name):
@@ -495,9 +492,6 @@ class HTMLParser {
             }
         }
 
-        if records.isEmpty {
-            throw HTMLParserError.noTimetableCourses
-        }
         return records
     }
     
@@ -541,11 +535,7 @@ class HTMLParser {
             }
         }
 
-        let records = Array(uniqueCourses.values)
-        if records.isEmpty {
-            throw HTMLParserError.noTimetableCourses
-        }
-        return records
+        return Array(uniqueCourses.values)
     }
 
     nonisolated private static func parseTimetableTable(_ timetableTable: Element) throws -> [ParsedCourseRecord] {

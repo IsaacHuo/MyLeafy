@@ -79,6 +79,66 @@ final class SchoolDataPrefetchTests: XCTestCase {
     }
 
     @MainActor
+    func testSemesterChangePrefetchBypassesSuccessCooldown() async throws {
+        defer { cleanupSchoolSession() }
+        activateBJFUIdentity()
+        let defaults = try makeDefaults()
+        var now = Date(timeIntervalSince1970: 2_500)
+        let coordinator = SchoolDataPrefetchCoordinator(userDefaults: defaults, now: { now })
+        let context = try makeModelContainer().mainContext
+        var syncCount = 0
+
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .foreground
+            ) { _, _ in
+                syncCount += 1
+                return .success("current semester")
+            },
+            .started
+        )
+        await waitUntil { syncCount == 1 }
+
+        now = now.addingTimeInterval(60)
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .semesterChanged
+            ) { _, _ in
+                syncCount += 1
+                return .success("next semester")
+            },
+            .started
+        )
+        await waitUntil { syncCount == 2 }
+    }
+
+    @MainActor
+    func testGraduateForegroundPrefetchStartsTimetableSync() async throws {
+        defer { cleanupSchoolSession() }
+        activateBJFUIdentity(portal: .graduate)
+        let coordinator = SchoolDataPrefetchCoordinator(userDefaults: try makeDefaults())
+        let context = try makeModelContainer().mainContext
+        var syncCount = 0
+
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .foreground
+            ) { _, _ in
+                syncCount += 1
+                return .success("graduate timetable")
+            },
+            .started
+        )
+        await waitUntil { syncCount == 1 }
+    }
+
+    @MainActor
     func testFailureCooldownAfterLoginRequiredOutcome() async throws {
         defer { cleanupSchoolSession() }
         activateBJFUIdentity()
@@ -188,9 +248,9 @@ final class SchoolDataPrefetchTests: XCTestCase {
     }
 
     @MainActor
-    private func activateBJFUIdentity() {
+    private func activateBJFUIdentity(portal: SchoolPortal = .undergraduate) {
         let manager = ActiveCampusContext.networkManager
-        manager.currentPortal = .undergraduate
+        manager.currentPortal = portal
         manager.persistAuthenticatedIdentity(
             eduID: "prefetch-test-\(UUID().uuidString)",
             displayName: "Prefetch Test"

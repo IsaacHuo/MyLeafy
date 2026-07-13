@@ -5,6 +5,7 @@
 //  Created by IsaacHuo on 2026/4/21.
 //
 
+import OSLog
 import SwiftData
 import SwiftUI
 import StoreKit
@@ -12,6 +13,7 @@ import UIKit
 
 @main
 struct LeafyApp: App {
+    private let logger = Logger(subsystem: "com.isaachuo.leafy", category: "SemesterRollover")
     @StateObject private var networkManager = ActiveCampusContext.networkManager
     @StateObject private var appNavigation = AppNavigationCoordinator()
     @StateObject private var communityNotificationBadgeViewModel = CommunityNotificationBadgeViewModel()
@@ -136,10 +138,9 @@ struct LeafyApp: App {
                 if ReviewDemoMode.isEnabled {
                     ReviewDemoDataSeeder.seedIfNeeded(using: sharedModelContainer.mainContext)
                 }
-                refreshSemesterRuntimeConfig(force: true)
+                refreshSemesterRuntimeConfig(force: true, prefetchTrigger: .foreground)
                 refreshWidgetSnapshot()
                 refreshScheduleReportNotifications()
-                prefetchSchoolData(trigger: .foreground)
                 externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
             }
             .onChange(of: networkManager.hasCachedIdentity) { _, _ in
@@ -160,9 +161,8 @@ struct LeafyApp: App {
                     refreshWidgetSnapshot()
                 }
                 if newPhase == .active {
-                    refreshSemesterRuntimeConfig()
+                    refreshSemesterRuntimeConfig(prefetchTrigger: .foreground)
                     refreshScheduleReportNotifications()
-                    prefetchSchoolData(trigger: .foreground)
                     externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
                 }
                 if newPhase != .active {
@@ -211,10 +211,9 @@ struct LeafyApp: App {
             modelRecoveryMessage = recoveryMessage
         }
         modelContainerRevision = UUID()
-        refreshSemesterRuntimeConfig(force: true)
+        refreshSemesterRuntimeConfig(force: true, prefetchTrigger: .foreground)
         refreshWidgetSnapshot()
         refreshScheduleReportNotifications()
-        prefetchSchoolData(trigger: .foreground)
     }
 
     @MainActor
@@ -281,13 +280,49 @@ struct LeafyApp: App {
     }
 
     @MainActor
-    private func refreshSemesterRuntimeConfig(force: Bool = false) {
+    private func refreshSemesterRuntimeConfig(
+        force: Bool = false,
+        prefetchTrigger: SchoolDataPrefetchTrigger? = nil
+    ) {
         semesterConfigRefreshTask?.cancel()
         semesterConfigRefreshTask = Task { @MainActor in
-            await SemesterConfig.refreshRemoteIfAvailable(force: force)
+            let previousConfig = SemesterConfig.current
+            let refreshedConfig = await SemesterConfig.refreshRemoteIfAvailable(force: force)
             guard !Task.isCancelled else { return }
+            let semesterChanged = previousConfig.semesterID != refreshedConfig.semesterID
+            let cachedTimetableIsFromAnotherSemester = TimetableCacheMetadata.lastSyncedSemesterID
+                .map { $0 != refreshedConfig.semesterID } ?? false
+            let timetableNeedsSemesterRefresh = semesterChanged || cachedTimetableIsFromAnotherSemester
+            if timetableNeedsSemesterRefresh {
+                resetTimetableForSemesterTransition()
+            }
             refreshWidgetSnapshot()
+            if let prefetchTrigger {
+                prefetchSchoolData(trigger: timetableNeedsSemesterRefresh ? .semesterChanged : prefetchTrigger)
+            }
             semesterConfigRefreshTask = nil
+        }
+    }
+
+    @MainActor
+    private func resetTimetableForSemesterTransition() {
+        guard !ReviewDemoMode.isEnabled,
+              ActiveCampusContext.descriptor.id == .bjfu,
+              ActiveCampusContext.identity?.isCustom != true else {
+            return
+        }
+
+        let context = sharedModelContainer.mainContext
+        do {
+            let courses = try context.fetch(FetchDescriptor<Course>())
+            for course in courses {
+                context.delete(course)
+            }
+            try context.save()
+            TimetableCacheMetadata.clear()
+            SchoolDataRefreshNotifier.post(.timetable)
+        } catch {
+            logger.error("Failed to reset timetable during semester rollover: \(error.localizedDescription, privacy: .public)")
         }
     }
 

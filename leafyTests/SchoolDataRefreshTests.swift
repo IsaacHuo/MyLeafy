@@ -4,6 +4,7 @@ import XCTest
 final class SchoolDataRefreshTests: XCTestCase {
     override func tearDown() {
         SchoolDataCache.clearDiscoverCaches()
+        TimetableCacheMetadata.clear()
         CampusIdentityStore.clear()
         super.tearDown()
     }
@@ -77,6 +78,17 @@ final class SchoolDataRefreshTests: XCTestCase {
     func testLiveTimetableRepositoryResolvesActiveCampusContextManager() {
         activateTemporaryIdentity()
         XCTAssertTrue(LiveSchoolTimetableRepository.activeManagerForRefresh() === ActiveCampusContext.networkManager)
+    }
+
+    @MainActor
+    func testTimetableCacheTracksSyncedSemester() {
+        activateTemporaryIdentity()
+
+        TimetableCacheMetadata.lastSyncedSemesterID = "2026-2027-1"
+        XCTAssertEqual(TimetableCacheMetadata.lastSyncedSemesterID, "2026-2027-1")
+
+        TimetableCacheMetadata.clear()
+        XCTAssertNil(TimetableCacheMetadata.lastSyncedSemesterID)
     }
 
     private func observeSchoolDataRefreshEvents(_ action: () -> Void) -> [SchoolDataRefreshEvent] {

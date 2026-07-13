@@ -73,11 +73,11 @@ enum SchoolDataSyncService {
             return .needsLogin
         }
 
-        guard networkManager.isLoggedIn, networkManager.currentPortal == .undergraduate else {
+        guard networkManager.isLoggedIn else {
             return .needsReauthentication(.schoolDataSync)
         }
 
-        await SemesterConfig.refreshRemoteIfAvailable(force: true)
+        let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: true)
 
         var results: [String] = []
         var refreshedScopes: Set<SchoolDataRefreshScope> = []
@@ -103,75 +103,77 @@ enum SchoolDataSyncService {
             results.append(L10n.text("课表失败", language: language))
         }
 
-        do {
-            let html = try await networkManager.fetchGrades()
-            let parsed = try HTMLParser.parseGrades(html: html)
-            let rankings = (try? HTMLParser.parseGradeRankings(html: html)) ?? []
-            let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html)
-            if !rankings.isEmpty {
-                gradeRankingsToSave = rankings
+        if networkManager.currentPortal == .undergraduate {
+            do {
+                let html = try await networkManager.fetchGrades()
+                let parsed = try HTMLParser.parseGrades(html: html)
+                let rankings = (try? HTMLParser.parseGradeRankings(html: html)) ?? []
+                let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html)
+                if !rankings.isEmpty {
+                    gradeRankingsToSave = rankings
+                }
+                if let creditSummary {
+                    gradeCreditSummaryToSave = creditSummary
+                }
+                parsedGrades = parsed
+                results.append(L10n.text("成绩 %d 条", language: language, parsed.count))
+            } catch {
+                if SchoolReauthentication.requiresReauthentication(error) {
+                    return .needsReauthentication(.schoolDataSync)
+                }
+                results.append(L10n.text("成绩失败", language: language))
             }
-            if let creditSummary {
-                gradeCreditSummaryToSave = creditSummary
-            }
-            parsedGrades = parsed
-            results.append(L10n.text("成绩 %d 条", language: language, parsed.count))
-        } catch {
-            if SchoolReauthentication.requiresReauthentication(error) {
-                return .needsReauthentication(.schoolDataSync)
-            }
-            results.append(L10n.text("成绩失败", language: language))
-        }
 
-        do {
-            let html = try await networkManager.fetchGradeRankings()
-            let parsed = try HTMLParser.parseGradeRankings(html: html)
-            gradeRankingsToSave = parsed
-            if let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html) {
-                gradeCreditSummaryToSave = creditSummary
+            do {
+                let html = try await networkManager.fetchGradeRankings()
+                let parsed = try HTMLParser.parseGradeRankings(html: html)
+                gradeRankingsToSave = parsed
+                if let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html) {
+                    gradeCreditSummaryToSave = creditSummary
+                }
+                results.append(L10n.text("排名 %d 条", language: language, parsed.count))
+            } catch {
+                if SchoolReauthentication.requiresReauthentication(error) {
+                    return .needsReauthentication(.schoolDataSync)
+                }
+                results.append(L10n.text("排名未开放", language: language))
             }
-            results.append(L10n.text("排名 %d 条", language: language, parsed.count))
-        } catch {
-            if SchoolReauthentication.requiresReauthentication(error) {
-                return .needsReauthentication(.schoolDataSync)
-            }
-            results.append(L10n.text("排名未开放", language: language))
-        }
 
-        do {
-            let html = try await networkManager.fetchExamSchedule()
-            let parsed = try HTMLParser.parseExams(html: html)
-            examScheduleToSave = parsed
-            results.append(L10n.text("考试 %d 条", language: language, parsed.count))
-        } catch {
-            if SchoolReauthentication.requiresReauthentication(error) {
-                return .needsReauthentication(.schoolDataSync)
+            do {
+                let html = try await networkManager.fetchExamSchedule()
+                let parsed = try HTMLParser.parseExams(html: html)
+                examScheduleToSave = parsed
+                results.append(L10n.text("考试 %d 条", language: language, parsed.count))
+            } catch {
+                if SchoolReauthentication.requiresReauthentication(error) {
+                    return .needsReauthentication(.schoolDataSync)
+                }
+                results.append(L10n.text("考试失败", language: language))
             }
-            results.append(L10n.text("考试失败", language: language))
-        }
 
-        do {
-            let html = try await networkManager.fetchTeachingPlan()
-            let parsed = try HTMLParser.parseTeachingPlan(html: html)
-            teachingPlanToSave = parsed
-            results.append(L10n.text("教学计划 %d 学期", language: language, parsed.count))
-        } catch {
-            if SchoolReauthentication.requiresReauthentication(error) {
-                return .needsReauthentication(.schoolDataSync)
+            do {
+                let html = try await networkManager.fetchTeachingPlan()
+                let parsed = try HTMLParser.parseTeachingPlan(html: html)
+                teachingPlanToSave = parsed
+                results.append(L10n.text("教学计划 %d 学期", language: language, parsed.count))
+            } catch {
+                if SchoolReauthentication.requiresReauthentication(error) {
+                    return .needsReauthentication(.schoolDataSync)
+                }
+                results.append(L10n.text("教学计划失败", language: language))
             }
-            results.append(L10n.text("教学计划失败", language: language))
-        }
 
-        do {
-            let html = try await networkManager.fetchGraduationRequirements()
-            let document = try HTMLParser.parseTrainingProgram(html: html)
-            trainingProgramToSave = document
-            results.append(L10n.text("培养方案 %d 类", language: language, document.creditRequirements.count))
-        } catch {
-            if SchoolReauthentication.requiresReauthentication(error) {
-                return .needsReauthentication(.schoolDataSync)
+            do {
+                let html = try await networkManager.fetchGraduationRequirements()
+                let document = try HTMLParser.parseTrainingProgram(html: html)
+                trainingProgramToSave = document
+                results.append(L10n.text("培养方案 %d 类", language: language, document.creditRequirements.count))
+            } catch {
+                if SchoolReauthentication.requiresReauthentication(error) {
+                    return .needsReauthentication(.schoolDataSync)
+                }
+                results.append(L10n.text("培养方案失败", language: language))
             }
-            results.append(L10n.text("培养方案失败", language: language))
         }
 
         if let parsedCourses {
@@ -183,6 +185,7 @@ enum SchoolDataSyncService {
             }
             TimetableCacheMetadata.lastSyncAt = Date()
             TimetableCacheMetadata.lastFailureMessage = nil
+            TimetableCacheMetadata.lastSyncedSemesterID = semesterConfig.semesterID
             AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
             refreshedScopes.insert(.timetable)
             if await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: parsedCourses.map(SharedTimetableCourse.init(course:))) {

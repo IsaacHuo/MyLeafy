@@ -161,6 +161,7 @@ nonisolated enum TimetablePeriodSchedule {
 enum TimetableCacheMetadata {
     private static let lastSyncKey = "timetable.lastSyncAt"
     private static let lastFailureKey = "timetable.lastFailureMessage"
+    private static let lastSyncedSemesterKey = "timetable.lastSyncedSemesterID"
 
     static var lastSyncAt: Date? {
         get {
@@ -184,9 +185,25 @@ enum TimetableCacheMetadata {
         }
     }
 
+    static var lastSyncedSemesterID: String? {
+        get {
+            migrateLegacyValues()
+            return UserDefaults.standard.string(forKey: scoped(lastSyncedSemesterKey))
+        }
+        set {
+            let trimmed = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let trimmed, !trimmed.isEmpty {
+                UserDefaults.standard.set(trimmed, forKey: scoped(lastSyncedSemesterKey))
+            } else {
+                UserDefaults.standard.removeObject(forKey: scoped(lastSyncedSemesterKey))
+            }
+        }
+    }
+
     static func clear() {
         UserDefaults.standard.removeObject(forKey: scoped(lastSyncKey))
         UserDefaults.standard.removeObject(forKey: scoped(lastFailureKey))
+        UserDefaults.standard.removeObject(forKey: scoped(lastSyncedSemesterKey))
     }
 
     private static func scoped(_ key: String) -> String {
@@ -195,7 +212,7 @@ enum TimetableCacheMetadata {
 
     private static func migrateLegacyValues() {
         CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-            keys: [lastSyncKey, lastFailureKey],
+            keys: [lastSyncKey, lastFailureKey, lastSyncedSemesterKey],
             migrationID: "timetableMetadata"
         )
     }
