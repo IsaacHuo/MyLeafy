@@ -829,6 +829,53 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertEqual(recentMessages.first?["text"] as? String, "你好")
     }
 
+    func testResearchPlannerUsesDeepSeekNonThinkingToolCompatibility() throws {
+        let toolCall = CampusAIResearchToolCall(
+            id: "call-1",
+            type: "function",
+            function: .init(name: "official_search", arguments: "{\"query\":\"推免\"}")
+        )
+        let payload = CampusAIResearchPlannerPayload(
+            model: CampusAIProviderCatalog.deepSeek.modelIdentifier,
+            messages: [
+                .system("system"),
+                CampusAIResearchMessage(
+                    role: "assistant",
+                    content: nil,
+                    name: nil,
+                    toolCallID: nil,
+                    toolCalls: [toolCall]
+                ),
+                .tool(callID: toolCall.id, name: toolCall.function.name, content: "{\"ok\":true}")
+            ],
+            tools: CampusAIResearchToolDefinition.all,
+            toolChoice: "required",
+            stream: false,
+            thinking: .disabled,
+            temperature: 0,
+            maxTokens: 800
+        )
+
+        let data = try JSONEncoder().encode(payload)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual((body["thinking"] as? [String: Any])?["type"] as? String, "disabled")
+        XCTAssertEqual(body["tool_choice"] as? String, "required")
+
+        let messages = try XCTUnwrap(body["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages[1]["content"] as? String, "")
+        XCTAssertEqual(messages[2]["role"] as? String, "tool")
+        XCTAssertNil(messages[2]["name"])
+        XCTAssertEqual(messages[2]["tool_call_id"] as? String, "call-1")
+    }
+
+    func testResearchPlannerProviderErrorIncludesDeepSeekDetail() {
+        let data = Data(#"{"error":{"message":"tool_choice is not supported in thinking mode"}}"#.utf8)
+        XCTAssertEqual(
+            CampusAIResearchProviderError.message(statusCode: 400, data: data),
+            "DeepSeek 工具规划返回了 400 错误：tool_choice is not supported in thinking mode"
+        )
+    }
+
     func testChatCompletionsPayloadIncludesLocalRetrievalAndCapabilities() throws {
         let context = CampusAIContextBuilder.build(
             courses: [],
