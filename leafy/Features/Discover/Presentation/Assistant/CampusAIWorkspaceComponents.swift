@@ -136,6 +136,8 @@ struct CampusAIHistorySheet: View {
 }
 
 struct CampusAIEmptyConversationPanel: View {
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
     let prompts: [String]
     let hasAPIKey: Bool
     let configureAPIKey: () -> Void
@@ -146,7 +148,7 @@ struct CampusAIEmptyConversationPanel: View {
             VStack(spacing: 12) {
                 Text("Leafy")
                     .font(.largeTitle.weight(.semibold))
-                    .foregroundStyle(AppTheme.primaryText)
+                    .foregroundStyle(AppTheme.accent(for: themeColorPreference))
 
                 Text("和 Leafy 聊聊，获取建议。")
                     .font(.subheadline)
