@@ -131,7 +131,7 @@ async function timetableInvitePreview(codeValue: string | null): Promise<SharePr
   ]);
   const ownerName = limitedDisplayName(profile?.nickname ?? profile?.display_name) ?? "同学";
   const courseCount = typeof snapshot?.course_count === "number" ? snapshot.course_count : undefined;
-  const courseText = courseCount === undefined ? "课程快照" : `${courseCount} 门课程`;
+  const courseText = courseCount === undefined ? "共享课表" : `${courseCount} 门课程`;
 
   return {
     kind: "timetable-invite",

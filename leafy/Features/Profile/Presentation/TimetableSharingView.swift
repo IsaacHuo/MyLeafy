@@ -80,13 +80,13 @@ struct TimetableSharingView: View {
             .listRowBackground(AppTheme.cardBackground)
 
             Section {
-                stepRow(index: 1, title: "发布课表", detail: "上传当前课程快照。")
+                stepRow(index: 1, title: "发布课表", detail: "上传当前课程安排。")
                 stepRow(index: 2, title: "生成邀请码", detail: "把 7 天有效的邀请码发给对方。")
                 stepRow(index: 3, title: "对方接受", detail: "对方点右上角加号，粘贴邀请码。")
             } header: {
                 Text("三步共享")
             } footer: {
-                Text("发布后，只要你之后重新同步课表，已共享的课表快照会自动更新。")
+                Text("发布后，只要你之后重新同步课表，已共享的课表数据会自动更新。")
             }
             .listRowBackground(AppTheme.cardBackground)
 
@@ -136,7 +136,7 @@ struct TimetableSharingView: View {
             } header: {
                 Text("我的共享")
             } footer: {
-                Text("共享课表只包含课程快照，不包含成绩、考试、备注、提醒或收藏。")
+                Text("共享课表只包含课程安排，不包含成绩、考试、备注、提醒或收藏。")
             }
             .listRowBackground(AppTheme.cardBackground)
 
@@ -211,7 +211,7 @@ struct TimetableSharingView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("这会撤销所有同学的查看权限，并让未使用的邀请码立即失效。已发布的课表快照仍只对你自己可见。")
+            Text("这会撤销所有同学的查看权限，并让未使用的邀请码立即失效。已发布的课表仍只对你自己可见。")
         }
     }
 
@@ -603,7 +603,7 @@ private struct AcceptTimetableInviteSheet: View {
                     .buttonStyle(.bordered)
                     .tint(AppTheme.accent)
 
-                    Text("接受后你可以查看对方发布的课程快照。对方可随时撤销查看权限。")
+                    Text("接受后你可以查看对方发布的课程安排。对方可随时撤销查看权限。")
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -692,7 +692,7 @@ private struct SharedTimetableGridDetailView: View {
                 ContentUnavailableView(
                     "暂无课表",
                     systemImage: "calendar",
-                    description: Text("对方发布的课表快照里还没有课程。")
+                    description: Text("对方发布的课表里还没有课程。")
                 )
                 .padding(.horizontal, AppSpacing.page)
             } else {

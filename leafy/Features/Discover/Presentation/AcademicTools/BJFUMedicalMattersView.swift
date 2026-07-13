@@ -49,7 +49,7 @@ struct MedicalPolicyView: View {
             beforeCareSection
             reimbursementPreparationSection
             ruleBoundarySection
-            AcademicDetailFooterText(text: "政策信息为本地快照，实际报销以校医院和学校最新通知为准。")
+            AcademicDetailFooterText(text: "页面使用本机收录的政策信息，实际报销以校医院和学校最新通知为准。")
         }
         .navigationTitle("政策查询")
         .leafyInlineNavigationTitle()

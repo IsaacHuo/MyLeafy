@@ -66,7 +66,6 @@ struct LeafyApp: App {
 
         #if DEBUG
         DebugNetworkDiagnostics.runStartupProbe()
-        CampusOccupancySnapshotExporter.runIfRequested()
         #endif
     }
 

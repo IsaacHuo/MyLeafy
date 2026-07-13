@@ -40,7 +40,7 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 
 - SwiftUI 构建页面与导航，iOS 17 为部署基线；在 iOS 26 上使用受可用性检查保护的系统视觉能力。
 - 教务数据通过 `URLSession`、显式 Cookie 管理和 SwiftSoup 解析；课表链路在必要时使用 `WKWebView` 复现浏览器路径。
-- SwiftData 保存课表、成绩和用户侧本地数据；页面通过预计算投影与快照降低复杂网格的渲染成本。
+- SwiftData 保存课表、成绩和用户侧本地数据；页面通过预计算投影与展示数据降低复杂网格的渲染成本。
 - Supabase Auth、PostgreSQL、Storage 与 Edge Functions 承载非教务业务；RLS、校园范围和资源所有权共同约束数据访问。
 - Leafy AI 的模型请求由 iOS 使用设备 Keychain 中的 DeepSeek Key 直连模型；`campus-ai-tools` 只执行带 JWT 的公开搜索、网页读取和 PDF 转发，不接收模型 Key 或本机校园上下文。
 - Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，管理会话不暴露给浏览器 JavaScript。

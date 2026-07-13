@@ -197,7 +197,7 @@ export const featureShowcases = [
   {
     label: "Sharing",
     title: "Shared timetable",
-    body: "Publish a read-only timetable snapshot and share it with a seven-day invite code.",
+    body: "Publish a read-only timetable and share it with a seven-day invite code.",
     image: "/media/feature-share-timetable.jpg",
     alt: "Shared timetable in MyLeafy"
   }
@@ -253,7 +253,7 @@ export const featureBands: Array<{
     icon: ChatsCircle,
     label: "Community",
     title: "Campus discussion",
-    body: "Profiles, posts, images, comments, likes, notices, feedback, ratings, and shared snapshots are stored in MyLeafy Community."
+    body: "Profiles, posts, images, comments, likes, notices, feedback, ratings, and shared timetable data are stored in MyLeafy Community."
   }
 ];
 
@@ -271,7 +271,7 @@ export const homeDataBoundaries = [
   {
     label: "Community service",
     value: "Supabase",
-    body: "Profiles, posts, comments, likes, notifications, notices, feedback, ratings, and shared timetable snapshots are stored in MyLeafy Community."
+    body: "Profiles, posts, comments, likes, notifications, notices, feedback, ratings, and shared timetable data are stored in MyLeafy Community."
   },
   {
     label: "Website hosting",
@@ -387,7 +387,7 @@ export const privacySummaryCards: Array<{
   {
     icon: Cloud,
     title: "Community data is stored in MyLeafy Community",
-    body: "Nickname, avatar, posts, comments, likes, notifications, feedback, ratings, and shared timetable snapshots are stored in MyLeafy Community."
+    body: "Nickname, avatar, posts, comments, likes, notifications, feedback, ratings, and shared timetable data are stored in MyLeafy Community."
   },
   {
     icon: ShieldCheck,
@@ -411,7 +411,7 @@ export const privacySections: Array<{
       "Local cache: recently synced classes, grades, class notes, reminders, favorite classrooms, links, countdowns, theme preferences, sync time, and failure messages are stored on the current device. iPhone, iPad, and Mac keep separate local copies.",
       "Community profile: anonymous community session, bound school student ID, display name, nickname, avatar, major, grade, email verification state, and profile update time are used for community identity.",
       "Community content: posts, images, comments, likes, notice read state, teacher star ratings, and rating summaries are stored in MyLeafy Community.",
-      "Shared timetable: sharing is created manually in the app. Shared snapshots include course name, teacher, location, week range, class period, semester, and publish time.",
+      "Shared timetable: sharing is created manually in the app. Published timetable data includes course name, teacher, location, week range, class period, semester, and publish time.",
       "Feedback: submitted feedback, optional contact information, device type, system version, app version, login state, and latest timetable sync time are used for support.",
       "Photos and files: MyLeafy reads selected photos only when you choose a community avatar, post image, or timetable background. On Mac, files are accessed through system open or save panels.",
       "Location and calendar: location is used only for weather and commute suggestions. Calendar permission is used only when you export timetable or reminders."
@@ -424,7 +424,7 @@ export const privacySections: Array<{
       "Request and display timetable, grades, exams, academic plans, and classroom information from the school system.",
       "Cache the latest successful sync on device for offline viewing.",
       "Provide community profile, posting, image upload, comments, likes, notifications, notices, feedback, and ratings.",
-      "Let you share a read-only timetable snapshot with a seven-day, single-use invite code after you choose to publish it.",
+      "Let you share a read-only timetable with a seven-day, single-use invite code after you choose to publish it.",
       "Handle support requests for sync failures, login issues, parsing failures, and community service issues.",
       "Maintain community safety through deletion, posting limits, image limits, and admin audit logs."
     ]

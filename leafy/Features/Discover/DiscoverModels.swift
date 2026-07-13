@@ -875,6 +875,7 @@ enum SchoolDataCache {
     private static let trainingProgramKey = "schoolCache.trainingProgram"
     private static let emptyClassroomPrefix = "schoolCache.emptyClassrooms"
     private static let classroomUsagePrefix = "schoolCache.classroomUsage"
+    private static let campusHeatmapDataKey = "schoolCache.campusHeatmapData"
     private static let lastExamSyncKey = "schoolCache.lastExamScheduleSyncAt"
     private static let lastTeachingPlanSyncKey = "schoolCache.lastTeachingPlanSyncAt"
     private static let lastGradeDetailsSyncKey = "schoolCache.lastGradeDetailsSyncAt"
@@ -976,6 +977,17 @@ enum SchoolDataCache {
         UserDefaults.standard.set(Date(), forKey: scoped(lastEmptyClassroomSyncKey))
     }
 
+    static func loadCampusHeatmapData() throws -> CachedCampusHeatmapData? {
+        migrateLegacyValues()
+        guard let data = UserDefaults.standard.data(forKey: scoped(campusHeatmapDataKey)) else { return nil }
+        return try JSONDecoder().decode(CachedCampusHeatmapData.self, from: data)
+    }
+
+    static func saveCampusHeatmapData(_ value: CachedCampusHeatmapData) throws {
+        let data = try JSONEncoder().encode(value)
+        UserDefaults.standard.set(data, forKey: scoped(campusHeatmapDataKey))
+    }
+
     static func lastSyncDate(for kind: SchoolCacheKind) -> Date? {
         migrateLegacyValues()
         switch kind {
@@ -1033,6 +1045,7 @@ enum SchoolDataCache {
             gradeCreditSummaryKey,
             graduationRequirementsKey,
             trainingProgramKey,
+            campusHeatmapDataKey,
             lastExamSyncKey,
             lastTeachingPlanSyncKey,
             lastGradeDetailsSyncKey,

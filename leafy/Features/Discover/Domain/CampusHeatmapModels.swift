@@ -14,6 +14,24 @@ nonisolated struct CampusHeatmapRequest: Equatable, Identifiable, Sendable {
     }
 }
 
+nonisolated struct CachedCampusHeatmapData: Codable, Equatable, Sendable {
+    let date: Date
+    let startPeriod: Int
+    let endPeriod: Int
+    let updatedAt: Date
+    let availableRooms: [EmptyClassroom]
+
+    var heatmapData: CampusHeatmapData {
+        CampusHeatmapData.make(availableRooms: availableRooms)
+    }
+
+    func matches(_ request: CampusHeatmapRequest, calendar: Calendar = .current) -> Bool {
+        calendar.isDate(date, inSameDayAs: request.date)
+            && startPeriod == request.startPeriod
+            && endPeriod == request.endPeriod
+    }
+}
+
 nonisolated struct CampusHeatmapBuildingSummary: Identifiable, Hashable, Sendable {
     var id: String { building }
 
@@ -124,94 +142,6 @@ nonisolated struct CampusOccupancySnapshot: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct CampusOccupiedRoomReference: Codable, Equatable, Sendable {
-    let building: String
-    let room: String
-
-    var identity: ClassroomIdentity {
-        ClassroomIdentity(building: building, room: room)
-    }
-}
-
-nonisolated struct CampusOccupancyArchiveSlot: Codable, Equatable, Sendable {
-    let week: Int
-    let day: Int
-    let period: Int
-    let occupiedRooms: [CampusOccupiedRoomReference]
-    let unmatchedAvailableRoomCount: Int
-
-    var key: String {
-        Self.key(week: week, day: day, period: period)
-    }
-
-    init(week: Int, day: Int, period: Int, snapshot: CampusOccupancySnapshot) {
-        self.week = week
-        self.day = day
-        self.period = period
-        self.occupiedRooms = snapshot.rooms
-            .filter(\.isOccupied)
-            .map { CampusOccupiedRoomReference(building: $0.building, room: $0.room) }
-        self.unmatchedAvailableRoomCount = snapshot.unmatchedAvailableRoomCount
-    }
-
-    static func key(week: Int, day: Int, period: Int) -> String {
-        "\(week)-\(day)-\(period)"
-    }
-}
-
-nonisolated struct CampusOccupancyArchive: Codable, Equatable, Sendable {
-    let semesterID: String
-    let generatedAt: Date
-    let slots: [CampusOccupancyArchiveSlot]
-
-    func slice(for request: CampusHeatmapRequest, config: SemesterRuntimeConfig = SemesterConfig.current) -> CampusOccupancySnapshot? {
-        guard semesterID == config.semesterID else { return nil }
-        guard Self.contains(request.date, in: config) else { return nil }
-
-        let schedule = SemesterConfig.weekAndDay(for: request.date, config: config)
-        let slotsByKey = Dictionary(slots.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
-        let periodSlots = (request.startPeriod...request.endPeriod).compactMap { period in
-            slotsByKey[CampusOccupancyArchiveSlot.key(week: schedule.week, day: schedule.day, period: period)]
-        }
-
-        guard periodSlots.count == request.endPeriod - request.startPeriod + 1 else {
-            return nil
-        }
-
-        var occupiedIDs = Set<ClassroomIdentity>()
-        for slot in periodSlots {
-            for room in slot.occupiedRooms {
-                occupiedIDs.insert(room.identity)
-            }
-        }
-
-        let rooms = ClassroomCatalog.roomsByBuilding.keys.sorted().flatMap { building in
-            (ClassroomCatalog.roomsByBuilding[building] ?? []).map { room in
-                CampusRoomOccupancy(
-                    building: building,
-                    room: room,
-                    isOccupied: occupiedIDs.contains(ClassroomIdentity(building: building, room: room))
-                )
-            }
-        }
-
-        return CampusOccupancySnapshot(
-            rooms: rooms,
-            unmatchedAvailableRoomCount: periodSlots.map(\.unmatchedAvailableRoomCount).max() ?? 0
-        )
-    }
-
-    private static func contains(_ date: Date, in config: SemesterRuntimeConfig) -> Bool {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: config.semesterStartDate)
-        guard let end = calendar.date(byAdding: .day, value: config.supportedWeeks * 7, to: start) else {
-            return false
-        }
-        let day = calendar.startOfDay(for: date)
-        return day >= start && day < end
-    }
-}
-
 nonisolated struct CampusHeatmapData: Equatable, Sendable {
     var buildings: [CampusHeatmapBuildingSummary] = []
     var unmatchedAvailableRoomCount = 0
@@ -286,25 +216,29 @@ nonisolated struct CampusHeatmapData: Equatable, Sendable {
 }
 
 nonisolated struct CampusHeatmapOutcome: Equatable, Sendable {
-    let data: CampusHeatmapData
+    let storedData: CachedCampusHeatmapData?
     let errorMessage: String?
     let requiresReauthentication: Bool
 
-    static func success(_ data: CampusHeatmapData) -> CampusHeatmapOutcome {
+    var data: CampusHeatmapData {
+        storedData?.heatmapData ?? CampusHeatmapData()
+    }
+
+    static func success(_ storedData: CachedCampusHeatmapData?) -> CampusHeatmapOutcome {
         CampusHeatmapOutcome(
-            data: data,
+            storedData: storedData,
             errorMessage: nil,
             requiresReauthentication: false
         )
     }
 
     static func fallback(
-        data: CampusHeatmapData,
+        storedData: CachedCampusHeatmapData?,
         errorMessage: String,
         requiresReauthentication: Bool
     ) -> CampusHeatmapOutcome {
         CampusHeatmapOutcome(
-            data: data,
+            storedData: storedData,
             errorMessage: errorMessage,
             requiresReauthentication: requiresReauthentication
         )

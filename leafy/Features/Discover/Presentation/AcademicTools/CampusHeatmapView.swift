@@ -4,13 +4,16 @@ import SwiftUI
 struct CampusHeatmapView: View {
     @Environment(\.leafyDependencies) private var dependencies
 
+    @State private var networkManager = ActiveCampusContext.networkManager
     @State private var usesCustomFilter = false
     @State private var selectedDate = Date()
     @State private var startPeriod = min(max(TimetablePeriodSchedule.defaultStudyPeriod(), 1), 12)
     @State private var endPeriod = min(max(TimetablePeriodSchedule.defaultStudyPeriod(), 1), 12)
-    @State private var data = CampusHeatmapData()
+    @State private var storedData: CachedCampusHeatmapData?
     @State private var errorMessage: String?
-    @State private var didLoadInitialData = false
+    @State private var isLoading = false
+    @State private var didLoadStoredData = false
+    @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var mapPosition = MapCameraPosition.region(Self.defaultRegion)
     @State private var selectedBuilding: CampusHeatmapBuildingSummary?
 
@@ -34,6 +37,10 @@ struct CampusHeatmapView: View {
         )
     }
 
+    private var data: CampusHeatmapData {
+        storedData?.heatmapData ?? CampusHeatmapData()
+    }
+
     private var querySummary: String {
         "\(DateFormatters.header.string(from: selectedDate)) \(periodRangeText)"
     }
@@ -43,6 +50,10 @@ struct CampusHeatmapView: View {
             return periodDisplayText(safeStartPeriod)
         }
         return "第 \(safeStartPeriod)-\(endPeriod) 节"
+    }
+
+    private var hasCurrentData: Bool {
+        storedData?.matches(heatmapRequest) == true
     }
 
     var body: some View {
@@ -60,54 +71,53 @@ struct CampusHeatmapView: View {
                 if usesCustomFilter {
                     queryControls
                 }
+                updateDataCard
                 if let errorMessage {
                     AcademicDetailCard {
                         Text(errorMessage)
                             .foregroundStyle(AppTheme.warning)
                     }
                 }
-                mapCard
-                heatRankingSection
-                if data.unmatchedAvailableRoomCount > 0 {
-                    unmatchedRoomsSection
+                if storedData == nil {
+                    noDataSection
+                } else {
+                    mapCard
+                    heatRankingSection
+                    if data.unmatchedAvailableRoomCount > 0 {
+                        unmatchedRoomsSection
+                    }
                 }
-                AcademicDetailFooterText(text: "校园热力图仅表示教学楼教室占用估算，不展示课程明细，也不代表食堂、宿舍或真实校园人流。")
+                AcademicDetailFooterText(text: "校园热力图根据最近更新的空闲教室数据估算，不展示课程明细，也不代表食堂、宿舍或真实校园人流。")
             }
         }
         .navigationTitle("校园热力图")
         .leafyInlineNavigationTitle()
         .task {
             normalizePeriods()
-            guard !isCustomCampus, !didLoadInitialData else { return }
-            didLoadInitialData = true
-            await loadHeatmap()
+            guard !isCustomCampus, !didLoadStoredData else { return }
+            didLoadStoredData = true
+            await loadStoredData()
         }
         .onChange(of: usesCustomFilter) { _, enabled in
             if !enabled {
                 resetToCurrentQuery()
             }
             normalizePeriods()
-            Task { await loadHeatmap() }
         }
         .onChange(of: startPeriod) { _, newValue in
             normalizePeriods(startingAt: newValue)
-            if usesCustomFilter {
-                Task { await loadHeatmap() }
-            }
         }
         .onChange(of: endPeriod) { _, _ in
             normalizePeriods()
-            if usesCustomFilter {
-                Task { await loadHeatmap() }
-            }
-        }
-        .onChange(of: selectedDate) { _, _ in
-            if usesCustomFilter {
-                Task { await loadHeatmap() }
-            }
         }
         .sheet(item: $selectedBuilding) { building in
             CampusFloorCongestionSheet(building: building)
+        }
+        .schoolReauthenticationSheet(
+            request: $reauthenticationRequest,
+            networkManager: networkManager
+        ) { _ in
+            Task { await updateData() }
         }
     }
 
@@ -141,14 +151,64 @@ struct CampusHeatmapView: View {
         }
     }
 
+    private var updateDataCard: some View {
+        AcademicDetailCard {
+            VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                Text(querySummary)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                Button {
+                    beginUpdate()
+                } label: {
+                    HStack(spacing: 8) {
+                        if isLoading {
+                            ProgressView()
+                        } else {
+                            Image(systemName: ReviewDemoMode.isEnabled ? "arrow.clockwise" : "person.badge.key")
+                        }
+                        Text(ReviewDemoMode.isEnabled ? "更新数据" : "重新登录并更新数据")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isLoading)
+                .accessibilityHint("更新所选日期和节次的校园热力图数据")
+            }
+        }
+    }
+
+    private var noDataSection: some View {
+        AcademicDetailCard {
+            ContentUnavailableView(
+                "暂无热力图数据",
+                systemImage: "map",
+                description: Text("请先重新登录教务并更新所选日期和节次的数据。")
+            )
+        }
+    }
+
     private var mapCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.compact) {
             AcademicDetailSectionHeader(title: "教学楼拥挤度")
             AcademicDetailCard {
                 VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Text(querySummary)
+                    Text(storedQuerySummary)
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)
+
+                    if let storedData {
+                        Text("上次更新 \(storedData.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                            .microCaption()
+                            .foregroundStyle(AppTheme.tertiaryText)
+                    }
+
+                    if !hasCurrentData {
+                        Label("当前条件尚未更新，下方仍显示上次成功更新的数据。", systemImage: "exclamationmark.triangle")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.warning)
+                    }
 
                     Map(position: $mapPosition) {
                         ForEach(data.mappedBuildings.filter { $0.building != "学研B座" }) { building in
@@ -186,7 +246,7 @@ struct CampusHeatmapView: View {
                     ContentUnavailableView(
                         "暂无拥挤度数据",
                         systemImage: "map",
-                        description: Text("当前条件没有可用的内置占用快照。")
+                        description: Text("上次更新没有返回可用于计算拥挤度的教室。")
                     )
                 } else {
                     VStack(spacing: 0) {
@@ -268,11 +328,47 @@ struct CampusHeatmapView: View {
         .padding(.vertical, 8)
     }
 
-    private func loadHeatmap() async {
-        let outcome = await dependencies.campusHeatmapService.load(heatmapRequest)
+    private var storedQuerySummary: String {
+        guard let storedData else { return "" }
+        let periodText: String
+        if storedData.startPeriod == storedData.endPeriod {
+            periodText = periodDisplayText(storedData.startPeriod)
+        } else {
+            periodText = "第 \(storedData.startPeriod)-\(storedData.endPeriod) 节"
+        }
+        return "\(DateFormatters.header.string(from: storedData.date)) \(periodText)"
+    }
+
+    private func beginUpdate() {
+        guard !isLoading else { return }
+        if ReviewDemoMode.isEnabled {
+            Task { await updateData() }
+        } else {
+            reauthenticationRequest = SchoolReauthenticationRequest(context: .campusHeatmap)
+        }
+    }
+
+    private func loadStoredData() async {
+        let outcome = await dependencies.campusHeatmapService.loadStoredData()
 
         await MainActor.run {
-            data = outcome.data
+            storedData = outcome.storedData
+            errorMessage = outcome.errorMessage
+        }
+    }
+
+    private func updateData() async {
+        guard !isLoading else { return }
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        defer { Task { @MainActor in isLoading = false } }
+
+        let outcome = await dependencies.campusHeatmapService.update(heatmapRequest)
+
+        await MainActor.run {
+            storedData = outcome.storedData
             errorMessage = outcome.errorMessage
         }
     }
@@ -393,7 +489,7 @@ private struct CampusFloorCongestionSheet: View {
                     }
                 }
 
-                AcademicDetailFooterText(text: "楼层拥挤度来自匿名教室占用快照，仅展示聚合结果。")
+                AcademicDetailFooterText(text: "楼层拥挤度根据最近更新的空闲教室数据估算，仅展示聚合结果。")
             }
             .navigationTitle("楼层情况")
             .leafyInlineNavigationTitle()

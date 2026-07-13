@@ -71,6 +71,13 @@ struct SchoolReauthenticationContext: Equatable {
         submitTitle: "登录并继续查询"
     )
 
+    static let campusHeatmap = SchoolReauthenticationContext(
+        portal: .undergraduate,
+        title: "重新登录教务",
+        message: "请先连接校园网并重新登录，之后会抓取所选日期和节次的空闲教室数据。",
+        submitTitle: "登录并更新数据"
+    )
+
     static let schoolDataSync = SchoolReauthenticationContext(
         portal: .undergraduate,
         title: "重新登录教务",

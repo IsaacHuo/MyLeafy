@@ -14,6 +14,11 @@ Timetable direction:
 - Runtime semester configuration selects the undergraduate semester ID, graduate term code, and first-week date without requiring an App Store release.
 - Undergraduate and graduate timetable refreshes must use the same observable cache and error semantics.
 
+Campus heatmap direction:
+- Do not bundle semester-wide classroom occupancy data. The user explicitly logs in and updates the selected date and periods on demand.
+- Keep only the latest successful heatmap data per campus account and overwrite it after each successful update.
+- User-facing copy says “更新数据” and “上次更新”; avoid unfamiliar implementation terminology.
+
 Leafy AI direction:
 - BYOK is the only model mode. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek.
 - Web research uses the authenticated `campus-ai-tools` Supabase Tool Gateway. The gateway may receive search queries and signed result receipts, but never receives the model key or local campus context.
