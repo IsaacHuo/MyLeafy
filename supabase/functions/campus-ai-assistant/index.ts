@@ -2676,7 +2676,7 @@ function academicRouteTitle(route: string) {
     case "medicalLedger":
       return "医疗台账";
     default:
-      return "学业页面";
+      return "校园页面";
   }
 }
 
