@@ -5,6 +5,13 @@ import UIKit
 import AppKit
 #endif
 
+enum LeafyRootChromeMetrics {
+    static let controlDiameter: CGFloat = 44
+    static let contentSpacing: CGFloat = AppSpacing.micro
+    static let reservedHeight: CGFloat = controlDiameter + contentSpacing
+    static let horizontalInset: CGFloat = AppSpacing.page
+}
+
 struct LeafyPageBackground: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
@@ -90,9 +97,12 @@ struct LeafyGlassIconButton: View {
     private var label: some View {
         ZStack(alignment: .topTrailing) {
             Image(systemName: systemName)
-                .font(.system(size: 17 * leafyControlScale, weight: .semibold))
+                .font(.system(size: 18 * leafyControlScale, weight: .semibold))
                 .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                .frame(width: 38 * leafyControlScale, height: 38 * leafyControlScale)
+                .frame(
+                    width: LeafyRootChromeMetrics.controlDiameter,
+                    height: LeafyRootChromeMetrics.controlDiameter
+                )
                 .contentShape(Circle())
 
             if showsBadge {

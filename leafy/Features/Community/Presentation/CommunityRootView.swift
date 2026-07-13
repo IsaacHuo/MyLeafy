@@ -351,9 +351,9 @@ struct CommunityRootView: View {
     }
 
     private var communityHeaderContentInset: CGFloat {
-        let baseInset = 58 * leafyControlScale
+        let baseInset = LeafyRootChromeMetrics.reservedHeight
         guard isTopicFilterPresented, isCommunityFeedAtTop else { return baseInset }
-        return baseInset + communityTopicFilterHeight + 8 * leafyControlScale
+        return baseInset + communityTopicFilterHeight + LeafyRootChromeMetrics.contentSpacing
     }
 
     @MainActor
@@ -444,8 +444,7 @@ struct CommunityRootView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, AppSpacing.page)
-        .padding(.top, AppSpacing.micro)
+        .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
         .animation(.easeOut(duration: 0.18), value: isTopicFilterPresented)
     }
 
@@ -467,7 +466,7 @@ struct CommunityRootView: View {
             }
             .padding(.horizontal, 14 * leafyControlScale)
             .frame(maxWidth: .infinity)
-            .frame(height: 44 * leafyControlScale)
+            .frame(height: LeafyRootChromeMetrics.controlDiameter)
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -917,10 +916,6 @@ private struct DiscoverLiquidGlassIconButton: View {
     let accessibilityLabel: String
     let action: () -> Void
 
-    private var buttonSize: CGFloat {
-        44 * leafyControlScale
-    }
-
     var body: some View {
         Button(action: action) {
             label
@@ -943,7 +938,10 @@ private struct DiscoverLiquidGlassIconButton: View {
                 }
             }
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-            .frame(width: buttonSize, height: buttonSize)
+            .frame(
+                width: LeafyRootChromeMetrics.controlDiameter,
+                height: LeafyRootChromeMetrics.controlDiameter
+            )
             .contentShape(Circle())
 
             if showsBadge {

@@ -278,9 +278,7 @@ struct CampusAIAssistantView: View {
         selectedConversationID = conversation.id
         visibleSuggestionPrompts = Self.randomSuggestionPrompts()
         persistModelContext(operation: "conversation.create")
-        if hasAPIKey {
-            isComposerFocused = true
-        } else {
+        if !hasAPIKey {
             openAPIKeySetup()
         }
     }
@@ -326,7 +324,7 @@ struct CampusAIAssistantView: View {
             messages.first(where: { $0.id == messageID && $0.roleRawValue == CampusAIMessageRole.user.rawValue })
         }
         pendingRegenerationUserMessageID = nil
-        outputMode = .automatic
+        outputMode.resetToAutomatic()
 
         let conversation = selectedConversation ?? {
             let newConversation = CampusAIConversation()
@@ -671,9 +669,6 @@ struct CampusAIAssistantView: View {
 
     private func handleSheetDismissal() {
         refreshConfiguredProviders()
-        if hasAPIKey {
-            isComposerFocused = true
-        }
     }
 
     private func executeOpenAcademicRoute(_ draft: CampusAIActionDraft) throws {

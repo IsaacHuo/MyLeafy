@@ -177,6 +177,20 @@ struct CampusAIAPIKeySetupView: View {
             }
 
             Section {
+                Text("1. 登录 DeepSeek 开放平台。")
+                Text("2. 在 API Keys 页面创建并复制密钥。")
+                Text("3. 返回 Leafy，将密钥粘贴到下方并保存。")
+
+                Link(destination: provider.apiKeyManagementURL) {
+                    Label("前往 DeepSeek API Keys", systemImage: "arrow.up.right.square")
+                }
+            } header: {
+                Text("如何获取 API Key")
+            } footer: {
+                Text("链接将使用系统浏览器打开 DeepSeek 官方开放平台。")
+            }
+
+            Section {
                 SecureField("DeepSeek API Key", text: $apiKeyDraft)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()

@@ -267,9 +267,13 @@ final class CampusAIAssistantTests: XCTestCase {
             displayName: "DeepSeek",
             modelIdentifier: "deepseek-v4-flash",
             modelDisplayName: "DeepSeek V4 Flash",
-            baseURLString: "https://api.deepseek.com"
+            baseURLString: "https://api.deepseek.com",
+            apiKeyManagementURL: URL(string: "https://platform.deepseek.com/api_keys")!
         )])
         XCTAssertEqual(CampusAIProviderCatalog.defaultProvider, CampusAIProviderCatalog.deepSeek)
+        XCTAssertEqual(CampusAIProviderCatalog.deepSeek.apiKeyManagementURL.scheme, "https")
+        XCTAssertEqual(CampusAIProviderCatalog.deepSeek.apiKeyManagementURL.host, "platform.deepseek.com")
+        XCTAssertEqual(CampusAIProviderCatalog.deepSeek.apiKeyManagementURL.path, "/api_keys")
     }
 
     func testSettingsStoreMigratesLegacyPromptAndContextOnly() throws {
@@ -1842,6 +1846,19 @@ final class CampusAIAssistantTests: XCTestCase {
         let oldData = try JSONSerialization.data(withJSONObject: object)
         let decoded = try JSONDecoder().decode(CampusAIRequest.self, from: oldData)
         XCTAssertEqual(decoded.outputMode, .automatic)
+    }
+
+    func testOutputModeCancellationResetsToAutomatic() {
+        var outputMode = CampusAIOutputMode.artifact
+
+        outputMode.resetToAutomatic()
+
+        XCTAssertEqual(outputMode, .automatic)
+    }
+
+    func testCompletionPlanEventPolicyPublishesOnlyNonemptyActions() {
+        XCTAssertFalse(CampusAICompletionPlanEventPolicy.shouldPublishActionEvents(actionCount: 0))
+        XCTAssertTrue(CampusAICompletionPlanEventPolicy.shouldPublishActionEvents(actionCount: 1))
     }
 
     func testCompletionPlanParsesArtifactAndValidatesActions() throws {

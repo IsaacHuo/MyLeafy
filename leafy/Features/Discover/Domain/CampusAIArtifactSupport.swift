@@ -4,6 +4,16 @@ import OSLog
 nonisolated enum CampusAIOutputMode: String, Codable, Hashable, Sendable {
     case automatic
     case artifact
+
+    mutating func resetToAutomatic() {
+        self = .automatic
+    }
+}
+
+nonisolated enum CampusAICompletionPlanEventPolicy {
+    static func shouldPublishActionEvents(actionCount: Int) -> Bool {
+        actionCount > 0
+    }
 }
 
 nonisolated enum CampusAIArtifactGenerationState: String, Codable, Hashable, Sendable {

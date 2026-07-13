@@ -31,9 +31,8 @@ struct CampusAIChatTopBar: View {
                 action: startNewConversation
             )
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 8)
+        .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
+        .padding(.bottom, LeafyRootChromeMetrics.contentSpacing)
     }
 }
 
@@ -122,6 +121,7 @@ struct CampusAIHistorySheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .listRowSeparator(.hidden)
                 .swipeActions {
                     Button(role: .destructive) {
                         deleteConversation(conversation)
@@ -148,7 +148,7 @@ struct CampusAIEmptyConversationPanel: View {
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text("和 Leafy 讨论任何问题。\n需要时，它也能结合你允许的本机数据整理建议与成品。")
+                Text("和 Leafy 聊聊，获取建议。")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
                     .multilineTextAlignment(.center)
@@ -246,7 +246,7 @@ struct CampusAIComposerBar: View {
         }
         .frame(maxWidth: 820)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
         .padding(.bottom, 8)
         .animation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2), value: outputMode)
     }
@@ -337,29 +337,37 @@ struct CampusAIComposerBar: View {
             Text("下一条消息将生成成品")
                 .font(.caption.weight(.medium))
             Spacer(minLength: 8)
-            Button {
-                outputMode = .automatic
-            } label: {
+            Button(action: cancelArtifactMode) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("取消生成成品")
         }
         .foregroundStyle(AppTheme.accent)
         .padding(.leading, 14)
-        .padding(.trailing, 8)
-        .padding(.vertical, 6)
+        .padding(.trailing, 4)
 
         if #available(iOS 26.0, *) {
-            pill.glassEffect(.regular.tint(AppTheme.accent.opacity(0.10)).interactive(), in: .capsule)
+            pill.glassEffect(.regular.tint(AppTheme.accent.opacity(0.10)), in: .capsule)
         } else {
             pill
                 .background(.ultraThinMaterial, in: Capsule())
                 .overlay {
                     Capsule().strokeBorder(AppTheme.accent.opacity(0.18), lineWidth: 0.5)
                 }
+        }
+    }
+
+    private func cancelArtifactMode() {
+        if accessibilityReduceMotion {
+            outputMode.resetToAutomatic()
+        } else {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                outputMode.resetToAutomatic()
+            }
         }
     }
 }

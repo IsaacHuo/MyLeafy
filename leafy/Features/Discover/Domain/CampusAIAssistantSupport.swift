@@ -519,6 +519,7 @@ nonisolated struct CampusAIProviderDescriptor: Hashable, Identifiable {
     let modelIdentifier: String
     let modelDisplayName: String
     let baseURLString: String
+    let apiKeyManagementURL: URL
 }
 
 nonisolated enum CampusAIProviderCatalog {
@@ -527,7 +528,8 @@ nonisolated enum CampusAIProviderCatalog {
         displayName: "DeepSeek",
         modelIdentifier: "deepseek-v4-flash",
         modelDisplayName: "DeepSeek V4 Flash",
-        baseURLString: "https://api.deepseek.com"
+        baseURLString: "https://api.deepseek.com",
+        apiKeyManagementURL: URL(string: "https://platform.deepseek.com/api_keys")!
     )
     static let all = [deepSeek]
     static let defaultProvider = deepSeek
@@ -4411,8 +4413,10 @@ nonisolated struct CampusAIService {
                             )
                             directAgentTrace.append(synthesisStep)
                             continuation.yield(.agentStep(synthesisStep))
-                            continuation.yield(.agentStatus(shouldCreateArtifact ? "正在整理成品" : "正在规划动作"))
-                            continuation.yield(.agentTool(.init(name: "completion.plan", status: "running")))
+                            continuation.yield(.agentStatus(shouldCreateArtifact ? "正在整理成品" : "正在整理回答"))
+                            if shouldCreateArtifact {
+                                continuation.yield(.agentTool(.init(name: "completion.plan", status: "running")))
+                            }
                         }
                         if shouldCreateArtifact {
                             finalResponse.artifactState = .generating
@@ -4450,22 +4454,26 @@ nonisolated struct CampusAIService {
                             }
                         }
                         if usesDirectAgent {
-                            let actionStep = directAgentStep(
-                                id: "direct-agent-action-plan",
-                                title: "动作规划",
-                                detail: finalResponse.actions.isEmpty
-                                    ? "没有生成需要确认的动作卡片。"
-                                    : "已生成 \(finalResponse.actions.count) 个待确认动作。",
-                                status: finalResponse.actions.isEmpty ? "skipped" : "completed",
-                                tool: "completion.plan"
-                            )
-                            directAgentTrace.append(actionStep)
-                            continuation.yield(.agentTool(.init(
-                                name: "completion.plan",
-                                status: "completed",
-                                resultCount: finalResponse.actions.count
-                            )))
-                            continuation.yield(.agentStep(actionStep))
+                            let shouldPublishActionEvents = CampusAICompletionPlanEventPolicy
+                                .shouldPublishActionEvents(actionCount: finalResponse.actions.count)
+                            if shouldPublishActionEvents {
+                                let actionStep = directAgentStep(
+                                    id: "direct-agent-action-plan",
+                                    title: "动作规划",
+                                    detail: "已生成 \(finalResponse.actions.count) 个待确认动作。",
+                                    status: "completed",
+                                    tool: "completion.plan"
+                                )
+                                directAgentTrace.append(actionStep)
+                                continuation.yield(.agentStep(actionStep))
+                            }
+                            if shouldCreateArtifact || shouldPublishActionEvents {
+                                continuation.yield(.agentTool(.init(
+                                    name: "completion.plan",
+                                    status: "completed",
+                                    resultCount: finalResponse.actions.count + finalResponse.deliverables.count
+                                )))
+                            }
                             finalResponse.agentTrace = mergeAgentTrace(
                                 finalResponse.agentTrace,
                                 directAgentTrace
