@@ -1,11 +1,5 @@
 import Foundation
 
-enum CampusAIWorkspaceRoute: Hashable {
-    case search
-    case artifactLibrary
-    case artifact(messageID: UUID, deliverableID: String)
-}
-
 struct CampusAIArtifactLibraryItem: Identifiable, Hashable {
     let id: String
     let messageID: UUID

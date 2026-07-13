@@ -5,7 +5,6 @@ struct CampusAIAssistantView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage(Self.experimentalNoticeAcknowledgedKey) private var experimentalNoticeAcknowledged = false
     @FocusState private var isComposerFocused: Bool
     @Query(sort: \CampusAIConversation.updatedAt, order: .reverse) private var conversations: [CampusAIConversation]
@@ -27,10 +26,6 @@ struct CampusAIAssistantView: View {
     @State private var visibleSuggestionPrompts = Self.randomSuggestionPrompts()
     @State private var configuredProviderIDs: Set<CampusAIProviderID> = []
     @State private var artifactCompletionSignal = 0
-    @State private var workspacePath: [CampusAIWorkspaceRoute] = []
-    @State private var isSidebarPresented = false
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var composerHeight: CGFloat = 68
 
     private var hasAPIKey: Bool {
         configuredProviderIDs.contains(userSettings.selectedProviderID)
@@ -55,10 +50,6 @@ struct CampusAIAssistantView: View {
         return messages.filter { $0.conversationID == key }
     }
 
-    private var artifactLibraryItems: [CampusAIArtifactLibraryItem] {
-        CampusAIArtifactLibraryIndex.items(messages: messages, conversations: conversations)
-    }
-
     private func actionRecords(for message: CampusAIMessage) -> [CampusAIActionRecord] {
         actionRecords.filter {
             $0.conversationID == message.conversationID &&
@@ -71,15 +62,7 @@ struct CampusAIAssistantView: View {
     }
 
     var body: some View {
-        CampusAIWorkspaceShell(
-            isSidebarPresented: $isSidebarPresented,
-            columnVisibility: $columnVisibility
-        ) {
-            workspaceSidebar
-        } content: {
-            workspaceNavigation
-        }
-        .toolbar(.hidden, for: .tabBar)
+        assistantNavigation
         .onAppear {
             selectInitialConversationIfNeeded()
             presentExperimentalNoticeIfNeeded()
@@ -91,6 +74,15 @@ struct CampusAIAssistantView: View {
         }
         .sheet(item: $activeSheet, onDismiss: handleSheetDismissal) { destination in
             switch destination {
+            case .history:
+                CampusAIHistorySheet(
+                    conversations: conversations,
+                    selectedConversationID: selectedConversation?.id,
+                    selectConversation: selectConversationFromHistory,
+                    deleteConversation: deleteConversation,
+                    clearHistory: clearAllHistory
+                )
+                .presentationDetents([.large])
             case .settings:
                 CampusAISettingsView(
                     settings: $userSettings,
@@ -134,30 +126,19 @@ struct CampusAIAssistantView: View {
         .sensoryFeedback(.success, trigger: artifactCompletionSignal)
     }
 
-    private var workspaceNavigation: some View {
-        NavigationStack(path: $workspacePath) {
+    private var assistantNavigation: some View {
+        NavigationStack {
             conversationScroll
                 .background(AppTheme.cardElevated.ignoresSafeArea())
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(action: toggleSidebar) {
-                            Label("打开 Leafy 菜单", systemImage: "line.3.horizontal")
-                        }
-                    }
-
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        Button(action: startNewConversation) {
-                            Label("新建对话", systemImage: "square.and.pencil")
-                        }
-
-                        Button(action: leaveWorkspace) {
-                            Label("退出 Leafy", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
-                    }
+                .toolbar(.hidden, for: .navigationBar)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    CampusAIChatTopBar(
+                        openHistory: openHistory,
+                        openSettings: openSettings,
+                        startNewConversation: startNewConversation
+                    )
                 }
-                .overlay(alignment: .bottom) {
+                .safeAreaInset(edge: .bottom, spacing: 0) {
                     CampusAIComposerBar(
                         draftText: $draftText,
                         outputMode: $outputMode,
@@ -170,62 +151,6 @@ struct CampusAIAssistantView: View {
                         cancelStreaming: cancelStreaming
                     )
                 }
-                .onPreferenceChange(CampusAIComposerHeightPreferenceKey.self) { height in
-                    guard height > 0, abs(height - composerHeight) > 0.5 else { return }
-                    composerHeight = height
-                }
-                .navigationDestination(for: CampusAIWorkspaceRoute.self) { route in
-                    workspaceDestination(for: route)
-                }
-        }
-    }
-
-    private var workspaceSidebar: some View {
-        CampusAIWorkspaceSidebar(
-            isActive: horizontalSizeClass == .regular || isSidebarPresented,
-            conversations: conversations,
-            selectedConversationID: selectedConversation?.id,
-            artifactCount: artifactLibraryItems.count,
-            search: openWorkspaceSearch,
-            openArtifactLibrary: openArtifactLibrary,
-            selectConversation: selectConversationFromSidebar,
-            deleteConversation: deleteConversation,
-            openSettings: openSettings
-        )
-    }
-
-    @ViewBuilder
-    private func workspaceDestination(for route: CampusAIWorkspaceRoute) -> some View {
-        switch route {
-        case .search:
-            CampusAIWorkspaceSearchView(
-                conversations: conversations,
-                artifacts: artifactLibraryItems,
-                selectConversation: selectConversationFromSearch,
-                openArtifact: openArtifact
-            )
-        case .artifactLibrary:
-            CampusAIArtifactLibraryView(
-                items: artifactLibraryItems,
-                openArtifact: openArtifact
-            )
-        case .artifact(let messageID, let deliverableID):
-            if let item = artifactLibraryItems.first(where: {
-                $0.messageID == messageID && $0.deliverable.id == deliverableID
-            }) {
-                CampusAIArtifactReaderView(
-                    deliverable: item.deliverable,
-                    messageID: item.messageID
-                )
-            } else {
-                ContentUnavailableView(
-                    "成品不可用",
-                    systemImage: "doc.badge.ellipsis",
-                    description: Text("这份成品可能已随原对话删除。")
-                )
-                .navigationTitle("成品")
-                .navigationBarTitleDisplayMode(.inline)
-            }
         }
     }
 
@@ -278,7 +203,7 @@ struct CampusAIAssistantView: View {
                 }
                 .leafyAdaptiveContentWidth(maxWidth: 820, horizontalPadding: AppSpacing.page)
                 .padding(.top, AppSpacing.card)
-                .padding(.bottom, composerHeight + AppSpacing.card)
+                .padding(.bottom, AppSpacing.card)
                 .animation(
                     accessibilityReduceMotion ? nil : .easeOut(duration: 0.18),
                     value: selectedMessages.map(\.id)
@@ -324,62 +249,18 @@ struct CampusAIAssistantView: View {
 
     private static let experimentalNoticeAcknowledgedKey = "campusAI.experimentalNoticeAcknowledged.v1"
 
-    private func toggleSidebar() {
+    private func openHistory() {
         isComposerFocused = false
-        if horizontalSizeClass == .regular {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
-            }
-        } else {
-            withAnimation(accessibilityReduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.34, dampingFraction: 0.88)) {
-                isSidebarPresented.toggle()
-            }
-        }
+        activeSheet = .history
     }
 
-    private func closeSidebar() {
-        withAnimation(accessibilityReduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.34, dampingFraction: 0.88)) {
-            isSidebarPresented = false
-        }
-    }
-
-    private func openWorkspaceSearch() {
-        isComposerFocused = false
-        closeSidebar()
-        workspacePath = [.search]
-    }
-
-    private func openArtifactLibrary() {
-        isComposerFocused = false
-        closeSidebar()
-        workspacePath = [.artifactLibrary]
-    }
-
-    private func openArtifact(_ item: CampusAIArtifactLibraryItem) {
-        workspacePath.append(.artifact(messageID: item.messageID, deliverableID: item.deliverable.id))
-    }
-
-    private func selectConversationFromSidebar(_ conversation: CampusAIConversation) {
+    private func selectConversationFromHistory(_ conversation: CampusAIConversation) {
         selectedConversationID = conversation.id
-        workspacePath.removeAll()
-        closeSidebar()
-    }
-
-    private func selectConversationFromSearch(_ conversation: CampusAIConversation) {
-        selectedConversationID = conversation.id
-        workspacePath.removeAll()
     }
 
     private func openSettings() {
         isComposerFocused = false
-        closeSidebar()
         activeSheet = .settings
-    }
-
-    private func leaveWorkspace() {
-        isComposerFocused = false
-        closeSidebar()
-        appNavigation.leaveLeafyWorkspace()
     }
 
     private func selectInitialConversationIfNeeded() {
@@ -392,8 +273,6 @@ struct CampusAIAssistantView: View {
 
     private func startNewConversation() {
         cancelStreaming()
-        workspacePath.removeAll()
-        closeSidebar()
         let conversation = CampusAIConversation()
         modelContext.insert(conversation)
         selectedConversationID = conversation.id
@@ -792,7 +671,7 @@ struct CampusAIAssistantView: View {
 
     private func handleSheetDismissal() {
         refreshConfiguredProviders()
-        if hasAPIKey, workspacePath.isEmpty {
+        if hasAPIKey {
             isComposerFocused = true
         }
     }
@@ -1026,12 +905,15 @@ struct CampusAIAssistantView: View {
 }
 
 private enum CampusAISheetDestination: Identifiable {
+    case history
     case settings
     case apiKey
     case actionEditor(CampusAIActionEditorPresentation)
 
     var id: String {
         switch self {
+        case .history:
+            return "history"
         case .settings:
             return "settings"
         case .apiKey:

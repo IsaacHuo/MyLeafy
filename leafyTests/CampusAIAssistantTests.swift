@@ -117,45 +117,6 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertFalse(CampusAIActionPresentationPolicy.isCollapsedByDefault(.pending))
     }
 
-    func testDrawerInteractionRequiresHorizontalIntentAndUsesProjectedPosition() {
-        XCTAssertTrue(CampusAIDrawerInteraction.isHorizontal(CGSize(width: 80, height: 20)))
-        XCTAssertFalse(CampusAIDrawerInteraction.isHorizontal(CGSize(width: 20, height: 80)))
-        XCTAssertFalse(CampusAIDrawerInteraction.isHorizontal(CGSize(width: 6, height: 0)))
-
-        XCTAssertTrue(
-            CampusAIDrawerInteraction.shouldOpen(
-                isOpen: false,
-                translation: 30,
-                predictedTranslation: 120,
-                drawerWidth: 320
-            )
-        )
-        XCTAssertFalse(
-            CampusAIDrawerInteraction.shouldOpen(
-                isOpen: false,
-                translation: 30,
-                predictedTranslation: 50,
-                drawerWidth: 320
-            )
-        )
-        XCTAssertFalse(
-            CampusAIDrawerInteraction.shouldOpen(
-                isOpen: true,
-                translation: -40,
-                predictedTranslation: -100,
-                drawerWidth: 320
-            )
-        )
-        XCTAssertTrue(
-            CampusAIDrawerInteraction.shouldOpen(
-                isOpen: true,
-                translation: -20,
-                predictedTranslation: -40,
-                drawerWidth: 320
-            )
-        )
-    }
-
     func testArtifactLibraryBuildsStableSortedItemsAndIgnoresFailedOrEmptyArtifacts() throws {
         let olderConversation = CampusAIConversation(id: UUID(), title: "旧对话", summary: "复习总结")
         let newerConversation = CampusAIConversation(id: UUID(), title: "新对话", summary: "旅行计划")

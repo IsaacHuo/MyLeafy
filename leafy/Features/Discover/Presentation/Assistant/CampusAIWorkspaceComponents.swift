@@ -1,5 +1,140 @@
 import SwiftUI
 
+struct CampusAIChatTopBar: View {
+    let openHistory: () -> Void
+    let openSettings: () -> Void
+    let startNewConversation: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            LeafyGlassGroup(spacing: 10) {
+                HStack(spacing: 10) {
+                    LeafyGlassIconButton(
+                        systemName: "clock.arrow.circlepath",
+                        accessibilityLabel: "历史记录",
+                        action: openHistory
+                    )
+
+                    LeafyGlassIconButton(
+                        systemName: "gearshape",
+                        accessibilityLabel: "Leafy 设置",
+                        action: openSettings
+                    )
+                }
+            }
+
+            Spacer(minLength: 16)
+
+            LeafyGlassIconButton(
+                systemName: "plus",
+                accessibilityLabel: "新建对话",
+                action: startNewConversation
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+}
+
+struct CampusAIHistorySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var isClearConfirmationPresented = false
+
+    let conversations: [CampusAIConversation]
+    let selectedConversationID: UUID?
+    let selectConversation: (CampusAIConversation) -> Void
+    let deleteConversation: (CampusAIConversation) -> Void
+    let clearHistory: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if conversations.isEmpty {
+                    ContentUnavailableView(
+                        "暂无对话",
+                        systemImage: "bubble.left.and.bubble.right",
+                        description: Text("新的对话会保存在这台设备上。")
+                    )
+                } else {
+                    conversationList
+                }
+            }
+            .navigationTitle("历史记录")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("完成") { dismiss() }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        isClearConfirmationPresented = true
+                    } label: {
+                        Label("清空历史", systemImage: "trash")
+                    }
+                    .disabled(conversations.isEmpty)
+                }
+            }
+            .confirmationDialog(
+                "清空全部对话？",
+                isPresented: $isClearConfirmationPresented,
+                titleVisibility: .visible
+            ) {
+                Button("清空全部历史", role: .destructive) {
+                    clearHistory()
+                    dismiss()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("这只会删除当前设备上的 Leafy 聊天记录。")
+            }
+        }
+    }
+
+    private var conversationList: some View {
+        List {
+            ForEach(conversations) { conversation in
+                Button {
+                    selectConversation(conversation)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(conversation.title.nonEmptyTrimmed ?? "新的对话")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(AppTheme.primaryText)
+                                .lineLimit(1)
+
+                            Text(conversation.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        if selectedConversationID == conversation.id {
+                            Image(systemName: "checkmark")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .swipeActions {
+                    Button(role: .destructive) {
+                        deleteConversation(conversation)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
+}
+
 struct CampusAIEmptyConversationPanel: View {
     let prompts: [String]
     let hasAPIKey: Bool
@@ -113,11 +248,6 @@ struct CampusAIComposerBar: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(key: CampusAIComposerHeightPreferenceKey.self, value: proxy.size.height)
-            }
-        }
         .animation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2), value: outputMode)
     }
 
@@ -231,14 +361,6 @@ struct CampusAIComposerBar: View {
                     Capsule().strokeBorder(AppTheme.accent.opacity(0.18), lineWidth: 0.5)
                 }
         }
-    }
-}
-
-struct CampusAIComposerHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 
