@@ -143,7 +143,10 @@ MyLeafy 同时维护两个独立身份：
 ### 3.5 AI 与额度
 
 - Leafy AI 默认通过 `campus-ai-assistant` 使用固定 Flash；免费额度为北京时间每日 10 次。
+- 免费额度按 Supabase Auth 用户计数，不要求 App Store 安装记录；Xcode 或 Simulator 缺少有效 AppTransaction 时仍可使用免费额度。
 - `com.isaachuo.leafy.ai.weekly.v2` 周订阅按 Apple 实际周期提供 120 次，同时北京时间每日最多 40 次；旧商品不再授予权益。
+- 订阅额度只接受服务端验证成功的 Apple 订阅交易 JWS，客户端提交的交易 ID 或 App Transaction ID 不能单独授予权益。
+- `private` 额度函数通过仅授予 `service_role` 的公开 RPC 包装层供 Edge Function 调用，不向 `anon` 或 `authenticated` 开放。实现与排查见[Leafy AI 免费额度鉴权](leafy-ai-quota-authentication.md)。
 - 自备 DeepSeek API Key 是可选直连模式，Pro 仅在该模式开放。
 - 自备 API Key 不存入 Supabase。
 - AI 请求日志应最小化，不长期保存完整个人学业上下文。

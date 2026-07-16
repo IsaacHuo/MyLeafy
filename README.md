@@ -172,6 +172,7 @@ supabase functions deploy campus-ai-tools
 | [App 产品设计](docs/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
 | [UI 风格规范](docs/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
 | [Supabase 接入](docs/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
+| [Leafy AI 免费额度鉴权](docs/leafy-ai-quota-authentication.md) | iOS/后端开发者 | 免费身份、订阅权益、额度 RPC、安全边界与排查方法 |
 | [运营后台](docs/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
 | [贡献规范](docs/contributing.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
