@@ -233,7 +233,7 @@ enum TimetableCalendarExportBuilder {
         let occurrenceKey = cellReminderKeyPrefix + reminder.cellKey
         return TimetableCalendarEventDraft(
             occurrenceKey: occurrenceKey,
-            title: reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("课表日程") : reminder.title,
+            title: reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("日程") : reminder.title,
             location: reminder.locationText,
             notes: notesText(reminder: reminder),
             startDate: startDate,
@@ -275,7 +275,7 @@ enum TimetableCalendarExportBuilder {
 
     private static func notesText(reminder: TimetableCellReminder) -> String {
         var lines = [
-            L10n.text("类型：课表日程"),
+            L10n.text("类型：日程"),
             L10n.text("周次：第 %d 周", reminder.week),
             reminder.displayStartPeriod == reminder.displayEndPeriod
                 ? L10n.text("节次：第 %d 节", reminder.displayStartPeriod)

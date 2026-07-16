@@ -532,9 +532,9 @@ enum TimetableNotificationManager {
         let content = UNMutableNotificationContent()
         content.title = reminder.title
         if reminder.locationText.isEmpty {
-            content.body = L10n.text("%d 分钟后有课表日程：第 %d 节。", minutesBefore, reminder.period)
+            content.body = L10n.text("%d 分钟后有日程：第 %d 节。", minutesBefore, reminder.period)
         } else {
-            content.body = L10n.text("%d 分钟后有课表日程：第 %d 节，地点：%@", minutesBefore, reminder.period, reminder.locationText)
+            content.body = L10n.text("%d 分钟后有日程：第 %d 节，地点：%@", minutesBefore, reminder.period, reminder.locationText)
         }
         content.sound = .default
 
@@ -564,9 +564,9 @@ enum TimetableNotificationManager {
         let content = UNMutableNotificationContent()
         content.title = event.title
         if event.locationText.isEmpty {
-            content.body = L10n.text("%d 分钟后有重要日期。", minutesBefore)
+            content.body = L10n.text("%d 分钟后有日程。", minutesBefore)
         } else {
-            content.body = L10n.text("%d 分钟后有重要日期，地点：%@", minutesBefore, event.locationText)
+            content.body = L10n.text("%d 分钟后有日程，地点：%@", minutesBefore, event.locationText)
         }
         content.sound = .default
 

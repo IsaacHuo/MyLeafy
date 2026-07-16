@@ -592,12 +592,7 @@ enum CustomScheduleEditorMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        switch self {
-        case .timetable:
-            return "课表日程"
-        case .importantDate:
-            return "重要日期"
-        }
+        "日程"
     }
 
     var systemImage: String {
@@ -667,7 +662,6 @@ struct CustomScheduleEditorSheet: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Query private var reminders: [TimetableCellReminder]
 
-    @State private var selectedMode: CustomScheduleEditorMode
     @State private var title: String
     @State private var location: String
     @State private var noteText: String
@@ -706,7 +700,6 @@ struct CustomScheduleEditorSheet: View {
             : context.reminder?.resolvedEndDate
                 ?? TimetablePeriodSchedule.endDate(week: context.week, dayOfWeek: context.day, period: context.period)
                 ?? startDate.addingTimeInterval(45 * 60)
-        _selectedMode = State(initialValue: initialMode)
         _title = State(initialValue: initialTitle)
         _location = State(initialValue: initialLocation)
         _noteText = State(initialValue: initialNote)
@@ -730,15 +723,6 @@ struct CustomScheduleEditorSheet: View {
                             .leafySubheadline()
                             .foregroundStyle(AppTheme.secondaryText)
 
-                        if presentation.allowsModeSelection {
-                            Picker("日程类型", selection: $selectedMode) {
-                                ForEach(CustomScheduleEditorMode.allCases) { mode in
-                                    Label(mode.title, systemImage: mode.systemImage)
-                                        .tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -760,18 +744,14 @@ struct CustomScheduleEditorSheet: View {
                         DatePicker("开始时间", selection: $startTime, displayedComponents: .hourAndMinute)
                             .datePickerStyle(.compact)
 
-                        if selectedMode == .importantDate {
-                            Toggle("设置结束时间", isOn: $hasEndTime)
-                        }
+                        Toggle("设置结束时间", isOn: $hasEndTime)
 
-                        if selectedMode == .timetable || hasEndTime {
+                        if hasEndTime {
                             DatePicker("结束时间", selection: $endTime, displayedComponents: .hourAndMinute)
                                 .datePickerStyle(.compact)
                         }
 
-                        if selectedMode == .timetable {
-                            scheduleInfoRow(title: "显示范围", value: periodText, icon: "clock")
-                        }
+                        scheduleInfoRow(title: "显示位置", value: placementText, icon: placementSystemImage)
 
                         if let validationMessage {
                             Text(validationMessage)
@@ -846,11 +826,6 @@ struct CustomScheduleEditorSheet: View {
                     .disabled(isSaveDisabled)
                 }
             }
-            .onChange(of: selectedMode) { _, mode in
-                if mode == .timetable {
-                    hasEndTime = true
-                }
-            }
             .leafyOperationAlert($operationAlert)
         }
     }
@@ -872,7 +847,7 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private var reminderRecord: TimetableCellReminder? {
-        context.reminder ?? reminderRecord(for: cellKey)
+        context.reminder ?? (selectedWeekAndDay == nil ? nil : reminderRecord(for: cellKey))
     }
 
     private func reminderRecord(for key: String) -> TimetableCellReminder? {
@@ -885,33 +860,15 @@ struct CustomScheduleEditorSheet: View {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return true
         }
-
-        switch selectedMode {
-        case .timetable:
-            return selectedWeekAndDay == nil ||
-                selectedPeriodRange == nil ||
-                scheduleEndDate <= scheduleStartDate
-        case .importantDate:
-            return hasEndTime && scheduleEndDate <= scheduleStartDate
-        }
+        return hasEndTime && scheduleEndDate <= scheduleStartDate
     }
 
     private var navigationTitle: String {
-        switch selectedMode {
-        case .timetable:
-            return reminderRecord == nil ? "添加日程" : "编辑日程"
-        case .importantDate:
-            return presentation.importantDateEvent == nil ? "添加重要日期" : "编辑重要日期"
-        }
+        canDelete ? "编辑日程" : "添加日程"
     }
 
     private var titlePlaceholder: String {
-        switch selectedMode {
-        case .timetable:
-            return "日程标题"
-        case .importantDate:
-            return "重要日期标题"
-        }
+        "日程标题"
     }
 
     private var weekText: String {
@@ -930,36 +887,19 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private var canSelectScheduleDate: Bool {
-        selectedMode == .importantDate || context.allowsDateSelection
+        true
     }
 
     private var sheetSubtitle: String {
-        switch selectedMode {
-        case .timetable:
-            return canSelectScheduleDate
-                ? "选择日期和开始、结束时间，按需添加地点、备注和本地提醒。"
-                : "基于当前课表格子添加日程，按需补充地点、备注和本地提醒。"
-        case .importantDate:
-            return "记录任意日期的重要事项；如果落在当前学期，会在课表日期摘要中轻量提示。"
-        }
+        "选择日期和开始时间，按需添加结束时间、地点、备注和本地提醒。学期内显示在课表，学期外显示倒计时。"
     }
 
     private var canDelete: Bool {
-        switch selectedMode {
-        case .timetable:
-            return reminderRecord != nil
-        case .importantDate:
-            return presentation.importantDateEvent != nil
-        }
+        reminderRecord != nil || presentation.importantDateEvent != nil
     }
 
     private var deleteTitle: String {
-        switch selectedMode {
-        case .timetable:
-            return "删除日程"
-        case .importantDate:
-            return "删除重要日期"
-        }
+        "删除日程"
     }
 
     private var scheduleStartDate: Date {
@@ -975,35 +915,30 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private var selectedPeriodRange: ClosedRange<Int>? {
-        TimetablePeriodSchedule.periodRange(overlapping: scheduleStartDate, endDate: scheduleEndDate)
+        let effectiveEndDate = hasEndTime ? scheduleEndDate : scheduleStartDate.addingTimeInterval(45 * 60)
+        return TimetablePeriodSchedule.periodRange(overlapping: scheduleStartDate, endDate: effectiveEndDate)
     }
 
     private var validationMessage: String? {
-        switch selectedMode {
-        case .timetable:
-            if selectedWeekAndDay == nil {
-                return L10n.text("当前课表只能显示本学期范围内的日程。", language: leafyLanguage)
-            }
-            if scheduleEndDate <= scheduleStartDate {
-                return L10n.text("结束时间需要晚于开始时间。", language: leafyLanguage)
-            }
-            if selectedPeriodRange == nil {
-                return L10n.text("这个时间段没有覆盖课表节次，无法显示在课表里。", language: leafyLanguage)
-            }
-        case .importantDate:
-            if hasEndTime && scheduleEndDate <= scheduleStartDate {
-                return L10n.text("结束时间需要晚于开始时间。", language: leafyLanguage)
-            }
+        if hasEndTime && scheduleEndDate <= scheduleStartDate {
+            return L10n.text("结束时间需要晚于开始时间。", language: leafyLanguage)
         }
         return nil
     }
 
+    private var placementText: String {
+        selectedWeekAndDay == nil ? "倒计时" : "课表显示"
+    }
+
+    private var placementSystemImage: String {
+        selectedWeekAndDay == nil ? "timer" : "calendar.badge.clock"
+    }
+
     @MainActor
     private func saveCurrentItem() async {
-        switch selectedMode {
-        case .timetable:
+        if selectedWeekAndDay != nil, selectedPeriodRange != nil {
             await saveReminder()
-        case .importantDate:
+        } else {
             await saveImportantDate()
         }
     }
@@ -1014,7 +949,7 @@ struct CustomScheduleEditorSheet: View {
         guard !trimmed.isEmpty,
               let weekAndDay = selectedWeekAndDay,
               let periodRange = selectedPeriodRange,
-              scheduleEndDate > scheduleStartDate
+              !hasEndTime || scheduleEndDate > scheduleStartDate
         else { return }
         let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1036,7 +971,7 @@ struct CustomScheduleEditorSheet: View {
             existing.location = TimetableCellReminder.normalizedOptionalText(trimmedLocation)
             existing.note = TimetableCellReminder.normalizedOptionalText(trimmedNote)
             existing.startsAt = scheduleStartDate
-            existing.endsAt = scheduleEndDate
+            existing.endsAt = hasEndTime ? scheduleEndDate : nil
             existing.minutesBefore = reminderMinutes
             existing.updatedAt = Date()
             record = existing
@@ -1050,7 +985,7 @@ struct CustomScheduleEditorSheet: View {
                 location: trimmedLocation,
                 note: trimmedNote,
                 startsAt: scheduleStartDate,
-                endsAt: scheduleEndDate,
+                endsAt: hasEndTime ? scheduleEndDate : nil,
                 minutesBefore: reminderMinutes
             )
             modelContext.insert(newRecord)
@@ -1061,6 +996,7 @@ struct CustomScheduleEditorSheet: View {
 
         do {
             try modelContext.save()
+            removeSourceImportantDateIfNeeded()
             let scheduledCount: Int
             do {
                 scheduledCount = try await TimetableNotificationManager.applyReminder(for: record) ? 1 : 0
@@ -1109,12 +1045,23 @@ struct CustomScheduleEditorSheet: View {
         }
         CustomScheduleStore.save(events)
 
+        if let sourceReminder = context.reminder {
+            TimetableNotificationManager.cancelReminder(for: sourceReminder)
+            modelContext.delete(sourceReminder)
+            do {
+                try modelContext.save()
+            } catch {
+                operationAlert = .failure(error.localizedDescription)
+                return
+            }
+        }
+
         let scheduledCount: Int
         do {
             scheduledCount = try await TimetableNotificationManager.applyReminder(for: event) ? 1 : 0
         } catch {
             operationAlert = .success(
-                L10n.text("重要日期已保存，但提醒未创建：%@", language: leafyLanguage, error.localizedDescription)
+                L10n.text("日程已保存，但提醒未创建：%@", language: leafyLanguage, error.localizedDescription)
             )
             return
         }
@@ -1126,10 +1073,9 @@ struct CustomScheduleEditorSheet: View {
 
     @MainActor
     private func deleteCurrentItem() {
-        switch selectedMode {
-        case .timetable:
+        if reminderRecord != nil {
             deleteReminder()
-        case .importantDate:
+        } else {
             deleteImportantDate()
         }
     }
@@ -1157,7 +1103,7 @@ struct CustomScheduleEditorSheet: View {
         TimetableNotificationManager.cancelReminder(for: event)
         CustomScheduleStore.save(events)
         operationAlert = .success(
-            L10n.text("重要日期已删除！", language: leafyLanguage),
+            L10n.text("日程已删除！", language: leafyLanguage),
             action: { dismiss() }
         )
     }
@@ -1182,12 +1128,21 @@ struct CustomScheduleEditorSheet: View {
 
     private func saveImportantDateSuccessMessage(reminderMinutes: Int, scheduledCount: Int) -> String {
         if reminderMinutes <= 0 {
-            return L10n.text("重要日期已保存！", language: leafyLanguage)
+            return L10n.text("日程已保存！", language: leafyLanguage)
         }
 
         return scheduledCount > 0
-            ? L10n.text("重要日期和提醒已保存！", language: leafyLanguage)
-            : L10n.text("重要日期已保存，但提醒时间已过，不会发送通知。", language: leafyLanguage)
+            ? L10n.text("日程和提醒已保存！", language: leafyLanguage)
+            : L10n.text("日程已保存，但提醒时间已过，不会发送通知。", language: leafyLanguage)
+    }
+
+    private func removeSourceImportantDateIfNeeded() {
+        guard let sourceEvent = presentation.importantDateEvent else { return }
+        var events = CustomScheduleStore.load()
+        guard events.contains(where: { $0.id == sourceEvent.id }) else { return }
+        events.removeAll { $0.id == sourceEvent.id }
+        TimetableNotificationManager.cancelReminder(for: sourceEvent)
+        CustomScheduleStore.save(events)
     }
 
     private func scheduleInfoRow(title: String, value: String, icon: String) -> some View {

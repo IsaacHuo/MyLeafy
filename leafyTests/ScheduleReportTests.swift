@@ -40,6 +40,7 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertEqual(loaded.setting(for: .eveningReport).hour, 23)
         XCTAssertEqual(loaded.setting(for: .eveningReport).minute, 0)
         XCTAssertEqual(loaded.scheduledNotificationIDs, ["one", "two"])
+        XCTAssertTrue(loaded.isEnabled)
     }
 
     func testCustomScheduleStoreMigratesLegacyCountdownsOnce() throws {
@@ -62,6 +63,22 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertNotNil(defaults.data(forKey: keys.current))
     }
 
+    func testUnifiedScheduleProjectsInsideSemesterAndCountsDownOutsideSemester() {
+        let inside = CustomScheduleEvent(
+            title: "学期内日程",
+            startsAt: SemesterConfig.startOfSemesterDate.addingTimeInterval(86_400)
+        )
+        let outside = CustomScheduleEvent(
+            title: "学期外日程",
+            startsAt: SemesterConfig.startOfSemesterDate.addingTimeInterval(
+                Double(SemesterConfig.supportedWeeks * 7 + 1) * 86_400
+            )
+        )
+
+        XCTAssertNotNil(inside.timetableProjection)
+        XCTAssertNil(outside.timetableProjection)
+    }
+
     func testPlannerBuildsMorningEveningAndDigestDraftsWithStableIDs() throws {
         let now = try makeDateTime("2026-03-09 06:00")
         var settings = ScheduleReportSettings(isEnabled: true)
@@ -77,10 +94,12 @@ final class ScheduleReportTests: XCTestCase {
                 Course(courseName: "数据结构", teacher: "周老师", room: "主楼 202", dayOfWeek: 2, weeks: [1], duration: [3, 4])
             ],
             exams: [
-                ExamArrangement(id: 1, courseID: "A", name: "高等数学期末", date: "2026-03-09", start: "09:00", end: "11:00", location: "101")
+                ExamArrangement(id: 1, courseID: "A", name: "高等数学期末", date: "2026-03-16", start: "09:00", end: "11:00", location: "101"),
+                ExamArrangement(id: 2, courseID: "B", name: "大学英语期末", date: "2026-03-16", start: "14:00", end: "16:00", location: "102")
             ],
             countdowns: [
-                CustomCountdownEvent(id: "cet", title: "四级报名", targetDate: try makeDateTime("2026-03-11 12:00"))
+                CustomCountdownEvent(id: "cet", title: "四级报名", targetDate: try makeDateTime("2026-03-14 12:00")),
+                CustomCountdownEvent(id: "paper", title: "论文提交", targetDate: try makeDateTime("2026-03-14 18:00"))
             ],
             cellReminders: [
                 TimetableCellReminder(
@@ -97,20 +116,24 @@ final class ScheduleReportTests: XCTestCase {
         let repeatedDrafts = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now, calendar: calendar)
         let morning = try XCTUnwrap(drafts.first { $0.mode == .morningReport })
         let evening = try XCTUnwrap(drafts.first { $0.mode == .eveningReport })
-        let exam = try XCTUnwrap(drafts.first { $0.mode == .examDigest })
-        let countdown = try XCTUnwrap(drafts.first { $0.mode == .countdownDigest })
+        let examDrafts = drafts.filter { $0.mode == .examDigest }
+        let countdownDrafts = drafts.filter { $0.mode == .countdownDigest }
+        let exam = try XCTUnwrap(examDrafts.first)
+        let countdown = try XCTUnwrap(countdownDrafts.first)
 
         XCTAssertEqual(drafts.filter { $0.mode == .morningReport }.count, 7)
         XCTAssertEqual(drafts.filter { $0.mode == .eveningReport }.count, 7)
         XCTAssertTrue(morning.body.contains("今天 1 节课"))
-        XCTAssertTrue(morning.body.contains("高等数学期末"))
         XCTAssertTrue(morning.body.contains("图书馆座位提醒"))
         XCTAssertTrue(evening.body.contains("明天 2 节课：计算机网络、数据结构"))
         XCTAssertFalse(evening.body.contains("第一节"))
-        XCTAssertTrue(exam.body.contains("未来 7 天有 1 场考试"))
+        XCTAssertEqual(examDrafts.count, 7)
+        XCTAssertTrue(exam.body.contains("高等数学期末还有 7 天"))
+        XCTAssertTrue(exam.body.contains("大学英语期末还有 7 天"))
         XCTAssertEqual(countdown.title, "重要日期提醒")
-        XCTAssertTrue(countdown.body.contains("未来 7 天有 1 个重要日期"))
+        XCTAssertEqual(countdownDrafts.count, 3)
         XCTAssertTrue(countdown.body.contains("四级报名"))
+        XCTAssertTrue(countdown.body.contains("论文提交"))
         XCTAssertEqual(drafts.map(\.id), repeatedDrafts.map(\.id))
     }
 

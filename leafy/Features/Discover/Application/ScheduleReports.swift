@@ -28,9 +28,9 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
         case .eveningReport:
             return "每天查看明天全部课程和时间日程"
         case .examDigest:
-            return "未来 7 天有考试时提醒"
+            return "考前 7 天至 1 天，每天提醒"
         case .countdownDigest:
-            return "未来 7 天有重要日期时提醒"
+            return "提前 5 天、3 天、1 天提醒"
         case .calendarDigest:
             return "今天或明天有校历、节气、假期节点时提醒"
         }
@@ -111,8 +111,11 @@ struct ScheduleReportSettings: Codable, Hashable {
     }
 
     var enabledModes: [ScheduleReportMode] {
-        guard isEnabled else { return [] }
         return ScheduleReportMode.allCases.filter { setting(for: $0).isEnabled }
+    }
+
+    mutating func deriveEnabledState() {
+        isEnabled = !enabledModes.isEmpty
     }
 
     private static func normalizedModeSettings(
@@ -143,15 +146,19 @@ enum ScheduleReportSettingsStore {
         else {
             return .disabled
         }
-        return ScheduleReportSettings(
+        var normalized = ScheduleReportSettings(
             isEnabled: settings.isEnabled,
             modeSettings: settings.modeSettings,
             scheduledNotificationIDs: settings.scheduledNotificationIDs
         )
+        normalized.deriveEnabledState()
+        return normalized
     }
 
     static func save(_ settings: ScheduleReportSettings, defaults: UserDefaults = .standard) {
-        guard let data = try? JSONEncoder().encode(settings) else { return }
+        var normalized = settings
+        normalized.deriveEnabledState()
+        guard let data = try? JSONEncoder().encode(normalized) else { return }
         defaults.set(data, forKey: scopedKey(defaults: defaults))
     }
 
@@ -295,23 +302,17 @@ enum ScheduleReportPlanner {
                 )
             }
         case .examDigest:
-            return singleDraftIfNeeded(
-                mode: mode,
+            return examReminderDrafts(
+                exams: input.exams,
                 setting: setting,
-                startDay: startDay,
                 now: now,
-                title: "考试提醒",
-                body: upcomingExamSummary(input.exams, from: now, days: lookaheadDays, calendar: calendar),
                 calendar: calendar
             )
         case .countdownDigest:
-            return singleDraftIfNeeded(
-                mode: mode,
+            return importantDateReminderDrafts(
+                events: input.countdowns,
                 setting: setting,
-                startDay: startDay,
                 now: now,
-                title: "重要日期提醒",
-                body: upcomingImportantDateSummary(input.countdowns, from: now, days: lookaheadDays, calendar: calendar),
                 calendar: calendar
             )
         case .calendarDigest:
@@ -344,6 +345,97 @@ enum ScheduleReportPlanner {
         return [
             draft(mode: mode, fireDate: fireDate, title: title, body: body, calendar: calendar)
         ]
+    }
+
+    private struct ExamReminderOccurrence {
+        let fireDate: Date
+        let exam: ExamArrangement
+        let daysBefore: Int
+    }
+
+    private struct ImportantDateReminderOccurrence {
+        let fireDate: Date
+        let event: CustomScheduleEvent
+        let daysBefore: Int
+    }
+
+    private static func examReminderDrafts(
+        exams: [ExamArrangement],
+        setting: ScheduleReportModeSetting,
+        now: Date,
+        calendar: Calendar
+    ) -> [ScheduleReportNotificationDraft] {
+        let occurrences = exams.flatMap { exam -> [ExamReminderOccurrence] in
+            guard let examDate = exam.startsAt else { return [] }
+            return (1...7).compactMap { daysBefore in
+                guard let fireDay = calendar.date(
+                    byAdding: .day,
+                    value: -daysBefore,
+                    to: calendar.startOfDay(for: examDate)
+                ),
+                      let fireDate = fireDate(on: fireDay, setting: setting, calendar: calendar),
+                      fireDate > now else { return nil }
+                return ExamReminderOccurrence(fireDate: fireDate, exam: exam, daysBefore: daysBefore)
+            }
+        }
+
+        return Dictionary(grouping: occurrences, by: \.fireDate)
+            .map { fireDate, grouped in
+                let body = grouped
+                    .sorted { ($0.exam.startsAt ?? .distantFuture) < ($1.exam.startsAt ?? .distantFuture) }
+                    .map { "\($0.exam.name)还有 \($0.daysBefore) 天（\($0.exam.date) \($0.exam.start)）" }
+                    .joined(separator: "；")
+                return draft(
+                    mode: .examDigest,
+                    fireDate: fireDate,
+                    title: "考试提醒",
+                    body: body,
+                    calendar: calendar
+                )
+            }
+            .sorted { $0.fireDate < $1.fireDate }
+    }
+
+    private static func importantDateReminderDrafts(
+        events: [CustomScheduleEvent],
+        setting: ScheduleReportModeSetting,
+        now: Date,
+        calendar: Calendar
+    ) -> [ScheduleReportNotificationDraft] {
+        let occurrences = events.flatMap { event -> [ImportantDateReminderOccurrence] in
+            [5, 3, 1].compactMap { daysBefore in
+                guard let fireDay = calendar.date(
+                    byAdding: .day,
+                    value: -daysBefore,
+                    to: calendar.startOfDay(for: event.startsAt)
+                ),
+                      let fireDate = fireDate(on: fireDay, setting: setting, calendar: calendar),
+                      fireDate > now else { return nil }
+                return ImportantDateReminderOccurrence(
+                    fireDate: fireDate,
+                    event: event,
+                    daysBefore: daysBefore
+                )
+            }
+        }
+
+        return Dictionary(grouping: occurrences, by: \.fireDate)
+            .map { fireDate, grouped in
+                let body = grouped
+                    .sorted { $0.event.startsAt < $1.event.startsAt }
+                    .map {
+                        "\($0.event.title)还有 \($0.daysBefore) 天（\(DateFormatters.headerWithTime.string(from: $0.event.startsAt))）"
+                    }
+                    .joined(separator: "；")
+                return draft(
+                    mode: .countdownDigest,
+                    fireDate: fireDate,
+                    title: "重要日期提醒",
+                    body: body,
+                    calendar: calendar
+                )
+            }
+            .sorted { $0.fireDate < $1.fireDate }
     }
 
     private static func draft(
@@ -542,29 +634,35 @@ enum ScheduleReportNotificationManager {
         input: ScheduleReportInput,
         now: Date = Date()
     ) async throws -> ScheduleReportSettings {
-        cancelScheduledNotifications(settings: settings)
-
         var updatedSettings = settings
         updatedSettings.scheduledNotificationIDs = []
 
         let drafts = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now)
         guard settings.isEnabled, !drafts.isEmpty else {
+            cancelScheduledNotifications(settings: settings)
             return updatedSettings
         }
 
         let center = try await authorizedNotificationCenter()
-        for draft in drafts {
-            let content = UNMutableNotificationContent()
-            content.title = draft.title
-            content.body = draft.body
-            content.sound = .default
-            content.userInfo = ["url": draft.targetURL.absoluteString]
+        cancelScheduledNotifications(settings: settings)
+        do {
+            for draft in drafts {
+                try Task.checkCancellation()
+                let content = UNMutableNotificationContent()
+                content.title = draft.title
+                content.body = draft.body
+                content.sound = .default
+                content.userInfo = ["url": draft.targetURL.absoluteString]
 
-            let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: draft.fireDate)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            let request = UNNotificationRequest(identifier: draft.id, content: content, trigger: trigger)
-            try await center.add(request)
-            updatedSettings.scheduledNotificationIDs.append(draft.id)
+                let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: draft.fireDate)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                let request = UNNotificationRequest(identifier: draft.id, content: content, trigger: trigger)
+                try await center.add(request)
+                updatedSettings.scheduledNotificationIDs.append(draft.id)
+            }
+        } catch {
+            center.removePendingNotificationRequests(withIdentifiers: drafts.map(\.id))
+            throw error
         }
 
         return updatedSettings

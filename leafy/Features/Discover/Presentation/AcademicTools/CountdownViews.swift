@@ -36,7 +36,7 @@ struct CustomScheduleListView: View {
                 }
             }
 
-            AcademicDetailFooterText(text: "自定日程仅保存在当前设备。课表日程会显示在课表格子里，重要日期会在对应日期轻量提示。")
+            AcademicDetailFooterText(text: "日程仅保存在当前设备。学期内自动显示在课表，学期外自动显示倒计时。")
         }
         .navigationTitle("自定日程")
         .leafyInlineNavigationTitle()
@@ -92,7 +92,7 @@ struct CustomScheduleListView: View {
             TimetableNotificationManager.cancelReminder(for: event)
             CustomScheduleStore.save(events)
             importantDateEvents = events
-            operationAlert = .success(L10n.text("重要日期已删除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("日程已删除！", language: leafyLanguage))
         }
     }
 
@@ -177,9 +177,9 @@ private enum CustomScheduleListItem: Identifiable {
     var badge: String {
         switch self {
         case .timetable:
-            return "课表日程"
-        case .importantDate:
-            return "重要日期"
+            return "课表显示"
+        case .importantDate(let event):
+            return event.timetableProjection == nil ? "倒计时" : "课表显示"
         }
     }
 
@@ -231,9 +231,9 @@ private enum CustomScheduleListItem: Identifiable {
     var systemImage: String {
         switch self {
         case .timetable:
-            return "bell.fill"
-        case .importantDate:
-            return "timer"
+            return "calendar.badge.clock"
+        case .importantDate(let event):
+            return event.timetableProjection == nil ? "timer" : "calendar.badge.clock"
         }
     }
 
@@ -241,8 +241,8 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable:
             return AppTheme.accent
-        case .importantDate:
-            return AppTheme.warning
+        case .importantDate(let event):
+            return event.timetableProjection == nil ? AppTheme.warning : AppTheme.accent
         }
     }
 }
@@ -284,7 +284,7 @@ private struct CustomScheduleListRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if case .importantDate = item {
+                if item.badge == "倒计时" {
                     Text(CountdownEventRow.countdownDescription(for: item.startDate))
                         .font(.title3.weight(.bold))
                         .foregroundStyle(AppTheme.primaryText)

@@ -546,7 +546,7 @@ struct CountdownEvent: Identifiable, Hashable {
     enum Kind: String {
         case exam = "考试"
         case semester = "学期"
-        case custom = "重要日期"
+        case custom = "日程"
     }
 
     let id: String

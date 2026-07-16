@@ -269,10 +269,7 @@ struct LeafyApp: App {
                 guard !Task.isCancelled else { return }
             } catch {
                 guard !Task.isCancelled else { return }
-                var disabledSettings = settings
-                disabledSettings.isEnabled = false
-                disabledSettings.scheduledNotificationIDs = []
-                ScheduleReportSettingsStore.save(disabledSettings)
+                logger.error("Schedule report notification refresh failed: \(error.localizedDescription, privacy: .public)")
             }
             scheduleReportRefreshTask = nil
         }

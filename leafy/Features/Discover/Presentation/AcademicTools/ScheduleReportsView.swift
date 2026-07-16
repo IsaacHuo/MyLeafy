@@ -3,11 +3,12 @@ import SwiftUI
 
 struct ScheduleReportsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.leafyLanguage) private var leafyLanguage
 
     @State private var settings = ScheduleReportSettingsStore.load()
+    @State private var lastAppliedSettings = ScheduleReportSettingsStore.load()
     @State private var operationAlert: LeafyOperationAlert?
-    @State private var isSaving = false
+    @State private var isApplying = false
+    @State private var applyTask: Task<Void, Never>?
 
     private var enabledModeCount: Int {
         settings.enabledModes.count
@@ -25,44 +26,22 @@ struct ScheduleReportsView: View {
                 }
             }
 
-            AcademicDetailCard {
-                VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Toggle("开启报告中心", isOn: $settings.isEnabled)
-                        .font(.headline)
-
-                    Text(settings.isEnabled ? "已开启 \(enabledModeCount) 个模式" : "关闭后会取消已排程的报告通知。")
-                        .leafySubheadline()
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-            }
-
-            AcademicDetailSectionHeader(title: "报告模式")
+            AcademicDetailSectionHeader(title: "提醒模式")
             ForEach(ScheduleReportMode.allCases) { mode in
                 ScheduleReportModeCard(
                     mode: mode,
                     setting: binding(for: mode),
-                    time: dateBinding(for: mode),
-                    isParentEnabled: settings.isEnabled
+                    time: dateBinding(for: mode)
                 )
             }
 
             AcademicDetailCard {
-                VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Button {
-                        Task { await saveSettings() }
-                    } label: {
-                        Label(isSaving ? "保存中" : "保存推送设置", systemImage: "checkmark.circle.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isSaving || (settings.isEnabled && enabledModeCount == 0))
-
-                    Text("通知正文会根据保存时的课表、考试、重要日期、校历节点和本地日程生成；打开 App、刷新数据或再次保存会重新排程。")
-                        .leafySubheadline()
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
+                Label(
+                    isApplying ? "正在更新推送" : "已开启 \(enabledModeCount) 个提醒",
+                    systemImage: isApplying ? "arrow.triangle.2.circlepath" : "checkmark.circle"
+                )
+                .leafySubheadline()
+                .foregroundStyle(AppTheme.secondaryText)
             }
 
             AcademicDetailFooterText(text: "天气服务将切换到 WeatherKit，但首版报告通知暂不展示天气。")
@@ -71,7 +50,10 @@ struct ScheduleReportsView: View {
         .leafyInlineNavigationTitle()
         .onAppear {
             settings = ScheduleReportSettingsStore.load()
+            settings.deriveEnabledState()
+            lastAppliedSettings = settings
         }
+        .onDisappear { applyTask?.cancel() }
         .leafyOperationAlert($operationAlert)
     }
 
@@ -79,7 +61,10 @@ struct ScheduleReportsView: View {
         Binding {
             settings.setting(for: mode)
         } set: { newValue in
-            settings.set(newValue, for: mode)
+            var updated = settings
+            updated.set(newValue, for: mode)
+            updated.deriveEnabledState()
+            apply(updated, debounce: false)
         }
     }
 
@@ -91,42 +76,59 @@ struct ScheduleReportsView: View {
             components.minute = setting.minute
             return Calendar.current.date(from: components) ?? Date()
         } set: { newValue in
-            var setting = settings.setting(for: mode)
+            var updated = settings
+            var setting = updated.setting(for: mode)
             let components = Calendar.current.dateComponents([.hour, .minute], from: newValue)
             setting.hour = components.hour ?? mode.defaultHour
             setting.minute = components.minute ?? mode.defaultMinute
-            settings.set(setting, for: mode)
+            updated.set(setting, for: mode)
+            updated.deriveEnabledState()
+            apply(updated, debounce: true)
         }
     }
 
     @MainActor
-    private func saveSettings() async {
-        isSaving = true
-        ScheduleReportSettingsStore.save(settings)
-
-        do {
-            let input = ScheduleReportDataSource.input(modelContext: modelContext)
-            let updatedSettings = try await ScheduleReportNotificationManager.updateNotifications(
-                settings: settings,
-                input: input
-            )
-            settings = updatedSettings
-            ScheduleReportSettingsStore.save(updatedSettings)
-            operationAlert = .success(
-                settings.isEnabled
-                    ? L10n.text("推送设置已保存，已排程 %d 条报告通知。", language: leafyLanguage, updatedSettings.scheduledNotificationIDs.count)
-                    : L10n.text("报告中心已关闭。", language: leafyLanguage)
-            )
-        } catch {
-            var disabledSettings = settings
-            disabledSettings.isEnabled = false
-            disabledSettings.scheduledNotificationIDs = []
-            settings = disabledSettings
-            ScheduleReportSettingsStore.save(disabledSettings)
-            operationAlert = .failure(error.localizedDescription)
+    private func apply(_ updatedSettings: ScheduleReportSettings, debounce: Bool) {
+        settings = updatedSettings
+        applyTask?.cancel()
+        applyTask = Task { @MainActor in
+            if debounce {
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+            }
+            guard !Task.isCancelled else { return }
+            isApplying = true
+            do {
+                let input = ScheduleReportDataSource.input(modelContext: modelContext)
+                let applied = try await ScheduleReportNotificationManager.updateNotifications(
+                    settings: updatedSettings,
+                    input: input
+                )
+                guard !Task.isCancelled else { return }
+                settings = applied
+                lastAppliedSettings = applied
+                ScheduleReportSettingsStore.save(applied)
+            } catch is CancellationError {
+                return
+            } catch {
+                settings = lastAppliedSettings
+                if let restored = try? await ScheduleReportNotificationManager.updateNotifications(
+                    settings: lastAppliedSettings,
+                    input: ScheduleReportDataSource.input(modelContext: modelContext)
+                ) {
+                    lastAppliedSettings = restored
+                    settings = restored
+                    ScheduleReportSettingsStore.save(restored)
+                } else {
+                    ScheduleReportSettingsStore.save(lastAppliedSettings)
+                }
+                operationAlert = .failure(error.localizedDescription)
+            }
+            isApplying = false
         }
-
-        isSaving = false
     }
 }
 
@@ -134,7 +136,6 @@ private struct ScheduleReportModeCard: View {
     let mode: ScheduleReportMode
     @Binding var setting: ScheduleReportModeSetting
     @Binding var time: Date
-    let isParentEnabled: Bool
 
     var body: some View {
         AcademicDetailCard {
@@ -147,13 +148,11 @@ private struct ScheduleReportModeCard: View {
                     }
                     .font(.headline)
                 }
-                .disabled(!isParentEnabled)
-
                 Text(mode.subtitle)
                     .leafySubheadline()
                     .foregroundStyle(AppTheme.secondaryText)
 
-                if setting.isEnabled && isParentEnabled {
+                if setting.isEnabled {
                     DatePicker("推送时间", selection: $time, displayedComponents: .hourAndMinute)
                 }
             }
