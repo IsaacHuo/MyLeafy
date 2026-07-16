@@ -17,9 +17,37 @@ MyLeafy 同时面对三类性质不同的系统：不稳定的学校网页、强
 
 ## 2. 系统上下文
 
-![MyLeafy 系统概览](diagrams/system-overview.svg)
+```mermaid
+flowchart LR
+    Student["学生"]
+    Operator["运营人员"]
 
-图源：[D2 source](diagrams/system-overview.d2)
+    subgraph Product["MyLeafy 系统边界"]
+        direction TB
+        IOS["MyLeafy iOS<br/>课表 · 校园 · 社区 · AI"]
+        Local[("设备本地数据<br/>SwiftData · Keychain · 缓存")]
+        Web["官网与运营后台<br/>公开页面 · 分享 · 内容治理"]
+        IOS -->|读写本地状态| Local
+    end
+
+    School["学校教务系统<br/>身份 · 课表 · 成绩 · 考试"]
+    Backend["Supabase 业务后端<br/>Auth · Database · Storage · Functions"]
+
+    Student -->|日常学习与校园任务| IOS
+    Operator -->|受控运营| Web
+    IOS -->|授权访问教务数据| School
+    IOS -->|用户会话 + RLS| Backend
+    Web -->|管理代理 + 服务端授权| Backend
+
+    classDef actor fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
+    classDef owned fill:#ECF7F0,stroke:#397A5A,color:#173C2B,stroke-width:2px;
+    classDef external fill:#FFF8E8,stroke:#B7791F,color:#5F3B0B,stroke-width:1.5px;
+    classDef data fill:#EDF4FF,stroke:#4776B5,color:#173B68,stroke-width:1.5px;
+    class Student,Operator actor;
+    class IOS,Web owned;
+    class School,Backend external;
+    class Local data;
+```
 
 系统由四个主要运行单元组成：
 
@@ -32,9 +60,28 @@ MyLeafy 同时面对三类性质不同的系统：不稳定的学校网页、强
 
 ## 3. iOS 分层与依赖方向
 
-![iOS 分层架构](diagrams/ios-architecture.svg)
+```mermaid
+flowchart TB
+    Presentation["表现层 · Presentation<br/>SwiftUI Views · 页面状态<br/>Navigation Coordinator"]
+    Application["应用层 · Application<br/>用例与协调器 · 服务协议<br/>展示投影与预计算"]
+    Domain["领域层 · Domain<br/>业务模型 · 纯规则与计算<br/>校园能力描述"]
+    Infrastructure["基础设施 · Infrastructure<br/>教务网络 · HTML 解析 · SwiftData<br/>Supabase · 系统服务"]
+    External["外部系统<br/>学校教务 · Supabase<br/>WeatherKit · WidgetKit"]
 
-图源：[D2 source](diagrams/ios-architecture.d2)
+    Presentation -->|用户意图| Application
+    Application -->|执行业务规则| Domain
+    Application -->|仅通过协议访问| Infrastructure
+    Infrastructure -->|适配外部能力| External
+
+    classDef ui fill:#F0F7FF,stroke:#4776B5,color:#173B68,stroke-width:2px;
+    classDef core fill:#ECF7F0,stroke:#397A5A,color:#173C2B,stroke-width:2px;
+    classDef adapter fill:#F8FAFC,stroke:#64748B,color:#1E293B,stroke-width:1.5px;
+    classDef external fill:#FFF8E8,stroke:#B7791F,color:#5F3B0B,stroke-width:1.5px;
+    class Presentation ui;
+    class Application,Domain core;
+    class Infrastructure adapter;
+    class External external;
+```
 
 ### 3.1 App 与 Core
 
@@ -116,9 +163,32 @@ Features/
 
 ## 5. 教务访问链路
 
-![教务数据流](diagrams/school-data-flow.svg)
+```mermaid
+flowchart TB
+    Login["01 · 建立会话<br/>验证码与临时 key · 本地编码 · Cookie 同步"]
+    School["02 · 学校教务系统<br/>登录与中间页 · 课表 · 成绩 · 考试 · 培养"]
+    Request["03 · 获取并识别页面<br/>URLSession 主链路 · WKWebView 特定兜底"]
+    Parse["04 · 解析与建模<br/>SwiftSoup · 领域模型 · 字段校验"]
+    Deliver["05 · 本地交付<br/>SwiftData · 页面投影 · SwiftUI / Widget"]
+    Recovery["故障分类与恢复<br/>网络：保留缓存<br/>会话：重新认证<br/>页面变化：输出可诊断错误"]
 
-图源：[D2 source](diagrams/school-data-flow.d2)
+    Login -->|用户授权登录| School
+    School -->|返回授权页面| Request
+    Request -->|仅传入已识别页面| Parse
+    Parse -->|校验成功后更新缓存| Deliver
+    Request -.->|网络 / 会话 / 页面异常| Recovery
+    Parse -.->|DOM 或字段不符合契约| Recovery
+    Recovery -.->|不覆盖最近成功数据| Deliver
+
+    classDef action fill:#F0F7FF,stroke:#4776B5,color:#173B68,stroke-width:2px;
+    classDef boundary fill:#FFF8E8,stroke:#B7791F,color:#5F3B0B,stroke-width:1.5px;
+    classDef success fill:#ECF7F0,stroke:#397A5A,color:#173C2B,stroke-width:2px;
+    classDef recovery fill:#FFF1F2,stroke:#BE5360,color:#6F1D2A,stroke-width:1.5px;
+    class Login,Request,Parse action;
+    class School boundary;
+    class Deliver success;
+    class Recovery recovery;
+```
 
 ### 5.1 登录与会话
 
@@ -291,7 +361,7 @@ Widget 和分享扩展消费显式共享的数据模型，不应直接复用主 
 | Supabase SQL | migration replay、RLS 与数据库测试 |
 | Edge Functions | Deno 类型检查、单元和契约测试 |
 | Web | TypeScript typecheck、Vitest、Playwright |
-| 文档与配置 | 链接、D2 编译、敏感文件与项目结构检查 |
+| 文档与配置 | 链接、Mermaid 语法、敏感文件与项目结构检查 |
 
 外部服务集成测试要区分“代码回归”和“学校/云服务暂时不可用”，避免把真实网络波动误判为确定的实现缺陷。
 

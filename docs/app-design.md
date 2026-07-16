@@ -33,9 +33,28 @@ MyLeafy 面向需要频繁处理课表、学业信息和校园事务的高校学
 
 ## 3. 信息架构
 
-![MyLeafy 信息架构](diagrams/app-information-architecture.svg)
+```mermaid
+flowchart LR
+    App(("MyLeafy")) --> Nav["根导航"]
 
-图源：[D2 source](diagrams/app-information-architecture.d2)
+    subgraph Tasks["五个核心任务区"]
+        direction LR
+        Nav --> AI["Leafy AI<br/>对话 · 本机上下文<br/>公开检索 · Artifact"]
+        Nav --> Timetable["课表<br/>周课表 · 课程详情<br/>提醒 · 分享 · Widget"]
+        Nav --> Community["社区<br/>帖子 · 投票 · 互动<br/>发布 · 通知 · 公告"]
+        Nav --> Campus["校园<br/>成绩考试 · 校历<br/>教室 · 学习空间 · 扩展工具"]
+        Nav --> Profile["我的<br/>社区资料 · 共享课表<br/>外观 · 语言 · 数据"]
+    end
+
+    Nav --> Shared["跨区域能力<br/>统一导航 · 登录与校园状态<br/>主题与无障碍 · 缓存与恢复"]
+
+    classDef root fill:#173C2B,stroke:#173C2B,color:#FFFFFF,stroke-width:2px;
+    classDef area fill:#F7FBF8,stroke:#6E9E80,color:#173C2B,stroke-width:1.5px;
+    classDef shared fill:#F0F7FF,stroke:#7699C6,color:#173B68,stroke-width:1.5px;
+    class App,Nav root;
+    class AI,Timetable,Community,Campus,Profile area;
+    class Shared shared;
+```
 
 ### 3.1 根导航
 

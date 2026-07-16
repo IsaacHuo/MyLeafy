@@ -16,9 +16,37 @@ MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校
 
 > 仓库名、Xcode target 与部分内部类型仍使用 `leafy` / `Leafy`。对外产品名称统一为 **MyLeafy**。
 
-![MyLeafy 系统概览](docs/diagrams/system-overview.svg)
+```mermaid
+flowchart LR
+    Student["学生"]
+    Operator["运营人员"]
 
-图源：[D2 source](docs/diagrams/system-overview.d2)
+    subgraph Product["MyLeafy 系统边界"]
+        direction TB
+        IOS["MyLeafy iOS<br/>课表 · 校园 · 社区 · AI"]
+        Local[("设备本地数据<br/>SwiftData · Keychain · 缓存")]
+        Web["官网与运营后台<br/>公开页面 · 分享 · 内容治理"]
+        IOS -->|读写本地状态| Local
+    end
+
+    School["学校教务系统<br/>身份 · 课表 · 成绩 · 考试"]
+    Backend["Supabase 业务后端<br/>Auth · Database · Storage · Functions"]
+
+    Student -->|日常学习与校园任务| IOS
+    Operator -->|受控运营| Web
+    IOS -->|授权访问教务数据| School
+    IOS -->|用户会话 + RLS| Backend
+    Web -->|管理代理 + 服务端授权| Backend
+
+    classDef actor fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
+    classDef owned fill:#ECF7F0,stroke:#397A5A,color:#173C2B,stroke-width:2px;
+    classDef external fill:#FFF8E8,stroke:#B7791F,color:#5F3B0B,stroke-width:1.5px;
+    classDef data fill:#EDF4FF,stroke:#4776B5,color:#173B68,stroke-width:1.5px;
+    class Student,Operator actor;
+    class IOS,Web owned;
+    class School,Backend external;
+    class Local data;
+```
 
 ## 项目能力
 

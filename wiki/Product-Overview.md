@@ -17,7 +17,28 @@ MyLeafy 是以课表和学业数据为核心的高校生活工具。目前项目
 
 ## 信息架构
 
-![App 信息架构](https://raw.githubusercontent.com/IsaacHuo/leafy/main/docs/diagrams/app-information-architecture.svg)
+```mermaid
+flowchart LR
+    App(("MyLeafy")) --> Nav["根导航"]
+
+    subgraph Tasks["五个核心任务区"]
+        direction LR
+        Nav --> AI["Leafy AI<br/>对话 · 本机上下文<br/>公开检索 · Artifact"]
+        Nav --> Timetable["课表<br/>周课表 · 课程详情<br/>提醒 · 分享 · Widget"]
+        Nav --> Community["社区<br/>帖子 · 投票 · 互动<br/>发布 · 通知 · 公告"]
+        Nav --> Campus["校园<br/>成绩考试 · 校历<br/>教室 · 学习空间 · 扩展工具"]
+        Nav --> Profile["我的<br/>社区资料 · 共享课表<br/>外观 · 语言 · 数据"]
+    end
+
+    Nav --> Shared["跨区域能力<br/>统一导航 · 登录与校园状态<br/>主题与无障碍 · 缓存与恢复"]
+
+    classDef root fill:#173C2B,stroke:#173C2B,color:#FFFFFF,stroke-width:2px;
+    classDef area fill:#F7FBF8,stroke:#6E9E80,color:#173C2B,stroke-width:1.5px;
+    classDef shared fill:#F0F7FF,stroke:#7699C6,color:#173B68,stroke-width:1.5px;
+    class App,Nav root;
+    class AI,Timetable,Community,Campus,Profile area;
+    class Shared shared;
+```
 
 根级导航保持克制，复杂校园能力按领域进入二级页面。项目不会为了增加功能数量持续增加根 Tab。
 
@@ -41,7 +62,7 @@ MyLeafy 是以课表和学业数据为核心的高校生活工具。目前项目
 2. 统一不同校园的适配协议与能力配置。
 3. 完善课表、日程和学习空间之间的数据连接。
 4. 收紧身份绑定、共享、导出与管理操作的安全边界。
-5. 保持实现、测试、D2 图表与公开文档一致。
+5. 保持实现、测试、Mermaid 图表与公开文档一致。
 
 以上为方向，不构成固定版本或时间承诺。详细内容见仓库中的[项目总览](https://github.com/IsaacHuo/leafy/blob/main/docs/overview.md)与[发展方向](https://github.com/IsaacHuo/leafy/blob/main/docs/roadmap.md)。
 

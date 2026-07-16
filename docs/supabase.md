@@ -6,9 +6,30 @@
 
 ## 1. 系统边界
 
-![Supabase 业务与安全边界](diagrams/supabase-boundary.svg)
+```mermaid
+flowchart TB
+    Client["01 · 非可信客户端<br/>MyLeafy iOS · Publishable key · 用户 JWT<br/>本机教务数据"]
+    Gateway["02 · 授权与业务边界<br/>Supabase Auth · Row Level Security · Edge Functions<br/>owner · profile · campus_id"]
+    Data["03 · 受保护业务数据<br/>社区与通知 · 共享课表 · 目录与评价<br/>私有图片 Storage"]
+    Server["服务端专属能力<br/>service_role · 签名与代理 secret<br/>管理权限与审计"]
 
-图源：[D2 source](diagrams/supabase-boundary.d2)
+    Client -->|匿名或用户会话| Gateway
+    Gateway -->|校验通过后访问| Data
+    Server -->|仅服务端注入| Gateway
+    Server -->|最小权限管理操作| Data
+    Client -.->|禁止下发高权限密钥| Server
+    Client -.->|默认不上传学校密码与完整教务数据| Data
+
+    classDef untrusted fill:#F8FAFC,stroke:#64748B,color:#1E293B,stroke-width:1.5px;
+    classDef guard fill:#F0F7FF,stroke:#4776B5,color:#173B68,stroke-width:2px;
+    classDef protected fill:#ECF7F0,stroke:#397A5A,color:#173C2B,stroke-width:2px;
+    classDef secret fill:#FFF8E8,stroke:#B7791F,color:#5F3B0B,stroke-width:1.5px;
+    class Client untrusted;
+    class Gateway guard;
+    class Data protected;
+    class Server secret;
+    linkStyle 4,5 stroke:#BE5360,stroke-width:2px,stroke-dasharray:5 5;
+```
 
 | 组件 | 使用的凭据 | 允许的操作 |
 |---|---|---|

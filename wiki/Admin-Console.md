@@ -11,7 +11,25 @@ MyLeafy 运营后台位于官网项目中，生产路由为 `/admin`。它用于
 
 ## 安全链路
 
-![运营后台安全链路](https://raw.githubusercontent.com/IsaacHuo/leafy/main/docs/diagrams/admin-security.svg)
+```mermaid
+sequenceDiagram
+    actor Admin as 管理员
+    participant Browser as React-admin 浏览器
+    participant Proxy as Cloudflare Pages Functions
+    participant Edge as Supabase Edge Functions
+    participant Data as PostgreSQL / Storage / Audit
+
+    Admin->>Browser: 发起管理操作
+    Browser->>Proxy: 同域请求 + HttpOnly Cookie + CSRF
+    Proxy->>Proxy: 校验 Origin、Method、类型与大小
+    Proxy->>Edge: 管理 token + 代理证明 + Request ID
+    Edge->>Edge: 校验会话、角色、校园范围与字段白名单
+    Edge->>Data: 执行授权后的最小操作
+    Data-->>Edge: 返回结果、冲突或拒绝
+    Edge-->>Proxy: 状态码 + Request ID + 审计结果
+    Proxy-->>Browser: 安全响应 / Set-Cookie
+    Browser-xData: 禁止以管理员身份直连数据层
+```
 
 浏览器只访问同域管理接口；Pages Functions 管理 HttpOnly Cookie、校验同源与 CSRF，并将请求代理到 Edge Functions。服务端再次执行会话、角色、校园范围、参数与审计校验。
 

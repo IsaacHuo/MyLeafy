@@ -2,7 +2,26 @@
 
 MyLeafy 以原生 iOS 交互为基础。设计系统的任务不是覆盖系统组件，而是统一主题语义、页面层级和复杂校园信息的呈现方式。
 
-![设计系统](https://raw.githubusercontent.com/IsaacHuo/leafy/main/docs/diagrams/design-system.svg)
+```mermaid
+flowchart TB
+    Tokens["01 · 基础令牌<br/>语义色 · Dynamic Type · 间距 · 圆角<br/>时长 · 缓动 · Reduce Motion"]
+    Components["02 · 原生组件<br/>Page / Card / Glass · Button / Chip / Badge<br/>Tab / Navigation / Sheet · Loading / Empty / Error"]
+    Patterns["03 · 产品模式<br/>高密度课表 · 校园工具主页 · 社区信息流<br/>AI Artifact 阅读页 · 系统设置式列表"]
+    Quality["04 · 质量门禁<br/>完整状态 · VoiceOver · 动态字体 · 深浅色<br/>iOS 17 基线 / 26 增强 · 性能 · 隐私 · 一致性"]
+
+    Tokens -->|约束视觉与交互| Components
+    Components -->|组合用户任务| Patterns
+    Patterns -->|逐页验收| Quality
+
+    classDef foundation fill:#F8FAFC,stroke:#64748B,color:#1E293B,stroke-width:1.5px;
+    classDef primitive fill:#F0F7FF,stroke:#4776B5,color:#173B68,stroke-width:2px;
+    classDef pattern fill:#ECF7F0,stroke:#397A5A,color:#173C2B,stroke-width:2px;
+    classDef gate fill:#FFF8E8,stroke:#B7791F,color:#5F3B0B,stroke-width:1.5px;
+    class Tokens foundation;
+    class Components primitive;
+    class Patterns pattern;
+    class Quality gate;
+```
 
 ## 核心原则
 
