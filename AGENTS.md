@@ -13,6 +13,8 @@ Timetable direction:
 - The BJFU timetable always renders a 20-week container. Course occurrences come only from the school response; unused weeks remain empty.
 - Runtime semester configuration selects the undergraduate semester ID, graduate term code, and first-week date without requiring an App Store release.
 - Undergraduate and graduate timetable refreshes must use the same observable cache and error semantics.
+- User-created schedules use one editor and one user-facing concept: dates inside the current 20-week semester project into the timetable, while dates outside it appear as countdowns. School-provided exams remain a separate data source.
+- Schedule-report toggles apply immediately. Exam reminders run daily from 7 through 1 days before; important-date reports run 5, 3, and 1 days before.
 
 Campus heatmap direction:
 - Do not bundle semester-wide classroom occupancy data. The user explicitly logs in and updates the selected date and periods on demand.

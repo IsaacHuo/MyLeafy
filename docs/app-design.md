@@ -196,7 +196,7 @@ Leafy AI 是辅助入口，不是替代所有功能的万能聊天框。
 4. 导出前明确文件格式和可能包含的个人数据。
 5. 生成失败保留原始对话，并提供重试或查看错误摘要。
 
-聊天列表只展示轻量 SwiftUI 成品卡片，完整 Markdown、Mermaid、KaTeX 和代码渲染仅在阅读页加载。Artifact 继续保存在消息 metadata 中，并可从聊天卡片打开及导出为静态 HTML、Markdown 或纯文本。
+聊天列表只展示轻量 SwiftUI 卡片，完整 Markdown、Mermaid、KaTeX 和代码渲染仅在阅读页加载。Artifact 继续保存在消息 metadata 中，并可从聊天卡片打开及导出为静态 HTML、Markdown 或纯文本。
 
 ### 6.4 动作边界
 
