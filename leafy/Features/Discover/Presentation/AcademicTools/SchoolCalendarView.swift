@@ -48,7 +48,7 @@ struct SchoolCalendarView: View {
 
     private func previewPageURL(for asset: CalendarAsset) -> URL {
         if asset.id == "calendar" {
-            return URL(string: "https://myleafy.space/campus/calendar/")!
+            return URL(string: "https://jwc.bjfu.edu.cn/images/xiaoli.jpg")!
         }
         return URL(string: "https://myleafy.space/campus/timetable/")!
     }

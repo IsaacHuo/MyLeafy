@@ -11,6 +11,7 @@ Core stack:
 
 Timetable direction:
 - The BJFU timetable always renders a 20-week container. Course occurrences come only from the school response; unused weeks remain empty.
+- Semester end dates and winter/summer break ranges come from semantic runtime calendar events, never from the 20-week timetable container.
 - Runtime semester configuration selects the undergraduate semester ID, graduate term code, and first-week date without requiring an App Store release.
 - Undergraduate and graduate timetable refreshes must use the same observable cache and error semantics.
 - User-created schedules use one editor and one user-facing concept: dates inside the current 20-week semester project into the timetable, while dates outside it appear as countdowns. School-provided exams remain a separate data source.

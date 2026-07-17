@@ -46,3 +46,11 @@ Deno.test("pending feedback includes open and reviewed", () => {
   assert(source.includes("pending: input.feedbackOpen + input.feedbackReviewed"));
   assert(source.includes('.in("status", ["open", "reviewed"])'));
 });
+
+Deno.test("semester calendar events preserve compatible academic categories", () => {
+  assert(source.includes("row.academicCategory ?? row.academic_category"));
+  for (const category of ["public_holiday", "important_date", "semester_end", "winter_break", "summer_break"]) {
+    assert(source.includes(`"${category}"`), `missing ${category}`);
+  }
+  assert(source.includes("...(academicCategory ? { academicCategory } : {})"));
+});

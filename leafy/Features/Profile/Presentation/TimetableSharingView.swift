@@ -1280,6 +1280,17 @@ private struct SharedTimetableGridDetailView: View {
         if today { return AppTheme.accent }
         guard let event else { return AppTheme.cardBackground }
 
+        switch event.academicCategory {
+        case .winterBreak:
+            return Color.cyan.opacity(colorScheme == .dark ? 0.24 : 0.18)
+        case .summerBreak:
+            return Color.yellow.opacity(colorScheme == .dark ? 0.24 : 0.20)
+        case .importantDate, .semesterEnd:
+            return AppTheme.fill.opacity(0.82)
+        case .publicHoliday, nil:
+            break
+        }
+
         switch event.kind {
         case .holiday:
             return colorScheme == .dark ? AppTheme.accent.opacity(0.26) : AppTheme.accentSoft.opacity(0.72)
@@ -1292,6 +1303,16 @@ private struct SharedTimetableGridDetailView: View {
 
     private func dayHeaderForeground(event: SchoolCalendarEvent?) -> Color {
         guard let event else { return AppTheme.primaryText }
+        switch event.academicCategory {
+        case .winterBreak:
+            return Color.cyan.opacity(colorScheme == .dark ? 0.92 : 0.78)
+        case .summerBreak:
+            return Color.yellow.opacity(colorScheme == .dark ? 0.92 : 0.78)
+        case .importantDate, .semesterEnd:
+            return AppTheme.secondaryText
+        case .publicHoliday, nil:
+            break
+        }
         switch event.kind {
         case .holiday:
             return AppTheme.accentEmphasis

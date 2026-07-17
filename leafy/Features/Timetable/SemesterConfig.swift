@@ -230,7 +230,7 @@ nonisolated struct SemesterConfig {
 
     static func campusCalendarEvents(campusID: CampusID = ActiveCampusContext.descriptor.id) -> [SchoolCalendarEvent] {
         guard campusID == .bjfu else { return [] }
-        return current.calendarEvents.filter { $0.kind == .closure }
+        return current.calendarEvents
     }
 
     static var startOfSemesterDate: Date {
@@ -291,6 +291,14 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
         case solarTerm
     }
 
+    enum AcademicCategory: String, Codable, Hashable, Sendable {
+        case publicHoliday = "public_holiday"
+        case importantDate = "important_date"
+        case semesterEnd = "semester_end"
+        case winterBreak = "winter_break"
+        case summerBreak = "summer_break"
+    }
+
     enum SolarTermSeason: String, Hashable, Sendable {
         case spring
         case summer
@@ -303,13 +311,22 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
     let startDateString: String
     let endDateString: String
     let kind: Kind
+    let academicCategory: AcademicCategory?
 
-    init(id: String, title: String, startDateString: String, endDateString: String, kind: Kind) {
+    init(
+        id: String,
+        title: String,
+        startDateString: String,
+        endDateString: String,
+        kind: Kind,
+        academicCategory: AcademicCategory? = nil
+    ) {
         self.id = id
         self.title = title
         self.startDateString = startDateString
         self.endDateString = endDateString
         self.kind = kind
+        self.academicCategory = academicCategory
     }
 
     var startDate: Date? {
@@ -318,6 +335,14 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
 
     var endDate: Date? {
         Self.dateFormatter.date(from: endDateString)
+    }
+
+    var isPublicHoliday: Bool {
+        kind == .holiday && (academicCategory == nil || academicCategory == .publicHoliday)
+    }
+
+    var isVacation: Bool {
+        academicCategory == .winterBreak || academicCategory == .summerBreak
     }
 
     var solarTermSeason: SolarTermSeason? {
@@ -356,6 +381,8 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
         case startDate = "start_date"
         case endDate = "end_date"
         case kind
+        case academicCategory
+        case academicCategorySnakeCase = "academic_category"
     }
 
     init(from decoder: Decoder) throws {
@@ -367,6 +394,8 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
         endDateString = try container.decodeIfPresent(String.self, forKey: .endDateString)
             ?? container.decode(String.self, forKey: .endDate)
         kind = try container.decode(Kind.self, forKey: .kind)
+        academicCategory = try container.decodeIfPresent(AcademicCategory.self, forKey: .academicCategory)
+            ?? container.decodeIfPresent(AcademicCategory.self, forKey: .academicCategorySnakeCase)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -376,6 +405,7 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
         try container.encode(startDateString, forKey: .startDateString)
         try container.encode(endDateString, forKey: .endDateString)
         try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(academicCategory, forKey: .academicCategory)
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -717,13 +747,17 @@ nonisolated enum AcademicCalendarEvents {
     static func events(
         for date: Date,
         campusID: CampusID = ActiveCampusContext.descriptor.id,
+        campusEvents: [SchoolCalendarEvent]? = nil,
         calendar: Calendar = .current
     ) -> [SchoolCalendarEvent] {
         let nationalHoliday = NationalHolidayCalendar.holidays
             .first { $0.contains(date, calendar: calendar) }?
             .schoolCalendarEvent
-        let campusEvent = SemesterConfig.campusCalendarEvents(campusID: campusID)
-            .first { $0.contains(date, calendar: calendar) }
+        let resolvedCampusEvents = campusEvents ?? SemesterConfig.campusCalendarEvents(campusID: campusID)
+        let campusEvent = resolvedCampusEvents
+            .filter { $0.contains(date, calendar: calendar) }
+            .sorted { campusEventPriority($0) < campusEventPriority($1) }
+            .first
         let solarTerm = NationalHolidayCalendar.solarTerms
             .first { $0.contains(date, calendar: calendar) }?
             .schoolCalendarEvent
@@ -734,9 +768,10 @@ nonisolated enum AcademicCalendarEvents {
     static func event(
         on date: Date,
         campusID: CampusID = ActiveCampusContext.descriptor.id,
+        campusEvents: [SchoolCalendarEvent]? = nil,
         calendar: Calendar = .current
     ) -> SchoolCalendarEvent? {
-        events(for: date, campusID: campusID, calendar: calendar).first
+        events(for: date, campusID: campusID, campusEvents: campusEvents, calendar: calendar).first
     }
 
     static func displayEvents(campusID: CampusID = ActiveCampusContext.descriptor.id) -> [SchoolCalendarEvent] {
@@ -746,20 +781,48 @@ nonisolated enum AcademicCalendarEvents {
         return nationalHolidays + campusEvents + solarTerms
     }
 
-    static func nextNationalHoliday(
+    static func nextHoliday(
         from referenceDate: Date,
+        campusID: CampusID = ActiveCampusContext.descriptor.id,
+        campusEvents: [SchoolCalendarEvent]? = nil,
         calendar: Calendar = .current
-    ) -> NationalHolidayEvent? {
+    ) -> SchoolCalendarEvent? {
         let today = calendar.startOfDay(for: referenceDate)
-        return NationalHolidayCalendar.holidays
-            .filter { holiday in
-                guard let endDate = holiday.endDate else { return false }
+        let nationalHolidays = NationalHolidayCalendar.holidays.map(\.schoolCalendarEvent)
+        let resolvedCampusEvents = campusEvents ?? SemesterConfig.campusCalendarEvents(campusID: campusID)
+        let campusHolidays = resolvedCampusEvents.filter(\.isPublicHoliday)
+
+        return (nationalHolidays + campusHolidays)
+            .filter { event in
+                guard let endDate = event.endDate else { return false }
                 return calendar.startOfDay(for: endDate) >= today
             }
             .sorted { lhs, rhs in
                 (lhs.startDate ?? .distantFuture) < (rhs.startDate ?? .distantFuture)
             }
             .first
+    }
+
+    private static func campusEventPriority(_ event: SchoolCalendarEvent) -> Int {
+        switch event.academicCategory {
+        case .publicHoliday:
+            return 0
+        case .winterBreak, .summerBreak:
+            return 1
+        case .semesterEnd:
+            return 2
+        case .importantDate:
+            return 3
+        case nil:
+            switch event.kind {
+            case .closure:
+                return 0
+            case .holiday:
+                return 1
+            case .solarTerm:
+                return 4
+            }
+        }
     }
 
     static func nationalHolidayWeeks(

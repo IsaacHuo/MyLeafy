@@ -3902,6 +3902,7 @@ function calendarEventsParam(params: Record<string, unknown>) {
     const startDateString = normalizeText(row.startDateString ?? row.start_date);
     const endDateString = normalizeText(row.endDateString ?? row.end_date);
     const kind = normalizeText(row.kind);
+    const academicCategory = normalizeText(row.academicCategory ?? row.academic_category);
 
     if (!id || !title || !startDateString || !endDateString || !kind) {
       throw new HttpError(400, `calendarEvents[${index}] is missing required fields.`);
@@ -3909,11 +3910,27 @@ function calendarEventsParam(params: Record<string, unknown>) {
     if (!["holiday", "closure"].includes(kind)) {
       throw new HttpError(400, `calendarEvents[${index}].kind is invalid.`);
     }
+    if (academicCategory && ![
+      "public_holiday",
+      "important_date",
+      "semester_end",
+      "winter_break",
+      "summer_break",
+    ].includes(academicCategory)) {
+      throw new HttpError(400, `calendarEvents[${index}].academicCategory is invalid.`);
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateString) || !/^\d{4}-\d{2}-\d{2}$/.test(endDateString)) {
       throw new HttpError(400, `calendarEvents[${index}] dates must use YYYY-MM-DD.`);
     }
 
-    return { id, title, startDateString, endDateString, kind };
+    return {
+      id,
+      title,
+      startDateString,
+      endDateString,
+      kind,
+      ...(academicCategory ? { academicCategory } : {}),
+    };
   });
 }
 
