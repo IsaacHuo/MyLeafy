@@ -12,31 +12,8 @@ const maxSpreadsheetColumnsPerRow = 30;
 const fetchTimeoutMs = 10_000;
 const receiptLifetimeSeconds = 10 * 60;
 const bjfuSearchSiteIDs = ["369", "121", "292"];
-const maxOfficialFocusTerms = 3;
-const maxOfficialExactQueries = 2;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-
-const searchFocusSynonymGroups = [
-  ["用印", "用章", "印章", "盖章"],
-  ["保研", "推免", "推荐免试", "免试攻读"],
-  ["期末安排", "期末考试", "公共课考试", "公共基础课考试", "考试周"],
-] as const;
-
-const genericSearchFocusTerms = new Set([
-  "申请",
-  "办理",
-  "流程",
-  "政策",
-  "通知",
-  "安排",
-  "资料",
-  "查询",
-  "搜索",
-  "学校",
-  "官网",
-  "官方",
-]);
 
 export type CampusAIWebToolName =
   | "official.search"
@@ -113,49 +90,22 @@ export async function searchBJFUOfficial(
   userID: string,
   signingSecret: string,
   signal?: AbortSignal,
-  requestedFocusTerms: string[] = [],
+  _requestedFocusTerms: string[] = [],
 ): Promise<CampusAISearchResult[]> {
   const normalizedQuery = normalizedSearchQuery(query);
   const limit = boundedCount(count);
-  const focusTerms = normalizedSearchFocusTerms(
-    normalizedQuery,
-    requestedFocusTerms,
-  );
-  if (focusTerms.length === 0) {
-    console.info(JSON.stringify({
-      event: "campus_ai_search_filtered",
-      provider: "bjfu_official",
-      focus_source: requestedFocusTerms.length > 0 ? "requested" : "derived",
-      raw_result_count: 0,
-      returned_result_count: 0,
-      rejection_reason: "missing_focus_terms",
-    }));
-    return [];
-  }
-
-  const exactQueries = expandedFocusTerms(focusTerms).slice(
-    0,
-    maxOfficialExactQueries,
-  );
   const exactResponses = await Promise.allSettled(
-    exactQueries.flatMap((exactQuery) =>
-      bjfuSearchSiteIDs.map((siteID) =>
-        fetchBJFUSearch(exactQuery, siteID, "exact", 1, signal)
-      )
+    bjfuSearchSiteIDs.map((siteID) =>
+      fetchBJFUSearch(normalizedQuery, siteID, "exact", 1, signal)
     ),
   );
   assertOfficialSearchAvailable(exactResponses);
   const exactRaw = fulfilledSearchResults(exactResponses);
   let combinedRaw = deduplicateRawResults(exactRaw)
     .filter((item) => isBJFUOfficialURL(item.url));
-  let diagnostics = rankSearchResultsWithDiagnostics(
-    combinedRaw,
-    normalizedQuery,
-    focusTerms,
-  );
 
   let fuzzyRaw: typeof combinedRaw = [];
-  if (diagnostics.ranked.length < limit) {
+  if (combinedRaw.length < limit) {
     const firstPageResponses = await Promise.allSettled(
       bjfuSearchSiteIDs.map((siteID) =>
         fetchBJFUSearch(normalizedQuery, siteID, "fuzzy", 1, signal)
@@ -165,13 +115,8 @@ export async function searchBJFUOfficial(
     fuzzyRaw = fulfilledSearchResults(firstPageResponses);
     combinedRaw = deduplicateRawResults([...combinedRaw, ...fuzzyRaw])
       .filter((item) => isBJFUOfficialURL(item.url));
-    diagnostics = rankSearchResultsWithDiagnostics(
-      combinedRaw,
-      normalizedQuery,
-      focusTerms,
-    );
 
-    if (diagnostics.ranked.length < limit) {
+    if (combinedRaw.length < limit) {
       const secondPageResponses = await Promise.allSettled(
         bjfuSearchSiteIDs.map((siteID) =>
           fetchBJFUSearch(normalizedQuery, siteID, "fuzzy", 2, signal)
@@ -183,26 +128,18 @@ export async function searchBJFUOfficial(
       ];
       combinedRaw = deduplicateRawResults([...combinedRaw, ...fuzzyRaw])
         .filter((item) => isBJFUOfficialURL(item.url));
-      diagnostics = rankSearchResultsWithDiagnostics(
-        combinedRaw,
-        normalizedQuery,
-        focusTerms,
-      );
     }
   }
 
   console.info(JSON.stringify({
-    event: "campus_ai_search_filtered",
+    event: "campus_ai_search_candidates",
     provider: "bjfu_official",
-    focus_source: requestedFocusTerms.length > 0 ? "requested" : "derived",
     exact_result_count: exactRaw.length,
     fuzzy_result_count: fuzzyRaw.length,
     raw_result_count: combinedRaw.length,
-    focus_rejected_count: diagnostics.focusRejected,
-    year_rejected_count: diagnostics.yearRejected,
-    returned_result_count: Math.min(diagnostics.ranked.length, limit),
+    returned_result_count: Math.min(combinedRaw.length, limit),
   }));
-  const selected = diagnostics.ranked.slice(0, limit);
+  const selected = combinedRaw.slice(0, limit);
   return await Promise.all(selected.map(async (item) => {
     const id = stableID("official", item.url);
     return {
@@ -211,6 +148,7 @@ export async function searchBJFUOfficial(
       url: item.url,
       display_host: new URL(item.url).hostname.toLowerCase(),
       snippet: item.snippet,
+      published_at: extractPublishedAt(`${item.title} ${item.snippet ?? ""}`),
       source_kind: "bjfu_official" as const,
       trust_score: officialTrustScore(item.url),
       read_receipt: await signReadReceipt({
@@ -230,7 +168,7 @@ export async function searchDuckDuckGoLite(
   userID: string,
   signingSecret: string,
   signal?: AbortSignal,
-  requestedFocusTerms: string[] = [],
+  _requestedFocusTerms: string[] = [],
 ): Promise<CampusAISearchResult[]> {
   const normalizedQuery = normalizedSearchQuery(query);
   const url = new URL("https://lite.duckduckgo.com/lite/");
@@ -274,25 +212,14 @@ export async function searchDuckDuckGoLite(
     );
   }
   const limit = boundedCount(count);
-  const focusTerms = normalizedSearchFocusTerms(
-    normalizedQuery,
-    requestedFocusTerms,
-  );
-  const diagnostics = rankSearchResultsWithDiagnostics(
-    parsed,
-    normalizedQuery,
-    focusTerms,
-  );
   console.info(JSON.stringify({
-    event: "campus_ai_search_filtered",
+    event: "campus_ai_search_candidates",
     provider: "duckduckgo_lite",
     raw_result_count: parsed.length,
-    focus_rejected_count: diagnostics.focusRejected,
-    year_rejected_count: diagnostics.yearRejected,
-    returned_result_count: Math.min(diagnostics.ranked.length, limit),
+    returned_result_count: Math.min(parsed.length, limit),
   }));
   return await Promise.all(
-    diagnostics.ranked.slice(0, limit).map(async (item) => {
+    parsed.slice(0, limit).map(async (item) => {
       const id = stableID("web", item.url);
       return {
         id,
@@ -300,6 +227,7 @@ export async function searchDuckDuckGoLite(
         url: item.url,
         display_host: new URL(item.url).hostname.toLowerCase(),
         snippet: item.snippet,
+        published_at: extractPublishedAt(`${item.title} ${item.snippet ?? ""}`),
         source_kind: isBJFUOfficialURL(item.url)
           ? "bjfu_official" as const
           : "public_web" as const,
@@ -370,92 +298,8 @@ export function parseDuckDuckGoLiteHTML(html: string, query = "") {
 
 export function rankSearchResultsByRelevance<
   T extends { title: string; url: string; snippet?: string },
->(results: T[], query: string, requestedFocusTerms: string[] = []): T[] {
-  return rankSearchResultsWithDiagnostics(
-    results,
-    query,
-    normalizedSearchFocusTerms(query, requestedFocusTerms),
-  ).ranked;
-}
-
-function rankSearchResultsWithDiagnostics<
-  T extends { title: string; url: string; snippet?: string },
->(results: T[], query: string, focusTerms: string[]) {
-  const queryConcepts = relevanceConcepts(query);
-  if (queryConcepts.size === 0 || focusTerms.length === 0) {
-    return {
-      ranked: [] as T[],
-      focusRejected: results.length,
-      yearRejected: 0,
-    };
-  }
-  const compactQuery = relevanceText(query).replaceAll(" ", "");
-  const queryYears = explicitYears(query);
-  let focusRejected = 0;
-  let yearRejected = 0;
-  const ranked = results
-    .map((result, index) => {
-      const focusMatch = searchResultMatchesFocus(result, focusTerms);
-      if (!focusMatch.matched) focusRejected += 1;
-      const titleConcepts = relevanceConcepts(result.title);
-      const snippetConcepts = relevanceConcepts(result.snippet ?? "");
-      let score = intersectionCount(queryConcepts, titleConcepts) * 6 +
-        intersectionCount(queryConcepts, snippetConcepts) * 2;
-      const compactTitle = relevanceText(result.title).replaceAll(" ", "");
-      const compactSnippet = relevanceText(result.snippet ?? "").replaceAll(
-        " ",
-        "",
-      );
-      if (compactQuery.length >= 4 && compactTitle.includes(compactQuery)) {
-        score += 24;
-      } else if (
-        compactQuery.length >= 4 && compactSnippet.includes(compactQuery)
-      ) {
-        score += 8;
-      }
-      const candidateYears = explicitYears(
-        `${result.title} ${result.snippet ?? ""}`,
-      );
-      const hasMatchingYear = queryYears.size === 0 ||
-        candidateYears.size === 0 ||
-        [...queryYears].some((year) => candidateYears.has(year));
-      if (queryYears.size > 0 && candidateYears.size > 0 && hasMatchingYear) {
-        score += 30;
-      }
-      if (!hasMatchingYear) yearRejected += 1;
-      if (focusMatch.title) score += 36;
-      else if (focusMatch.snippet) score += 14;
-      return { result, index, score, hasMatchingYear, focusMatch };
-    })
-    .filter((candidate) =>
-      candidate.score > 0 && candidate.hasMatchingYear &&
-      candidate.focusMatch.matched
-    )
-    .sort((left, right) => right.score - left.score || left.index - right.index)
-    .map((candidate) => candidate.result);
-  return { ranked, focusRejected, yearRejected };
-}
-
-function explicitYears(value: string) {
-  const years = new Set<number>();
-  for (const match of value.matchAll(/(?:19|20)\d{2}/g)) {
-    years.add(Number(match[0]));
-  }
-  for (
-    const match of value.matchAll(
-      /(?<!\d)(\d{2})\s*(?:[-–—~～至]|到)\s*(\d{2})(?=\s*(?:学年|年|届))/g,
-    )
-  ) {
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    years.add(first >= 70 ? 1900 + first : 2000 + first);
-    years.add(second >= 70 ? 1900 + second : 2000 + second);
-  }
-  for (const match of value.matchAll(/(?<!\d)(\d{2})(?=\s*(?:年|届))/g)) {
-    const year = Number(match[1]);
-    years.add(year >= 70 ? 1900 + year : 2000 + year);
-  }
-  return years;
+>(results: T[], _query: string, _requestedFocusTerms: string[] = []): T[] {
+  return deduplicateRawResults(results);
 }
 
 export async function readWebPage(
@@ -1198,83 +1042,6 @@ function normalizedSearchQuery(value: string) {
   return normalized.slice(0, 180);
 }
 
-function normalizedSearchFocusTerms(
-  query: string,
-  requestedFocusTerms: string[],
-) {
-  const normalizedQuery = relevanceText(query).replaceAll(" ", "");
-  const requested = requestedFocusTerms
-    .map((term) => normalizeFocusTerm(term))
-    .filter((term) => term.length >= 2)
-    .filter((term) => !genericSearchFocusTerms.has(term))
-    .filter((term) => focusTermIsGrounded(term, normalizedQuery));
-  const uniqueRequested = Array.from(new Set(requested));
-  if (uniqueRequested.length > 0) {
-    return uniqueRequested.slice(0, maxOfficialFocusTerms);
-  }
-
-  const synonymous = searchFocusSynonymGroups
-    .filter((group) => group.some((term) => normalizedQuery.includes(term)))
-    .map((group) => group.find((term) => normalizedQuery.includes(term)) ?? group[0]);
-  if (synonymous.length > 0) {
-    return Array.from(new Set(synonymous)).slice(0, maxOfficialFocusTerms);
-  }
-
-  const stripped = normalizedQuery
-    .replace(/(?:19|20)\d{2}/g, " ")
-    .replace(
-      /(?:北京林业大学|北林|官网|官方|学校|帮我|请问|麻烦|查询|搜索|查找|申请|办理|流程|政策|通知|安排|资料|关于|如何|怎么|什么|当前|最新|最近|现在|学年|学期|的)/g,
-      " ",
-    )
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-  return stripped.split(/\s+/)
-    .filter((term) => Array.from(term).length >= 2)
-    .sort((left, right) => Array.from(right).length - Array.from(left).length)
-    .slice(0, 1);
-}
-
-function normalizeFocusTerm(value: string) {
-  return relevanceText(normalizeText(value)).replaceAll(" ", "").slice(0, 32);
-}
-
-function focusTermIsGrounded(term: string, compactQuery: string) {
-  if (compactQuery.includes(term)) return true;
-  return searchFocusSynonymGroups.some((group) =>
-    group.includes(term as never) &&
-    group.some((candidate) => compactQuery.includes(candidate))
-  );
-}
-
-function expandedFocusTerms(focusTerms: string[]) {
-  const expanded: string[] = [];
-  for (const focusTerm of focusTerms) {
-    expanded.push(focusTerm);
-    const group = searchFocusSynonymGroups.find((candidate) =>
-      candidate.includes(focusTerm as never)
-    );
-    if (group) expanded.push(...group);
-  }
-  return Array.from(new Set(expanded.map(normalizeFocusTerm)))
-    .filter((term) => term.length >= 2);
-}
-
-function searchResultMatchesFocus(
-  result: { title: string; snippet?: string },
-  focusTerms: string[],
-) {
-  const title = relevanceText(result.title).replaceAll(" ", "");
-  const snippet = relevanceText(result.snippet ?? "").replaceAll(" ", "");
-  const variants = expandedFocusTerms(focusTerms);
-  const titleMatch = variants.some((term) => title.includes(term));
-  const snippetMatch = variants.some((term) => snippet.includes(term));
-  return {
-    matched: titleMatch || snippetMatch,
-    title: titleMatch,
-    snippet: snippetMatch,
-  };
-}
-
 function fulfilledSearchResults<T>(
   responses: PromiseSettledResult<T[]>[],
 ) {
@@ -1323,63 +1090,6 @@ function deduplicateRawResults<T extends { url: string }>(values: T[]) {
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
-}
-
-function relevanceText(value: string) {
-  return value
-    .toLowerCase()
-    .replaceAll("北京林业大学", " ")
-    .replaceAll("北林官网", " ")
-    .replaceAll("北林", " ")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function relevanceConcepts(value: string) {
-  const normalized = relevanceText(value);
-  const concepts = new Set<string>();
-  for (
-    const chunk of normalized.split(" ").filter((item) => item.length >= 2)
-  ) {
-    concepts.add(chunk);
-    if (/\p{Script=Han}/u.test(chunk) && Array.from(chunk).length > 2) {
-      const characters = Array.from(chunk);
-      for (let index = 0; index < characters.length - 1; index += 1) {
-        concepts.add(characters[index] + characters[index + 1]);
-      }
-    }
-  }
-  for (
-    const generic of [
-      "北京",
-      "林业",
-      "大学",
-      "官网",
-      "学校",
-      "资料",
-      "查询",
-      "搜索",
-    ]
-  ) {
-    concepts.delete(generic);
-  }
-  if (
-    ["保研", "推免", "推荐免试", "免试攻读"].some((term) =>
-      normalized.includes(term)
-    )
-  ) {
-    concepts.add("__postgraduate_recommendation__");
-  }
-  return concepts;
-}
-
-function intersectionCount(left: Set<string>, right: Set<string>) {
-  let count = 0;
-  for (const value of left) {
-    if (right.has(value)) count += 1;
-  }
-  return count;
 }
 
 function normalizePageText(value: string) {

@@ -960,6 +960,7 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
     let capabilities: CampusAICapabilitySet
     let localRetrieval: CampusAILocalRetrievalPayload
     let outputMode: CampusAIOutputMode
+    let actionPlanningRequested: Bool
 
     enum CodingKeys: String, CodingKey {
         case requestID
@@ -974,6 +975,7 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         case capabilities
         case localRetrieval
         case outputMode
+        case actionPlanningRequested
     }
 
     init(
@@ -988,7 +990,8 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         webSearchEnabled: Bool = false,
         capabilities: CampusAICapabilitySet = .disabled,
         localRetrieval: CampusAILocalRetrievalPayload = .empty(query: ""),
-        outputMode: CampusAIOutputMode = .automatic
+        outputMode: CampusAIOutputMode = .automatic,
+        actionPlanningRequested: Bool = false
     ) {
         self.requestID = requestID
         self.message = message
@@ -1002,6 +1005,7 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         self.capabilities = capabilities
         self.localRetrieval = localRetrieval
         self.outputMode = outputMode
+        self.actionPlanningRequested = actionPlanningRequested
     }
 
     init(from decoder: Decoder) throws {
@@ -1022,6 +1026,7 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         localRetrieval = try container.decodeIfPresent(CampusAILocalRetrievalPayload.self, forKey: .localRetrieval)
             ?? .empty(query: message)
         outputMode = try container.decodeIfPresent(CampusAIOutputMode.self, forKey: .outputMode) ?? .automatic
+        actionPlanningRequested = try container.decodeIfPresent(Bool.self, forKey: .actionPlanningRequested) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1038,6 +1043,7 @@ nonisolated struct CampusAIRequest: Codable, Hashable {
         try container.encode(capabilities, forKey: .capabilities)
         try container.encode(localRetrieval, forKey: .localRetrieval)
         try container.encode(outputMode, forKey: .outputMode)
+        try container.encode(actionPlanningRequested, forKey: .actionPlanningRequested)
     }
 }
 
@@ -4739,7 +4745,7 @@ nonisolated struct CampusAIService {
                                 settings: settings,
                                 apiKey: apiKey
                             )
-                            finalResponse.actions = Self.hasExplicitActionIntent(in: request.message)
+                            finalResponse.actions = request.actionPlanningRequested
                                 ? completionPlan.actions
                                 : []
                             if shouldCreateArtifact {
@@ -5110,6 +5116,7 @@ nonisolated struct CampusAIService {
             "Artifact 的 title、summary 和正文由你生成；来源、数据范围和本机条目引用由 App 在本地附加，不要输出 sources 字段。",
             "可以使用 local_retrieval 中的 routeHint 和 sourceID 判断动作目标；缺少明确目标 ID 时不要编造编辑或删除动作。",
             "只有用户原问题明确要求打开页面或添加日程时才生成动作；不得根据 AI 回答中的建议自行生成动作，否则返回 {\"actions\":[]}。",
+            "考试时间安排是什么、期末整体安排等信息查询不得生成动作；只有用户明确要求打开或管理相应页面时才可生成 openAcademicRoute。",
             "支持 kind：openAcademicRoute、createSchedule。旧 kind 仅用于客户端兼容，不得再生成。",
             "openAcademicRoute.payload.route 必须来自 supported_actions 中的 allowed_values.route。",
             "用户明确想查看、添加或管理考试、考场、考试时间、考试安排时，生成 openAcademicRoute 到 examSchedule。",
@@ -5148,58 +5155,6 @@ nonisolated struct CampusAIService {
             throw CampusAIServiceError.invalidProviderResponse
         }
         return try CampusAICompletionPlanParser.parse(content)
-    }
-
-    static func fallbackActionDrafts(
-        for request: CampusAIRequest,
-        answer _: String = ""
-    ) -> [CampusAIActionDraft] {
-        let text = request.message.lowercased()
-        let hasCreateIntent = ["新建", "添加", "创建", "设置", "安排"].contains { text.contains($0) }
-        let hasOpenIntent = ["查看", "打开", "查询", "管理"].contains { text.contains($0) }
-        let hasScheduleIntent = ["日程", "提醒", "事项", "待办", "安排"].contains { text.contains($0) }
-        let hasExamIntent = text.contains("考试") || text.contains("考场")
-        guard (hasCreateIntent || hasOpenIntent) && (hasScheduleIntent || hasExamIntent) else { return [] }
-
-        if hasCreateIntent, hasScheduleIntent, !hasExamIntent {
-            return [
-                CampusAIActionDraft(
-                    kind: .createSchedule,
-                    title: "添加日程",
-                    detail: "确认日期、时间和日程信息后保存。",
-                    payload: CampusAIActionPayload(
-                        startsAt: fallbackScheduleStartDate(in: request.message).map {
-                            scheduleDateTimeFormatter.string(from: $0)
-                        }
-                    )
-                )
-            ]
-        }
-
-        let route: CampusAIAcademicRouteID
-        if text.contains("推送") || text.contains("报告") {
-            route = .scheduleReports
-        } else if text.contains("考试") || text.contains("考场") {
-            route = .examSchedule
-        } else {
-            route = .customCountdowns
-        }
-        return [
-            CampusAIActionDraft(
-                kind: .openAcademicRoute,
-                title: "打开\(route.title)",
-                detail: actionDetail(for: route),
-                payload: CampusAIActionPayload(route: route.rawValue)
-            )
-        ]
-    }
-
-    static func hasExplicitActionIntent(in message: String) -> Bool {
-        let text = message.lowercased()
-        let actionVerbs = ["新建", "添加", "创建", "设置", "安排", "查看", "打开", "查询", "管理"]
-        let supportedTargets = ["日程", "提醒", "事项", "待办", "安排", "考试", "考场"]
-        return actionVerbs.contains { text.contains($0) }
-            && supportedTargets.contains { text.contains($0) }
     }
 
     private static func actionDetail(for route: CampusAIAcademicRouteID) -> String {
