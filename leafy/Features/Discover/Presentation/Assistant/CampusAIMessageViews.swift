@@ -47,7 +47,7 @@ struct CampusAIMessageRow: View {
     }
 
     private var progressSearchResults: [CampusAISearchResultPreview] {
-        var results = agentMetadata.searchResults
+        var results = isStreaming ? agentMetadata.searchResults : []
         var seenURLs = Set(results.map(\.url))
         for citation in agentMetadata.citations where seenURLs.insert(citation.url).inserted {
             results.append(CampusAISearchResultPreview(

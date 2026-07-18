@@ -4001,6 +4001,7 @@ nonisolated enum CampusAIServiceError: LocalizedError, Equatable {
     case quotaExhausted(String)
     case providerRejected(String)
     case invalidProviderResponse
+    case incompleteStream
 
     var errorDescription: String? {
         switch self {
@@ -4018,6 +4019,8 @@ nonisolated enum CampusAIServiceError: LocalizedError, Equatable {
             return message
         case .invalidProviderResponse:
             return "AI 助手返回了无法识别的响应。"
+        case .incompleteStream:
+            return "联网连接中断，请重试。"
         }
     }
 }
@@ -4180,8 +4183,11 @@ nonisolated struct CampusAISSEParser {
     private var accumulatedReasoning = ""
     private var finishReason: String?
     private var emittedDone = false
+    private let requiresExplicitTerminal: Bool
 
-    init() {}
+    init(requiresExplicitTerminal: Bool = false) {
+        self.requiresExplicitTerminal = requiresExplicitTerminal
+    }
 
     mutating func append(_ data: Data) throws -> [CampusAIStreamEvent] {
         pendingData.append(data)
@@ -4220,6 +4226,9 @@ nonisolated struct CampusAISSEParser {
             buffer = ""
         }
         if includeRemainder, !emittedDone {
+            if requiresExplicitTerminal || accumulatedAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw CampusAIServiceError.incompleteStream
+            }
             emittedDone = true
             events.append(doneEvent())
         }
@@ -4248,6 +4257,9 @@ nonisolated struct CampusAISSEParser {
             return []
         }
         if payloadText == "[DONE]" {
+            guard accumulatedAnswer.nonEmptyTrimmed != nil else {
+                throw CampusAIServiceError.invalidProviderResponse
+            }
             emittedDone = true
             return [doneEvent()]
         }
@@ -4326,6 +4338,9 @@ nonisolated struct CampusAISSEParser {
             emittedDone = true
             let answer = payload.answer ?? accumulatedAnswer
             let reasoning = payload.reasoning ?? accumulatedReasoning
+            guard answer.nonEmptyTrimmed != nil else {
+                throw CampusAIServiceError.invalidProviderResponse
+            }
             return [
                 .done(
                     CampusAIResponse(
@@ -4813,7 +4828,7 @@ nonisolated struct CampusAIService {
                         throw CampusAIServiceError.providerRejected(message)
                     }
 
-                    var parser = CampusAISSEParser()
+                    var parser = CampusAISSEParser(requiresExplicitTerminal: true)
                     var chunk = Data()
                     chunk.reserveCapacity(4_096)
                     for try await byte in bytes {

@@ -29,6 +29,8 @@ const maxAgentOfficialSearchCalls = 15;
 const maxAgentSubtasks = 3;
 const maxAgentSearchResults = 8;
 const maxOfficialDocumentPages = 20;
+const preferredOfficialDocumentSources = 5;
+const officialDocumentReadConcurrency = 3;
 const maxOfficialSpreadsheetReads = 4;
 const maxOfficialDocumentBytes = 2 * 1024 * 1024;
 const officialDocumentFetchTimeoutMs = 8_000;
@@ -110,6 +112,7 @@ type CampusAISearchRoute = "direct" | "officialResearch" | "webResearch";
 export type CampusAISearchRoutingDecision = {
   route: CampusAISearchRoute;
   query: string;
+  focusTerms: string[];
   usePersonalContext: boolean;
   reasonCode: string;
 };
@@ -337,6 +340,8 @@ export async function handler(request: Request): Promise<Response> {
     let agentTrace: AgentTraceStep[] = [];
     let deliverables: CampusAIDeliverable[] = [];
     let completed = false;
+    let lastStage = "reserved";
+    const streamStartedAt = performance.now();
 
     try {
       if (reservation.quota) {
@@ -346,6 +351,7 @@ export async function handler(request: Request): Promise<Response> {
       const streamCallbacks: AgentCallbacks = {
         onDelta(delta) {
           if (delta.length > 0) {
+            lastStage = "answer_stream";
             firstTokenSeen = true;
             answer += delta;
             enqueueSSE(controller, { type: "delta", text: delta });
@@ -361,9 +367,11 @@ export async function handler(request: Request): Promise<Response> {
           usage = nextUsage;
         },
         onAgentStatus(text: string) {
+          lastStage = "agent_status";
           enqueueSSE(controller, { type: "agent_status", text });
         },
         onAgentStep(step: AgentTraceStep) {
+          lastStage = step.kind;
           agentTrace.push(step);
           enqueueSSE(controller, { type: "agent_step", step });
         },
@@ -390,10 +398,12 @@ export async function handler(request: Request): Promise<Response> {
       let routing: CampusAISearchRoutingDecision = {
         route: "direct",
         query: "",
+        focusTerms: [],
         usePersonalContext: true,
         reasonCode: "routing_disabled",
       };
       if (shouldRunManagedAgent(body)) {
+        lastStage = "routing";
         streamCallbacks.onAgentStatus?.("正在判断是否需要联网");
         const routed = await managedSearchRoutingDecisionWithRetry(
           body,
@@ -428,6 +438,9 @@ export async function handler(request: Request): Promise<Response> {
           [routingToolCall(routing)],
           routing.usePersonalContext,
         );
+      if (!result.answer.trim()) {
+        throw new Error("empty_managed_answer");
+      }
       usage = mergeUsage(usage, result.usage ?? {});
       citations = deduplicateCitations([
         ...citations,
@@ -493,23 +506,6 @@ export async function handler(request: Request): Promise<Response> {
         }
       }
 
-      completed = true;
-      enqueueSSE(controller, {
-        type: "done",
-        answer: result.answer,
-        reasoning: result.reasoning,
-        finish_reason: result.finishReason,
-        suggested_title: shortTitle(message),
-        summary: "",
-        actions: completionPlan.actions,
-        citations,
-        deliverables,
-        artifact_state: artifactState,
-        artifact_error_message: artifactErrorMessage,
-        agentTrace,
-        agent_trace: agentTrace,
-      });
-
       await completeUsage(adminClient, {
         requestUUID,
         status: "success",
@@ -529,36 +525,78 @@ export async function handler(request: Request): Promise<Response> {
         appTransactionID,
       );
       enqueueSSE(controller, { type: "quota", quota });
+      completed = true;
+      lastStage = "done";
+      enqueueSSE(controller, {
+        type: "done",
+        answer: result.answer,
+        reasoning: result.reasoning,
+        finish_reason: result.finishReason,
+        suggested_title: shortTitle(message),
+        summary: "",
+        actions: completionPlan.actions,
+        citations,
+        deliverables,
+        artifact_state: artifactState,
+        artifact_error_message: artifactErrorMessage,
+        agentTrace,
+        agent_trace: agentTrace,
+      });
+      console.info(JSON.stringify({
+        event: "campus_ai_stream_terminal",
+        request_id: requestUUID,
+        terminal: "done",
+        last_stage: lastStage,
+        latency_ms: elapsedMilliseconds(streamStartedAt),
+      }));
     } catch (error) {
       console.error("campus-ai-assistant: request failed", errorMessage(error));
+      try {
+        await completeUsage(adminClient, {
+          requestUUID,
+          status: "error",
+          counted: firstTokenSeen,
+          requestCharCount,
+          responseCharCount: answer.length + reasoning.length +
+            safeJSONStringify(citations).length +
+            safeJSONStringify(deliverables).length +
+            safeJSONStringify(agentTrace).length,
+          usage,
+          errorCode: signal.aborted
+            ? "client_aborted"
+            : completed
+            ? null
+            : "provider_error",
+        });
+        const quota = await quotaSnapshot(
+          adminClient,
+          authResult.userID,
+          appTransactionID,
+        );
+        enqueueSSE(controller, { type: "quota", quota });
+      } catch (cleanupError) {
+        console.error(JSON.stringify({
+          event: "campus_ai_usage_cleanup_failed",
+          request_id: requestUUID,
+          error_name: cleanupError instanceof Error
+            ? cleanupError.name
+            : "unknown",
+        }));
+      }
       enqueueSSE(controller, {
         type: "error",
         error: error instanceof CampusAISearchRoutingError
           ? "联网判断失败，请重试。"
           : "AI 助手暂时不可用，请稍后重试。",
       });
-      await completeUsage(adminClient, {
-        requestUUID,
-        status: "error",
-        counted: firstTokenSeen,
-        requestCharCount,
-        responseCharCount: answer.length + reasoning.length +
-          safeJSONStringify(citations).length +
-          safeJSONStringify(deliverables).length +
-          safeJSONStringify(agentTrace).length,
-        usage,
-        errorCode: signal.aborted
-          ? "client_aborted"
-          : completed
-          ? null
-          : "provider_error",
-      });
-      const quota = await quotaSnapshot(
-        adminClient,
-        authResult.userID,
-        appTransactionID,
-      );
-      enqueueSSE(controller, { type: "quota", quota });
+      console.error(JSON.stringify({
+        event: "campus_ai_stream_terminal",
+        request_id: requestUUID,
+        terminal: "error",
+        last_stage: lastStage,
+        latency_ms: elapsedMilliseconds(streamStartedAt),
+        error_name: error instanceof Error ? error.name : "unknown",
+      }));
     }
   });
 }
@@ -667,7 +705,8 @@ function searchRoutingSystemPrompt() {
     "学校之外的实时、近期或可外部核验事实选择 webResearch。寒暄、稳定通识、纯创作和只询问明确个人本地记录的请求选择 direct。无法确认信息是否可能过期时，保守选择研究。",
     "use_personal_context 默认 false。只有问题明确需要个人事实或个性化安排时才为 true；不要为了显得个性化而调用成绩、考试、课表或日程。",
     "混合问题既问学校公共安排又要求结合个人情况时，选择 officialResearch 且 use_personal_context 为 true。",
-    "query 必须保留用户问题的学校、年份和实质主题；direct 时 query 必须为空。用户明确禁止联网时选择 direct。",
+    "query 必须保留用户问题的学校、年份和实质主题；direct 时 query 必须为空。focus_terms 必须给出 1-3 个不可丢失的具体主题短语，不能只写申请、办理、流程、通知、政策、安排等泛词。用户明确禁止联网时选择 direct。",
+    "例如“申请学校用印”的 focus_terms 是 [\"用印\"]；“期末公共基础课安排”的 focus_terms 是 [\"公共基础课考试\"]。",
     "current_local_time 是每次请求的当前日期依据。涉及当前、最新、近期、当前学期或未明确年份的公共安排时，query 必须带上当前年份；用户明确询问历史年份时保留其年份。",
     "示例：当前年份为 2026 时，北京林业大学期末整体安排是什么，返回查询 2026 北京林业大学 期末考试 总体安排；2026 年北京林业大学保研政策选择 officialResearch 且不使用个人上下文；我明天考什么选择 direct 且使用个人上下文；结合学校期末安排和我的考试制定计划选择 officialResearch 且使用个人上下文；你好选择 direct 且不使用个人上下文。",
   ].join("\n");
@@ -688,12 +727,19 @@ function searchRoutingToolDefinition() {
             enum: ["direct", "officialResearch", "webResearch"],
           },
           query: { type: "string" },
+          focus_terms: {
+            type: "array",
+            items: { type: "string" },
+            minItems: 0,
+            maxItems: 3,
+          },
           use_personal_context: { type: "boolean" },
           reason_code: { type: "string" },
         },
         required: [
           "route",
           "query",
+          "focus_terms",
           "use_personal_context",
           "reason_code",
         ],
@@ -737,9 +783,16 @@ export function parseSearchRoutingDecision(
       if (route !== "direct" && !query) {
         throw new CampusAISearchRoutingError("invalid_query");
       }
+      const focusTerms = route === "direct"
+        ? []
+        : safeAgentFocusTerms(args.focus_terms, originalMessage);
+      if (route !== "direct" && focusTerms.length === 0) {
+        throw new CampusAISearchRoutingError("invalid_focus_terms");
+      }
       return {
         route,
         query: query ?? "",
+        focusTerms,
         usePersonalContext: usesPersonalContext,
         reasonCode: (normalizeText(args.reason_code) ?? "")
           .replace(/[^A-Za-z0-9_-]/g, "")
@@ -756,11 +809,16 @@ function routingToolCall(
   return decision.route === "officialResearch"
     ? {
       name: "official_document_search",
-      arguments: { query: decision.query },
+      arguments: { query: decision.query, focus_terms: decision.focusTerms },
     }
     : {
       name: "web_search",
-      arguments: { query: decision.query, freshness: "noLimit", count: 5 },
+      arguments: {
+        query: decision.query,
+        focus_terms: decision.focusTerms,
+        freshness: "noLimit",
+        count: 5,
+      },
     };
 }
 
@@ -823,7 +881,19 @@ async function runAgentDeepSeek(
         callbacks.onAgentStatus?.("正在联网搜索");
         emitTool({ name: "web.search", status: "running", detail: query });
         try {
-          const results = await webSearch(query, freshness, count, agentSignal);
+          const candidates = await webSearch(
+            query,
+            freshness,
+            count,
+            agentSignal,
+            normalizedFocusTerms(toolCall.arguments.focus_terms),
+          );
+          const results = await verifiedWebSearchResults(
+            candidates,
+            normalizedFocusTerms(toolCall.arguments.focus_terms),
+            agentSignal,
+            callbacks,
+          );
           searchResults.push({ query, citations: results });
           callbacks.onAgentSearchResults?.(results);
           for (const citation of results) emitCitation(citation);
@@ -851,10 +921,11 @@ async function runAgentDeepSeek(
           emitStep(agentStep(
             "tool",
             "联网搜索失败",
-            "本次回答将不使用联网结果。",
+            "已停止本次联网回答，请重试。",
             "failed",
             { tool: "web.search" },
           ));
+          throw error;
         }
         break;
       }
@@ -874,8 +945,10 @@ async function runAgentDeepSeek(
           const result = await officialDocumentSearch(
             body,
             query,
+            normalizedFocusTerms(toolCall.arguments.focus_terms),
             message,
             agentSignal,
+            callbacks,
           );
           deliverables.push(result.deliverable);
           const resultCitations = citationsFromDeliverable(result.deliverable);
@@ -906,10 +979,11 @@ async function runAgentDeepSeek(
           emitStep(agentStep(
             "tool",
             "官方资料检索失败",
-            "本次回答将不使用这批官方资料。",
+            "已停止本次官方资料回答，请重试。",
             "failed",
             { tool: "official.document.search" },
           ));
+          throw error;
         }
         break;
       }
@@ -1134,8 +1208,13 @@ function agentToolDefinitions() {
               type: "string",
               description: "The official document search query.",
             },
+            focus_terms: {
+              type: "array",
+              items: { type: "string" },
+              description: "One to three concrete topics that every result must preserve.",
+            },
           },
-          required: ["query"],
+          required: ["query", "focus_terms"],
           additionalProperties: false,
         },
       },
@@ -1288,11 +1367,17 @@ export function normalizeAgentToolCalls(
           options.message,
         );
         if (!query) break;
+        const focusTerms = safeAgentFocusTerms(
+          toolCall.arguments.focus_terms,
+          options.message,
+        );
+        if (focusTerms.length === 0) break;
         searchCount += 1;
         normalized.push({
           name: "web_search",
           arguments: {
             query,
+            focus_terms: focusTerms,
             freshness: normalizeFreshness(toolCall.arguments.freshness),
             count: boundedInteger(
               toolCall.arguments.count,
@@ -1316,10 +1401,15 @@ export function normalizeAgentToolCalls(
           options.message,
         );
         if (!query) break;
+        const focusTerms = safeAgentFocusTerms(
+          toolCall.arguments.focus_terms,
+          options.message,
+        );
+        if (focusTerms.length === 0) break;
         officialSearchCount += 1;
         normalized.push({
           name: "official_document_search",
-          arguments: { query },
+          arguments: { query, focus_terms: focusTerms },
         });
         break;
       }
@@ -1396,6 +1486,65 @@ export function safeAgentSearchQuery(candidate: unknown, original: string) {
   return preservesAnchor ? candidateQuery.slice(0, 180) : originalQuery;
 }
 
+export function safeAgentFocusTerms(candidate: unknown, original: string) {
+  const requested = normalizedFocusTerms(candidate);
+  const originalAnchors = new Set(substantiveSearchAnchors(original));
+  const accepted = requested.filter((term) => {
+    if (genericFocusTerm(term)) return false;
+    const termAnchors = substantiveSearchAnchors(term);
+    return termAnchors.some((anchor) =>
+      originalAnchors.has(anchor) || campusSearchSynonymMatch(anchor, original)
+    );
+  });
+  if (accepted.length > 0) return accepted.slice(0, 3);
+
+  const knownFocus = [
+    ["用印", "用章", "印章", "盖章"],
+    ["保研", "推免", "推荐免试", "免试攻读"],
+    ["公共基础课考试", "公共课考试", "期末考试", "考试周"],
+  ].find((group) => group.some((term) => original.includes(term)));
+  if (knownFocus) {
+    return [knownFocus.find((term) => original.includes(term)) ?? knownFocus[0]];
+  }
+
+  const stripped = original.toLowerCase()
+    .replace(/[\p{P}\p{S}\s]+/gu, "")
+    .replace(/(?:19|20)\d{2}/g, "")
+    .replace(
+      /(?:北京林业大学|北林|官网|官方|学校|最新|最近|搜索|查找|查一下|资料|网页|通知|政策|链接|来源|出处|申请|办理|流程|安排|关于|如何|怎么|什么|学年|学期|的)/g,
+      " ",
+    )
+    .trim();
+  return stripped.length >= 2 ? [stripped.slice(0, 32)] : [];
+}
+
+function normalizedFocusTerms(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.flatMap((item) => {
+    const term = normalizeText(item)?.toLowerCase()
+      .replace(/[\p{P}\p{S}\s]+/gu, "")
+      .slice(0, 32);
+    return term && term.length >= 2 ? [term] : [];
+  })));
+}
+
+function genericFocusTerm(value: string) {
+  return new Set([
+    "申请",
+    "办理",
+    "流程",
+    "通知",
+    "政策",
+    "安排",
+    "资料",
+    "搜索",
+    "查询",
+    "学校",
+    "官网",
+    "官方",
+  ]).has(value);
+}
+
 function substantiveSearchAnchors(value: string) {
   const normalized = value.toLowerCase()
     .replace(/[\p{P}\p{S}\s]+/gu, "")
@@ -1416,7 +1565,13 @@ function substantiveSearchAnchors(value: string) {
 }
 
 function campusSearchSynonymMatch(anchor: string, candidate: string) {
-  return anchor === "推免" && /(保研|推免|推荐免试|免试攻读)/.test(candidate);
+  if (anchor === "推免") {
+    return /(保研|推免|推荐免试|免试攻读)/.test(candidate);
+  }
+  if (["用印", "用章", "印章", "盖章"].includes(anchor)) {
+    return /(用印|用章|印章|盖章)/.test(candidate);
+  }
+  return false;
 }
 
 function normalizeFreshness(value: unknown) {
@@ -1466,6 +1621,7 @@ export async function webSearch(
   _freshness: string,
   count: number,
   signal: AbortSignal,
+  focusTerms: string[] = [],
 ) {
   const signingSecret = Deno.env.get("CAMPUS_AI_TOOL_SIGNING_SECRET")?.trim();
   if (!signingSecret) {
@@ -1477,6 +1633,7 @@ export async function webSearch(
     "managed-agent",
     signingSecret,
     signal,
+    focusTerms,
   );
   return results.map((result) => ({
     id: result.id,
@@ -1487,6 +1644,49 @@ export async function webSearch(
       : result.display_host,
     snippet: result.snippet,
   } satisfies AgentCitation));
+}
+
+export async function verifiedWebSearchResults(
+  candidates: AgentCitation[],
+  focusTerms: string[],
+  signal: AbortSignal,
+  callbacks?: AgentCallbacks,
+) {
+  const verified: AgentCitation[] = [];
+  for (
+    let index = 0;
+    index < candidates.length;
+    index += officialDocumentReadConcurrency
+  ) {
+    if (signal.aborted) throw new DOMException("Agent timeout", "AbortError");
+    const batch = candidates.slice(index, index + officialDocumentReadConcurrency);
+    callbacks?.onAgentStatus?.(
+      `正在读取网页 ${Math.min(index + batch.length, candidates.length)}/${candidates.length}`,
+    );
+    const settled = await Promise.allSettled(batch.map((citation) =>
+      fetchOfficialDocumentSource(citation, 45, focusTerms, signal)
+    ));
+    for (const result of settled) {
+      if (result.status !== "fulfilled" || !result.value) continue;
+      const source = result.value;
+      verified.push({
+        id: source.id,
+        title: source.title,
+        url: source.url,
+        siteName: source.siteName,
+        summary: source.summary ?? source.excerpt,
+      });
+    }
+    if (verified.length >= countVerifiedSources(candidates.length)) break;
+  }
+  if (candidates.length > 0 && verified.length === 0) {
+    throw new Error("all_web_page_reads_failed");
+  }
+  return verified;
+}
+
+function countVerifiedSources(candidateCount: number) {
+  return Math.min(preferredOfficialDocumentSources, candidateCount);
 }
 
 function officialDocumentQuery(
@@ -1505,8 +1705,10 @@ function officialDocumentQuery(
 async function officialDocumentSearch(
   body: CampusAIRequest,
   query: string,
+  focusTerms: string[],
   userMessage: string,
   signal: AbortSignal,
+  callbacks?: AgentCallbacks,
 ): Promise<AgentOfficialDocumentResult> {
   const signingSecret = Deno.env.get("CAMPUS_AI_TOOL_SIGNING_SECRET")?.trim();
   if (!signingSecret) {
@@ -1518,6 +1720,7 @@ async function officialDocumentSearch(
     "managed-agent",
     signingSecret,
     signal,
+    focusTerms,
   );
   const citations = officialResults.map((result) => ({
     id: result.id,
@@ -1534,17 +1737,40 @@ async function officialDocumentSearch(
     }))
     .filter((candidate) => candidate.trustScore >= 45)
     .sort((lhs, rhs) => rhs.trustScore - lhs.trustScore)
-    .slice(0, maxOfficialDocumentPages);
+    .slice(0, Math.min(maxOfficialDocumentPages, maxAgentSearchResults));
 
   const sources: CampusAIDeliverableSource[] = [];
-  for (const candidate of candidates) {
+  for (
+    let index = 0;
+    index < candidates.length && sources.length < preferredOfficialDocumentSources;
+    index += officialDocumentReadConcurrency
+  ) {
     if (signal.aborted) throw new DOMException("Agent timeout", "AbortError");
-    const source = await fetchOfficialDocumentSource(
-      candidate.citation,
-      candidate.trustScore,
-      signal,
+    const batch = candidates.slice(index, index + officialDocumentReadConcurrency);
+    callbacks?.onAgentStatus?.(
+      `正在读取官方资料 ${Math.min(index + batch.length, candidates.length)}/${candidates.length}`,
     );
-    if (source) sources.push(source);
+    const settled = await Promise.allSettled(batch.map((candidate) =>
+      fetchOfficialDocumentSource(
+        candidate.citation,
+        candidate.trustScore,
+        focusTerms,
+        signal,
+      )
+    ));
+    for (const result of settled) {
+      if (result.status === "fulfilled" && result.value) {
+        sources.push(result.value);
+      }
+    }
+    callbacks?.onAgentTool?.({
+      name: "official.document.read",
+      status: "completed",
+      resultCount: sources.length,
+    });
+  }
+  if (candidates.length > 0 && sources.length === 0) {
+    throw new Error("all_official_page_reads_failed");
   }
 
   let remainingSpreadsheetReads = maxOfficialSpreadsheetReads;
@@ -1584,6 +1810,12 @@ async function officialDocumentSearch(
     sources,
     artifactFormatsForMessage(userMessage),
   );
+  console.info(JSON.stringify({
+    event: "campus_ai_official_research_completed",
+    candidate_count: candidates.length,
+    read_count: sources.length,
+    displayed_count: deliverable.sources.length,
+  }));
   return { query, deliverable };
 }
 
@@ -1602,6 +1834,7 @@ export function officialDocumentFreshness(message: string) {
 async function fetchOfficialDocumentSource(
   citation: AgentCitation,
   trustScore: number,
+  focusTerms: string[],
   parentSignal: AbortSignal,
 ): Promise<CampusAIDeliverableSource | null> {
   const timeout = AbortSignal.timeout(officialDocumentFetchTimeoutMs);
@@ -1619,11 +1852,15 @@ async function fetchOfficialDocumentSource(
       redirect: "follow",
       signal,
     });
-  } catch {
-    return fallbackOfficialSource(citation, trustScore);
+  } catch (error) {
+    logOfficialReadFailure(citation, error instanceof Error ? error.name : "fetch_failed");
+    return null;
   }
 
-  if (!response.ok) return fallbackOfficialSource(citation, trustScore);
+  if (!response.ok) {
+    logOfficialReadFailure(citation, `http_${response.status}`);
+    return null;
+  }
   const responseURL = response.url || citation.url;
   if (!isSafePublicHTTPURL(responseURL)) return null;
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
@@ -1631,17 +1868,30 @@ async function fetchOfficialDocumentSource(
     contentType && !contentType.includes("text/html") &&
     !contentType.includes("application/xhtml")
   ) {
-    return fallbackOfficialSource(citation, trustScore);
+    logOfficialReadFailure(citation, "unsupported_content_type");
+    return null;
   }
 
   const html = await boundedResponseText(response, maxOfficialDocumentBytes);
-  if (!html) return fallbackOfficialSource(citation, trustScore);
+  if (!html) {
+    logOfficialReadFailure(citation, "empty_body");
+    return null;
+  }
   return extractOfficialDocumentSourceFromHTML(
     html,
     responseURL,
     citation,
     trustScore,
+    focusTerms,
   );
+}
+
+function logOfficialReadFailure(citation: AgentCitation, code: string) {
+  console.warn(JSON.stringify({
+    event: "campus_ai_official_read_failed",
+    source_id: citation.id,
+    code,
+  }));
 }
 
 async function boundedResponseText(response: Response, maxBytes: number) {
@@ -1682,6 +1932,7 @@ export function extractOfficialDocumentSourceFromHTML(
   pageURL: string,
   citation: AgentCitation,
   trustScore: number,
+  focusTerms: string[] = [],
 ): CampusAIDeliverableSource | null {
   if (!isSafePublicHTTPURL(pageURL)) return null;
   const root = parseHTML(html);
@@ -1695,7 +1946,19 @@ export function extractOfficialDocumentSourceFromHTML(
     citation.snippet ??
     "";
   const excerpt = bodyText.slice(0, 260);
-  const attachments = extractOfficialDocumentAttachments(root, url);
+  if (
+    focusTerms.length > 0 &&
+    !textMatchesFocus(`${title} ${bodyText}`, focusTerms)
+  ) {
+    return null;
+  }
+  const attachments = extractOfficialDocumentAttachments(root, url)
+    .filter((attachment) =>
+      focusTerms.length === 0 || textMatchesFocus(
+        `${attachment.title} ${attachment.url}`,
+        focusTerms,
+      )
+    );
 
   return {
     id: `official-${hashString(url)}`,
@@ -1752,21 +2015,19 @@ function extractOfficialDocumentAttachments(
   return attachments;
 }
 
-function fallbackOfficialSource(
-  citation: AgentCitation,
-  trustScore: number,
-): CampusAIDeliverableSource | null {
-  if (!isSafePublicHTTPURL(citation.url)) return null;
-  return {
-    id: `official-${hashString(citation.url)}`,
-    title: citation.title,
-    url: citation.url,
-    siteName: citation.siteName,
-    summary: citation.summary ?? citation.snippet,
-    excerpt: citation.summary ?? citation.snippet,
-    trustScore,
-    attachments: [],
-  };
+function textMatchesFocus(value: string, focusTerms: string[]) {
+  const normalized = value.toLowerCase().replace(/[\p{P}\p{S}\s]+/gu, "");
+  const synonymGroups = [
+    ["用印", "用章", "印章", "盖章"],
+    ["保研", "推免", "推荐免试", "免试攻读"],
+    ["公共基础课考试", "公共课考试", "期末考试", "考试周"],
+  ];
+  return focusTerms.some((focusTerm) => {
+    const compact = focusTerm.toLowerCase().replace(/[\p{P}\p{S}\s]+/gu, "");
+    if (normalized.includes(compact)) return true;
+    const group = synonymGroups.find((candidate) => candidate.includes(compact));
+    return group?.some((term) => normalized.includes(term)) ?? false;
+  });
 }
 
 export function officialDocumentDeliverable(
@@ -3311,22 +3572,46 @@ async function authenticateUser(adminClient: any, request: Request) {
   return { ok: true as const, userID: data.user.id as string };
 }
 
-function streamResponse(
+export function streamResponse(
   producer: (
     controller: ReadableStreamDefaultController<Uint8Array>,
     signal: AbortSignal,
   ) => Promise<void>,
+  keepaliveIntervalMilliseconds = 10_000,
 ) {
   const abortController = new AbortController();
+  let keepalive: ReturnType<typeof setInterval> | undefined;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      keepalive = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(": keepalive\n\n"));
+        } catch {
+          // The stream is already closed or cancelled.
+        }
+      }, keepaliveIntervalMilliseconds);
       try {
         await producer(controller, abortController.signal);
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "campus_ai_stream_producer_failed",
+          error_name: error instanceof Error ? error.name : "unknown",
+        }));
+        try {
+          enqueueSSE(controller, {
+            type: "error",
+            error: "AI 助手连接中断，请重试。",
+          });
+        } catch {
+          // The client already disconnected.
+        }
       } finally {
+        if (keepalive !== undefined) clearInterval(keepalive);
         controller.close();
       }
     },
     cancel() {
+      if (keepalive !== undefined) clearInterval(keepalive);
       abortController.abort();
     },
   });
@@ -3771,4 +4056,8 @@ export function redactProviderError(value: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function elapsedMilliseconds(startedAt: number) {
+  return Math.max(0, Math.round(performance.now() - startedAt));
 }

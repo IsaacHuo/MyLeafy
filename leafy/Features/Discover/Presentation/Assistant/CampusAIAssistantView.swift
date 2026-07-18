@@ -618,6 +618,7 @@ struct CampusAIAssistantView: View {
                     }
                     agentMetadata.statusText = nil
                     agentMetadata.citations = response.citations
+                    agentMetadata.searchResults = []
                     if !response.agentTrace.isEmpty {
                         agentMetadata.agentTrace = response.agentTrace
                     }
@@ -639,8 +640,8 @@ struct CampusAIAssistantView: View {
                     throw CampusAIServiceError.providerRejected(message)
                 }
             }
-            if assistantMessage.text.nonEmptyTrimmed == nil {
-                assistantMessage.text = "我暂时没有整理出有效回答。"
+            guard assistantMessage.text.nonEmptyTrimmed != nil else {
+                throw CampusAIServiceError.invalidProviderResponse
             }
             conversation.contextDigest = contextDigest(context)
             conversation.updatedAt = Date()
@@ -655,6 +656,9 @@ struct CampusAIAssistantView: View {
             conversation.updatedAt = Date()
             persistModelContext(operation: "message.cancel")
         } catch {
+            if userSettings.serviceMode == .leafyManaged {
+                await subscriptionStore.refreshQuota()
+            }
             if assistantMessage.text.nonEmptyTrimmed != nil {
                 assistantMessage.text = [
                     assistantMessage.text.trimmingCharacters(in: .whitespacesAndNewlines),

@@ -11,8 +11,32 @@ const maxSpreadsheetRowsPerSheet = 200;
 const maxSpreadsheetColumnsPerRow = 30;
 const fetchTimeoutMs = 10_000;
 const receiptLifetimeSeconds = 10 * 60;
+const bjfuSearchSiteIDs = ["369", "121", "292"];
+const maxOfficialFocusTerms = 3;
+const maxOfficialExactQueries = 2;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+const searchFocusSynonymGroups = [
+  ["用印", "用章", "印章", "盖章"],
+  ["保研", "推免", "推荐免试", "免试攻读"],
+  ["期末安排", "期末考试", "公共课考试", "公共基础课考试", "考试周"],
+] as const;
+
+const genericSearchFocusTerms = new Set([
+  "申请",
+  "办理",
+  "流程",
+  "政策",
+  "通知",
+  "安排",
+  "资料",
+  "查询",
+  "搜索",
+  "学校",
+  "官网",
+  "官方",
+]);
 
 export type CampusAIWebToolName =
   | "official.search"
@@ -89,43 +113,96 @@ export async function searchBJFUOfficial(
   userID: string,
   signingSecret: string,
   signal?: AbortSignal,
+  requestedFocusTerms: string[] = [],
 ): Promise<CampusAISearchResult[]> {
   const normalizedQuery = normalizedSearchQuery(query);
   const limit = boundedCount(count);
-  const siteIDs = ["369", "121", "292"];
-  const responses = await Promise.allSettled(
-    siteIDs.map((siteID) => fetchBJFUSearch(normalizedQuery, siteID, signal)),
+  const focusTerms = normalizedSearchFocusTerms(
+    normalizedQuery,
+    requestedFocusTerms,
   );
-  const raw = responses.flatMap((response) =>
-    response.status === "fulfilled" ? response.value : []
-  );
-  const parseFailure = responses.find((response) =>
-    response.status === "rejected" &&
-    response.reason instanceof CampusAIWebToolError &&
-    response.reason.code === "official_search_parse_failed"
-  );
-  if (raw.length === 0 && parseFailure?.status === "rejected") {
-    throw parseFailure.reason;
+  if (focusTerms.length === 0) {
+    console.info(JSON.stringify({
+      event: "campus_ai_search_filtered",
+      provider: "bjfu_official",
+      focus_source: requestedFocusTerms.length > 0 ? "requested" : "derived",
+      raw_result_count: 0,
+      returned_result_count: 0,
+      rejection_reason: "missing_focus_terms",
+    }));
+    return [];
   }
-  if (responses.every((response) => response.status === "rejected")) {
-    throw new CampusAIWebToolError(
-      "official_search_failed",
-      "北林官方检索暂时不可用，请稍后重试。",
-      502,
-      true,
-    );
-  }
-  if (raw.length === 0) return [];
-  const unique = deduplicateRawResults(raw)
+
+  const exactQueries = expandedFocusTerms(focusTerms).slice(
+    0,
+    maxOfficialExactQueries,
+  );
+  const exactResponses = await Promise.allSettled(
+    exactQueries.flatMap((exactQuery) =>
+      bjfuSearchSiteIDs.map((siteID) =>
+        fetchBJFUSearch(exactQuery, siteID, "exact", 1, signal)
+      )
+    ),
+  );
+  assertOfficialSearchAvailable(exactResponses);
+  const exactRaw = fulfilledSearchResults(exactResponses);
+  let combinedRaw = deduplicateRawResults(exactRaw)
     .filter((item) => isBJFUOfficialURL(item.url));
-  const ranked = rankSearchResultsByRelevance(unique, normalizedQuery);
+  let diagnostics = rankSearchResultsWithDiagnostics(
+    combinedRaw,
+    normalizedQuery,
+    focusTerms,
+  );
+
+  let fuzzyRaw: typeof combinedRaw = [];
+  if (diagnostics.ranked.length < limit) {
+    const firstPageResponses = await Promise.allSettled(
+      bjfuSearchSiteIDs.map((siteID) =>
+        fetchBJFUSearch(normalizedQuery, siteID, "fuzzy", 1, signal)
+      ),
+    );
+    assertOfficialSearchAvailable(firstPageResponses);
+    fuzzyRaw = fulfilledSearchResults(firstPageResponses);
+    combinedRaw = deduplicateRawResults([...combinedRaw, ...fuzzyRaw])
+      .filter((item) => isBJFUOfficialURL(item.url));
+    diagnostics = rankSearchResultsWithDiagnostics(
+      combinedRaw,
+      normalizedQuery,
+      focusTerms,
+    );
+
+    if (diagnostics.ranked.length < limit) {
+      const secondPageResponses = await Promise.allSettled(
+        bjfuSearchSiteIDs.map((siteID) =>
+          fetchBJFUSearch(normalizedQuery, siteID, "fuzzy", 2, signal)
+        ),
+      );
+      fuzzyRaw = [
+        ...fuzzyRaw,
+        ...fulfilledSearchResults(secondPageResponses),
+      ];
+      combinedRaw = deduplicateRawResults([...combinedRaw, ...fuzzyRaw])
+        .filter((item) => isBJFUOfficialURL(item.url));
+      diagnostics = rankSearchResultsWithDiagnostics(
+        combinedRaw,
+        normalizedQuery,
+        focusTerms,
+      );
+    }
+  }
+
   console.info(JSON.stringify({
     event: "campus_ai_search_filtered",
     provider: "bjfu_official",
-    raw_result_count: unique.length,
-    returned_result_count: Math.min(ranked.length, limit),
+    focus_source: requestedFocusTerms.length > 0 ? "requested" : "derived",
+    exact_result_count: exactRaw.length,
+    fuzzy_result_count: fuzzyRaw.length,
+    raw_result_count: combinedRaw.length,
+    focus_rejected_count: diagnostics.focusRejected,
+    year_rejected_count: diagnostics.yearRejected,
+    returned_result_count: Math.min(diagnostics.ranked.length, limit),
   }));
-  const selected = ranked.slice(0, limit);
+  const selected = diagnostics.ranked.slice(0, limit);
   return await Promise.all(selected.map(async (item) => {
     const id = stableID("official", item.url);
     return {
@@ -153,6 +230,7 @@ export async function searchDuckDuckGoLite(
   userID: string,
   signingSecret: string,
   signal?: AbortSignal,
+  requestedFocusTerms: string[] = [],
 ): Promise<CampusAISearchResult[]> {
   const normalizedQuery = normalizedSearchQuery(query);
   const url = new URL("https://lite.duckduckgo.com/lite/");
@@ -196,15 +274,25 @@ export async function searchDuckDuckGoLite(
     );
   }
   const limit = boundedCount(count);
-  const ranked = rankSearchResultsByRelevance(parsed, normalizedQuery);
+  const focusTerms = normalizedSearchFocusTerms(
+    normalizedQuery,
+    requestedFocusTerms,
+  );
+  const diagnostics = rankSearchResultsWithDiagnostics(
+    parsed,
+    normalizedQuery,
+    focusTerms,
+  );
   console.info(JSON.stringify({
     event: "campus_ai_search_filtered",
     provider: "duckduckgo_lite",
     raw_result_count: parsed.length,
-    returned_result_count: Math.min(ranked.length, limit),
+    focus_rejected_count: diagnostics.focusRejected,
+    year_rejected_count: diagnostics.yearRejected,
+    returned_result_count: Math.min(diagnostics.ranked.length, limit),
   }));
   return await Promise.all(
-    ranked.slice(0, limit).map(async (item) => {
+    diagnostics.ranked.slice(0, limit).map(async (item) => {
       const id = stableID("web", item.url);
       return {
         id,
@@ -282,13 +370,33 @@ export function parseDuckDuckGoLiteHTML(html: string, query = "") {
 
 export function rankSearchResultsByRelevance<
   T extends { title: string; url: string; snippet?: string },
->(results: T[], query: string): T[] {
+>(results: T[], query: string, requestedFocusTerms: string[] = []): T[] {
+  return rankSearchResultsWithDiagnostics(
+    results,
+    query,
+    normalizedSearchFocusTerms(query, requestedFocusTerms),
+  ).ranked;
+}
+
+function rankSearchResultsWithDiagnostics<
+  T extends { title: string; url: string; snippet?: string },
+>(results: T[], query: string, focusTerms: string[]) {
   const queryConcepts = relevanceConcepts(query);
-  if (queryConcepts.size === 0) return results;
+  if (queryConcepts.size === 0 || focusTerms.length === 0) {
+    return {
+      ranked: [] as T[],
+      focusRejected: results.length,
+      yearRejected: 0,
+    };
+  }
   const compactQuery = relevanceText(query).replaceAll(" ", "");
   const queryYears = explicitYears(query);
-  return results
+  let focusRejected = 0;
+  let yearRejected = 0;
+  const ranked = results
     .map((result, index) => {
+      const focusMatch = searchResultMatchesFocus(result, focusTerms);
+      if (!focusMatch.matched) focusRejected += 1;
       const titleConcepts = relevanceConcepts(result.title);
       const snippetConcepts = relevanceConcepts(result.snippet ?? "");
       let score = intersectionCount(queryConcepts, titleConcepts) * 6 +
@@ -314,11 +422,18 @@ export function rankSearchResultsByRelevance<
       if (queryYears.size > 0 && candidateYears.size > 0 && hasMatchingYear) {
         score += 30;
       }
-      return { result, index, score, hasMatchingYear };
+      if (!hasMatchingYear) yearRejected += 1;
+      if (focusMatch.title) score += 36;
+      else if (focusMatch.snippet) score += 14;
+      return { result, index, score, hasMatchingYear, focusMatch };
     })
-    .filter((candidate) => candidate.score > 0 && candidate.hasMatchingYear)
+    .filter((candidate) =>
+      candidate.score > 0 && candidate.hasMatchingYear &&
+      candidate.focusMatch.matched
+    )
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .map((candidate) => candidate.result);
+  return { ranked, focusRejected, yearRejected };
 }
 
 function explicitYears(value: string) {
@@ -644,13 +759,18 @@ export function isSafePublicHTTPURL(value: string) {
 async function fetchBJFUSearch(
   query: string,
   siteID: string,
+  matchMode: "exact" | "fuzzy",
+  page: number,
   signal?: AbortSignal,
 ) {
   const body = new URLSearchParams({
     siteID,
     query,
-    matchType: "1",
+    matchType: matchMode === "exact" ? "0" : "1",
     combinedSearch: "0",
+    page: String(Math.max(1, Math.trunc(page))),
+    sortField: "publishDate",
+    order: "1",
   });
   const response = await fetchWithTimeout(
     new URL("https://www.bjfu.edu.cn/cms/web/search/index.jsp"),
@@ -1076,6 +1196,114 @@ function normalizedSearchQuery(value: string) {
     throw new CampusAIWebToolError("invalid_query", "搜索词不能为空。", 400);
   }
   return normalized.slice(0, 180);
+}
+
+function normalizedSearchFocusTerms(
+  query: string,
+  requestedFocusTerms: string[],
+) {
+  const normalizedQuery = relevanceText(query).replaceAll(" ", "");
+  const requested = requestedFocusTerms
+    .map((term) => normalizeFocusTerm(term))
+    .filter((term) => term.length >= 2)
+    .filter((term) => !genericSearchFocusTerms.has(term))
+    .filter((term) => focusTermIsGrounded(term, normalizedQuery));
+  const uniqueRequested = Array.from(new Set(requested));
+  if (uniqueRequested.length > 0) {
+    return uniqueRequested.slice(0, maxOfficialFocusTerms);
+  }
+
+  const synonymous = searchFocusSynonymGroups
+    .filter((group) => group.some((term) => normalizedQuery.includes(term)))
+    .map((group) => group.find((term) => normalizedQuery.includes(term)) ?? group[0]);
+  if (synonymous.length > 0) {
+    return Array.from(new Set(synonymous)).slice(0, maxOfficialFocusTerms);
+  }
+
+  const stripped = normalizedQuery
+    .replace(/(?:19|20)\d{2}/g, " ")
+    .replace(
+      /(?:北京林业大学|北林|官网|官方|学校|帮我|请问|麻烦|查询|搜索|查找|申请|办理|流程|政策|通知|安排|资料|关于|如何|怎么|什么|当前|最新|最近|现在|学年|学期|的)/g,
+      " ",
+    )
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+  return stripped.split(/\s+/)
+    .filter((term) => Array.from(term).length >= 2)
+    .sort((left, right) => Array.from(right).length - Array.from(left).length)
+    .slice(0, 1);
+}
+
+function normalizeFocusTerm(value: string) {
+  return relevanceText(normalizeText(value)).replaceAll(" ", "").slice(0, 32);
+}
+
+function focusTermIsGrounded(term: string, compactQuery: string) {
+  if (compactQuery.includes(term)) return true;
+  return searchFocusSynonymGroups.some((group) =>
+    group.includes(term as never) &&
+    group.some((candidate) => compactQuery.includes(candidate))
+  );
+}
+
+function expandedFocusTerms(focusTerms: string[]) {
+  const expanded: string[] = [];
+  for (const focusTerm of focusTerms) {
+    expanded.push(focusTerm);
+    const group = searchFocusSynonymGroups.find((candidate) =>
+      candidate.includes(focusTerm as never)
+    );
+    if (group) expanded.push(...group);
+  }
+  return Array.from(new Set(expanded.map(normalizeFocusTerm)))
+    .filter((term) => term.length >= 2);
+}
+
+function searchResultMatchesFocus(
+  result: { title: string; snippet?: string },
+  focusTerms: string[],
+) {
+  const title = relevanceText(result.title).replaceAll(" ", "");
+  const snippet = relevanceText(result.snippet ?? "").replaceAll(" ", "");
+  const variants = expandedFocusTerms(focusTerms);
+  const titleMatch = variants.some((term) => title.includes(term));
+  const snippetMatch = variants.some((term) => snippet.includes(term));
+  return {
+    matched: titleMatch || snippetMatch,
+    title: titleMatch,
+    snippet: snippetMatch,
+  };
+}
+
+function fulfilledSearchResults<T>(
+  responses: PromiseSettledResult<T[]>[],
+) {
+  return responses.flatMap((response) =>
+    response.status === "fulfilled" ? response.value : []
+  );
+}
+
+function assertOfficialSearchAvailable<T>(
+  responses: PromiseSettledResult<T[]>[],
+) {
+  if (responses.length === 0) return;
+  const parseFailure = responses.find((response) =>
+    response.status === "rejected" &&
+    response.reason instanceof CampusAIWebToolError &&
+    response.reason.code === "official_search_parse_failed"
+  );
+  const raw = fulfilledSearchResults(responses);
+  if (raw.length === 0 && parseFailure?.status === "rejected") {
+    throw parseFailure.reason;
+  }
+  if (responses.every((response) => response.status === "rejected")) {
+    throw new CampusAIWebToolError(
+      "official_search_failed",
+      "北林官方检索暂时不可用，请稍后重试。",
+      502,
+      true,
+    );
+  }
 }
 
 function boundedCount(value: number) {

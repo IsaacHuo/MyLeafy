@@ -28,8 +28,10 @@ import {
   searchRoutingPayload,
   shouldGenerateArtifact,
   shouldRunManagedAgent,
+  streamResponse,
   systemPrompt,
   verifiedAppTransactionID,
+  verifiedWebSearchResults,
   webSearch,
 } from "./index.ts";
 
@@ -375,6 +377,7 @@ Deno.test("campus-ai-assistant parses semantic routing decisions", () => {
             arguments: JSON.stringify({
               route: "officialResearch",
               query: "2026 北京林业大学 推免 政策",
+              focus_terms: ["推免"],
               use_personal_context: false,
               reason_code: "public_institutional",
             }),
@@ -394,6 +397,67 @@ Deno.test("campus-ai-assistant parses semantic routing decisions", () => {
     "public policy should not use personal context",
   );
   assert(decision.query.includes("2026"), "expected year anchor");
+  assert(
+    decision.focusTerms.length === 1 && decision.focusTerms[0] === "推免",
+    "expected a concrete search focus",
+  );
+});
+
+Deno.test("campus-ai-assistant stream wrapper emits keepalive and one terminal", async () => {
+  const encoder = new TextEncoder();
+  const response = streamResponse(async (controller) => {
+    await new Promise((resolve) => setTimeout(resolve, 12));
+    controller.enqueue(
+      encoder.encode('data: {"type":"done","answer":"已完成"}\n\n'),
+    );
+  }, 3);
+  const body = await response.text();
+
+  assert(body.includes(": keepalive"), "expected SSE keepalive while waiting");
+  assert(
+    body.match(/"type":"done"/g)?.length === 1,
+    "expected exactly one done terminal",
+  );
+  assert(!body.includes('"type":"error"'), "did not expect an error terminal");
+});
+
+Deno.test("campus-ai-assistant stream wrapper structures producer failures", async () => {
+  const response = streamResponse(async () => {
+    throw new Error("read failed");
+  }, 3);
+  const body = await response.text();
+
+  assert(
+    body.match(/"type":"error"/g)?.length === 1,
+    "expected exactly one error terminal",
+  );
+  assert(!body.includes('"type":"done"'), "did not expect a done terminal");
+});
+
+Deno.test("campus-ai-assistant rejects candidates when every page read fails", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = () => Promise.resolve(new Response("failed", { status: 503 }));
+    let threw = false;
+    try {
+      await verifiedWebSearchResults(
+        [{
+          id: "candidate-1",
+          title: "学院用印流程",
+          url: "https://gong.bjfu.edu.cn/seal-flow",
+          siteName: "北京林业大学",
+        }],
+        ["用印"],
+        new AbortController().signal,
+      );
+    } catch (error) {
+      threw = error instanceof Error &&
+        error.message === "all_web_page_reads_failed";
+    }
+    assert(threw, "all failed page reads must stop synthesis");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("campus-ai-assistant builds DeepSeek tool planner payload", () => {

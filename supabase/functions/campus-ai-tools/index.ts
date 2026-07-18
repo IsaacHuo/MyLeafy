@@ -91,6 +91,7 @@ export async function handler(request: Request): Promise<Response> {
         auth.userID,
         signingSecret,
         request.signal,
+        stringArrayArgument(args.focus_terms),
       );
       resultCount = result.length;
       await completeToolCall(
@@ -110,6 +111,7 @@ export async function handler(request: Request): Promise<Response> {
         auth.userID,
         signingSecret,
         request.signal,
+        stringArrayArgument(args.focus_terms),
       );
       resultCount = result.length;
       await completeToolCall(
@@ -335,6 +337,15 @@ function integerArgument(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.trunc(value)
     : fallback;
+}
+
+function stringArrayArgument(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 function elapsedMilliseconds(startedAt: number) {

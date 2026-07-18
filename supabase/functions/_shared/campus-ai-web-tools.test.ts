@@ -132,6 +132,32 @@ Deno.test("campus ai search relevance rejects explicitly stale years", () => {
   );
 });
 
+Deno.test("campus ai search relevance requires the school seal topic", () => {
+  const ranked = rankSearchResultsByRelevance([
+    {
+      title: "关于补办学生证的通知",
+      url: "https://jwc.bjfu.edu.cn/student-card",
+      snippet: "学生提交申请后办理补办手续",
+    },
+    {
+      title: "学院用印申请线上流程",
+      url: "https://gong.bjfu.edu.cn/seal-flow",
+      snippet: "学校印章审批和线下盖章说明",
+    },
+    {
+      title: "同等学力申请硕士学位通知",
+      url: "https://graduate.bjfu.edu.cn/degree",
+      snippet: "申请材料和办理流程",
+    },
+  ], "申请学校用印", ["用印"]);
+
+  assert(ranked.length === 1, "generic application overlap must be rejected");
+  assert(
+    ranked[0].url.endsWith("seal-flow"),
+    "expected only the seal workflow result",
+  );
+});
+
 Deno.test("campus ai web tools distinguish empty results from provider structure changes", async () => {
   const originalFetch = globalThis.fetch;
   try {
@@ -180,11 +206,12 @@ Deno.test("campus ai web tools distinguish empty results from provider structure
 Deno.test("campus ai official search queries all registered sites and deduplicates", async () => {
   const originalFetch = globalThis.fetch;
   const requestedSiteIDs: string[] = [];
+  const requestedMatchTypes: string[] = [];
   try {
     globalThis.fetch = (_input, init) => {
       const body = new URLSearchParams(String(init?.body ?? ""));
       requestedSiteIDs.push(body.get("siteID") ?? "");
-      assert(body.get("matchType") === "1", "expected fuzzy CMS search");
+      requestedMatchTypes.push(body.get("matchType") ?? "");
       return Promise.resolve(
         new Response(`
         <div class="searchInfoList"><ul><li><div class="search01">
@@ -201,9 +228,16 @@ Deno.test("campus ai official search queries all registered sites and deduplicat
       "test-secret",
     );
     assert(
-      JSON.stringify(requestedSiteIDs.sort()) ===
+      JSON.stringify(requestedSiteIDs.slice(0, 3).sort()) ===
         JSON.stringify(["121", "292", "369"]),
       "expected all registered CMS site IDs",
+    );
+    const firstFuzzyIndex = requestedMatchTypes.indexOf("1");
+    assert(firstFuzzyIndex >= 3, "expected exact CMS search first");
+    assert(
+      requestedMatchTypes.slice(0, firstFuzzyIndex).every((value) => value === "0") &&
+        requestedMatchTypes.slice(firstFuzzyIndex).every((value) => value === "1"),
+      "expected fuzzy CMS search only after exact results are insufficient",
     );
     assert(results.length === 1, "expected URL deduplication across sites");
   } finally {

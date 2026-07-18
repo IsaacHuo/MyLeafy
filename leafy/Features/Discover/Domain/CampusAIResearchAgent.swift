@@ -12,6 +12,7 @@ nonisolated enum CampusAISearchRoute: String, Codable, Hashable {
 nonisolated struct CampusAISearchRoutingDecision: Hashable {
     let route: CampusAISearchRoute
     let query: String
+    let focusTerms: [String]
     let usePersonalContext: Bool
     let reasonCode: String
 
@@ -297,9 +298,14 @@ nonisolated struct CampusAIResearchAgent {
         }
         let arguments = try decodeArguments(CampusAISearchRoutingArguments.self, call: call)
         let query = arguments.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let focusTerms = CampusAIResearchQueryRelevance.validatedFocusTerms(
+            arguments.focusTerms,
+            question: request.message
+        )
         if arguments.route != .direct {
             guard !query.isEmpty,
-                  CampusAIResearchQueryRelevance.isAnchored(query: query, to: request.message)
+                  CampusAIResearchQueryRelevance.isAnchored(query: query, to: request.message),
+                  !focusTerms.isEmpty
             else {
                 throw CampusAIResearchAgentError.irrelevantQuery
             }
@@ -316,6 +322,7 @@ nonisolated struct CampusAIResearchAgent {
         return CampusAISearchRoutingDecision(
             route: arguments.route,
             query: query,
+            focusTerms: arguments.route == .direct ? [] : focusTerms,
             usePersonalContext: arguments.usePersonalContext,
             reasonCode: reasonCode.isEmpty ? "unspecified" : reasonCode
         )
@@ -332,6 +339,7 @@ nonisolated struct CampusAIResearchAgent {
                 name: name,
                 arguments: encodeToolResult(CampusAISearchArguments(
                     query: routing.query,
+                    focusTerms: routing.focusTerms,
                     scope: routing.route == .officialResearch ? "all" : nil,
                     count: 8
                 ))
@@ -399,6 +407,10 @@ nonisolated struct CampusAIResearchAgent {
                 return finishAtLimit(call, state: &state, continuation: continuation)
             }
             let arguments = try decodeArguments(CampusAISearchArguments.self, call: call)
+            let focusTerms = CampusAIResearchQueryRelevance.validatedFocusTerms(
+                arguments.focusTerms ?? [],
+                question: state.originalQuestion
+            )
             let normalized = arguments.query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let deduplicationKey = "\(name):\(normalized)"
             guard state.executedCalls.insert(deduplicationKey).inserted else {
@@ -407,7 +419,7 @@ nonisolated struct CampusAIResearchAgent {
             guard CampusAIResearchQueryRelevance.isAnchored(
                 query: arguments.query,
                 to: state.originalQuestion
-            ) else {
+            ), !focusTerms.isEmpty else {
                 return failedTool(call, error: CampusAIResearchAgentError.irrelevantQuery, state: &state, continuation: continuation)
             }
             state.searchCount += 1
@@ -419,7 +431,8 @@ nonisolated struct CampusAIResearchAgent {
                 let results = try await gateway.search(
                     official: official,
                     query: arguments.query,
-                    count: min(max(arguments.count ?? 8, 1), 8)
+                    count: min(max(arguments.count ?? 8, 1), 8),
+                    focusTerms: focusTerms
                 )
                 for result in results {
                     state.results[result.id] = result
@@ -427,7 +440,6 @@ nonisolated struct CampusAIResearchAgent {
                         state.attachments[result.id] = result.asAttachment
                     }
                 }
-                continuation.yield(.agentSearchResults(results.map(\.searchPreview)))
                 let step = state.appendTrace(title: title, detail: "找到 \(results.count) 条结果。", status: "completed", tool: name)
                 continuation.yield(.agentStep(step))
                 continuation.yield(.agentTool(.init(name: name, status: "completed", resultCount: results.count)))
@@ -830,11 +842,13 @@ nonisolated struct CampusAISearchRoutingPlannerPayload: Encodable {
 nonisolated private struct CampusAISearchRoutingArguments: Decodable {
     let route: CampusAISearchRoute
     let query: String
+    let focusTerms: [String]
     let usePersonalContext: Bool
     let reasonCode: String
 
     enum CodingKeys: String, CodingKey {
         case route, query
+        case focusTerms = "focus_terms"
         case usePersonalContext = "use_personal_context"
         case reasonCode = "reason_code"
     }
@@ -876,12 +890,51 @@ nonisolated enum CampusAIResearchQueryRelevance {
     private static let genericPhrases = ["北京林业大学", "北林官网", "北林"]
     private static let stopConcepts: Set<String> = ["北京", "林业", "大学", "官网", "学校", "资料", "查询", "搜索"]
     private static let recommendationSynonyms = ["保研", "推免", "推荐免试", "免试攻读"]
+    private static let focusSynonymGroups = [
+        ["用印", "用章", "印章", "盖章"],
+        recommendationSynonyms,
+        ["期末安排", "期末考试", "公共课考试", "公共基础课考试"]
+    ]
+    private static let genericFocusTerms: Set<String> = [
+        "申请", "办理", "通知", "流程", "政策", "安排", "资料", "信息", "要求", "学校", "官方"
+    ]
 
     static func isAnchored(query: String, to question: String) -> Bool {
         let queryConcepts = concepts(in: query)
         let questionConcepts = concepts(in: question)
         guard !queryConcepts.isEmpty, !questionConcepts.isEmpty else { return false }
         return !queryConcepts.isDisjoint(with: questionConcepts)
+    }
+
+    static func validatedFocusTerms(_ terms: [String], question: String) -> [String] {
+        var seen = Set<String>()
+        return terms.lazy.compactMap { rawTerm in
+            let term = rawTerm
+                .lowercased()
+                .replacingOccurrences(
+                    of: #"[^\p{L}\p{N}]+"#,
+                    with: "",
+                    options: .regularExpression
+                )
+            guard term.count >= 2,
+                  term.count <= 24,
+                  !genericFocusTerms.contains(term),
+                  focusTermIsGrounded(term, in: question),
+                  seen.insert(term).inserted
+            else {
+                return nil
+            }
+            return term
+        }.prefix(3).map { $0 }
+    }
+
+    private static func focusTermIsGrounded(_ term: String, in question: String) -> Bool {
+        let normalizedQuestion = question.lowercased()
+        if normalizedQuestion.contains(term) { return true }
+        return focusSynonymGroups.contains { group in
+            group.contains(where: { term.contains($0) || $0.contains(term) })
+                && group.contains(where: normalizedQuestion.contains)
+        }
     }
 
     static func concepts(in text: String) -> Set<String> {
@@ -1130,9 +1183,16 @@ nonisolated struct CampusAIResearchToolDefinition: Encodable {
         var enumValues: [String]? = nil
         var minimum: Int? = nil
         var maximum: Int? = nil
+        var items: Item? = nil
+        var minItems: Int? = nil
+        var maxItems: Int? = nil
+
+        struct Item: Encodable {
+            let type: String
+        }
 
         enum CodingKeys: String, CodingKey {
-            case type, description, minimum, maximum
+            case type, description, minimum, maximum, items, minItems, maxItems
             case enumValues = "enum"
         }
     }
@@ -1141,13 +1201,27 @@ nonisolated struct CampusAIResearchToolDefinition: Encodable {
     static let all: [Self] = [
         .init(function: .init(name: "official_search", description: "搜索北京林业大学主页、教务处和研究生院。校园政策与通知必须优先使用。", parameters: .init(properties: [
             "query": .init(type: "string", description: "简短搜索词"),
+            "focus_terms": .init(
+                type: "array",
+                description: "查询中不可丢失的 1 至 3 个实质主题短语，不能只写申请、办理、通知、流程等泛词",
+                items: .init(type: "string"),
+                minItems: 1,
+                maxItems: 3
+            ),
             "scope": .init(type: "string", description: "搜索范围", enumValues: ["all", "homepage", "undergraduate", "graduate"]),
             "count": .init(type: "integer", description: "结果数", minimum: 1, maximum: 8)
-        ], required: ["query"]))),
+        ], required: ["query", "focus_terms"]))),
         .init(function: .init(name: "web_search", description: "用零 Key 公开搜索入口搜索全网。仅在官方资料不足或问题明确涉及校外资料时使用。", parameters: .init(properties: [
             "query": .init(type: "string", description: "简短搜索词"),
+            "focus_terms": .init(
+                type: "array",
+                description: "查询中不可丢失的 1 至 3 个实质主题短语",
+                items: .init(type: "string"),
+                minItems: 1,
+                maxItems: 3
+            ),
             "count": .init(type: "integer", description: "结果数", minimum: 1, maximum: 8)
-        ], required: ["query"]))),
+        ], required: ["query", "focus_terms"]))),
         .init(function: .init(name: "read_web_page", description: "读取本次搜索结果中的一个 HTML 页面。只能提交 result_id。", parameters: .init(properties: [
             "result_id": .init(type: "string", description: "搜索结果 ID")
         ], required: ["result_id"]))),
@@ -1168,6 +1242,7 @@ nonisolated struct CampusAIResearchToolDefinition: Encodable {
     static let systemPrompt = """
     你是 Leafy 的联网研究工具规划器。每一轮必须且只能调用一个工具，不要直接回答用户。
     校园政策、通知、教务、培养方案、推免、论文格式等请求必须先 official_search；只有官方结果不足或用户明确要求全网时才用 web_search。
+    每次搜索都必须提供 focus_terms，提取不可丢失的具体主题。比如“申请学校用印”应使用 ["用印"]，不能只使用“申请”；“期末公共基础课安排”应使用 ["公共基础课考试"]。后续改写查询时必须保持相同主题焦点。
     搜索结果只有摘要。关键事实必须先用 read_web_page、read_pdf 或 read_spreadsheet 读取正文后才能认为已验证。
     每轮输入都会提供 current_local_time 和 time_zone_identifier。涉及当前、最新、近期、当前学期或未明确年份的公共安排时，搜索词必须带上由当前日期得到的年份；用户明确询问历史年份时保留其年份。优先读取年份匹配的结果，不要用过期通知回答当前问题。
     read_web_page 只能使用本次搜索返回的 result_id；read_pdf 和 read_spreadsheet 只能使用本次搜索或页面附件返回的 attachment_id。不要重复相同查询或相同 ID。
@@ -1191,12 +1266,18 @@ nonisolated enum CampusAISearchRoutingToolDefinition {
                 ]
             ),
             "query": .init(type: "string", description: "联网搜索词；direct 时返回空字符串"),
+            "focus_terms": .init(
+                type: "array",
+                description: "联网时不可丢失的 1 至 3 个实质主题短语；direct 时为空数组",
+                items: .init(type: "string"),
+                maxItems: 3
+            ),
             "use_personal_context": .init(
                 type: "boolean",
                 description: "只有回答确实需要用户个人课表、考试、成绩或日程时才为 true"
             ),
             "reason_code": .init(type: "string", description: "不包含用户原文的简短诊断代码")
-        ], required: ["route", "query", "use_personal_context", "reason_code"])
+        ], required: ["route", "query", "focus_terms", "use_personal_context", "reason_code"])
     ))
 
     static let systemPrompt = """
@@ -1206,9 +1287,9 @@ nonisolated enum CampusAISearchRoutingToolDefinition {
     学校之外的实时、近期或可外部核验事实选择 webResearch。寒暄、稳定通识、纯创作和只询问明确个人本地记录的请求选择 direct。无法确认信息是否可能过期时，保守选择研究。
     use_personal_context 默认 false。只有问题明确需要个人事实或个性化安排时才设为 true；不要为了显得个性化而调用成绩、考试、课表或日程。
     混合问题既问学校公共安排又要求结合个人情况时，选择 officialResearch 且 use_personal_context 为 true。
-    query 必须保留用户问题的学校、年份和实质主题；direct 时 query 必须为空。用户明确禁止联网时选择 direct。
+    query 必须保留用户问题的学校、年份和实质主题；direct 时 query 必须为空。联网时 focus_terms 必须提供 1 至 3 个不可丢失的具体主题短语，不能只写申请、办理、流程、通知、政策、安排等泛词；direct 时返回空数组。用户明确禁止联网时选择 direct。
     current_local_time 是每次请求的当前日期依据。涉及当前、最新、近期、当前学期或未明确年份的公共安排时，query 必须带上当前年份；用户明确询问历史年份时保留其年份。
-    示例：当前年份为 2026 时，“北京林业大学期末整体安排是什么”返回查询“2026 北京林业大学 期末考试 总体安排”；“2026 年北京林业大学保研政策”选择 officialResearch 且不使用个人上下文；“我明天考什么”选择 direct 且使用个人上下文；“结合学校期末安排和我的考试制定计划”选择 officialResearch 且使用个人上下文；“你好”选择 direct 且不使用个人上下文。
+    示例：当前年份为 2026 时，“北京林业大学期末整体安排是什么”返回查询“2026 北京林业大学 期末考试 总体安排”，focus_terms 为 ["期末考试"]；“申请学校用印”的 focus_terms 为 ["用印"]；“2026 年北京林业大学保研政策”选择 officialResearch 且 focus_terms 为 ["推免"]；“我明天考什么”选择 direct 且使用个人上下文；“结合学校期末安排和我的考试制定计划”选择 officialResearch 且使用个人上下文；“你好”选择 direct 且不使用个人上下文。
     """
 }
 
@@ -1230,8 +1311,14 @@ nonisolated enum CampusAIResearchProviderError {
 
 nonisolated private struct CampusAISearchArguments: Codable {
     let query: String
+    let focusTerms: [String]?
     let scope: String?
     let count: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case query, scope, count
+        case focusTerms = "focus_terms"
+    }
 }
 
 nonisolated private struct CampusAIResultIDArguments: Decodable {
@@ -1405,9 +1492,26 @@ nonisolated struct CampusAIToolGatewayClient {
         enum CodingKeys: String, CodingKey { case requestID = "request_id"; case tool, arguments }
     }
 
-    func search(official: Bool, query: String, count: Int) async throws -> [CampusAIToolSearchResult] {
-        struct Arguments: Encodable { let query: String; let count: Int }
-        let value: SearchPayload = try await call(tool: official ? "official.search" : "web.search", arguments: Arguments(query: query, count: count))
+    func search(
+        official: Bool,
+        query: String,
+        count: Int,
+        focusTerms: [String]
+    ) async throws -> [CampusAIToolSearchResult] {
+        struct Arguments: Encodable {
+            let query: String
+            let count: Int
+            let focusTerms: [String]
+
+            enum CodingKeys: String, CodingKey {
+                case query, count
+                case focusTerms = "focus_terms"
+            }
+        }
+        let value: SearchPayload = try await call(
+            tool: official ? "official.search" : "web.search",
+            arguments: Arguments(query: query, count: count, focusTerms: focusTerms)
+        )
         return value.results
     }
 

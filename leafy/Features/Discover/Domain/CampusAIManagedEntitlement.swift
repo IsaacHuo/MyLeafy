@@ -289,6 +289,16 @@ final class CampusAISubscriptionStore: ObservableObject {
         self.quota = quota
         isPurchased = quota.planSource == "subscription" && quota.status == "active"
     }
+
+    func refreshQuota() async {
+        do {
+            let transactionJWS = await CampusAIManagedEntitlementClient.currentSubscriptionJWS()
+            quota = try await CampusAIManagedEntitlementClient.sync(transactionJWS: transactionJWS)
+            isPurchased = quota?.planSource == "subscription" && quota?.status == "active"
+        } catch {
+            CampusAIDiagnostics.failure(error, stage: "quota.refresh.after_stream_failure")
+        }
+    }
 }
 
 nonisolated private func nonEmptyTrimmed(_ value: String?) -> String? {

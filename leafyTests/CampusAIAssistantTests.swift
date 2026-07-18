@@ -1117,6 +1117,38 @@ final class CampusAIAssistantTests: XCTestCase {
             query: "师生健康与生命安全",
             to: "2026 年工学院保研政策"
         ))
+
+        XCTAssertEqual(
+            CampusAIResearchQueryRelevance.validatedFocusTerms(
+                ["申请", "用印", "学生证"],
+                question: "申请学校用印"
+            ),
+            ["用印"]
+        )
+        XCTAssertEqual(
+            CampusAIResearchQueryRelevance.validatedFocusTerms(
+                ["推免"],
+                question: "2026 年北京林业大学保研政策"
+            ),
+            ["推免"]
+        )
+    }
+
+    func testResearchSearchToolsRequireFocusTerms() throws {
+        let encoded = try JSONEncoder().encode(CampusAIResearchToolDefinition.all)
+        let tools = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
+
+        for name in ["official_search", "web_search"] {
+            let tool = try XCTUnwrap(tools.first { item in
+                (item["function"] as? [String: Any])?["name"] as? String == name
+            })
+            let function = try XCTUnwrap(tool["function"] as? [String: Any])
+            let parameters = try XCTUnwrap(function["parameters"] as? [String: Any])
+            let required = try XCTUnwrap(parameters["required"] as? [String])
+            let properties = try XCTUnwrap(parameters["properties"] as? [String: Any])
+            XCTAssertTrue(required.contains("focus_terms"))
+            XCTAssertNotNil(properties["focus_terms"])
+        }
     }
 
     func testResearchCitationPolicyKeepsReadSourcesWithoutInlineURLs() {
@@ -1649,7 +1681,7 @@ final class CampusAIAssistantTests: XCTestCase {
     }
 
     func testSSEParserHandlesManagedAgentEvents() throws {
-        var parser = CampusAISSEParser()
+        var parser = CampusAISSEParser(requiresExplicitTerminal: true)
         let raw = """
         data: {"type":"agent_status","text":"正在联网搜索"}
 
@@ -1659,18 +1691,14 @@ final class CampusAIAssistantTests: XCTestCase {
 
         data: {"type":"agent_citation","citation":{"id":"web-1","title":"北京林业大学通知","url":"https://www.bjfu.edu.cn/notice","siteName":"北京林业大学","summary":"通知摘要","publishedAt":"2026-07-02T00:00:00+08:00"}}
 
+        data: {"type":"done","answer":"已整理官方通知。"}
+
         """
 
         var events = try parser.append(Data(raw.utf8))
         events.append(contentsOf: try parser.finish())
-        events.removeAll {
-            if case .done = $0 {
-                return true
-            }
-            return false
-        }
 
-        XCTAssertEqual(events.count, 4)
+        XCTAssertEqual(events.count, 5)
         XCTAssertEqual(events[0], .agentStatus("正在联网搜索"))
         if case .agentStep(let step) = events[1] {
             XCTAssertEqual(step.id, "step-1")
@@ -1691,6 +1719,30 @@ final class CampusAIAssistantTests: XCTestCase {
             XCTAssertEqual(citation.publishedAt, "2026-07-02T00:00:00+08:00")
         } else {
             XCTFail("expected agent citation")
+        }
+        if case .done(let response) = events[4] {
+            XCTAssertEqual(response.answer, "已整理官方通知。")
+        } else {
+            XCTFail("expected explicit done")
+        }
+    }
+
+    func testManagedSSERequiresExplicitNonEmptyTerminal() throws {
+        var truncated = CampusAISSEParser(requiresExplicitTerminal: true)
+        _ = try truncated.append(Data("data: {\"type\":\"agent_status\",\"text\":\"正在读取网页\"}\n\n".utf8))
+        XCTAssertThrowsError(try truncated.finish()) { error in
+            guard case CampusAIServiceError.incompleteStream = error else {
+                return XCTFail("expected incompleteStream, got \(error)")
+            }
+        }
+
+        var emptyDone = CampusAISSEParser(requiresExplicitTerminal: true)
+        XCTAssertThrowsError(
+            try emptyDone.append(Data("data: {\"type\":\"done\",\"answer\":\"\"}\n\n".utf8))
+        ) { error in
+            guard case CampusAIServiceError.invalidProviderResponse = error else {
+                return XCTFail("expected invalidProviderResponse, got \(error)")
+            }
         }
     }
 
