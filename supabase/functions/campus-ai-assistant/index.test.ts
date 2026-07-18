@@ -8,11 +8,11 @@ import {
   deepSeekPayload,
   drainDeepSeekSSEBuffer,
   extractOfficialDocumentSourceFromHTML,
-  fallbackActionDrafts,
   handler,
-  hasExplicitCampusActionIntent,
   isSafePublicHTTPURL,
   localRetrievalDeliverables,
+  managedSingleAgentInitialPayload,
+  managedSingleAgentTools,
   normalizeAgentToolCalls,
   officialDocumentDeliverable,
   officialDocumentFreshness,
@@ -21,11 +21,10 @@ import {
   parseActionPlannerProviderResponse,
   parseAgentToolCallsFromProviderResponse,
   parseDeepSeekAPIKeys,
-  parseSearchRoutingDecision,
+  parseManagedAgentDecision,
   processDeepSeekSSEBlock,
   redactProviderError,
   safeAgentSearchQuery,
-  searchRoutingPayload,
   shouldGenerateArtifact,
   shouldRunManagedAgent,
   streamResponse,
@@ -309,10 +308,10 @@ Deno.test("campus-ai-assistant enables card planning only for explicit artifact 
   );
 });
 
-Deno.test("campus-ai-assistant enables model routing whenever managed research is available", () => {
+Deno.test("campus-ai-assistant enables the single Agent whenever managed research is available", () => {
   assert(
     shouldRunManagedAgent({ web_search_enabled: true }),
-    "enabled web research should use the semantic router",
+    "enabled web research should use the single Agent",
   );
   assert(
     !shouldRunManagedAgent({ web_search_enabled: false }),
@@ -328,8 +327,8 @@ Deno.test("campus-ai-assistant enables model routing whenever managed research i
   );
 });
 
-Deno.test("campus-ai-assistant builds a bounded routing payload without personal context", () => {
-  const payload = searchRoutingPayload(
+Deno.test("campus-ai-assistant builds a bounded Agent payload without personal context", () => {
+  const payload = managedSingleAgentInitialPayload(
     {
       context: {
         campusID: "bjfu",
@@ -351,56 +350,58 @@ Deno.test("campus-ai-assistant builds a bounded routing payload without personal
   );
 
   assert(
-    payload.tool_choice === "required",
-    "router must return a structured decision",
+    payload.tool_choice === "auto",
+    "Agent must choose tools automatically",
   );
   assert(
     content.includes("北京林业大学期末整体安排是什么"),
     "expected question",
   );
   assert(content.includes("北京林业大学"), "expected public campus descriptor");
-  assert(!content.includes("个人考试"), "router must exclude personal exams");
-  assert(!content.includes("本地结果"), "router must exclude local retrieval");
+  assert(!content.includes("个人考试"), "Agent must exclude personal exams");
+  assert(!content.includes("本地结果"), "Agent must exclude local retrieval");
   assert(
     !content.includes("context_settings"),
-    "router must exclude context settings",
+    "Agent must exclude context settings",
   );
 });
 
-Deno.test("campus-ai-assistant parses semantic routing decisions", () => {
+Deno.test("campus-ai-assistant preserves invalid tool JSON for Agent correction", () => {
   const response = JSON.stringify({
     choices: [{
       message: {
         tool_calls: [{
+          id: "call-1",
           function: {
-            name: "route_search",
-            arguments: JSON.stringify({
-              route: "officialResearch",
-              query: "2026 北京林业大学 推免 政策",
-              focus_terms: ["推免"],
-              use_personal_context: false,
-              reason_code: "public_institutional",
-            }),
+            name: "official_search",
+            arguments: "{not-json",
           },
         }],
       },
     }],
   });
-  const decision = parseSearchRoutingDecision(
-    response,
-    "2026 年北京林业大学保研政策",
+  const decision = parseManagedAgentDecision(response);
+  assert(
+    decision.toolCall?.name === "official_search",
+    "expected tool call to be retained",
   );
+  assert(
+    decision.toolCall?.argumentsText === "{not-json",
+    "invalid JSON must reach the tool error path",
+  );
+});
 
-  assert(decision.route === "officialResearch", "expected official research");
-  assert(
-    !decision.usePersonalContext,
-    "public policy should not use personal context",
-  );
-  assert(decision.query.includes("2026"), "expected year anchor");
-  assert(
-    decision.focusTerms.length === 1 && decision.focusTerms[0] === "推免",
-    "expected a concrete search focus",
-  );
+Deno.test("campus-ai-assistant search tools do not require focus terms", () => {
+  for (const tool of managedSingleAgentTools()) {
+    const fn = tool.function as {
+      name: string;
+      parameters: { required: string[]; properties: Record<string, unknown> };
+    };
+    if (fn.name !== "official_search" && fn.name !== "web_search") continue;
+    assert(fn.parameters.required.includes("query"), "expected query");
+    assert(!fn.parameters.required.includes("focus_terms"), "focus terms must not be required");
+    assert(!("focus_terms" in fn.parameters.properties), "focus terms should not gate search");
+  }
 });
 
 Deno.test("campus-ai-assistant stream wrapper emits keepalive and one terminal", async () => {
@@ -496,7 +497,7 @@ Deno.test("campus-ai-assistant builds DeepSeek tool planner payload", () => {
   );
 });
 
-Deno.test("campus-ai-assistant preserves search intent anchors", () => {
+Deno.test("campus-ai-assistant allows dynamic search query rewrites", () => {
   assert(
     safeAgentSearchQuery(
       "2026 北京林业大学推荐免试工作方案",
@@ -508,8 +509,8 @@ Deno.test("campus-ai-assistant preserves search intent anchors", () => {
     safeAgentSearchQuery(
       "师生健康与学位论文",
       "2026 年工学院保研政策",
-    ) === "2026 年工学院保研政策",
-    "unrelated planner query should fall back to the user question",
+    ) === "师生健康与学位论文",
+    "deterministic code must not replace the Agent query based on semantic anchors",
   );
 });
 
@@ -887,42 +888,10 @@ Deno.test("campus-ai-assistant parses and validates action planner output", () =
   );
 });
 
-Deno.test("campus-ai-assistant falls back to schedule action cards", () => {
-  const actions = fallbackActionDrafts(
-    {
-      web_search_enabled: false,
-      current_local_time: "2026-07-16T23:30:00+09:00",
-      time_zone_identifier: "Asia/Tokyo",
-    },
-    "帮我设置一个明天早上十点的日程",
-    "已准备日程，请确认保存。",
-  );
-
-  assert(actions.length === 1, "expected one fallback action");
-  assert(
-    actions[0].kind === "createSchedule",
-    "expected unified schedule action",
-  );
-  assert(
-    actions[0].payload?.startsAt === "2026-07-17T10:00:00+09:00",
-    "expected tomorrow morning ten with the device timezone",
-  );
-});
-
-Deno.test("campus-ai-assistant never infers actions from its own answer", () => {
-  assert(
-    !hasExplicitCampusActionIntent("Hi"),
-    "expected a greeting to stay a normal answer",
-  );
-  const actions = fallbackActionDrafts(
-    { web_search_enabled: false },
-    "Hi",
-    "你可以添加日程或查看考试安排。",
-  );
-  assert(
-    actions.length === 0,
-    "expected answer suggestions to create no action",
-  );
+Deno.test("campus-ai-assistant action prompt rejects informational exam queries", () => {
+  const prompt = actionPlannerSystemPrompt(false);
+  assert(prompt.includes("考试时间安排是什么"), "expected informational-query guard");
+  assert(prompt.includes("不得生成动作"), "expected explicit operation requirement");
 });
 
 Deno.test("campus-ai-assistant accepts incomplete unified schedule drafts", () => {

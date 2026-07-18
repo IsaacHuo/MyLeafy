@@ -1089,52 +1089,11 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertFalse(encoded.contains("localRetrieval"))
         XCTAssertFalse(encoded.contains("contextSettings"))
         XCTAssertFalse(encoded.contains("不应进入规划输入"))
-
-        let routingPayload = CampusAIResearchAgent.routingPayload(for: request)
-        let routingData = try JSONEncoder().encode(routingPayload)
-        let routingBody = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: routingData) as? [String: Any]
-        )
-        let routingMessages = try XCTUnwrap(routingBody["messages"] as? [[String: Any]])
-        let routingContent = try XCTUnwrap(routingMessages.last?["content"] as? String)
-        XCTAssertEqual(routingBody["tool_choice"] as? String, "required")
-        XCTAssertTrue(routingContent.contains("2026 年工学院保研政策"))
-        XCTAssertFalse(routingContent.contains("localRetrieval"))
-        XCTAssertFalse(routingContent.contains("contextSettings"))
-        XCTAssertFalse(routingContent.contains("不应进入规划输入"))
+        XCTAssertEqual(input.campusID, request.context.campusID)
+        XCTAssertEqual(input.campusName, request.context.campusName)
     }
 
-    func testResearchQueryMustRemainAnchoredToOriginalQuestion() {
-        XCTAssertTrue(CampusAIResearchQueryRelevance.isAnchored(
-            query: "北京林业大学 工学院 2026 推免 工作方案",
-            to: "2026 年工学院保研政策"
-        ))
-        XCTAssertTrue(CampusAIResearchQueryRelevance.isAnchored(
-            query: "推荐免试 攻读研究生 工作方案",
-            to: "保研政策"
-        ))
-        XCTAssertFalse(CampusAIResearchQueryRelevance.isAnchored(
-            query: "师生健康与生命安全",
-            to: "2026 年工学院保研政策"
-        ))
-
-        XCTAssertEqual(
-            CampusAIResearchQueryRelevance.validatedFocusTerms(
-                ["申请", "用印", "学生证"],
-                question: "申请学校用印"
-            ),
-            ["用印"]
-        )
-        XCTAssertEqual(
-            CampusAIResearchQueryRelevance.validatedFocusTerms(
-                ["推免"],
-                question: "2026 年北京林业大学保研政策"
-            ),
-            ["推免"]
-        )
-    }
-
-    func testResearchSearchToolsRequireFocusTerms() throws {
+    func testResearchSearchToolsDoNotRequireFocusTerms() throws {
         let encoded = try JSONEncoder().encode(CampusAIResearchToolDefinition.all)
         let tools = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [[String: Any]])
 
@@ -1146,8 +1105,8 @@ final class CampusAIAssistantTests: XCTestCase {
             let parameters = try XCTUnwrap(function["parameters"] as? [String: Any])
             let required = try XCTUnwrap(parameters["required"] as? [String])
             let properties = try XCTUnwrap(parameters["properties"] as? [String: Any])
-            XCTAssertTrue(required.contains("focus_terms"))
-            XCTAssertNotNil(properties["focus_terms"])
+            XCTAssertEqual(required, ["query"])
+            XCTAssertNil(properties["focus_terms"])
         }
     }
 
@@ -1500,79 +1459,32 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertFalse(CampusAIService.shouldRunDirectAgent(disabledRequest))
     }
 
-    func testActionPlannerFallbackCreatesPendingScheduleDraft() {
-        let request = CampusAIRequest(
-            message: "我要新建一个日程",
+    func testActionPlanningIsAgentControlledAndPersists() throws {
+        let informational = CampusAIRequest(
+            message: "考试时间安排是什么",
+            context: minimalAIContext(),
+            recentMessages: []
+        )
+        let explicit = CampusAIRequest(
+            message: "帮我添加明天十点的日程",
             context: minimalAIContext(),
             recentMessages: [],
-            webSearchEnabled: false
+            actionPlanningRequested: true
         )
 
-        let actions = CampusAIService.fallbackActionDrafts(
-            for: request,
-            answer: "可以去日程页面添加。"
+        XCTAssertFalse(informational.actionPlanningRequested)
+        XCTAssertTrue(explicit.actionPlanningRequested)
+        let decoded = try JSONDecoder().decode(
+            CampusAIRequest.self,
+            from: JSONEncoder().encode(explicit)
         )
-
-        XCTAssertEqual(actions.count, 1)
-        XCTAssertEqual(actions.first?.kind, .createSchedule)
-        XCTAssertNil(actions.first?.payload.route)
-        XCTAssertNil(actions.first?.payload.startsAt)
-        XCTAssertEqual(actions.first?.title, "添加日程")
-        XCTAssertEqual(actions.first?.detail, "确认日期、时间和日程信息后保存。")
+        XCTAssertTrue(decoded.actionPlanningRequested)
     }
 
-    func testActionPlannerNeverInfersActionsFromAssistantAnswer() {
-        let request = CampusAIRequest(
-            message: "Hi",
-            context: minimalAIContext(),
-            recentMessages: [],
-            webSearchEnabled: false
-        )
-
-        XCTAssertFalse(CampusAIService.hasExplicitActionIntent(in: request.message))
-        XCTAssertTrue(CampusAIService.fallbackActionDrafts(
-            for: request,
-            answer: "你可以添加日程或查看考试安排。"
-        ).isEmpty)
-    }
-
-    func testActionPlannerFallbackParsesTomorrowMorningTen() throws {
-        let request = CampusAIRequest(
-            message: "帮我设置一个明天早上十点的日程",
-            context: minimalAIContext(),
-            recentMessages: [],
-            webSearchEnabled: false
-        )
-
-        let draft = try XCTUnwrap(CampusAIService.fallbackActionDrafts(for: request).first)
-        let parsed = try XCTUnwrap(CampusAIActionValidation.scheduleStartDate(for: draft))
-        let components = Calendar.current.dateComponents([.day, .hour, .minute], from: parsed)
-
-        XCTAssertEqual(draft.kind, .createSchedule)
-        XCTAssertEqual(components.hour, 10)
-        XCTAssertEqual(components.minute, 0)
-        XCTAssertTrue(Calendar.current.isDateInTomorrow(parsed))
-    }
-
-    func testActionPlannerFallbackRoutesExamRequestsToExamSchedule() {
-        let request = CampusAIRequest(
-            message: "帮我查看考试时间",
-            context: minimalAIContext(),
-            recentMessages: [],
-            webSearchEnabled: false
-        )
-
-        let actions = CampusAIService.fallbackActionDrafts(
-            for: request,
-            answer: "可以去考试安排页面查看。"
-        )
-
-        XCTAssertEqual(actions.count, 1)
-        XCTAssertEqual(actions.first?.kind, .openAcademicRoute)
-        XCTAssertEqual(actions.first?.payload.route, "examSchedule")
-        XCTAssertEqual(actions.first?.title, "打开考试安排")
-        XCTAssertEqual(actions.first?.detail, "前往考试安排继续查看或管理考试。")
-        XCTAssertEqual(CampusAIAcademicRouteID.examSchedule.title, "考试安排")
+    func testActionPlannerPromptRejectsInformationalExamQueries() {
+        let prompt = CampusAIService.actionPlannerSystemPrompt()
+        XCTAssertTrue(prompt.contains("只有用户原问题明确要求打开页面或添加日程时才生成动作"))
+        XCTAssertTrue(prompt.contains("考试时间安排"))
     }
 
     func testAPIKeyResolverUsesSelectedProviderKey() throws {
@@ -1597,7 +1509,8 @@ final class CampusAIAssistantTests: XCTestCase {
 
         XCTAssertTrue(prompt.contains("通用 AI 助手"))
         XCTAssertTrue(prompt.contains("可以回答通用问题"))
-        XCTAssertTrue(prompt.contains("问题与已提供的课程、考试、学习、提醒或个人事项相关时"))
+        XCTAssertTrue(prompt.contains("个人课表、考试、成绩、日程和其他本机资料默认不参与回答"))
+        XCTAssertTrue(prompt.contains("只有输入明确包含必要的 context 或 local_retrieval 时"))
         XCTAssertTrue(prompt.contains("不要反复解释内部数据来源"))
         XCTAssertTrue(prompt.contains("PDF"))
         XCTAssertTrue(prompt.contains("本地文件路径"))

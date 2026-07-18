@@ -50,7 +50,7 @@ Deno.test("campus ai web tools parse and normalize BJFU CMS results", () => {
   assert(results[0].snippet?.includes("正式工作方案"), "expected snippet");
 });
 
-Deno.test("campus ai search relevance keeps recommendation policy and drops screenshot noise", () => {
+Deno.test("campus ai search candidates preserve provider order for Agent review", () => {
   const ranked = rankSearchResultsByRelevance([
     {
       title: "携手同心，守护师生健康",
@@ -74,14 +74,14 @@ Deno.test("campus ai search relevance keeps recommendation policy and drops scre
     },
   ], "2026 年工学院保研政策");
 
-  assert(ranked.length === 1, "expected only the recommendation policy result");
+  assert(ranked.length === 4, "semantic candidates must not be pre-filtered");
   assert(
-    ranked[0].url.endsWith("recommendation-2026"),
-    "expected recommendation policy ranked first",
+    ranked[0].url.endsWith("health") && ranked[2].url.endsWith("recommendation-2026"),
+    "expected stable provider ordering",
   );
 });
 
-Deno.test("campus ai search relevance recognizes recommendation synonyms and stable ties", () => {
+Deno.test("campus ai search candidates remain stable regardless of synonyms", () => {
   const ranked = rankSearchResultsByRelevance([
     { title: "推免工作方案", url: "https://jwc.bjfu.edu.cn/1" },
     { title: "推荐免试实施办法", url: "https://jwc.bjfu.edu.cn/2" },
@@ -94,7 +94,7 @@ Deno.test("campus ai search relevance recognizes recommendation synonyms and sta
   );
 });
 
-Deno.test("campus ai search relevance rejects explicitly stale years", () => {
+Deno.test("campus ai search candidates do not hard-reject years", () => {
   const ranked = rankSearchResultsByRelevance([
     {
       title: "北京林业大学 2022 年春季学期期末考试总体安排",
@@ -126,13 +126,13 @@ Deno.test("campus ai search relevance rejects explicitly stale years", () => {
     "undated but relevant official results may remain",
   );
   assert(
-    !ranked.some((item) => item.url.endsWith("final-2022")) &&
-      !ranked.some((item) => item.url.endsWith("final-2016")),
-    "explicitly stale years must be rejected",
+    ranked.some((item) => item.url.endsWith("final-2022")) &&
+      ranked.some((item) => item.url.endsWith("final-2016")),
+    "the Agent, not deterministic code, must judge year applicability",
   );
 });
 
-Deno.test("campus ai search relevance requires the school seal topic", () => {
+Deno.test("campus ai search candidates do not hard-reject topic overlap", () => {
   const ranked = rankSearchResultsByRelevance([
     {
       title: "关于补办学生证的通知",
@@ -151,10 +151,10 @@ Deno.test("campus ai search relevance requires the school seal topic", () => {
     },
   ], "申请学校用印", ["用印"]);
 
-  assert(ranked.length === 1, "generic application overlap must be rejected");
+  assert(ranked.length === 3, "topic candidates must remain available to the Agent");
   assert(
-    ranked[0].url.endsWith("seal-flow"),
-    "expected only the seal workflow result",
+    ranked[1].url.endsWith("seal-flow"),
+    "expected provider order to be preserved",
   );
 });
 
