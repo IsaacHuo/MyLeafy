@@ -199,8 +199,8 @@ deno test --allow-env \
 
 | 职责 | 文件 |
 |---|---|
-| iOS Managed 请求与 BYOK 动作过滤 | `leafy/Features/Discover/Domain/CampusAIAssistantSupport.swift` |
-| AppTransaction 与订阅同步 | `leafy/Features/Discover/Domain/CampusAIManagedEntitlement.swift` |
+| iOS Managed 请求与 BYOK 动作过滤 | `leafy/Features/LeafyAI/Data/API/CampusAIService.swift`、`leafy/Features/LeafyAI/Domain/CampusAICoreModels.swift` |
+| AppTransaction 与订阅同步 | `leafy/Features/LeafyAI/Domain/CampusAIManagedEntitlement.swift` |
 | 服务端回复与额度预留 | `supabase/functions/campus-ai-assistant/index.ts` |
 | 订阅交易验证与权益同步 | `supabase/functions/campus-ai-entitlement/index.ts` |
 | 数据库安全包装层 | `supabase/migrations/20260716062000_campus_ai_edge_rpc_wrappers.sql` |

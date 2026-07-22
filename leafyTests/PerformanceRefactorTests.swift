@@ -3119,3 +3119,132 @@ private func makeCommunityPollOption(
         createdAt: createdAt
     )
 }
+
+final class PerformanceProjectionTests: XCTestCase {
+    @MainActor
+    func testConversationProjectionFiltersOnceAndIndexesActions() {
+        let selectedID = UUID()
+        let otherID = UUID()
+        let selected = CampusAIConversation(id: selectedID, title: "Selected")
+        let other = CampusAIConversation(id: otherID, title: "Other")
+        let firstMessage = CampusAIMessage(
+            conversationID: selectedID.uuidString,
+            roleRawValue: CampusAIMessageRole.user.rawValue,
+            text: "Question"
+        )
+        let secondMessage = CampusAIMessage(
+            conversationID: selectedID.uuidString,
+            roleRawValue: CampusAIMessageRole.assistant.rawValue,
+            text: "Answer"
+        )
+        let unrelatedMessage = CampusAIMessage(
+            conversationID: otherID.uuidString,
+            roleRawValue: CampusAIMessageRole.user.rawValue,
+            text: "Other"
+        )
+        let indexedAction = CampusAIActionRecord(
+            conversationID: selectedID.uuidString,
+            messageID: secondMessage.id.uuidString,
+            kindRawValue: CampusAIActionKind.createCountdown.rawValue,
+            title: "Countdown",
+            detail: "Detail",
+            payloadJSON: "{}",
+            statusRawValue: CampusAIActionStatus.pending.rawValue
+        )
+        let unrelatedAction = CampusAIActionRecord(
+            conversationID: otherID.uuidString,
+            messageID: unrelatedMessage.id.uuidString,
+            kindRawValue: CampusAIActionKind.createCountdown.rawValue,
+            title: "Other",
+            detail: "Detail",
+            payloadJSON: "{}",
+            statusRawValue: CampusAIActionStatus.pending.rawValue
+        )
+
+        let projection = CampusAIConversationProjection(
+            selectedConversationID: selectedID,
+            conversations: [other, selected],
+            messages: [firstMessage, unrelatedMessage, secondMessage],
+            actionRecords: [unrelatedAction, indexedAction]
+        )
+
+        XCTAssertEqual(projection.conversation?.id, selectedID)
+        XCTAssertEqual(projection.messages.map(\.id), [firstMessage.id, secondMessage.id])
+        XCTAssertEqual(projection.actionRecords(for: firstMessage).count, 0)
+        XCTAssertEqual(projection.actionRecords(for: secondMessage).map(\.id), [indexedAction.id])
+    }
+
+    @MainActor
+    func testChatSessionKeepsTransientStreamingTextOutOfPersistentMessage() {
+        let session = CampusAIChatSession()
+        let conversationID = UUID()
+        let messageID = UUID()
+
+        session.markStreaming(conversationID: conversationID, messageID: messageID)
+        XCTAssertEqual(session.append(delta: "Leafy", messageID: messageID), "Leafy")
+        XCTAssertEqual(session.append(delta: " AI", messageID: messageID), "Leafy AI")
+        XCTAssertEqual(session.displayText(for: messageID), "Leafy AI")
+
+        session.cancel()
+        XCTAssertNil(session.displayText(for: messageID))
+        XCTAssertEqual(session.streamingText, "")
+        XCTAssertFalse(session.isSending)
+    }
+
+    @MainActor
+    func testRatingCatalogWorkspaceLoadsEachSectionOnceOnDemand() {
+        let workspace = RatingCatalogWorkspace()
+
+        XCTAssertTrue(workspace.teachers.beginInitialLoad())
+        XCTAssertFalse(workspace.teachers.beginInitialLoad())
+        XCTAssertFalse(workspace.courses.hasStartedInitialLoad)
+        XCTAssertFalse(workspace.dishes.hasStartedInitialLoad)
+
+        XCTAssertTrue(workspace.courses.beginInitialLoad())
+        XCTAssertTrue(workspace.teachers.hasStartedInitialLoad)
+        XCTAssertTrue(workspace.courses.hasStartedInitialLoad)
+        XCTAssertFalse(workspace.dishes.hasStartedInitialLoad)
+    }
+
+    func testMasonryProjectionPreservesAlternatingOrder() {
+        let columns = CommunityMasonryColumns(items: Array(0..<7))
+
+        XCTAssertEqual(columns.left, [0, 2, 4, 6])
+        XCTAssertEqual(columns.right, [1, 3, 5])
+    }
+
+    func testCompactTimestampFormatterKeepsExistingFeedFormat() throws {
+        let calendar = Calendar.current
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 7, day: 22, hour: 9, minute: 5)))
+
+        XCTAssertEqual(CommunityCompactTimestampFormatter.string(from: date), "7/22 09:05")
+    }
+
+    @MainActor
+    func testTimetableCacheAcceptsOnePrebuiltRenderInput() {
+        let course = Course(
+            courseName: "A",
+            teacher: "T",
+            room: "101",
+            location: "",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1]
+        )
+        let input = TimetableRenderInput(
+            courses: [course],
+            notes: [],
+            occurrenceNotes: [],
+            cellReminders: [],
+            hidesWeekends: false
+        )
+        let cache = TimetableGridSnapshotCache()
+
+        let first = cache.snapshot(input: input, totalWeeks: 2)
+        let second = cache.snapshot(input: input, totalWeeks: 2)
+
+        XCTAssertEqual(cache.buildCount, 1)
+        XCTAssertEqual(first.layouts(day: 1, week: 1).map(\.course.courseName), ["A"])
+        XCTAssertEqual(second.layouts(day: 1, week: 1).map(\.course.courseName), ["A"])
+    }
+}

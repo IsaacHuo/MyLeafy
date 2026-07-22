@@ -40,6 +40,14 @@ Leafy AI direction:
 - Managed SSE responses must end with an explicit non-empty `done` or structured `error`; keepalive comments preserve long research connections, and abandoned quota reservations expire after 10 minutes without consuming quota.
 - Personal context defaults to timetable and exams only. All other scopes are opt-in; BYOK sends only bounded local retrieval results, and external search is blocked after personal context is read or when a query contains direct identifiers or copied personal-result text.
 
+Architecture and performance direction:
+- Feature dependencies flow from Presentation to Application to Domain; Data implements narrow application protocols and is wired at the app composition root.
+- Preserve existing public type names, repository contracts, SwiftData schema, Supabase interfaces, UI, copy, and navigation during structural refactors.
+- Keep transient Leafy AI streaming text out of broad SwiftData invalidation; persist only at explicit checkpoints and terminal states.
+- Build timetable render input and its signature once per refresh, and consume indexed snapshot data from child views.
+- Community rating sections load on demand while retaining per-section state; feed projections and formatters must not be rebuilt per card body evaluation.
+- Performance claims require three comparable runs, at least 10% median improvement, no more than 5% peak-memory regression, and no new app-owned leaks. Signposts must never include user content or personal data.
+
 Minimum iOS target:
 - iOS 17+
 
