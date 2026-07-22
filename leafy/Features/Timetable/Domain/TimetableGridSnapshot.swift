@@ -2,6 +2,35 @@ import Foundation
 import os
 
 @MainActor
+struct TimetableRenderInput {
+    let courses: [Course]
+    let notes: [CourseNote]
+    let occurrenceNotes: [CourseOccurrenceNote]
+    let cellReminders: [TimetableCellReminder]
+    let signature: TimetableGridInputSignature
+
+    init(
+        courses: [Course],
+        notes: [CourseNote],
+        occurrenceNotes: [CourseOccurrenceNote],
+        cellReminders: [TimetableCellReminder],
+        hidesWeekends: Bool
+    ) {
+        self.courses = courses
+        self.notes = notes
+        self.occurrenceNotes = occurrenceNotes
+        self.cellReminders = cellReminders
+        signature = TimetableGridInputSignature(
+            courses: courses,
+            notes: notes,
+            occurrenceNotes: occurrenceNotes,
+            cellReminders: cellReminders,
+            hidesWeekends: hidesWeekends
+        )
+    }
+}
+
+@MainActor
 struct TimetableGridInputSignature: Equatable, Hashable {
     let hidesWeekends: Bool
     let courseSignatures: [CourseSignature]
@@ -125,6 +154,7 @@ struct TimetableGridSnapshot {
     private let layoutsByDay: [TimetableGridDayKey: [DayCourseLayout]]
     private let occupiedPeriodsByDay: [TimetableGridDayKey: Set<Int>]
     private let latestCellReminderByKey: [String: TimetableCellReminder]
+    private let cellRemindersByDay: [TimetableGridDayKey: [TimetableCellReminder]]
     private let courseNotesByKey: [String: String]
     private let occurrenceNotesByKey: [String: String]
 
@@ -177,6 +207,18 @@ struct TimetableGridSnapshot {
                 .map { ($0.cellKey, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        let cellRemindersByDay = Dictionary(
+            grouping: latestCellReminderByKey.values,
+            by: { TimetableGridDayKey(week: $0.week, day: $0.dayOfWeek) }
+        )
+        .mapValues { reminders in
+            reminders.sorted { lhs, rhs in
+                if lhs.displayStartPeriod != rhs.displayStartPeriod {
+                    return lhs.displayStartPeriod < rhs.displayStartPeriod
+                }
+                return lhs.title.localizedCompare(rhs.title) == .orderedAscending
+            }
+        }
 
         return TimetableGridSnapshot(
             signature: signature,
@@ -187,6 +229,7 @@ struct TimetableGridSnapshot {
             layoutsByDay: layoutsByDay,
             occupiedPeriodsByDay: occupiedPeriodsByDay,
             latestCellReminderByKey: latestCellReminderByKey,
+            cellRemindersByDay: cellRemindersByDay,
             courseNotesByKey: courseNotesByKey,
             occurrenceNotesByKey: occurrenceNotesByKey
         )
@@ -205,14 +248,7 @@ struct TimetableGridSnapshot {
     }
 
     func cellReminders(week: Int, day: Int) -> [TimetableCellReminder] {
-        latestCellReminderByKey.values
-            .filter { $0.week == week && $0.dayOfWeek == day }
-            .sorted { lhs, rhs in
-                if lhs.displayStartPeriod != rhs.displayStartPeriod {
-                    return lhs.displayStartPeriod < rhs.displayStartPeriod
-                }
-                return lhs.title.localizedCompare(rhs.title) == .orderedAscending
-            }
+        cellRemindersByDay[TimetableGridDayKey(week: week, day: day)] ?? []
     }
 
     func hasNote(for course: Course, week: Int) -> Bool {
@@ -242,13 +278,20 @@ final class TimetableGridSnapshotCache {
         hidesWeekends: Bool,
         totalWeeks: Int
     ) -> TimetableGridSnapshot {
-        let signature = TimetableGridInputSignature(
-            courses: courses,
-            notes: notes,
-            occurrenceNotes: occurrenceNotes,
-            cellReminders: cellReminders,
-            hidesWeekends: hidesWeekends
+        snapshot(
+            input: TimetableRenderInput(
+                courses: courses,
+                notes: notes,
+                occurrenceNotes: occurrenceNotes,
+                cellReminders: cellReminders,
+                hidesWeekends: hidesWeekends
+            ),
+            totalWeeks: totalWeeks
         )
+    }
+
+    func snapshot(input: TimetableRenderInput, totalWeeks: Int) -> TimetableGridSnapshot {
+        let signature = input.signature
 
         if let cachedSnapshot,
            cachedSnapshot.signature == signature,
@@ -257,11 +300,11 @@ final class TimetableGridSnapshotCache {
         }
 
         let snapshot = TimetableGridSnapshot.make(
-            courses: courses,
-            notes: notes,
-            occurrenceNotes: occurrenceNotes,
-            cellReminders: cellReminders,
-            hidesWeekends: hidesWeekends,
+            courses: input.courses,
+            notes: input.notes,
+            occurrenceNotes: input.occurrenceNotes,
+            cellReminders: input.cellReminders,
+            hidesWeekends: signature.hidesWeekends,
             totalWeeks: totalWeeks,
             signature: signature
         )
