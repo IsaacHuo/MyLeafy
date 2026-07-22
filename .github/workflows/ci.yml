@@ -114,20 +114,14 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Check admin Edge Functions
+      - name: Check all Edge Functions
+        shell: bash
         run: |
-          deno check \
-            supabase/functions/admin-login/index.ts \
-            supabase/functions/admin-me/index.ts \
-            supabase/functions/admin-logout/index.ts \
-            supabase/functions/admin-community/index.ts \
-            supabase/functions/admin-export/index.ts \
-            supabase/functions/admin-list-announcements/index.ts \
-            supabase/functions/admin-publish-announcement/index.ts \
-            supabase/functions/admin-update-announcement/index.ts
+          mapfile -t entrypoints < <(find supabase/functions -name '*.ts' -type f | sort)
+          deno check "${entrypoints[@]}"
 
-      - name: Run admin permissions tests
-        run: deno test --allow-read=supabase/functions/admin-community/index.ts supabase/functions/_shared/admin-core.test.ts supabase/functions/_shared/admin-permissions.test.ts supabase/functions/_shared/admin-csv.test.ts supabase/functions/admin-community/admin-community.contract.test.ts
+      - name: Run all Edge Function tests
+        run: deno test --allow-env --allow-read supabase/functions
 
       - name: Verify migration contracts
         run: bash supabase/tests/verify_admin_security_runtime_migration.sh
@@ -165,12 +159,56 @@ jobs:
       - name: Run database tests
         run: supabase test db
 
-  xcode-project:
-    name: Xcode project metadata
+  ios-tests:
+    name: iOS build and tests
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: List Xcode project
-        run: xcodebuild -list -project leafy.xcodeproj
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project leafy.xcodeproj -scheme leafy
+
+      - name: Build for the iOS 17 deployment target
+        run: |
+          xcodebuild build \
+            -project leafy.xcodeproj \
+            -scheme leafy \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Select an available iPhone simulator
+        shell: bash
+        run: |
+          destination=$(xcodebuild -showdestinations -project leafy.xcodeproj -scheme leafy \
+            | sed -n 's/.*platform:iOS Simulator, arch:[^,]*, id:\([^,]*\), OS:\([^,]*\), name:iPhone[^}]*/platform=iOS Simulator,id=\1/p' \
+            | head -n 1)
+          if [[ -z "${destination}" ]]; then
+            echo 'No available iPhone Simulator destination was found.'
+            xcodebuild -showdestinations -project leafy.xcodeproj -scheme leafy
+            exit 1
+          fi
+          echo "IOS_TEST_DESTINATION=${destination}" >> "${GITHUB_ENV}"
+
+      - name: Run the complete iOS test suite
+        run: |
+          mkdir -p TestResults
+          xcodebuild test \
+            -project leafy.xcodeproj \
+            -scheme leafy \
+            -configuration Debug \
+            -destination "${IOS_TEST_DESTINATION}" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath TestResults/leafy.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload iOS test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leafy-ios-test-results
+          path: TestResults/leafy.xcresult
+          if-no-files-found: ignore

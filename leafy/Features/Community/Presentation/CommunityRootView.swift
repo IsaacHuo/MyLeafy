@@ -183,6 +183,7 @@ struct CommunityRootView: View {
     @State private var showingCommunityTerms = false
     @State private var showingNotifications = false
     @State private var showingCommunitySearch = false
+    @State private var showingCommunityRecovery = false
     @State private var selectedPost: CommunityPost?
     @State private var communityRefreshID = UUID()
     @State private var communityActionError: String?
@@ -242,7 +243,8 @@ struct CommunityRootView: View {
                         },
                         onSubmitNewSchool: { schoolName in
                             Task { await submitSchoolRequest(schoolName: schoolName) }
-                        }
+                        },
+                        onRecover: { showingCommunityRecovery = true }
                     )
                     .leafyAdaptiveContentWidth(maxWidth: 560, horizontalPadding: AppSpacing.page)
                     .padding(.top, 72)
@@ -258,6 +260,10 @@ struct CommunityRootView: View {
                     operationAlert = .success(message)
                 }
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showingCommunityRecovery) {
+                CommunityAccountRecoverySheet()
+                    .presentationDetents([.medium])
             }
             .sheet(isPresented: $showingCommunityProfileEditor) {
                 CommunityProfileEditorSheet()
@@ -582,6 +588,7 @@ private struct CommunityCampusRequestGateView: View {
     let isSubmitting: Bool
     let onSelectCampus: (CommunityCampusOption) -> Void
     let onSubmitNewSchool: (String) -> Void
+    let onRecover: () -> Void
 
     private var status: CommunityAccessStatus {
         profile?.communityAccessStatus ?? .general
@@ -675,9 +682,81 @@ private struct CommunityCampusRequestGateView: View {
                     onSubmitNewSchool: onSubmitNewSchool
                 )
             }
+
+            if profile == nil,
+               bootstrapError?.contains("已绑定社区账号") == true {
+                Button("使用通知邮箱恢复") {
+                    onRecover()
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
         .padding(AppSpacing.section)
         .leafyCardStyle()
+    }
+}
+
+private struct CommunityAccountRecoverySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var code = ""
+    @State private var didSendCode = false
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("已绑定的通知邮箱", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if didSendCode {
+                        TextField("8 位验证码", text: $code)
+                            .keyboardType(.numberPad)
+                            .textContentType(.oneTimeCode)
+                    }
+                } footer: {
+                    Text("邮箱只用于找回已经绑定的社区账号，不会替代教务登录。")
+                }
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(AppTheme.danger)
+                }
+
+                Button(didSendCode ? "验证并恢复" : "发送验证码") {
+                    Task { await submit() }
+                }
+                .disabled(isWorking || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (didSendCode && code.count < 8))
+            }
+            .navigationTitle("恢复社区账号")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func submit() async {
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            if didSendCode {
+                try await CommunitySessionManager.shared.verifyRecovery(email: email, code: code)
+                dismiss()
+            } else {
+                try await CommunitySessionManager.shared.requestRecovery(email: email)
+                didSendCode = true
+            }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

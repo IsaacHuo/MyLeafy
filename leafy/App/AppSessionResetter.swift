@@ -9,8 +9,6 @@ enum AppSessionResetter {
         }
         ActiveCampusContext.networkManager.clearSession()
         LeafyWidgetSnapshotBuilder.publishNeedsLogin()
-        Task {
-            await CommunitySessionManager.shared.signOut()
-        }
+        CommunitySessionManager.shared.detachFromSchoolSession()
     }
 }

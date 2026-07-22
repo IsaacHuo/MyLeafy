@@ -7,6 +7,10 @@ enum ExternalLearningMaterialImportError: LocalizedError, Equatable {
     case emptyBatch
     case missingBatch(UUID)
     case missingStagedFile(String)
+    case tooManyFiles
+    case fileTooLarge(String)
+    case batchTooLarge
+    case insufficientDiskSpace
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +24,14 @@ enum ExternalLearningMaterialImportError: LocalizedError, Equatable {
             return "这批外部文件暂存记录已失效，请重新从微信或 QQ 打开。"
         case .missingStagedFile(let filename):
             return "无法找到暂存文件 \(filename)，请重新导入。"
+        case .tooManyFiles:
+            return "每次最多导入 10 个文件。"
+        case .fileTooLarge(let filename):
+            return "\(filename) 超过 25 MB，无法导入。"
+        case .batchTooLarge:
+            return "单次导入总大小不能超过 100 MB。"
+        case .insufficientDiskSpace:
+            return "设备可用空间不足，无法暂存这些文件。"
         }
     }
 }
@@ -62,6 +74,11 @@ enum ExternalLearningMaterialImport {
     static let callbackHost = "learning-material-import"
     static let stagingDirectoryName = "ExternalLearningMaterialImports"
     static let manifestFilename = "manifest.json"
+    static let maximumItemCount = 10
+    static let maximumFileBytes: Int64 = 25 * 1024 * 1024
+    static let maximumBatchBytes: Int64 = 100 * 1024 * 1024
+    static let maximumDataFallbackBytes = 10 * 1024 * 1024
+    static let stagingLifetime: TimeInterval = 24 * 60 * 60
 
     static let supportedContentTypes: [UTType] = [
         .pdf,
@@ -160,12 +177,16 @@ struct ExternalLearningMaterialImportStore {
         source: ExternalLearningMaterialImportSource,
         id: UUID = UUID()
     ) throws -> ExternalLearningMaterialImportManifest {
+        guard urls.count <= ExternalLearningMaterialImport.maximumItemCount else {
+            throw ExternalLearningMaterialImportError.tooManyFiles
+        }
         var items: [ExternalLearningMaterialImportItem] = []
         try prepareBatchDirectory(id)
 
         for url in urls {
             let item = try stageFile(from: url, batchID: id)
             items.append(item)
+            try validateBatch(items)
         }
 
         guard !items.isEmpty else {
@@ -211,6 +232,12 @@ struct ExternalLearningMaterialImportStore {
             throw ExternalLearningMaterialImportError.unsupportedFile(filename)
         }
 
+        let sourceBytes = byteCount(for: sourceURL)
+        guard sourceBytes <= ExternalLearningMaterialImport.maximumFileBytes else {
+            throw ExternalLearningMaterialImportError.fileTooLarge(filename)
+        }
+        try requireAvailableCapacity(sourceBytes)
+
         try prepareBatchDirectory(batchID)
         let stagedFilename = stagedFilename(for: itemID, originalFilename: filename)
         let destinationURL = batchDirectoryURL(for: batchID).appendingPathComponent(stagedFilename)
@@ -251,6 +278,12 @@ struct ExternalLearningMaterialImportStore {
             throw ExternalLearningMaterialImportError.unsupportedFile(filename)
         }
 
+        guard data.count <= ExternalLearningMaterialImport.maximumDataFallbackBytes,
+              Int64(data.count) <= ExternalLearningMaterialImport.maximumFileBytes else {
+            throw ExternalLearningMaterialImportError.fileTooLarge(filename)
+        }
+        try requireAvailableCapacity(Int64(data.count))
+
         try prepareBatchDirectory(batchID)
         let stagedFilename = stagedFilename(for: itemID, originalFilename: filename)
         let destinationURL = batchDirectoryURL(for: batchID).appendingPathComponent(stagedFilename)
@@ -266,6 +299,7 @@ struct ExternalLearningMaterialImportStore {
     }
 
     func writeManifest(_ manifest: ExternalLearningMaterialImportManifest) throws {
+        try validateBatch(manifest.items)
         try prepareBatchDirectory(manifest.id)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = Self.preciseISO8601DateEncodingStrategy
@@ -287,6 +321,7 @@ struct ExternalLearningMaterialImportStore {
     }
 
     func pendingManifests() -> [ExternalLearningMaterialImportManifest] {
+        removeExpiredBatches()
         guard let batchDirectories = try? fileManager.contentsOfDirectory(
             at: rootDirectory,
             includingPropertiesForKeys: nil
@@ -314,6 +349,23 @@ struct ExternalLearningMaterialImportStore {
         }
     }
 
+    func removeExpiredBatches(now: Date = Date()) {
+        guard let directories = try? fileManager.contentsOfDirectory(
+            at: rootDirectory,
+            includingPropertiesForKeys: [.creationDateKey]
+        ) else { return }
+
+        for directory in directories {
+            let manifestDate = UUID(uuidString: directory.lastPathComponent)
+                .flatMap { try? loadManifest(id: $0).createdAt }
+            let creationDate = try? directory.resourceValues(forKeys: [.creationDateKey]).creationDate
+            let referenceDate = manifestDate ?? creationDate ?? .distantPast
+            if now.timeIntervalSince(referenceDate) > ExternalLearningMaterialImport.stagingLifetime {
+                try? fileManager.removeItem(at: directory)
+            }
+        }
+    }
+
     func batchDirectoryURL(for id: UUID) -> URL {
         rootDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
     }
@@ -332,6 +384,24 @@ struct ExternalLearningMaterialImportStore {
     private func byteCount(for url: URL) -> Int64 {
         let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         return Int64(values?.fileSize ?? 0)
+    }
+
+    private func validateBatch(_ items: [ExternalLearningMaterialImportItem]) throws {
+        guard items.count <= ExternalLearningMaterialImport.maximumItemCount else {
+            throw ExternalLearningMaterialImportError.tooManyFiles
+        }
+        let total = items.reduce(Int64(0)) { $0 + max(0, $1.byteCount) }
+        guard total <= ExternalLearningMaterialImport.maximumBatchBytes else {
+            throw ExternalLearningMaterialImportError.batchTooLarge
+        }
+    }
+
+    private func requireAvailableCapacity(_ additionalBytes: Int64) throws {
+        let values = try rootDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        if let capacity = values.volumeAvailableCapacityForImportantUsage,
+           capacity < additionalBytes + 20 * 1024 * 1024 {
+            throw ExternalLearningMaterialImportError.insufficientDiskSpace
+        }
     }
 
     private static var preciseISO8601DateEncodingStrategy: JSONEncoder.DateEncodingStrategy {

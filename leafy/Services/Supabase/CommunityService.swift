@@ -99,6 +99,16 @@ actor CommunityService {
         }
     }
 
+    func replaceAnonymousSession() async throws {
+        activeEnsureSessionTask?.cancel()
+        activeEnsureSessionTask = nil
+        let client = try LeafySupabase.shared.requireClient()
+        if client.auth.currentSession != nil {
+            try await client.auth.signOut()
+        }
+        _ = try await client.auth.signInAnonymously()
+    }
+
     private static func performEnsureAnonymousSession() async throws {
         try Task.checkCancellation()
         let client = try LeafySupabase.shared.requireClient()
@@ -308,7 +318,7 @@ actor CommunityService {
         if resetCoverToDefault {
             coverPath = nil
         } else {
-            coverPath = (try? await uploadProfileCoverIfNeeded(cover, userID: existingProfile.id)) ?? existingProfile.coverPath
+            coverPath = try await uploadProfileCoverIfNeeded(cover, userID: existingProfile.id) ?? existingProfile.coverPath
         }
         let update = CommunityProfileUpdate(
             nickname: trimmedNickname,
@@ -459,6 +469,56 @@ actor CommunityService {
             throw CommunityServiceError.missingAuthenticatedUser
         }
 
+        return profile
+    }
+
+    func requestCommunityRecovery(email rawEmail: String) async throws {
+        let email = CommunityEmailBinding.normalizedEmail(rawEmail)
+        guard CommunityEmailBinding.isValidEmail(email) else {
+            throw CommunityServiceError.invalidEmail
+        }
+        let client = try LeafySupabase.shared.requireClient()
+        do {
+            try await client.auth.signInWithOTP(
+                email: email,
+                redirectTo: LeafySupabase.authCallbackURL,
+                shouldCreateUser: false
+            )
+        } catch {
+            throw mapEmailAuthError(error)
+        }
+    }
+
+    func verifyCommunityRecovery(email rawEmail: String, code: String) async throws -> CommunityProfile {
+        let email = CommunityEmailBinding.normalizedEmail(rawEmail)
+        guard CommunityEmailBinding.isValidEmail(email) else {
+            throw CommunityServiceError.invalidEmail
+        }
+        guard CommunityEmailBinding.isCompleteVerificationCode(code) else {
+            throw CommunityServiceError.edgeFunctionRejected("请输入邮件中的 8 位验证码。")
+        }
+
+        let client = try LeafySupabase.shared.requireClient()
+        do {
+            let response = try await client.auth.verifyOTP(
+                email: email,
+                token: code,
+                type: .magiclink,
+                redirectTo: LeafySupabase.authCallbackURL
+            )
+            guard response.session != nil else {
+                throw CommunityServiceError.missingAuthenticatedUser
+            }
+        } catch let error as CommunityServiceError {
+            throw error
+        } catch {
+            throw mapEmailAuthError(error)
+        }
+
+        guard let profile = try await fetchCurrentProfile() else {
+            try? await client.auth.signOut()
+            throw CommunityServiceError.edgeFunctionRejected("该邮箱没有可恢复的社区账号。")
+        }
         return profile
     }
 
@@ -765,6 +825,14 @@ actor CommunityService {
         guard images.count <= CommunityImageUpload.postImageLimit else {
             throw CommunityServiceError.imageLimitExceeded
         }
+        let title = input.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = input.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title.count <= 80 else {
+            throw CommunityServiceError.edgeFunctionRejected("标题需为 1–80 个字符。")
+        }
+        guard !body.isEmpty, body.count <= 10_000 else {
+            throw CommunityServiceError.edgeFunctionRejected("正文需为 1–10,000 个字符。")
+        }
 
         let client = try LeafySupabase.shared.requireClient()
         guard client.auth.currentUser != nil else {
@@ -775,30 +843,22 @@ actor CommunityService {
         try await enforcePostRateLimit(authorID: actorProfile.id, client: client)
 
         let postID = UUID()
-        let now = ISO8601DateFormatter().string(from: Date())
         let category = CommunityPostCategory.normalized(input.category)
-
-        let insert = CommunityPostInsert(
-            id: postID,
-            campusID: actorProfile.campusID,
-            authorID: actorProfile.id,
-            title: trimmedText(input.title) ?? "",
-            body: trimmedText(input.body) ?? "",
-            category: category,
-            isAnonymous: input.isAnonymous,
-            commentCount: 0,
-            status: images.isEmpty ? "published" : "pending_review",
-            createdAt: now,
-            updatedAt: now
-        )
 
         let createdRecord: CommunityPostRecord
         do {
             createdRecord = try await client
-                .from("posts")
-                .insert(insert)
-                .select()
-                .single()
+                .rpc(
+                    "create_community_post_v2",
+                    params: CommunityCreatePostRPCParams(
+                        id: postID,
+                        title: title,
+                        body: body,
+                        category: category,
+                        isAnonymous: input.isAnonymous,
+                        hasImages: !images.isEmpty
+                    )
+                )
                 .execute()
                 .value
         } catch {
@@ -1030,6 +1090,10 @@ actor CommunityService {
     }
 
     func createComment(postID: UUID, body: String) async throws -> CommunityComment {
+        let normalizedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedBody.isEmpty, normalizedBody.count <= 2_000 else {
+            throw CommunityServiceError.edgeFunctionRejected("评论需为 1–2,000 个字符。")
+        }
         let client = try LeafySupabase.shared.requireClient()
         guard client.auth.currentUser != nil else {
             throw CommunityServiceError.missingAuthenticatedUser
@@ -1037,25 +1101,18 @@ actor CommunityService {
         let actorProfile = try await requireCompletedCurrentProfile()
         try await requireAcceptedCurrentTerms()
 
-        let now = ISO8601DateFormatter().string(from: Date())
-        let insert = CommunityCommentInsert(
-            id: UUID(),
-            postID: postID,
-            authorID: actorProfile.id,
-            body: trimmedText(body) ?? "",
-            isAnonymous: false,
-            status: "published",
-            createdAt: now,
-            updatedAt: now
-        )
-
         let createdRecord: CommunityCommentRecord
         do {
             createdRecord = try await client
-                .from("comments")
-                .insert(insert)
-                .select()
-                .single()
+                .rpc(
+                    "create_community_comment_v1",
+                    params: CommunityCreateCommentRPCParams(
+                        id: UUID(),
+                        postID: postID,
+                        body: normalizedBody,
+                        isAnonymous: false
+                    )
+                )
                 .execute()
                 .value
         } catch {
@@ -2192,6 +2249,14 @@ actor CommunityService {
         reason: String,
         detail: String?
     ) async throws {
+        let normalizedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedDetail = detail?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedReason.isEmpty else {
+            throw CommunityServiceError.edgeFunctionRejected("请选择举报原因。")
+        }
+        guard (normalizedDetail?.count ?? 0) <= 1_000 else {
+            throw CommunityServiceError.edgeFunctionRejected("举报说明最多 1,000 个字符。")
+        }
         let client = try LeafySupabase.shared.requireClient()
         guard client.auth.currentUser != nil else {
             throw CommunityServiceError.missingAuthenticatedUser
@@ -2205,8 +2270,8 @@ actor CommunityService {
                     postID: postID,
                     commentID: commentID,
                     reportedUserID: reportedUserID,
-                    reason: reason,
-                    detail: detail
+                    reason: normalizedReason,
+                    detail: normalizedDetail
                 )
             )
             .execute()
@@ -2263,27 +2328,32 @@ actor CommunityService {
                     )
                 )
 
-            let imageInsert = CommunityPostImageInsert(
-                id: image.id,
-                postID: postID,
-                path: objectPath,
-                thumbnailPath: thumbnailPath,
-                sortOrder: index,
-                width: image.width,
-                height: image.height,
-                thumbnailWidth: thumbnailUpload.width,
-                thumbnailHeight: thumbnailUpload.height,
-                fullWidth: image.width,
-                fullHeight: image.height,
-                createdAt: ISO8601DateFormatter().string(from: Date())
-            )
-
             do {
+                let session = try await client.auth.session
+                client.functions.setAuth(token: session.accessToken)
+                let validation: CommunityUploadValidationResponse = try await client.functions.invoke(
+                    "community-validate-upload",
+                    options: FunctionInvokeOptions(
+                        headers: ["Authorization": "Bearer \(session.accessToken)"],
+                        body: CommunityUploadValidationRequest(
+                            postID: postID,
+                            fullPath: objectPath,
+                            thumbnailPath: thumbnailPath
+                        )
+                    )
+                )
                 _ = try await client
-                    .from("post_images")
-                    .insert(imageInsert)
+                    .rpc(
+                        "attach_community_post_image_v1",
+                        params: CommunityAttachPostImageRPCParams(
+                            receiptID: validation.receiptID,
+                            imageID: image.id,
+                            sortOrder: index
+                        )
+                    )
                     .execute()
             } catch {
+                _ = try? await client.storage.from(Self.storageBucket).remove(paths: [objectPath, thumbnailPath])
                 throw CommunityServiceError.edgeFunctionRejected("图片记录写入失败：\(error.localizedDescription)")
             }
         }
@@ -2291,13 +2361,11 @@ actor CommunityService {
 
     private func publishPostAfterImageUpload(postID: UUID) async throws {
         let client = try LeafySupabase.shared.requireClient()
-        let update = CommunityPostStatusUpdate(status: "published")
-
         _ = try await client
-            .from("posts")
-            .update(update)
-            .eq("id", value: postID.uuidString)
-            .eq("status", value: "pending_review")
+            .rpc(
+                "publish_community_post_v1",
+                params: CommunityPublishPostRPCParams(postID: postID)
+            )
             .execute()
     }
 
@@ -2331,6 +2399,13 @@ actor CommunityService {
                 )
             )
 
+        do {
+            try await validateProfileImageUpload(kind: "avatar", path: objectPath, client: client)
+        } catch {
+            _ = try? await client.storage.from(Self.storageBucket).remove(paths: [objectPath])
+            throw error
+        }
+
         return objectPath
     }
 
@@ -2354,7 +2429,33 @@ actor CommunityService {
                 )
             )
 
+        do {
+            try await validateProfileImageUpload(kind: "cover", path: objectPath, client: client)
+        } catch {
+            _ = try? await client.storage.from(Self.storageBucket).remove(paths: [objectPath])
+            throw error
+        }
+
         return objectPath
+    }
+
+    private func validateProfileImageUpload(
+        kind: String,
+        path: String,
+        client: SupabaseClient
+    ) async throws {
+        let session = try await client.auth.session
+        client.functions.setAuth(token: session.accessToken)
+        let response: CommunityProfileUploadValidationResponse = try await client.functions.invoke(
+            "community-validate-upload",
+            options: FunctionInvokeOptions(
+                headers: ["Authorization": "Bearer \(session.accessToken)"],
+                body: CommunityProfileUploadValidationRequest(kind: kind, objectPath: path)
+            )
+        )
+        guard response.validated else {
+            throw CommunityServiceError.edgeFunctionRejected("图片验证失败，请重新选择图片。")
+        }
     }
 
     private nonisolated func hydratePosts(
@@ -4006,36 +4107,22 @@ private nonisolated struct DishRatingInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostInsert: Encodable, Sendable {
+private nonisolated struct CommunityCreatePostRPCParams: Encodable, Sendable {
     let id: UUID
-    let campusID: String
-    let authorID: UUID
     let title: String
     let body: String
     let category: String?
     let isAnonymous: Bool
-    let commentCount: Int
-    let status: String
-    let createdAt: String
-    let updatedAt: String
+    let hasImages: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case campusID = "campus_id"
-        case authorID = "author_id"
-        case title
-        case body
-        case category
-        case isAnonymous = "is_anonymous"
-        case commentCount = "comment_count"
-        case status
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
+        case id = "p_id"
+        case title = "p_title"
+        case body = "p_body"
+        case category = "p_category"
+        case isAnonymous = "p_is_anonymous"
+        case hasImages = "p_has_images"
     }
-}
-
-private nonisolated struct CommunityPostStatusUpdate: Encodable, Sendable {
-    let status: String
 }
 
 private nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
@@ -4068,33 +4155,57 @@ private nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostImageInsert: Encodable, Sendable {
-    let id: UUID
+private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable {
     let postID: UUID
-    let path: String
+    let fullPath: String
     let thumbnailPath: String
-    let sortOrder: Int
-    let width: Int?
-    let height: Int?
-    let thumbnailWidth: Int?
-    let thumbnailHeight: Int?
-    let fullWidth: Int?
-    let fullHeight: Int?
-    let createdAt: String
 
     enum CodingKeys: String, CodingKey {
-        case id
         case postID = "post_id"
-        case path
+        case fullPath = "full_path"
         case thumbnailPath = "thumbnail_path"
-        case sortOrder = "sort_order"
-        case width
-        case height
-        case thumbnailWidth = "thumbnail_width"
-        case thumbnailHeight = "thumbnail_height"
-        case fullWidth = "full_width"
-        case fullHeight = "full_height"
-        case createdAt = "created_at"
+    }
+}
+
+private nonisolated struct CommunityProfileUploadValidationRequest: Encodable, Sendable {
+    let kind: String
+    let objectPath: String
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case objectPath = "object_path"
+    }
+}
+
+private nonisolated struct CommunityProfileUploadValidationResponse: Decodable, Sendable {
+    let validated: Bool
+}
+
+private nonisolated struct CommunityUploadValidationResponse: Decodable, Sendable {
+    let receiptID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case receiptID = "receipt_id"
+    }
+}
+
+private nonisolated struct CommunityAttachPostImageRPCParams: Encodable, Sendable {
+    let receiptID: UUID
+    let imageID: UUID
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case receiptID = "p_receipt_id"
+        case imageID = "p_image_id"
+        case sortOrder = "p_sort_order"
+    }
+}
+
+private nonisolated struct CommunityPublishPostRPCParams: Encodable, Sendable {
+    let postID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case postID = "p_post_id"
     }
 }
 
@@ -4120,24 +4231,16 @@ private nonisolated struct CommunityCommentRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityCommentInsert: Encodable, Sendable {
+private nonisolated struct CommunityCreateCommentRPCParams: Encodable, Sendable {
     let id: UUID
     let postID: UUID
-    let authorID: UUID
     let body: String
     let isAnonymous: Bool
-    let status: String
-    let createdAt: String
-    let updatedAt: String
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case postID = "post_id"
-        case authorID = "author_id"
-        case body
-        case isAnonymous = "is_anonymous"
-        case status
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
+        case id = "p_id"
+        case postID = "p_post_id"
+        case body = "p_body"
+        case isAnonymous = "p_is_anonymous"
     }
 }

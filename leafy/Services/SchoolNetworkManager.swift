@@ -78,7 +78,11 @@ final class SchoolNetworkManager: ObservableObject {
 
     var persistedCookieValues: [String: String] {
         didSet {
-            UserDefaults.standard.set(persistedCookieValues, forKey: storageKey("schoolSessionCookies"))
+            _ = SchoolSessionCredentialStore.save(
+                persistedCookieValues,
+                identity: CampusIdentityStore.currentIdentity(),
+                portal: currentPortal
+            )
         }
     }
 
@@ -143,9 +147,16 @@ final class SchoolNetworkManager: ObservableObject {
             keys: Self.scopedStorageKeys,
             migrationID: "schoolSession"
         )
+        let currentIdentity = CampusIdentityStore.currentIdentity()
+        let portal = SchoolPortal(rawValue: UserDefaults.standard.string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
         self.isLoggedIn = UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
-        self.persistedCookieValues = UserDefaults.standard.dictionary(forKey: CampusScopedDefaults.key("schoolSessionCookies")) as? [String: String] ?? [:]
-        self.currentPortal = SchoolPortal(rawValue: UserDefaults.standard.string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
+        self.persistedCookieValues = SchoolSessionCredentialStore.migrateLegacyCookiesIfNeeded(
+            defaults: .standard,
+            defaultsKey: CampusScopedDefaults.key("schoolSessionCookies"),
+            identity: currentIdentity,
+            portal: portal
+        )
+        self.currentPortal = portal
         self.lastLandingURLString = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("lastLandingURL"))
         self.authenticatedEduID = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedEduID"))
         self.authenticatedDisplayName = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedDisplayName"))

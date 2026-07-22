@@ -892,23 +892,26 @@ struct TimetableView: View {
                                     .frame(width: axisWidth, height: headerHeight)
                             },
                             header: {
-                                HStack(alignment: .top, spacing: metrics.weekSpacing) {
-                                    ForEach(1...totalWeeks, id: \.self) { week in
+                                ZStack(alignment: .topLeading) {
+                                    ForEach(renderedTimetableWeeks, id: \.self) { week in
                                         HStack(alignment: .top, spacing: metrics.daySpacing) {
                                             ForEach(gridSnapshot.visibleDays, id: \.self) { day in
                                                 dayHeader(metadata: dayMetadata(day: day, week: week))
                                                     .frame(width: metrics.dayColumnWidth, height: headerHeight)
                                             }
                                         }
+                                        .offset(x: CGFloat(week - 1) * metrics.weekStride)
+                                        .accessibilityHidden(week != currentWeek)
                                     }
                                 }
+                                .frame(width: timetableContentWidth(metrics: metrics), height: headerHeight, alignment: .topLeading)
                             },
                             axis: {
                                 timeAxis(metrics: metrics)
                             },
                             body: {
-                                HStack(alignment: .top, spacing: metrics.weekSpacing) {
-                                    ForEach(1...totalWeeks, id: \.self) { week in
+                                ZStack(alignment: .topLeading) {
+                                    ForEach(renderedTimetableWeeks, id: \.self) { week in
                                         HStack(alignment: .top, spacing: metrics.daySpacing) {
                                             ForEach(gridSnapshot.visibleDays, id: \.self) { day in
                                                 dayColumnBody(
@@ -921,9 +924,15 @@ struct TimetableView: View {
                                                 )
                                             }
                                         }
+                                        .offset(x: CGFloat(week - 1) * metrics.weekStride)
+                                        .accessibilityHidden(week != currentWeek)
                                     }
                                 }
-                                .frame(height: metrics.gridHeight, alignment: .topLeading)
+                                .frame(
+                                    width: timetableContentWidth(metrics: metrics),
+                                    height: metrics.gridHeight,
+                                    alignment: .topLeading
+                                )
                             }
                         )
                         .frame(width: metrics.containerWidth, height: metrics.containerHeight, alignment: .topLeading)
@@ -1038,20 +1047,17 @@ struct TimetableView: View {
         return ZStack(alignment: .topLeading) {
             timetableGridBackground(width: width, metrics: metrics)
 
-            ForEach((1...totalClasses).filter { !occupiedPeriods.contains($0) && !reminderPeriods.contains($0) }, id: \.self) { period in
-                let blockHeight = cellReminderHeight(metrics: metrics)
-                let blockWidth = max(width - metrics.cardInset * 2, 1)
-                let blockCenter = CGPoint(
-                    x: width * 0.5,
-                    y: yPosition(forClass: period, metrics: metrics) + metrics.rowHeight * 0.5
-                )
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    SpatialTapGesture().onEnded { value in
+                        guard let period = (1...totalClasses).first(where: { candidate in
+                            let minY = yPosition(forClass: candidate, metrics: metrics)
+                            return value.location.y >= minY && value.location.y <= minY + metrics.rowHeight
+                        }),
+                        !occupiedPeriods.contains(period),
+                        !reminderPeriods.contains(period) else { return }
 
-                RoundedRectangle(cornerRadius: AppRadius.small * 0.72, style: .continuous)
-                    .fill(Color.clear)
-                    .frame(width: blockWidth, height: blockHeight)
-                    .contentShape(RoundedRectangle(cornerRadius: AppRadius.small * 0.72, style: .continuous))
-                    .position(x: blockCenter.x, y: blockCenter.y)
-                    .onTapGesture {
                         selectedCellReminderContext = TimetableCellReminderContext(
                             week: week,
                             day: day,
@@ -1062,7 +1068,28 @@ struct TimetableView: View {
                             reminder: nil
                         )
                     }
-                    .accessibilityLabel("添加日程")
+                )
+                .accessibilityHidden(true)
+
+            if let accessiblePeriod = (1...totalClasses).first(where: {
+                !occupiedPeriods.contains($0) && !reminderPeriods.contains($0)
+            }) {
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement()
+                    .accessibilityLabel("\(metadata.dayTitle)添加日程")
+                    .accessibilityHint("添加第 \(accessiblePeriod) 节日程")
+                    .accessibilityAction {
+                        selectedCellReminderContext = TimetableCellReminderContext(
+                            week: week,
+                            day: day,
+                            period: accessiblePeriod,
+                            date: metadata.date,
+                            occupiedPeriods: occupiedPeriods,
+                            totalPeriods: totalClasses,
+                            reminder: nil
+                        )
+                    }
             }
 
             ForEach(reminders) { reminder in
@@ -1613,20 +1640,32 @@ struct TimetableView: View {
     }
 
     private func timetableGridBackground(width: CGFloat, metrics: TimetableLayoutMetrics) -> some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(1...totalClasses, id: \.self) { classIndex in
+        Canvas { context, _ in
+            for classIndex in 1...totalClasses {
                 let isBreakBoundary = classIndex == 5 || classIndex == 9
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(backgroundFillColor(for: classIndex))
-                    .frame(width: width, height: metrics.rowHeight)
-                    .opacity(isBreakBoundary ? 1 : 0.72)
-                    .position(
-                        x: width * 0.5,
-                        y: yPosition(forClass: classIndex, metrics: metrics) + metrics.rowHeight * 0.5
-                    )
+                let rect = CGRect(
+                    x: 0,
+                    y: yPosition(forClass: classIndex, metrics: metrics),
+                    width: width,
+                    height: metrics.rowHeight
+                )
+                context.opacity = isBreakBoundary ? 1 : 0.72
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: AppRadius.small),
+                    with: .color(backgroundFillColor(for: classIndex))
+                )
             }
         }
         .frame(width: width, height: metrics.gridHeight, alignment: .topLeading)
+        .accessibilityHidden(true)
+    }
+
+    private var renderedTimetableWeeks: ClosedRange<Int> {
+        max(1, currentWeek - 1)...min(totalWeeks, currentWeek + 1)
+    }
+
+    private func timetableContentWidth(metrics: TimetableLayoutMetrics) -> CGFloat {
+        max(CGFloat(totalWeeks) * metrics.weekStride - metrics.weekSpacing, 1)
     }
 
     private func backgroundFillColor(for classIndex: Int) -> Color {

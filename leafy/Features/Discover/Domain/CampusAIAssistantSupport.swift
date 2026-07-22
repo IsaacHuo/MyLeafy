@@ -666,13 +666,13 @@ nonisolated struct CampusAIContextSettings: Codable, Hashable {
 
     static let defaultValue = CampusAIContextSettings(
         includesTimetable: true,
-        includesGrades: true,
+        includesGrades: false,
         includesExamsAndPlans: true,
-        includesLearningWorkspace: true,
-        includesPostgraduateAndCareer: true,
-        includesHonorsFitnessQuality: true,
-        includesMedicalLedger: true,
-        includesCommunityCache: true
+        includesLearningWorkspace: false,
+        includesPostgraduateAndCareer: false,
+        includesHonorsFitnessQuality: false,
+        includesMedicalLedger: false,
+        includesCommunityCache: false
     )
 }
 
@@ -862,7 +862,8 @@ nonisolated enum CampusAISettingsStore {
     请用中文回答，默认简短直接，先给结论和下一步。可以围绕校园学习、生活安排和个人事项整理建议；信息不足时直接说缺什么，不要编造。
     """
 
-    private static let storageKey = "campusAI.userSettings.v4"
+    private static let storageKey = "campusAI.userSettings.v5"
+    private static let unsafeDefaultsStorageKey = "campusAI.userSettings.v4"
     private static let previousStorageKey = "campusAI.userSettings.v3"
     private static let olderStorageKey = "campusAI.userSettings.v2"
     private static let legacyStorageKey = "campusAI.userSettings.v1"
@@ -877,9 +878,21 @@ nonisolated enum CampusAISettingsStore {
             return normalized
         }
 
+        if let data = userDefaults.data(forKey: unsafeDefaultsStorageKey),
+           var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
+            // v4 defaulted every personal scope on. Reset once instead of
+            // guessing which scopes the user knowingly enabled.
+            settings.contextSettings = .defaultValue
+            let migrated = migrateDefaultPrompt(in: settings.normalizedForLocalRuntime)
+            save(migrated, userDefaults: userDefaults)
+            userDefaults.removeObject(forKey: unsafeDefaultsStorageKey)
+            return migrated
+        }
+
         if let data = userDefaults.data(forKey: previousStorageKey),
            var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
             settings.serviceMode = .leafyManaged
+            settings.contextSettings = .defaultValue
             let migrated = migrateDefaultPrompt(in: settings)
             save(migrated, userDefaults: userDefaults)
             userDefaults.removeObject(forKey: previousStorageKey)
@@ -890,6 +903,7 @@ nonisolated enum CampusAISettingsStore {
            var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
             settings.serviceMode = .leafyManaged
             settings.webSearchEnabled = true
+            settings.contextSettings = .defaultValue
             let migrated = migrateDefaultPrompt(in: settings)
             save(migrated, userDefaults: userDefaults)
             userDefaults.removeObject(forKey: olderStorageKey)
@@ -904,7 +918,7 @@ nonisolated enum CampusAISettingsStore {
         let migrated = migrateDefaultPrompt(in: CampusAIUserSettings(
             serviceMode: .leafyManaged,
             systemPrompt: legacySettings.systemPrompt ?? defaultSystemPrompt,
-            contextSettings: legacySettings.contextSettings ?? .defaultValue
+            contextSettings: .defaultValue
         ))
         save(migrated, userDefaults: userDefaults)
         userDefaults.removeObject(forKey: legacyStorageKey)
@@ -925,6 +939,7 @@ nonisolated enum CampusAISettingsStore {
 
     static func reset(userDefaults: UserDefaults = .standard) -> CampusAIUserSettings {
         userDefaults.removeObject(forKey: storageKey)
+        userDefaults.removeObject(forKey: unsafeDefaultsStorageKey)
         userDefaults.removeObject(forKey: previousStorageKey)
         userDefaults.removeObject(forKey: olderStorageKey)
         userDefaults.removeObject(forKey: legacyStorageKey)
@@ -4033,11 +4048,14 @@ nonisolated enum CampusAIServiceError: LocalizedError, Equatable {
 
 nonisolated enum CampusAIKeychainError: LocalizedError {
     case unexpectedStatus(OSStatus)
+    case missingCampusIdentity
 
     var errorDescription: String? {
         switch self {
         case .unexpectedStatus(let status):
             return "API Key 保存失败（\(status)）。"
+        case .missingCampusIdentity:
+            return "请先登录教务账号，再保存 API Key。"
         }
     }
 }
@@ -4049,7 +4067,16 @@ nonisolated enum CampusAIKeychainStore {
 
     static func load(providerID: CampusAIProviderID = CampusAIProviderCatalog.defaultProvider.id) -> String? {
         try? removeLegacyKeysIfNeeded()
-        return load(account: account(for: providerID))
+        guard let scopedAccount = account(for: providerID) else { return nil }
+        if let value = load(account: scopedAccount) {
+            return value
+        }
+
+        let legacyAccount = legacyAccount(for: providerID)
+        guard let legacyValue = load(account: legacyAccount) else { return nil }
+        try? saveData(Data(legacyValue.utf8), account: scopedAccount)
+        SecItemDelete(baseQuery(account: legacyAccount) as CFDictionary)
+        return legacyValue
     }
 
     static func save(
@@ -4061,30 +4088,16 @@ nonisolated enum CampusAIKeychainStore {
             try delete(providerID: providerID)
             return
         }
-
-        let data = Data(trimmed.utf8)
-        let updateStatus = SecItemUpdate(
-            baseQuery(account: account(for: providerID)) as CFDictionary,
-            [kSecValueData as String: data] as CFDictionary
-        )
-        if updateStatus == errSecSuccess {
-            return
+        guard let scopedAccount = account(for: providerID) else {
+            throw CampusAIKeychainError.missingCampusIdentity
         }
-        if updateStatus != errSecItemNotFound {
-            throw CampusAIKeychainError.unexpectedStatus(updateStatus)
-        }
-
-        var addQuery = baseQuery(account: account(for: providerID))
-        addQuery[kSecValueData as String] = data
-        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-        guard addStatus == errSecSuccess else {
-            throw CampusAIKeychainError.unexpectedStatus(addStatus)
-        }
+        try saveData(Data(trimmed.utf8), account: scopedAccount)
     }
 
     static func delete(providerID: CampusAIProviderID = CampusAIProviderCatalog.defaultProvider.id) throws {
         try removeLegacyKeysIfNeeded()
-        let status = SecItemDelete(baseQuery(account: account(for: providerID)) as CFDictionary)
+        guard let scopedAccount = account(for: providerID) else { return }
+        let status = SecItemDelete(baseQuery(account: scopedAccount) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw CampusAIKeychainError.unexpectedStatus(status)
         }
@@ -4138,15 +4151,39 @@ nonisolated enum CampusAIKeychainStore {
         return value.nonEmptyTrimmed
     }
 
-    private static func account(for providerID: CampusAIProviderID) -> String {
+    private static func account(for providerID: CampusAIProviderID) -> String? {
+        guard let scopeKey = CampusIdentityStore.currentIdentity()?.scopeKey else { return nil }
+        return "\(scopeKey):\(legacyAccount(for: providerID))"
+    }
+
+    private static func legacyAccount(for providerID: CampusAIProviderID) -> String {
         "\(providerID.rawValue)-api-key"
+    }
+
+    private static func saveData(_ data: Data, account: String) throws {
+        let updateStatus = SecItemUpdate(
+            baseQuery(account: account) as CFDictionary,
+            [kSecValueData as String: data] as CFDictionary
+        )
+        if updateStatus == errSecSuccess { return }
+        if updateStatus != errSecItemNotFound {
+            throw CampusAIKeychainError.unexpectedStatus(updateStatus)
+        }
+
+        var addQuery = baseQuery(account: account)
+        addQuery[kSecValueData as String] = data
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw CampusAIKeychainError.unexpectedStatus(addStatus)
+        }
     }
 
     private static func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account
+            kSecAttrAccount as String: account,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
     }
 }
@@ -5011,7 +5048,9 @@ nonisolated struct CampusAIService {
             message: request.message,
             campusID: request.context.campusID,
             campusName: request.context.campusName,
-            context: usePersonalContext ? request.context : nil,
+            // Direct BYOK requests receive only the bounded retrieval hits,
+            // never the complete local context snapshot.
+            context: nil,
             contextSettings: usePersonalContext ? request.contextSettings : nil,
             capabilities: request.capabilities,
             localRetrieval: usePersonalContext ? request.localRetrieval : nil,
@@ -5057,7 +5096,6 @@ nonisolated struct CampusAIService {
         let userContent = CampusAIActionPlannerUserContent(
             message: request.message,
             answer: answer,
-            context: request.context,
             contextSettings: request.contextSettings,
             capabilities: request.capabilities,
             localRetrieval: request.localRetrieval,
@@ -5428,7 +5466,6 @@ nonisolated private struct CampusAIProviderUserContent: Encodable {
 nonisolated private struct CampusAIActionPlannerUserContent: Encodable {
     let message: String
     let answer: String
-    let context: CampusAIContextPayload
     let contextSettings: CampusAIContextSettings
     let capabilities: CampusAICapabilitySet
     let localRetrieval: CampusAILocalRetrievalPayload
@@ -5441,7 +5478,6 @@ nonisolated private struct CampusAIActionPlannerUserContent: Encodable {
     enum CodingKeys: String, CodingKey {
         case message
         case answer
-        case context
         case contextSettings = "context_settings"
         case capabilities
         case localRetrieval = "local_retrieval"
@@ -5455,7 +5491,6 @@ nonisolated private struct CampusAIActionPlannerUserContent: Encodable {
     init(
         message: String,
         answer: String,
-        context: CampusAIContextPayload,
         contextSettings: CampusAIContextSettings,
         capabilities: CampusAICapabilitySet,
         localRetrieval: CampusAILocalRetrievalPayload,
@@ -5463,7 +5498,6 @@ nonisolated private struct CampusAIActionPlannerUserContent: Encodable {
     ) {
         self.message = message
         self.answer = answer
-        self.context = context
         self.contextSettings = contextSettings
         self.capabilities = capabilities
         self.localRetrieval = localRetrieval

@@ -5,6 +5,42 @@ import XCTest
 @testable import Leafy
 
 final class CampusAIAssistantTests: XCTestCase {
+    func testExternalSearchPrivacyGuardBlocksDirectIdentifiersAndPersonalSnippets() {
+        let personalResult = CampusAILocalKnowledgeResult(
+            id: "schedule-1",
+            domain: .schedule,
+            title: "我的高等数学补考安排",
+            summary: "周三下午三点在学研中心参加补考，请携带校园卡。",
+            sourceID: "schedule-1"
+        )
+
+        XCTAssertFalse(CampusAISearchPrivacyGuard.isSafe(
+            "student@example.com 成绩",
+            eduID: "2026123456",
+            localResults: [personalResult]
+        ))
+        XCTAssertFalse(CampusAISearchPrivacyGuard.isSafe(
+            "13800138000 失物招领",
+            eduID: "2026123456",
+            localResults: [personalResult]
+        ))
+        XCTAssertFalse(CampusAISearchPrivacyGuard.isSafe(
+            "查询学号 2026123456 的信息",
+            eduID: "2026123456",
+            localResults: [personalResult]
+        ))
+        XCTAssertFalse(CampusAISearchPrivacyGuard.isSafe(
+            "我的高等数学补考安排",
+            eduID: nil,
+            localResults: [personalResult]
+        ))
+        XCTAssertTrue(CampusAISearchPrivacyGuard.isSafe(
+            "北京林业大学补考管理办法",
+            eduID: "2026123456",
+            localResults: [personalResult]
+        ))
+    }
+
     func testResearchLimitsAreHardCeilingsAndSpreadsheetToolIsAvailable() {
         XCTAssertEqual(CampusAIResearchAgent.maximumTurns, 10)
         XCTAssertEqual(CampusAIResearchAgent.maximumSearches, 15)
@@ -405,7 +441,7 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertTrue(CampusAIWorkspaceSearch.artifacts(artifacts, query: "隐藏关键词").isEmpty)
     }
 
-    func testSettingsStoreDefaultsToAllContextScopesAndCustomPrompt() throws {
+    func testSettingsStoreDefaultsToMinimalContextScopesAndCustomPrompt() throws {
         let suiteName = "CampusAIAssistantTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -418,8 +454,11 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertEqual(initial.serviceMode, .leafyManaged)
         XCTAssertEqual(initial.systemPrompt, CampusAISettingsStore.defaultSystemPrompt)
         XCTAssertTrue(initial.contextSettings.includesTimetable)
-        XCTAssertTrue(initial.contextSettings.includesMedicalLedger)
-        XCTAssertTrue(initial.contextSettings.includesCommunityCache)
+        XCTAssertFalse(initial.contextSettings.includesGrades)
+        XCTAssertTrue(initial.contextSettings.includesExamsAndPlans)
+        XCTAssertFalse(initial.contextSettings.includesLearningWorkspace)
+        XCTAssertFalse(initial.contextSettings.includesMedicalLedger)
+        XCTAssertFalse(initial.contextSettings.includesCommunityCache)
         XCTAssertTrue(initial.webSearchEnabled)
 
         var changed = initial
@@ -537,7 +576,7 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertFalse(settings.contextSettings.includesMedicalLedger)
         XCTAssertTrue(settings.webSearchEnabled)
         XCTAssertNil(defaults.data(forKey: "campusAI.userSettings.v1"))
-        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v4"))
+        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v5"))
     }
 
     func testLegacyKeychainAccountsAreRemovedOnce() throws {
@@ -755,6 +794,7 @@ final class CampusAIAssistantTests: XCTestCase {
                     images: []
                 )
             ],
+            settings: allContextSettings,
             now: now
         )
 
@@ -850,6 +890,7 @@ final class CampusAIAssistantTests: XCTestCase {
             examScheduleLastSyncAt: syncDate,
             teachingPlanLastSyncAt: syncDate,
             trainingProgramLastSyncAt: syncDate,
+            settings: allContextSettings,
             now: now
         )
 
@@ -868,6 +909,7 @@ final class CampusAIAssistantTests: XCTestCase {
             teachingPlan: [],
             trainingProgram: nil,
             countdowns: [],
+            settings: allContextSettings,
             now: now
         )
         XCTAssertEqual(missingContext.sourceStatus.first { $0.scope == "全学期课表" }?.state, .missing)
@@ -985,7 +1027,7 @@ final class CampusAIAssistantTests: XCTestCase {
         let userContentData = Data(userContentText.utf8)
         let userContent = try XCTUnwrap(JSONSerialization.jsonObject(with: userContentData) as? [String: Any])
         XCTAssertEqual(userContent["message"] as? String, "明天上什么课？")
-        XCTAssertNotNil(userContent["context"])
+        XCTAssertNil(userContent["context"])
         XCTAssertNotNil(userContent["context_settings"])
         XCTAssertNotNil(userContent["capabilities"])
         XCTAssertNotNil(userContent["local_retrieval"])
@@ -1165,7 +1207,8 @@ final class CampusAIAssistantTests: XCTestCase {
             countdowns: [],
             learningTasks: [
                 LearningProjectTask(title: "整理论文提纲", note: "周五前完成")
-            ]
+            ],
+            settings: allContextSettings
         )
         let retrieval = CampusAILocalKnowledgeIndex.search(query: "导出学习任务资料包", context: context)
         let request = CampusAIRequest(
@@ -1389,6 +1432,7 @@ final class CampusAIAssistantTests: XCTestCase {
             learningTasks: [
                 LearningProjectTask(title: "刷树题", note: "每天 3 道，优先二叉树")
             ],
+            settings: allContextSettings,
             now: now
         )
 
@@ -1786,7 +1830,10 @@ final class CampusAIAssistantTests: XCTestCase {
             CampusAIMarkdownHTML.baseDocument,
             baseURL: CampusAIMarkdownHTML.rendererDirectory()
         )
-        await fulfillment(of: [loaded], timeout: 8)
+        // A cold WKWebView can take longer to bring up its isolated WebContent
+        // process on a freshly booted simulator. Keep this above the CI watchdog
+        // jitter while still failing promptly when navigation is genuinely stuck.
+        await fulfillment(of: [loaded], timeout: 20)
         if let error = navigationDelegate.error {
             throw error
         }
@@ -2210,7 +2257,8 @@ final class CampusAIAssistantTests: XCTestCase {
             countdowns: [],
             learningTasks: [
                 LearningProjectTask(title: "整理论文提纲", note: "周五前完成 <初稿>")
-            ]
+            ],
+            settings: allContextSettings
         )
         let request = CampusAIRequest(
             message: "请把学习任务整理成 HTML Markdown TXT 资料包",
@@ -2295,7 +2343,7 @@ final class CampusAIAssistantTests: XCTestCase {
         XCTAssertTrue(settings.webSearchEnabled)
         XCTAssertEqual(settings.systemPrompt, "保留这个偏好")
         XCTAssertNil(defaults.data(forKey: "campusAI.userSettings.v2"))
-        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v4"))
+        XCTAssertNotNil(defaults.data(forKey: "campusAI.userSettings.v5"))
     }
 
     func testCurrentSettingsPreserveDisabledWebResearch() throws {
@@ -2512,6 +2560,19 @@ final class CampusAIAssistantTests: XCTestCase {
             trainingProgram: nil,
             countdowns: [],
             now: SemesterConfig.startOfSemesterDate
+        )
+    }
+
+    private var allContextSettings: CampusAIContextSettings {
+        CampusAIContextSettings(
+            includesTimetable: true,
+            includesGrades: true,
+            includesExamsAndPlans: true,
+            includesLearningWorkspace: true,
+            includesPostgraduateAndCareer: true,
+            includesHonorsFitnessQuality: true,
+            includesMedicalLedger: true,
+            includesCommunityCache: true
         )
     }
 }

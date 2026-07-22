@@ -7,6 +7,7 @@ import {
   deepSeekAPIKeys,
   deepSeekPayload,
   drainDeepSeekSSEBuffer,
+  externalSearchQueryIsSafe,
   extractOfficialDocumentSourceFromHTML,
   handler,
   isSafePublicHTTPURL,
@@ -511,6 +512,25 @@ Deno.test("campus-ai-assistant allows dynamic search query rewrites", () => {
       "2026 年工学院保研政策",
     ) === "师生健康与学位论文",
     "deterministic code must not replace the Agent query based on semantic anchors",
+  );
+});
+
+Deno.test("campus-ai-assistant blocks personal data in external search queries", () => {
+  const body = {
+    local_retrieval: {
+      results: [{
+        domain: "schedule",
+        title: "我的高等数学补考安排",
+        summary: "周三下午三点在学研中心参加补考，请携带校园卡。",
+      }],
+    },
+  };
+  assert(!externalSearchQueryIsSafe("student@example.com 成绩", body), "email must be blocked");
+  assert(!externalSearchQueryIsSafe("13800138000 失物招领", body), "phone number must be blocked");
+  assert(!externalSearchQueryIsSafe("我的高等数学补考安排", body), "personal title must be blocked");
+  assert(
+    externalSearchQueryIsSafe("北京林业大学补考管理办法", body),
+    "public policy queries should remain available",
   );
 });
 

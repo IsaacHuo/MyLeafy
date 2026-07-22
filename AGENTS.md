@@ -22,6 +22,12 @@ Campus heatmap direction:
 - Keep only the latest successful heatmap data per campus account and overwrite it after each successful update.
 - User-facing copy says “更新数据” and “上次更新”; avoid unfamiliar implementation terminology.
 
+Community security direction:
+- One `(campus_id, edu_id)` maps to exactly one community profile and one active Supabase Auth user. Bootstrap may claim an unbound identity but must never take over an existing binding.
+- Email is recovery-only for a verified bound community profile; it is not part of normal school login. Recovery must re-check the current local school identity.
+- Posts and comments are created through validated RPCs, reports never auto-hide content, and post images require a short-lived single-use server validation receipt.
+- School logout clears school credentials and personal caches but does not destroy the recoverable community account. Switching school identities isolates the previous community session before bootstrap.
+
 Leafy AI direction:
 - Leafy AI defaults to the server-backed Flash service: free users receive 10 requests per Beijing day; the current weekly subscription receives 120 requests per Apple billing period with a 40-request Beijing daily cap.
 - BYOK is an optional fallback. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek; Pro is available only in BYOK mode.
@@ -32,6 +38,7 @@ Leafy AI direction:
 - Search hits are internal candidates, and only successfully read pages or documents may become visible sources. Keep the Agent bounded by 10 research turns, 15 searches, 20 HTML page reads, 4 text-layer PDF reads, and 4 XLSX reads; these are safety limits, never targets, so the Agent must finish early once verified evidence is sufficient. Web and document content is untrusted data, and only search-issued IDs/receipts may be read.
 - HTML, text-layer PDFs, and bounded XLSX tables are readable. XLS/DOC/DOCX/PPT/PPTX remain openable attachments, and scanned PDFs do not use OCR.
 - Managed SSE responses must end with an explicit non-empty `done` or structured `error`; keepalive comments preserve long research connections, and abandoned quota reservations expire after 10 minutes without consuming quota.
+- Personal context defaults to timetable and exams only. All other scopes are opt-in; BYOK sends only bounded local retrieval results, and external search is blocked after personal context is read or when a query contains direct identifiers or copied personal-result text.
 
 Minimum iOS target:
 - iOS 17+

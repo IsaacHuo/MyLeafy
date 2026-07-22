@@ -4,7 +4,7 @@ import SwiftSoup
 extension SchoolNetworkManager {
     var allowsDebugSnapshots: Bool {
         #if DEBUG
-        return true
+        return UserDefaults.standard.bool(forKey: "leafy.debug.allowSchoolSnapshots")
         #else
         return false
         #endif
@@ -239,6 +239,7 @@ extension SchoolNetworkManager {
         clearAuthenticatedIdentity()
         CampusIdentityStore.clear()
         ReviewDemoMode.disable()
+        clearDebugSnapshots()
     }
 
     func cancelInFlightRequests() {
@@ -250,8 +251,10 @@ extension SchoolNetworkManager {
     func cookieDebugSummary(for url: URL?) -> String {
         #if DEBUG
         guard let url else { return "cookies: unavailable" }
-        let header = cookieHeaderValue(for: url)
-        return header.isEmpty ? "cookies: none" : "cookies: \(header)"
+        let names = Set(persistedCookieValues.keys)
+            .union(HTTPCookieStorage.shared.cookies(for: url)?.map(\.name) ?? [])
+            .sorted()
+        return names.isEmpty ? "cookies: none" : "cookie names: \(names.joined(separator: ", "))"
         #else
         return "cookies: redacted"
         #endif
@@ -281,11 +284,43 @@ extension SchoolNetworkManager {
         guard let directory = debugDirectory() else { return nil }
         let url = directory.appendingPathComponent(filename)
         do {
-            try html.write(to: url, atomically: true, encoding: .utf8)
+            try redactedDebugSnapshot(html).write(to: url, atomically: true, encoding: .utf8)
             return url
         } catch {
             print("[SchoolNetworkManager] Failed to persist debug HTML:", error.localizedDescription)
             return nil
+        }
+    }
+
+    func clearDebugSnapshots() {
+        let manager = FileManager.default
+        if let caches = manager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? manager.removeItem(at: caches.appendingPathComponent("leafy-debug", isDirectory: true))
+        }
+    }
+
+    private func redactedDebugSnapshot(_ raw: String) -> String {
+        let text: String
+        if let document = try? SwiftSoup.parse(raw) {
+            _ = try? document.select("script,style,form,input,textarea,select,option").remove()
+            let title = (try? document.title()) ?? ""
+            let body = (try? document.body()?.text()) ?? ""
+            text = "title: \(title)\nbody: \(body)"
+        } else {
+            text = raw
+        }
+
+        let bounded = String(text.prefix(2_000))
+        let patterns = [
+            #"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}"#,
+            #"(?<!\d)\d{6,}(?!\d)"#
+        ]
+        return patterns.reduce(bounded) { value, pattern in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                return value
+            }
+            let range = NSRange(value.startIndex..., in: value)
+            return regex.stringByReplacingMatches(in: value, range: range, withTemplate: "[REDACTED]")
         }
     }
 
@@ -307,11 +342,9 @@ extension SchoolNetworkManager {
         let urlPart = responseURL?.absoluteString ?? "unknown"
 
         #if DEBUG
-        let savedURL = persistDebugHTML(html, filename: snapshotName)
-        let filePart = savedURL?.lastPathComponent ?? snapshotName
         let textPart = bodyText.isEmpty ? "" : L10n.text("，正文前缀：%@", bodyText)
         let cookiePart = responseURL.map { L10n.text("，%@", cookieDebugSummary(for: $0)) } ?? ""
-        return L10n.text("URL: %@，标题: %@，调试文件: %@%@%@", urlPart, title, filePart, textPart, cookiePart)
+        return L10n.text("URL: %@，标题: %@%@%@", urlPart, title, textPart, cookiePart)
         #else
         return L10n.text("页面返回异常，URL: %@，标题: %@。请确认校园网连接，或重新登录后重试。", urlPart, title)
         #endif

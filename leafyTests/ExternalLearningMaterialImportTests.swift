@@ -36,6 +36,30 @@ final class ExternalLearningMaterialImportTests: XCTestCase {
         XCTAssertThrowsError(try store.loadManifest(id: batchID))
     }
 
+    func testExternalImportRejectsMoreThanTenFilesBeforeStaging() {
+        let root = temporaryDirectory()
+        let store = ExternalLearningMaterialImportStore(rootDirectory: root)
+        let urls = (0..<11).map { root.appendingPathComponent("\($0).pdf") }
+
+        XCTAssertThrowsError(try store.makeBatch(from: urls, source: .openIn)) { error in
+            XCTAssertEqual(error as? ExternalLearningMaterialImportError, .tooManyFiles)
+        }
+    }
+
+    func testExternalImportRejectsFileLargerThanTwentyFiveMiB() throws {
+        let root = temporaryDirectory()
+        let store = ExternalLearningMaterialImportStore(rootDirectory: root)
+        let sourceURL = root.appendingPathComponent("large.pdf")
+        XCTAssertTrue(FileManager.default.createFile(atPath: sourceURL.path, contents: nil))
+        let handle = try FileHandle(forWritingTo: sourceURL)
+        try handle.truncate(atOffset: UInt64(ExternalLearningMaterialImport.maximumFileBytes + 1))
+        try handle.close()
+
+        XCTAssertThrowsError(try store.makeBatch(from: [sourceURL], source: .openIn)) { error in
+            XCTAssertEqual(error as? ExternalLearningMaterialImportError, .fileTooLarge("large.pdf"))
+        }
+    }
+
     @MainActor
     func testCoordinatorImportsBatchToFixedAndProjectDestinations() throws {
         let root = temporaryDirectory()

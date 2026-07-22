@@ -129,6 +129,20 @@ final class CommunitySessionManager: ObservableObject {
         }
 
         do {
+            let expectedScopeKey = CampusIdentityStore.currentIdentity()?.scopeKey
+            if let expectedScopeKey,
+               let storedScopeKey = CommunityIdentityDeviceStore.loadScopeKey(),
+               storedScopeKey != expectedScopeKey,
+               currentAuthUserID != nil {
+                try await CommunityTimeout.run(
+                    seconds: 12,
+                    message: Self.bootstrapTimeoutMessage
+                ) { [service] in
+                    try await service.replaceAnonymousSession()
+                }
+                profile = nil
+            }
+
             try await CommunityTimeout.run(
                 seconds: 12,
                 message: Self.bootstrapTimeoutMessage
@@ -173,6 +187,9 @@ final class CommunitySessionManager: ObservableObject {
 
             self.profile = profile
             self.bootstrapError = nil
+            if let scopeKey = CampusIdentityStore.currentIdentity()?.scopeKey {
+                _ = CommunityIdentityDeviceStore.saveScopeKey(scopeKey)
+            }
             CommunityDiagnostics.log.info("Community bootstrap finished for profile \(profile.id.uuidString, privacy: .public)")
         } catch {
             self.bootstrapError = error.localizedDescription
@@ -195,6 +212,12 @@ final class CommunitySessionManager: ObservableObject {
             try? await client.auth.signOut()
         }
 
+        profile = nil
+        bootstrapError = nil
+    }
+
+    func detachFromSchoolSession() {
+        cancelInFlightWork()
         profile = nil
         bootstrapError = nil
     }
@@ -237,6 +260,24 @@ final class CommunitySessionManager: ObservableObject {
 
     func verifyEmailBinding(email: String, code: String) async throws {
         try await verifyEmailBinding(input: CommunityEmailVerificationInput(email: email, code: code))
+    }
+
+    func requestRecovery(email: String) async throws {
+        try await service.requestCommunityRecovery(email: email)
+    }
+
+    func verifyRecovery(email: String, code: String) async throws {
+        let recoveredProfile = try await service.verifyCommunityRecovery(email: email, code: code)
+        let identity = CampusIdentityStore.currentIdentity()
+        guard let identity,
+              recoveredProfile.eduID == identity.eduID,
+              recoveredProfile.campusID == (identity.isCustom ? "general" : identity.campusID.rawValue) else {
+            await signOut()
+            throw CommunityServiceError.edgeFunctionRejected("邮箱对应的社区账号与当前教务身份不一致。")
+        }
+        profile = recoveredProfile
+        bootstrapError = nil
+        _ = CommunityIdentityDeviceStore.saveScopeKey(identity.scopeKey)
     }
 
     @discardableResult

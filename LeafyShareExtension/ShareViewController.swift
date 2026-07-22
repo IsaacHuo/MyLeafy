@@ -51,6 +51,9 @@ final class ShareViewController: UIViewController {
             guard !providers.isEmpty else {
                 throw ExternalLearningMaterialImportError.emptyBatch
             }
+            guard providers.count <= ExternalLearningMaterialImport.maximumItemCount else {
+                throw ExternalLearningMaterialImportError.tooManyFiles
+            }
 
             let store = try ExternalLearningMaterialImportStore.appGroupStore()
             let batchID = UUID()
@@ -60,6 +63,10 @@ final class ShareViewController: UIViewController {
             for provider in providers {
                 if let item = try await stageProvider(provider, store: store, batchID: batchID) {
                     items.append(item)
+                    guard items.reduce(Int64(0), { $0 + $1.byteCount }) <= ExternalLearningMaterialImport.maximumBatchBytes else {
+                        try? store.removeBatch(batchID)
+                        throw ExternalLearningMaterialImportError.batchTooLarge
+                    }
                 }
             }
 
@@ -165,6 +172,11 @@ final class ShareViewController: UIViewController {
                 }
                 guard let data else {
                     continuation.resume(returning: nil)
+                    return
+                }
+
+                guard UTType(typeIdentifier)?.conforms(to: .image) == true else {
+                    continuation.resume(throwing: ExternalLearningMaterialImportError.unsupportedFile(suggestedName ?? "学习资料"))
                     return
                 }
 

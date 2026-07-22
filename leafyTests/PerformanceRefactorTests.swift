@@ -958,7 +958,7 @@ final class PerformanceRefactorTests: XCTestCase {
         let reminderDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "cellReminder:\(reminder.cellKey)" })
         XCTAssertEqual(reminderDraft.title, "预习植物分类")
         XCTAssertEqual(reminderDraft.location, "图书馆二层")
-        XCTAssertTrue(reminderDraft.notes.contains("类型：课表日程"))
+        XCTAssertTrue(reminderDraft.notes.contains("类型：日程"))
         XCTAssertTrue(reminderDraft.notes.contains("地点：图书馆二层"))
         XCTAssertTrue(reminderDraft.notes.contains("节次：第 3-4 节"))
         XCTAssertTrue(reminderDraft.notes.contains("备注：带笔记本"))

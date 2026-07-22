@@ -59,140 +59,29 @@ Deno.serve(async (request) => {
     const isBJFU = requestedCampusID === "bjfu";
     const campusID = isBJFU ? "bjfu" : "general";
     const displayName = normalizeText(body.display_name) ?? eduID;
-    const now = new Date().toISOString();
 
-    const { data: existingProfileByEduID, error: eduProfileError } = await adminClient
-      .from("profiles")
-      .select("*")
-      .eq("campus_id", campusID)
-      .eq("edu_id", eduID)
-      .maybeSingle();
+    const { data: claim, error: claimError } = await adminClient.rpc(
+      "edge_claim_community_identity",
+      {
+        p_auth_user_id: user.id,
+        p_campus_id: campusID,
+        p_edu_id: eduID,
+        p_display_name: displayName,
+      },
+    );
 
-    if (eduProfileError) {
-      return json({ error: eduProfileError.message }, 500);
-    }
-
-    const { data: currentProfile, error: currentProfileError } = await adminClient
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (currentProfileError) {
-      return json({ error: currentProfileError.message }, 500);
-    }
-
-    const { data: currentLink, error: currentLinkError } = await adminClient
-      .from("profile_auth_links")
-      .select("*")
-      .eq("auth_user_id", user.id)
-      .maybeSingle();
-
-    if (currentLinkError) {
-      return json({ error: currentLinkError.message }, 500);
-    }
-
-    const allowsGenericCommunityBootstrap = !isBJFU && currentLink?.edu_id === eduID && currentLink.campus_id !== "bjfu";
-    if (
-      currentLink &&
-      (currentLink.edu_id !== eduID || currentLink.campus_id !== campusID) &&
-      !allowsGenericCommunityBootstrap &&
-      (!existingProfileByEduID || existingProfileByEduID.id !== currentLink.profile_id)
-    ) {
-      return json({ error: "当前社区会话已绑定其他学号，请退出后重新登录。" }, 409);
-    }
-
-    if (
-      !currentLink &&
-      currentProfile &&
-      (currentProfile.edu_id !== eduID || currentProfile.campus_id !== campusID) &&
-      !(!isBJFU && currentProfile.edu_id === eduID && currentProfile.campus_id !== "bjfu") &&
-      (!existingProfileByEduID || existingProfileByEduID.id !== currentProfile.id)
-    ) {
-      return json({ error: "当前社区会话已绑定其他学号，请退出后重新登录。" }, 409);
-    }
-
-    const sourceProfile = existingProfileByEduID ?? currentProfile ?? null;
-    const preservedStatus = normalizeText(sourceProfile?.community_access_status);
-    const preservedCommunityCampusID = normalizeText(sourceProfile?.community_campus_id);
-    const shouldKeepApprovedCommunity = !isBJFU && preservedStatus === "approved" && preservedCommunityCampusID;
-    const communityPayload = isBJFU
-      ? {
-        campus_id: "bjfu",
-        community_campus_id: "bjfu",
-        community_access_status: "approved",
-        community_school_name: "北京林业大学",
-        community_rejection_reason: null,
+    if (claimError) {
+      const code = communityIdentityErrorCode(claimError.message);
+      if (code) {
+        return json({ error: communityIdentityErrorMessage(code), code }, 409);
       }
-      : {
-        campus_id: shouldKeepApprovedCommunity ? preservedCommunityCampusID : "general",
-        community_campus_id: shouldKeepApprovedCommunity ? preservedCommunityCampusID : null,
-        community_access_status: preservedStatus === "pending" || preservedStatus === "rejected" || preservedStatus === "approved"
-          ? preservedStatus
-          : "general",
-        community_school_name: sourceProfile?.community_school_name ?? null,
-        community_rejection_reason: preservedStatus === "rejected" ? sourceProfile?.community_rejection_reason ?? null : null,
-      };
-
-    const profilePayload = {
-      ...communityPayload,
-      edu_id: eduID,
-      display_name: displayName,
-      updated_at: now,
-    };
-    const isNewUser = !existingProfileByEduID && !currentProfile;
-    let targetProfileID = currentLink?.profile_id ?? existingProfileByEduID?.id ?? currentProfile?.id ?? user.id;
-
-    if (existingProfileByEduID) {
-      targetProfileID = existingProfileByEduID.id;
-      const { error: updateProfileError } = await adminClient
-        .from("profiles")
-        .update(profilePayload)
-        .eq("id", targetProfileID);
-
-      if (updateProfileError) {
-        return json({ error: updateProfileError.message }, 500);
-      }
-    } else {
-      const { error: upsertError } = await adminClient
-        .from("profiles")
-        .upsert({
-          ...profilePayload,
-          id: targetProfileID,
-          nickname: currentProfile?.nickname ?? "",
-          avatar_path: currentProfile?.avatar_path ?? null,
-          cover_path: currentProfile?.cover_path ?? null,
-          major: currentProfile?.major ?? null,
-          grade: currentProfile?.grade ?? null,
-          bound_email: currentProfile?.bound_email ?? null,
-          pending_bound_email: currentProfile?.pending_bound_email ?? null,
-          email_verification_sent_at: currentProfile?.email_verification_sent_at ?? null,
-          profile_edited_at: currentProfile?.profile_edited_at ?? null,
-          is_profile_complete: currentProfile?.is_profile_complete ?? false,
-          created_at: currentProfile?.created_at ?? now,
-        }, {
-          onConflict: "id",
-        });
-
-      if (upsertError) {
-        return json({ error: upsertError.message }, 500);
-      }
+      console.error("community-bootstrap-user: identity claim failed", claimError.code ?? "unknown");
+      return json({ error: "社区身份绑定失败，请稍后重试。", code: "COMMUNITY_IDENTITY_CLAIM_FAILED" }, 500);
     }
 
-    const { error: linkError } = await adminClient
-      .from("profile_auth_links")
-      .upsert({
-        auth_user_id: user.id,
-        profile_id: targetProfileID,
-        campus_id: profilePayload.campus_id,
-        edu_id: eduID,
-        last_seen_at: now,
-      }, {
-        onConflict: "auth_user_id",
-      });
-
-    if (linkError) {
-      return json({ error: linkError.message }, 500);
+    const targetProfileID = normalizeText(claim?.profile_id);
+    if (!targetProfileID) {
+      return json({ error: "Community identity claim returned no profile.", code: "COMMUNITY_IDENTITY_CLAIM_FAILED" }, 500);
     }
 
     const { data: profile, error: profileError } = await adminClient
@@ -211,7 +100,7 @@ Deno.serve(async (request) => {
 
     return json({
       profile,
-      is_new_user: isNewUser,
+      is_new_user: claim?.is_new_user === true,
       is_profile_complete: profile.is_profile_complete,
     });
   } catch (error) {
@@ -236,6 +125,27 @@ function normalizeText(value: string | null | undefined): string | null {
 function normalizeCampusID(value: string | null | undefined): string {
   const normalized = normalizeText(value)?.toLowerCase() ?? "bjfu";
   return normalized.length > 0 ? normalized : "bjfu";
+}
+
+function communityIdentityErrorCode(message: string): string | null {
+  const codes = [
+    "COMMUNITY_AUTH_IDENTITY_MISMATCH",
+    "COMMUNITY_ACCOUNT_RECOVERY_REQUIRED",
+    "COMMUNITY_AUTH_SESSION_REQUIRED",
+    "COMMUNITY_EDU_ID_REQUIRED",
+  ];
+  return codes.find((code) => message.includes(code)) ?? null;
+}
+
+function communityIdentityErrorMessage(code: string): string {
+  switch (code) {
+    case "COMMUNITY_ACCOUNT_RECOVERY_REQUIRED":
+      return "该教务身份已绑定社区账号，请使用已验证邮箱恢复。";
+    case "COMMUNITY_AUTH_IDENTITY_MISMATCH":
+      return "当前社区会话已绑定其他教务身份，请先切换账号。";
+    default:
+      return "登录身份无效，请重新登录后再试。";
+  }
 }
 
 function json(payload: unknown, status = 200) {
