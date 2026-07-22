@@ -186,15 +186,15 @@ jobs:
       - name: Select an available iPhone simulator
         shell: bash
         run: |
-          destination=$(xcodebuild -showdestinations -project leafy.xcodeproj -scheme leafy \
-            | sed -n 's/.*platform:iOS Simulator, arch:[^,]*, id:\([^,]*\), OS:\([^,]*\), name:iPhone[^}]*/platform=iOS Simulator,id=\1/p' \
+          device_id=$(xcodebuild -showdestinations -project leafy.xcodeproj -scheme leafy \
+            | sed -n 's/.*platform:iOS Simulator, arch:[^,]*, id:\([^,]*\), OS:[^,]*, name:iPhone[^}]*}.*/\1/p' \
             | head -n 1)
-          if [[ -z "${destination}" ]]; then
+          if [[ -z "${device_id}" ]]; then
             echo 'No available iPhone Simulator destination was found.'
             xcodebuild -showdestinations -project leafy.xcodeproj -scheme leafy
             exit 1
           fi
-          device_id="${destination##*=}"
+          destination="platform=iOS Simulator,id=${device_id}"
           device_state=$(xcrun simctl list devices --json \
             | jq -r --arg device_id "${device_id}" '.devices[][] | select(.udid == $device_id) | .state')
           case "${device_state}" in
