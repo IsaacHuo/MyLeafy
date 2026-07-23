@@ -15,6 +15,7 @@ import {
   managedSingleAgentInitialPayload,
   managedSingleAgentTools,
   normalizeAgentToolCalls,
+  normalizePersonalContextScopes,
   officialDocumentDeliverable,
   officialDocumentFreshness,
   officialDocumentTrustScore,
@@ -25,7 +26,9 @@ import {
   parseManagedAgentDecision,
   processDeepSeekSSEBlock,
   redactProviderError,
+  resolvePersonalContextRequest,
   safeAgentSearchQuery,
+  sanitizedPersonalContext,
   shouldGenerateArtifact,
   shouldRunManagedAgent,
   streamResponse,
@@ -400,9 +403,116 @@ Deno.test("campus-ai-assistant search tools do not require focus terms", () => {
     };
     if (fn.name !== "official_search" && fn.name !== "web_search") continue;
     assert(fn.parameters.required.includes("query"), "expected query");
-    assert(!fn.parameters.required.includes("focus_terms"), "focus terms must not be required");
-    assert(!("focus_terms" in fn.parameters.properties), "focus terms should not gate search");
+    assert(
+      !fn.parameters.required.includes("focus_terms"),
+      "focus terms must not be required",
+    );
+    assert(
+      !("focus_terms" in fn.parameters.properties),
+      "focus terms should not gate search",
+    );
   }
+});
+
+Deno.test("campus-ai-assistant personal context tool declares seven scopes", () => {
+  const tool = managedSingleAgentTools().find((item) =>
+    item.function.name === "request_personal_context"
+  );
+  assert(tool, "expected personal context tool");
+  const parameters = tool.function.parameters as {
+    required: string[];
+    properties: Record<string, { items?: { enum?: string[] } }>;
+  };
+  const values = parameters.properties.scopes?.items?.enum ?? [];
+  assert(
+    JSON.stringify(parameters.required) === JSON.stringify(["scopes"]),
+    "expected scopes to be required",
+  );
+  assert(values.length === 7, "expected seven personal context scopes");
+  assert(values.includes("grades"), "expected grades scope");
+  assert(!values.includes("community"), "community scope must be removed");
+  assert(
+    !("domains" in parameters.properties),
+    "new schema must not expose legacy domains",
+  );
+});
+
+Deno.test("campus-ai-assistant resolves grades aliases and availability states", () => {
+  const result = {
+    id: "grade-1",
+    domain: "academics",
+    title: "高等数学：92",
+    summary: "4 学分",
+    source_id: "grade.course.0",
+  };
+  for (const alias of ["grades", "academics", "成绩"]) {
+    const available = resolvePersonalContextRequest({
+      context_settings: { includesGrades: true },
+      local_retrieval: { results: [result] },
+    }, [alias]);
+    assert(
+      available.status === "available",
+      `expected ${alias} to resolve grades`,
+    );
+    assert(
+      available.results.length === 1,
+      `expected ${alias} to return grade result`,
+    );
+  }
+
+  const disabled = resolvePersonalContextRequest({
+    context_settings: { includesGrades: false },
+    local_retrieval: { results: [result] },
+  }, ["grades"]);
+  assert(
+    disabled.status === "disabled",
+    "disabled grades must not be returned",
+  );
+  assert(disabled.results.length === 0, "disabled grades must not leak data");
+
+  const noData = resolvePersonalContextRequest({
+    context_settings: { includesGrades: true },
+    local_retrieval: { results: [] },
+  }, ["成绩"]);
+  assert(noData.status === "no_data", "enabled empty grades should be no_data");
+});
+
+Deno.test("campus-ai-assistant rejects and strips legacy community context", () => {
+  const normalized = normalizePersonalContextScopes(["community"]);
+  assert(
+    normalized.scopes.length === 0,
+    "community must not normalize to a supported scope",
+  );
+  assert(
+    normalized.requestedUnsupportedCommunity,
+    "community should report unsupported",
+  );
+
+  const sanitized = sanitizedPersonalContext({
+    campusID: "bjfu",
+    communityCache: { posts: [{ title: "不应发送" }] },
+  });
+  assert(!("communityCache" in sanitized), "community cache must be stripped");
+
+  const payload = deepSeekPayload({
+    context: {
+      campusID: "bjfu",
+      communityCache: { posts: [{ title: "不应发送" }] },
+    },
+    context_settings: { includesGrades: true },
+    local_retrieval: {
+      results: [{
+        domain: "community",
+        title: "不应发送",
+        source_id: "community.post.0",
+      }],
+    },
+  }, "测试社区过滤") as Record<string, unknown>;
+  const messages = payload.messages as Array<Record<string, unknown>>;
+  assert(
+    !String(messages[1].content).includes("不应发送"),
+    "legacy community content must not reach the model",
+  );
 });
 
 Deno.test("campus-ai-assistant stream wrapper emits keepalive and one terminal", async () => {
@@ -439,7 +549,8 @@ Deno.test("campus-ai-assistant stream wrapper structures producer failures", asy
 Deno.test("campus-ai-assistant rejects candidates when every page read fails", async () => {
   const originalFetch = globalThis.fetch;
   try {
-    globalThis.fetch = () => Promise.resolve(new Response("failed", { status: 503 }));
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("failed", { status: 503 }));
     let threw = false;
     try {
       await verifiedWebSearchResults(
@@ -525,9 +636,18 @@ Deno.test("campus-ai-assistant blocks personal data in external search queries",
       }],
     },
   };
-  assert(!externalSearchQueryIsSafe("student@example.com 成绩", body), "email must be blocked");
-  assert(!externalSearchQueryIsSafe("13800138000 失物招领", body), "phone number must be blocked");
-  assert(!externalSearchQueryIsSafe("我的高等数学补考安排", body), "personal title must be blocked");
+  assert(
+    !externalSearchQueryIsSafe("student@example.com 成绩", body),
+    "email must be blocked",
+  );
+  assert(
+    !externalSearchQueryIsSafe("13800138000 失物招领", body),
+    "phone number must be blocked",
+  );
+  assert(
+    !externalSearchQueryIsSafe("我的高等数学补考安排", body),
+    "personal title must be blocked",
+  );
   assert(
     externalSearchQueryIsSafe("北京林业大学补考管理办法", body),
     "public policy queries should remain available",
@@ -910,8 +1030,14 @@ Deno.test("campus-ai-assistant parses and validates action planner output", () =
 
 Deno.test("campus-ai-assistant action prompt rejects informational exam queries", () => {
   const prompt = actionPlannerSystemPrompt(false);
-  assert(prompt.includes("考试时间安排是什么"), "expected informational-query guard");
-  assert(prompt.includes("不得生成动作"), "expected explicit operation requirement");
+  assert(
+    prompt.includes("考试时间安排是什么"),
+    "expected informational-query guard",
+  );
+  assert(
+    prompt.includes("不得生成动作"),
+    "expected explicit operation requirement",
+  );
 });
 
 Deno.test("campus-ai-assistant accepts incomplete unified schedule drafts", () => {
