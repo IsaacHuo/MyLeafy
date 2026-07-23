@@ -283,6 +283,10 @@ private struct ScheduleReportCustomEditor: View {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && fireDate > Date()
     }
 
+    private var editorTitle: String {
+        setting.isConfigured ? "编辑自定义提醒" : "添加自定义提醒"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -307,14 +311,16 @@ private struct ScheduleReportCustomEditor: View {
                     Text("自定义提醒只发送一次。正文留空时将使用默认提示。")
                 }
             }
-            .navigationTitle(setting.isConfigured ? "编辑自定义提醒" : "添加自定义提醒")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
+                ToolbarItem(placement: .principal) {
+                    Text(editorTitle)
+                        .font(.headline)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存并开启") {
+                    Button("保存") {
                         onSave(
                             ScheduleReportCustomSetting(
                                 isEnabled: true,
@@ -326,6 +332,7 @@ private struct ScheduleReportCustomEditor: View {
                         dismiss()
                     }
                     .disabled(!canSave)
+                    .accessibilityHint("保存并开启这条自定义提醒")
                 }
             }
         }
