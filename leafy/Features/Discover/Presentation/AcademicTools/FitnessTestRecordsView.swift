@@ -10,6 +10,47 @@ import UIKit
 import AppKit
 #endif
 
+struct FitnessTestShareSnapshot: Equatable {
+    struct Group: Identifiable, Equatable {
+        let item: FitnessTestItem
+        let records: [Record]
+
+        var id: String { item.rawValue }
+    }
+
+    struct Record: Identifiable, Equatable {
+        let id: UUID
+        let testedAt: Date
+        let displayValue: String
+        let note: String
+    }
+
+    let recordCount: Int
+    let latestTestDate: Date?
+    let groups: [Group]
+
+    init(records: [FitnessTestRecord]) {
+        let sortedRecords = FitnessTestRecordFormatter.sortedRecords(records)
+        recordCount = sortedRecords.count
+        latestTestDate = sortedRecords.first?.testedAt
+        groups = FitnessTestItem.allCases.compactMap { item in
+            let itemRecords = sortedRecords
+                .filter { $0.item == item }
+                .map {
+                    Record(
+                        id: $0.id,
+                        testedAt: $0.testedAt,
+                        displayValue: $0.displayValue,
+                        note: $0.note.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
+            return itemRecords.isEmpty ? nil : Group(item: item, records: itemRecords)
+        }
+    }
+
+    var itemCount: Int { groups.count }
+}
+
 struct FitnessTestRecordsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyLanguage) private var leafyLanguage
@@ -20,6 +61,7 @@ struct FitnessTestRecordsView: View {
     @State private var showingEditor = false
     @State private var editingRecord: FitnessTestRecord?
     @State private var operationAlert: LeafyOperationAlert?
+    @State private var sharePreviewImage: UIImage?
 
     private var sortedRecords: [FitnessTestRecord] {
         FitnessTestRecordFormatter.sortedRecords(records)
@@ -86,11 +128,12 @@ struct FitnessTestRecordsView: View {
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
                 Button {
-                    showingEditor = true
+                    generateSharePreview()
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: "square.and.arrow.up")
                 }
-                .accessibilityLabel(L10n.text("添加记录", language: leafyLanguage))
+                .disabled(records.isEmpty)
+                .accessibilityLabel(L10n.text("分享全部体测记录", language: leafyLanguage))
             }
         }
         .sheet(isPresented: $showingEditor) {
@@ -101,6 +144,14 @@ struct FitnessTestRecordsView: View {
         .sheet(item: $editingRecord) { record in
             FitnessTestRecordEditorView(record: record) { draft in
                 update(record, with: draft)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { sharePreviewImage != nil },
+            set: { if !$0 { sharePreviewImage = nil } }
+        )) {
+            if let sharePreviewImage {
+                FitnessTestSharePreviewSheet(image: sharePreviewImage)
             }
         }
         .leafyOperationAlert($operationAlert)
@@ -199,6 +250,38 @@ struct FitnessTestRecordsView: View {
             operationAlert = .failure(error.localizedDescription)
         }
     }
+
+    @MainActor
+    private func generateSharePreview() {
+        let snapshot = FitnessTestShareSnapshot(records: records)
+        guard snapshot.recordCount > 0 else { return }
+
+        let content = FitnessTestShareCard(snapshot: snapshot)
+            .frame(width: 390)
+            .padding(18)
+            .background(
+                LinearGradient(
+                    colors: [
+                        AppTheme.background,
+                        AppTheme.accentSoft.opacity(0.42),
+                        AppTheme.background
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = LeafyImageCodec.displayScale
+
+        guard let image = renderer.leafyPlatformImage else {
+            operationAlert = .failure(
+                L10n.text("分享图片生成失败，请稍后重试。", language: leafyLanguage)
+            )
+            return
+        }
+        sharePreviewImage = image
+    }
 }
 
 private struct FitnessTestSummaryCard: View {
@@ -248,6 +331,151 @@ private struct FitnessTestSummaryMetric: View {
     }
 }
 
+private struct FitnessTestShareCard: View {
+    let snapshot: FitnessTestShareSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "figure.strengthtraining.traditional")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentEmphasis)
+                    .frame(width: 48, height: 48)
+                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("体测记录")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(AppTheme.primaryText)
+                    Text("全部本地记录")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+
+            HStack(spacing: 10) {
+                summaryMetric(title: "记录数", value: "\(snapshot.recordCount)")
+                summaryMetric(title: "项目数", value: "\(snapshot.itemCount)")
+                summaryMetric(title: "最近测试", value: latestTestText)
+            }
+
+            ForEach(snapshot.groups) { group in
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text(group.item.rawValue)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(AppTheme.primaryText)
+                        Spacer()
+                        Text("\(group.records.count) 条")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .padding(.bottom, 10)
+
+                    ForEach(Array(group.records.enumerated()), id: \.element.id) { index, record in
+                        if index > 0 {
+                            Divider()
+                                .overlay(AppTheme.separator)
+                        }
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text(record.displayValue)
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(AppTheme.accentEmphasis)
+                                Spacer()
+                                Text(DateFormatters.header.string(from: record.testedAt))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(AppTheme.secondaryText)
+                            }
+
+                            if !record.note.isEmpty {
+                                Text(record.note)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppTheme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, 9)
+                    }
+                }
+                .padding(14)
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                )
+            }
+
+            Text("记录仅保存在当前设备 · 由 Leafy 生成")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AppTheme.tertiaryText)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var latestTestText: String {
+        snapshot.latestTestDate.map { DateFormatters.chineseDay.string(from: $0) } ?? "暂无"
+    }
+
+    private func summaryMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 10))
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppTheme.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(11)
+        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+    }
+}
+
+private struct FitnessTestSharePreviewSheet: View {
+    let image: UIImage
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isSharing = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: AppSpacing.card) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.10), radius: 18, x: 0, y: 10)
+
+                    Text("点击右上角分享，可发送到聊天、动态或保存到相册。")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(AppSpacing.page)
+            }
+            .background(LeafyPageBackground())
+            .navigationTitle("分享预览")
+            .leafyInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .leafyLeading) {
+                    Button("关闭") { dismiss() }
+                }
+                ToolbarItem(placement: .leafyTrailing) {
+                    Button("分享") { isSharing = true }
+                        .fontWeight(.semibold)
+                }
+            }
+            .sheet(isPresented: $isSharing) {
+                ShareSheet(activityItems: [image])
+            }
+        }
+    }
+}
+
 private struct FitnessTestRecordRow: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
 
@@ -282,7 +510,7 @@ private struct FitnessTestRecordRow: View {
 
             Spacer(minLength: AppSpacing.micro)
 
-            VStack(spacing: AppSpacing.micro) {
+            HStack(spacing: AppSpacing.micro) {
                 Button(action: editAction) {
                     Image(systemName: "pencil")
                         .font(.system(size: 14, weight: .semibold))
