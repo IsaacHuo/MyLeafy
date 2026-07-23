@@ -8,6 +8,15 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
     case examDigest
     case countdownDigest
     case calendarDigest
+    case custom
+
+    static let builtInCases: [ScheduleReportMode] = [
+        .morningReport,
+        .eveningReport,
+        .examDigest,
+        .countdownDigest,
+        .calendarDigest
+    ]
 
     var id: String { rawValue }
 
@@ -18,6 +27,7 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
         case .examDigest: return "考试提醒"
         case .countdownDigest: return "重要日期提醒"
         case .calendarDigest: return "校历节点"
+        case .custom: return "自定义提醒"
         }
     }
 
@@ -33,6 +43,8 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
             return "提前 5 天、3 天、1 天提醒"
         case .calendarDigest:
             return "今天或明天有校历、节气、假期节点时提醒"
+        case .custom:
+            return "在任意未来时间提醒你自己设置的事项"
         }
     }
 
@@ -43,6 +55,7 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
         case .examDigest: return "pencil.and.list.clipboard"
         case .countdownDigest: return "timer"
         case .calendarDigest: return "calendar.badge.exclamationmark"
+        case .custom: return "bell.and.waves.left.and.right"
         }
     }
 
@@ -53,6 +66,7 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
         case .examDigest: return 20
         case .countdownDigest: return 20
         case .calendarDigest: return 8
+        case .custom: return 9
         }
     }
 
@@ -61,6 +75,7 @@ enum ScheduleReportMode: String, CaseIterable, Codable, Identifiable, Hashable {
         case .morningReport: return 30
         case .eveningReport: return 30
         case .examDigest, .countdownDigest, .calendarDigest: return 0
+        case .custom: return 0
         }
     }
 }
@@ -81,19 +96,91 @@ struct ScheduleReportModeSetting: Codable, Hashable {
     }
 }
 
+struct ScheduleReportCustomSetting: Codable, Hashable, Identifiable {
+    static let defaultBody = "你设置的提醒时间到了。"
+
+    var id: String { "custom" }
+    var isEnabled: Bool
+    var title: String
+    var body: String
+    var fireDate: Date?
+
+    init(
+        isEnabled: Bool = false,
+        title: String = "",
+        body: String = "",
+        fireDate: Date? = nil
+    ) {
+        self.isEnabled = isEnabled
+        self.title = title
+        self.body = body
+        self.fireDate = fireDate
+    }
+
+    var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var resolvedBody: String {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? Self.defaultBody : trimmed
+    }
+
+    var isConfigured: Bool {
+        !trimmedTitle.isEmpty && fireDate != nil
+    }
+}
+
 struct ScheduleReportSettings: Codable, Hashable {
     var isEnabled: Bool
     var modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
+    var customReminder: ScheduleReportCustomSetting
     var scheduledNotificationIDs: [String]
 
     init(
         isEnabled: Bool = false,
         modeSettings: [ScheduleReportMode: ScheduleReportModeSetting] = [:],
+        customReminder: ScheduleReportCustomSetting = ScheduleReportCustomSetting(),
         scheduledNotificationIDs: [String] = []
     ) {
         self.isEnabled = isEnabled
         self.modeSettings = Self.normalizedModeSettings(modeSettings)
+        self.customReminder = customReminder
         self.scheduledNotificationIDs = scheduledNotificationIDs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case modeSettings
+        case customReminder
+        case scheduledNotificationIDs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            isEnabled: try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false,
+            modeSettings: try container.decodeIfPresent(
+                [ScheduleReportMode: ScheduleReportModeSetting].self,
+                forKey: .modeSettings
+            ) ?? [:],
+            customReminder: try container.decodeIfPresent(
+                ScheduleReportCustomSetting.self,
+                forKey: .customReminder
+            ) ?? ScheduleReportCustomSetting(),
+            scheduledNotificationIDs: try container.decodeIfPresent(
+                [String].self,
+                forKey: .scheduledNotificationIDs
+            ) ?? []
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(modeSettings, forKey: .modeSettings)
+        try container.encode(customReminder, forKey: .customReminder)
+        try container.encode(scheduledNotificationIDs, forKey: .scheduledNotificationIDs)
     }
 
     static let disabled = ScheduleReportSettings()
@@ -111,18 +198,23 @@ struct ScheduleReportSettings: Codable, Hashable {
     }
 
     var enabledModes: [ScheduleReportMode] {
-        return ScheduleReportMode.allCases.filter { setting(for: $0).isEnabled }
+        ScheduleReportMode.builtInCases.filter { setting(for: $0).isEnabled }
     }
 
-    mutating func deriveEnabledState() {
-        isEnabled = !enabledModes.isEmpty
+    mutating func deriveEnabledState(now: Date = Date()) {
+        if customReminder.isEnabled,
+           let fireDate = customReminder.fireDate,
+           fireDate <= now {
+            customReminder.isEnabled = false
+        }
+        isEnabled = !enabledModes.isEmpty || customReminder.isEnabled
     }
 
     private static func normalizedModeSettings(
         _ modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
     ) -> [ScheduleReportMode: ScheduleReportModeSetting] {
         Dictionary(
-            uniqueKeysWithValues: ScheduleReportMode.allCases.map { mode in
+            uniqueKeysWithValues: ScheduleReportMode.builtInCases.map { mode in
                 let setting = modeSettings[mode] ?? ScheduleReportModeSetting(mode: mode)
                 return (
                     mode,
@@ -149,6 +241,7 @@ enum ScheduleReportSettingsStore {
         var normalized = ScheduleReportSettings(
             isEnabled: settings.isEnabled,
             modeSettings: settings.modeSettings,
+            customReminder: settings.customReminder,
             scheduledNotificationIDs: settings.scheduledNotificationIDs
         )
         normalized.deriveEnabledState()
@@ -213,21 +306,26 @@ enum ScheduleReportPlanner {
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [ScheduleReportNotificationDraft] {
-        guard settings.isEnabled else { return [] }
+        var normalizedSettings = settings
+        normalizedSettings.deriveEnabledState(now: now)
+        guard normalizedSettings.isEnabled else { return [] }
 
         let today = calendar.startOfDay(for: now)
-        let modes = settings.enabledModes
-        return modes.flatMap { mode in
+        let modes = normalizedSettings.enabledModes
+        var scheduledDrafts = modes.flatMap { mode in
             drafts(
                 mode: mode,
-                setting: settings.setting(for: mode),
+                setting: normalizedSettings.setting(for: mode),
                 input: input,
                 now: now,
                 startDay: today,
                 calendar: calendar
             )
         }
-        .sorted { lhs, rhs in
+        if let customDraft = customDraft(normalizedSettings.customReminder, now: now, calendar: calendar) {
+            scheduledDrafts.append(customDraft)
+        }
+        return scheduledDrafts.sorted { lhs, rhs in
             if lhs.fireDate != rhs.fireDate { return lhs.fireDate < rhs.fireDate }
             return lhs.id < rhs.id
         }
@@ -254,6 +352,8 @@ enum ScheduleReportPlanner {
         case .calendarDigest:
             return calendarDigestSummary(from: referenceDate, calendar: calendar)
                 ?? "今天和明天暂无校历节点。"
+        case .custom:
+            return "你设置的自定义提醒。"
         }
     }
 
@@ -325,7 +425,30 @@ enum ScheduleReportPlanner {
                 body: calendarDigestSummary(from: now, calendar: calendar),
                 calendar: calendar
             )
+        case .custom:
+            return []
         }
+    }
+
+    private static func customDraft(
+        _ setting: ScheduleReportCustomSetting,
+        now: Date,
+        calendar: Calendar
+    ) -> ScheduleReportNotificationDraft? {
+        guard setting.isEnabled,
+              !setting.trimmedTitle.isEmpty,
+              let fireDate = setting.fireDate,
+              fireDate > now
+        else {
+            return nil
+        }
+        return draft(
+            mode: .custom,
+            fireDate: fireDate,
+            title: setting.trimmedTitle,
+            body: setting.resolvedBody,
+            calendar: calendar
+        )
     }
 
     private static func singleDraftIfNeeded(
@@ -635,10 +758,11 @@ enum ScheduleReportNotificationManager {
         now: Date = Date()
     ) async throws -> ScheduleReportSettings {
         var updatedSettings = settings
+        updatedSettings.deriveEnabledState(now: now)
         updatedSettings.scheduledNotificationIDs = []
 
-        let drafts = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now)
-        guard settings.isEnabled, !drafts.isEmpty else {
+        let drafts = ScheduleReportPlanner.drafts(settings: updatedSettings, input: input, now: now)
+        guard updatedSettings.isEnabled, !drafts.isEmpty else {
             cancelScheduledNotifications(settings: settings)
             return updatedSettings
         }
