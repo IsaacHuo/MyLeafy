@@ -530,10 +530,10 @@ private struct PostgraduateTimelineRow: View {
                     .padding(.leading, 44)
                     .padding(.trailing, 2)
                     .padding(.bottom, 14)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: isExpanded)
+        .animation(.easeInOut(duration: 0.22), value: isExpanded)
     }
 
     private var timelineHeader: some View {
