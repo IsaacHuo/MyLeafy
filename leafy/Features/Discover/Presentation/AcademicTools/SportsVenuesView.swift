@@ -294,6 +294,16 @@ private enum SportsVenueData {
                     ]
                 ),
                 SportsVenue(
+                    id: "west-trackside-equipment",
+                    title: "场边器械",
+                    location: "西区操场周边",
+                    tags: ["户外器械", "操场周边", "分散设置"],
+                    details: [
+                        SportsVenueDetail(title: "器械", value: "单杠、扩胸器等户外健身器械"),
+                        SportsVenueDetail(title: "分布", value: "沿操场周边分散设置")
+                    ]
+                ),
+                SportsVenue(
                     id: "stadium-table-tennis",
                     title: "看台乒乓球场",
                     location: "田径场看台地下",
