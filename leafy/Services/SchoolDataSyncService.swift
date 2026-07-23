@@ -205,7 +205,7 @@ enum SchoolDataSyncService {
             refreshedScopes.insert(.gradeSupplemental)
         }
         if let examScheduleToSave {
-            SchoolDataCache.saveExamSchedule(examScheduleToSave, notifies: false)
+            SchoolDataCache.saveRemoteExamSchedule(examScheduleToSave, notifies: false)
             refreshedScopes.insert(.exams)
         }
         if let teachingPlanToSave {

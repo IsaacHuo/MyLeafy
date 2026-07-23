@@ -21,6 +21,24 @@ struct ExamArrangement: Identifiable, Codable, Hashable {
         guard let startsAt else { return false }
         return startsAt <= Date()
     }
+
+    var isCompleted: Bool {
+        isCompleted(at: Date())
+    }
+
+    func isCompleted(at date: Date) -> Bool {
+        guard let completionDate = endsAt ?? startsAt else { return false }
+        return completionDate <= date
+    }
+
+    fileprivate var cacheIdentity: String {
+        [courseID, name, self.date, start]
+            .map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            }
+            .joined(separator: "|")
+    }
 }
 
 struct TeachingPlanSection: Identifiable, Codable, Hashable {
@@ -664,6 +682,7 @@ struct TimetableExamProjection: Identifiable, Hashable {
     let examID: Int
     let name: String
     let startsAt: Date
+    let endsAt: Date
     let startText: String
     let location: String
     let week: Int
@@ -672,6 +691,14 @@ struct TimetableExamProjection: Identifiable, Hashable {
 
     var id: String {
         "\(examID)-\(week)-\(dayOfWeek)-\(period)"
+    }
+
+    var isCompleted: Bool {
+        isCompleted(at: Date())
+    }
+
+    func isCompleted(at date: Date) -> Bool {
+        endsAt <= date
     }
 }
 
@@ -696,6 +723,7 @@ extension ExamArrangement {
             examID: id,
             name: name,
             startsAt: startsAt,
+            endsAt: endsAt ?? startsAt,
             startText: start,
             location: location,
             week: schedule.week,
@@ -866,6 +894,44 @@ struct CalendarAsset: Identifiable, Hashable {
     let url: URL
 }
 
+enum SchoolExamScheduleMerger {
+    static func merge(
+        remote: [ExamArrangement],
+        cached: [ExamArrangement],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [ExamArrangement] {
+        var examsByIdentity: [String: ExamArrangement] = [:]
+        for exam in remote {
+            examsByIdentity[exam.cacheIdentity] = exam
+        }
+
+        let semesterStart = calendar.startOfDay(for: SemesterConfig.startOfSemesterDate)
+        let semesterEnd = calendar.date(
+            byAdding: .day,
+            value: SemesterConfig.supportedWeeks * 7,
+            to: semesterStart
+        ) ?? semesterStart
+
+        for exam in cached {
+            guard examsByIdentity[exam.cacheIdentity] == nil,
+                  exam.isCompleted(at: now),
+                  let startsAt = exam.startsAt,
+                  startsAt >= semesterStart,
+                  startsAt < semesterEnd
+            else { continue }
+            examsByIdentity[exam.cacheIdentity] = exam
+        }
+
+        return examsByIdentity.values.sorted { lhs, rhs in
+            let leftDate = lhs.startsAt ?? .distantFuture
+            let rightDate = rhs.startsAt ?? .distantFuture
+            if leftDate != rightDate { return leftDate < rightDate }
+            return lhs.cacheIdentity < rhs.cacheIdentity
+        }
+    }
+}
+
 enum SchoolDataCache {
     private static let examScheduleKey = "schoolCache.examSchedule"
     private static let teachingPlanKey = "schoolCache.teachingPlan"
@@ -894,6 +960,21 @@ enum SchoolDataCache {
             NotificationCenter.default.post(name: .schoolExamScheduleDidChange, object: nil)
             SchoolDataRefreshNotifier.post(.exams)
         }
+    }
+
+    @discardableResult
+    static func saveRemoteExamSchedule(
+        _ exams: [ExamArrangement],
+        now: Date = Date(),
+        notifies: Bool = true
+    ) -> [ExamArrangement] {
+        let merged = SchoolExamScheduleMerger.merge(
+            remote: exams,
+            cached: loadExamSchedule(),
+            now: now
+        )
+        saveExamSchedule(merged, notifies: notifies)
+        return merged
     }
 
     static func loadTeachingPlan() -> [TeachingPlanSection] {

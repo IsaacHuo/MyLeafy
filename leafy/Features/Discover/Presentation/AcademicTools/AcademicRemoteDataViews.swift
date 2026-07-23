@@ -201,10 +201,8 @@ struct ExamScheduleView: View {
         do {
             let html = try await networkManager.fetchExamSchedule()
             let parsed = try HTMLParser.parseExams(html: html)
-                .sorted { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
             await MainActor.run {
-                exams = parsed
-                SchoolDataCache.saveExamSchedule(parsed)
+                exams = SchoolDataCache.saveRemoteExamSchedule(parsed)
             }
         } catch {
             await MainActor.run {
@@ -276,7 +274,7 @@ private struct ExamArrangementCard: View {
 
                     Spacer(minLength: AppSpacing.micro)
 
-                    Text(exam.isStarted ? "已开始" : "待开始")
+                    Text(statusText)
                         .font(.system(size: 13 * leafyControlScale, weight: .semibold))
                         .foregroundStyle(statusTint)
                         .padding(.horizontal, 12 * leafyControlScale)
@@ -301,7 +299,15 @@ private struct ExamArrangementCard: View {
     }
 
     private var statusTint: Color {
-        exam.isStarted ? AppTheme.secondaryText : AppTheme.accent(for: themeColorPreference)
+        exam.isCompleted || exam.isStarted
+            ? AppTheme.secondaryText
+            : AppTheme.accent(for: themeColorPreference)
+    }
+
+    private var statusText: String {
+        if exam.isCompleted { return "已考完" }
+        if exam.isStarted { return "进行中" }
+        return "待开始"
     }
 }
 

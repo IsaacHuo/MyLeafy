@@ -473,7 +473,7 @@ struct TimetableExamBlockView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.small * 0.68, style: .continuous))
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 2, y: 1)
-        .accessibilityLabel(L10n.text("考试 %@", language: AppLanguagePreference.current, projection.name))
+        .accessibilityLabel(accessibilityText)
     }
 
     private var titleFontSize: CGFloat {
@@ -485,9 +485,21 @@ struct TimetableExamBlockView: View {
     }
 
     private var detailText: String {
-        projection.location.isEmpty
+        let scheduleText = projection.location.isEmpty
             ? projection.startText
             : "\(projection.startText) \(projection.location)"
+        return projection.isCompleted ? "已考完 · \(scheduleText)" : scheduleText
+    }
+
+    private var accessibilityText: String {
+        [
+            "考试 \(projection.name)",
+            projection.isCompleted ? "已考完" : nil,
+            projection.startText,
+            projection.location.isEmpty ? nil : projection.location
+        ]
+        .compactMap { $0 }
+        .joined(separator: "，")
     }
 }
 

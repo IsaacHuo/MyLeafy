@@ -74,6 +74,51 @@ final class SchoolDataRefreshTests: XCTestCase {
         XCTAssertEqual(SchoolDataCache.lastSyncDate(for: .gradeDetails), Date(timeIntervalSince1970: 42))
     }
 
+    func testRemoteExamMergeRetainsOnlyMissingCompletedCurrentSemesterExams() throws {
+        let semesterStart = Calendar.current.startOfDay(for: SemesterConfig.startOfSemesterDate)
+        let now = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10, to: semesterStart))
+        let completedMissing = exam(id: 1, courseID: "OLD", name: "已结束考试", dayOffset: 5)
+        let futureMissing = exam(id: 2, courseID: "FUTURE", name: "未来考试", dayOffset: 15)
+        let previousSemester = exam(id: 3, courseID: "PREVIOUS", name: "上学期考试", dayOffset: -2)
+        let cachedDuplicate = exam(
+            id: 4,
+            courseID: "REMOTE",
+            name: "远端考试",
+            dayOffset: 6,
+            location: "旧地点"
+        )
+        let remoteReplacement = exam(
+            id: 40,
+            courseID: "REMOTE",
+            name: "远端考试",
+            dayOffset: 6,
+            location: "新地点"
+        )
+        let remoteFuture = exam(id: 5, courseID: "NEW", name: "新增考试", dayOffset: 18)
+
+        let merged = SchoolExamScheduleMerger.merge(
+            remote: [remoteReplacement, remoteFuture],
+            cached: [completedMissing, futureMissing, previousSemester, cachedDuplicate],
+            now: now
+        )
+
+        XCTAssertEqual(Set(merged.map(\.courseID)), ["OLD", "REMOTE", "NEW"])
+        XCTAssertEqual(merged.first { $0.courseID == "REMOTE" }?.id, 40)
+        XCTAssertEqual(merged.first { $0.courseID == "REMOTE" }?.location, "新地点")
+        XCTAssertFalse(merged.contains { $0.courseID == "FUTURE" })
+        XCTAssertFalse(merged.contains { $0.courseID == "PREVIOUS" })
+    }
+
+    func testExamProjectionCarriesCompletionTime() throws {
+        let exam = exam(id: 9, courseID: "DONE", name: "结课考试", dayOffset: 2)
+        let projection = try XCTUnwrap(exam.timetableProjection)
+        let afterExam = try XCTUnwrap(Calendar.current.date(byAdding: .hour, value: 1, to: projection.endsAt))
+
+        XCTAssertEqual(projection.endsAt, exam.endsAt)
+        XCTAssertTrue(projection.isCompleted(at: afterExam))
+        XCTAssertFalse(projection.isCompleted(at: projection.startsAt))
+    }
+
     @MainActor
     func testLiveTimetableRepositoryResolvesActiveCampusContextManager() {
         activateTemporaryIdentity()
@@ -126,6 +171,29 @@ final class SchoolDataRefreshTests: XCTestCase {
             start: "08:00",
             end: "10:00",
             location: "二教 101"
+        )
+    }
+
+    private func exam(
+        id: Int,
+        courseID: String,
+        name: String,
+        dayOffset: Int,
+        location: String = "二教 101"
+    ) -> ExamArrangement {
+        let date = Calendar.current.date(
+            byAdding: .day,
+            value: dayOffset,
+            to: SemesterConfig.startOfSemesterDate
+        ) ?? SemesterConfig.startOfSemesterDate
+        return ExamArrangement(
+            id: id,
+            courseID: courseID,
+            name: name,
+            date: DateFormatters.queryDate.string(from: date),
+            start: "08:00",
+            end: "10:00",
+            location: location
         )
     }
 

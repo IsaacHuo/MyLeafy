@@ -1368,6 +1368,12 @@ struct TimetableView: View {
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            [item.title, item.detail, item.periodText, item.timeText]
+                .filter { !$0.isEmpty }
+                .joined(separator: "，")
+        )
     }
 
     private func isTodayCourseAgendaItem(_ item: TimetableAgendaItem) -> Bool {

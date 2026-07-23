@@ -460,14 +460,17 @@ struct TimetableAgendaItem: Identifiable {
     }
 
     static func exam(_ projection: TimetableExamProjection, week: Int, day: Int, date: Date) -> TimetableAgendaItem {
-        TimetableAgendaItem(
+        let scheduleDetail = projection.location.isEmpty
+            ? projection.startText
+            : "\(projection.startText) \(projection.location)"
+        return TimetableAgendaItem(
             id: "exam-\(projection.id)",
             week: week,
             day: day,
             date: date,
             sortPeriod: projection.period,
             title: projection.name,
-            detail: projection.location.isEmpty ? projection.startText : "\(projection.startText) \(projection.location)",
+            detail: projection.isCompleted ? "已考完 · \(scheduleDetail)" : scheduleDetail,
             periodText: "\(projection.period)",
             timeText: projection.startText,
             systemImage: "exclamationmark.triangle.fill",
