@@ -56,6 +56,13 @@ describe("admin data provider campus scope", () => {
     expect(mockedAction).toHaveBeenCalledWith("listFeedback", expect.objectContaining({ start: "2026-07-01", end: "2026-07-13" }));
   });
 
+  it("loads moderation report evidence through the dedicated detail action", async () => {
+    saveCampusScope("campus-a");
+    mockedAction.mockResolvedValue({ data: { report: { id: "report-1" }, evidence: {} }, meta: {} });
+    await dataProvider.getOne("reports", { id: "report-1" });
+    expect(mockedAction).toHaveBeenCalledWith("getModerationReport", { id: "report-1", campusID: "campus-a" });
+  });
+
   it("requires an explicit campus before creating catalog records", async () => {
     saveCampusScope("all");
     await expect(dataProvider.create("teachers", { data: { name: "测试", unit: "学院" } }))

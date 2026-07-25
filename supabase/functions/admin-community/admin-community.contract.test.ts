@@ -3,17 +3,17 @@ import { adminActionAuditMatrix } from "./action-audit.ts";
 
 const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
 
-Deno.test("admin-community keeps 65 registered action contracts", () => {
+Deno.test("admin-community keeps 67 registered action contracts", () => {
   const names = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm), (match) => match[1]);
-  assertEquals(names.length, 65);
-  for (const required of ["overview", "bulkModeratePosts", "globalSearch", "listAdminSessions", "revokeAdminSession", "listNationalCalendarRuntimeConfigs", "upsertNationalCalendarRuntimeConfig"]) {
+  assertEquals(names.length, 67);
+  for (const required of ["overview", "retryPostPublish", "getModerationReport", "bulkModeratePosts", "globalSearch", "listAdminSessions", "revokeAdminSession", "listNationalCalendarRuntimeConfigs", "upsertNationalCalendarRuntimeConfig"]) {
     assert(names.includes(required), `missing ${required}`);
   }
 });
 
-Deno.test("all 65 runtime actions match the machine-readable audit matrix", () => {
+Deno.test("all 67 runtime actions match the machine-readable audit matrix", () => {
   const matches = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm));
-  assertEquals(adminActionAuditMatrix.length, 65);
+  assertEquals(adminActionAuditMatrix.length, 67);
   assertEquals(adminActionAuditMatrix.map((row) => row.action), matches.map((match) => match[1]));
   for (const [index, match] of matches.entries()) {
     const block = source.slice(match.index ?? 0, matches[index + 1]?.index ?? source.indexOf("} satisfies Record"));
@@ -29,7 +29,7 @@ Deno.test("all 65 runtime actions match the machine-readable audit matrix", () =
 
 Deno.test("critical multi-write actions declare transaction RPC boundaries", () => {
   for (const action of [
-    "approveCampusRequest", "moderatePost", "bulkModeratePosts", "pinPost",
+    "approveCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "pinPost",
     "resolveModerationReport", "approvePostgraduateSuggestion", "approveCatalogSuggestion",
   ]) {
     assertEquals(adminActionAuditMatrix.find((row) => row.action === action)?.transactionBoundary, "transaction_rpc");

@@ -9,9 +9,9 @@ export type AdminActionAuditRow = {
 
 export const auditedAdminActionNames = [
   "overview", "listCampuses", "listCampusRequests", "approveCampusRequest", "rejectCampusRequest",
-  "listPosts", "previewCommunityFeed", "getPost", "moderatePost", "bulkModeratePosts",
+  "listPosts", "previewCommunityFeed", "getPost", "retryPostPublish", "moderatePost", "bulkModeratePosts",
   "listPolls", "getPoll", "moderatePoll", "reviewPollDeletion", "listPostPins", "pinPost", "unpinPost",
-  "listComments", "listModerationReports", "resolveModerationReport", "moderateComment", "bulkModerateComments",
+  "listComments", "listModerationReports", "getModerationReport", "resolveModerationReport", "moderateComment", "bulkModerateComments",
   "listProfiles", "getProfile", "muteProfile", "unmuteProfile", "listFeedback", "updateFeedback",
   "listAnnouncements", "createAnnouncement", "updateAnnouncement", "listPostgraduateSources",
   "upsertPostgraduateSource", "setPostgraduateSourceStatus", "listPostgraduateSuggestions",
@@ -25,7 +25,7 @@ export const auditedAdminActionNames = [
 ] as const;
 
 const operatorActions = new Set<string>([
-  "approveCampusRequest", "rejectCampusRequest", "moderatePost", "bulkModeratePosts", "moderatePoll",
+  "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "moderatePoll",
   "reviewPollDeletion", "pinPost", "unpinPost", "resolveModerationReport", "moderateComment",
   "bulkModerateComments", "muteProfile", "unmuteProfile", "updateFeedback", "createAnnouncement",
   "updateAnnouncement", "upsertPostgraduateSource", "setPostgraduateSourceStatus",
@@ -50,7 +50,7 @@ const globalActions = new Set<string>([
 
 const requiredCampusActions = new Set<string>(["upsertTeacher", "upsertCourse", "upsertDish"]);
 const transactionRPCActions = new Set<string>([
-  "approveCampusRequest", "rejectCampusRequest", "moderatePost", "bulkModeratePosts", "pinPost",
+  "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "pinPost",
   "resolveModerationReport", "approvePostgraduateSuggestion", "approveCatalogSuggestion",
   "upsertSemesterRuntimeConfig", "createAdmin", "updateAdmin", "disableAdmin",
   "upsertNationalCalendarRuntimeConfig",

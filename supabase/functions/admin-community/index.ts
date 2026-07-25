@@ -69,6 +69,7 @@ const actionRegistry = {
   listPosts: defineAction("listPosts", listPosts, { domain: "community-social" }),
   previewCommunityFeed: defineAction("previewCommunityFeed", previewCommunityFeed, { domain: "community-social" }),
   getPost: defineAction("getPost", getPost, { domain: "community-social" }),
+  retryPostPublish: defineAction("retryPostPublish", retryPostPublish, { domain: "moderation", permission: "operator", mutating: true }),
   moderatePost: defineAction("moderatePost", moderatePost, { domain: "moderation", permission: "operator", mutating: true }),
   bulkModeratePosts: defineAction("bulkModeratePosts", bulkModeratePosts, { domain: "moderation", permission: "operator", mutating: true }),
   listPolls: defineAction("listPolls", listPolls, { domain: "community-social" }),
@@ -80,6 +81,7 @@ const actionRegistry = {
   unpinPost: defineAction("unpinPost", unpinPost, { domain: "community-social", permission: "operator", mutating: true }),
   listComments: defineAction("listComments", listComments, { domain: "community-social" }),
   listModerationReports: defineAction("listModerationReports", listModerationReports, { domain: "moderation" }),
+  getModerationReport: defineAction("getModerationReport", getModerationReport, { domain: "moderation" }),
   resolveModerationReport: defineAction("resolveModerationReport", resolveModerationReport, { domain: "moderation", permission: "operator", mutating: true }),
   moderateComment: defineAction("moderateComment", moderateComment, { domain: "moderation", permission: "operator", mutating: true }),
   bulkModerateComments: defineAction("bulkModerateComments", bulkModerateComments, { domain: "moderation", permission: "operator", mutating: true }),
@@ -611,6 +613,7 @@ async function moderationAnalytics(context: AdminContext, days: number, campusID
 async function recentModerationLogs(context: AdminContext, since: string) {
   const riskActions = [
     "moderatePost",
+    "retryPostPublish",
     "bulkModeratePosts",
     "pinPost",
     "unpinPost",
@@ -835,6 +838,24 @@ async function getPost(context: AdminContext, params: Record<string, unknown>) {
   const post = (await hydratePosts(context, [data], true))[0];
   const comments = await listComments(context, { postID: id, status: "all", pageSize: 100 });
   return { post, comments: comments.items };
+}
+
+async function retryPostPublish(context: AdminContext, params: Record<string, unknown>) {
+  const id = requiredText(params, "id");
+  const { data, error } = await context.adminClient.rpc("admin_retry_pending_post_publish_v1", {
+    p_post_id: id,
+    p_admin_id: context.admin.id,
+  });
+
+  if (error) {
+    throw databaseError(error, { notFoundMessage: "未找到该待发布帖子。" });
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new HttpError(409, "帖子状态已经变化，请刷新后重试。", { code: "conflict" });
+  }
+  return (await hydratePosts(context, [row], true))[0];
 }
 
 async function moderatePost(context: AdminContext, params: Record<string, unknown>) {
@@ -1256,6 +1277,43 @@ async function listModerationReports(context: AdminContext, params: Record<strin
     total: count ?? 0,
     page,
     pageSize,
+  };
+}
+
+async function getModerationReport(context: AdminContext, params: Record<string, unknown>) {
+  const id = requiredText(params, "id");
+  const { data, error } = await context.adminClient
+    .from("community_reports")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw databaseError(error);
+  }
+  if (!data) {
+    throw new HttpError(404, "Moderation report not found.");
+  }
+
+  const report = (await hydrateReports(context, [data]))[0];
+  let postDetail: unknown = null;
+  if (data.post_id) {
+    try {
+      postDetail = await getPost(context, { id: data.post_id });
+    } catch (error) {
+      if (!(error instanceof HttpError) || error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+
+  return {
+    report,
+    evidence: {
+      post: postDetail,
+      comment: report.comment ?? null,
+      reportedUser: report.reported_user ?? null,
+    },
   };
 }
 
@@ -2644,13 +2702,19 @@ async function hydratePosts(context: AdminContext, posts: any[], includeSignedIm
   const likeMap = await countPostLikes(context.adminClient, posts.map((post) => post.id));
   const pinMap = await fetchPostPinMap(context.adminClient, posts.map((post) => post.id));
 
-  return posts.map((post) => ({
-    ...post,
-    author: authorMap.get(post.author_id) ?? null,
-    images: imageMap.get(post.id) ?? [],
-    like_count: likeMap.get(post.id) ?? 0,
-    pin: pinMap.get(post.id) ?? null,
-  }));
+  return posts.map((post) => {
+    const images = imageMap.get(post.id) ?? [];
+    return {
+      ...post,
+      display_status: post.status === "pending_review" ? "publish_exception" : post.status,
+      author: authorMap.get(post.author_id) ?? null,
+      images,
+      image_count: images.length,
+      upload_state: postUploadState(post, images.length),
+      like_count: likeMap.get(post.id) ?? 0,
+      pin: pinMap.get(post.id) ?? null,
+    };
+  });
 }
 
 async function hydratePolls(context: AdminContext, polls: any[]) {
@@ -2927,7 +2991,7 @@ async function fetchPostImageMap(client: any, postIDs: string[], includeSignedIm
   const images = data ?? [];
   const signedMap = new Map<string, string>();
   if (includeSignedImages) {
-    const paths = unique(images.map((image: any) => image.path).filter(Boolean));
+    const paths = unique(images.flatMap((image: any) => [image.path, image.thumbnail_path]).filter(Boolean));
     if (paths.length > 0) {
       const { data: signed } = await client.storage
         .from("community-images")
@@ -2941,10 +3005,32 @@ async function fetchPostImageMap(client: any, postIDs: string[], includeSignedIm
   const grouped = new Map<string, any[]>();
   for (const image of images) {
     const list = grouped.get(image.post_id) ?? [];
-    list.push({ ...image, signed_url: signedMap.get(image.path) ?? null });
+    list.push({
+      ...image,
+      signed_url: signedMap.get(image.path) ?? null,
+      thumbnail_signed_url: signedMap.get(image.thumbnail_path) ?? null,
+    });
     grouped.set(image.post_id, list);
   }
   return grouped;
+}
+
+function postUploadState(post: any, imageCount: number) {
+  if (post.status !== "pending_review") {
+    return null;
+  }
+
+  const expected = typeof post.expected_image_count === "number" ? post.expected_image_count : null;
+  if (expected === null) {
+    return imageCount > 0 ? "legacy_ready" : "legacy_incomplete";
+  }
+  if (imageCount === expected && expected > 0) {
+    return "publish_failed";
+  }
+
+  const createdAt = new Date(post.created_at ?? 0).getTime();
+  const isRecent = Number.isFinite(createdAt) && Date.now() - createdAt < 10 * 60 * 1000;
+  return isRecent ? "uploading" : "upload_incomplete";
 }
 
 async function fetchPollOptionMap(client: any, pollIDs: string[]) {

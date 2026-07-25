@@ -198,6 +198,8 @@ MyLeafy 同时维护两个独立身份：
 
 - 对象路径按用户或 profile 命名空间隔离。
 - 上传前由客户端进行大小、格式和尺寸处理；服务端策略仍限制路径与权限。
+- 图片帖创建时记录准确的预期图片数。每张图片使用短期、单次验证凭证挂载，最后一张验证图片在同一数据库事务中发布帖子。
+- `create_community_post_v2` 与 `publish_community_post_v1` 仅作为已安装客户端兼容入口；新客户端使用 `create_community_post_v3`，不得在图片全部挂载后再开启第二个发布窗口。
 - 读取通过 signed URL 或受控函数。
 - 删除内容时考虑对象清理、软删除和审计之间的关系。
 - 不使用可预测的公开 URL 暴露私有图片。
@@ -406,6 +408,7 @@ deno check supabase/functions/admin-community/index.ts
 | profile 无法创建 | Function 是否部署、JWT 是否有效、migration 是否完整、校园记录是否存在 |
 | 查询返回 401/403 | Auth session、RLS、profile link 和 campus scope |
 | 图片上传成功但不可见 | bucket 是否私有、对象路径、signed URL、Storage policy |
+| 图片帖停留在 `pending_review` | 预期图片数、已挂载验证图片数、凭证是否消费完成；该状态是发布异常，只能经完整性重试或下架 |
 | Feed 顺序异常 | 服务端 Feed RPC、置顶记录与客户端是否二次排序 |
 | 邮箱绑定收不到码 | Auth provider、模板、SMTP/DNS、频率限制与待绑定邮箱状态 |
 | 学期数据错位 | active 配置是否唯一、学期 ID 与起始日期是否来自学校真实值 |

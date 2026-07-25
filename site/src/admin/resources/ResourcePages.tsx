@@ -57,6 +57,7 @@ export function createResourcePages(resource: string) {
 }
 
 export function ResourceList({ resource, config }: { resource: string; config: ResourceConfig }) {
+  const { canAccess: canBulk } = useCanAccess({ resource, action: "bulk" });
   const filters = [
     ...(config.searchable === false ? [] : [<TextInput key="search" source="search" label="搜索" alwaysOn resettable />]),
     ...(config.statusChoices ? [<SelectInput key="status" source="status" label="状态" choices={config.statusChoices} alwaysOn />] : []),
@@ -76,7 +77,7 @@ export function ResourceList({ resource, config }: { resource: string; config: R
       actions={<ListActions resource={resource} config={config} />}
       sort={config.defaultSort ?? { field: "created_at", order: "DESC" }}
     >
-      <Datagrid bulkActionButtons={resource === "posts" || resource === "comments" ? <BulkHideButton resource={resource} /> : false} rowClick={false}>
+      <Datagrid bulkActionButtons={(resource === "posts" || resource === "comments") && canBulk ? <BulkHideButton resource={resource} /> : false} rowClick={false}>
         {config.columns.map(renderColumn)}
         <FunctionField label="操作" render={() => <RowActions resource={resource} config={config} />} />
       </Datagrid>
@@ -140,13 +141,14 @@ function renderColumn(config: ColumnConfig) {
 
 function ListActions({ resource, config }: { resource: string; config: ResourceConfig }) {
   const { canAccess: canCreate } = useCanAccess({ resource, action: "create" });
+  const { canAccess: canExport } = useCanAccess({ resource, action: "export" });
   const campusID = useCampusScope();
   const createRequiresCampus = campusScopedCreateResources.has(resource);
   return (
     <TopToolbar>
       <FilterButton />
       {config.createForm && canCreate && (!createRequiresCampus || campusID !== "all") && <CreateButton />}
-      {config.exportable && <ExportResourceButton resource={resource} />}
+      {config.exportable && canExport && <ExportResourceButton resource={resource} />}
     </TopToolbar>
   );
 }
@@ -237,6 +239,8 @@ function RecordFormDialog({ resource, config, record }: { resource: string; conf
   const initial = useMemo(() => Object.fromEntries((config.editForm ?? []).map((field) => [field.source, formInitial(record, field)])), [config.editForm, record]);
   const [values, setValues] = useState<Record<string, unknown>>(initial);
   const [loading, setLoading] = useState(false);
+  const { canAccess } = useCanAccess({ resource, action: "edit", record });
+  if (!canAccess) return null;
 
   async function save() {
     setLoading(true);
@@ -328,7 +332,7 @@ function BulkHideButton({ resource }: { resource: string }) {
   return (
     <>
       <Button label="批量下架" color="error" startIcon={<GppBad />} onClick={() => setMode("hidden")} />
-      <Button label="批量恢复" onClick={() => setMode("published")} />
+      <Button label={resource === "posts" ? "批量恢复已隐藏帖子" : "批量恢复"} onClick={() => setMode("published")} />
       <Dialog open={mode !== null} onClose={() => setMode(null)}><DialogTitle>{mode === "hidden" ? "批量下架" : "批量恢复"} {selectedIds.length} 条记录</DialogTitle><DialogContent><Typography color="text.secondary" sx={{ mt: 1, mb: mode === "hidden" ? 2 : 0 }}>该操作不会乐观更新；后端确认成功后才刷新列表，并写入审计日志。</Typography>{mode === "hidden" && <MuiTextField label="下架原因" value={reason} onChange={(event) => setReason(event.target.value)} fullWidth multiline minRows={3} />}</DialogContent><DialogActions><Button label="取消" onClick={() => setMode(null)} /><Button label={mode === "hidden" ? "确认下架" : "确认恢复"} color={mode === "hidden" ? "error" : "primary"} disabled={mode === "hidden" && !reason.trim()} onClick={async () => { try { await dataProvider.execute(action, { ids: selectedIds, status: mode, ...(mode === "hidden" ? { reason } : {}) }); notify(mode === "hidden" ? "批量下架成功。" : "批量恢复成功。", { type: "success" }); onUnselectItems(); setMode(null); refresh(); } catch (error) { notify(error instanceof Error ? error.message : "批量操作失败。", { type: "error" }); } }} /></DialogActions></Dialog>
     </>
   );
@@ -364,7 +368,7 @@ function RecordDetailDialog({ resource, record }: { resource: string; record: Re
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>记录详情</DialogTitle>
         <DialogContent>
-          {loading ? <Typography color="text.secondary">正在加载完整详情…</Typography> : <Box component="pre" sx={{ m: 0, p: 2, bgcolor: "grey.50", borderRadius: 1, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13 }}>{JSON.stringify(detail, null, 2)}</Box>}
+          {loading ? <Typography color="text.secondary">正在加载完整详情…</Typography> : <RecordDetailContent resource={resource} detail={detail} />}
         </DialogContent>
         <DialogActions><Button label="关闭" onClick={() => setOpen(false)} /></DialogActions>
       </Dialog>
@@ -372,7 +376,126 @@ function RecordDetailDialog({ resource, record }: { resource: string; record: Re
   );
 }
 
-const detailResources = new Set(["posts", "polls", "profiles"]);
+const detailResources = new Set(["posts", "polls", "reports", "profiles"]);
+
+export function RecordDetailContent({ resource, detail }: { resource: string; detail: Record<string, any> }) {
+  if (resource === "posts") {
+    return <PostDetail post={detail.post ?? detail} comments={detail.comments ?? []} />;
+  }
+  if (resource === "polls") {
+    const poll = detail.poll ?? detail;
+    return (
+      <Stack spacing={2}>
+        <DetailHeading title={poll.question} status={poll.status} />
+        {poll.detail && <Typography sx={{ whiteSpace: "pre-wrap" }}>{poll.detail}</Typography>}
+        <DetailFacts facts={[
+          ["作者", poll.author?.nickname],
+          ["截止时间", formatDateTime(poll.closes_at)],
+          ["总票数", poll.total_vote_count],
+          ["删除申请", poll.deletion_status],
+        ]} />
+        <Stack spacing={1}>
+          <Typography fontWeight={700}>选项</Typography>
+          {(poll.options ?? []).map((option: Record<string, any>, index: number) => (
+            <Box key={option.id ?? index} sx={detailCardSx}>
+              <Typography>{option.text ?? option.label ?? `选项 ${index + 1}`}</Typography>
+              <Typography variant="caption" color="text.secondary">{option.vote_count ?? 0} 票</Typography>
+            </Box>
+          ))}
+        </Stack>
+      </Stack>
+    );
+  }
+  if (resource === "reports") {
+    const report = detail.report ?? detail;
+    const postEvidence = detail.evidence?.post;
+    return (
+      <Stack spacing={2}>
+        <DetailHeading title={`举报：${report.reason ?? "未填写原因"}`} status={report.status} />
+        <DetailFacts facts={[
+          ["对象", report.target_type],
+          ["举报人", report.reporter?.nickname],
+          ["被举报用户", report.reported_user?.nickname],
+          ["提交时间", formatDateTime(report.created_at)],
+          ["处理备注", report.resolution_note],
+        ]} />
+        {report.detail && <Box sx={detailCardSx}><Typography fontWeight={700}>举报详情</Typography><Typography sx={{ whiteSpace: "pre-wrap" }}>{report.detail}</Typography></Box>}
+        {postEvidence?.post && <Box><Typography fontWeight={700} mb={1}>被举报帖子证据</Typography><PostDetail post={postEvidence.post} comments={postEvidence.comments ?? []} compact /></Box>}
+        {detail.evidence?.comment && <Box sx={detailCardSx}><Typography fontWeight={700}>被举报评论</Typography><Typography sx={{ whiteSpace: "pre-wrap" }}>{detail.evidence.comment.body}</Typography></Box>}
+      </Stack>
+    );
+  }
+  return <Box component="pre" sx={{ m: 0, p: 2, bgcolor: "grey.50", borderRadius: 1, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 13 }}>{JSON.stringify(detail, null, 2)}</Box>;
+}
+
+function PostDetail({ post, comments, compact = false }: { post: Record<string, any>; comments: Record<string, any>[]; compact?: boolean }) {
+  const images = Array.isArray(post.images) ? post.images : [];
+  return (
+    <Stack spacing={2}>
+      <DetailHeading title={post.title} status={post.status === "pending_review" ? "publish_exception" : post.status} />
+      <DetailFacts facts={[
+        ["作者", post.author?.nickname],
+        ["分类", post.category],
+        ["发布时间", formatDateTime(post.created_at)],
+        ["发布链路", adminValueLabel("upload_state", post.upload_state)],
+        ["图片", images.length],
+      ]} />
+      <Typography sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.body}</Typography>
+      {images.length > 0 && (
+        <Box>
+          <Typography fontWeight={700} mb={1}>帖子图片</Typography>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1.5 }}>
+            {images.map((image: Record<string, any>, index: number) => {
+              const fullURL = image.signed_url;
+              const previewURL = image.thumbnail_signed_url || fullURL;
+              return previewURL ? (
+                <Box
+                  key={image.id ?? index}
+                  component="a"
+                  href={fullURL || previewURL}
+                  target="_blank"
+                  rel="noreferrer"
+                  sx={{ display: "block", borderRadius: 1.5, overflow: "hidden", border: "1px solid", borderColor: "divider", bgcolor: "grey.100" }}
+                >
+                  <Box component="img" src={previewURL} alt={`帖子图片 ${index + 1}`} sx={{ width: "100%", height: compact ? 180 : 260, display: "block", objectFit: "contain" }} />
+                </Box>
+              ) : <Box key={image.id ?? index} sx={detailCardSx}><Typography color="text.secondary">图片签名地址不可用，请刷新详情。</Typography></Box>;
+            })}
+          </Box>
+        </Box>
+      )}
+      {!compact && (
+        <Box>
+          <Typography fontWeight={700} mb={1}>评论（{comments.length}）</Typography>
+          <Stack spacing={1}>
+            {comments.length ? comments.map((comment, index) => (
+              <Box key={comment.id ?? index} sx={detailCardSx}>
+                <Typography variant="caption" color="text.secondary">{comment.author?.nickname ?? "未知用户"} · {formatDateTime(comment.created_at)}</Typography>
+                <Typography sx={{ whiteSpace: "pre-wrap" }}>{comment.body}</Typography>
+              </Box>
+            )) : <Typography color="text.secondary">暂无评论。</Typography>}
+          </Stack>
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
+function DetailHeading({ title, status }: { title: unknown; status: unknown }) {
+  return <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between"><Typography variant="h6" fontWeight={750}>{String(title ?? "未命名记录")}</Typography><Typography color="primary.main" fontWeight={700}>{adminValueLabel("status", status)}</Typography></Stack>;
+}
+
+function DetailFacts({ facts }: { facts: Array<[string, unknown]> }) {
+  return <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>{facts.filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => <Box key={label} sx={detailCardSx}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{String(value)}</Typography></Box>)}</Box>;
+}
+
+const detailCardSx = { p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1, bgcolor: "background.paper" };
+
+function formatDateTime(value: unknown) {
+  if (!value) return "—";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN");
+}
 
 function AdminPagination() {
   const { page, perPage, setPage, setPerPage, total = 0 } = useListContext();
@@ -389,14 +512,23 @@ function adminValueLabel(source: string, value: unknown) {
     open: "未查看", reviewed: "已查看待处理", resolved: "已处理", rejected: "已驳回", closed: "已完成",
     draft: "草稿", archived: "已下线", approved: "已通过", success: "成功", failure: "失败",
     viewer: "只读管理员", operator: "运营管理员", super_admin: "超级管理员",
+    uploading: "上传中", upload_incomplete: "上传不完整", publish_failed: "自动发布失败",
+    legacy_ready: "旧版记录可重试", legacy_incomplete: "旧版上传不完整",
+    publish_exception: "发布异常",
   };
   const text = String(value);
-  return source === "status" || source.endsWith("_status") || source === "outcome" || source === "role"
+  return source === "status" || source.endsWith("_status") || source === "display_status" || source === "outcome" || source === "role" || source === "upload_state"
     ? labels[text] ?? text
     : text;
 }
 
 export function actionConfirmation(resource: string, record: Record<string, any>, action: RowActionConfig) {
+  if (resource === "posts" && action.action === "retryPostPublish") {
+    return {
+      summary: `重新发布：${record.title || record.id || "异常帖子"}`,
+      impact: "服务端会重新校验已登记图片数量；仅完整上传的帖子才会公开。",
+    };
+  }
   if (resource === "ratings") {
     const target = record.teacher?.name || record.dish?.name || `ID ${record.teacher_id ?? record.dish_id ?? "未知"}`;
     const user = record.user?.nickname || record.user_id || "未知用户";

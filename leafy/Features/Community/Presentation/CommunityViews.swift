@@ -1827,7 +1827,7 @@ struct CommunityComposerSheet: View {
         }
 
         do {
-            let createdPost = try await dependencies.communityRepository.createPost(
+            _ = try await dependencies.communityRepository.createPost(
                 input: CreatePostInput(
                     title: title,
                     body: postBody,
@@ -1836,10 +1836,7 @@ struct CommunityComposerSheet: View {
                 ),
                 images: draftImages.map(\.upload)
             )
-            let message = createdPost.status == "pending_review"
-                ? L10n.text("含图片帖子已提交审核，审核通过后会进入公开社区。", language: leafyLanguage)
-                : L10n.text("发布成功！", language: leafyLanguage)
-            onPosted(message)
+            onPosted(L10n.text("发布成功！", language: leafyLanguage))
             dismiss()
         } catch {
             if error.localizedDescription == CommunityServiceError.profileCompletionRequired.localizedDescription {

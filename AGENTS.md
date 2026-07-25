@@ -25,7 +25,8 @@ Campus heatmap direction:
 Community security direction:
 - One `(campus_id, edu_id)` maps to exactly one durable community profile. Multiple replaceable device Supabase Auth sessions may link to that profile, while one Auth session maps to at most one profile.
 - School login automatically inherits the matching community profile and content. A verified bound email is notification-only and never participates in school login or community recovery.
-- Posts and comments are created through validated RPCs, reports never auto-hide content, and post images require a short-lived single-use server validation receipt.
+- Posts and comments are created through validated RPCs, reports never auto-hide content, and post images require a short-lived single-use server validation receipt. Image posts record the exact expected image count; the final validated attachment publishes the post atomically.
+- `posts.status = pending_review` is an upload/publication exception, never a normal editorial queue. Polls may still use `pending_review` for explicit manual approval or rejection.
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
 
 Leafy AI direction:

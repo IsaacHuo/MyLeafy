@@ -803,14 +803,14 @@ extension CommunityService {
         do {
             createdRecord = try await client
                 .rpc(
-                    "create_community_post_v2",
+                    "create_community_post_v3",
                     params: CommunityCreatePostRPCParams(
                         id: postID,
                         title: title,
                         body: body,
                         category: category,
                         isAnonymous: input.isAnonymous,
-                        hasImages: !images.isEmpty
+                        imageCount: images.count
                     )
                 )
                 .execute()
@@ -822,15 +822,30 @@ extension CommunityService {
         if !images.isEmpty {
             do {
                 try await uploadPostImages(images, authorID: actorProfile.id, postID: postID)
-                try await publishPostAfterImageUpload(postID: postID)
             } catch {
-                try? await markPostDeleted(postID: postID)
+                CommunityDiagnostics.log.error(
+                    "Image post upload failed imageCount=\(images.count, privacy: .public) error=\(error.localizedDescription, privacy: .private)"
+                )
+                do {
+                    try await markPostDeleted(postID: postID)
+                } catch {
+                    CommunityDiagnostics.log.fault(
+                        "Image post cleanup failed error=\(error.localizedDescription, privacy: .private)"
+                    )
+                }
                 throw CommunityServiceError.edgeFunctionRejected("图片发布失败：\(error.localizedDescription)")
             }
         }
 
         let fallbackStatus = images.isEmpty ? createdRecord.status : "published"
-        return try await fetchPost(postID: postID) ?? CommunityPost(
+        let hydratedPost = try await fetchPost(postID: postID)
+        if !images.isEmpty, hydratedPost?.status == "pending_review" {
+            CommunityDiagnostics.log.error(
+                "Image post remained pending after all validated images were attached imageCount=\(images.count, privacy: .public)"
+            )
+            throw CommunityServiceError.edgeFunctionRejected("图片已上传，但自动发布未完成。请稍后刷新；如仍未发布，管理员可在后台重新发布。")
+        }
+        return hydratedPost ?? CommunityPost(
             id: createdRecord.id,
             authorID: createdRecord.authorID,
             title: createdRecord.title,
@@ -2337,16 +2352,6 @@ extension CommunityService {
                 throw CommunityServiceError.edgeFunctionRejected("图片记录写入失败：\(error.localizedDescription)")
             }
         }
-    }
-
-    private func publishPostAfterImageUpload(postID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        _ = try await client
-            .rpc(
-                "publish_community_post_v1",
-                params: CommunityPublishPostRPCParams(postID: postID)
-            )
-            .execute()
     }
 
     private func markPostDeleted(postID: UUID) async throws {
@@ -4093,7 +4098,7 @@ private nonisolated struct CommunityCreatePostRPCParams: Encodable, Sendable {
     let body: String
     let category: String?
     let isAnonymous: Bool
-    let hasImages: Bool
+    let imageCount: Int
 
     enum CodingKeys: String, CodingKey {
         case id = "p_id"
@@ -4101,7 +4106,7 @@ private nonisolated struct CommunityCreatePostRPCParams: Encodable, Sendable {
         case body = "p_body"
         case category = "p_category"
         case isAnonymous = "p_is_anonymous"
-        case hasImages = "p_has_images"
+        case imageCount = "p_image_count"
     }
 }
 
@@ -4178,14 +4183,6 @@ private nonisolated struct CommunityAttachPostImageRPCParams: Encodable, Sendabl
         case receiptID = "p_receipt_id"
         case imageID = "p_image_id"
         case sortOrder = "p_sort_order"
-    }
-}
-
-private nonisolated struct CommunityPublishPostRPCParams: Encodable, Sendable {
-    let postID: UUID
-
-    enum CodingKeys: String, CodingKey {
-        case postID = "p_post_id"
     }
 }
 

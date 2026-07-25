@@ -56,11 +56,19 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   },
   posts: {
     label: "帖子",
-    columns: columns(["title", "标题"], ["category", "分类"], ["status", "状态"], ["author.nickname", "作者"], ["like_count", "点赞", "number"], ["created_at", "发布时间", "date"]),
-    statusChoices: status("published", "pending_review", "hidden", "deleted", "all"),
+    columns: columns(["title", "标题"], ["category", "分类"], ["display_status", "状态"], ["upload_state", "发布链路"], ["author.nickname", "作者"], ["image_count", "图片", "number"], ["like_count", "点赞", "number"], ["created_at", "发布时间", "date"]),
+    statusChoices: [
+      { id: "published", name: "已发布" },
+      { id: "pending_review", name: "发布异常" },
+      { id: "hidden", name: "已隐藏" },
+      { id: "deleted", name: "已删除" },
+      { id: "all", name: "全部" },
+    ],
     exportable: true,
     actions: [
-      { label: "下架", action: "moderatePost", tone: "danger", visible: (r) => r.status === "published" || r.status === "pending_review", fields: [reasonField("下架原因")], fixed: { status: "hidden" }, build: idParams },
+      { label: "重新发布", action: "retryPostPublish", visible: canRetryPendingPost, build: idParams },
+      { label: "下架异常", action: "moderatePost", tone: "danger", visible: (r) => r.status === "pending_review", fields: [reasonField("处理原因")], fixed: { status: "hidden" }, build: idParams },
+      { label: "下架", action: "moderatePost", tone: "danger", visible: (r) => r.status === "published", fields: [reasonField("下架原因")], fixed: { status: "hidden" }, build: idParams },
       { label: "恢复", action: "moderatePost", visible: (r) => r.status === "hidden", fixed: { status: "published" }, build: idParams },
       { label: "全局置顶", action: "pinPost", visible: (r) => r.status === "published" && !r.pin, fields: [{ source: "priority", label: "优先级", kind: "number" }, { source: "startsAt", label: "开始时间", kind: "datetime" }, { source: "endsAt", label: "结束时间", kind: "datetime" }, reasonField("置顶原因")], fixed: { scope: "global" }, build: (r, v) => ({ postID: r.id, ...v }) },
       { label: "分类置顶", action: "pinPost", visible: (r) => r.status === "published" && !r.pin, fields: [{ source: "category", label: "分类", required: true }, { source: "priority", label: "优先级", kind: "number" }, { source: "startsAt", label: "开始时间", kind: "datetime" }, { source: "endsAt", label: "结束时间", kind: "datetime" }, reasonField("置顶原因")], fixed: { scope: "category" }, build: (r, v) => ({ postID: r.id, ...v }) },
@@ -73,7 +81,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     statusChoices: status("published", "pending_review", "hidden", "deleted", "all"),
     exportable: true,
     actions: [
-      { label: "下架", action: "moderatePoll", tone: "danger", visible: (r) => r.status === "published" || r.status === "pending_review", fields: [reasonField()], fixed: { status: "hidden" }, build: idParams },
+      { label: "通过审核", action: "moderatePoll", visible: (r) => r.status === "pending_review", fixed: { status: "published" }, build: idParams },
+      { label: "驳回", action: "moderatePoll", tone: "danger", visible: (r) => r.status === "pending_review", fields: [reasonField("驳回原因")], fixed: { status: "hidden" }, build: idParams },
+      { label: "下架", action: "moderatePoll", tone: "danger", visible: (r) => r.status === "published", fields: [reasonField()], fixed: { status: "hidden" }, build: idParams },
       { label: "恢复", action: "moderatePoll", visible: (r) => r.status === "hidden", fixed: { status: "published" }, build: idParams },
       { label: "批准删除", action: "reviewPollDeletion", tone: "danger", visible: (r) => r.deletion_status === "pending", fields: [reasonField()], fixed: { decision: "approved" }, build: idParams },
       { label: "拒绝删除", action: "reviewPollDeletion", visible: (r) => r.deletion_status === "pending", fields: [reasonField()], fixed: { decision: "rejected" }, build: idParams },
@@ -210,4 +220,12 @@ function forms(fields: FormFieldConfig[]) {
 
 function statusName(value: string) {
   return ({ published: "已发布", pending: "待处理", pending_review: "待审核", hidden: "已隐藏", deleted: "已删除", open: "待处理", reviewed: "已查看", resolved: "已处理", rejected: "已驳回", closed: "已关闭", draft: "草稿", archived: "已下线", approved: "已通过", all: "全部" } as Record<string, string>)[value] ?? value;
+}
+
+function canRetryPendingPost(record: Record<string, any>) {
+  if (record.status !== "pending_review" || Number(record.image_count ?? 0) < 1) {
+    return false;
+  }
+  const expected = record.expected_image_count;
+  return expected === null || expected === undefined || Number(expected) === Number(record.image_count);
 }

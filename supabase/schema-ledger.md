@@ -1,6 +1,6 @@
 # MyLeafy Supabase Schema Ledger
 
-Last updated: 2026-07-22
+Last updated: 2026-07-25
 
 This ledger records the deployed schema facts that the app relies on. It is not
 a replacement for migrations, and existing migration history should not be
@@ -12,8 +12,8 @@ contract.
 
 | Domain | Owns | Public entry points |
 | --- | --- | --- |
-| `community-social` | Profiles, posts, comments, images, likes, favorites, pins, feed hydration | `community-bootstrap-user`, `community-feed`, `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1` |
-| `moderation` | Reports, hidden/pending/deleted content states, profile mute actions, poll deletion review | `admin-community` moderation actions, report/comment/post status updates |
+| `community-social` | Profiles, posts, comments, images, likes, favorites, pins, feed hydration | `community-bootstrap-user`, `community-feed`, `create_community_post_v3`, `attach_community_post_image_v1`, `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1` |
+| `moderation` | Reports, hidden/pending/deleted content states, profile mute actions, poll deletion review | `admin-community` moderation actions, `retryPostPublish`, `getModerationReport`, report/comment/post status updates |
 | `catalog-ratings` | Teachers, courses, dishes, ratings, catalog suggestions, postgraduate sources | Teacher/course/dish tables and rating CRUD paths, catalog suggestion admin actions |
 | `timetable-sharing` | Timetable snapshots, invite codes, share members, owner/viewer state changes | `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | Campuses, campus membership requests, semester and national calendar runtime configs | `campus-request`, `current_profile_campus_id`, campus request admin actions |
@@ -72,7 +72,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 
 | Domain | RPCs |
 | --- | --- |
-| `community-social` | `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_post_favorite_v1`, `create_community_notification`, `unblock_community_user` |
+| `community-social` | `create_community_post_v3`, `attach_community_post_image_v1`, `publish_community_post_v1` (legacy compatibility), `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_post_favorite_v1`, `create_community_notification`, `unblock_community_user` |
 | `community-social` polls | `my_authored_community_polls_v1`, `my_voted_community_polls_v1`, `request_delete_community_poll_v1`, `delete_own_community_poll_v1` |
 | `timetable-sharing` | `can_view_timetable_snapshot`, `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config`, `admin_upsert_semester_runtime_config`, `admin_upsert_national_calendar_runtime_config` |
@@ -160,6 +160,17 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260722094000_campus_ai_entitlement_monotonicity.sql`
 - `20260722100000_community_upload_receipts.sql`
 - `20260722113000_community_school_identity_inheritance.sql`
+- `20260722160000_admin_backend_hardening.sql`
+- `20260725190000_community_post_upload_closure.sql`
+- `20260725203000_admin_database_lint_closure.sql`
+
+## Community Post Upload Invariants
+
+- `posts.expected_image_count` records the exact image count for `create_community_post_v3`; text-only posts publish immediately.
+- Each image attachment consumes one short-lived validation receipt. When the attached count reaches the expected count, the final attachment publishes the post in the same database transaction.
+- `posts.status = pending_review` denotes an incomplete upload or publication exception. It is not an editorial approval queue and is excluded from generic restore-to-published actions.
+- `admin_retry_pending_post_publish_v1` publishes only a pending post with at least one validated image and a complete expected count. Incomplete, deleted, or conflicting records fail explicitly.
+- Poll `pending_review` remains a manual moderation state with separate approve and reject transitions.
 
 ## Community Identity Invariants
 
@@ -194,6 +205,6 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - Admin global-search indexes use `pg_trgm` for substring lookup and a
   full-text GIN index for post content. They add no App table privileges and do
   not change existing RLS policies.
-- Admin Edge actions preserve all 60 legacy names and add `globalSearch`,
-  session listing/revocation, and national-calendar listing/upsert. CSV export
-  is isolated in `admin-export` with server-side resource and field allowlists.
+- Admin Edge actions preserve all legacy names and expose 67 registered actions,
+  including `retryPostPublish` and `getModerationReport`. CSV export is isolated
+  in `admin-export` with server-side resource and field allowlists.

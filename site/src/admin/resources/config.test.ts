@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { adminActionNames } from "../registry";
 import { resourceConfigs } from "./config";
 
 describe("admin resource capabilities", () => {
@@ -35,6 +36,38 @@ describe("admin resource capabilities", () => {
     for (const resource of ["posts", "polls", "comments"]) {
       const visible = resourceConfigs[resource].actions?.filter((action) => !action.visible || action.visible({ status: "deleted" })) ?? [];
       expect(visible).toHaveLength(0);
+    }
+  });
+
+  it("keeps every pending workflow decision-complete", () => {
+    const postActions = resourceConfigs.posts.actions?.filter((action) => action.visible?.({
+      status: "pending_review",
+      image_count: 1,
+      expected_image_count: 1,
+    })).map((action) => action.label);
+    expect(postActions).toEqual(["重新发布", "下架异常"]);
+
+    const pollActions = resourceConfigs.polls.actions?.filter((action) => action.visible?.({
+      status: "pending_review",
+      deletion_status: "none",
+    })).map((action) => action.label);
+    expect(pollActions).toEqual(["通过审核", "驳回"]);
+  });
+
+  it("does not allow an incomplete image upload to be retried", () => {
+    const retry = resourceConfigs.posts.actions?.find((action) => action.action === "retryPostPublish");
+    expect(retry?.visible?.({ status: "pending_review", image_count: 1, expected_image_count: 2 })).toBe(false);
+    expect(retry?.visible?.({ status: "pending_review", image_count: 0, expected_image_count: null })).toBe(false);
+  });
+
+  it("maps every configured backend action to the shared registry", () => {
+    const registered = new Set<string>(adminActionNames);
+    for (const config of Object.values(resourceConfigs)) {
+      for (const action of config.actions ?? []) {
+        if (action.action !== "__deleteRating") {
+          expect(registered.has(action.action), `${config.label}:${action.action}`).toBe(true);
+        }
+      }
     }
   });
 

@@ -110,10 +110,12 @@ Cookie 属性：
 
 ### 4.2 社区内容
 
-- 帖子、评论、投票和互动详情。
+- 帖子详情展示正文、作者、时间、状态、评论和短期 signed URL 图片证据，不以原始 JSON 代替运营判断。
+- 图片帖在最后一张图片验证挂载时自动发布；帖子 `pending_review` 只表示上传或发布异常。后台仅在图片完整性通过后提供“重新发布”，不完整记录只能下架。
+- 投票 `pending_review` 才是人工审核队列，必须分别提供“通过审核”和“驳回”；已发布内容只显示下架，已隐藏内容只显示恢复。
 - 全局/分类置顶与客户端 Feed 预览。
-- 批量下架、恢复和必要的内容状态操作。
-- 举报、通知、公告和反馈处理。
+- 批量下架、恢复和必要的内容状态操作；帖子批量恢复不得发布 `pending_review` 异常记录。
+- 举报详情同时提供被举报帖子、评论、用户和图片证据，运营人员可在同一上下文完成驳回、下架或禁言。
 
 反馈状态口径固定为：`open` 是未查看待处理，`reviewed` 是已查看但仍待处理，`closed` 才是处理完成。总览、逾期统计和列表必须使用同一口径。
 
@@ -316,7 +318,14 @@ supabase functions deploy admin-export
 
 部署顺序遵循：前向 migration → 向后兼容的 Edge Functions → Cloudflare 变量和代理 → Web 静态资源。不要先发布依赖尚未存在 action 的前端。
 
-本轮后台可靠性修复不包含数据库 migration。发布 `admin-community` 后再发布 Web 静态资源；发布后只读检查总览、列头、筛选、中文状态和权限按钮。真实删除只允许使用明确指定的可废弃记录，并核对对应审计日志。
+图片帖发布闭环涉及前向 migration `20260725190000_community_post_upload_closure.sql`。发布顺序固定为：
+
+1. 部署 migration，保留 `create_community_post_v2` 与 `publish_community_post_v1` 兼容旧客户端。
+2. 部署 `admin-community`，使 `retryPostPublish` 与 `getModerationReport` 可用。
+3. 发布 Web 静态资源；iOS 新版本改用 `create_community_post_v3`。
+4. 使用合成内容验证自动发布；真实异常帖子只检查图片和操作是否可见，不替管理员批准内容。
+
+发布后分别以 `viewer` 和 `operator` 冒烟验证。`viewer` 不应看到编辑、导出、批量或写操作；`operator` 的写操作必须产生审计记录。
 
 ## 12. 安全要求
 
@@ -378,8 +387,10 @@ npm run test:e2e
 - auth provider 的 401/403 分支。
 - HttpOnly session 下的启动、退出和过期恢复。
 - registry 与 contract 一致性。
+- 所有前端 action 均在服务端注册，待处理资源具有合法接受/拒绝出口。
 - data provider 的分页、筛选、错误映射和缓存刷新。
-- 危险操作确认与权限隐藏。
+- 帖子图片证据、投票通过/驳回、举报证据、危险操作确认与权限隐藏。
+- WebKit/iPad 响应式布局下的详情与操作可用性。
 - 浏览器 storage 中不存在管理 token。
 
 ### Edge Functions 与数据库
@@ -401,7 +412,7 @@ bash supabase/tests/verify_admin_security_runtime_migration.sh
 supabase test db
 ```
 
-测试必须覆盖允许与拒绝路径、跨校园访问、角色降级、过期会话、参数越界、CSV 公式注入和审计记录。
+测试必须覆盖允许与拒绝路径、跨校园访问、角色降级、过期会话、参数越界、CSV 公式注入和审计记录。图片帖还必须覆盖 0/1/多图、最后一图原子发布、部分上传不公开、重复凭证、数量不匹配、旧客户端兼容、异常重试和并发状态冲突。
 
 ## 15. 变更检查清单
 

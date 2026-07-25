@@ -42,6 +42,7 @@ const listActions: Record<string, string> = {
 const getOneActions: Record<string, string> = {
   posts: "getPost",
   polls: "getPoll",
+  reports: "getModerationReport",
   profiles: "getProfile",
 };
 
