@@ -2005,8 +2005,10 @@ private struct CacheAndSyncView: View {
 
 private struct CampusNetworkConnectionGuideView: View {
     @Environment(\.openURL) private var openURL
+    @State private var browserItem: ProfileBrowserItem?
 
     private let easyConnectURL = URL(string: "https://apps.apple.com/cn/app/easyconnect/id440460214")!
+    private let vpnGuideURL = URL(string: "https://nic.bjfu.edu.cn/bszn/bslc/c5e6826b4e424db886eb70b0780de781.htm")!
 
     var body: some View {
         List {
@@ -2014,7 +2016,7 @@ private struct CampusNetworkConnectionGuideView: View {
                 Label("连接 bjfu-wifi", systemImage: "wifi")
                     .leafyHeadline()
 
-                Text("连接后回到 Leafy，即可登录教务并同步课表、成绩、考试安排或查询空教室。")
+                Text("根据学校相关规定，课表、成绩等教务信息需要在连接校园网的情况下获取。连接校园网后回到 MyLeafy，即可登录教务并同步课表、成绩、考试安排或查询空教室。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -2023,7 +2025,7 @@ private struct CampusNetworkConnectionGuideView: View {
                 Label("通过北林 VPN 连接", systemImage: "network.badge.shield.half.filled")
                     .leafyHeadline()
 
-                Text("先安装 EasyConnect，并按学校提供的方式连接北林 VPN。连接成功后，回到 Leafy 即可使用需要校园网的教务功能。")
+                Text("先安装 EasyConnect，并登入账号密码，连接北林 VPN ,这样您便相当于处于校园网中，之后回到 Leafy ，即可使用需要校园网的教务功能。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
 
@@ -2031,6 +2033,12 @@ private struct CampusNetworkConnectionGuideView: View {
                     openURL(easyConnectURL)
                 } label: {
                     Label("前往 App Store 下载 EasyConnect", systemImage: "arrow.down.app.fill")
+                }
+
+                Button {
+                    browserItem = ProfileBrowserItem(url: vpnGuideURL)
+                } label: {
+                    Label("查看学校官方 VPN 使用指南", systemImage: "safari")
                 }
             }
 
@@ -2043,6 +2051,9 @@ private struct CampusNetworkConnectionGuideView: View {
         .leafyInsetGroupedListStyle()
         .navigationTitle("校园网连接说明")
         .leafyInlineNavigationTitle()
+        .sheet(item: $browserItem) { item in
+            ProfileSafariView(url: item.url)
+        }
     }
 }
 
