@@ -13,6 +13,7 @@ export default defineConfig({
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
+    { name: "ipad-webkit", use: { ...devices["iPad Pro 11"] } },
   ],
   webServer: {
     command: "npm run dev -- --port 4173",

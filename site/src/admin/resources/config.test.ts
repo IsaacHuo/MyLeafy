@@ -78,4 +78,46 @@ describe("admin resource capabilities", () => {
       expect(actions.every((action) => action.visible?.({ status: "approved" }) === false)).toBe(true);
     }
   });
+
+  it("uses explicit task-first defaults for operational queues", () => {
+    const expectedDefaults: Record<string, string> = {
+      "campus-requests": "pending",
+      posts: "pending_review",
+      polls: "pending",
+      reports: "open",
+      feedback: "open",
+      "postgraduate-suggestions": "open",
+      suggestions: "open",
+    };
+
+    for (const [resource, status] of Object.entries(expectedDefaults)) {
+      const config = resourceConfigs[resource];
+      expect(config.defaultFilters?.status, resource).toBe(status);
+      expect(config.statusChoices?.[0]?.id, resource).toBe(status);
+    }
+  });
+
+  it("keeps non-queue content lists unfiltered by default", () => {
+    for (const resource of ["comments", "announcements", "postgraduate", "teachers", "courses", "dishes"]) {
+      expect(resourceConfigs[resource].defaultFilters?.status, resource).toBe("all");
+    }
+  });
+
+  it("defines every status choice explicitly and keeps all last", () => {
+    for (const [resource, config] of Object.entries(resourceConfigs)) {
+      if (!config.statusChoices) continue;
+      expect(config.statusChoices.some((choice) => choice.id.trim() === ""), resource).toBe(false);
+      expect(config.statusChoices.filter((choice) => choice.id === "all"), resource).toHaveLength(1);
+      expect(config.statusChoices[config.statusChoices.length - 1]?.id, resource).toBe("all");
+      expect(config.statusChoices.some((choice) => choice.id === config.defaultFilters?.status), resource).toBe(true);
+    }
+  });
+
+  it("keeps post exceptions separate from the poll review queue", () => {
+    expect(resourceConfigs.posts.statusChoices?.[0]).toEqual({ id: "pending_review", name: "发布异常" });
+    expect(resourceConfigs.polls.statusChoices?.slice(0, 2)).toEqual([
+      { id: "pending", name: "待处理（审核/删除）" },
+      { id: "pending_review", name: "待审核" },
+    ]);
+  });
 });

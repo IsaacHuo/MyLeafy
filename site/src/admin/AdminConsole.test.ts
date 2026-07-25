@@ -5,5 +5,6 @@ describe("admin Chinese translations", () => {
   it("prefers the Chinese catalog over React Admin English defaults", () => {
     expect(i18nProvider.translate("ra.navigation.no_results", { _: "No results found" })).toBe("暂无数据");
     expect(i18nProvider.translate("ra.action.refresh", { _: "Refresh" })).toBe("刷新");
+    expect(i18nProvider.translate("ra.action.clear_input_value", { _: "Clear value" })).toBe("显示全部");
   });
 });

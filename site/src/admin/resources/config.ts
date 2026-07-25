@@ -28,6 +28,7 @@ export type ResourceConfig = {
   label: string;
   columns: ColumnConfig[];
   statusChoices?: Array<{ id: string; name: string }>;
+  defaultFilters?: Record<string, string | number | boolean>;
   filters?: FormFieldConfig[];
   createForm?: FormFieldConfig[];
   editForm?: FormFieldConfig[];
@@ -47,6 +48,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   campuses: { label: "学校空间", columns: columns(["id", "ID"], ["display_name", "学校"], ["connector_kind", "连接器"], ["is_community_enabled", "社区开放", "boolean"], ["status", "状态"]), searchable: false },
   "campus-requests": {
     label: "学校归属申请", columns: columns(["request_type", "类型"], ["school_name", "学校"], ["requester.nickname", "用户"], ["status", "状态"], ["admin_note", "审核备注"], ["created_at", "时间", "date"]), statusChoices: status("pending", "approved", "rejected", "all"),
+    defaultFilters: { status: "pending" },
     actions: [
       { label: "批准更换", action: "approveCampusRequest", visible: (r) => r.status === "pending" && r.request_type === "school_change", build: (r) => ({ id: r.id, campusID: r.requested_campus_id }) },
       { label: "批准为新学校", action: "approveCampusRequest", visible: (r) => r.status === "pending" && r.request_type !== "school_change", fields: [{ source: "displayName", label: "学校显示名称", required: true }], build: idParams },
@@ -58,12 +60,13 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     label: "帖子",
     columns: columns(["title", "标题"], ["category", "分类"], ["display_status", "状态"], ["upload_state", "发布链路"], ["author.nickname", "作者"], ["image_count", "图片", "number"], ["like_count", "点赞", "number"], ["created_at", "发布时间", "date"]),
     statusChoices: [
-      { id: "published", name: "已发布" },
       { id: "pending_review", name: "发布异常" },
+      { id: "published", name: "已发布" },
       { id: "hidden", name: "已隐藏" },
       { id: "deleted", name: "已删除" },
       { id: "all", name: "全部" },
     ],
+    defaultFilters: { status: "pending_review" },
     exportable: true,
     actions: [
       { label: "重新发布", action: "retryPostPublish", visible: canRetryPendingPost, build: idParams },
@@ -78,7 +81,15 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   polls: {
     label: "投票",
     columns: columns(["question", "问题"], ["status", "状态"], ["total_vote_count", "票数", "number"], ["closes_at", "截止", "date"], ["created_at", "创建", "date"]),
-    statusChoices: status("published", "pending_review", "hidden", "deleted", "all"),
+    statusChoices: [
+      { id: "pending", name: "待处理（审核/删除）" },
+      { id: "pending_review", name: "待审核" },
+      { id: "published", name: "已发布" },
+      { id: "hidden", name: "已隐藏" },
+      { id: "deleted", name: "已删除" },
+      { id: "all", name: "全部" },
+    ],
+    defaultFilters: { status: "pending" },
     exportable: true,
     actions: [
       { label: "通过审核", action: "moderatePoll", visible: (r) => r.status === "pending_review", fixed: { status: "published" }, build: idParams },
@@ -93,6 +104,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     label: "评论",
     columns: columns(["body", "内容"], ["post.title", "帖子"], ["author.nickname", "作者"], ["status", "状态"], ["created_at", "时间", "date"]),
     statusChoices: status("published", "hidden", "deleted", "all"),
+    defaultFilters: { status: "all" },
     exportable: true,
     actions: [
       { label: "下架", action: "moderateComment", tone: "danger", visible: (r) => r.status === "published" || r.status === "pending_review", fields: [reasonField()], fixed: { status: "hidden" }, build: idParams },
@@ -103,6 +115,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     label: "举报",
     columns: columns(["target_type", "对象"], ["reason", "原因"], ["detail", "详情"], ["status", "状态"], ["created_at", "提交时间", "date"]),
     statusChoices: status("open", "reviewed", "resolved", "rejected", "all"),
+    defaultFilters: { status: "open", targetType: "all" },
     filters: [{ source: "targetType", label: "对象类型", kind: "select", choices: [{ id: "all", name: "全部" }, { id: "post", name: "帖子" }, { id: "comment", name: "评论" }, { id: "user", name: "用户" }] }],
     exportable: true,
     actions: [
@@ -115,6 +128,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   profiles: {
     label: "用户",
     columns: columns(["nickname", "昵称"], ["display_name", "姓名"], ["edu_id", "学号"], ["community_access_status", "社区状态"], ["muted_until", "禁言截止", "date"], ["created_at", "创建", "date"]),
+    defaultFilters: { muted: "all" },
     exportable: true,
     filters: [{ source: "muted", label: "禁言状态", kind: "select", choices: [{ id: "all", name: "全部" }, { id: "active", name: "禁言中" }] }],
     actions: [
@@ -126,6 +140,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     label: "反馈",
     columns: columns(["issue_type", "类型", "text", true], ["body", "内容"], ["contact", "联系方式"], ["status", "状态", "text", true], ["created_at", "提交时间", "date", true]),
     statusChoices: feedbackStatus("open", "reviewed", "closed", "all"),
+    defaultFilters: { status: "open" },
     editable: true, exportable: true,
     filters: [{ source: "issueType", label: "反馈类型" }],
     editForm: [{ source: "status", label: "状态", kind: "select", choices: feedbackStatus("open", "reviewed", "closed"), required: true }, { source: "adminNote", label: "处理备注", kind: "longtext" }],
@@ -135,12 +150,14 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     label: "公告",
     columns: columns(["title", "标题"], ["level", "级别"], ["status", "状态"], ["published_at", "发布时间", "date"], ["expires_at", "过期时间", "date"]),
     statusChoices: status("published", "draft", "archived", "all"), exportable: true, editable: true,
+    defaultFilters: { status: "all" },
     ...forms([{ source: "title", label: "标题", required: true }, { source: "body", label: "正文", kind: "longtext", required: true }, { source: "level", label: "级别", kind: "select", choices: [{ id: "info", name: "普通" }, { id: "warning", name: "重要" }, { id: "urgent", name: "紧急" }] }, { source: "status", label: "状态", kind: "select", choices: status("published", "draft", "archived") }, { source: "publishedAt", label: "发布时间", kind: "datetime" }, { source: "expiresAt", label: "过期时间", kind: "datetime" }]),
   },
   postgraduate: {
     label: "考研信息",
     columns: columns(["title", "标题"], ["source_kind", "类型"], ["trust_level", "可信度"], ["school", "学校"], ["exam_year", "年份", "number"], ["status", "状态"]),
     statusChoices: status("published", "hidden", "archived", "all"), exportable: true, editable: true,
+    defaultFilters: { status: "all" },
     filters: [{ source: "kind", label: "来源类型" }, { source: "trustLevel", label: "可信度" }],
     ...forms([{ source: "title", label: "标题", required: true }, { source: "summary", label: "摘要", kind: "longtext" }, { source: "sourceURL", label: "来源链接", required: true }, { source: "sourceKind", label: "类型", required: true }, { source: "trustLevel", label: "可信度", required: true }, { source: "school", label: "学校" }, { source: "unit", label: "单位" }, { source: "major", label: "专业" }, { source: "examYear", label: "年份", kind: "number" }, { source: "status", label: "状态", kind: "select", choices: status("published", "hidden", "archived") }]),
     actions: [
@@ -151,6 +168,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   },
   "postgraduate-suggestions": {
     label: "考研信息线索", columns: columns(["title", "标题"], ["source_kind", "类型"], ["school", "学校"], ["exam_year", "年份", "number"], ["status", "状态"], ["created_at", "提交时间", "date"]), statusChoices: status("open", "approved", "rejected", "all"),
+    defaultFilters: { status: "open" },
     actions: [
       { label: "通过并入库", action: "approvePostgraduateSuggestion", visible: (r) => r.status === "open", fields: [{ source: "summary", label: "入库摘要", kind: "longtext" }, { source: "adminNote", label: "审核备注", kind: "longtext" }], build: idParams },
       { label: "驳回", action: "rejectPostgraduateSuggestion", tone: "danger", visible: (r) => r.status === "open", fields: [{ source: "adminNote", label: "驳回原因", kind: "longtext", required: true }], build: idParams },
@@ -161,6 +179,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     label: "名录建议",
     columns: columns(["suggestion_type", "类型"], ["name", "名称"], ["unit", "单位"], ["category", "分类"], ["status", "状态"], ["created_at", "时间", "date"]),
     statusChoices: status("open", "approved", "rejected", "all"), exportable: true,
+    defaultFilters: { status: "open", type: "all" },
     filters: [{ source: "type", label: "建议类型", kind: "select", choices: [{ id: "all", name: "全部" }, { id: "teacher", name: "教师" }, { id: "course", name: "课程" }, { id: "dish", name: "菜品" }] }],
     actions: [
       { label: "通过", action: "approveCatalogSuggestion", visible: (r) => r.status === "open", fields: [{ source: "adminNote", label: "审核备注", kind: "longtext" }], build: idParams },
@@ -172,6 +191,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   dishes: { ...catalog("菜品", [["name", "菜名"], ["location", "地点"], ["rating_average", "评分", "number"], ["rating_count", "人数", "number"], ["status", "状态"]], [{ source: "name", label: "菜名", required: true }, { source: "location", label: "地点", required: true }, statusField()]), filters: [{ source: "location", label: "地点" }] },
   ratings: {
     label: "评分", columns: columns(["teacher.name", "教师"], ["dish.name", "菜品"], ["user.nickname", "用户"], ["stars", "星级", "number", true], ["updated_at", "时间", "date", true]), exportable: true, searchable: false,
+    defaultFilters: { target: "teacher" },
     filters: [{ source: "teacherID", label: "教师 ID" }, { source: "dishID", label: "菜品 ID" }, { source: "userID", label: "用户 UUID" }, { source: "stars", label: "星级", kind: "select", choices: [1, 2, 3, 4, 5].map((id) => ({ id, name: `${id} 星` })) }],
     actions: [{ label: "删除", action: "__deleteRating", tone: "danger", permissionAction: "delete" }],
     defaultSort: { field: "updated_at", order: "DESC" },
@@ -183,7 +203,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     actions: [{ label: "停用", action: "disableAdmin", tone: "danger", permissionAction: "delete", visible: (r) => r.active === true, build: idParams }],
     defaultSort: { field: "created_at", order: "DESC" },
   },
-  sessions: { label: "会话", columns: columns(["admin.display_name", "管理员"], ["is_current", "当前会话", "boolean"], ["last_seen_at", "最近活动", "date", true], ["expires_at", "过期", "date", true], ["revoked_at", "撤销", "date", true]), exportable: true, searchable: false, defaultSort: { field: "created_at", order: "DESC" }, filters: [{ source: "status", label: "状态", kind: "select", choices: [{ id: "all", name: "全部" }, { id: "active", name: "有效" }, { id: "revoked", name: "已撤销" }] }, { source: "adminID", label: "管理员 ID" }], actions: [{ label: "撤销", action: "revokeAdminSession", tone: "danger", permissionAction: "delete", visible: (r) => !r.revoked_at, build: idParams }] },
+  sessions: { label: "会话", columns: columns(["admin.display_name", "管理员"], ["is_current", "当前会话", "boolean"], ["last_seen_at", "最近活动", "date", true], ["expires_at", "过期", "date", true], ["revoked_at", "撤销", "date", true]), exportable: true, searchable: false, defaultSort: { field: "created_at", order: "DESC" }, defaultFilters: { status: "all" }, filters: [{ source: "status", label: "状态", kind: "select", choices: [{ id: "all", name: "全部" }, { id: "active", name: "有效" }, { id: "revoked", name: "已撤销" }] }, { source: "adminID", label: "管理员 ID" }], actions: [{ label: "撤销", action: "revokeAdminSession", tone: "danger", permissionAction: "delete", visible: (r) => !r.revoked_at, build: idParams }] },
   "audit-logs": { label: "审计日志", columns: columns(["admin.display_name", "管理员"], ["action", "动作", "text", true], ["target_type", "对象", "text", true], ["outcome", "结果", "text", true], ["duration_ms", "耗时(ms)", "number", true], ["error_code", "错误码", "text", true], ["created_at", "时间", "date", true]), exportable: true, searchable: false, defaultSort: { field: "created_at", order: "DESC" }, filters: [{ source: "action", label: "动作" }, { source: "adminID", label: "管理员 ID" }] },
   "semester-configs": {
     label: "学期配置", columns: columns(["campus_id", "学校"], ["semester_id", "学期"], ["semester_start_date", "开始日期", "date"], ["supported_weeks", "周数", "number"], ["graduate_timetable_term_code", "研究生代码"], ["is_active", "启用", "boolean"]), editable: true,
@@ -200,6 +220,7 @@ function catalog(label: string, rawColumns: any[], form: FormFieldConfig[]): Res
   return {
     label, columns: columns(...rawColumns.map(([source, columnLabel, kind = "text"]) => [source, columnLabel, kind, true])), createForm: form, editForm: form, editable: true, exportable: true,
     defaultSort: { field: "rating_average", order: "DESC" },
+    defaultFilters: { status: "all" },
     statusChoices: status("published", "hidden", "all"),
     actions: [
       { label: "隐藏", action: `set${entity}Status`, tone: "danger", visible: (r) => r.status !== "hidden", fixed: { status: "hidden" }, build: idParams },

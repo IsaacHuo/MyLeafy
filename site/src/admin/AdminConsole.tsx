@@ -45,6 +45,7 @@ const chineseMessages: Record<string, string> = {
   "ra.action.back": "返回",
   "ra.action.bulk_actions": "已选择 1 项 |||| 已选择 %{smart_count} 项",
   "ra.action.close": "关闭",
+  "ra.action.clear_input_value": "显示全部",
   "ra.action.confirm": "确认",
   "ra.action.create": "新增",
   "ra.action.create_item": "新增%{item}",

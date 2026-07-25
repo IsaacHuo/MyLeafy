@@ -60,7 +60,7 @@ export function ResourceList({ resource, config }: { resource: string; config: R
   const { canAccess: canBulk } = useCanAccess({ resource, action: "bulk" });
   const filters = [
     ...(config.searchable === false ? [] : [<TextInput key="search" source="search" label="搜索" alwaysOn resettable />]),
-    ...(config.statusChoices ? [<SelectInput key="status" source="status" label="状态" choices={config.statusChoices} alwaysOn />] : []),
+    ...(config.statusChoices ? [renderRequiredSelectFilter("status", "状态", config.statusChoices, true)] : []),
     ...(resource === "ratings" ? [<SelectInput key="target" source="target" label="评分类型" choices={[{ id: "teacher", name: "教师" }, { id: "dish", name: "菜品" }]} alwaysOn />] : []),
     ...(config.filters ?? []).map(renderFilterInput),
     ...(dateFilterResources.has(resource) ? [
@@ -72,6 +72,7 @@ export function ResourceList({ resource, config }: { resource: string; config: R
     <><List
       title={config.label}
       filters={filters}
+      filterDefaultValues={config.defaultFilters}
       perPage={20}
       pagination={<AdminPagination />}
       actions={<ListActions resource={resource} config={config} />}
@@ -124,8 +125,34 @@ function PostFeedPreview() {
 }
 
 function renderFilterInput(field: FormFieldConfig) {
-  if (field.kind === "select") return <SelectInput key={field.source} source={field.source} label={field.label} choices={field.choices ?? []} />;
+  if (field.kind === "select") {
+    const choices = field.choices ?? [];
+    if (choices.some((choice) => choice.id === "all")) {
+      return renderRequiredSelectFilter(field.source, field.label, choices);
+    }
+    return <SelectInput key={field.source} source={field.source} label={field.label} choices={choices} />;
+  }
   return <TextInput key={field.source} source={field.source} label={field.label} type={field.kind === "date" ? "date" : field.kind === "number" ? "number" : "text"} resettable />;
+}
+
+function renderRequiredSelectFilter(
+  source: string,
+  label: string,
+  choices: Array<{ id: string | number; name: string }>,
+  alwaysOn = false,
+) {
+  return (
+    <SelectInput
+      key={source}
+      source={source}
+      label={<span>{label}</span>}
+      choices={choices}
+      alwaysOn={alwaysOn}
+      isRequired
+      emptyValue="all"
+      resettable
+    />
+  );
 }
 
 const dateFilterResources = new Set(["posts", "polls", "comments", "reports", "profiles", "feedback", "postgraduate-suggestions", "suggestions", "ratings", "audit-logs"]);

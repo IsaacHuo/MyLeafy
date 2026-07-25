@@ -15,6 +15,7 @@ const identity = {
 
 test("logs in through the BFF and opens a real resource route", async ({ page }) => {
   let loggedIn = false;
+  const actionCalls: Array<{ action: string; params?: Record<string, unknown> }> = [];
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/login")) {
@@ -33,7 +34,8 @@ test("logs in through the BFF and opens a real resource route", async ({ page })
       return;
     }
     if (url.pathname.endsWith("/actions")) {
-      const body = route.request().postDataJSON() as { action: string };
+      const body = route.request().postDataJSON() as { action: string; params?: Record<string, unknown> };
+      actionCalls.push(body);
       const data = body.action === "overview"
         ? { summary: { operations: { totalProfiles: 12, activeProfiles: 10, newProfilesToday: 1, mutedProfiles: 0, postsToday: 2, commentsToday: 3, daily: [{ bucket_date: "2026-07-13", posts: 2, comments: 3, profiles: 1 }] }, moderation: {}, feedback: { open: 2, reviewed: 3, pending: 5, overdue: 1, aging: [] }, teachers: {} } }
           : body.action === "listCampuses"
@@ -66,10 +68,20 @@ test("logs in through the BFF and opens a real resource route", async ({ page })
   await expect(page.getByText("未查看 2 · 已查看 3 · 逾期 1")).toBeVisible();
   await expect(page.getByText("undefined", { exact: true })).toHaveCount(0);
 
-  await page.getByText("帖子", { exact: true }).click();
+  await navigateAdmin(page, "帖子");
   await expect(page).toHaveURL(/\/admin\/posts/);
+  const postStatus = page.getByRole("combobox", { name: "状态" });
+  await expect(postStatus).toHaveText("发布异常");
+  await expect.poll(() => lastActionParams(actionCalls, "listPosts")?.status).toBe("pending_review");
+  await postStatus.click();
+  await expect(page.getByRole("option").first()).toHaveText("发布异常");
+  await expect(page.getByRole("option", { name: "全部" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.locator(".ra-input-status").getByRole("button", { name: "显示全部" }).click();
+  await expect(postStatus).toHaveText("全部");
+  await expect.poll(() => lastActionParams(actionCalls, "listPosts")?.status).toBe("all");
   await expect(page.getByText("测试图片帖子")).toBeVisible();
-  await expect(page.getByText("发布异常", { exact: true })).toBeVisible();
+  await expect(page.getByRole("table").getByText("发布异常", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "重新发布" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "标题" })).toBeVisible();
   await page.getByRole("button", { name: "查看" }).click();
@@ -79,16 +91,31 @@ test("logs in through the BFF and opens a real resource route", async ({ page })
   await expect(page.getByText(/仅完整上传的帖子才会公开/)).toBeVisible();
   await page.getByRole("button", { name: "取消" }).click();
 
-  await page.getByText("反馈", { exact: true }).click();
+  await navigateAdmin(page, "投票");
+  const pollStatus = page.getByRole("combobox", { name: "状态" });
+  await expect(pollStatus).toHaveText("待处理（审核/删除）");
+  await expect.poll(() => lastActionParams(actionCalls, "listPolls")?.status).toBe("pending");
+  await pollStatus.click();
+  await expect(page.getByRole("option").first()).toHaveText("待处理（审核/删除）");
+  await expect(page.getByRole("option", { name: "待审核" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await navigateAdmin(page, "举报");
+  await expect(page.getByRole("combobox", { name: "状态" })).toHaveText("待处理");
+  await expect.poll(() => lastActionParams(actionCalls, "listModerationReports")?.status).toBe("open");
+
+  await navigateAdmin(page, "反馈");
+  await expect(page.getByRole("combobox", { name: "状态" })).toHaveText("未查看");
+  await expect.poll(() => lastActionParams(actionCalls, "listFeedback")?.status).toBe("open");
   await expect(page.getByRole("columnheader", { name: /类型/ })).toBeVisible();
   await expect(page.getByText("已查看待处理", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /新增反馈/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "添加筛选" })).toBeVisible();
 
-  await page.getByText("会话", { exact: true }).click();
+  await navigateAdmin(page, "会话");
   await expect(page.getByRole("button", { name: "撤销", exact: true })).toBeVisible();
 
-  await page.getByText("评分", { exact: true }).click();
+  await navigateAdmin(page, "评分");
   await page.getByRole("button", { name: "删除", exact: true }).click();
   await expect(page.getByText(/评分：测试教师 · 4 星 · 用户：测试用户/)).toBeVisible();
   await expect(page.getByText("undefined", { exact: true })).toHaveCount(0);
@@ -158,7 +185,7 @@ test("viewer sees evidence but no edit, export, or bulk controls", async ({ page
   await page.getByLabel("账号").fill("viewer");
   await page.getByLabel("密码").fill("secret");
   await page.getByRole("button", { name: "登录" }).click();
-  await page.getByText("帖子", { exact: true }).click();
+  await navigateAdmin(page, "帖子");
   await expect(page.getByText("只读图片帖子")).toBeVisible();
   await expect(page.getByRole("button", { name: "查看" })).toBeVisible();
   await expect(page.getByRole("button", { name: "重新发布" })).toHaveCount(0);
@@ -166,8 +193,26 @@ test("viewer sees evidence but no edit, export, or bulk controls", async ({ page
   await expect(page.getByRole("button", { name: "导出 CSV" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /批量/ })).toHaveCount(0);
 
-  await page.getByText("反馈", { exact: true }).click();
+  await navigateAdmin(page, "反馈");
   await expect(page.getByText("只读反馈")).toBeVisible();
   await expect(page.getByRole("button", { name: "编辑" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "导出 CSV" })).toHaveCount(0);
 });
+
+function lastActionParams(
+  calls: Array<{ action: string; params?: Record<string, unknown> }>,
+  action: string,
+) {
+  const matching = calls.filter((call) => call.action === action);
+  return matching[matching.length - 1]?.params;
+}
+
+async function navigateAdmin(page: import("@playwright/test").Page, label: string) {
+  const item = page.getByRole("menuitem", { name: label, exact: true });
+  const expandMenu = page.getByRole("button", { name: "展开菜单" });
+  if (await expandMenu.isVisible()) {
+    await expandMenu.click();
+  }
+  await item.scrollIntoViewIfNeeded();
+  await item.click();
+}
