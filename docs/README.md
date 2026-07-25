@@ -11,7 +11,9 @@
 5. [Supabase 接入](supabase.md)：身份、数据域、RLS、Storage、Edge Functions 与本地环境。
 6. [Leafy AI 免费额度鉴权](leafy-ai-quota-authentication.md)：免费身份、订阅权益、额度 RPC、安全边界与排查方法。
 7. [运营后台](admin-console.md)：管理请求链路、角色、资源、安全与测试。
-8. [未来功能展望](future-features.md)：用户侧候选能力、优先级、边界与验证标准。\n9. [贡献规范](contributing.md)：Issue、分支、PR、验证与敏感信息要求。
+8. [2.9 build 22 审核复盘](app-store-review-2.9-build-22.md)：审核问题、崩溃根因、修复边界、验证记录与送审清单。
+9. [未来功能展望](future-features.md)：用户侧候选能力、优先级、边界与验证标准。
+10. [贡献规范](contributing.md)：Issue、分支、PR、验证与敏感信息要求。
 
 ## 文档目录
 
@@ -25,9 +27,11 @@
 | [Leafy_UI设计总结.md](Leafy_UI设计总结.md) | 当前 iOS 页面与组件的设计实现总结 | 设计与客户端开发者 |
 | [supabase.md](supabase.md) | Auth、Database、RLS、Storage、Functions 和联调 | 后端与客户端开发者 |
 | [leafy-ai-quota-authentication.md](leafy-ai-quota-authentication.md) | Leafy AI 免费/订阅身份、额度 RPC、故障排查与验证 | iOS/后端开发者 |
+| [app-store-review-2.9-build-22.md](app-store-review-2.9-build-22.md) | 2.9 build 21 审核问题、两类崩溃复盘与 build 22 送审记录 | 发布维护者与客户端开发者 |
 | [admin-console.md](admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 | Web/后端开发者 |
 | [contributing.md](contributing.md) | 协作流程、测试与安全要求 | 贡献者 |
-| [roadmap.md](roadmap.md) | 非承诺式发展方向和工程优先级 | 贡献者 |\n| [future-features.md](future-features.md) | 用户侧未来功能、建议优先级、边界与验证标准 | 产品、设计与贡献者 |
+| [roadmap.md](roadmap.md) | 非承诺式发展方向和工程优先级 | 贡献者 |
+| [future-features.md](future-features.md) | 用户侧未来功能、建议优先级、边界与验证标准 | 产品、设计与贡献者 |
 | [release-notes.md](release-notes.md) | 对外版本更新文案归档 | 维护者与用户 |
 | Mermaid 图表 | 直接嵌入对应 Markdown 文档，由 GitHub 原生渲染 | 文档维护者 |
 | [archive/](archive/) | 仍有参考价值的历史复盘和问题分析 | 维护者 |

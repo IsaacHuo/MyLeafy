@@ -1,18 +1,567 @@
-# MyLeafy 2.9 build 22 审核提交清单
+# MyLeafy 2.9 build 21 审核问题与 build 22 修复复盘
 
-## App Store Connect
+## 文档目的
 
-- 从当前被拒提交中移除 `com.isaachuo.leafy.ai.weekly.v2` 及其订阅组，但保留商品记录，不执行停售或删除。
-- 在 App Description 末尾加入：
+本文记录 MyLeafy 2.9 build 21 在 App Review 中暴露的问题、两份崩溃日志的符号化结论、build 22 的修复边界、验证结果和重新送审操作。它既是本次发布记录，也是以后排查 SwiftData 生命周期和 Swift Concurrency 隔离问题的参考。
+
+本文只记录已经从日志、代码和测试中确认的事实。App Store Connect 中需要人工完成的操作单独标记，不与代码修复混为一谈。
+
+## 审核上下文
+
+| 项目 | 内容 |
+|---|---|
+| Submission ID | `e10189d0-77c9-4b42-b2ce-7a8bc87bac54` |
+| 被审核版本 | 2.9 build 21 |
+| 修复版本 | 2.9 build 22 |
+| 审核设备 | iPad Air 11-inch (M3)，日志型号 `iPad15,3` |
+| 审核系统 | iPadOS 26.5.2，系统构建 `23F84` |
+| App 二进制 UUID | `D88039CB-F09D-31AB-9522-AAB7DE345B10` |
+| 问题范围 | 订阅元数据、运行时崩溃、IAP 购买失败 |
+
+Apple 的审核意见包含三个独立问题：
+
+1. Guideline 3.1.2(c)：App Store 元数据缺少可用的 Terms of Use (EULA) 链接。
+2. Guideline 2.1(a)：App 在 iPad 审核过程中无明确用户操作即崩溃。
+3. Guideline 2.1(b)：Leafy AI 周订阅在 Sandbox 购买时显示交易验证失败。
+
+本次发布策略是暂时隐藏 Leafy AI 和购买入口，以四个公开根 Tab 重新提交；同时修复两个与 AI 订阅无关的底层崩溃。
+
+## 结论摘要
+
+两份 build 21 日志通过相同的二进制 UUID 与 dSYM 完整匹配，确认是两个独立崩溃，不是一个问题的不同表现。
+
+| Incident ID | 触发线程 | 根因 | build 22 修复 |
+|---|---|---|---|
+| `8B75185D-1554-4C48-8C84-B4DC049F5717` | 主线程 | 课表渲染快照长期持有已被 SwiftData 删除或替换的 `Course` | 快照只保存不可变渲染值，交互时按 UUID 解析当前有效模型 |
+| `C99CC30A-85BB-4383-AC7E-BA23DD58A850` | 后台 cooperative executor | 社区 badge 刷新路径违反 MainActor/队列隔离 | 使用结构化并发处理超时，所有 UI 发布显式固定在 MainActor |
+
+两份日志的异常类型都是：
+
+```text
+EXC_BREAKPOINT (SIGTRAP)
+```
+
+这里的 `EXC_BREAKPOINT` 不表示用户点击了调试断点。Swift、SwiftData 和 dispatch runtime 在检测到不可继续的内部约束被破坏时，会主动执行 trap 指令并终止进程。它是一次 fail-fast，不是普通网络错误，也不等同于随机硬件故障。
+
+## 崩溃一：课表读取失效的 SwiftData 模型
+
+### 日志证据
+
+第一份日志的关键信息：
+
+- Incident ID：`8B75185D-1554-4C48-8C84-B4DC049F5717`
+- 异常：`EXC_BREAKPOINT / SIGTRAP`
+- Faulting thread：线程 0，`com.apple.main-thread`
+- 顶部运行时帧：Swift `_assertionFailure`
+- SwiftUI 调用链包含 `ForEachChild.updateValue()` 和 AttributeGraph 更新
+- 完整符号化后的 App 帧指向：
+  - `TimetableView.heightForCourse(_:metrics:)`
+  - `TimetableView.dayColumnBody` 内部渲染闭包
+
+这说明崩溃发生在 SwiftUI 重新计算课表布局时，而不是课程网络请求本身。
+
+### 原有生命周期错误
+
+SwiftData 的 `@Model` 实例是引用类型，其属性访问依赖 `ModelContext` 和底层持久化状态。对象引用仍然非空，不代表它仍然可以安全读取。
+
+旧版 `TimetableGridSnapshot` 名义上是渲染快照，但内部长期保存：
+
+- `Course`
+- `TimetableCellReminder`
+
+这些都是 SwiftData managed object。课表刷新、学期切换、清空和手动导入会删除旧模型并插入替代模型，旧快照却可能继续被 SwiftUI 使用。
+
+典型触发顺序：
+
+```text
+@Query 返回旧 Course A
+        ↓
+TimetableGridSnapshot 保存 A 的对象引用
+        ↓
+刷新流程删除 A，并插入新 Course A'
+        ↓
+SwiftUI 在下一次 AttributeGraph 事务中重算旧快照
+        ↓
+heightForCourse 读取旧 A.duration
+        ↓
+SwiftData 发现 backing storage 已失效
+        ↓
+assertion → SIGTRAP
+```
+
+简单的非空判断无法解决此问题。旧 `Course` 的 Swift 对象外壳可能依然存在，但属性 getter 已不能访问被删除的持久化记录。
+
+### 为什么审核员不操作也可能触发
+
+SwiftUI 不只在用户点击时计算 View。下列自动事件都可能触发下一次布局或状态更新：
+
+- 启动后的课表刷新；
+- 运行时学期配置更新；
+- SwiftData `@Query` 结果变化；
+- Tab、尺寸、Scene 或前后台状态变化；
+- 其他 Observable 状态使 AttributeGraph 失效。
+
+只要“删除旧模型”和“旧快照再次渲染”落在同一个生命周期窗口内，App 就可能在空闲状态崩溃。因此 Apple 的 “crashed with no specific action taken” 与日志一致。
+
+### build 22 修复
+
+渲染快照现在只保存普通不可变值：
+
+- `TimetableCourseRenderValue`
+- `TimetableCellReminderRenderValue`
+
+生成快照时一次性复制 UUID、名称、教师、教室、节次、周次和备注等渲染字段。SwiftUI 后续布局不再读取任何 SwiftData managed object。
+
+用户点击课程时，界面使用渲染值中的 UUID，从当前 `@Query` 结果重新解析有效 `Course`：
+
+- 找到：进入详情或编辑流程；
+- 未找到：重建快照并提示“课表已更新，请重试。”；
+- 不允许回退读取已经失效的旧模型。
+
+课程替换保存也改为可抛错边界。原有的 `try? modelContext.save()` 会吞掉错误，并可能让 UI 在持久化失败后继续发布不可信快照；现在保存失败会显式回滚并进入错误状态。
+
+同一安全边界覆盖：
+
+- 课表刷新替换；
+- 课程清空；
+- 学期切换；
+- 手动导入；
+- 提醒删除和重建。
+
+主要实现：
+
+- `leafy/Features/Timetable/Domain/TimetableGridSnapshot.swift`
+- `leafy/Features/Timetable/Presentation/Grid/TimetableCourseBlocks.swift`
+- `leafy/Features/Timetable/Presentation/Grid/TimetableLayoutSupport.swift`
+- `leafy/Features/Timetable/Presentation/Screen/TimetableView.swift`
+- `leafy/Features/Timetable/Application/TimetableRefreshUseCase.swift`
+
+### 可复用原则
+
+SwiftData managed object 可以用于当前事务中的查询和编辑，但不应被长期保存到跨刷新、跨渲染或异步缓存的“快照”中。跨边界的数据应复制成值类型；需要编辑时再通过稳定 ID 查找当前有效模型。
+
+## 崩溃二：社区 badge 违反 MainActor 隔离
+
+### 日志证据
+
+第二份日志的关键信息：
+
+- Incident ID：`C99CC30A-85BB-4383-AC7E-BA23DD58A850`
+- 异常：`EXC_BREAKPOINT / SIGTRAP`
+- Faulting thread：线程 9
+- 队列：`com.apple.root.user-initiated-qos.cooperative`
+- 顶部运行时帧：
+  - `_dispatch_assert_queue_fail`
+  - `dispatch_assert_queue`
+  - `_swift_task_checkIsolatedSwift`
+- 完整符号化后的 App 帧指向：
+  - `CommunityNotificationBadgeViewModel.refresh()`
+  - `scheduleRefresh()` 创建的延迟刷新任务
+
+这不是 SwiftData 问题。运行时明确发现当前代码位于后台 executor，但执行路径要求 MainActor/主队列隔离。
+
+### 原有并发错误
+
+`CommunityNotificationBadgeViewModel` 是 `@MainActor` 对象，`@Published unreadCount` 属于 UI 状态，只能在 MainActor 上发布。
+
+旧版 `CommunityTimeout.run` 使用以下机制手工竞争请求和超时：
+
+- `Task.detached`
+- `withCheckedThrowingContinuation`
+- `NSLock`
+
+锁可以避免两个竞争者重复恢复 continuation，但不能提供 actor 隔离。`Task.detached` 不继承调用者的 actor；`CheckedContinuation` 负责检查恢复规则，本身不是 MainActor 调度器。
+
+同时，badge 的延迟刷新和 Realtime 回调依赖隐式 executor 推断。网络完成、超时、取消和订阅切换交错时，存在后台 cooperative executor 进入 UI 隔离路径的可能，运行时因此主动终止。
+
+典型风险链路：
+
+```text
+MainActor 安排 badge 刷新
+        ↓
+detached 请求任务与 detached 超时任务竞争
+        ↓
+延迟刷新或结果回调落在后台 cooperative executor
+        ↓
+进入 CommunityNotificationBadgeViewModel.refresh
+        ↓
+准备发布 unreadCount / 执行 MainActor 隔离代码
+        ↓
+Swift runtime 检测 executor 不匹配
+        ↓
+dispatch assertion → SIGTRAP
+```
+
+### 为什么它是间歇性的
+
+触发顺序取决于：
+
+- Sandbox 网络延迟；
+- 请求和超时谁先完成；
+- Realtime 回调到达时间；
+- Tab 切换和任务取消；
+- 账号或社区 profile 切换；
+- 设备负载和 Swift cooperative executor 调度。
+
+本地网络快速时，错误路径可能长期不出现；审核环境的网络和调度差异会扩大竞争窗口。
+
+### build 22 修复
+
+`CommunityTimeout.run` 保持原有调用接口，但内部改为 `withThrowingTaskGroup`：
+
+1. 一个结构化子任务执行实际操作；
+2. 一个结构化子任务负责超时；
+3. 第一个结果确定后取消其余任务；
+4. 操作完成、超时和取消只能产生一个最终结果。
+
+badge 刷新进一步明确了 actor 所有权：
+
+- 延迟刷新任务显式声明 `Task { @MainActor in ... }`；
+- Realtime 建立、事件处理和清理路径显式回到 MainActor；
+- 所有 `@Published` 修改只发生在 MainActor；
+- 不依赖闭包对 actor 的隐式继承。
+
+为避免旧请求覆盖新账号状态，每次订阅还会生成独立 `subscriptionID`。请求返回后同时检查：
+
+- 当前任务未取消；
+- `profileID` 仍然匹配；
+- `subscriptionID` 仍然匹配。
+
+任一条件不成立，旧结果直接丢弃，不修改当前 badge。
+
+主要实现：
+
+- `leafy/Features/Community/Application/CommunitySessionManager.swift`
+- `leafy/Features/Community/Presentation/CommunityRootView.swift`
+
+### 可复用原则
+
+- UI 状态的 actor 所有权必须显式、稳定，不能依赖 detached task 或回调线程“通常正确”。
+- 超时应优先使用结构化并发，而不是手工组合 detached task、锁和 continuation。
+- 异步结果除了线程安全，还必须校验业务身份是否仍然有效；否则即使不崩溃，也可能发生旧账号结果覆盖新账号。
+
+## Leafy AI 与订阅问题
+
+### 审核发现
+
+审核截图显示 Leafy AI 周订阅页面返回：
+
+> 同步 Leafy AI 额度失败：订阅交易验证失败，请稍后重试。
+
+同时，Apple 指出 App Store 元数据缺少 Terms of Use 链接，并要求确认 IAP 配置和 Paid Apps Agreement。
+
+本次不通过关闭证书校验、跳过 JWS 验证或把失败交易标记为已订阅来规避审核。这些做法会扩大权益伪造风险。
+
+### build 22 产品策略
+
+Leafy AI 和订阅实现继续保留在源码中，但本次审核版本没有公开入口：
+
+- 根导航固定为 `课表 / 社区 / 校园 / 我的`；
+- iOS 26 原生 `Tab` 和 iOS 17–25 `tabItem` 两条路径都不展示 Leafy；
+- `RootTab.leafy` 类型继续保留，便于后续恢复；
+- 任何旧状态或内部状态尝试选择 `.leafy`，都会重定向到 `.timetable`；
+- 用户无法从公开 UI 到达 Leafy AI 或购买页面。
+
+订阅商品 `com.isaachuo.leafy.ai.weekly.v2` 保留在 App Store Connect，不删除、不停售，但应从当前被拒提交及其审核关联中移除。
+
+未来恢复订阅前必须完成：
+
+1. 确认 Paid Apps Agreement 状态为 Active；
+2. 获取并记录 Supabase 原始 JWS 验签异常；
+3. 分别完成 Sandbox 和 Production 交易/JWS 测试；
+4. 只有服务端验证成功后才授予并显示订阅权益；
+5. 购买页和 App Store 元数据同时提供隐私政策与 Terms of Use。
+
+## App Store Connect 人工操作
+
+以下操作不能由代码提交代替，重新送审前需要在 App Store Connect 确认：
+
+- [ ] 从当前被拒提交中移除 `com.isaachuo.leafy.ai.weekly.v2` 及其订阅组关联；保留商品记录。
+- [ ] 在 App Description 末尾加入：
 
   `Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/`
 
-- 删除本版本元数据、宣传文本和审核截图中关于 Leafy AI 或周订阅可购买的描述。
-- 隐私政策链接保持不变。
-- 后续恢复订阅前，确认 Paid Apps Agreement 状态为 Active，并完成 Production/Sandbox JWS 验证。
+- [ ] 删除本版本元数据、宣传文本和审核截图中关于 Leafy AI 或周订阅可购买的描述。
+- [ ] 隐私政策链接保持可访问。
+- [ ] 上传 2.9 build 22，并确认 App、Widget、Share Extension 的 build number 一致。
+- [ ] 在 Review Notes 中加入修复说明和录屏。
+- [ ] 回复原审核消息并附上录屏。
 
-## Review Notes
+Apple 参考：
 
+- [提交 In-App Purchase](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase/)
+- [签署和更新协议](https://developer.apple.com/help/app-store-connect/manage-agreements/sign-and-update-agreements)
+- [Apple 标准 EULA](https://www.apple.com/legal/internet-services/itunes/dev/stdeula/)
+
+## build 22 代码与版本状态
+
+- Marketing version 保持 `2.9`。
+- App、Widget 和 Share Extension 的全部构建配置统一为 build `22`。
+- 公开根 Tab 顺序固定为：
+
+  1. 课表
+  2. 社区
+  3. 校园
+  4. 我的
+
+- Leafy AI、商品 ID、SwiftData schema、Supabase RPC 和 AI 服务代码均未删除。
+- 未降低或绕过订阅验签安全策略。
+
+对应修复提交：
+
+```text
+68f311ed878630244621bb9590fdd1b018401183
+fix(app-review): stabilize 2.9 build 22
+```
+
+该提交已合并到 `main`。
+
+## 验证记录
+
+### 静态与单元验证
+
+- `git diff --check` 通过。
+- Debug build 通过。
+- 定向测试共 7 项通过，覆盖：
+  - 快照生成后删除原 SwiftData 模型，渲染值仍可读取；
+  - 快照不残留 `Course` 和提醒 managed object；
+  - `CommunityTimeout` 的操作完成、超时和取消；
+  - 根 Tab 数量与顺序；
+  - 旧 `.leafy` 状态重定向到课表。
+
+### iPadOS 26 验证
+
+在 iPad Air 11-inch (M3) / iOS 26.5 模拟器使用 Release 配置完成：
+
+- 连续冷启动 10 次；
+- 每次启动后空闲至少 30 秒；
+- 依次切换课表、社区、校园、我的；
+- 三轮前台/后台切换；
+- 再次切换全部四个 Tab。
+
+验证期间未观察到：
+
+- `EXC_BREAKPOINT`
+- SwiftData invalid-model assertion
+- dispatch queue / executor assertion
+- Leafy AI 或订阅入口可达
+
+### 最低系统兼容验证
+
+在 iOS 17.5 模拟器完成兼容构建和四 Tab 冒烟测试，旧版 `tabItem` 导航路径保持可用。
+
+### 验证边界
+
+模拟器验证不能替代 App Review 的真实设备和 Sandbox 环境。build 22 已移除本次公开购买路径，因此没有把“订阅交易成功”列为本版验收项；订阅恢复时必须单独完成真实 Sandbox/Production 验证。
+
+## 为什么开发阶段一直没有定位出来
+
+本次问题长期难以定位，不是因为没有在真机调试，而是因为原有开发链路缺少从“真机停止”到“可符号化崩溃证据”的闭环。
+
+### `Paused` 只是状态，不是诊断结果
+
+通过 Xcode 安装 Debug build 到真机时，App 进程由 LLDB 调试器附加。遇到以下情况时，Xcode 都可能显示 `Paused`：
+
+- 命中普通断点或异常断点；
+- 开发者主动点击 Pause；
+- Swift `fatalError`、precondition 或 runtime assertion；
+- SwiftData/dispatch 执行 trap；
+- 系统把进程停在底层框架函数中。
+
+如果停止在 `_assertionFailure`、`_dispatch_assert_queue_fail` 或其他系统帧，Xcode 默认画面经常只显示“某个线程暂停”，而不会自动解释是哪一段业务生命周期造成的。
+
+这时至少需要立即保存：
+
+```lldb
+bt
+thread backtrace all
+```
+
+同时复制 Debug Console 中停止前后的完整输出。只有“Xcode 显示 Paused”或一张暂停截图，无法区分断点、SwiftData assertion、actor 隔离、网络等待和 UI 卡顿。
+
+### 调试器会截住崩溃
+
+连接 Xcode 时，调试器通常会在进程真正终止前截获异常，让开发者检查现场。这对人工调试有用，但意味着 iOS 可能还没有完成写入完整 `.ips`。
+
+如果需要系统生成完整崩溃报告，应在保存现场 backtrace 后使用 Xcode 的 `Debug > Detach`，让进程完成崩溃，再从设备导出报告。Apple 也明确说明：调试器截获崩溃时，需要 detach 才能让系统完成 crash report。
+
+如果 Xcode 只是命中了普通断点，App 没有真正终止，就不会生成 `.ips`。
+
+### Debug 环境不能完全代表 App Review
+
+本地调试和审核环境存在几项重要差异：
+
+| 本地开发 | App Review |
+|---|---|
+| 通常是 Debug 配置 | App Store Release/distribution build |
+| LLDB 附加并改变暂停、调度和时序 | 无调试器附加 |
+| 常在个人 iPhone 测试 | 本次是 iPad Air 11-inch (M3) |
+| 使用个人账号和已有缓存 | 使用审核账号、Sandbox 和不同数据状态 |
+| 网络、Realtime 和后台任务时序相对固定 | 审核网络与系统调度不同 |
+
+本次两个崩溃都依赖窄时序窗口：
+
+- 课表：旧 SwiftData 模型被替换后，旧快照何时再次渲染；
+- 社区：请求、超时、取消和 Realtime 回调在哪个 executor 上完成。
+
+调试器、设备性能和网络状态都会改变这个窗口。真机多次运行没有触发，不能证明生命周期和并发边界正确。
+
+### Codex 当时缺少决定性输入
+
+Codex 能检查源码和运行它有权限启动的模拟器，但不会自动读取：
+
+- 你手上 iPhone 的系统诊断目录；
+- Xcode 当前暂停线程和 LLDB 状态；
+- 未保存的 Debug Console；
+- App Store Connect 中的审核附件；
+- 某次上传 build 对应的 dSYM。
+
+如果只提供“真机 paused”“偶尔闪退”或 UI 截图，AI 可以提出假设，但无法可靠判断：
+
+- 进程是否真正崩溃；
+- 哪个线程触发终止；
+- 异常是 `SIGTRAP`、`EXC_BAD_ACCESS`、watchdog 还是 jetsam；
+- 第一个 App-owned stack frame 在哪里；
+- 使用哪个 dSYM 才能还原源码函数。
+
+这次 Apple 提供的两份完整 `.ips` 同时给出了异常类型、faulting thread、全部线程 backtrace 和二进制 UUID，才把问题从“间歇性现象”变成了可以验证的两条调用链。
+
+## `.ips` 是什么，系统如何获得
+
+`.ips` 是 Apple 平台现代诊断报告的一种文件格式。App 真正异常终止时，iOS/iPadOS 会由系统进程记录当时的运行状态，通常包括：
+
+- App 名称、版本、build 和 bundle ID；
+- 设备型号、系统版本和进程状态；
+- exception、signal 和 termination reason；
+- faulting thread；
+- 所有线程的 backtrace；
+- 已加载二进制及其 UUID；
+- 部分系统诊断信息。
+
+它不是普通 `print` 控制台日志，也不是屏幕录制。控制台说明崩溃前发生了什么，`.ips` 则主要记录进程终止瞬间各线程正在执行什么；两者一起使用效果最好。
+
+本次两份 `.ips` 的产生链路是：
+
+```text
+App Review 在审核 iPad 上运行 build 21
+        ↓
+iPadOS 检测到 SIGTRAP 并终止 Leafy
+        ↓
+系统生成 JSON 格式的 .ips crash report
+        ↓
+审核团队将报告附加到 App Store Connect 审核消息
+        ↓
+开发者下载附件并使用匹配 UUID 的 dSYM 符号化
+```
+
+Apple 官方说明，crash report 会记录终止方式和所有线程当时的调用栈；JSON 报告中的 binary UUID 用于匹配对应 dSYM：
+
+- [Diagnosing issues using crash reports and device logs](https://developer.apple.com/documentation/xcode/diagnosing-issues-using-crash-reports-and-device-logs)
+- [Interpreting the JSON format of a crash report](https://developer.apple.com/documentation/xcode/interpreting-the-json-format-of-a-crash-report)
+
+## 从自己的真机获取 `.ips`
+
+### 方法一：直接在 iPhone 或 iPad 分享
+
+在设备上打开：
+
+```text
+设置
+  → 隐私与安全性
+  → 分析与改进
+  → 分析数据
+```
+
+然后：
+
+1. 找到以 `Leafy-` 或 `Leafy_` 和日期开头的记录；
+2. 确认时间与刚才的闪退时间一致；
+3. 打开记录；
+4. 点击分享按钮；
+5. 保存到“文件”、AirDrop 到 Mac，或作为附件发送。
+
+高内存终止可能显示为 `JetsamEvent-...`，它与普通 crash report 不同，通常没有相同形式的线程崩溃栈。
+
+### 方法二：通过 Xcode 从连接的设备导出
+
+1. 用数据线或已配对的无线调试连接设备；
+2. 打开 Xcode；
+3. 打开 `Window > Devices and Simulators`；
+4. 选择对应 iPhone/iPad；
+5. 打开 `View Device Logs`；
+6. 按 App 名称和时间找到记录；
+7. 导出报告，或拖到本地目录。
+
+Xcode 还可以导入 crash report 并尝试使用本机已有 dSYM 自动符号化。
+
+### 方法三：从 Xcode Organizer 获取 App Store/TestFlight 崩溃
+
+对于已经通过 App Store 或 TestFlight 分发的版本：
+
+1. 打开 `Window > Organizer`；
+2. 进入 `Crashes`；
+3. 选择 Leafy、版本和 build；
+4. 查看按 crash signature 聚合的 Crash Point；
+5. 导出具体 crash report。
+
+这类数据依赖 Apple 收集和用户的诊断共享设置，不保证每次崩溃立即出现，也不一定覆盖低量或单设备问题。
+
+完整获取方式见 Apple 官方文档：
+
+- [Acquiring crash reports and diagnostic logs](https://developer.apple.com/documentation/xcode/acquiring-crash-reports-and-diagnostic-logs)
+- [Adding identifiable symbol names to a crash report](https://developer.apple.com/documentation/xcode/adding-identifiable-symbol-names-to-a-crash-report)
+
+## 以后如何把真机现场交给 Codex
+
+遇到 Xcode 再次显示 `Paused` 时，按以下最小证据包处理。
+
+### 仍处于暂停状态时
+
+先不要立即 Stop：
+
+1. 截图 Xcode 的 Debug Navigator、停止线程和源码位置；
+2. 在 LLDB 输入 `bt`；
+3. 再输入 `thread backtrace all`；
+4. 复制 Debug Console 从复现前到暂停后的输出；
+5. 记录刚才的操作、准确时间、设备和系统版本；
+6. 如果需要 `.ips`，保存上述现场后再 Detach，让进程完成崩溃。
+
+### 崩溃完成后
+
+提供以下内容：
+
+- 原始 `.ips`，不要只截取前十行；
+- Console 文本日志；
+- Xcode 暂停截图；
+- 当前 Git commit；
+- App version、build number、Debug/Release 配置；
+- 设备型号和 iOS/iPadOS 版本；
+- 最短复现步骤和崩溃时间；
+- 对应 `.xcarchive` 或 dSYM 的路径。
+
+可以直接把文件保存到 Mac，例如 `Downloads`，然后把绝对路径告诉 Codex。Codex就能读取原文件、核对 UUID、符号化地址并对应当前源码。
+
+推荐请求格式：
+
+```text
+这是刚才真机闪退的材料：
+
+- .ips: /Users/.../Downloads/Leafy-2026-07-25.ips
+- Console: /Users/.../Downloads/Leafy-console.log
+- 截图: /Users/.../Downloads/Leafy-paused.png
+- Git commit: <commit>
+- Build: 2.9 (22), Release
+- Device: <设备和系统>
+- 复现步骤: <步骤>
+
+请先确认是否是真崩溃，核对 binary UUID 与 dSYM，完整符号化 faulting thread，再分析根因。
+```
+
+对于模拟器，Codex 可以通过 iOS 调试工具直接启动 App、采集 console 和复现 UI；对于你手中的物理设备，最可靠的交接方式仍然是导出 `.ips`、console 和 LLDB backtrace，而不是只描述“Xcode paused”。
+
+## Review Notes 模板
+
+```text
 MyLeafy 2.9 (build 22) temporarily removes the public Leafy AI entry point and all in-app purchase access. The subscription product is not included in this submission.
 
 We fixed both crashes identified from the symbolicated build 21 crash reports:
@@ -24,9 +573,11 @@ We tested cold launch, idle operation, all four tabs (Timetable, Community, Camp
 
 Terms of Use:
 https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+```
 
-## 给审核团队的回复
+## 给审核团队的回复模板
 
+```text
 Hello App Review Team,
 
 Thank you for the detailed feedback. We have submitted MyLeafy 2.9 (build 22) with the following changes:
@@ -37,11 +588,33 @@ Thank you for the detailed feedback. We have submitted MyLeafy 2.9 (build 22) wi
 - We tested cold launch, idle operation, all four tabs, and foreground/background transitions on iPad Air 11-inch (M3).
 
 The attached screen recording demonstrates the tested flow. Thank you for reviewing the updated build.
+```
 
-## 录屏顺序
+## 审核录屏顺序
 
-1. 展示安装的是 2.9 build 22。
+1. 展示安装版本为 2.9 build 22。
 2. 冷启动并在课表页空闲至少 30 秒。
 3. 依次打开课表、社区、校园、我的四个 Tab。
 4. 进入后台再回到前台，重复三轮。
-5. 再次切换四个 Tab，证明 App 继续正常运行且没有 Leafy AI 或订阅入口。
+5. 再次切换四个 Tab，证明 App 继续正常运行。
+6. 展示没有 Leafy AI 或订阅公开入口。
+
+## 后续崩溃排查流程
+
+以后收到 Apple `.ips` 日志时，按以下顺序处理：
+
+1. 记录版本、build、Incident ID、设备和系统版本。
+2. 从日志读取 App binary UUID。
+3. 找到该次上传对应的 `.xcarchive` 和 dSYM，并核对 UUID；不能使用其他 build 的近似 dSYM。
+4. 完整符号化日志，优先确认 faulting thread 和第一个 App-owned frame。
+5. 区分异常类型：
+   - SwiftData/Swift assertion：检查模型生命周期和非法状态；
+   - dispatch/actor assertion：检查 executor 和 MainActor 边界；
+   - memory access：再检查悬空指针、越界或第三方 native code；
+   - watchdog：检查启动、主线程阻塞和后台时间限制。
+6. 还原触发时序，不只修复堆栈最上方的一行。
+7. 为生命周期或并发边界增加定向回归测试。
+8. 使用与审核尽可能一致的设备、系统和 Release 配置验证。
+9. 保存每次上传的 archive、dSYM、Git commit、build number 和验证记录。
+
+本次经验说明，“本地不容易复现”不代表问题随机或不可诊断。对间歇性崩溃，准确的二进制 UUID、完整符号化、线程信息和生命周期时序通常比重复盲测更重要。
