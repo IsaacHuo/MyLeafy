@@ -31,7 +31,7 @@ export async function handler(request: Request): Promise<Response> {
 
   const body = await readJSON<ValidationRequest>(request);
   const kind = normalized(body.kind) ?? "post";
-  const postID = normalized(body.post_id);
+  const postID = normalizedUUID(body.post_id);
   const fullPath = normalized(body.full_path);
   const thumbnailPath = normalized(body.thumbnail_path);
 
@@ -40,15 +40,18 @@ export async function handler(request: Request): Promise<Response> {
     .select("profile_id")
     .eq("auth_user_id", authData.user.id)
     .maybeSingle();
-  if (linkError || !link?.profile_id) return json({ error: "Community profile is unavailable." }, 403);
+  const profileID = normalizedUUID(link?.profile_id);
+  if (linkError || !profileID) {
+    return rejected("profile_link_unavailable", "Community profile is unavailable.", 403);
+  }
 
   if (kind === "avatar" || kind === "cover") {
     const objectPath = normalized(body.object_path);
     const prefix = kind === "avatar"
-      ? `avatars/${link.profile_id}/`
-      : `profile-covers/${link.profile_id}/`;
+      ? `avatars/${profileID}/`
+      : `profile-covers/${profileID}/`;
     if (!objectPath || !objectPath.startsWith(prefix)) {
-      return json({ error: "Upload path does not belong to the current profile." }, 403);
+      return rejected("profile_image_path_mismatch", "Upload path does not belong to the current profile.", 403);
     }
     try {
       await validatedJPEG(client, objectPath, kind === "avatar" ? 512 : 1800);
@@ -63,9 +66,9 @@ export async function handler(request: Request): Promise<Response> {
     return json({ error: "Invalid upload validation request." }, 400);
   }
 
-  const prefix = `posts/${link.profile_id}/${postID}`;
+  const prefix = postUploadPrefix(profileID, postID);
   if (!fullPath.startsWith(`${prefix}/full/`) || !thumbnailPath.startsWith(`${prefix}/thumb/`)) {
-    return json({ error: "Upload path does not belong to the current profile." }, 403);
+    return rejected("post_image_path_mismatch", "Upload path does not belong to the current profile.", 403);
   }
 
   try {
@@ -150,12 +153,28 @@ function normalized(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+export function normalizedUUID(value: unknown) {
+  const text = normalized(value)?.toLowerCase();
+  return text && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(text)
+    ? text
+    : null;
+}
+
+export function postUploadPrefix(profileID: string, postID: string) {
+  return `posts/${profileID}/${postID}`;
+}
+
 async function readJSON<T>(request: Request): Promise<T> {
   try {
     return await request.json() as T;
   } catch {
     return {} as T;
   }
+}
+
+function rejected(code: string, message: string, status: number) {
+  console.warn(JSON.stringify({ event: "community_upload_rejected", code }));
+  return json({ error: message, code }, status);
 }
 
 function json(payload: unknown, status = 200) {

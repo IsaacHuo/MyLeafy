@@ -938,7 +938,7 @@ extension CommunityService {
             options: FunctionInvokeOptions(
                 headers: ["Authorization": "Bearer \(session.accessToken)"],
                 body: CommunityUploadValidationRequest(
-                    postID: postID,
+                    postID: postID.uuidString.lowercased(),
                     fullPath: fullPath,
                     thumbnailPath: thumbnailPath
                 )
@@ -2678,7 +2678,7 @@ extension CommunityService {
                     options: FunctionInvokeOptions(
                         headers: ["Authorization": "Bearer \(session.accessToken)"],
                         body: CommunityUploadValidationRequest(
-                            postID: postID,
+                            postID: postID.uuidString.lowercased(),
                             fullPath: objectPath,
                             thumbnailPath: thumbnailPath
                         )
@@ -4626,7 +4626,7 @@ private nonisolated struct CommunityPostAttachmentRecord: Decodable, Sendable {
 }
 
 private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable {
-    let postID: UUID
+    let postID: String
     let fullPath: String
     let thumbnailPath: String
 
