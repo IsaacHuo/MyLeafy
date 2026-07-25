@@ -143,6 +143,159 @@ struct TimetableGridInputSignature: Equatable, Hashable {
     }
 }
 
+struct TimetableCourseRenderValue: Identifiable, Hashable {
+    let id: UUID
+    let courseName: String
+    let displayCourseName: String
+    let teacher: String
+    let classInfo: String
+    let room: String
+    let location: String
+    let locationText: String
+    let timetableCardLocationText: String
+    let dayOfWeek: Int
+    let weeks: [Int]
+    let duration: [Int]
+    let stableCourseKey: String
+
+    @MainActor
+    init(course: Course) {
+        id = course.id
+        courseName = course.courseName
+        displayCourseName = course.displayCourseName
+        teacher = course.teacher
+        classInfo = course.classInfo
+        room = course.room
+        location = course.location
+        locationText = course.locationText
+        timetableCardLocationText = course.timetableCardLocationText
+        dayOfWeek = course.dayOfWeek
+        weeks = course.weeks
+        duration = course.duration
+        stableCourseKey = course.stableCourseKey
+    }
+
+    func occurrenceKey(week: Int) -> String {
+        CourseOccurrenceNote.occurrenceKey(courseKey: stableCourseKey, week: week)
+    }
+}
+
+struct TimetableCellReminderRenderValue: Identifiable, Hashable {
+    let id: UUID
+    let cellKey: String
+    let week: Int
+    let dayOfWeek: Int
+    let period: Int
+    let title: String
+    let locationText: String
+    let noteText: String
+    let startsAt: Date?
+    let endsAt: Date?
+    let minutesBefore: Int
+    let updatedAt: Date
+    let displayStartPeriod: Int
+    let displayEndPeriod: Int
+    let resolvedStartDate: Date?
+    let resolvedEndDate: Date?
+
+    var displayPeriodRange: ClosedRange<Int> {
+        displayStartPeriod...displayEndPeriod
+    }
+
+    @MainActor
+    init(reminder: TimetableCellReminder) {
+        id = reminder.id
+        cellKey = reminder.cellKey
+        week = reminder.week
+        dayOfWeek = reminder.dayOfWeek
+        period = reminder.period
+        title = reminder.title
+        locationText = reminder.locationText
+        noteText = reminder.noteText
+        startsAt = reminder.startsAt
+        endsAt = reminder.endsAt
+        minutesBefore = reminder.minutesBefore
+        updatedAt = reminder.updatedAt
+        displayStartPeriod = reminder.displayStartPeriod
+        displayEndPeriod = reminder.displayEndPeriod
+        resolvedStartDate = reminder.resolvedStartDate
+        resolvedEndDate = reminder.resolvedEndDate
+    }
+}
+
+struct TimetableGridCourseLayout: Identifiable {
+    let course: TimetableCourseRenderValue
+    let laneIndex: Int
+    let laneCount: Int
+
+    var id: UUID { course.id }
+}
+
+enum TimetableGridCourseLayoutBuilder {
+    static func layouts(for courses: [TimetableCourseRenderValue]) -> [TimetableGridCourseLayout] {
+        guard !courses.isEmpty else { return [] }
+
+        var result: [TimetableGridCourseLayout] = []
+        var cluster: [TimetableCourseRenderValue] = []
+        var clusterMaxEnd = 0
+
+        func flushCluster() {
+            guard !cluster.isEmpty else { return }
+            result.append(contentsOf: layoutsForCluster(cluster))
+            cluster.removeAll()
+            clusterMaxEnd = 0
+        }
+
+        for course in courses {
+            let start = course.duration.min() ?? 0
+            let end = course.duration.max() ?? 0
+
+            if cluster.isEmpty {
+                cluster = [course]
+                clusterMaxEnd = end
+            } else if start <= clusterMaxEnd {
+                cluster.append(course)
+                clusterMaxEnd = max(clusterMaxEnd, end)
+            } else {
+                flushCluster()
+                cluster = [course]
+                clusterMaxEnd = end
+            }
+        }
+
+        flushCluster()
+        return result
+    }
+
+    private static func layoutsForCluster(
+        _ cluster: [TimetableCourseRenderValue]
+    ) -> [TimetableGridCourseLayout] {
+        var laneEndings: [Int] = []
+        var placements: [(TimetableCourseRenderValue, Int)] = []
+
+        for course in cluster {
+            let start = course.duration.min() ?? 0
+            let end = course.duration.max() ?? 0
+
+            if let reusableLane = laneEndings.firstIndex(where: { $0 < start }) {
+                laneEndings[reusableLane] = end
+                placements.append((course, reusableLane))
+            } else {
+                laneEndings.append(end)
+                placements.append((course, laneEndings.count - 1))
+            }
+        }
+
+        return placements.map { course, laneIndex in
+            TimetableGridCourseLayout(
+                course: course,
+                laneIndex: laneIndex,
+                laneCount: max(1, laneEndings.count)
+            )
+        }
+    }
+}
+
 @MainActor
 struct TimetableGridSnapshot {
     let signature: TimetableGridInputSignature
@@ -151,10 +304,10 @@ struct TimetableGridSnapshot {
     let courseNoteKeys: Set<String>
     let occurrenceNoteKeys: Set<String>
 
-    private let layoutsByDay: [TimetableGridDayKey: [DayCourseLayout]]
+    private let layoutsByDay: [TimetableGridDayKey: [TimetableGridCourseLayout]]
     private let occupiedPeriodsByDay: [TimetableGridDayKey: Set<Int>]
-    private let latestCellReminderByKey: [String: TimetableCellReminder]
-    private let cellRemindersByDay: [TimetableGridDayKey: [TimetableCellReminder]]
+    private let latestCellReminderByKey: [String: TimetableCellReminderRenderValue]
+    private let cellRemindersByDay: [TimetableGridDayKey: [TimetableCellReminderRenderValue]]
     private let courseNotesByKey: [String: String]
     private let occurrenceNotesByKey: [String: String]
 
@@ -182,11 +335,13 @@ struct TimetableGridSnapshot {
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
         let courseNoteKeys = Set(courseNotesByKey.keys)
         let occurrenceNoteKeys = Set(occurrenceNotesByKey.keys)
+        let courseValues = courses.map(TimetableCourseRenderValue.init(course:))
+        let reminderValues = cellReminders.map(TimetableCellReminderRenderValue.init(reminder:))
 
-        let coursesByDay = Dictionary(grouping: courses) { course in
+        let coursesByDay = Dictionary(grouping: courseValues) { course in
             TimetableGridDayKey(week: 0, day: course.dayOfWeek)
         }
-        var layoutsByDay: [TimetableGridDayKey: [DayCourseLayout]] = [:]
+        var layoutsByDay: [TimetableGridDayKey: [TimetableGridCourseLayout]] = [:]
         var occupiedPeriodsByDay: [TimetableGridDayKey: Set<Int>] = [:]
 
         for week in 1...totalWeeks {
@@ -194,15 +349,22 @@ struct TimetableGridSnapshot {
                 let key = TimetableGridDayKey(week: week, day: day)
                 let dayCourses = (coursesByDay[TimetableGridDayKey(week: 0, day: day)] ?? [])
                     .filter { $0.weeks.contains(week) }
-                    .sortedByStartPeriod()
-                let layouts = DayCourseLayoutBuilder.layouts(for: dayCourses)
+                    .sorted { lhs, rhs in
+                        let lhsStart = lhs.duration.min() ?? Int.max
+                        let rhsStart = rhs.duration.min() ?? Int.max
+                        if lhsStart != rhsStart {
+                            return lhsStart < rhsStart
+                        }
+                        return lhs.displayCourseName.localizedCompare(rhs.displayCourseName) == .orderedAscending
+                    }
+                let layouts = TimetableGridCourseLayoutBuilder.layouts(for: dayCourses)
                 layoutsByDay[key] = layouts
                 occupiedPeriodsByDay[key] = Set(layouts.flatMap(\.course.duration))
             }
         }
 
         let latestCellReminderByKey = Dictionary(
-            cellReminders
+            reminderValues
                 .sorted { $0.updatedAt > $1.updatedAt }
                 .map { ($0.cellKey, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -235,7 +397,7 @@ struct TimetableGridSnapshot {
         )
     }
 
-    func layouts(day: Int, week: Int) -> [DayCourseLayout] {
+    func layouts(day: Int, week: Int) -> [TimetableGridCourseLayout] {
         layoutsByDay[TimetableGridDayKey(week: week, day: day)] ?? []
     }
 
@@ -243,11 +405,11 @@ struct TimetableGridSnapshot {
         occupiedPeriodsByDay[TimetableGridDayKey(week: week, day: day)] ?? []
     }
 
-    func cellReminder(week: Int, day: Int, period: Int) -> TimetableCellReminder? {
+    func cellReminder(week: Int, day: Int, period: Int) -> TimetableCellReminderRenderValue? {
         latestCellReminderByKey[TimetableCellReminder.cellKey(week: week, dayOfWeek: day, period: period)]
     }
 
-    func cellReminders(week: Int, day: Int) -> [TimetableCellReminder] {
+    func cellReminders(week: Int, day: Int) -> [TimetableCellReminderRenderValue] {
         cellRemindersByDay[TimetableGridDayKey(week: week, day: day)] ?? []
     }
 
@@ -262,6 +424,22 @@ struct TimetableGridSnapshot {
             courseNotesByKey: courseNotesByKey,
             occurrenceNotesByKey: occurrenceNotesByKey
         )
+    }
+
+    func hasNote(for course: TimetableCourseRenderValue, week: Int) -> Bool {
+        note(for: course, week: week) != nil
+    }
+
+    func note(for course: TimetableCourseRenderValue, week: Int) -> String? {
+        let occurrenceText = occurrenceNotesByKey[course.occurrenceKey(week: week)]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let occurrenceText, !occurrenceText.isEmpty {
+            return occurrenceText
+        }
+
+        let courseText = courseNotesByKey[course.stableCourseKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return courseText?.isEmpty == false ? courseText : nil
     }
 }
 

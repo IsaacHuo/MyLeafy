@@ -290,39 +290,22 @@ nonisolated enum CommunityTimeout {
         message: String,
         operation: @Sendable @escaping () async throws -> T
     ) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            let state = CommunityTimeoutState(continuation: continuation)
-            let operationTask = Task.detached {
-                do {
-                    state.resume(.success(try await operation()))
-                } catch {
-                    state.resume(.failure(error))
-                }
+        try Task.checkCancellation()
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                try Task.checkCancellation()
+                throw CommunityServiceError.edgeFunctionRejected(message)
             }
 
-            Task.detached {
-                try? await Task.sleep(for: .seconds(seconds))
-                operationTask.cancel()
-                state.resume(.failure(CommunityServiceError.edgeFunctionRejected(message)))
+            defer { group.cancelAll() }
+            guard let firstResult = try await group.next() else {
+                throw CancellationError()
             }
+            return firstResult
         }
-    }
-}
-
-private nonisolated final class CommunityTimeoutState<T: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<T, Error>?
-
-    init(continuation: CheckedContinuation<T, Error>) {
-        self.continuation = continuation
-    }
-
-    func resume(_ result: Result<T, Error>) {
-        lock.lock()
-        let continuation = continuation
-        self.continuation = nil
-        lock.unlock()
-
-        continuation?.resume(with: result)
     }
 }

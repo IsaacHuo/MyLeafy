@@ -8,6 +8,13 @@ import UIKit
 import AppKit
 #endif
 
+private struct CourseBlockContent {
+    let displayCourseName: String
+    let teacher: String
+    let locationText: String
+    let timetableCardLocationText: String
+}
+
 struct CourseBlockView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.colorScheme) private var colorScheme
@@ -15,20 +22,81 @@ struct CourseBlockView: View {
     @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
 
-    let course: Course
+    private let content: CourseBlockContent
+    private let contextMenuCourse: Course?
     let hasNote: Bool
-    var noteText: String? = nil
+    var noteText: String?
     let height: CGFloat
     let width: CGFloat
     let isCompact: Bool
-    var isTodayCourse: Bool = false
-    var backgroundPalette: [Color]? = nil
-    var courseCardOpacity: Double? = nil
-    var showsContextMenu = true
+    var isTodayCourse: Bool
+    var backgroundPalette: [Color]?
+    var courseCardOpacity: Double?
+    var showsContextMenu: Bool
+
+    init(
+        course: Course,
+        hasNote: Bool,
+        noteText: String? = nil,
+        height: CGFloat,
+        width: CGFloat,
+        isCompact: Bool,
+        isTodayCourse: Bool = false,
+        backgroundPalette: [Color]? = nil,
+        courseCardOpacity: Double? = nil,
+        showsContextMenu: Bool = true
+    ) {
+        content = CourseBlockContent(
+            displayCourseName: course.displayCourseName,
+            teacher: course.teacher,
+            locationText: course.locationText,
+            timetableCardLocationText: course.timetableCardLocationText
+        )
+        contextMenuCourse = course
+        self.hasNote = hasNote
+        self.noteText = noteText
+        self.height = height
+        self.width = width
+        self.isCompact = isCompact
+        self.isTodayCourse = isTodayCourse
+        self.backgroundPalette = backgroundPalette
+        self.courseCardOpacity = courseCardOpacity
+        self.showsContextMenu = showsContextMenu
+    }
+
+    init(
+        renderValue: TimetableCourseRenderValue,
+        hasNote: Bool,
+        noteText: String? = nil,
+        height: CGFloat,
+        width: CGFloat,
+        isCompact: Bool,
+        isTodayCourse: Bool = false,
+        backgroundPalette: [Color]? = nil,
+        courseCardOpacity: Double? = nil,
+        showsContextMenu: Bool = false
+    ) {
+        content = CourseBlockContent(
+            displayCourseName: renderValue.displayCourseName,
+            teacher: renderValue.teacher,
+            locationText: renderValue.locationText,
+            timetableCardLocationText: renderValue.timetableCardLocationText
+        )
+        contextMenuCourse = nil
+        self.hasNote = hasNote
+        self.noteText = noteText
+        self.height = height
+        self.width = width
+        self.isCompact = isCompact
+        self.isTodayCourse = isTodayCourse
+        self.backgroundPalette = backgroundPalette
+        self.courseCardOpacity = courseCardOpacity
+        self.showsContextMenu = showsContextMenu
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: contentSpacing) {
-            Text(course.displayCourseName)
+            Text(content.displayCourseName)
                 .font(.system(size: courseNameFontSize, weight: isCompact ? .semibold : .regular))
                 .lineSpacing(isCompact ? 0 : 2)
                 .foregroundStyle(AppTheme.primaryText)
@@ -38,7 +106,7 @@ struct CourseBlockView: View {
                 .minimumScaleFactor(isCompact ? 0.82 : 1)
                 .allowsTightening(isCompact)
 
-            Text(course.timetableCardLocationText)
+            Text(content.timetableCardLocationText)
                 .font(.system(size: locationFontSize, weight: isCompact ? .medium : .regular))
                 .lineSpacing(isCompact ? 0 : 2)
                 .foregroundStyle(AppTheme.secondaryText)
@@ -80,7 +148,7 @@ struct CourseBlockView: View {
             radius: todayCourseGlowRadius,
             y: 0
         )
-        .modifier(CourseBlockContextMenuModifier(course: course, isEnabled: showsContextMenu))
+        .modifier(CourseBlockContextMenuModifier(course: contextMenuCourse, isEnabled: showsContextMenu))
     }
 
     private var cornerRadius: CGFloat {
@@ -237,7 +305,7 @@ struct CourseBlockView: View {
     private var courseBackground: Color {
         if let backgroundPalette, !backgroundPalette.isEmpty {
             return AppTheme.courseCardColor(
-                for: course.displayCourseName + course.teacher,
+                for: content.displayCourseName + content.teacher,
                 colors: backgroundPalette
             )
             .opacity(courseCardOpacity ?? (isCompact ? 0.86 : 0.9))
@@ -248,7 +316,7 @@ struct CourseBlockView: View {
         }
 
         return AppTheme.courseCardColor(
-            for: course.displayCourseName + course.teacher,
+            for: content.displayCourseName + content.teacher,
             themeColorPreferenceRaw: appThemeColorPreferenceRaw
         )
         .opacity(isCompact ? 0.82 : 0.9)
@@ -256,12 +324,12 @@ struct CourseBlockView: View {
 }
 
 private struct CourseBlockContextMenuModifier: ViewModifier {
-    let course: Course
+    let course: Course?
     let isEnabled: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if isEnabled {
+        if isEnabled, let course {
             content.contextMenu {
                 Label(course.teacher.isEmpty ? L10n.text("未填写教师") : course.teacher, systemImage: "person")
                 Label(course.locationText, systemImage: "mappin.and.ellipse")
@@ -279,9 +347,21 @@ struct TimetableCellReminderBlockView: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
 
-    let reminder: TimetableCellReminder
+    private let reminder: TimetableCellReminderRenderValue
     let height: CGFloat
     let width: CGFloat
+
+    init(reminder: TimetableCellReminder, height: CGFloat, width: CGFloat) {
+        self.reminder = TimetableCellReminderRenderValue(reminder: reminder)
+        self.height = height
+        self.width = width
+    }
+
+    init(renderValue: TimetableCellReminderRenderValue, height: CGFloat, width: CGFloat) {
+        reminder = renderValue
+        self.height = height
+        self.width = width
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2.5 * leafyControlScale) {

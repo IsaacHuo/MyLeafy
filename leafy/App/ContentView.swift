@@ -83,14 +83,6 @@ struct ContentView: View {
     private var nativeTabView: some View {
         TabView(selection: nativeRootTabSelection) {
             Tab(
-                RootTab.leafy.title(language: leafyLanguage),
-                systemImage: RootTab.leafy.systemImage,
-                value: RootTab.leafy
-            ) {
-                CampusAIAssistantView()
-            }
-
-            Tab(
                 RootTab.timetable.title(language: leafyLanguage),
                 systemImage: RootTab.timetable.systemImage,
                 value: RootTab.timetable
@@ -143,12 +135,6 @@ struct ContentView: View {
 
     private var legacyNativeTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
-            CampusAIAssistantView()
-                .tabItem {
-                    Label(RootTab.leafy.title(language: leafyLanguage), systemImage: RootTab.leafy.systemImage)
-                }
-                .tag(RootTab.leafy)
-
             TimetableView()
                 .tabItem {
                     Label(RootTab.timetable.title(language: leafyLanguage), systemImage: RootTab.timetable.systemImage)
@@ -182,9 +168,7 @@ struct ContentView: View {
     }
 
     private func handleRootTabChange(to newTab: RootTab) {
-        if newTab == .community, !isCommunityEnabled {
-            appNavigation.selectedRootTab = .timetable
-        }
+        appNavigation.sanitizePublicRootTab(isCommunityEnabled: isCommunityEnabled)
     }
 
     @MainActor
@@ -224,9 +208,7 @@ struct ContentView: View {
     @MainActor
     private func sanitizeUnavailableRootTab() {
         let isCustomCampus = ActiveCampusContext.identity?.isCustom == true
-        if !isCommunityEnabled, appNavigation.selectedRootTab == .community {
-            appNavigation.selectedRootTab = .timetable
-        }
+        appNavigation.sanitizePublicRootTab(isCommunityEnabled: isCommunityEnabled)
         if !appNavigation.selectedAcademicTab.isVisible(
             isCustomCampus: isCustomCampus,
             isCommunityEnabled: isCommunityEnabled,

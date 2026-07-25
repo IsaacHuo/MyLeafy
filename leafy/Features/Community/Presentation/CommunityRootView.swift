@@ -43,7 +43,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
         if CommunityDiagnosticsOptions.disablesNotificationRealtime {
             CommunityDiagnostics.log.info("Community notification realtime subscription skipped by diagnostics")
         } else {
-            realtimeTask = Task { [weak self] in
+            realtimeTask = Task { @MainActor [weak self] in
                 await self?.subscribeToNotificationChanges(profileID: profileID, subscriptionID: subscriptionID)
             }
         }
@@ -73,21 +73,29 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
             unreadCount = 0
             return
         }
-        guard profileID != nil else {
+        guard let profileID, let subscriptionID else {
             unreadCount = 0
             return
         }
 
         do {
             CommunityDiagnostics.log.info("Community notification badge refresh started")
-            unreadCount = try await CommunityTimeout.run(
+            let fetchedCount = try await CommunityTimeout.run(
                 seconds: 6,
                 message: "未读通知加载超时。"
             ) {
                 try await self.repository.fetchUnreadNotificationCount()
             }
+            guard !Task.isCancelled,
+                  self.profileID == profileID,
+                  self.subscriptionID == subscriptionID
+            else { return }
+            unreadCount = fetchedCount
         } catch {
             guard !Task.isCancelled else { return }
+            guard self.profileID == profileID,
+                  self.subscriptionID == subscriptionID
+            else { return }
             CommunityDiagnostics.log.error("Community notification badge refresh failed: \(error.localizedDescription, privacy: .public)")
             unreadCount = 0
         }
@@ -95,7 +103,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
 
     private func scheduleRefresh() {
         scheduledRefreshTask?.cancel()
-        scheduledRefreshTask = Task { [weak self] in
+        scheduledRefreshTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
             await self?.refresh()
@@ -125,13 +133,13 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
                 filter: filter
             )
 
-            let insertTask = Task { [weak self] in
+            let insertTask = Task { @MainActor [weak self] in
                 for await _ in inserts {
                     guard !Task.isCancelled else { return }
                     self?.handleRealtimeChange(profileID: profileID)
                 }
             }
-            let updateTask = Task { [weak self] in
+            let updateTask = Task { @MainActor [weak self] in
                 for await _ in updates {
                     guard !Task.isCancelled else { return }
                     self?.handleRealtimeChange(profileID: profileID)
@@ -160,7 +168,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
     }
 
     private func removeChannel(_ channel: RealtimeChannelV2) {
-        Task {
+        Task { @MainActor in
             await LeafySupabase.shared.client?.realtimeV2.removeChannel(channel)
         }
     }

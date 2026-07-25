@@ -29,6 +29,7 @@ Community security direction:
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
 
 Leafy AI direction:
+- For the 2.9 build 22 review submission, Leafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.
 - Leafy AI defaults to the server-backed Flash service: free users receive 10 requests per Beijing day; the current weekly subscription receives 120 requests per Apple billing period with a 40-request Beijing daily cap.
 - BYOK is an optional fallback. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek; Pro is available only in BYOK mode.
 - The only supported subscription product is `com.isaachuo.leafy.ai.weekly.v2`; legacy products grant no entitlement.
