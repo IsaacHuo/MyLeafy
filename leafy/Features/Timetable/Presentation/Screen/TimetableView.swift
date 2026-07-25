@@ -1096,7 +1096,7 @@ struct TimetableView: View {
                 let blockWidth = max(width - metrics.cardInset * 2, 1)
                 let spanHeight = cellReminderSpanHeight(for: reminder, metrics: metrics)
                 TimetableCellReminderBlockView(
-                    reminder: reminder,
+                    renderValue: reminder,
                     height: blockHeight,
                     width: blockWidth
                 )
@@ -1106,6 +1106,10 @@ struct TimetableView: View {
                 )
                 .zIndex(2)
                 .onTapGesture {
+                    guard let currentReminder = cellReminders.first(where: { $0.id == reminder.id }) else {
+                        handleStaleTimetableSnapshot()
+                        return
+                    }
                     selectedCellReminderContext = TimetableCellReminderContext(
                         week: week,
                         day: day,
@@ -1113,7 +1117,7 @@ struct TimetableView: View {
                         date: metadata.date,
                         occupiedPeriods: occupiedPeriods,
                         totalPeriods: totalClasses,
-                        reminder: reminder
+                        reminder: currentReminder
                     )
                 }
             }
@@ -1124,7 +1128,7 @@ struct TimetableView: View {
                 let noteText = gridSnapshot.note(for: layout.course, week: week)
 
                 CourseBlockView(
-                    course: layout.course,
+                    renderValue: layout.course,
                     hasNote: noteText != nil,
                     noteText: noteText,
                     height: blockHeight,
@@ -1140,8 +1144,12 @@ struct TimetableView: View {
                     y: yOffset(for: layout.course, metrics: metrics) + blockHeight * 0.5
                 )
                 .onTapGesture {
+                    guard let currentCourse = courses.first(where: { $0.id == layout.course.id }) else {
+                        handleStaleTimetableSnapshot()
+                        return
+                    }
                     selectedCourseContext = SelectedCourseContext(
-                        course: layout.course,
+                        course: currentCourse,
                         week: week,
                         day: day,
                         date: metadata.date
@@ -1414,13 +1422,21 @@ struct TimetableView: View {
     private func handleAgendaItemTap(_ item: TimetableAgendaItem) {
         switch item.kind {
         case .course(let course):
+            guard let currentCourse = courses.first(where: { $0.id == course.id }) else {
+                handleStaleTimetableSnapshot()
+                return
+            }
             selectedCourseContext = SelectedCourseContext(
-                course: course,
+                course: currentCourse,
                 week: item.week,
                 day: item.day,
                 date: item.date
             )
         case .cellReminder(let reminder, let period):
+            guard let currentReminder = cellReminders.first(where: { $0.id == reminder.id }) else {
+                handleStaleTimetableSnapshot()
+                return
+            }
             selectedCellReminderContext = TimetableCellReminderContext(
                 week: item.week,
                 day: item.day,
@@ -1428,7 +1444,7 @@ struct TimetableView: View {
                 date: item.date,
                 occupiedPeriods: currentTimetableGridSnapshot().occupiedPeriods(day: item.day, week: item.week),
                 totalPeriods: totalClasses,
-                reminder: reminder
+                reminder: currentReminder
             )
         case .countdown(let projection):
             presentCustomScheduleEditor(for: projection)
@@ -1486,14 +1502,20 @@ struct TimetableView: View {
         max(metrics.rowHeight - metrics.cardInset * 2, metrics.rowHeight * 0.72)
     }
 
-    private func cellReminderHeight(for reminder: TimetableCellReminder, metrics: TimetableLayoutMetrics) -> CGFloat {
+    private func cellReminderHeight(
+        for reminder: TimetableCellReminderRenderValue,
+        metrics: TimetableLayoutMetrics
+    ) -> CGFloat {
         max(
             cellReminderSpanHeight(for: reminder, metrics: metrics) - metrics.cardInset * 2,
             metrics.rowHeight * 0.72
         )
     }
 
-    private func cellReminderSpanHeight(for reminder: TimetableCellReminder, metrics: TimetableLayoutMetrics) -> CGFloat {
+    private func cellReminderSpanHeight(
+        for reminder: TimetableCellReminderRenderValue,
+        metrics: TimetableLayoutMetrics
+    ) -> CGFloat {
         let periodCount = max(reminder.displayEndPeriod - reminder.displayStartPeriod + 1, 1)
         return CGFloat(periodCount) * metrics.rowHeight + CGFloat(max(periodCount - 1, 0)) * metrics.rowSpacing
     }
@@ -1713,28 +1735,36 @@ struct TimetableView: View {
             .padding(.vertical, 16)
     }
 
-    private func layoutsForDay(_ day: Int, week: Int) -> [DayCourseLayout] {
+    private func layoutsForDay(_ day: Int, week: Int) -> [TimetableGridCourseLayout] {
         currentTimetableGridSnapshot().layouts(day: day, week: week)
     }
 
-    private func widthForLayout(_ layout: DayCourseLayout, availableWidth: CGFloat, metrics: TimetableLayoutMetrics) -> CGFloat {
+    private func widthForLayout(
+        _ layout: TimetableGridCourseLayout,
+        availableWidth: CGFloat,
+        metrics: TimetableLayoutMetrics
+    ) -> CGFloat {
         let totalSpacing = CGFloat(max(layout.laneCount - 1, 0)) * metrics.laneSpacing
         let laneWidth = (availableWidth - totalSpacing - metrics.cardInset * 2) / CGFloat(layout.laneCount)
         return max(laneWidth, 1)
     }
 
-    private func xOffsetForLayout(_ layout: DayCourseLayout, availableWidth: CGFloat, metrics: TimetableLayoutMetrics) -> CGFloat {
+    private func xOffsetForLayout(
+        _ layout: TimetableGridCourseLayout,
+        availableWidth: CGFloat,
+        metrics: TimetableLayoutMetrics
+    ) -> CGFloat {
         let laneWidth = widthForLayout(layout, availableWidth: availableWidth, metrics: metrics)
         return metrics.cardInset + CGFloat(layout.laneIndex) * (laneWidth + metrics.laneSpacing)
     }
 
-    private func heightForCourse(_ course: Course, metrics: TimetableLayoutMetrics) -> CGFloat {
+    private func heightForCourse(_ course: TimetableCourseRenderValue, metrics: TimetableLayoutMetrics) -> CGFloat {
         let count = max(course.duration.count, 1)
         let rawHeight = CGFloat(count) * metrics.rowHeight + CGFloat(count - 1) * metrics.rowSpacing - metrics.cardInset * 2
         return max(rawHeight, metrics.rowHeight * 0.7)
     }
 
-    private func yOffset(for course: Course, metrics: TimetableLayoutMetrics) -> CGFloat {
+    private func yOffset(for course: TimetableCourseRenderValue, metrics: TimetableLayoutMetrics) -> CGFloat {
         guard let start = course.duration.min() else { return 0 }
         return yPosition(forClass: start, metrics: metrics) + metrics.cardInset
     }
@@ -1797,6 +1827,17 @@ struct TimetableView: View {
               timetableGridSnapshot?.totalWeeks != snapshot.totalWeeks
         else { return }
         timetableGridSnapshot = snapshot
+    }
+
+    private func handleStaleTimetableSnapshot() {
+        timetableGridSnapshotCache.invalidate()
+        timetableGridSnapshot = nil
+        alertMessage = L10n.text("课表已更新，请重试。", language: leafyLanguage)
+        showAlert = true
+        Task { @MainActor in
+            await Task.yield()
+            syncTimetableGridSnapshot()
+        }
     }
 
     private func syncTimetableScheduleProjectionSnapshot() {
@@ -1906,7 +1947,7 @@ struct TimetableView: View {
                 )
             }
 
-            await MainActor.run {
+            try await MainActor.run {
                 let newCourses = parsedCourseRecords.map { $0.makeCourse() }
                 let sharedCourses = newCourses.map(SharedTimetableCourse.init(course:))
 
@@ -1926,8 +1967,22 @@ struct TimetableView: View {
                     modelContext.insert(course)
                 }
 
-                try? modelContext.save()
-                syncTimetableGridSnapshot()
+                do {
+                    try modelContext.save()
+                } catch {
+                    modelContext.rollback()
+                    throw error
+                }
+                timetableGridSnapshot = timetableGridSnapshotCache.snapshot(
+                    input: TimetableRenderInput(
+                        courses: newCourses,
+                        notes: courseNotes,
+                        occurrenceNotes: occurrenceNotes,
+                        cellReminders: cellReminders,
+                        hidesWeekends: timetableHidesWeekends
+                    ),
+                    totalWeeks: totalWeeks
+                )
                 TimetableCacheMetadata.lastSyncAt = Date()
                 TimetableCacheMetadata.lastFailureMessage = nil
                 TimetableCacheMetadata.lastSyncedSemesterID = semesterConfig.semesterID

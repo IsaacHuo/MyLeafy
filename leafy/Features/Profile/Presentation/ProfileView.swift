@@ -1314,7 +1314,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "为什么会有 \(AppBrand.displayName)", body: "北林学生常用的课表、成绩、考试、自习室、校历、评教、社区和反馈入口分散在不同系统里。\(AppBrand.displayName) 的目标是把这些高频事务整理成一个安静、清楚、可离线兜底的学生端工具。"),
                 ManualInfo(title: "它不替代什么", body: "\(AppBrand.displayName) 不是北京林业大学官方教务系统，也不会绕过学校的登录、验证码、校园网、VPN 或权限限制。涉及成绩、培养方案、考试安排等正式结果时，仍以学校系统为准。"),
-                ManualInfo(title: "主要入口怎么用", body: "课表用于查看当天和当前周安排；Leafy AI 用于基于本机学业数据提问；社区用于同学交流、公告和反馈；校园收纳成绩、考试、教学培养、自习室、校历和评教；我的用于管理资料、同步、个性化、支持和安全设置。"),
+                ManualInfo(title: "主要入口怎么用", body: "课表用于查看当天和当前周安排；社区用于同学交流、公告和反馈；校园收纳成绩、考试、教学培养、自习室、校历和评教；我的用于管理资料、同步、个性化、支持和安全设置。Leafy AI 正在继续打磨，当前版本暂不开放入口。"),
                 ManualInfo(title: "什么时候需要同步", body: "选课、调课、成绩发布、考试安排更新、培养方案或空教室查询结果变化后，可以连接能访问北林教务的网络重新同步。同步失败时，App 会优先保留最近一次成功缓存。")
             ],
             steps: [
@@ -1913,10 +1913,17 @@ private struct CacheAndSyncView: View {
 
         for course in courses { modelContext.delete(course) }
         for grade in grades { modelContext.delete(grade) }
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            isClearing = false
+            operationAlert = .failure("教务缓存清除失败：\(error.localizedDescription)")
+            return
+        }
+
         SchoolDataCache.clearDiscoverCaches()
         TimetableCacheMetadata.clear()
-        try? modelContext.save()
-
         LeafyWidgetSnapshotBuilder.publish(
             from: modelContext,
             isAuthenticated: networkManager.hasCachedIdentity || isCustomCampus || ReviewDemoMode.isEnabled
@@ -1980,7 +1987,14 @@ private struct CacheAndSyncView: View {
         SunshineRunStore.clear()
         ScheduleReportSettingsStore.clear()
         AppSessionResetter.returnToLogin(modelContext: modelContext)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            isClearing = false
+            operationAlert = .failure("本地缓存清除失败：\(error.localizedDescription)")
+            return
+        }
 
         isClearing = false
         message = L10n.text("本地缓存和本地身份已清除。", language: leafyLanguage)

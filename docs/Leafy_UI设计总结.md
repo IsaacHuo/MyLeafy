@@ -117,7 +117,6 @@ App 图标：
 
 根结构：
 
-- Leafy：SF Symbol `sparkles`。
 - 课表：SF Symbol `calendar`。
 - 社区：SF Symbol `person.2`。
 - 校园：SF Symbol `book.closed`。
@@ -128,16 +127,16 @@ iOS 26 及以上：
 - 使用系统 `TabView`。
 - 社区 Tab 支持未读 badge。
 - 使用系统 tab bar 外观并禁止最小化行为。
-- Leafy 被选中后隐藏根 tab bar，AI 顶部工具栏自然使用 Liquid Glass。
+- 旧状态选择 Leafy 时重定向到课表。
 
 iOS 17 到 iOS 25：
 
 - 使用系统 `TabView` 与原生 tab item。
-- Leafy 与其他根页面共享系统 Tab Bar，切换页面时保持统一导航层级。
 - 社区 Tab 使用系统 badge。
 
 Leafy AI 对话页：
 
+- 2.9 build 22 暂时没有公开入口；以下规范供后续恢复时继续使用。
 - Leafy、课表和社区的根页面顶部统一使用 44pt 控件与 52pt 内容预留高度；Leafy 左侧为历史、设置，右侧为新建。
 - 历史记录使用系统大页 Sheet 与原生 `List`，设置使用独立系统 Sheet；不使用抽屉或卡片库入口。
 - 输入栏通过 `safeAreaInset` 停靠在根 Tab Bar 上方，使用 20pt 根页面边距并承载 `+`、多行输入和发送/停止。

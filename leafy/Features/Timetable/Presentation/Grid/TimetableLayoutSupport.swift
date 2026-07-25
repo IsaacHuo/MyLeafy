@@ -382,8 +382,8 @@ struct TimetableCellReminderContext: Identifiable {
 }
 
 enum TimetableAgendaItemKind {
-    case course(Course)
-    case cellReminder(TimetableCellReminder, period: Int)
+    case course(TimetableCourseRenderValue)
+    case cellReminder(TimetableCellReminderRenderValue, period: Int)
     case countdown(TimetableCountdownProjection)
     case exam(TimetableExamProjection)
 }
@@ -402,7 +402,7 @@ struct TimetableAgendaItem: Identifiable {
     let tint: Color
     let kind: TimetableAgendaItemKind
 
-    static func course(_ course: Course, week: Int, day: Int, date: Date) -> TimetableAgendaItem {
+    static func course(_ course: TimetableCourseRenderValue, week: Int, day: Int, date: Date) -> TimetableAgendaItem {
         let periods = course.duration.sorted()
         let startPeriod = periods.first ?? 1
         let endPeriod = periods.last ?? startPeriod
@@ -425,7 +425,12 @@ struct TimetableAgendaItem: Identifiable {
         )
     }
 
-    static func cellReminder(_ reminder: TimetableCellReminder, week: Int, day: Int, date: Date) -> TimetableAgendaItem {
+    static func cellReminder(
+        _ reminder: TimetableCellReminderRenderValue,
+        week: Int,
+        day: Int,
+        date: Date
+    ) -> TimetableAgendaItem {
         TimetableAgendaItem(
             id: "reminder-\(reminder.id.uuidString)-\(week)-\(day)",
             week: week,
@@ -494,7 +499,7 @@ struct TimetableAgendaItem: Identifiable {
         }
     }
 
-    private static func cellReminderDetail(_ reminder: TimetableCellReminder) -> String {
+    private static func cellReminderDetail(_ reminder: TimetableCellReminderRenderValue) -> String {
         var parts: [String] = []
         let location = reminder.locationText
         if !location.isEmpty {
@@ -504,7 +509,7 @@ struct TimetableAgendaItem: Identifiable {
         return parts.joined(separator: " · ")
     }
 
-    private static func cellReminderTimeText(_ reminder: TimetableCellReminder) -> String {
+    private static func cellReminderTimeText(_ reminder: TimetableCellReminderRenderValue) -> String {
         if let startDate = reminder.resolvedStartDate,
            let endDate = reminder.resolvedEndDate,
            endDate > startDate {

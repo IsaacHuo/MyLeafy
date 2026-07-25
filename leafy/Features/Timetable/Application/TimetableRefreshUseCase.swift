@@ -28,7 +28,7 @@ struct TimetableRefreshUseCase {
         records: [ParsedCourseRecord],
         existingCourses: [Course],
         modelContext: ModelContext
-    ) {
+    ) throws {
         for course in existingCourses {
             modelContext.delete(course)
         }
@@ -37,7 +37,12 @@ struct TimetableRefreshUseCase {
             modelContext.insert(course)
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
     }
 
     static func nearestAvailableWeek(from parsedCourses: [ParsedCourseRecord], preferredWeek: Int) -> Int? {

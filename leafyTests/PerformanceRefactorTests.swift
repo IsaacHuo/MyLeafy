@@ -8,6 +8,43 @@ import SwiftData
 @testable import Leafy
 
 final class PerformanceRefactorTests: XCTestCase {
+    func testCommunityTimeoutReturnsCompletedOperation() async throws {
+        let value = try await CommunityTimeout.run(seconds: 1, message: "超时") {
+            42
+        }
+
+        XCTAssertEqual(value, 42)
+    }
+
+    func testCommunityTimeoutThrowsConfiguredTimeout() async {
+        do {
+            _ = try await CommunityTimeout.run(seconds: 0.01, message: "测试超时") {
+                try await Task.sleep(for: .seconds(1))
+                return 42
+            }
+            XCTFail("Expected timeout")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "测试超时")
+        }
+    }
+
+    func testCommunityTimeoutPropagatesCancellation() async {
+        let task = Task {
+            try await CommunityTimeout.run(seconds: 10, message: "超时") {
+                try await Task.sleep(for: .seconds(10))
+                return 42
+            }
+        }
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+    }
+
     func testAppLanguagePreferenceDefaultsToSimplifiedChinese() {
         XCTAssertEqual(AppLanguagePreference.current, .zhHans)
         XCTAssertEqual(AppLanguagePreference.zhHans.localeIdentifier, "zh-Hans")
@@ -229,6 +266,49 @@ final class PerformanceRefactorTests: XCTestCase {
             totalWeeks: 3
         )
         XCTAssertEqual(cache.buildCount, 3)
+    }
+
+    @MainActor
+    func testGridSnapshotRemainsReadableAfterManagedModelsAreDeleted() throws {
+        let schema = Schema([Course.self, TimetableCellReminder.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let course = Course(
+            courseName: "数据库原理",
+            teacher: "教师",
+            room: "101",
+            location: "学研中心",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1, 2]
+        )
+        let reminder = TimetableCellReminder(
+            week: 1,
+            dayOfWeek: 1,
+            period: 3,
+            title: "提交作业"
+        )
+        context.insert(course)
+        context.insert(reminder)
+        try context.save()
+
+        let snapshot = TimetableGridSnapshot.make(
+            courses: [course],
+            notes: [],
+            occurrenceNotes: [],
+            cellReminders: [reminder],
+            hidesWeekends: false,
+            totalWeeks: 1
+        )
+
+        context.delete(course)
+        context.delete(reminder)
+        try context.save()
+
+        XCTAssertEqual(snapshot.layouts(day: 1, week: 1).first?.course.courseName, "数据库原理")
+        XCTAssertEqual(snapshot.layouts(day: 1, week: 1).first?.course.duration, [1, 2])
+        XCTAssertEqual(snapshot.cellReminder(week: 1, day: 1, period: 3)?.title, "提交作业")
     }
 
     @MainActor
@@ -1585,12 +1665,22 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.leafy, .timetable, .community, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.leafy, .timetable, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .academics, .profile])
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.leafy, .timetable, .community, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .academics, .profile])
+    }
+
+    @MainActor
+    func testHiddenLeafyRootTabRedirectsToTimetable() {
+        let coordinator = AppNavigationCoordinator()
+        coordinator.selectedRootTab = .leafy
+
+        coordinator.sanitizePublicRootTab(isCommunityEnabled: true)
+
+        XCTAssertEqual(coordinator.selectedRootTab, .timetable)
     }
 
     func testAcademicRootTabUsesCampusProductName() {

@@ -6,7 +6,7 @@
 - 技术实现与数据流：[架构说明](architecture.md)
 - 数据来源与产品边界：[项目总览](overview.md)
 
-MyLeafy 是当前面向北京林业大学学生、以课表为核心的校园工具 App。设计重点是快速打开、快速确认今天安排，同时在根导航中提供 Leafy AI 对话入口；校园数据是 Leafy 的本机能力，而不是 AI 可回答问题的边界。
+MyLeafy 是当前面向北京林业大学学生、以课表为核心的校园工具 App。设计重点是快速打开、快速确认今天安排。2.9 build 22 暂时隐藏 Leafy AI 的公开入口，保留能力代码供后续打磨。
 
 ## 1. 产品目标
 
@@ -37,9 +37,8 @@ MyLeafy 面向需要频繁处理课表、学业信息和校园事务的高校学
 flowchart LR
     App(("MyLeafy")) --> Nav["根导航"]
 
-    subgraph Tasks["五个核心任务区"]
+    subgraph Tasks["四个公开核心任务区"]
         direction LR
-        Nav --> AI["Leafy AI<br/>对话 · 本机上下文<br/>公开检索 · Artifact"]
         Nav --> Timetable["课表<br/>周课表 · 课程详情<br/>提醒 · 分享 · Widget"]
         Nav --> Community["社区<br/>帖子 · 投票 · 互动<br/>发布 · 通知 · 公告"]
         Nav --> Campus["校园<br/>成绩考试 · 校历<br/>教室 · 学习空间 · 扩展工具"]
@@ -52,7 +51,7 @@ flowchart LR
     classDef area fill:#F7FBF8,stroke:#6E9E80,color:#173C2B,stroke-width:1.5px;
     classDef shared fill:#F0F7FF,stroke:#7699C6,color:#173B68,stroke-width:1.5px;
     class App,Nav root;
-    class AI,Timetable,Community,Campus,Profile area;
+    class Timetable,Community,Campus,Profile area;
     class Shared shared;
 ```
 
@@ -60,13 +59,12 @@ flowchart LR
 
 根 Tab 的逻辑顺序为：
 
-1. `Leafy`：根 Tab 内的 AI 对话页面，承接通用问答、历史对话与 Artifact。
-2. `课表`：最高频时间入口，应用默认页。
-3. `社区`：校园内容、互动、通知与发布。
-4. `校园`：按领域组织的学习和校园工具。
-5. `我的`：个人资料、内容、共享、外观、数据与支持。
+1. `课表`：最高频时间入口，应用默认页。
+2. `社区`：校园内容、互动、通知与发布。
+3. `校园`：按领域组织的学习和校园工具。
+4. `我的`：个人资料、内容、共享、外观、数据与支持。
 
-课表虽然不是视觉顺序的第一个 Tab，但它是默认选中项。社区由校园能力决定是否显示；隐藏社区时，其通知订阅与相关入口也应同步停止或降级。
+Leafy AI 在 2.9 build 22 中没有公开入口，旧导航状态会回到课表。社区由校园能力决定是否显示；隐藏社区时，其通知订阅与相关入口也应同步停止或降级。
 
 ### 3.2 校园一级领域
 
@@ -178,9 +176,11 @@ flowchart LR
 
 Leafy AI 是辅助入口，不是替代所有功能的万能聊天框。
 
+> 2.9 build 22 暂时隐藏公开入口与购买流程。本节记录保留实现和未来恢复时的产品边界。
+
 ### 6.1 对话结构
 
-- Leafy 保持在根 `TabView` 内，底部校园 Tab Bar 始终可见；输入栏通过系统安全区停靠在 Tab Bar 上方并跟随键盘。
+- 未来恢复入口后，Leafy 应保持在根 `TabView` 内，底部校园 Tab Bar 始终可见；输入栏通过系统安全区停靠在 Tab Bar 上方并跟随键盘。
 - 顶部依次提供历史记录、设置、Flash/Pro 原生胶囊模型选择和新建对话；历史与设置均使用原生 Sheet，不使用侧滑抽屉。
 - 空状态说明能力、数据来源和限制。
 - 输入区支持问题和有限的建议入口。

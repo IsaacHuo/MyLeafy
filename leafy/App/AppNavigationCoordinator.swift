@@ -17,7 +17,7 @@ enum RootTab: Hashable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.leafy, .timetable, .community, .academics, .profile]
+        [.timetable, .community, .academics, .profile]
     }
 
     static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {
@@ -84,6 +84,13 @@ final class AppNavigationCoordinator: ObservableObject {
 
     func leaveLeafyWorkspace() {
         selectedRootTab = lastNonLeafyRootTab == .leafy ? .timetable : lastNonLeafyRootTab
+    }
+
+    func sanitizePublicRootTab(isCommunityEnabled: Bool) {
+        if selectedRootTab == .leafy ||
+           (selectedRootTab == .community && !isCommunityEnabled) {
+            selectedRootTab = .timetable
+        }
     }
 
     func openAcademic(tab: AcademicPrimaryTab) {
