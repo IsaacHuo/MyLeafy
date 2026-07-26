@@ -100,59 +100,92 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         )
     }
 
-    func testPublishCapabilityRequirementsReportMissingEntries() throws {
+    func testPublishCapabilityRequirementsAreMediaSpecific() throws {
         let staleCapabilities = try decodeCapabilities(
             rpcs: ["create_community_post_v4": true],
-            edgeFunctions: ["community-validate-upload"]
+            edgeFunctions: []
+        )
+        let textKinds: Set<CommunityPublishMediaKind> = []
+        let imageKinds: Set<CommunityPublishMediaKind> = [.image]
+        let attachmentKinds: Set<CommunityPublishMediaKind> = [.attachment]
+
+        XCTAssertTrue(
+            CommunityPublishCapabilityRequirements.isSatisfied(
+                by: staleCapabilities,
+                mediaKinds: textKinds
+            )
         )
         XCTAssertEqual(
-            CommunityPublishCapabilityRequirements.missingRPCs(in: staleCapabilities),
-            [
-                "attach_community_post_attachment_v1",
-                "abort_community_post_upload_v1"
-            ]
+            CommunityPublishCapabilityRequirements.missingRPCs(
+                in: staleCapabilities,
+                mediaKinds: imageKinds
+            ),
+            ["attach_community_post_image_v1"]
         )
         XCTAssertEqual(
-            CommunityPublishCapabilityRequirements.missingEdgeFunctions(in: staleCapabilities),
+            CommunityPublishCapabilityRequirements.missingEdgeFunctions(
+                in: staleCapabilities,
+                mediaKinds: imageKinds
+            ),
+            ["community-validate-upload"]
+        )
+        XCTAssertEqual(
+            CommunityPublishCapabilityRequirements.missingRPCs(
+                in: staleCapabilities,
+                mediaKinds: attachmentKinds
+            ),
+            ["attach_community_post_attachment_v1"]
+        )
+        XCTAssertEqual(
+            CommunityPublishCapabilityRequirements.missingEdgeFunctions(
+                in: staleCapabilities,
+                mediaKinds: attachmentKinds
+            ),
             ["community-validate-attachment"]
         )
-        XCTAssertFalse(CommunityPublishCapabilityRequirements.isSatisfied(by: staleCapabilities))
-
-        let currentCapabilities = try decodeCapabilities(
-            rpcs: Dictionary(
-                uniqueKeysWithValues: CommunityPublishCapabilityRequirements.requiredRPCs.map { ($0, true) }
-            ),
-            edgeFunctions: CommunityPublishCapabilityRequirements.requiredEdgeFunctions
-        )
-        XCTAssertTrue(CommunityPublishCapabilityRequirements.isSatisfied(by: currentCapabilities))
     }
 
     func testPublishCapabilitiesRefreshOnlyWhenCachedValueIsMissingRequirements() async throws {
+        let mediaKinds: Set<CommunityPublishMediaKind> = [.attachment]
         let staleCapabilities = try decodeCapabilities(
             rpcs: ["create_community_post_v4": true],
-            edgeFunctions: ["community-validate-upload"]
+            edgeFunctions: []
         )
         let currentCapabilities = try decodeCapabilities(
             rpcs: Dictionary(
-                uniqueKeysWithValues: CommunityPublishCapabilityRequirements.requiredRPCs.map { ($0, true) }
+                uniqueKeysWithValues: CommunityPublishCapabilityRequirements
+                    .requiredRPCs(for: mediaKinds)
+                    .map { ($0, true) }
             ),
-            edgeFunctions: CommunityPublishCapabilityRequirements.requiredEdgeFunctions
+            edgeFunctions: CommunityPublishCapabilityRequirements.requiredEdgeFunctions(for: mediaKinds)
         )
 
         let refreshed = try await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
-            staleCapabilities
+            staleCapabilities,
+            mediaKinds: mediaKinds
         ) {
             currentCapabilities
         }
-        XCTAssertTrue(CommunityPublishCapabilityRequirements.isSatisfied(by: refreshed))
+        XCTAssertTrue(
+            CommunityPublishCapabilityRequirements.isSatisfied(
+                by: refreshed,
+                mediaKinds: mediaKinds
+            )
+        )
 
         let preserved = try await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
-            currentCapabilities
+            currentCapabilities,
+            mediaKinds: mediaKinds
         ) {
             XCTFail("满足要求的 capability 不应重复刷新")
             return staleCapabilities
         }
-        XCTAssertTrue(CommunityPublishCapabilityRequirements.isSatisfied(by: preserved))
+        XCTAssertTrue(
+            CommunityPublishCapabilityRequirements.isSatisfied(
+                by: preserved,
+                mediaKinds: mediaKinds
+            )
+        )
     }
 
     @MainActor

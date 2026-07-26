@@ -41,35 +41,56 @@ nonisolated enum CommunityPublishMediaKind: String, Codable, Hashable, Sendable 
 }
 
 nonisolated enum CommunityPublishCapabilityRequirements {
-    static let requiredRPCs = [
-        "create_community_post_v4",
-        "attach_community_post_attachment_v1",
-        "abort_community_post_upload_v1"
-    ]
-
-    static let requiredEdgeFunctions = [
-        "community-validate-attachment",
-        "community-validate-upload"
-    ]
-
-    static func missingRPCs(in capabilities: BackendCapabilities) -> [String] {
-        requiredRPCs.filter { !capabilities.supportsRPC($0) }
+    static func requiredRPCs(for mediaKinds: Set<CommunityPublishMediaKind>) -> [String] {
+        var names = ["create_community_post_v4"]
+        if mediaKinds.contains(.image) {
+            names.append("attach_community_post_image_v1")
+        }
+        if mediaKinds.contains(.attachment) {
+            names.append("attach_community_post_attachment_v1")
+        }
+        return names
     }
 
-    static func missingEdgeFunctions(in capabilities: BackendCapabilities) -> [String] {
-        requiredEdgeFunctions.filter { !capabilities.edgeFunctions.contains($0) }
+    static func requiredEdgeFunctions(for mediaKinds: Set<CommunityPublishMediaKind>) -> [String] {
+        var names: [String] = []
+        if mediaKinds.contains(.image) {
+            names.append("community-validate-upload")
+        }
+        if mediaKinds.contains(.attachment) {
+            names.append("community-validate-attachment")
+        }
+        return names
     }
 
-    static func isSatisfied(by capabilities: BackendCapabilities) -> Bool {
-        missingRPCs(in: capabilities).isEmpty
-            && missingEdgeFunctions(in: capabilities).isEmpty
+    static func missingRPCs(
+        in capabilities: BackendCapabilities,
+        mediaKinds: Set<CommunityPublishMediaKind>
+    ) -> [String] {
+        requiredRPCs(for: mediaKinds).filter { !capabilities.supportsRPC($0) }
+    }
+
+    static func missingEdgeFunctions(
+        in capabilities: BackendCapabilities,
+        mediaKinds: Set<CommunityPublishMediaKind>
+    ) -> [String] {
+        requiredEdgeFunctions(for: mediaKinds).filter { !capabilities.edgeFunctions.contains($0) }
+    }
+
+    static func isSatisfied(
+        by capabilities: BackendCapabilities,
+        mediaKinds: Set<CommunityPublishMediaKind>
+    ) -> Bool {
+        missingRPCs(in: capabilities, mediaKinds: mediaKinds).isEmpty
+            && missingEdgeFunctions(in: capabilities, mediaKinds: mediaKinds).isEmpty
     }
 
     static func refreshingIfNeeded(
         _ capabilities: BackendCapabilities,
+        mediaKinds: Set<CommunityPublishMediaKind>,
         refresh: () async throws -> BackendCapabilities
     ) async rethrows -> BackendCapabilities {
-        guard !isSatisfied(by: capabilities) else { return capabilities }
+        guard !isSatisfied(by: capabilities, mediaKinds: mediaKinds) else { return capabilities }
         return try await refresh()
     }
 }
@@ -671,7 +692,7 @@ final class CommunityPublishCoordinator: ObservableObject {
         do {
             guard !Task.isCancelled else { return }
             var task = try requiredTask(taskID)
-            try await requireBackendCapabilities()
+            try await requireBackendCapabilities(for: task)
 
             if task.authorID == nil {
                 setState(taskID, .creatingPost)
@@ -984,21 +1005,30 @@ final class CommunityPublishCoordinator: ObservableObject {
         return offset
     }
 
-    private func requireBackendCapabilities() async throws {
+    private func requireBackendCapabilities(for task: CommunityPublishTask) async throws {
+        let mediaKinds = Set(task.media.map(\.kind))
         let cachedCapabilities = try await SupabaseBackendClient.shared.capabilities()
         let capabilities = try await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
-            cachedCapabilities
+            cachedCapabilities,
+            mediaKinds: mediaKinds
         ) {
             try await SupabaseBackendClient.shared.capabilities(forceRefresh: true)
         }
 
-        let missingRPCs = CommunityPublishCapabilityRequirements.missingRPCs(in: capabilities)
-        let missingEdgeFunctions = CommunityPublishCapabilityRequirements.missingEdgeFunctions(in: capabilities)
+        let missingRPCs = CommunityPublishCapabilityRequirements.missingRPCs(
+            in: capabilities,
+            mediaKinds: mediaKinds
+        )
+        let missingEdgeFunctions = CommunityPublishCapabilityRequirements.missingEdgeFunctions(
+            in: capabilities,
+            mediaKinds: mediaKinds
+        )
         guard missingRPCs.isEmpty, missingEdgeFunctions.isEmpty else {
             CommunityDiagnostics.log.error(
                 """
                 Community publish capabilities unavailable after refresh. \
                 version=\(capabilities.version, privacy: .public) \
+                media_kinds=\(mediaKinds.map(\.rawValue).sorted().joined(separator: ","), privacy: .public) \
                 missing_rpcs=\(missingRPCs.joined(separator: ","), privacy: .public) \
                 missing_edge_functions=\(missingEdgeFunctions.joined(separator: ","), privacy: .public)
                 """
