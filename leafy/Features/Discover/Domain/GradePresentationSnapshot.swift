@@ -6,13 +6,15 @@ struct GradePresentationSnapshot {
         signature: GradePresentationSignature(),
         analytics: .empty,
         groupedGrades: [:],
-        sortedTerms: []
+        sortedTerms: [],
+        termSummaries: [:]
     )
 
     let signature: GradePresentationSignature
     let analytics: GradeAnalytics
     let groupedGrades: [String: [Grade]]
     let sortedTerms: [String]
+    let termSummaries: [String: GradeTermPresentationSummary]
 
     static func make(
         grades: [Grade],
@@ -20,11 +22,29 @@ struct GradePresentationSnapshot {
     ) -> GradePresentationSnapshot {
         let signature = GradePresentationSignature(grades: grades, creditSummary: creditSummary)
         let groupedGrades = Dictionary(grouping: grades, by: { $0.term })
+        let termSummaries = groupedGrades.mapValues {
+            GradeTermPresentationSummary.make(grades: $0)
+        }
         return GradePresentationSnapshot(
             signature: signature,
             analytics: GradeAnalytics.calculate(from: grades, creditSummary: creditSummary),
             groupedGrades: groupedGrades,
-            sortedTerms: groupedGrades.keys.sorted(by: >)
+            sortedTerms: groupedGrades.keys.sorted(by: >),
+            termSummaries: termSummaries
+        )
+    }
+}
+
+@MainActor
+struct GradeTermPresentationSummary: Equatable {
+    let effectiveCourseCount: Int
+    let weightedAverage: Double?
+
+    static func make(grades: [Grade]) -> GradeTermPresentationSummary {
+        let analytics = GradeAnalytics.calculate(from: grades)
+        return GradeTermPresentationSummary(
+            effectiveCourseCount: analytics.effectiveCourseCount,
+            weightedAverage: analytics.weightedAverage
         )
     }
 }

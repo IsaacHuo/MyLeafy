@@ -36,6 +36,10 @@ enable_anonymous_sign_ins = true
 otp_length = 8
 otp_expiry = 3600
 
+[auth.email.template.confirmation]
+subject = "MyLeafy 注册验证码"
+content_path = "./supabase/templates/signup-otp.html"
+
 [auth.email.template.email_change]
 subject = "MyLeafy 绑定邮箱验证码"
 content_path = "./supabase/templates/email-change-otp.html"

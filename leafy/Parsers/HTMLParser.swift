@@ -1332,6 +1332,7 @@ class HTMLParser {
         var sections: [TrainingProgramSection] = []
         var currentTitle: String?
         var currentBody: [String] = []
+        var currentLinks: [TrainingProgramLink] = []
 
         func flush() {
             guard let currentTitle else { return }
@@ -1342,7 +1343,8 @@ class HTMLParser {
                 TrainingProgramSection(
                     id: "\(sections.count)-\(currentTitle)",
                     title: currentTitle,
-                    body: body
+                    body: body,
+                    links: currentLinks
                 )
             )
         }
@@ -1360,8 +1362,25 @@ class HTMLParser {
                 flush()
                 currentTitle = text
                 currentBody = []
+                currentLinks = []
             } else if currentTitle != nil {
-                currentBody.append(text)
+                let paragraphLinks = try paragraph.select("a[href]").array().compactMap { anchor -> TrainingProgramLink? in
+                    let href = try anchor.attr("href").trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !href.isEmpty, href != "#" else { return nil }
+                    let title = try normalizeProgramText(anchor.text())
+                    return TrainingProgramLink(title: title, href: href)
+                }
+
+                for link in paragraphLinks where !currentLinks.contains(where: { $0.id == link.id }) {
+                    currentLinks.append(link)
+                }
+
+                let paragraphWithoutLinks = try SwiftSoup.parseBodyFragment(try paragraph.html())
+                try paragraphWithoutLinks.select("a").remove()
+                let nonLinkText = try normalizeProgramText(paragraphWithoutLinks.text())
+                if paragraphLinks.isEmpty || !nonLinkText.isEmpty {
+                    currentBody.append(text)
+                }
             }
         }
 

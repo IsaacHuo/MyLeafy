@@ -160,23 +160,14 @@ struct TimetableView: View {
                     loadingState
                         .padding(.horizontal, AppSpacing.page)
                 } else if courses.isEmpty {
-                    VStack(spacing: 14) {
-                        emptyState(
-                            title: "暂无课表",
-                            description: isCustomCampus
-                                ? "添加课程或导入文件后显示。"
-                                : "还没有本地课表缓存。连接校园网后在“我的”页重新拉取。"
-                        )
-
+                    Group {
                         if isCustomCampus {
-                            Button {
-                                isTimetableProcessingPresented = true
-                            } label: {
-                                Label("课表处理", systemImage: "slider.horizontal.3")
-                                    .font(.headline)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(AppTheme.accent(for: themeColorPreference))
+                            customCampusEmptyState
+                        } else {
+                            emptyState(
+                                title: "暂无课表",
+                                description: "还没有本地课表缓存。连接校园网后在“我的”页重新拉取。"
+                            )
                         }
                     }
                     .padding(.horizontal, AppSpacing.page)
@@ -1734,6 +1725,24 @@ struct TimetableView: View {
         )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
+    }
+
+    private var customCampusEmptyState: some View {
+        ContentUnavailableView {
+            Label("暂无课表", systemImage: "calendar")
+        } description: {
+            Text("添加课程或导入文件后显示。")
+        } actions: {
+            Button {
+                isTimetableProcessingPresented = true
+            } label: {
+                Label("课表处理", systemImage: "slider.horizontal.3")
+                    .font(.headline)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.accent(for: themeColorPreference))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func layoutsForDay(_ day: Int, week: Int) -> [TimetableGridCourseLayout] {

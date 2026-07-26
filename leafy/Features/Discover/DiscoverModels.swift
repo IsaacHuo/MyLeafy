@@ -270,10 +270,62 @@ struct TrainingProgramDocument: Identifiable, Codable, Hashable {
     let creditRequirements: [GraduationCreditRequirement]
 }
 
+struct TrainingProgramLink: Identifiable, Codable, Hashable {
+    let title: String
+    let href: String
+
+    var id: String { "\(title)|\(href)" }
+
+    init(title: String, href: String) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanHref = href.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.title = cleanTitle.isEmpty ? L10n.text("查看原链接") : cleanTitle
+        self.href = cleanHref
+    }
+
+    func resolvedURL(relativeTo baseURL: URL) -> URL? {
+        guard !href.isEmpty,
+              let url = URL(string: href, relativeTo: baseURL)?.absoluteURL,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            return nil
+        }
+        return url
+    }
+}
+
 struct TrainingProgramSection: Identifiable, Codable, Hashable {
     let id: String
     let title: String
     let body: String
+    let links: [TrainingProgramLink]
+
+    init(
+        id: String,
+        title: String,
+        body: String,
+        links: [TrainingProgramLink] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.body = body
+        self.links = links
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case body
+        case links
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        body = try container.decode(String.self, forKey: .body)
+        links = try container.decodeIfPresent([TrainingProgramLink].self, forKey: .links) ?? []
+    }
 }
 
 struct GraduationCreditCategoryProgress: Identifiable, Hashable {

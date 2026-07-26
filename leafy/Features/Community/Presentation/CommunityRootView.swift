@@ -249,7 +249,7 @@ struct CommunityRootView: View {
                             Task { await selectInitialCampus(campus) }
                         },
                         onSubmitNewSchool: { schoolName in
-                            Task { await submitSchoolRequest(schoolName: schoolName) }
+                            try await submitSchoolRequest(schoolName: schoolName)
                         },
                         onRetry: {
                             Task { await sessionManager.bootstrapCommunityUser(force: true) }
@@ -392,17 +392,14 @@ struct CommunityRootView: View {
     }
 
     @MainActor
-    private func submitSchoolRequest(schoolName: String) async {
+    private func submitSchoolRequest(schoolName: String) async throws {
         guard !isSubmittingSchoolRequest else { return }
         isSubmittingSchoolRequest = true
         defer { isSubmittingSchoolRequest = false }
 
-        do {
-            _ = try await sessionManager.submitCampusMembershipRequest(schoolName: schoolName)
-            operationAlert = .success("学校申请已提交，审核通过后会自动进入对应学校社区。")
-        } catch {
-            communityActionError = error.localizedDescription
-        }
+        _ = try await sessionManager.submitCampusMembershipRequest(schoolName: schoolName)
+        communityActionError = nil
+        operationAlert = .success("学校申请已提交，审核通过后会自动进入对应学校社区。")
     }
 
     private var communityHeader: some View {
@@ -602,7 +599,7 @@ private struct CommunityCampusRequestGateView: View {
     let bootstrapError: String?
     let isSubmitting: Bool
     let onSelectCampus: (CommunityCampusOption) -> Void
-    let onSubmitNewSchool: (String) -> Void
+    let onSubmitNewSchool: (String) async throws -> Void
     let onRetry: () -> Void
 
     private var status: CommunityAccessStatus {
@@ -715,21 +712,12 @@ enum CommunityCampusSelectionMode: Equatable {
     case initial
     case change(currentSchoolName: String?)
 
-    var searchPrompt: String {
-        switch self {
-        case .initial:
-            return "搜索已有学校"
-        case .change:
-            return "搜索新的学校社区"
-        }
-    }
-
     var emptyResultMessage: String {
         switch self {
         case .initial:
-            return "没找到学校时，可以申请新增学校社区。"
+            return "暂时没有可直接加入的学校社区，你仍可以申请新增学校。"
         case .change:
-            return "当前只支持在已有学校社区之间提交更换申请。"
+            return "暂时没有其他可更换的学校社区。"
         }
     }
 
@@ -758,49 +746,36 @@ enum CommunityCampusSelectionMode: Equatable {
 
 struct CommunityCampusSelectionPanel: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @FocusState private var isSearchFocused: Bool
-    @State private var searchText = ""
     @State private var campusOptions: [CommunityCampusOption] = []
     @State private var selectedCampus: CommunityCampusOption?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var pendingConfirmation: CommunityCampusOption?
+    @State private var isNewSchoolRequestPresented = false
 
     let mode: CommunityCampusSelectionMode
     let isSubmitting: Bool
     let onSelectCampus: (CommunityCampusOption) -> Void
-    var onSubmitNewSchool: ((String) -> Void)?
-
-    private var trimmedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var canSubmitNewSchool: Bool {
-        onSubmitNewSchool != nil && !trimmedSearchText.isEmpty && !isSubmitting
-    }
+    var onSubmitNewSchool: ((String) async throws -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.compact) {
-            TextField(mode.searchPrompt, text: $searchText)
-                .leafyDisableAutocapitalization()
-                .disableAutocorrection(true)
-                .textFieldStyle(.roundedBorder)
-                .focused($isSearchFocused)
-                .submitLabel(.search)
-                .onSubmit {
-                    Task { await loadCampuses() }
-                }
-
             if let errorMessage {
-                Text(errorMessage)
-                    .microCaption()
-                    .foregroundStyle(AppTheme.danger)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorMessage)
+                        .microCaption()
+                        .foregroundStyle(AppTheme.danger)
+                    Button("重新加载") {
+                        Task { await loadCampuses() }
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
 
             if isLoading {
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("正在搜索学校")
+                    Text("正在加载学校社区")
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -856,25 +831,21 @@ struct CommunityCampusSelectionPanel: View {
 
             if let onSubmitNewSchool {
                 Button {
-                    onSubmitNewSchool(trimmedSearchText)
+                    isNewSchoolRequestPresented = true
                 } label: {
-                    Text("找不到？申请新增“\(trimmedSearchText)”")
+                    Label("申请新增学校", systemImage: "building.2.crop.circle.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .disabled(!canSubmitNewSchool)
+                .disabled(isSubmitting)
+                .sheet(isPresented: $isNewSchoolRequestPresented) {
+                    CommunityNewSchoolRequestSheet(onSubmit: onSubmitNewSchool)
+                        .presentationDetents([.medium, .large])
+                }
             }
         }
         .task {
             await loadCampuses()
-        }
-        .onChange(of: searchText) { _, _ in
-            selectedCampus = nil
-            Task {
-                try? await Task.sleep(for: .milliseconds(250))
-                guard !Task.isCancelled else { return }
-                await loadCampuses()
-            }
         }
         .confirmationDialog(
             mode.confirmationTitle,
@@ -887,7 +858,6 @@ struct CommunityCampusSelectionPanel: View {
         ) { campus in
             Button(primaryActionTitle) {
                 pendingConfirmation = nil
-                isSearchFocused = false
                 onSelectCampus(campus)
             }
             Button("取消", role: .cancel) {
@@ -895,16 +865,6 @@ struct CommunityCampusSelectionPanel: View {
             }
         } message: { campus in
             Text(mode.confirmationMessage(for: campus))
-        }
-        .toolbar {
-            if isSearchFocused {
-                ToolbarItemGroup(placement: .leafyKeyboard) {
-                    Spacer()
-                    Button("完成") {
-                        isSearchFocused = false
-                    }
-                }
-            }
         }
     }
 
@@ -925,12 +885,91 @@ struct CommunityCampusSelectionPanel: View {
 
         do {
             campusOptions = try await CommunitySessionManager.shared.searchCommunityCampuses(
-                query: trimmedSearchText,
-                limit: 12
+                query: "",
+                limit: 50
             )
             errorMessage = nil
         } catch {
             campusOptions = []
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct CommunityNewSchoolRequestSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isSchoolNameFocused: Bool
+
+    let onSubmit: (String) async throws -> Void
+
+    @State private var schoolName = ""
+    @State private var isSubmitting = false
+    @State private var errorMessage: String?
+
+    private var trimmedSchoolName: String {
+        schoolName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("学校全称", text: $schoolName)
+                        .leafyDisableAutocapitalization()
+                        .autocorrectionDisabled()
+                        .focused($isSchoolNameFocused)
+                } footer: {
+                    Text("请填写学校官方全称。提交后需要管理员审核，审核通过后会自动进入对应学校社区。")
+                }
+
+                if let errorMessage {
+                    Section("提交失败") {
+                        Text(errorMessage)
+                            .foregroundStyle(AppTheme.danger)
+                    }
+                }
+            }
+            .navigationTitle("申请新增学校")
+            .leafyInlineNavigationTitle()
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                    .disabled(isSubmitting)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await submit() }
+                    } label: {
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Text("提交申请")
+                        }
+                    }
+                    .disabled(trimmedSchoolName.isEmpty || isSubmitting)
+                }
+            }
+            .onAppear {
+                isSchoolNameFocused = true
+            }
+        }
+    }
+
+    @MainActor
+    private func submit() async {
+        guard !trimmedSchoolName.isEmpty, !isSubmitting else { return }
+        isSubmitting = true
+        errorMessage = nil
+        defer { isSubmitting = false }
+
+        do {
+            try await onSubmit(trimmedSchoolName)
+            dismiss()
+        } catch {
             errorMessage = error.localizedDescription
         }
     }

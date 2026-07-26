@@ -5,6 +5,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 #if canImport(UIKit)
+import SafariServices
 import UIKit
 #elseif canImport(AppKit)
 import AppKit
@@ -816,6 +817,8 @@ struct TrainingProgramView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
+    @State private var expandedSectionIDs: Set<String> = []
+    @State private var browserItem: TrainingProgramBrowserItem?
 
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
@@ -889,15 +892,8 @@ struct TrainingProgramView: View {
             if let document, !document.sections.isEmpty {
                 VStack(alignment: .leading, spacing: AppSpacing.compact) {
                     AcademicDetailSectionHeader(title: "培养方案正文")
-                    AcademicDetailCard {
-                        VStack(spacing: 0) {
-                            ForEach(Array(document.sections.enumerated()), id: \.element.id) { index, section in
-                                if index > 0 {
-                                    AcademicDetailDivider()
-                                }
-                                sectionRow(section)
-                            }
-                        }
+                    ForEach(document.sections) { section in
+                        programSectionCard(section)
                     }
                 }
             }
@@ -940,6 +936,9 @@ struct TrainingProgramView: View {
             creditSummary = SchoolDataCache.loadGradeCreditSummary()
             errorMessage = nil
         }
+        .sheet(item: $browserItem) { item in
+            TrainingProgramSafariView(url: item.url)
+        }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
             networkManager: networkManager
@@ -961,6 +960,18 @@ struct TrainingProgramView: View {
             HStack(spacing: 8 * leafyControlScale) {
                 PlanBadge(text: "\(requirements.count) 类学分要求")
                 PlanBadge(text: "\(document.sections.count) 个正文部分")
+            }
+
+            if let sourcePageURL, !isCustomCampus {
+                Button {
+                    browserItem = TrainingProgramBrowserItem(url: sourcePageURL)
+                } label: {
+                    Label("查看学校原页面", systemImage: "safari")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(AppTheme.accent)
+                .accessibilityHint("在 App 内浏览器中打开")
             }
         }
         .padding(.vertical, 5 * leafyControlScale)
@@ -997,23 +1008,103 @@ struct TrainingProgramView: View {
         .padding(.vertical, 6 * leafyControlScale)
     }
 
-    private func sectionRow(_ section: TrainingProgramSection) -> some View {
-        VStack(alignment: .leading, spacing: 8 * leafyControlScale) {
-            Text(section.title)
-                .leafyHeadline()
-                .foregroundStyle(AppTheme.primaryText)
+    private func programSectionCard(_ section: TrainingProgramSection) -> some View {
+        let isExpanded = expandedSectionIDs.contains(section.id)
 
-            if section.body.isEmpty {
-                Text("该部分主要为表格内容，已在学分要求中整理。")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-            } else {
-                Text(section.body)
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.secondaryText)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.snappy) {
+                    if isExpanded {
+                        expandedSectionIDs.remove(section.id)
+                    } else {
+                        expandedSectionIDs.insert(section.id)
+                    }
+                }
+            } label: {
+                HStack(spacing: 12 * leafyControlScale) {
+                    Text(section.title)
+                        .leafyHeadline()
+                        .foregroundStyle(AppTheme.primaryText)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10 * leafyControlScale, weight: .semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                .frame(minHeight: 44 * leafyControlScale)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "已展开" : "已收起")
+            .accessibilityHint(isExpanded ? "轻点收起正文" : "轻点展开正文")
+
+            if isExpanded {
+                AcademicDetailDivider()
+
+                VStack(alignment: .leading, spacing: 12 * leafyControlScale) {
+                    if section.body.isEmpty && section.links.isEmpty {
+                        Text("该部分主要为表格内容，已在学分要求中整理。")
+                            .microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    } else if !section.body.isEmpty {
+                        Text(section.body)
+                            .leafyBody()
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .multilineTextAlignment(.leading)
+                            .lineSpacing(4 * leafyControlScale)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    ForEach(resolvedLinks(in: section)) { link in
+                        Button {
+                            browserItem = TrainingProgramBrowserItem(url: link.url)
+                        } label: {
+                            HStack(spacing: 10 * leafyControlScale) {
+                                Image(systemName: "link")
+                                    .foregroundStyle(AppTheme.accentEmphasis)
+                                Text(link.title)
+                                    .leafySubheadline()
+                                    .foregroundStyle(AppTheme.primaryText)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9 * leafyControlScale, weight: .semibold))
+                                    .foregroundStyle(AppTheme.secondaryText)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44 * leafyControlScale, alignment: .leading)
+                            .padding(.horizontal, 12 * leafyControlScale)
+                            .background(
+                                AppTheme.softFill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("在 App 内浏览器中打开")
+                    }
+                }
+                .padding(.top, 14 * leafyControlScale)
             }
         }
-        .padding(.vertical, 6 * leafyControlScale)
+        .padding(.horizontal, AppSpacing.card)
+        .padding(.vertical, 8 * leafyControlScale)
+        .leafyCardStyle()
+    }
+
+    private var sourcePageURL: URL? {
+        URL(string: "\(networkManager.baseURL)/jsxsd/pyfa/pyfazd_query")
+    }
+
+    private var sourceBaseURL: URL {
+        CampusDescriptor.bjfu.undergraduateBaseURL
+    }
+
+    private func resolvedLinks(in section: TrainingProgramSection) -> [TrainingProgramResolvedLink] {
+        section.links.compactMap { link in
+            guard let url = link.resolvedURL(relativeTo: sourceBaseURL) else { return nil }
+            return TrainingProgramResolvedLink(title: link.title, url: url)
+        }
     }
 
     private func loadProgram(force: Bool, userInitiated: Bool) async {
@@ -1156,6 +1247,33 @@ struct TrainingProgramView: View {
         String(format: "%.1f", value)
     }
 }
+
+private struct TrainingProgramResolvedLink: Identifiable {
+    let title: String
+    let url: URL
+
+    var id: URL { url }
+}
+
+private struct TrainingProgramBrowserItem: Identifiable {
+    let url: URL
+
+    var id: URL { url }
+}
+
+#if canImport(UIKit)
+private struct TrainingProgramSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+}
+#else
+private typealias TrainingProgramSafariView = LeafyExternalBrowserView
+#endif
 
 struct EmptyClassroomView: View {
     enum QueryMode: String, CaseIterable, Identifiable {

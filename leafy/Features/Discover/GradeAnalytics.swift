@@ -135,6 +135,27 @@ struct GradeAnalytics: Hashable {
             }
     }
 
+    var lowScoreFirstCourses: [CoursePerformance] {
+        courses.sorted { lhs, rhs in
+            if lhs.isPassed != rhs.isPassed {
+                return !lhs.isPassed && rhs.isPassed
+            }
+
+            switch (lhs.score, rhs.score) {
+            case let (leftScore?, rightScore?):
+                if leftScore != rightScore { return leftScore < rightScore }
+            case (nil, _?):
+                return false
+            case (_?, nil):
+                return true
+            case (nil, nil):
+                break
+            }
+
+            return Self.metadataAscending(lhs, rhs)
+        }
+    }
+
     var highImpactCourses: [CoursePerformance] {
         courses
             .sorted {
@@ -152,6 +173,15 @@ struct GradeAnalytics: Hashable {
                     return Self.metadataAscending($0, $1)
                 }
             }
+    }
+
+    func scoreDifference(for course: CoursePerformance) -> Double? {
+        guard let score = course.score, let weightedAverage else { return nil }
+        return score - weightedAverage
+    }
+
+    func impactMagnitude(for course: CoursePerformance) -> Double? {
+        scoreDifference(for: course).map { abs($0) * course.credit }
     }
 
     var requiredCredits: Double {

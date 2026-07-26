@@ -7,6 +7,88 @@ import Supabase
 import SwiftData
 @testable import Leafy
 
+private final class AuthRecordingURLProtocol: URLProtocol, @unchecked Sendable {
+    struct RecordedRequest {
+        let method: String
+        let path: String
+        let body: [String: Any]
+    }
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var requests: [RecordedRequest] = []
+
+    static func reset() {
+        lock.lock()
+        requests.removeAll()
+        lock.unlock()
+    }
+
+    static func snapshot() -> [RecordedRequest] {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let body = requestBodyData().flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
+        } ?? [:]
+        let recorded = RecordedRequest(
+            method: request.httpMethod ?? "",
+            path: request.url?.path ?? "",
+            body: body
+        )
+
+        Self.lock.lock()
+        Self.requests.append(recorded)
+        Self.lock.unlock()
+
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 400,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(
+            self,
+            didLoad: Data(#"{"message":"forced test response","error_code":"validation_failed"}"#.utf8)
+        )
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    private func requestBodyData() -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else {
+            return nil
+        }
+
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1_024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count >= 0 else { return nil }
+            guard count > 0 else { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+}
+
 final class PerformanceRefactorTests: XCTestCase {
     func testCommunityTimeoutReturnsCompletedOperation() async throws {
         let value = try await CommunityTimeout.run(seconds: 1, message: "超时") {
@@ -1910,6 +1992,129 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(CustomCampusAuthService.normalizeCodeForTesting(" 123 456 "), "123456")
         XCTAssertEqual(CustomCampusAuthService.normalizeCodeForTesting("12-34-56"), "123456")
         XCTAssertEqual(CustomCampusAuthService.normalizeCodeForTesting("12 34 56 78"), "12345678")
+    }
+
+    func testCustomCampusRegistrationUsesSignupRequestsWithoutPasswordUpdate() async {
+        AuthRecordingURLProtocol.reset()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AuthRecordingURLProtocol.self]
+        let client = SupabaseClient(
+            supabaseURL: URL(string: "https://example.supabase.co")!,
+            supabaseKey: "test-anon-key",
+            options: SupabaseClientOptions(global: .init(session: URLSession(configuration: configuration)))
+        )
+        let service = CustomCampusAuthService(clientProvider: { client })
+
+        do {
+            try await service.startSignUp(email: "student@example.com", password: "password123")
+            XCTFail("Expected the recording transport to return an error.")
+        } catch {}
+
+        do {
+            try await service.resendSignUpCode(email: "student@example.com")
+            XCTFail("Expected the recording transport to return an error.")
+        } catch {}
+
+        do {
+            _ = try await service.verifySignUpCode(email: "student@example.com", code: "12345678")
+            XCTFail("Expected the recording transport to return an error.")
+        } catch {}
+
+        let requests = AuthRecordingURLProtocol.snapshot()
+        XCTAssertEqual(requests.map(\.path), [
+            "/auth/v1/signup",
+            "/auth/v1/resend",
+            "/auth/v1/verify"
+        ])
+        XCTAssertEqual(requests.map(\.method), ["POST", "POST", "POST"])
+        guard requests.count == 3 else { return }
+        XCTAssertEqual(requests[0].body["email"] as? String, "student@example.com")
+        XCTAssertEqual(requests[0].body["password"] as? String, "password123")
+        XCTAssertEqual(requests[1].body["type"] as? String, "signup")
+        XCTAssertEqual(requests[2].body["type"] as? String, "signup")
+        XCTAssertFalse(requests.contains { $0.path == "/auth/v1/user" })
+    }
+
+    @MainActor
+    func testManualCourseWeekSelectionNormalizesGapsAndBuildsSummary() {
+        XCTAssertEqual(
+            ManualCourseWeekSelection.normalized([16, 1, 8, 10, 8, 21, 0, 15, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14]),
+            Array(1...8) + Array(10...16)
+        )
+        XCTAssertEqual(
+            ManualCourseWeekSelection.summary(Array(1...8) + Array(10...16)),
+            "1–8、10–16 周"
+        )
+        XCTAssertEqual(ManualCourseWeekSelection.summary([]), "未选择")
+    }
+
+    @MainActor
+    func testManualGradeDraftValidationAndCRUDRemainContainerScoped() throws {
+        XCTAssertThrowsError(
+            try ManualGradeDraft(
+                term: "",
+                courseName: "数据结构",
+                credit: "3",
+                score: "优秀",
+                type: "必修"
+            ).validated()
+        ) { error in
+            XCTAssertEqual(error as? ManualGradeValidationError, .missingTerm)
+        }
+        XCTAssertThrowsError(
+            try ManualGradeDraft(
+                term: "2025-2026-2",
+                courseName: "数据结构",
+                credit: "三",
+                score: "优秀",
+                type: "必修"
+            ).validated()
+        ) { error in
+            XCTAssertEqual(error as? ManualGradeValidationError, .invalidCredit)
+        }
+
+        let schema = Schema([Grade.self])
+        let firstContainer = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
+        let secondContainer = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
+
+        let grade = try ManualGradeStore.save(
+            draft: ManualGradeDraft(
+                term: " 2025-2026-2 ",
+                courseName: " 数据结构 ",
+                credit: " 3.0 ",
+                score: " 优秀 ",
+                type: " 必修 "
+            ),
+            editing: nil,
+            in: firstContainer.mainContext
+        )
+        XCTAssertEqual(grade.term, "2025-2026-2")
+        XCTAssertEqual(grade.score, "优秀")
+        XCTAssertEqual(try firstContainer.mainContext.fetch(FetchDescriptor<Grade>()).count, 1)
+        XCTAssertTrue(try secondContainer.mainContext.fetch(FetchDescriptor<Grade>()).isEmpty)
+
+        try ManualGradeStore.save(
+            draft: ManualGradeDraft(
+                term: "2025-2026-2",
+                courseName: "数据结构",
+                credit: "3.0",
+                score: "92",
+                type: "专业必修"
+            ),
+            editing: grade,
+            in: firstContainer.mainContext
+        )
+        XCTAssertEqual(grade.score, "92")
+        XCTAssertEqual(grade.type, "专业必修")
+
+        try ManualGradeStore.delete(grade, in: firstContainer.mainContext)
+        XCTAssertTrue(try firstContainer.mainContext.fetch(FetchDescriptor<Grade>()).isEmpty)
     }
 
     func testCustomCampusAuthMapsRecoverableSupabaseSignupErrors() {

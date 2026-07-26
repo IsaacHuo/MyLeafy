@@ -11,6 +11,41 @@ struct ManualCourseEditorItem: Identifiable, Hashable {
     let id = UUID()
 }
 
+nonisolated enum ManualCourseWeekSelection {
+    static func normalized(_ weeks: some Sequence<Int>) -> [Int] {
+        Array(Set(weeks.filter { (1...SemesterConfig.supportedWeeks).contains($0) })).sorted()
+    }
+
+    static func summary(_ weeks: some Sequence<Int>) -> String {
+        let normalizedWeeks = normalized(weeks)
+        guard let firstWeek = normalizedWeeks.first else {
+            return "未选择"
+        }
+
+        var ranges: [ClosedRange<Int>] = []
+        var rangeStart = firstWeek
+        var previousWeek = firstWeek
+
+        for week in normalizedWeeks.dropFirst() {
+            if week == previousWeek + 1 {
+                previousWeek = week
+                continue
+            }
+            ranges.append(rangeStart...previousWeek)
+            rangeStart = week
+            previousWeek = week
+        }
+        ranges.append(rangeStart...previousWeek)
+
+        let text = ranges.map { range in
+            range.lowerBound == range.upperBound
+                ? "\(range.lowerBound)"
+                : "\(range.lowerBound)–\(range.upperBound)"
+        }
+        return "\(text.joined(separator: "、")) 周"
+    }
+}
+
 struct ManualCourseEditorSheet: View {
     let item: ManualCourseEditorItem
     let onSave: (Course) -> Void
@@ -22,16 +57,19 @@ struct ManualCourseEditorSheet: View {
     @State private var location = ""
     @State private var classInfo = ""
     @State private var dayOfWeek = 1
-    @State private var startWeek = max(1, min(SemesterConfig.currentWeek(), SemesterConfig.supportedWeeks))
-    @State private var endWeek = max(1, min(SemesterConfig.currentWeek(), SemesterConfig.supportedWeeks))
+    @State private var selectedWeeks = Set([
+        max(1, min(SemesterConfig.currentWeek(), SemesterConfig.supportedWeeks))
+    ])
     @State private var startPeriod = 1
     @State private var endPeriod = 2
 
     private var isSaveDisabled: Bool {
         courseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || startWeek > endWeek
+            || selectedWeeks.isEmpty
             || startPeriod > endPeriod
     }
+
+    private let weekColumns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
         NavigationStack {
@@ -45,25 +83,61 @@ struct ManualCourseEditorSheet: View {
                     Text("课程只保存在当前通用学校账号的本机课表中。")
                 }
 
-                Section("上课时间") {
+                Section {
                     Picker("星期", selection: $dayOfWeek) {
                         ForEach(1...7, id: \.self) { day in
                             Text(dayTitle(day)).tag(day)
                         }
                     }
 
-                    Picker("开始周", selection: $startWeek) {
+                    HStack {
+                        Text("上课周次")
+                        Spacer()
+                        Text(ManualCourseWeekSelection.summary(selectedWeeks))
+                            .foregroundStyle(selectedWeeks.isEmpty ? AppTheme.danger : AppTheme.secondaryText)
+                    }
+
+                    LazyVGrid(columns: weekColumns, spacing: 8) {
                         ForEach(1...SemesterConfig.supportedWeeks, id: \.self) { week in
-                            Text("第 \(week) 周").tag(week)
+                            Button {
+                                if selectedWeeks.contains(week) {
+                                    selectedWeeks.remove(week)
+                                } else {
+                                    selectedWeeks.insert(week)
+                                }
+                            } label: {
+                                Text("\(week)")
+                                    .font(.callout.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 34)
+                                    .foregroundStyle(selectedWeeks.contains(week) ? Color.white : AppTheme.primaryText)
+                                    .background(
+                                        selectedWeeks.contains(week) ? AppTheme.accent : AppTheme.fill,
+                                        in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("第 \(week) 周")
+                            .accessibilityValue(selectedWeeks.contains(week) ? "已选择" : "未选择")
                         }
                     }
 
-                    Picker("结束周", selection: $endWeek) {
-                        ForEach(1...SemesterConfig.supportedWeeks, id: \.self) { week in
-                            Text("第 \(week) 周").tag(week)
+                    HStack {
+                        Button("选择全部") {
+                            selectedWeeks = Set(1...SemesterConfig.supportedWeeks)
                         }
+                        Spacer()
+                        Button("清空") {
+                            selectedWeeks.removeAll()
+                        }
+                        .foregroundStyle(AppTheme.danger)
                     }
+                } header: {
+                    Text("上课日期")
+                } footer: {
+                    Text("可以直接取消某一周，适合节假日停课或中间断周的课程。")
+                }
 
+                Section("上课节次") {
                     Picker("开始节次", selection: $startPeriod) {
                         ForEach(1...13, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
@@ -89,11 +163,6 @@ struct ManualCourseEditorSheet: View {
                         .disabled(isSaveDisabled)
                 }
             }
-            .onChange(of: startWeek) { _, newValue in
-                if endWeek < newValue {
-                    endWeek = newValue
-                }
-            }
             .onChange(of: startPeriod) { _, newValue in
                 if endPeriod < newValue {
                     endPeriod = newValue
@@ -114,7 +183,7 @@ struct ManualCourseEditorSheet: View {
                 room: trimmedLocation,
                 location: trimmedLocation,
                 dayOfWeek: dayOfWeek,
-                weeks: Array(startWeek...endWeek),
+                weeks: ManualCourseWeekSelection.normalized(selectedWeeks),
                 duration: Array(startPeriod...endPeriod)
             )
         )

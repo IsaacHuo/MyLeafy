@@ -88,13 +88,13 @@ struct CustomCampusAuthService: Sendable {
         }
     }
 
-    func sendSignUpCode(email: String, password: String) async throws {
+    func startSignUp(email: String, password: String) async throws {
         let credentials = try validatedCredentials(email: email, password: password)
         do {
-            try await clientProvider().auth.signInWithOTP(
+            _ = try await clientProvider().auth.signUp(
                 email: credentials.email,
-                redirectTo: LeafySupabase.authCallbackURL,
-                shouldCreateUser: true
+                password: credentials.password,
+                redirectTo: LeafySupabase.authCallbackURL
             )
         } catch {
             throw Self.mapAuthError(error, email: credentials.email)
@@ -114,21 +114,19 @@ struct CustomCampusAuthService: Sendable {
         }
     }
 
-    func verifySignUpCode(email: String, password: String, code: String) async throws -> CustomCampusAuthSession {
+    func verifySignUpCode(email: String, code: String) async throws -> CustomCampusAuthSession {
         let email = try validatedEmail(email)
-        let password = try validatedCredentials(email: email, password: password).password
         let code = try validatedCode(code)
         do {
             let response = try await clientProvider().auth.verifyOTP(
                 email: email,
                 token: code,
-                type: .magiclink,
+                type: .signup,
                 redirectTo: LeafySupabase.authCallbackURL
             )
             guard let session = response.session else {
                 throw CustomCampusAuthError.missingSession
             }
-            _ = try await clientProvider().auth.update(user: UserAttributes(password: password))
             return CustomCampusAuthSession(session: session, fallbackEmail: email)
         } catch {
             throw Self.mapAuthError(error, email: email)

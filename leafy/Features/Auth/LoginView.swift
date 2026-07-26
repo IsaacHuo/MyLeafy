@@ -678,7 +678,7 @@ struct LoginView: View {
             guard customSignUpCodeEmail == normalizedEmail, customSignUpCodePassword == password else {
                 throw CustomCampusAuthError.invalidCode
             }
-            session = try await service.verifySignUpCode(email: username, password: password, code: customSignUpCode)
+            session = try await service.verifySignUpCode(email: username, code: customSignUpCode)
         }
 
         await MainActor.run {
@@ -708,7 +708,16 @@ struct LoginView: View {
         }
 
         do {
-            try await CustomCampusAuthService().sendSignUpCode(email: credentials.email, password: credentials.password)
+            let service = CustomCampusAuthService()
+            let shouldResend = await MainActor.run {
+                customSignUpCodeEmail == credentials.email
+                    && customSignUpCodePassword == credentials.password
+            }
+            if shouldResend {
+                try await service.resendSignUpCode(email: credentials.email)
+            } else {
+                try await service.startSignUp(email: credentials.email, password: credentials.password)
+            }
             await MainActor.run {
                 customSignUpCodeEmail = credentials.email
                 customSignUpCodePassword = credentials.password

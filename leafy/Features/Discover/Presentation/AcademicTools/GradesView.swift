@@ -8,6 +8,117 @@ import UIKit
 import AppKit
 #endif
 
+struct ManualGradeDraft: Equatable {
+    var term: String = ""
+    var courseName: String = ""
+    var credit: String = ""
+    var score: String = ""
+    var type: String = ""
+
+    func validated() throws -> ManualGradeDraft {
+        let normalized = ManualGradeDraft(
+            term: term.trimmingCharacters(in: .whitespacesAndNewlines),
+            courseName: courseName.trimmingCharacters(in: .whitespacesAndNewlines),
+            credit: credit.trimmingCharacters(in: .whitespacesAndNewlines),
+            score: score.trimmingCharacters(in: .whitespacesAndNewlines),
+            type: type.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+
+        guard !normalized.term.isEmpty else {
+            throw ManualGradeValidationError.missingTerm
+        }
+        guard !normalized.courseName.isEmpty else {
+            throw ManualGradeValidationError.missingCourseName
+        }
+        guard let creditValue = Double(normalized.credit), creditValue >= 0 else {
+            throw ManualGradeValidationError.invalidCredit
+        }
+        guard !normalized.score.isEmpty else {
+            throw ManualGradeValidationError.missingScore
+        }
+        return normalized
+    }
+}
+
+enum ManualGradeValidationError: LocalizedError, Equatable {
+    case missingTerm
+    case missingCourseName
+    case invalidCredit
+    case missingScore
+
+    var errorDescription: String? {
+        switch self {
+        case .missingTerm:
+            return "请填写学期。"
+        case .missingCourseName:
+            return "请填写课程名称。"
+        case .invalidCredit:
+            return "学分需要是大于或等于 0 的数字。"
+        case .missingScore:
+            return "请填写成绩，可输入数字或优秀、合格等文字。"
+        }
+    }
+}
+
+@MainActor
+enum ManualGradeStore {
+    @discardableResult
+    static func save(
+        draft: ManualGradeDraft,
+        editing grade: Grade?,
+        in modelContext: ModelContext
+    ) throws -> Grade {
+        let validatedDraft = try draft.validated()
+        let target: Grade
+        if let grade {
+            target = grade
+        } else {
+            target = Grade(
+                term: validatedDraft.term,
+                courseName: validatedDraft.courseName,
+                credit: validatedDraft.credit,
+                score: validatedDraft.score,
+                type: validatedDraft.type
+            )
+            modelContext.insert(target)
+        }
+
+        target.term = validatedDraft.term
+        target.courseName = validatedDraft.courseName
+        target.credit = validatedDraft.credit
+        target.score = validatedDraft.score
+        target.type = validatedDraft.type
+
+        do {
+            try modelContext.save()
+            return target
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
+    static func delete(_ grade: Grade, in modelContext: ModelContext) throws {
+        modelContext.delete(grade)
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+}
+
+private struct GradeEditorPresentation: Identifiable {
+    let id: UUID
+    let grade: Grade?
+
+    init(grade: Grade? = nil) {
+        self.id = grade?.id ?? UUID()
+        self.grade = grade
+    }
+}
+
 struct GradesView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyControlScale) private var leafyControlScale
@@ -27,6 +138,7 @@ struct GradesView: View {
     @State private var gradePresentationSignature = GradePresentationSignature()
     @State private var isGradeImportPresented = false
     @State private var isGradeImportGuidePresented = false
+    @State private var gradeEditorPresentation: GradeEditorPresentation?
 
     init(openAnalytics: (() -> Void)? = nil) {
         self.openAnalytics = openAnalytics
@@ -68,13 +180,30 @@ struct GradesView: View {
             ToolbarItem(placement: .leafyTrailing) {
                 if isFetching {
                     ProgressView()
+                } else if isCustomCampus {
+                    Menu {
+                        Button {
+                            gradeEditorPresentation = GradeEditorPresentation()
+                        } label: {
+                            Label("手动添加成绩", systemImage: "plus")
+                        }
+
+                        Button {
+                            isGradeImportGuidePresented = true
+                        } label: {
+                            Label("导入 CSV", systemImage: "tray.and.arrow.down")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("添加或导入成绩")
                 } else {
                     Button {
                         Task { await runPrimaryGradeAction() }
                     } label: {
-                        Image(systemName: isCustomCampus ? "tray.and.arrow.down" : "arrow.triangle.2.circlepath")
+                        Image(systemName: "arrow.triangle.2.circlepath")
                     }
-                    .accessibilityLabel(isCustomCampus ? "导入" : "刷新")
+                    .accessibilityLabel("刷新")
                 }
             }
         }
@@ -90,6 +219,10 @@ struct GradesView: View {
                 isGradeImportPresented = true
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $gradeEditorPresentation) { presentation in
+            ManualGradeEditorSheet(presentation: presentation)
+                .presentationDetents([.large])
         }
         .alert("提示", isPresented: $showAlert) {
             Button("确定", role: .cancel) {}
@@ -137,12 +270,28 @@ struct GradesView: View {
             } description: {
                 Text(isCustomCampus ? "可以从教务系统导出表格后按模板整理；也可以先只使用课表和考试功能。" : "连接校园网后可获取最新成绩。")
             } actions: {
-                Button {
-                    Task { await runPrimaryGradeAction() }
-                } label: {
-                    Label(isCustomCampus ? "查看导入模板" : "获取最新成绩", systemImage: isCustomCampus ? "doc.text.magnifyingglass" : "arrow.triangle.2.circlepath")
+                if isCustomCampus {
+                    Button {
+                        gradeEditorPresentation = GradeEditorPresentation()
+                    } label: {
+                        Label("手动添加成绩", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button {
+                        isGradeImportGuidePresented = true
+                    } label: {
+                        Label("导入 CSV", systemImage: "tray.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button {
+                        Task { await runPrimaryGradeAction() }
+                    } label: {
+                        Label("获取最新成绩", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
             .tint(AppTheme.accent)
             .padding(.vertical, AppSpacing.page)
@@ -150,10 +299,13 @@ struct GradesView: View {
     }
 
     private func termSection(term: String, grades: [Grade]) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.compact) {
+        let isCollapsed = collapsedTerms.contains(term)
+        let summaryText = termSummaryText(term: term, rawRecordCount: grades.count)
+
+        return VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.snappy) {
-                    if collapsedTerms.contains(term) {
+                    if isCollapsed {
                         collapsedTerms.remove(term)
                     } else {
                         collapsedTerms.insert(term)
@@ -163,38 +315,100 @@ struct GradesView: View {
                 HStack {
                     Text(term)
                         .leafySubheadline()
+                        .foregroundStyle(AppTheme.primaryText)
                     Spacer()
-                    Image(systemName: collapsedTerms.contains(term) ? "chevron.down" : "chevron.up")
-                        .foregroundColor(.secondary)
+                    Text(summaryText)
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                        .foregroundStyle(AppTheme.secondaryText)
                         .font(.system(size: 10 * leafyControlScale, weight: .semibold))
                 }
+                .frame(minHeight: 44 * leafyControlScale)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, AppSpacing.card)
+            .padding(.vertical, 6 * leafyControlScale)
+            .accessibilityLabel("\(term)，\(summaryText)")
+            .accessibilityValue(isCollapsed ? "已收起" : "已展开")
+            .accessibilityHint(isCollapsed ? "轻点展开本学期成绩" : "轻点收起本学期成绩")
 
-            if !collapsedTerms.contains(term) {
-                AcademicDetailCard {
-                    VStack(spacing: 0) {
-                        ForEach(Array(grades.enumerated()), id: \.element.id) { index, grade in
-                            if index > 0 {
-                                AcademicDetailDivider()
-                            }
-                            gradeRow(grade)
-                        }
+            if !isCollapsed {
+                ForEach(Array(grades.enumerated()), id: \.element.id) { index, grade in
+                    if index > 0 {
+                        Divider()
+                            .overlay(AppTheme.separator)
+                            .padding(.leading, AppSpacing.card)
                     }
+
+                    gradeRow(grade)
+                        .padding(.horizontal, AppSpacing.card)
+                        .padding(.vertical, 8 * leafyControlScale)
                 }
+            }
+        }
+        .background(
+            AppTheme.cardBackground,
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+        )
+    }
+
+    private func termSummaryText(term: String, rawRecordCount: Int) -> String {
+        guard let summary = gradePresentationSnapshot.termSummaries[term],
+              summary.effectiveCourseCount > 0 else {
+            return L10n.text("%d 条成绩", language: leafyLanguage, rawRecordCount)
+        }
+
+        if let average = summary.weightedAverage {
+            return L10n.text(
+                "%d 门 · 均分 %.1f",
+                language: leafyLanguage,
+                summary.effectiveCourseCount,
+                average
+            )
+        }
+
+        return L10n.text("%d 门", language: leafyLanguage, summary.effectiveCourseCount)
+    }
+
+    private var gpaFooterText: String {
+        let sourceText: String
+        if gradePresentationSnapshot.analytics.officialGPA != nil {
+            sourceText = L10n.text(
+                "GPA 使用学校官方数据。分数段、通过率和课程影响为 %@ 基于成绩明细整理。",
+                language: leafyLanguage,
+                AppBrand.displayName
+            )
+        } else {
+            sourceText = L10n.text("当前页面未解析到学校官方 GPA，因此 GPA 暂不显示。", language: leafyLanguage)
+        }
+
+        guard let lastUpdatedAt = SchoolDataCache.lastSyncDate(for: .gradeDetails) else {
+            return sourceText
+        }
+
+        let updatedText = lastUpdatedAt.formatted(date: .abbreviated, time: .shortened)
+        return sourceText + L10n.text(" 上次更新：%@。", language: leafyLanguage, updatedText)
+    }
+
+    private func gradeRow(_ grade: Grade) -> some View {
+        Group {
+            if isCustomCampus {
+                Button {
+                    gradeEditorPresentation = GradeEditorPresentation(grade: grade)
+                } label: {
+                    gradeRowContent(grade)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("编辑或删除这条成绩")
+            } else {
+                gradeRowContent(grade)
             }
         }
     }
 
-    private var gpaFooterText: String {
-        if gradePresentationSnapshot.analytics.officialGPA != nil {
-            return L10n.text("GPA 使用学校官方数据。分数段、通过率和课程影响为 %@ 基于成绩明细整理。", language: leafyLanguage, AppBrand.displayName)
-        }
-        return L10n.text("当前页面未解析到学校官方 GPA，因此 GPA 暂不显示。", language: leafyLanguage)
-    }
-
-    private func gradeRow(_ grade: Grade) -> some View {
+    private func gradeRowContent(_ grade: Grade) -> some View {
         HStack(alignment: .center, spacing: 12 * leafyControlScale) {
             VStack(alignment: .leading, spacing: 4 * leafyControlScale) {
                 Text(grade.courseName)
@@ -216,6 +430,7 @@ struct GradesView: View {
                 .foregroundColor(scoreColor(grade.score))
         }
         .padding(.vertical, 4 * leafyControlScale)
+        .contentShape(Rectangle())
     }
 
     private func fetchGrades(userInitiated: Bool) async {
@@ -342,6 +557,145 @@ struct GradesView: View {
     }
 }
 
+private struct ManualGradeEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let presentation: GradeEditorPresentation
+
+    @State private var draft: ManualGradeDraft
+    @State private var errorMessage: String?
+    @State private var isDeleteConfirmationPresented = false
+
+    init(presentation: GradeEditorPresentation) {
+        self.presentation = presentation
+        let grade = presentation.grade
+        _draft = State(
+            initialValue: ManualGradeDraft(
+                term: grade?.term ?? "",
+                courseName: grade?.courseName ?? "",
+                credit: grade?.credit ?? "",
+                score: grade?.score ?? "",
+                type: grade?.type ?? ""
+            )
+        )
+    }
+
+    private var isEditing: Bool {
+        presentation.grade != nil
+    }
+
+    private var isSaveDisabled: Bool {
+        (try? draft.validated()) == nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("学期，例如 2025-2026-1", text: $draft.term)
+                    TextField("课程名称", text: $draft.courseName)
+                } header: {
+                    Text("课程")
+                }
+
+                Section {
+                    TextField("学分", text: $draft.credit)
+                    TextField("成绩，例如 92、优秀或合格", text: $draft.score)
+                    TextField("课程类型，例如 必修、选修", text: $draft.type)
+                } header: {
+                    Text("成绩")
+                } footer: {
+                    Text("成绩支持数字或文字等级；课程类型可以留空，保存后显示为“未分类”。")
+                }
+
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundStyle(AppTheme.danger)
+                    } header: {
+                        Text("保存失败")
+                    }
+                }
+
+                if isEditing {
+                    Section {
+                        Button(role: .destructive) {
+                            isDeleteConfirmationPresented = true
+                        } label: {
+                            Label("删除这条成绩", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(isEditing ? "编辑成绩" : "添加成绩")
+            .leafyInlineNavigationTitle()
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        save()
+                    }
+                    .disabled(isSaveDisabled)
+                }
+            }
+            .confirmationDialog(
+                "删除这条成绩？",
+                isPresented: $isDeleteConfirmationPresented,
+                titleVisibility: .visible
+            ) {
+                Button("删除成绩", role: .destructive) {
+                    deleteGrade()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("删除后会立即更新当前通用入口的成绩分析，此操作不影响北京林业大学入口。")
+            }
+        }
+    }
+
+    @MainActor
+    private func save() {
+        do {
+            try ManualGradeStore.save(
+                draft: draft,
+                editing: presentation.grade,
+                in: modelContext
+            )
+            publishGradeChange()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func deleteGrade() {
+        guard let grade = presentation.grade else { return }
+
+        do {
+            try ManualGradeStore.delete(grade, in: modelContext)
+            publishGradeChange()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func publishGradeChange() {
+        SchoolDataRefreshNotifier.post(.grades)
+        LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
+    }
+}
+
 private struct GradeAnalyticsCard: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
 
@@ -355,7 +709,7 @@ private struct GradeAnalyticsCard: View {
                     .foregroundStyle(AppTheme.primaryText)
                 Spacer()
                 HStack(spacing: 4) {
-                    Text("点击查看详情")
+                    Text("查看分析")
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                 }
@@ -408,7 +762,7 @@ private struct GradeAnalyticsCard: View {
 
 private enum GradeCourseSort: String, CaseIterable, Identifiable {
     case term = "学期"
-    case score = "分数"
+    case lowScore = "低分优先"
     case impact = "影响"
 
     var id: String { rawValue }
@@ -502,7 +856,8 @@ struct GradeAnalyticsDetailView: View {
     @State private var isLoadingRankings = false
     @State private var creditSummary: GradeCreditSummary? = SchoolDataCache.loadGradeCreditSummary()
     @State private var networkManager = ActiveCampusContext.networkManager
-    @State private var courseSort: GradeCourseSort = .term
+    @State private var courseSort: GradeCourseSort = .lowScore
+    @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var sharePreviewImage: UIImage?
     @State private var csvShareItem: GradeCSVShareItem?
     @State private var exportErrorMessage: String?
@@ -516,8 +871,7 @@ struct GradeAnalyticsDetailView: View {
         AcademicDetailScrollContainer {
             GradeOverviewCard(
                 analytics: displayedAnalytics,
-                gradeCountingNote: gradeCountingNote,
-                summaryText: summaryText
+                gradeCountingNote: gradeCountingNote
             )
 
             GradeDetailCard(title: "成绩趋势", systemImage: "chart.xyaxis.line", subtitle: "按有效课程口径计算") {
@@ -525,17 +879,28 @@ struct GradeAnalyticsDetailView: View {
                 GradeScoreDistributionChart(analytics: displayedAnalytics)
             }
 
-            GradeDetailCard(title: "官方排名", systemImage: "chart.bar.xaxis", subtitle: "来自教务系统官方页面") {
-                if isLoadingRankings && rankings.isEmpty {
-                    HStack {
+            GradeDetailCard(title: "官方排名", systemImage: "chart.bar.xaxis", subtitle: rankingSubtitle) {
+                if isLoadingRankings {
+                    HStack(spacing: 8) {
                         ProgressView()
-                        Text("正在查询强智官方排名")
+                        Text(rankings.isEmpty ? "正在查询强智官方排名" : "正在更新官方排名")
+                            .microCaption()
                             .foregroundStyle(AppTheme.secondaryText)
                     }
+                }
+
+                if isLoadingRankings && rankings.isEmpty {
+                    EmptyView()
                 } else if rankings.isEmpty {
                     Text(rankingMessage)
+                        .leafyBody()
                         .foregroundStyle(AppTheme.secondaryText)
                 } else {
+                    if !rankingMessage.isEmpty {
+                        Text(rankingMessage)
+                            .microCaption()
+                            .foregroundStyle(AppTheme.warning)
+                    }
                     RankingAnalysisCard(analytics: displayedAnalytics, rankings: rankings)
                     if !periodRankings.isEmpty {
                         RankingTrendChart(rankings: periodRankings)
@@ -547,10 +912,24 @@ struct GradeAnalyticsDetailView: View {
                         rankingRecordGroup(title: group.range, records: group.records)
                     }
                 }
+
+                if !isCustomCampus {
+                    Button {
+                        Task { await refreshRankings(userInitiated: true) }
+                    } label: {
+                        Label(rankings.isEmpty ? "重试查询" : "刷新排名", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isLoadingRankings)
+                }
             }
 
-            GradeDetailCard(title: "课程结构", systemImage: "square.grid.2x2", subtitle: "学分、分数段和课程类型") {
+            GradeDetailCard(title: "课程结构", systemImage: "square.grid.2x2", subtitle: "按有效课程统计学分与课程类型") {
                 GradeCreditStructureChart(analytics: displayedAnalytics)
+            }
+
+            GradeDetailCard(title: "课程明细", systemImage: "list.bullet.rectangle", subtitle: "优先查看低分和高学分课程") {
                 GradeCourseExplorerCard(
                     analytics: displayedAnalytics,
                     sort: $courseSort
@@ -558,6 +937,7 @@ struct GradeAnalyticsDetailView: View {
             }
 
             GradeDetailCard(title: "统计口径", systemImage: "info.circle", subtitle: "GPA 只使用官方值") {
+                supplementalStatistics
                 Text(methodologyText)
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
@@ -603,6 +983,12 @@ struct GradeAnalyticsDetailView: View {
         } message: {
             Text(exportErrorMessage ?? "")
         }
+        .schoolReauthenticationSheet(
+            request: $reauthenticationRequest,
+            networkManager: networkManager
+        ) { _ in
+            Task { await refreshRankings(userInitiated: true) }
+        }
         .task {
             await loadSupplementalData()
         }
@@ -632,12 +1018,11 @@ struct GradeAnalyticsDetailView: View {
         return L10n.text("统计按有效课程计算；成绩单列表仍保留期考、补考和重修记录。", language: leafyLanguage)
     }
 
-    private var summaryText: String {
-        let averageText = displayedAnalytics.displayWeightedAverage.map(format) ?? L10n.text("暂无", language: leafyLanguage)
-        let gpaText = displayedAnalytics.displayGPA.map(format) ?? L10n.text("未获取", language: leafyLanguage)
-        let riskText = displayedAnalytics.riskCourseCount == 0 ? L10n.text("目前没有未通过课程", language: leafyLanguage) : L10n.text("有 %d 门未通过课程", language: leafyLanguage, displayedAnalytics.riskCourseCount)
-        let trendText = displayedAnalytics.termSummaries.count <= 1 ? L10n.text("当前成绩学期较少，趋势判断需要继续积累数据", language: leafyLanguage) : L10n.text("已形成 %d 个学期的趋势记录", language: leafyLanguage, displayedAnalytics.termSummaries.count)
-        return L10n.text("当前%@均分 %@，官方 GPA %@，已通过学分 %@，%@。%@。建议优先关注低分和高学分课程。", language: leafyLanguage, displayedAnalytics.weightedAverageSourceText, averageText, gpaText, format(displayedAnalytics.passedCredits), riskText, trendText)
+    private var rankingSubtitle: String {
+        guard let date = SchoolDataCache.lastSyncDate(for: .gradeRankings) else {
+            return "来自教务系统官方页面"
+        }
+        return "来自教务系统 · 上次更新 \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private var methodologyText: String {
@@ -645,6 +1030,34 @@ struct GradeAnalyticsDetailView: View {
             ? L10n.text("当前缓存没有解析到学校官方 GPA，因此 GPA 暂不展示。", language: leafyLanguage)
             : L10n.text("页面已解析到学校官方 GPA，GPA 展示只使用官方值。", language: leafyLanguage)
         return officialText + L10n.text(" 其他统计按有效课程计算：同名同学分课程会合并，补考或重修优先取已通过且分数最高记录；优秀、良好、中等等明确等级会映射为可解释的分值，通过制成绩只计通过与学分，不计入分数统计。", language: leafyLanguage)
+    }
+
+    private var supplementalStatistics: some View {
+        HStack(spacing: 10) {
+            supplementalStatistic(
+                title: "中位数",
+                value: displayedAnalytics.medianScore.map(format) ?? "--"
+            )
+            supplementalStatistic(
+                title: "标准差",
+                value: displayedAnalytics.standardDeviation.map(format) ?? "--"
+            )
+        }
+    }
+
+    private func supplementalStatistic(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(value)
+                .leafySubheadline()
+                .foregroundStyle(AppTheme.primaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private var overallRankings: [GradeRankingRecord] {
@@ -801,6 +1214,9 @@ struct GradeAnalyticsDetailView: View {
     private func loadSupplementalData() async {
         rankings = SchoolDataCache.loadGradeRankings()
         creditSummary = SchoolDataCache.loadGradeCreditSummary()
+        if !rankings.isEmpty {
+            rankingMessage = ""
+        }
         refreshPresentationSnapshotIfNeeded()
 
         guard !isCustomCampus else {
@@ -808,17 +1224,37 @@ struct GradeAnalyticsDetailView: View {
             return
         }
 
-        guard networkManager.isLoggedIn else {
-            if rankings.isEmpty {
-                rankingMessage = L10n.text("教务暂未开放成绩排名，或需要连接校园网后重新登录查询。", language: leafyLanguage)
+        await refreshRankings(userInitiated: false)
+    }
+
+    private func refreshRankings(userInitiated: Bool) async {
+        if userInitiated,
+           let request = await SchoolReauthentication.preflightRequest(
+               networkManager: networkManager,
+               context: .grades
+           ) {
+            await MainActor.run {
+                reauthenticationRequest = request
             }
             return
         }
 
-        await loadRankings()
+        guard networkManager.isLoggedIn else {
+            await MainActor.run {
+                if rankings.isEmpty {
+                    rankingMessage = L10n.text("教务暂未开放成绩排名，或需要连接校园网后重新登录查询。", language: leafyLanguage)
+                }
+                if userInitiated, networkManager.hasCachedIdentity {
+                    reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
+                }
+            }
+            return
+        }
+
+        await loadRankings(userInitiated: userInitiated)
     }
 
-    private func loadRankings() async {
+    private func loadRankings(userInitiated: Bool) async {
         guard !isLoadingRankings else { return }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
@@ -841,20 +1277,29 @@ struct GradeAnalyticsDetailView: View {
             let parsed = try HTMLParser.parseGradeRankings(html: html)
             let parsedCreditSummary = try? HTMLParser.parseGradeCreditSummary(html: html)
             await MainActor.run {
-                rankings = parsed
-                SchoolDataCache.saveGradeRankings(parsed)
+                if parsed.isEmpty {
+                    rankingMessage = rankings.isEmpty
+                        ? L10n.text("本次未查询到官方排名。", language: leafyLanguage)
+                        : L10n.text("本次未查询到新的官方排名，已保留最近一次成功数据。", language: leafyLanguage)
+                } else {
+                    rankings = parsed
+                    SchoolDataCache.saveGradeRankings(parsed)
+                    rankingMessage = ""
+                }
                 if let parsedCreditSummary {
                     creditSummary = parsedCreditSummary
                     SchoolDataCache.saveGradeCreditSummary(parsedCreditSummary)
                 }
                 refreshPresentationSnapshotIfNeeded()
-                rankingMessage = parsed.isEmpty ? L10n.text("教务暂未开放成绩排名。", language: leafyLanguage) : ""
                 isLoadingRankings = false
             }
         } catch {
             await MainActor.run {
                 rankingMessage = error.localizedDescription.isEmpty ? L10n.text("教务暂未开放成绩排名。", language: leafyLanguage) : error.localizedDescription
                 isLoadingRankings = false
+                if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
+                    reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
+                }
             }
         }
     }
@@ -872,14 +1317,10 @@ private struct GradeOverviewCard: View {
 
     let analytics: GradeAnalytics
     let gradeCountingNote: String
-    let summaryText: String
 
     var body: some View {
         GradeDetailCard(title: "概览", systemImage: "chart.line.uptrend.xyaxis", subtitle: gradeCountingNote) {
-            ViewThatFits(in: .horizontal) {
-                metricGrid(columnCount: 3)
-                metricGrid(columnCount: 2)
-            }
+            metricGrid
 
             if let officialCreditPoint = analytics.officialCreditPoint {
                 HStack {
@@ -894,24 +1335,47 @@ private struct GradeOverviewCard: View {
                 .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
             }
 
-            Text(summaryText)
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
+            riskCallout
         }
     }
 
-    private func metricGrid(columnCount: Int) -> some View {
+    private var metricGrid: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: columnCount),
+            columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2),
             spacing: 10
         ) {
             GradeMetricTile(title: "GPA", value: analytics.displayGPA.map(format) ?? "--", subtitle: analytics.gpaSourceText)
-            GradeMetricTile(title: "均分", value: analytics.displayWeightedAverage.map(format) ?? "--", subtitle: analytics.weightedAverageSourceText)
+            GradeMetricTile(title: "加权均分", value: analytics.displayWeightedAverage.map(format) ?? "--", subtitle: analytics.weightedAverageSourceText)
             GradeMetricTile(title: "通过率", value: analytics.passRate.map(percent) ?? "--", subtitle: "\(analytics.effectiveCourseCount) 门有效课")
-            GradeMetricTile(title: "学分", value: creditFormat(analytics.totalCredits), subtitle: "\(creditFormat(analytics.passedCredits)) 已通过")
-            GradeMetricTile(title: "中位数", value: analytics.medianScore.map(format) ?? "--", subtitle: "基础统计")
-            GradeMetricTile(title: "标准差", value: analytics.standardDeviation.map(format) ?? "--", subtitle: "分数离散度")
+            GradeMetricTile(
+                title: "已通过学分",
+                value: creditFormat(analytics.passedCredits),
+                subtitle: "共 \(creditFormat(analytics.totalCredits)) 学分"
+            )
         }
+    }
+
+    private var riskCallout: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: analytics.riskCourseCount > 0 ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(analytics.riskCourseCount > 0 ? AppTheme.danger : AppTheme.accent)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(analytics.riskCourseCount > 0 ? "\(analytics.riskCourseCount) 门课程需要关注" : "当前没有未通过课程")
+                    .leafySubheadline()
+                    .foregroundStyle(AppTheme.primaryText)
+                Text(analytics.riskCourseCount > 0 ? "建议先查看低分优先和高学分课程。" : "继续关注高学分课程和学期趋势。")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            (analytics.riskCourseCount > 0 ? AppTheme.danger.opacity(0.08) : AppTheme.softFill),
+            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private func format(_ value: Double) -> String {
@@ -1197,6 +1661,7 @@ private struct GradeCourseExplorerCard: View {
 
     let analytics: GradeAnalytics
     @Binding var sort: GradeCourseSort
+    @State private var showsAllCourses = false
 
     private var sortedCourses: [GradeAnalytics.CoursePerformance] {
         switch sort {
@@ -1205,38 +1670,52 @@ private struct GradeCourseExplorerCard: View {
                 if $0.term != $1.term { return $0.term > $1.term }
                 return scoreDescending($0, $1)
             }
-        case .score:
-            return analytics.courses.sorted(by: scoreDescending)
+        case .lowScore:
+            return analytics.lowScoreFirstCourses
         case .impact:
             return analytics.highImpactCourses
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    courseListTitle
-                    Spacer()
-                    sortPicker
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    courseListTitle
-                    sortPicker
-                }
-            }
-
-            ForEach(sortedCourses) { course in
-                GradeCourseAnalysisRow(course: course)
-            }
-        }
+    private var visibleCourses: ArraySlice<GradeAnalytics.CoursePerformance> {
+        sortedCourses.prefix(showsAllCourses ? sortedCourses.count : 8)
     }
 
-    private var courseListTitle: some View {
-        Text("课程明细")
-            .leafySubheadline()
-            .foregroundStyle(AppTheme.primaryText)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sortPicker
+
+            Text("“影响”按课程分数相对本地加权均分的偏离程度乘以学分排序，不是官方 GPA 预测。")
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(visibleCourses) { course in
+                GradeCourseAnalysisRow(
+                    course: course,
+                    weightedAverage: analytics.weightedAverage
+                )
+            }
+
+            if sortedCourses.count > 8 {
+                Button {
+                    withAnimation(.snappy) {
+                        showsAllCourses.toggle()
+                    }
+                } label: {
+                    Label(
+                        showsAllCourses ? "收起课程" : "查看全部 \(sortedCourses.count) 门",
+                        systemImage: showsAllCourses ? "chevron.up" : "chevron.down"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityValue(showsAllCourses ? "已展开全部课程" : "当前显示前 8 门课程")
+            }
+        }
+        .onChange(of: sort) { _, _ in
+            showsAllCourses = false
+        }
     }
 
     private var sortPicker: some View {
@@ -1246,12 +1725,14 @@ private struct GradeCourseExplorerCard: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(maxWidth: 180)
+        .frame(maxWidth: 280)
+        .accessibilityLabel("课程排序")
     }
 }
 
 private struct GradeCourseAnalysisRow: View {
     let course: GradeAnalytics.CoursePerformance
+    let weightedAverage: Double?
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -1261,7 +1742,7 @@ private struct GradeCourseAnalysisRow: View {
         .padding(10)
         .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(course.name)，成绩 \(course.rawScore)，\(String(format: "%.1f", course.credit)) 学分，\(course.term)")
+        .accessibilityLabel(accessibilityText)
     }
 
     private var horizontalLayout: some View {
@@ -1308,6 +1789,11 @@ private struct GradeCourseAnalysisRow: View {
         Text(course.term)
             .microCaption()
             .foregroundStyle(AppTheme.secondaryText)
+        if let differenceText {
+            Text(differenceText)
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+        }
     }
 
     private var scoreText: some View {
@@ -1319,6 +1805,21 @@ private struct GradeCourseAnalysisRow: View {
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
         }
+    }
+
+    private var differenceText: String? {
+        guard let score = course.score, let weightedAverage else { return nil }
+        let difference = score - weightedAverage
+        if abs(difference) < 0.05 {
+            return "接近本地加权均分"
+        }
+        return "\(difference > 0 ? "高于" : "低于")本地加权均分 \(String(format: "%.1f", abs(difference))) 分"
+    }
+
+    private var accessibilityText: String {
+        let base = "\(course.name)，成绩 \(course.rawScore)，\(String(format: "%.1f", course.credit)) 学分，\(course.term)"
+        guard let differenceText else { return base }
+        return "\(base)，\(differenceText)"
     }
 }
 
