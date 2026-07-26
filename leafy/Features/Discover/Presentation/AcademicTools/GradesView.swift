@@ -1661,7 +1661,6 @@ private struct GradeCourseExplorerCard: View {
 
     let analytics: GradeAnalytics
     @Binding var sort: GradeCourseSort
-    @State private var showsAllCourses = false
 
     private var sortedCourses: [GradeAnalytics.CoursePerformance] {
         switch sort {
@@ -1677,12 +1676,8 @@ private struct GradeCourseExplorerCard: View {
         }
     }
 
-    private var visibleCourses: ArraySlice<GradeAnalytics.CoursePerformance> {
-        sortedCourses.prefix(showsAllCourses ? sortedCourses.count : 8)
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        LazyVStack(alignment: .leading, spacing: 10) {
             sortPicker
 
             Text("“影响”按课程分数相对本地加权均分的偏离程度乘以学分排序，不是官方 GPA 预测。")
@@ -1690,31 +1685,9 @@ private struct GradeCourseExplorerCard: View {
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ForEach(visibleCourses) { course in
-                GradeCourseAnalysisRow(
-                    course: course,
-                    weightedAverage: analytics.weightedAverage
-                )
+            ForEach(sortedCourses) { course in
+                GradeCourseAnalysisRow(course: course)
             }
-
-            if sortedCourses.count > 8 {
-                Button {
-                    withAnimation(.snappy) {
-                        showsAllCourses.toggle()
-                    }
-                } label: {
-                    Label(
-                        showsAllCourses ? "收起课程" : "查看全部 \(sortedCourses.count) 门",
-                        systemImage: showsAllCourses ? "chevron.up" : "chevron.down"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityValue(showsAllCourses ? "已展开全部课程" : "当前显示前 8 门课程")
-            }
-        }
-        .onChange(of: sort) { _, _ in
-            showsAllCourses = false
         }
     }
 
@@ -1725,75 +1698,48 @@ private struct GradeCourseExplorerCard: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(maxWidth: 280)
+        .frame(maxWidth: 320)
+        .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityLabel("课程排序")
     }
 }
 
 private struct GradeCourseAnalysisRow: View {
+    @ScaledMetric(relativeTo: .body) private var contentHeight: CGFloat = 56
+
     let course: GradeAnalytics.CoursePerformance
-    let weightedAverage: Double?
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            horizontalLayout
-            verticalLayout
-        }
-        .padding(10)
-        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var horizontalLayout: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             courseText
 
             Spacer(minLength: 10)
 
             scoreText
         }
-    }
-
-    private var verticalLayout: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            courseText
-            scoreText
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        .frame(height: contentHeight)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
     }
 
     private var courseText: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(course.name)
                 .leafyHeadline()
                 .foregroundStyle(AppTheme.primaryText)
-                .lineLimit(3)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    courseBadges
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    courseBadges
-                }
-            }
-        }
-    }
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
 
-    @ViewBuilder
-    private var courseBadges: some View {
-        GradeBadge(text: course.type)
-        if course.attemptCount > 1 {
-            GradeBadge(text: "\(course.attemptCount) 次记录")
-        }
-        Text(course.term)
-            .microCaption()
-            .foregroundStyle(AppTheme.secondaryText)
-        if let differenceText {
-            Text(differenceText)
+            Text(metadataText)
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
+        .layoutPriority(1)
     }
 
     private var scoreText: some View {
@@ -1805,21 +1751,29 @@ private struct GradeCourseAnalysisRow: View {
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
-    private var differenceText: String? {
-        guard let score = course.score, let weightedAverage else { return nil }
-        let difference = score - weightedAverage
-        if abs(difference) < 0.05 {
-            return "接近本地加权均分"
+    private var metadataText: String {
+        var components = [course.type]
+        if course.attemptCount > 1 {
+            components.append("\(course.attemptCount) 次记录")
         }
-        return "\(difference > 0 ? "高于" : "低于")本地加权均分 \(String(format: "%.1f", abs(difference))) 分"
+        components.append(course.term)
+        return components.joined(separator: " · ")
     }
 
     private var accessibilityText: String {
-        let base = "\(course.name)，成绩 \(course.rawScore)，\(String(format: "%.1f", course.credit)) 学分，\(course.term)"
-        guard let differenceText else { return base }
-        return "\(base)，\(differenceText)"
+        var components = [
+            course.name,
+            "成绩 \(course.rawScore)",
+            "\(String(format: "%.1f", course.credit)) 学分",
+            course.term
+        ]
+        if course.attemptCount > 1 {
+            components.append("\(course.attemptCount) 次记录")
+        }
+        return components.joined(separator: "，")
     }
 }
 
