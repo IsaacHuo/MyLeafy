@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftSoup
 import SwiftUI
+import OSLog
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -79,19 +80,15 @@ struct TimetableView: View {
     )
     @State private var timetableBackgroundImage: UIImage?
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
+    @State private var timetableBackgroundConfiguration = TimetableBackgroundConfiguration.load()
 
     @AppStorage("hasSeenTimetableOnboarding") private var hasSeenTimetableOnboarding = false
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
-    @AppStorage(TimetableBackgroundStore.isEnabledKey) private var timetableBackgroundIsEnabled = false
-    @AppStorage(TimetableBackgroundStore.filenameKey) private var timetableBackgroundFilename = ""
-    @AppStorage(TimetableBackgroundStore.displayModeKey) private var timetableBackgroundDisplayModeRaw = TimetableBackgroundDisplayMode.fill.rawValue
-    @AppStorage(TimetableBackgroundStore.imageOpacityKey) private var timetableBackgroundImageOpacity = TimetableBackgroundStore.defaultImageOpacity
-    @AppStorage(TimetableBackgroundStore.blurRadiusKey) private var timetableBackgroundBlurRadius = TimetableBackgroundStore.defaultBlurRadius
-    @AppStorage(TimetableBackgroundStore.overlayOpacityKey) private var timetableBackgroundOverlayOpacity = TimetableBackgroundStore.defaultOverlayOpacity
-    @AppStorage(TimetableBackgroundStore.courseCardOpacityKey) private var timetableBackgroundCourseCardOpacity = TimetableBackgroundStore.defaultCourseCardOpacity
-    @AppStorage(TimetableBackgroundStore.lightPaletteKey) private var timetableBackgroundLightPalette = ""
-    @AppStorage(TimetableBackgroundStore.darkPaletteKey) private var timetableBackgroundDarkPalette = ""
 
+    private static let backgroundLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
+        category: "TimetableBackground"
+    )
     private var totalWeeks: Int { SemesterConfig.supportedWeeks }
     private let totalClasses = 13
     private var overviewRowSpacing: CGFloat { 1.5 * leafyControlScale }
@@ -127,23 +124,20 @@ struct TimetableView: View {
     }
 
     private var usesCustomTimetableBackground: Bool {
-        timetableBackgroundIsEnabled && timetableBackgroundImage != nil
-    }
-
-    private var timetableBackgroundDisplayMode: TimetableBackgroundDisplayMode {
-        TimetableBackgroundDisplayMode(rawValue: timetableBackgroundDisplayModeRaw) ?? .fill
+        guard timetableBackgroundConfiguration.usesCustomBackground else { return false }
+        guard !timetableBackgroundConfiguration.requiresMetalEffects
+                || TimetableShaderAvailability.isAvailable else {
+            return false
+        }
+        if timetableBackgroundConfiguration.kind == .photo {
+            return timetableBackgroundImage != nil
+        }
+        return true
     }
 
     private var timetableBackgroundCoursePalette: [Color]? {
         guard usesCustomTimetableBackground else { return nil }
-        let rawPalette = colorScheme == .dark ? timetableBackgroundDarkPalette : timetableBackgroundLightPalette
-        let colors = TimetableBackgroundStore.colors(from: rawPalette)
-        if !colors.isEmpty { return colors }
-
-        let fallbackHexes = colorScheme == .dark
-            ? TimetableBackgroundPalette.fallbackDarkHexes
-            : TimetableBackgroundPalette.fallbackLightHexes
-        return fallbackHexes.compactMap { TimetableBackgroundStore.colors(from: $0).first }
+        return timetableBackgroundConfiguration.coursePalette(colorScheme: colorScheme)
     }
 
     private var timetableRenderInput: TimetableRenderInput {
@@ -289,14 +283,8 @@ struct TimetableView: View {
 
     private var rootBackgroundLifecycle: some View {
         rootBaseLifecycle
-        .onChange(of: timetableBackgroundFilename) { _, _ in
-            reloadTimetableBackgroundImage()
-        }
-        .onChange(of: timetableBackgroundIsEnabled) { _, _ in
-            reloadTimetableBackgroundImage()
-        }
         .onReceive(NotificationCenter.default.publisher(for: .timetableBackgroundSettingsDidChange)) { _ in
-            reloadTimetableBackgroundImage()
+            reloadTimetableBackground()
         }
     }
 
@@ -304,14 +292,12 @@ struct TimetableView: View {
         ZStack {
             LeafyPageBackground()
 
-            if timetableBackgroundIsEnabled, let timetableBackgroundImage {
-                TimetableBackgroundImageLayer(
-                    image: timetableBackgroundImage,
-                    displayMode: timetableBackgroundDisplayMode,
-                    imageOpacity: timetableBackgroundImageOpacity,
-                    blurRadius: timetableBackgroundBlurRadius,
-                    overlayOpacity: timetableBackgroundOverlayOpacity
+            if usesCustomTimetableBackground {
+                TimetableBackgroundLayer(
+                    configuration: timetableBackgroundConfiguration,
+                    image: timetableBackgroundImage
                 )
+                .ignoresSafeArea()
             }
         }
     }
@@ -423,7 +409,7 @@ struct TimetableView: View {
 
     private func handleAppear() {
         syncTimetableGridSnapshot()
-        reloadTimetableBackgroundImage()
+        reloadTimetableBackground()
         reloadCustomCountdownEvents()
         reloadExamArrangements()
         syncReturnButtonVisibility()
@@ -571,17 +557,44 @@ struct TimetableView: View {
         publishWidgetSnapshot()
     }
 
-    private func reloadTimetableBackgroundImage() {
+    private func reloadTimetableBackground() {
         timetableBackgroundLoadTask?.cancel()
-        guard timetableBackgroundIsEnabled else {
+        let configuration = TimetableBackgroundConfiguration.load()
+        let previousConfiguration = timetableBackgroundConfiguration
+        timetableBackgroundConfiguration = configuration
+
+        if configuration.requiresMetalEffects, !TimetableShaderAvailability.isAvailable {
+            timetableBackgroundImage = nil
+            Self.backgroundLogger.error(
+                "Configured timetable background requires Metal effects, but no Metal device is available"
+            )
+            return
+        }
+
+        guard configuration.kind == .photo else {
             timetableBackgroundImage = nil
             return
         }
-        let filename = timetableBackgroundFilename
+
+        let filename = configuration.filename
+        if previousConfiguration.kind == .photo,
+           previousConfiguration.filename == filename,
+           timetableBackgroundImage != nil {
+            return
+        }
         timetableBackgroundLoadTask = Task {
             let image = await TimetableBackgroundStore.image(filename: filename)
-            guard !Task.isCancelled, filename == timetableBackgroundFilename else { return }
+            guard !Task.isCancelled,
+                  filename == TimetableBackgroundConfiguration.load().filename
+            else {
+                return
+            }
             timetableBackgroundImage = image
+            if image == nil {
+                Self.backgroundLogger.error(
+                    "Configured timetable background image could not be loaded; filename=\(filename, privacy: .private(mask: .hash))"
+                )
+            }
         }
     }
 
@@ -1136,7 +1149,7 @@ struct TimetableView: View {
                     isCompact: true,
                     isTodayCourse: metadata.isToday,
                     backgroundPalette: timetableBackgroundCoursePalette,
-                    courseCardOpacity: timetableBackgroundCourseCardOpacity,
+                    courseCardOpacity: timetableBackgroundConfiguration.courseCardOpacity,
                     showsContextMenu: false
                 )
                 .position(

@@ -33,6 +33,125 @@ enum TimetableBackgroundDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum TimetableBackgroundKind: String, CaseIterable, Identifiable {
+    case off
+    case photo
+    case solid
+    case effect
+
+    var id: String { rawValue }
+
+    func title(language: AppLanguagePreference) -> String {
+        switch self {
+        case .off:
+            return L10n.text("关闭", language: language)
+        case .photo:
+            return L10n.text("照片", language: language)
+        case .solid:
+            return L10n.text("纯色", language: language)
+        case .effect:
+            return L10n.text("效果", language: language)
+        }
+    }
+}
+
+enum TimetablePhotoFilter: String, CaseIterable, Identifiable {
+    case none
+    case paperTexture
+    case flutedGlass
+    case water
+    case imageDithering
+    case halftoneDots
+    case halftoneCMYK
+
+    var id: String { rawValue }
+
+    func title(language: AppLanguagePreference) -> String {
+        switch self {
+        case .none:
+            return L10n.text("原图", language: language)
+        case .paperTexture:
+            return L10n.text("纸张", language: language)
+        case .flutedGlass:
+            return L10n.text("棱镜", language: language)
+        case .water:
+            return L10n.text("水波", language: language)
+        case .imageDithering:
+            return L10n.text("抖动", language: language)
+        case .halftoneDots:
+            return L10n.text("网点", language: language)
+        case .halftoneCMYK:
+            return "CMYK"
+        }
+    }
+}
+
+enum TimetableShaderEffect: String, CaseIterable, Identifiable {
+    case staticMeshGradient
+    case waves
+    case meshGradient
+
+    var id: String { rawValue }
+
+    func title(language: AppLanguagePreference) -> String {
+        switch self {
+        case .staticMeshGradient:
+            return L10n.text("柔彩", language: language)
+        case .waves:
+            return L10n.text("波纹", language: language)
+        case .meshGradient:
+            return L10n.text("流光", language: language)
+        }
+    }
+
+    var isAnimated: Bool {
+        self == .meshGradient
+    }
+}
+
+enum TimetableShaderPalette: String, CaseIterable, Identifiable {
+    case forest
+    case dawn
+    case night
+
+    var id: String { rawValue }
+
+    func title(language: AppLanguagePreference) -> String {
+        switch self {
+        case .forest:
+            return L10n.text("森林", language: language)
+        case .dawn:
+            return L10n.text("晨曦", language: language)
+        case .night:
+            return L10n.text("夜空", language: language)
+        }
+    }
+
+    func shaderHexes(colorScheme: ColorScheme) -> [String] {
+        switch (self, colorScheme) {
+        case (.forest, .light):
+            return ["#E7F2D8", "#B8D99B", "#79B47A", "#D8E9C3"]
+        case (.forest, .dark):
+            return ["#102719", "#28553A", "#4D8052", "#1B3D2B"]
+        case (.dawn, .light):
+            return ["#FFF0D7", "#F6C6A8", "#EE9C91", "#F7D7B8"]
+        case (.dawn, .dark):
+            return ["#321D28", "#68404A", "#94594F", "#4B2C34"]
+        case (.night, .light):
+            return ["#E8E8FF", "#BFC8F4", "#9BA9DD", "#D4C7EF"]
+        case (.night, .dark):
+            return ["#11162E", "#27325E", "#485188", "#30284F"]
+        @unknown default:
+            return TimetableShaderPalette.forest.shaderHexes(colorScheme: .light)
+        }
+    }
+
+    func courseHexes(colorScheme: ColorScheme) -> [String] {
+        let source = shaderHexes(colorScheme: colorScheme)
+        return (0..<7).map { source[$0 % source.count] }
+    }
+}
+
 struct TimetableBackgroundPalette: Equatable {
     nonisolated static let fallbackLightHexes = [
         "#DAE7D0", "#D4E4C9", "#CEE0C1", "#C8DCBA", "#C2D8B2", "#BCD5AB", "#B6D1A3"
@@ -55,8 +174,139 @@ struct TimetableBackgroundImportResult {
     let palette: TimetableBackgroundPalette
 }
 
+struct TimetableBackgroundConfiguration: Equatable {
+    let kind: TimetableBackgroundKind
+    let filename: String
+    let displayMode: TimetableBackgroundDisplayMode
+    let imageOpacity: Double
+    let blurRadius: Double
+    let overlayOpacity: Double
+    let courseCardOpacity: Double
+    let lightPaletteHexes: String
+    let darkPaletteHexes: String
+    let solidColorHex: String
+    let photoFilter: TimetablePhotoFilter
+    let shaderEffect: TimetableShaderEffect
+    let shaderPalette: TimetableShaderPalette
+
+    static func load(defaults: UserDefaults = .standard) -> TimetableBackgroundConfiguration {
+        let filename = defaults.string(forKey: TimetableBackgroundStore.filenameKey) ?? ""
+        let isEnabled = defaults.bool(forKey: TimetableBackgroundStore.isEnabledKey)
+        let storedKind = TimetableBackgroundKind(
+            rawValue: defaults.string(forKey: TimetableBackgroundStore.kindKey) ?? ""
+        ) ?? (filename.isEmpty ? .off : .photo)
+        let activeKind: TimetableBackgroundKind
+        if !isEnabled {
+            activeKind = .off
+        } else if storedKind == .photo, filename.isEmpty {
+            activeKind = .off
+        } else {
+            activeKind = storedKind
+        }
+
+        return TimetableBackgroundConfiguration(
+            kind: activeKind,
+            filename: filename,
+            displayMode: TimetableBackgroundDisplayMode(
+                rawValue: defaults.string(forKey: TimetableBackgroundStore.displayModeKey) ?? ""
+            ) ?? .fill,
+            imageOpacity: storedDouble(
+                defaults: defaults,
+                key: TimetableBackgroundStore.imageOpacityKey,
+                fallback: TimetableBackgroundStore.defaultImageOpacity
+            ),
+            blurRadius: storedDouble(
+                defaults: defaults,
+                key: TimetableBackgroundStore.blurRadiusKey,
+                fallback: TimetableBackgroundStore.defaultBlurRadius
+            ),
+            overlayOpacity: storedDouble(
+                defaults: defaults,
+                key: TimetableBackgroundStore.overlayOpacityKey,
+                fallback: TimetableBackgroundStore.defaultOverlayOpacity
+            ),
+            courseCardOpacity: storedDouble(
+                defaults: defaults,
+                key: TimetableBackgroundStore.courseCardOpacityKey,
+                fallback: TimetableBackgroundStore.defaultCourseCardOpacity
+            ),
+            lightPaletteHexes: defaults.string(forKey: TimetableBackgroundStore.lightPaletteKey) ?? "",
+            darkPaletteHexes: defaults.string(forKey: TimetableBackgroundStore.darkPaletteKey) ?? "",
+            solidColorHex: normalizedSolidColorHex(
+                defaults.string(forKey: TimetableBackgroundStore.solidColorHexKey)
+            ),
+            photoFilter: TimetablePhotoFilter(
+                rawValue: defaults.string(forKey: TimetableBackgroundStore.photoFilterKey) ?? ""
+            ) ?? .none,
+            shaderEffect: TimetableShaderEffect(
+                rawValue: defaults.string(forKey: TimetableBackgroundStore.shaderEffectKey) ?? ""
+            ) ?? .staticMeshGradient,
+            shaderPalette: TimetableShaderPalette(
+                rawValue: defaults.string(forKey: TimetableBackgroundStore.shaderPaletteKey) ?? ""
+            ) ?? .forest
+        )
+    }
+
+    var usesCustomBackground: Bool {
+        switch kind {
+        case .off:
+            return false
+        case .photo:
+            return !filename.isEmpty
+        case .solid, .effect:
+            return true
+        }
+    }
+
+    var requiresMetalEffects: Bool {
+        kind == .effect || (kind == .photo && photoFilter != .none)
+    }
+
+    func coursePalette(colorScheme: ColorScheme) -> [Color]? {
+        guard usesCustomBackground else { return nil }
+
+        let hexes: [String]
+        switch kind {
+        case .off:
+            return nil
+        case .photo:
+            let serialized = colorScheme == .dark ? darkPaletteHexes : lightPaletteHexes
+            let storedColors = TimetableBackgroundStore.colors(from: serialized)
+            if !storedColors.isEmpty {
+                return storedColors
+            }
+            hexes = colorScheme == .dark
+                ? TimetableBackgroundPalette.fallbackDarkHexes
+                : TimetableBackgroundPalette.fallbackLightHexes
+        case .solid:
+            guard let base = TimetableBackgroundRGB(hex: solidColorHex) else {
+                return TimetableBackgroundStore.colors(
+                    from: TimetableBackgroundStore.defaultSolidColorHex
+                )
+            }
+            let palette = TimetableBackgroundPaletteExtractor.palette(baseColor: base)
+            hexes = colorScheme == .dark ? palette.darkHexes : palette.lightHexes
+        case .effect:
+            hexes = shaderPalette.courseHexes(colorScheme: colorScheme)
+        }
+        return hexes.compactMap { TimetableBackgroundStore.color(hex: $0) }
+    }
+
+    private static func storedDouble(defaults: UserDefaults, key: String, fallback: Double) -> Double {
+        defaults.object(forKey: key) == nil ? fallback : defaults.double(forKey: key)
+    }
+
+    private static func normalizedSolidColorHex(_ rawValue: String?) -> String {
+        guard let rawValue, let rgb = TimetableBackgroundRGB(hex: rawValue) else {
+            return TimetableBackgroundStore.defaultSolidColorHex
+        }
+        return rgb.hexString
+    }
+}
+
 enum TimetableBackgroundStore {
     static let isEnabledKey = "timetableBackground.isEnabled"
+    static let kindKey = "timetableBackground.kind"
     static let filenameKey = "timetableBackground.filename"
     static let displayModeKey = "timetableBackground.displayMode"
     static let imageOpacityKey = "timetableBackground.imageOpacity"
@@ -65,11 +315,16 @@ enum TimetableBackgroundStore {
     static let courseCardOpacityKey = "timetableBackground.courseCardOpacity"
     static let lightPaletteKey = "timetableBackground.lightPalette"
     static let darkPaletteKey = "timetableBackground.darkPalette"
+    static let solidColorHexKey = "timetableBackground.solidColor"
+    static let photoFilterKey = "timetableBackground.photoFilter"
+    static let shaderEffectKey = "timetableBackground.shaderEffect"
+    static let shaderPaletteKey = "timetableBackground.shaderPalette"
 
     static let defaultImageOpacity = 0.32
     static let defaultBlurRadius = 0.0
     static let defaultOverlayOpacity = 0.10
     static let defaultCourseCardOpacity = 0.50
+    static let defaultSolidColorHex = "#DCEAD3"
 
     static func importImageData(_ data: Data, replacing oldFilename: String?) async throws -> TimetableBackgroundImportResult {
         try await Task.detached(priority: .userInitiated) {
@@ -140,6 +395,11 @@ enum TimetableBackgroundStore {
             .map { String($0) }
             .compactMap { TimetableBackgroundRGB(hex: $0) }
             .map { Color(red: $0.red, green: $0.green, blue: $0.blue) }
+    }
+
+    static func color(hex: String) -> Color? {
+        guard let rgb = TimetableBackgroundRGB(hex: hex) else { return nil }
+        return Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 
     static func notifySettingsDidChange() {
@@ -364,6 +624,26 @@ enum TimetableBackgroundPaletteExtractor {
             )
         }
 
+        return TimetableBackgroundPalette(lightHexes: lightHexes, darkHexes: darkHexes)
+    }
+
+    nonisolated static func palette(baseColor: TimetableBackgroundRGB) -> TimetableBackgroundPalette {
+        let source = baseColor.hsb
+        let offsets: [CGFloat] = [0, 0.045, -0.045, 0.09, -0.09, 0.135, -0.135]
+        let lightHexes = offsets.enumerated().map { index, offset in
+            colorHex(
+                hue: source.hue + offset,
+                saturation: min(max(source.saturation * 0.42 + 0.10, 0.12), 0.34),
+                brightness: [0.93, 0.89, 0.95, 0.90, 0.94, 0.88, 0.92][index]
+            )
+        }
+        let darkHexes = offsets.enumerated().map { index, offset in
+            colorHex(
+                hue: source.hue + offset * 0.7,
+                saturation: min(max(source.saturation * 0.36 + 0.16, 0.18), 0.42),
+                brightness: [0.30, 0.34, 0.27, 0.32, 0.36, 0.29, 0.33][index]
+            )
+        }
         return TimetableBackgroundPalette(lightHexes: lightHexes, darkHexes: darkHexes)
     }
 

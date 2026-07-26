@@ -1,0 +1,10 @@
+Powered by Paper Shaders:
+https://shaders.paper.design
+
+Leafy includes a native SwiftUI/Metal adaptation derived from Paper Shaders at:
+https://github.com/paper-design/shaders/tree/d9540abccaf21e107aa32079cddb0111c8c3c05b
+
+Leafy modifications include native Metal stitchable functions, bounded presets,
+fixed-frame thumbnails, reduced sampling cost, and runtime animation throttling.
+
+Licensed under the Apache License, Version 2.0. See PaperShaders-LICENSE.txt.

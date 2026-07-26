@@ -22,7 +22,11 @@ struct ProfileView: View {
     @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
     @AppStorage(TimetableBackgroundStore.isEnabledKey) private var timetableBackgroundIsEnabled = false
+    @AppStorage(TimetableBackgroundStore.kindKey) private var timetableBackgroundKindRaw = TimetableBackgroundKind.photo.rawValue
     @AppStorage(TimetableBackgroundStore.filenameKey) private var timetableBackgroundFilename = ""
+    @AppStorage(TimetableBackgroundStore.photoFilterKey) private var timetableBackgroundPhotoFilterRaw = TimetablePhotoFilter.none.rawValue
+    @AppStorage(TimetableBackgroundStore.shaderEffectKey) private var timetableBackgroundShaderEffectRaw = TimetableShaderEffect.staticMeshGradient.rawValue
+    @AppStorage(TimetableBackgroundStore.shaderPaletteKey) private var timetableBackgroundShaderPaletteRaw = TimetableShaderPalette.forest.rawValue
 
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
     @State private var showingLogoutAlert = false
@@ -190,7 +194,7 @@ struct ProfileView: View {
         NavigationLink {
             TimetableBackgroundSettingsView()
         } label: {
-            profileRow(icon: "photo.on.rectangle.angled", title: "课表底图", detail: timetableBackgroundDetail)
+            profileRow(icon: "rectangle.3.group.fill", title: "课表背景", detail: timetableBackgroundDetail)
         }
 
         if !isCustomCampus {
@@ -304,8 +308,27 @@ struct ProfileView: View {
     }
 
     private var timetableBackgroundDetail: String {
-        guard !timetableBackgroundFilename.isEmpty else { return L10n.text("未设置", language: leafyLanguage) }
-        return timetableBackgroundIsEnabled ? L10n.text("已开启", language: leafyLanguage) : L10n.text("已暂停", language: leafyLanguage)
+        guard timetableBackgroundIsEnabled else {
+            return L10n.text("已关闭", language: leafyLanguage)
+        }
+        let kind = TimetableBackgroundKind(rawValue: timetableBackgroundKindRaw)
+            ?? (timetableBackgroundFilename.isEmpty ? .off : .photo)
+        switch kind {
+        case .off:
+            return L10n.text("已关闭", language: leafyLanguage)
+        case .photo:
+            guard !timetableBackgroundFilename.isEmpty else {
+                return L10n.text("等待选择照片", language: leafyLanguage)
+            }
+            let filter = TimetablePhotoFilter(rawValue: timetableBackgroundPhotoFilterRaw) ?? .none
+            return "\(L10n.text("照片", language: leafyLanguage)) · \(filter.title(language: leafyLanguage))"
+        case .solid:
+            return L10n.text("纯色", language: leafyLanguage)
+        case .effect:
+            let effect = TimetableShaderEffect(rawValue: timetableBackgroundShaderEffectRaw) ?? .staticMeshGradient
+            let palette = TimetableShaderPalette(rawValue: timetableBackgroundShaderPaletteRaw) ?? .forest
+            return "\(effect.title(language: leafyLanguage)) · \(palette.title(language: leafyLanguage))"
+        }
     }
 
     private var profileSubtitle: String {

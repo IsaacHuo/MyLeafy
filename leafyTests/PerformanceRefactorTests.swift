@@ -688,6 +688,78 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(palette.darkHexes, TimetableBackgroundPalette.fallbackDarkHexes)
     }
 
+    func testTimetableBackgroundConfigurationMigratesLegacyEnabledPhoto() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set("legacy-background.jpg", forKey: TimetableBackgroundStore.filenameKey)
+            defaults.set(0.42, forKey: TimetableBackgroundStore.imageOpacityKey)
+
+            let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(configuration.kind, .photo)
+            XCTAssertEqual(configuration.filename, "legacy-background.jpg")
+            XCTAssertEqual(configuration.imageOpacity, 0.42)
+        }
+    }
+
+    func testTimetableBackgroundConfigurationKeepsPausedPhotoReference() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(false, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set("kept-background.jpg", forKey: TimetableBackgroundStore.filenameKey)
+
+            let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(configuration.kind, .off)
+            XCTAssertEqual(configuration.filename, "kept-background.jpg")
+            XCTAssertFalse(configuration.usesCustomBackground)
+        }
+    }
+
+    func testTimetableBackgroundConfigurationFallsBackFromInvalidValues() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set(TimetableBackgroundKind.effect.rawValue, forKey: TimetableBackgroundStore.kindKey)
+            defaults.set("invalid-filter", forKey: TimetableBackgroundStore.photoFilterKey)
+            defaults.set("invalid-effect", forKey: TimetableBackgroundStore.shaderEffectKey)
+            defaults.set("invalid-palette", forKey: TimetableBackgroundStore.shaderPaletteKey)
+            defaults.set("invalid-color", forKey: TimetableBackgroundStore.solidColorHexKey)
+
+            let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(configuration.photoFilter, .none)
+            XCTAssertEqual(configuration.shaderEffect, .staticMeshGradient)
+            XCTAssertEqual(configuration.shaderPalette, .forest)
+            XCTAssertEqual(configuration.solidColorHex, TimetableBackgroundStore.defaultSolidColorHex)
+        }
+    }
+
+    func testTimetableBackgroundSolidColorNormalizesAndBuildsAdaptiveCoursePalettes() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set(TimetableBackgroundKind.solid.rawValue, forKey: TimetableBackgroundStore.kindKey)
+            defaults.set("#2a7f62", forKey: TimetableBackgroundStore.solidColorHexKey)
+
+            let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(configuration.solidColorHex, "#2A7F62")
+            XCTAssertEqual(configuration.coursePalette(colorScheme: .light)?.count, 7)
+            XCTAssertEqual(configuration.coursePalette(colorScheme: .dark)?.count, 7)
+        }
+    }
+
+    func testTimetableBackgroundCatalogContainsPlannedFiltersEffectsAndPalettes() {
+        XCTAssertEqual(TimetablePhotoFilter.allCases.count, 7)
+        XCTAssertEqual(TimetableShaderEffect.allCases.count, 3)
+        XCTAssertEqual(TimetableShaderPalette.allCases.count, 3)
+    }
+
+    func testTimetableBackgroundColorSerializationRoundTripsValidColors() {
+        let serialized = TimetableBackgroundStore.serialize(hexes: ["#123456", "#ABCDEF"])
+
+        XCTAssertEqual(serialized, "#123456,#ABCDEF")
+        XCTAssertEqual(TimetableBackgroundStore.colors(from: serialized).count, 2)
+    }
+
     func testCourseColorHashIndexStaysStable() {
         XCTAssertEqual(AppTheme.stableCourseColorIndex(for: "Data StructuresAlice", colorCount: 7), 3)
         XCTAssertEqual(AppTheme.stableCourseColorIndex(for: "森林生态王老师", colorCount: 7), 0)
@@ -2853,6 +2925,17 @@ final class PerformanceRefactorTests: XCTestCase {
             FitnessTestItem.height.rawValue
         ])
     }
+}
+
+private func withTemporaryUserDefaults(_ body: (UserDefaults) -> Void) {
+    let suiteName = "TimetableBackgroundTests.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: suiteName) else {
+        return XCTFail("Failed to create isolated UserDefaults suite")
+    }
+    defer {
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+    body(defaults)
 }
 
 private var reviewTestCalendar: Calendar {
