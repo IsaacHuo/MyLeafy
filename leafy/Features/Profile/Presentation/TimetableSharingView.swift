@@ -301,7 +301,7 @@ struct TimetableSharingView: View {
         case .creatingInvite:
             return "生成中"
         case .updating, .idle:
-            return mySnapshot == nil ? "邀请" : "再邀请"
+            return "邀请"
         }
     }
 
@@ -628,7 +628,7 @@ struct TimetableSharingView: View {
             if didPublish {
                 operationAlert = .failure(
                     L10n.text(
-                        "课表已更新，但邀请码生成失败：%@\n请点击“再邀请一位同学”重试。",
+                        "课表已更新，但邀请码生成失败：%@\n请点击“邀请一位同学”重试。",
                         language: leafyLanguage,
                         error.localizedDescription
                     )
