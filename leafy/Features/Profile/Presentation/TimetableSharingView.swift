@@ -20,6 +20,7 @@ private enum TimetableSharingActionPhase: Equatable {
 }
 
 struct TimetableSharingView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.leafyLanguage) private var leafyLanguage
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Query private var courses: [Course]
@@ -75,27 +76,6 @@ struct TimetableSharingView: View {
 
     var body: some View {
         List {
-            Section {
-                LeafyGlassGroup(spacing: AppSpacing.card) {
-                    VStack(spacing: AppSpacing.card) {
-                        shareMyTimetableCard
-                        addClassmateTimetableCard
-                    }
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            if case .failed(let message) = loadState {
-                Section {
-                    sharingLoadFailureView(message: message)
-                }
-                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            }
-
             if hasLoadedSharingState, !viewableSnapshots.isEmpty {
                 Section {
                     ForEach(viewableSnapshots) { snapshot in
@@ -122,26 +102,22 @@ struct TimetableSharingView: View {
                 sharingManagementSection
             }
 
+            sharingActionsSection
+
             if hasLoadedSharingState, hasActiveSharingAccess {
                 Section {
                     Button(role: .destructive) {
                         showingStopSharingConfirmation = true
                     } label: {
-                        Label("停止共享并撤销所有权限", systemImage: "person.2.slash.fill")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 50)
+                        Label("停止共享", systemImage: "person.2.slash.fill")
                     }
-                    .timetableSharingSecondaryButtonStyle()
-                    .tint(AppTheme.danger)
                     .accessibilityHint("撤销所有同学的查看权限，并让未使用的邀请码失效")
                 }
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 12, trailing: 16))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                .listRowBackground(AppTheme.cardBackground)
             }
         }
         .leafyInsetGroupedListStyle()
+        .leafyCompactListSectionSpacing()
         .scrollContentBackground(.hidden)
         .frame(maxWidth: 760, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .top)
@@ -186,111 +162,146 @@ struct TimetableSharingView: View {
         }
     }
 
-    private var shareMyTimetableCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            actionCardHeader(
-                icon: "person.2.fill",
-                title: "分享我的课表",
-                detail: shareCardDetail
-            )
-
-            Button {
-                Task { await shareLatestTimetable() }
-            } label: {
-                HStack(spacing: 10) {
-                    if actionPhase == .publishing || actionPhase == .creatingInvite || loadState == .loading {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "paperplane.fill")
-                    }
-
-                    Text(L10n.text(shareActionTitle, language: leafyLanguage))
-                        .font(.body.weight(.semibold))
+    private var sharingActionsSection: some View {
+        Section {
+            switch loadState {
+            case .loading:
+                compactOverviewRow(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "正在加载共享状态",
+                    detail: "正在获取已发布课表和共享关系。"
+                ) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 44, height: 44)
+                        .accessibilityLabel("正在加载")
                 }
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 52)
+
+            case .failed(let message):
+                compactOverviewRow(
+                    icon: "exclamationmark.triangle.fill",
+                    tint: AppTheme.danger,
+                    title: "共享状态加载失败",
+                    detail: message
+                ) {
+                    Button {
+                        Task {
+                            loadState = .loading
+                            await load()
+                            presentInitialInviteIfNeeded()
+                        }
+                    } label: {
+                        compactActionButtonLabel("重试")
+                    }
+                    .timetableSharingSecondaryButtonStyle()
+                    .tint(AppTheme.accent)
+                    .timetableSharingCompactControl()
+                    .accessibilityHint("重新加载共享状态")
+                }
+
+            case .loaded:
+                if canUseSharing {
+                    shareMyTimetableRow
+                    addClassmateTimetableRow
+                } else {
+                    sharingRequirementRow
+                }
             }
-            .timetableSharingPrimaryButtonStyle()
-            .tint(AppTheme.accent)
-            .disabled(!canStartSharing)
-            .accessibilityHint(L10n.text(shareActionAccessibilityHint, language: leafyLanguage))
-
-            shareAvailabilityGuidance
-
-            Label(
-                "只共享课程安排，不包含成绩、考试、备注、提醒或收藏。",
-                systemImage: "lock.shield.fill"
-            )
-            .microCaption()
-            .foregroundStyle(AppTheme.secondaryText)
-            .fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("共享操作")
+        } footer: {
+            if hasLoadedSharingState, canUseSharing {
+                Text("只共享课程安排，不包含成绩、考试、备注、提醒或收藏。")
+            }
         }
-        .padding(18)
-        .leafyCardStyle()
+        .listRowBackground(AppTheme.cardBackground)
     }
 
-    private var addClassmateTimetableCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            actionCardHeader(
-                icon: "calendar.badge.plus",
-                title: "添加同学的课表",
-                detail: "粘贴 12 位邀请码，或直接打开同学发来的邀请链接。"
-            )
+    @ViewBuilder
+    private var shareMyTimetableRow: some View {
+        if courses.isEmpty {
+            compactOverviewRow(
+                icon: "person.2.fill",
+                title: "分享我的课表",
+                detail: "本机暂无课程，先同步后再分享。"
+            ) {
+                Button {
+                    appNavigation.openProfileRoute(.cacheSync)
+                } label: {
+                    compactActionButtonLabel("重新同步")
+                }
+                .timetableSharingSecondaryButtonStyle()
+                .tint(AppTheme.accent)
+                .timetableSharingCompactControl()
+                .accessibilityHint("前往缓存与同步页面重新同步教务课表")
+            }
+        } else {
+            compactOverviewRow(
+                icon: "person.2.fill",
+                title: "分享我的课表",
+                detail: shareActionDetail
+            ) {
+                Button {
+                    Task { await shareLatestTimetable() }
+                } label: {
+                    compactActionButtonLabel(
+                        shareActionButtonTitle,
+                        showsProgress: actionPhase == .publishing || actionPhase == .creatingInvite
+                    )
+                }
+                .timetableSharingPrimaryButtonStyle()
+                .tint(AppTheme.accent)
+                .timetableSharingCompactControl()
+                .disabled(!canStartSharing)
+                .accessibilityHint(L10n.text(shareActionAccessibilityHint, language: leafyLanguage))
+            }
+        }
+    }
 
+    private var addClassmateTimetableRow: some View {
+        compactOverviewRow(
+            icon: "calendar.badge.plus",
+            title: "添加同学的课表",
+            detail: "输入 12 位邀请码，或直接打开邀请链接。"
+        ) {
             Button {
                 pendingInviteCode = nil
                 showingAcceptSheet = true
             } label: {
-                Label("输入邀请码", systemImage: "doc.on.clipboard.fill")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 52)
+                compactActionButtonLabel("输入")
             }
             .timetableSharingSecondaryButtonStyle()
             .tint(AppTheme.accent)
+            .timetableSharingCompactControl()
             .disabled(!canAddClassmateTimetable)
             .accessibilityHint("输入同学发来的 12 位邀请码并查看课表")
-
-            if !canUseSharing, !sessionManager.isBootstrapping {
-                Text("完成社区资料后即可添加同学发来的课表。")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-            } else if loadState == .loading {
-                Text("正在加载共享状态，请稍候。")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-            }
         }
-        .padding(18)
-        .leafyCardStyle()
     }
 
-    private var shareCardDetail: String {
-        if loadState == .loading {
-            return "正在加载当前共享状态。"
-        }
-        if courses.isEmpty {
-            return "本机暂时没有可发布的课程。"
-        }
-        if mySnapshot == nil {
-            return L10n.text("发布当前 %d 门课程，并生成 7 天有效的单次邀请。", language: leafyLanguage, courses.count)
-        }
-        return L10n.text("共享当前 %d 门课程；邀请前会先更新到最新安排。", language: leafyLanguage, courses.count)
-    }
-
-    private var shareActionTitle: String {
+    private var shareActionDetail: String {
         switch actionPhase {
         case .publishing:
-            return "正在发布课表"
+            return "正在发布最新课程安排。"
         case .creatingInvite:
-            return "正在生成邀请"
+            return "课表已更新，正在生成邀请。"
         case .updating:
-            return "正在更新共享课表"
+            return "正在更新已发布的课程安排。"
         case .idle:
-            if loadState == .loading {
-                return "正在加载共享状态"
+            if mySnapshot == nil {
+                return L10n.text("%d 门课程 · 发布并生成单次邀请", language: leafyLanguage, courses.count)
             }
-            return mySnapshot == nil ? "生成分享邀请" : "再邀请一位同学"
+            return L10n.text("%d 门课程 · 邀请前自动更新", language: leafyLanguage, courses.count)
+        }
+    }
+
+    private var shareActionButtonTitle: String {
+        switch actionPhase {
+        case .publishing:
+            return "发布中"
+        case .creatingInvite:
+            return "生成中"
+        case .updating, .idle:
+            return mySnapshot == nil ? "邀请" : "再邀请"
         }
     }
 
@@ -317,163 +328,75 @@ struct TimetableSharingView: View {
             actionPhase == .idle
     }
 
-    @ViewBuilder
-    private var shareAvailabilityGuidance: some View {
-        if !canUseSharing {
-            Text(L10n.text(requirementText, language: leafyLanguage))
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+    private var requirementText: String {
+        if sessionManager.profile != nil {
+            return "完成社区昵称后即可分享和添加课表。"
+        }
+        if sessionManager.bootstrapError != nil {
+            return "社区身份加载失败，请重试。"
+        }
+        return "完成社区身份初始化后即可使用共享课表。"
+    }
 
-            if sessionManager.isBootstrapping {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("正在准备社区身份")
-                }
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-            } else if sessionManager.profile != nil {
+    @ViewBuilder
+    private var sharingRequirementRow: some View {
+        if sessionManager.profile != nil {
+            compactOverviewRow(
+                icon: "person.crop.circle.badge.checkmark",
+                title: "完善社区资料",
+                detail: requirementText
+            ) {
                 NavigationLink {
                     CommunityProfileEditorView()
                 } label: {
-                    Label("完善社区资料", systemImage: "person.crop.circle.badge.checkmark")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 48)
+                    compactActionButtonLabel("完善")
                 }
                 .timetableSharingSecondaryButtonStyle()
                 .tint(AppTheme.accent)
-            } else {
-                if let error = sessionManager.bootstrapError {
-                    Text(error)
-                        .microCaption()
-                        .foregroundStyle(AppTheme.danger)
-                }
-
+                .timetableSharingCompactControl()
+                .accessibilityHint("打开社区资料编辑页面")
+            }
+        } else {
+            compactOverviewRow(
+                icon: "person.crop.circle.badge.exclamationmark",
+                tint: sessionManager.bootstrapError == nil ? nil : AppTheme.danger,
+                title: "准备社区身份",
+                detail: requirementText
+            ) {
                 Button {
                     Task { await bootstrapAndLoad() }
                 } label: {
-                    Label("重新加载社区身份", systemImage: "arrow.clockwise")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 48)
+                    compactActionButtonLabel("重试")
                 }
                 .timetableSharingSecondaryButtonStyle()
                 .tint(AppTheme.accent)
+                .timetableSharingCompactControl()
+                .accessibilityHint("重新加载社区身份")
             }
-        } else if courses.isEmpty {
-            Text("分享前需要先在本机获取课表；这不会影响你添加同学的课表。")
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-
-            Button {
-                appNavigation.openProfileRoute(.cacheSync)
-            } label: {
-                Label("重新同步课表", systemImage: "arrow.triangle.2.circlepath")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 48)
-            }
-            .timetableSharingSecondaryButtonStyle()
-            .tint(AppTheme.accent)
-        } else if case .failed = loadState {
-            Text("共享状态加载失败，请先点击下方“重试加载”。")
-                .microCaption()
-                .foregroundStyle(AppTheme.danger)
         }
-    }
-
-    private func actionCardHeader(icon: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            LeafyIconBadge(systemName: icon)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(L10n.text(title, language: leafyLanguage))
-                    .leafyHeadline()
-                    .foregroundStyle(AppTheme.primaryText)
-                Text(L10n.text(detail, language: leafyLanguage))
-                    .leafySubheadline()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func sharingLoadFailureView(message: String) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("共享状态加载失败", systemImage: "exclamationmark.triangle.fill")
-                .leafyHeadline()
-                .foregroundStyle(AppTheme.danger)
-
-            Text(message)
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                Task {
-                    loadState = .loading
-                    await load()
-                    presentInitialInviteIfNeeded()
-                }
-            } label: {
-                Label("重试加载", systemImage: "arrow.clockwise")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 48)
-            }
-            .timetableSharingSecondaryButtonStyle()
-            .tint(AppTheme.accent)
-        }
-        .padding(18)
-        .leafyCardStyle()
-    }
-
-    private var requirementText: String {
-        if sessionManager.profile == nil {
-            return "共享课表会使用你的社区资料展示昵称和头像。请先完成社区身份初始化。"
-        }
-
-        return "共享课表需要先完善社区昵称。共享页不会主动展示学号。"
     }
 
     private var sharingManagementSection: some View {
         Section {
-            ownerStatusView
-
-            Button {
-                Task { await updateSharedTimetable() }
-            } label: {
-                HStack(spacing: 10) {
-                    if actionPhase == .updating {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                    }
-                    Text(actionPhase == .updating ? "正在更新共享课表" : "更新共享课表")
-                        .font(.body.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
+            if mySnapshot != nil {
+                publishedTimetableRow
             }
-            .timetableSharingSecondaryButtonStyle()
-            .tint(AppTheme.accent)
-            .disabled(!canUseSharing || courses.isEmpty || actionPhase != .idle)
-            .accessibilityHint("只更新已发布的课程安排，不会生成新的邀请码")
 
             if !activeInvites.isEmpty {
-                Text(L10n.text("当前有 %d 个未使用且未过期的邀请码。出于隐私保护，旧邀请码不会再次显示明文。", language: leafyLanguage, activeInvites.count))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
+                compactOverviewRow(
+                    icon: "ticket.fill",
+                    title: "未使用邀请",
+                    detail: "7 天内有效；旧邀请码不会再次显示明文。"
+                ) {
+                    Text(L10n.text("%d 个", language: leafyLanguage, activeInvites.count))
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityLabel(L10n.text("%d 个未使用邀请", language: leafyLanguage, activeInvites.count))
+                }
             }
 
-            if members.isEmpty {
-                Text("还没有同学可以查看你的课表。发送邀请后，对方接受时会出现在这里。")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-            } else {
+            if !members.isEmpty {
                 ForEach(members) { member in
                     TimetableShareMemberRow(member: member) {
                         Task { await revoke(member) }
@@ -481,29 +404,59 @@ struct TimetableSharingView: View {
                 }
             }
         } header: {
-            Text("共享状态")
+            Text("我的共享")
         } footer: {
-            Text("重新同步教务课表时，已发布的共享课表也会自动更新。")
+            Text(sharingManagementFooter)
         }
         .listRowBackground(AppTheme.cardBackground)
     }
 
-    private var ownerStatusView: some View {
-        HStack(spacing: 12) {
-            LeafyIconBadge(systemName: mySnapshot == nil ? "calendar.badge.exclamationmark" : "calendar.badge.checkmark")
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.text(mySnapshot == nil ? "尚未发布课表" : "已发布课表", language: leafyLanguage))
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.primaryText)
-
-                Text(L10n.text(ownerStatusDetail, language: leafyLanguage))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
+    @ViewBuilder
+    private var publishedTimetableRow: some View {
+        if courses.isEmpty {
+            compactOverviewRow(
+                icon: "calendar.badge.checkmark",
+                title: "已发布课表",
+                detail: ownerStatusDetail
+            ) {
+                Button {
+                    appNavigation.openProfileRoute(.cacheSync)
+                } label: {
+                    compactActionButtonLabel("同步")
+                }
+                .timetableSharingSecondaryButtonStyle()
+                .tint(AppTheme.accent)
+                .timetableSharingCompactControl()
+                .accessibilityHint("先重新同步本机课表，再更新共享课表")
             }
-
-            Spacer()
+        } else {
+            compactOverviewRow(
+                icon: "calendar.badge.checkmark",
+                title: "已发布课表",
+                detail: ownerStatusDetail
+            ) {
+                Button {
+                    Task { await updateSharedTimetable() }
+                } label: {
+                    compactActionButtonLabel(
+                        actionPhase == .updating ? "更新中" : "更新",
+                        showsProgress: actionPhase == .updating
+                    )
+                }
+                .timetableSharingSecondaryButtonStyle()
+                .tint(AppTheme.accent)
+                .timetableSharingCompactControl()
+                .disabled(!canUseSharing || actionPhase != .idle)
+                .accessibilityHint("只更新已发布的课程安排，不会生成新的邀请码")
+            }
         }
+    }
+
+    private var sharingManagementFooter: String {
+        if members.isEmpty {
+            return "还没有同学可以查看你的课表。发送邀请后，对方接受时会显示在这里。重新同步教务课表时，共享课表也会自动更新。"
+        }
+        return "重新同步教务课表时，已发布的共享课表也会自动更新。"
     }
 
     private var ownerStatusDetail: String {
@@ -513,6 +466,77 @@ struct TimetableSharingView: View {
 
         let dateText = mySnapshot.publishedDate.map { DateFormatters.headerWithTime.string(from: $0) } ?? mySnapshot.publishedRelativeText
         return L10n.text("%d 门课程 · %@", language: leafyLanguage, mySnapshot.courseCount, dateText)
+    }
+
+    @ViewBuilder
+    private func compactOverviewRow<Trailing: View>(
+        icon: String,
+        tint: Color? = nil,
+        title: String,
+        detail: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                compactOverviewContent(icon: icon, tint: tint, title: title, detail: detail)
+
+                HStack {
+                    Spacer()
+                    trailing()
+                }
+            }
+            .padding(.vertical, 2)
+        } else {
+            HStack(alignment: .center, spacing: 12) {
+                compactOverviewContent(icon: icon, tint: tint, title: title, detail: detail)
+                    .layoutPriority(1)
+
+                Spacer(minLength: 4)
+                trailing()
+                    .fixedSize()
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
+    private func compactOverviewContent(
+        icon: String,
+        tint: Color?,
+        title: String,
+        detail: String
+    ) -> some View {
+        HStack(alignment: .center, spacing: 11) {
+            LeafyIconBadge(systemName: icon, tint: tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.text(title, language: leafyLanguage))
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+
+                Text(L10n.text(detail, language: leafyLanguage))
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func compactActionButtonLabel(
+        _ title: String,
+        showsProgress: Bool = false
+    ) -> some View {
+        HStack(spacing: 6) {
+            if showsProgress {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Text(L10n.text(title, language: leafyLanguage))
+                .font(.subheadline.weight(.semibold))
+        }
     }
 
     private func presentInitialInviteIfNeeded() {
@@ -694,6 +718,12 @@ private extension View {
         #else
         buttonStyle(.bordered)
         #endif
+    }
+
+    func timetableSharingCompactControl() -> some View {
+        controlSize(.regular)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 
