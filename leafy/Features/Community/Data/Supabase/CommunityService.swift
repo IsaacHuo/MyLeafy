@@ -971,7 +971,7 @@ extension CommunityService {
             options: FunctionInvokeOptions(
                 headers: ["Authorization": "Bearer \(session.accessToken)"],
                 body: CommunityAttachmentValidationRequest(
-                    postID: postID,
+                    postID: postID.uuidString.lowercased(),
                     objectPath: objectPath,
                     displayName: displayName
                 )
@@ -4638,7 +4638,7 @@ private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable
 }
 
 private nonisolated struct CommunityAttachmentValidationRequest: Encodable, Sendable {
-    let postID: UUID
+    let postID: String
     let objectPath: String
     let displayName: String
 

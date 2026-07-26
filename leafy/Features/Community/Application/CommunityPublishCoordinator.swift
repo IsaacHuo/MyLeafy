@@ -162,6 +162,10 @@ nonisolated struct CommunityPublishTask: Codable, Identifiable, Hashable, Sendab
             return state.title
         }
     }
+
+    var isVisibleInFeedTaskStrip: Bool {
+        !state.isTerminal
+    }
 }
 
 nonisolated struct CommunityBackgroundTransferDescriptor: Codable, Hashable, Sendable {
@@ -421,12 +425,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     var visibleTasks: [CommunityPublishTask] {
-        tasks.filter {
-            if $0.state == .published, let completedAt = $0.completedAt {
-                return Date().timeIntervalSince(completedAt) < 8
-            }
-            return $0.state != .cancelled
-        }
+        tasks.filter(\.isVisibleInFeedTaskStrip)
     }
 
     var notificationItems: [NotificationFeedItem] {

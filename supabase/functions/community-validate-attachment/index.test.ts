@@ -4,6 +4,7 @@ import {
   isAttachmentSizeAllowed,
   isContentTypeAllowed,
   isUTF8Markdown,
+  normalizedUUID,
   sanitizedDisplayName,
   zipEntryNames,
 } from "./index.ts";
@@ -41,6 +42,15 @@ Deno.test("attachment validator rejects forged MIME and extension combinations",
 Deno.test("attachment validator sanitizes display names", () => {
   assert(sanitizedDisplayName("  课程/总结.docx ") === "课程 总结.docx", "expected sanitized name");
   assert(sanitizedDisplayName("") === null, "expected empty rejection");
+});
+
+Deno.test("attachment validator normalizes UUID casing for storage path matching", () => {
+  assert(
+    normalizedUUID("1A47CE80-ADC4-4DAD-B880-584666256B11")
+      === "1a47ce80-adc4-4dad-b880-584666256b11",
+    "expected lowercase UUID",
+  );
+  assert(normalizedUUID("not-a-uuid") === null, "expected invalid UUID rejection");
 });
 
 Deno.test("attachment validator reads a consistent OOXML central directory", () => {

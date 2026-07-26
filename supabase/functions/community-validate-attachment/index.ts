@@ -39,7 +39,7 @@ export async function handler(request: Request): Promise<Response> {
   if (authError || !authData.user) return json({ error: "Invalid authentication." }, 401);
 
   const body = await readJSON<ValidationRequest>(request);
-  const postID = normalized(body.post_id);
+  const postID = normalizedUUID(body.post_id);
   const objectPath = normalized(body.object_path);
   const displayName = sanitizedDisplayName(body.display_name);
   const extension = supportedExtension(displayName);
@@ -271,6 +271,14 @@ export function sanitizedDisplayName(value: unknown): string | null {
     .trim();
   if (!name || name.length > 180) return null;
   return name;
+}
+
+export function normalizedUUID(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const candidate = value.trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(candidate)
+    ? candidate
+    : null;
 }
 
 function bearerToken(request: Request) {

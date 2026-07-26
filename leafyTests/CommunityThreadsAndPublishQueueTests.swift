@@ -58,7 +58,7 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         )
     }
 
-    func testCommentInteractionPolicyAllowsOnlyVisiblePublishedCommentsFromOtherUsers() {
+    func testCommentInteractionPolicyAllowsReplyingToOwnVisiblePublishedComment() {
         let viewerID = UUID()
         let otherUserID = UUID()
 
@@ -74,9 +74,15 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
                 viewerID: viewerID
             )
         )
-        XCTAssertFalse(
+        XCTAssertTrue(
             CommunityCommentInteractionPolicy.canReply(
                 to: makeComment(authorID: viewerID),
+                viewerID: viewerID
+            )
+        )
+        XCTAssertFalse(
+            CommunityCommentInteractionPolicy.canLike(
+                makeComment(authorID: viewerID),
                 viewerID: viewerID
             )
         )
@@ -332,6 +338,36 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
 
         XCTAssertEqual(task.progress, 0.425, accuracy: 0.001)
         XCTAssertEqual(task.progressDetail, "上传 1/1")
+    }
+
+    func testPublishedTaskImmediatelyLeavesFeedTaskStrip() {
+        var task = CommunityPublishTask(
+            id: UUID(),
+            input: CreatePostInput(
+                title: "测试发布状态条",
+                body: "正文",
+                category: "学习交流",
+                isAnonymous: false
+            ),
+            createdAt: Date(),
+            updatedAt: Date(),
+            state: .publishing,
+            media: [],
+            authorID: UUID(),
+            errorMessage: nil,
+            completedAt: nil
+        )
+
+        XCTAssertTrue(task.isVisibleInFeedTaskStrip)
+
+        task.state = .published
+        task.completedAt = Date()
+
+        XCTAssertFalse(task.isVisibleInFeedTaskStrip)
+
+        task.state = .failed
+
+        XCTAssertTrue(task.isVisibleInFeedTaskStrip)
     }
 
     func testPostDecodesLegacyPayloadWithoutAttachments() throws {

@@ -22,6 +22,11 @@ private struct CommunityAttachmentPreview: Identifiable {
     let url: URL
 }
 
+private struct CommunityAttachmentShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 private enum CommunityComposerAttachmentError: LocalizedError {
     case unsupportedType
     case unreadableFile
@@ -135,15 +140,18 @@ private enum CommunityModerationTarget: Identifiable, Equatable {
 
 nonisolated enum CommunityCommentInteractionPolicy {
     static func canReply(to comment: CommunityComment, viewerID: UUID?) -> Bool {
-        guard let viewerID else { return false }
-        return comment.authorID != viewerID
-            && comment.status == "published"
+        guard viewerID != nil else { return false }
+        return comment.status == "published"
             && !comment.isDeletedPlaceholder
             && comment.replyTargetIsVisible
     }
 
     static func canLike(_ comment: CommunityComment, viewerID: UUID?) -> Bool {
-        canReply(to: comment, viewerID: viewerID)
+        guard let viewerID else { return false }
+        return comment.authorID != viewerID
+            && comment.status == "published"
+            && !comment.isDeletedPlaceholder
+            && comment.replyTargetIsVisible
     }
 }
 
@@ -1895,6 +1903,57 @@ private struct CommunityPostAttachmentsSection: View {
     }
 }
 
+private struct CommunityAttachmentPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let url: URL
+
+    @State private var shareItem: CommunityAttachmentShareItem?
+    @State private var alertMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            CommunityQuickLookPreview(url: url)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(url.deletingPathExtension().lastPathComponent)
+                .leafyInlineNavigationTitle()
+                .toolbar {
+                    ToolbarItem(placement: .leafyLeading) {
+                        Button("关闭") {
+                            dismiss()
+                        }
+                    }
+
+                    ToolbarItem(placement: .leafyTrailing) {
+                        Button(action: share) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("分享或用其他 App 打开")
+                    }
+                }
+                .sheet(item: $shareItem) { item in
+                    ShareSheet(activityItems: [item.url])
+                }
+                .alert("附件操作失败", isPresented: Binding(
+                    get: { alertMessage != nil },
+                    set: { if !$0 { alertMessage = nil } }
+                )) {
+                    Button("知道了", role: .cancel) {}
+                } message: {
+                    Text(alertMessage ?? "")
+                }
+        }
+    }
+
+    private func share() {
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+            alertMessage = "无法找到已下载的附件，请返回后重新下载。"
+            return
+        }
+        shareItem = CommunityAttachmentShareItem(url: url)
+    }
+}
+
 private struct CommunityQuickLookPreview: UIViewControllerRepresentable {
     let url: URL
 
@@ -1908,8 +1967,9 @@ private struct CommunityQuickLookPreview: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_: QLPreviewController, context: Context) {
+    func updateUIViewController(_ controller: QLPreviewController, context: Context) {
         context.coordinator.url = url
+        controller.reloadData()
     }
 
     @MainActor
@@ -2854,8 +2914,7 @@ struct RealCommunityPostDetailSheet: View {
                     .presentationDetents([.large])
             }
             .sheet(item: $attachmentPreview) { preview in
-                CommunityQuickLookPreview(url: preview.url)
-                    .ignoresSafeArea()
+                CommunityAttachmentPreviewSheet(url: preview.url)
             }
             .leafyOperationAlert($operationAlert)
             .confirmationDialog("举报内容", isPresented: Binding(
@@ -3582,8 +3641,14 @@ private struct CommunityCommentCard: View {
 
                 Spacer()
 
-                if hasModerationActions {
-                    moderationMenu
+                HStack(spacing: 2) {
+                    if hasModerationActions {
+                        moderationMenu
+                    }
+
+                    if canLike {
+                        likeButton
+                    }
                 }
             }
 
@@ -3591,13 +3656,6 @@ private struct CommunityCommentCard: View {
                 replyableContent(replyTarget: replyTarget)
             } else {
                 replyableContent(replyTarget: nil)
-            }
-
-            if canLike {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    likeButton
-                }
             }
         }
         .padding(16)
