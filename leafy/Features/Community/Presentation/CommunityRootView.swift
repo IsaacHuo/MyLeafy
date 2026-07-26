@@ -342,6 +342,16 @@ struct CommunityRootView: View {
                     Task { await refreshUnreadNotificationCount() }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .communityPublishTaskDidFinish)) { notification in
+                if (notification.userInfo?["succeeded"] as? Bool) == true {
+                    operationAlert = .success("帖子已发布。")
+                } else {
+                    operationAlert = .failure(
+                        (notification.userInfo?["message"] as? String)
+                            ?? "帖子发布失败，可在社区顶部任务条中重试。"
+                    )
+                }
+            }
             .onChange(of: appNavigation.requestedCommunityPostID) { _, postID in
                 guard let postID else { return }
                 Task { await openRequestedCommunityPost(id: postID) }
@@ -1031,6 +1041,7 @@ private extension View {
 private enum NotificationOpenResult {
     case post(CommunityPost)
     case announcement(SiteAnnouncement)
+    case publication(CommunityPublishTask)
 }
 
 @MainActor
@@ -1044,6 +1055,7 @@ private final class CommunityNotificationsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let service = CommunityService.shared
+    private let publishCoordinator = CommunityPublishCoordinator.shared
 
     var isMutedAll: Bool {
         settings?.mutedAll ?? false
@@ -1060,7 +1072,7 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         do {
             try await service.ensureAnonymousSession()
         } catch {
-            items = []
+            items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
             errorMessage = error.localizedDescription
             return
         }
@@ -1070,15 +1082,17 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         do {
             settings = try await service.fetchNotificationSettings()
             if settings?.mutedAll == true {
-                items = []
+                items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
                 errorMessage = nil
                 return
             }
 
-            items = try await service.fetchNotificationFeed()
+            items = (
+                try await service.fetchNotificationFeed() + publishCoordinator.notificationItems
+            ).sorted { $0.sortDate > $1.sortDate }
             errorMessage = nil
         } catch {
-            items = []
+            items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
             errorMessage = error.localizedDescription
         }
     }
@@ -1091,9 +1105,11 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         do {
             settings = try await service.updateNotificationSettings(mutedAll: muted)
             if muted {
-                items = []
+                items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
             } else {
-                items = try await service.fetchNotificationFeed()
+                items = (
+                    try await service.fetchNotificationFeed() + publishCoordinator.notificationItems
+                ).sorted { $0.sortDate > $1.sortDate }
             }
             errorMessage = nil
             return true
@@ -1111,6 +1127,11 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         do {
             try await service.markNotificationFeedRead()
             let readAt = ISO8601DateFormatter().string(from: Date())
+            for item in items {
+                if case .publication(let notification) = item {
+                    publishCoordinator.markNotificationRead(taskID: notification.id)
+                }
+            }
             items = items.map { $0.markingRead(at: readAt) }
             errorMessage = nil
             return true
@@ -1126,7 +1147,11 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         defer { activeItemID = nil }
 
         do {
-            try await service.dismissNotificationFeedItem(item)
+            if case .publication(let notification) = item {
+                publishCoordinator.dismissNotification(taskID: notification.id)
+            } else {
+                try await service.dismissNotificationFeedItem(item)
+            }
             items.removeAll { $0.id == item.id }
             errorMessage = nil
             return true
@@ -1146,6 +1171,37 @@ private final class CommunityNotificationsViewModel: ObservableObject {
             return await openCommunityNotification(notification, itemID: item.id)
         case .announcement(let announcement):
             return await openSiteAnnouncement(announcement, itemID: item.id)
+        case .publication(let notification):
+            return await openPublicationNotification(notification, itemID: item.id)
+        }
+    }
+
+    private func openPublicationNotification(
+        _ notification: CommunityPublishNotification,
+        itemID: String
+    ) async -> NotificationOpenResult? {
+        publishCoordinator.markNotificationRead(taskID: notification.id)
+        if let index = items.firstIndex(where: { $0.id == itemID }) {
+            items[index] = .publication(
+                CommunityPublishNotification(task: notification.task, isRead: true)
+            )
+        }
+
+        guard notification.task.state == .published else {
+            errorMessage = nil
+            return .publication(notification.task)
+        }
+
+        do {
+            guard let post = try await service.fetchPost(postID: notification.task.id) else {
+                errorMessage = "已发布的帖子暂时无法打开，请稍后重试。"
+                return nil
+            }
+            errorMessage = nil
+            return .post(post)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 
@@ -1206,6 +1262,7 @@ private struct CommunityNotificationsSheet: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @StateObject private var viewModel = CommunityNotificationsViewModel()
     @State private var selectedAnnouncement: SiteAnnouncement?
+    @State private var selectedPublishTask: CommunityPublishTask?
     @State private var operationAlert: LeafyOperationAlert?
 
     var body: some View {
@@ -1237,7 +1294,7 @@ private struct CommunityNotificationsSheet: View {
                     }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-                } else if viewModel.isMutedAll {
+                } else if viewModel.isMutedAll && viewModel.items.isEmpty {
                     Section {
                         CommunityNotificationStateView(
                             title: "已关闭通知",
@@ -1288,6 +1345,8 @@ private struct CommunityNotificationsSheet: View {
                                         onOpenPost(post)
                                     case .announcement(let announcement):
                                         selectedAnnouncement = announcement
+                                    case .publication(let task):
+                                        selectedPublishTask = task
                                     }
                                 }
                             } label: {
@@ -1340,6 +1399,10 @@ private struct CommunityNotificationsSheet: View {
             }
             .sheet(item: $selectedAnnouncement) { announcement in
                 SiteAnnouncementDetailSheet(announcement: announcement)
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(item: $selectedPublishTask) { task in
+                CommunityPublishTaskDetailSheet(taskID: task.id)
                     .presentationDetents([.medium, .large])
             }
             .leafyOperationAlert($operationAlert)
@@ -1516,6 +1579,84 @@ private struct CommunityNotificationCard: View {
                 return AppTheme.warning
             case .urgent:
                 return AppTheme.danger
+            }
+        case .publication(let notification):
+            return notification.task.state == .published ? .green : AppTheme.danger
+        }
+    }
+}
+
+private struct CommunityPublishTaskDetailSheet: View {
+    let taskID: UUID
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var coordinator = CommunityPublishCoordinator.shared
+
+    private var task: CommunityPublishTask? {
+        coordinator.tasks.first { $0.id == taskID }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if let task {
+                    VStack(alignment: .leading, spacing: AppSpacing.card) {
+                        LeafySectionTitle(task.state.title, subtitle: task.input.title)
+
+                        ProgressView(value: task.progress)
+                            .tint(task.state == .failed ? AppTheme.danger : AppTheme.accent)
+
+                        if let errorMessage = task.errorMessage {
+                            CommunityInlineError(message: errorMessage)
+                        }
+
+                        ForEach(task.media) { media in
+                            HStack(spacing: 12) {
+                                Image(systemName: media.kind == .image ? "photo" : "paperclip")
+                                    .foregroundStyle(AppTheme.accentEmphasis)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(media.displayName)
+                                        .leafyBody()
+                                    Text(media.validated ? "已校验" : media.errorMessage ?? "\(Int(media.progress * 100))%")
+                                        .microCaption()
+                                        .foregroundStyle(media.errorMessage == nil ? AppTheme.secondaryText : AppTheme.danger)
+                                }
+                                Spacer()
+                            }
+                            .padding(14)
+                            .leafyCardStyle()
+                        }
+
+                        if task.state == .failed {
+                            Button("重试发布") {
+                                coordinator.retry(taskID: task.id)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .frame(maxWidth: .infinity)
+                        }
+
+                        if task.state != .published && task.state != .cancelled {
+                            Button("取消任务", role: .destructive) {
+                                coordinator.cancel(taskID: task.id)
+                            }
+                            .buttonStyle(.bordered)
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(AppSpacing.page)
+                } else {
+                    ContentUnavailableView("任务已不存在", systemImage: "tray")
+                }
+            }
+            .background(LeafyPageBackground())
+            .navigationTitle("发布任务")
+            .leafyInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .leafyTrailing) {
+                    Button("完成") {
+                        dismiss()
+                    }
+                }
             }
         }
     }

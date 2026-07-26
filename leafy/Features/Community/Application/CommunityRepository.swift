@@ -19,7 +19,20 @@ nonisolated protocol CommunityFeedRepository: CommunitySessionRepository {
 nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
     func fetchPost(postID: UUID) async throws -> CommunityPost?
     func fetchComments(postID: UUID) async throws -> [CommunityComment]
+    func fetchCommentThreads(
+        postID: UUID,
+        cursor: CommunityCommentCursor?,
+        limit: Int
+    ) async throws -> CommunityCommentPage
     func createComment(postID: UUID, body: String) async throws -> CommunityComment
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?
+    ) async throws -> CommunityComment
+    func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState
+    func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload
     func togglePostLike(postID: UUID) async throws -> CommunityPost
     func togglePostFavorite(postID: UUID) async throws -> CommunityPost
     func reportPost(postID: UUID, reason: String) async throws
@@ -27,6 +40,47 @@ nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
     func blockUser(userID: UUID, reason: String?) async throws
     func deletePost(postID: UUID) async throws
     func deleteComment(commentID: UUID) async throws
+}
+
+extension CommunityPostDetailRepository {
+    func fetchCommentThreads(
+        postID: UUID,
+        cursor: CommunityCommentCursor?,
+        limit: Int
+    ) async throws -> CommunityCommentPage {
+        guard cursor == nil else {
+            return CommunityCommentPage(threads: [], nextCursor: nil)
+        }
+        let comments = try await fetchComments(postID: postID)
+        let grouped = Dictionary(grouping: comments, by: \.threadRootID)
+        let threads = comments
+            .filter { !$0.isReply }
+            .prefix(max(1, limit))
+            .map { root in
+                CommunityCommentThread(
+                    root: root,
+                    replies: (grouped[root.id] ?? []).filter(\.isReply)
+                )
+            }
+        return CommunityCommentPage(threads: Array(threads), nextCursor: nil)
+    }
+
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID _: UUID?,
+        replyToCommentID _: UUID?
+    ) async throws -> CommunityComment {
+        try await createComment(postID: postID, body: body)
+    }
+
+    func toggleCommentLike(commentID _: UUID) async throws -> CommunityCommentLikeState {
+        throw CommunityServiceError.edgeFunctionRejected("当前社区服务暂不支持评论点赞。")
+    }
+
+    func attachmentDownloadURL(attachmentID _: UUID) async throws -> CommunityAttachmentDownload {
+        throw CommunityServiceError.edgeFunctionRejected("当前社区服务暂不支持附件下载。")
+    }
 }
 
 nonisolated protocol CommunityPollRepository: CommunitySessionRepository {
@@ -55,6 +109,12 @@ nonisolated protocol CommunityRepository:
     CommunityCatalogRatingRepository,
     CommunityNotificationRepository {
     func createPost(input: CreatePostInput, images: [CommunityImageUpload]) async throws -> CommunityPost
+    @MainActor
+    func enqueuePostPublication(
+        input: CreatePostInput,
+        images: [CommunityImageUpload],
+        attachments: [CommunityAttachmentUpload]
+    ) throws -> UUID
     func fetchMyAuthoredPolls(limit: Int) async throws -> [CommunityPoll]
     func fetchMyVotedPolls(limit: Int) async throws -> [CommunityPoll]
 }
@@ -62,6 +122,15 @@ nonisolated protocol CommunityRepository:
 extension CommunityRepository {
     func fetchPosts() async throws -> [CommunityPost] {
         try await fetchPosts(query: .default)
+    }
+
+    @MainActor
+    func enqueuePostPublication(
+        input _: CreatePostInput,
+        images _: [CommunityImageUpload],
+        attachments _: [CommunityAttachmentUpload]
+    ) throws -> UUID {
+        throw CommunityServiceError.edgeFunctionRejected("当前社区服务暂不支持后台发布。")
     }
 }
 
@@ -76,6 +145,19 @@ struct LiveCommunityRepository: CommunityRepository {
         try await service.ensureAnonymousSession()
     }
 
+    @MainActor
+    func enqueuePostPublication(
+        input: CreatePostInput,
+        images: [CommunityImageUpload],
+        attachments: [CommunityAttachmentUpload]
+    ) throws -> UUID {
+        try CommunityPublishCoordinator.shared.enqueue(
+            input: input,
+            images: images,
+            attachments: attachments
+        )
+    }
+
     func fetchPosts(query: CommunityFeedQuery) async throws -> [CommunityPost] {
         try await service.fetchPosts(query: query)
     }
@@ -88,8 +170,38 @@ struct LiveCommunityRepository: CommunityRepository {
         try await service.fetchComments(postID: postID)
     }
 
+    func fetchCommentThreads(
+        postID: UUID,
+        cursor: CommunityCommentCursor?,
+        limit: Int
+    ) async throws -> CommunityCommentPage {
+        try await service.fetchCommentThreads(postID: postID, cursor: cursor, limit: limit)
+    }
+
     func createComment(postID: UUID, body: String) async throws -> CommunityComment {
         try await service.createComment(postID: postID, body: body)
+    }
+
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?
+    ) async throws -> CommunityComment {
+        try await service.createComment(
+            postID: postID,
+            body: body,
+            parentCommentID: parentCommentID,
+            replyToCommentID: replyToCommentID
+        )
+    }
+
+    func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState {
+        try await service.toggleCommentLike(commentID: commentID)
+    }
+
+    func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload {
+        try await service.attachmentDownloadURL(attachmentID: attachmentID)
     }
 
     func togglePostLike(postID: UUID) async throws -> CommunityPost {

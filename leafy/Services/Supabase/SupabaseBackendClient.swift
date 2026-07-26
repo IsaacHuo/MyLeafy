@@ -6,6 +6,8 @@ nonisolated enum BackendFeature: String, CaseIterable, Sendable {
     case communityHotPosts = "community_hot_posts"
     case communityPolls = "community_polls"
     case communityNotifications = "community_notifications"
+    case communityCommentThreads = "community_comment_threads"
+    case communityPostAttachments = "community_post_attachments"
     case postFavorites = "post_favorites"
     case catalogRatings = "catalog_ratings"
     case postgraduateSources = "postgraduate_sources"

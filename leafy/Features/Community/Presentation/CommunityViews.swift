@@ -1,6 +1,7 @@
 import Combine
 import OSLog
 import PhotosUI
+import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -8,6 +9,92 @@ private struct CommunityDraftImage: Identifiable, Hashable {
     let id: UUID
     let image: UIImage
     let upload: CommunityImageUpload
+}
+
+private struct CommunityDraftAttachment: Identifiable, Hashable {
+    let upload: CommunityAttachmentUpload
+
+    var id: UUID { upload.id }
+}
+
+private struct CommunityAttachmentPreview: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private enum CommunityComposerAttachmentError: LocalizedError {
+    case unsupportedType
+    case unreadableFile
+    case fileTooLarge
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedType:
+            return "仅支持 PDF、XLSX、DOCX 和 Markdown 文件。"
+        case .unreadableFile:
+            return "无法读取这个文件。"
+        case .fileTooLarge:
+            return "单个附件不能超过 10 MB。"
+        }
+    }
+}
+
+private enum CommunityComposerAttachmentTypes {
+    static let allowed: [UTType] = [
+        .pdf,
+        UTType(filenameExtension: "xlsx") ?? .spreadsheet,
+        UTType(filenameExtension: "docx") ?? .content,
+        UTType(filenameExtension: "md") ?? .plainText
+    ]
+
+    static func stagingDirectory() throws -> URL {
+        let root = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = root.appendingPathComponent("CommunityComposerAttachments", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [
+                .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+            ]
+        )
+        return directory
+    }
+
+    static func contentType(for fileExtension: String) -> String {
+        switch fileExtension {
+        case "pdf":
+            return "application/pdf"
+        case "xlsx":
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "docx":
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        default:
+            return "text/markdown"
+        }
+    }
+
+    static func systemImage(for fileExtension: String) -> String {
+        switch fileExtension {
+        case "pdf": return "doc.richtext"
+        case "xlsx": return "tablecells"
+        case "docx": return "doc.text"
+        default: return "text.document"
+        }
+    }
+
+    static func sanitizedDisplayName(_ value: String) -> String {
+        let filteredScalars = value.unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0) && $0.value != 0x2F && $0.value != 0x5C
+        }
+        let cleaned = String(String.UnicodeScalarView(filteredScalars))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return String((cleaned.isEmpty ? "附件" : cleaned).prefix(120))
+    }
 }
 
 private struct CommunityFeedTaskID: Hashable {
@@ -46,14 +133,31 @@ private enum CommunityModerationTarget: Identifiable, Equatable {
     }
 }
 
+nonisolated enum CommunityCommentInteractionPolicy {
+    static func canReply(to comment: CommunityComment, viewerID: UUID?) -> Bool {
+        guard let viewerID else { return false }
+        return comment.authorID != viewerID
+            && comment.status == "published"
+            && !comment.isDeletedPlaceholder
+            && comment.replyTargetIsVisible
+    }
+
+    static func canLike(_ comment: CommunityComment, viewerID: UUID?) -> Bool {
+        canReply(to: comment, viewerID: viewerID)
+    }
+}
+
 @MainActor
 final class CommunityPostDetailViewModel: ObservableObject {
     @Published private(set) var post: CommunityPost
-    @Published private(set) var comments: [CommunityComment] = []
+    @Published private(set) var commentThreads: [CommunityCommentThread] = []
+    @Published private(set) var nextCommentCursor: CommunityCommentCursor?
     @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingMoreComments = false
     @Published private(set) var isLikeLoading = false
     @Published private(set) var isFavoriteLoading = false
     @Published private(set) var isSubmitting = false
+    @Published private(set) var activeCommentLikeIDs: Set<UUID> = []
     @Published var errorMessage: String?
 
     private let postID: UUID
@@ -65,6 +169,10 @@ final class CommunityPostDetailViewModel: ObservableObject {
         self.repository = repository
     }
 
+    var comments: [CommunityComment] {
+        commentThreads.flatMap { [$0.root] + $0.replies }
+    }
+
     func load() async {
         isLoading = true
         defer { isLoading = false }
@@ -73,14 +181,36 @@ final class CommunityPostDetailViewModel: ObservableObject {
             if let refreshedPost = try await repository.fetchPost(postID: postID) {
                 post = refreshedPost
             }
-            comments = try await repository.fetchComments(postID: postID)
+            let page = try await repository.fetchCommentThreads(postID: postID, cursor: nil, limit: 20)
+            commentThreads = page.threads
+            nextCommentCursor = page.nextCursor
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    func submitComment(body: String) async -> Bool {
+    func loadMoreComments() async {
+        guard !isLoadingMoreComments, let nextCommentCursor else { return }
+        isLoadingMoreComments = true
+        defer { isLoadingMoreComments = false }
+
+        do {
+            let page = try await repository.fetchCommentThreads(
+                postID: postID,
+                cursor: nextCommentCursor,
+                limit: 20
+            )
+            let existingIDs = Set(commentThreads.map(\.id))
+            commentThreads.append(contentsOf: page.threads.filter { !existingIDs.contains($0.id) })
+            self.nextCommentCursor = page.nextCursor
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func submitComment(body: String, replyingTo target: CommunityComment? = nil) async -> Bool {
         guard !isSubmitting else { return false }
 
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,13 +223,50 @@ final class CommunityPostDetailViewModel: ObservableObject {
         defer { isSubmitting = false }
 
         do {
-            let comment = try await repository.createComment(postID: postID, body: trimmed)
-            comments.append(comment)
+            _ = try await repository.createComment(
+                postID: postID,
+                body: trimmed,
+                parentCommentID: target?.threadRootID,
+                replyToCommentID: target?.id
+            )
+            let page = try await repository.fetchCommentThreads(postID: postID, cursor: nil, limit: 20)
+            commentThreads = page.threads
+            nextCommentCursor = page.nextCursor
             errorMessage = nil
             return true
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+
+    func toggleCommentLike(_ comment: CommunityComment) async {
+        guard !activeCommentLikeIDs.contains(comment.id) else { return }
+        activeCommentLikeIDs.insert(comment.id)
+
+        let original = comment
+        replaceComment(
+            comment.replacingLikeState(
+                CommunityCommentLikeState(
+                    commentID: comment.id,
+                    likeCount: max(0, comment.likeCount + (comment.viewerHasLiked ? -1 : 1)),
+                    viewerHasLiked: !comment.viewerHasLiked
+                )
+            )
+        )
+
+        defer { activeCommentLikeIDs.remove(comment.id) }
+        do {
+            let state = try await repository.toggleCommentLike(commentID: comment.id)
+            replaceComment(
+                currentComment(id: comment.id)?.replacingLikeState(
+                    state
+                ) ?? original
+            )
+            errorMessage = nil
+        } catch {
+            replaceComment(original)
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -171,7 +338,7 @@ final class CommunityPostDetailViewModel: ObservableObject {
     func reportComment(_ comment: CommunityComment, reason: String) async {
         do {
             try await repository.reportComment(commentID: comment.id, reason: reason)
-            comments.removeAll { $0.id == comment.id }
+            removeComment(id: comment.id)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -181,10 +348,49 @@ final class CommunityPostDetailViewModel: ObservableObject {
     func blockCommentAuthor(_ comment: CommunityComment) async {
         do {
             try await repository.blockUser(userID: comment.authorID, reason: "用户主动屏蔽")
-            comments.removeAll { $0.authorID == comment.authorID }
+            commentThreads = commentThreads.compactMap { thread in
+                guard thread.root.authorID != comment.authorID else { return nil }
+                return CommunityCommentThread(
+                    root: thread.root,
+                    replies: thread.replies.filter { $0.authorID != comment.authorID }
+                )
+            }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func currentComment(id: UUID) -> CommunityComment? {
+        comments.first { $0.id == id }
+    }
+
+    private func replaceComment(_ comment: CommunityComment) {
+        guard let threadIndex = commentThreads.firstIndex(where: {
+            $0.root.id == comment.id || $0.replies.contains(where: { $0.id == comment.id })
+        }) else { return }
+
+        var thread = commentThreads[threadIndex]
+        if thread.root.id == comment.id {
+            thread = CommunityCommentThread(root: comment, replies: thread.replies)
+        } else if let replyIndex = thread.replies.firstIndex(where: { $0.id == comment.id }) {
+            var replies = thread.replies
+            replies[replyIndex] = comment
+            thread = CommunityCommentThread(root: thread.root, replies: replies)
+        }
+        commentThreads[threadIndex] = thread
+    }
+
+    private func removeComment(id: UUID) {
+        if let rootIndex = commentThreads.firstIndex(where: { $0.root.id == id }) {
+            commentThreads.remove(at: rootIndex)
+            return
+        }
+        commentThreads = commentThreads.map { thread in
+            CommunityCommentThread(
+                root: thread.root,
+                replies: thread.replies.filter { $0.id != id }
+            )
         }
     }
 }
@@ -205,6 +411,7 @@ struct RealCommunitySectionView: View {
     @ObservedObject var viewModel: CommunityFeedViewModel
     var topContentInset: CGFloat = 0
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
+    @ObservedObject private var publishCoordinator = CommunityPublishCoordinator.shared
     @State private var showingTermsSheet = false
     @State private var hasPresentedTermsGate = false
     @State private var selectedPoll: CommunityPoll?
@@ -252,6 +459,9 @@ struct RealCommunitySectionView: View {
                         .frame(height: 0)
 
                         LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                            if !publishCoordinator.visibleTasks.isEmpty {
+                                CommunityPublishTaskStrip(tasks: publishCoordinator.visibleTasks)
+                            }
                             feedContent
                         }
                         .padding(.top, topContentInset + 10 * leafyControlScale)
@@ -283,6 +493,12 @@ struct RealCommunitySectionView: View {
         .task(id: feedTaskID) {
             CommunityDiagnostics.log.info("Community feed task began for query \(feedQuery.cacheKey, privacy: .public)")
             await loadFeedForCurrentQuery()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .communityPublishTaskDidFinish)) { notification in
+            guard (notification.userInfo?["succeeded"] as? Bool) == true else { return }
+            Task {
+                await viewModel.load(mode: .refresh, query: feedQuery)
+            }
         }
         .sheet(isPresented: $showingTermsSheet) {
             CommunityTermsAgreementSheet {
@@ -1519,6 +1735,280 @@ private extension View {
     }
 }
 
+private struct CommunityPublishTaskStrip: View {
+    let tasks: [CommunityPublishTask]
+
+    @State private var isExpanded = true
+    @ObservedObject private var coordinator = CommunityPublishCoordinator.shared
+
+    private var primaryTask: CommunityPublishTask? {
+        tasks.first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    statusIcon
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(headerTitle)
+                            .leafyHeadline()
+                            .foregroundStyle(AppTheme.primaryText)
+                        Text(headerDetail)
+                            .microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.tertiaryText)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let primaryTask {
+                ProgressView(value: primaryTask.progress)
+                    .tint(primaryTask.state == .failed ? .red : AppTheme.accent)
+            }
+
+            if isExpanded {
+                ForEach(tasks) { task in
+                    CommunityPublishTaskRow(task: task, coordinator: coordinator)
+                }
+            }
+        }
+        .padding(16)
+        .leafyGlassSurface(
+            in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous),
+            isInteractive: true
+        )
+        .clipShape(
+            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+        )
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if primaryTask?.state == .published {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(.green)
+        } else if primaryTask?.state == .failed {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(.red)
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 24, height: 24)
+        }
+    }
+
+    private var headerTitle: String {
+        guard let primaryTask else { return "发布任务" }
+        if tasks.count > 1 {
+            return "\(primaryTask.progressDetail) · 共 \(tasks.count) 个任务"
+        }
+        return primaryTask.progressDetail
+    }
+
+    private var headerDetail: String {
+        primaryTask?.input.title ?? ""
+    }
+}
+
+private struct CommunityPostAttachmentsSection: View {
+    let attachments: [CommunityPostAttachment]
+    let downloadingIDs: Set<UUID>
+    let errorMessage: String?
+    let onOpen: (CommunityPostAttachment) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("附件")
+                    .leafyHeadline()
+                Spacer()
+                Text("\(attachments.count) 个")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.tertiaryText)
+            }
+
+            ForEach(attachments.sorted { $0.sortOrder < $1.sortOrder }) { attachment in
+                Button {
+                    onOpen(attachment)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: attachment.systemImage)
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(AppTheme.accentEmphasis)
+                            .frame(width: 38, height: 38)
+                            .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: 10))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(attachment.displayName)
+                                .leafyBody()
+                                .foregroundStyle(AppTheme.primaryText)
+                                .lineLimit(1)
+                            Text(attachment.formattedByteSize)
+                                .microCaption()
+                                .foregroundStyle(AppTheme.tertiaryText)
+                        }
+
+                        Spacer()
+
+                        if downloadingIDs.contains(attachment.id) {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "eye")
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(downloadingIDs.contains(attachment.id))
+            }
+
+            if let errorMessage {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.circle")
+                    Text(errorMessage)
+                        .microCaption()
+                    Spacer()
+                }
+                .foregroundStyle(.red)
+            }
+        }
+        .padding(16)
+        .leafyCardStyle()
+    }
+}
+
+private struct CommunityQuickLookPreview: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(url: url)
+    }
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_: QLPreviewController, context: Context) {
+        context.coordinator.url = url
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        var url: URL
+
+        init(url: URL) {
+            self.url = url
+        }
+
+        func numberOfPreviewItems(in _: QLPreviewController) -> Int {
+            1
+        }
+
+        func previewController(_: QLPreviewController, previewItemAt _: Int) -> QLPreviewItem {
+            url as NSURL
+        }
+    }
+}
+
+private struct CommunityPublishTaskRow: View {
+    let task: CommunityPublishTask
+    @ObservedObject var coordinator: CommunityPublishCoordinator
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(task.input.title)
+                        .leafyBody()
+                        .lineLimit(1)
+                    if let errorMessage = task.errorMessage, task.state == .failed {
+                        Text(errorMessage)
+                            .microCaption()
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    } else {
+                        Text(task.progressDetail)
+                            .microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                if task.state == .failed {
+                    Button("重试") {
+                        coordinator.retry(taskID: task.id)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+
+                if task.state != .published && task.state != .cancelled && task.state != .cancelling {
+                    Button(role: .destructive) {
+                        coordinator.cancel(taskID: task.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel("取消发布")
+                }
+            }
+
+            ForEach(task.media) { media in
+                HStack(spacing: 8) {
+                    Image(systemName: media.kind == .image ? "photo" : CommunityComposerAttachmentTypes.systemImage(for: media.fileExtension))
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(media.displayName)
+                        .microCaption()
+                        .lineLimit(1)
+                    Spacer()
+                    Text(mediaStatus(media))
+                        .microCaption()
+                        .foregroundStyle(media.errorMessage == nil ? AppTheme.tertiaryText : .red)
+                }
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func mediaStatus(_ media: CommunityPublishMediaItem) -> String {
+        if let errorMessage = media.errorMessage {
+            return errorMessage
+        }
+        if media.validated {
+            return "已校验"
+        }
+        if media.fullUploaded && media.thumbnailUploaded {
+            return "待校验"
+        }
+        if media.progress > 0 {
+            return "\(Int(media.progress * 100))%"
+        }
+        return "排队中"
+    }
+}
+
 private struct CommunityPinBadge: View {
     let pin: CommunityPostPin
 
@@ -1589,6 +2079,8 @@ struct CommunityComposerSheet: View {
     @State private var isSubmitting = false
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var draftImages: [CommunityDraftImage] = []
+    @State private var draftAttachments: [CommunityDraftAttachment] = []
+    @State private var showingAttachmentImporter = false
     @State private var errorMessage: String?
     @State private var showingProfileEditor = false
     @State private var showingTermsSheet = false
@@ -1663,6 +2155,7 @@ struct CommunityComposerSheet: View {
             }
             .task {
                 await sessionManager.restoreProfileIfPossible()
+                await preflightPostCreation()
             }
             .onChange(of: selectedItems) { _, newValue in
                 Task {
@@ -1671,6 +2164,13 @@ struct CommunityComposerSheet: View {
             }
             .onChange(of: composerMode) { _, _ in
                 errorMessage = nil
+            }
+            .fileImporter(
+                isPresented: $showingAttachmentImporter,
+                allowedContentTypes: CommunityComposerAttachmentTypes.allowed,
+                allowsMultipleSelection: true
+            ) { result in
+                handleAttachmentSelection(result)
             }
             .sheet(isPresented: $showingProfileEditor) {
                 CommunityProfileEditorSheet()
@@ -1692,6 +2192,7 @@ struct CommunityComposerSheet: View {
         case .post:
             postFields
             imageFields
+            attachmentFields
         case .poll:
             CommunityPollDraftFields(
                 question: $pollQuestion,
@@ -1797,12 +2298,92 @@ struct CommunityComposerSheet: View {
         .leafyCardStyle()
     }
 
+    private var attachmentFields: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("附件")
+                    .leafyHeadline()
+                Spacer()
+                Text("\(draftAttachments.count)/\(CommunityPostAttachment.postAttachmentLimit)")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.tertiaryText)
+            }
+
+            Button {
+                showingAttachmentImporter = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "paperclip")
+                    Text("添加 PDF、Excel、Word 或 Markdown")
+                        .leafyBody()
+                }
+                .foregroundStyle(AppTheme.accentEmphasis)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(AppTheme.softFill, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(draftAttachments.count >= CommunityPostAttachment.postAttachmentLimit)
+
+            ForEach(draftAttachments) { draft in
+                HStack(spacing: 12) {
+                    Image(systemName: CommunityComposerAttachmentTypes.systemImage(for: draft.upload.fileExtension))
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentEmphasis)
+                        .frame(width: 34, height: 34)
+                        .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: 9))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(draft.upload.displayName)
+                            .leafyBody()
+                            .lineLimit(1)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(draft.upload.byteSize), countStyle: .file))
+                            .microCaption()
+                            .foregroundStyle(AppTheme.tertiaryText)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        removeDraftAttachment(draft.id)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("移除附件")
+                }
+            }
+
+            Text("每个附件不超过 10 MB；附件会私密存储，下载时临时授权。")
+                .microCaption()
+                .foregroundStyle(AppTheme.tertiaryText)
+        }
+        .padding(18)
+        .leafyCardStyle()
+    }
+
     private func submitCurrentMode() async {
         switch composerMode {
         case .post:
             await submitPost()
         case .poll:
             await submitPoll()
+        }
+    }
+
+    private func preflightPostCreation() async {
+        switch await communityAccessGate.evaluate(.postCreation, forceBootstrap: true) {
+        case .allowed:
+            errorMessage = nil
+        case .requiresProfileCompletion:
+            showingProfileEditor = true
+            errorMessage = L10n.text("第一次发帖前需要先完善社区资料。", language: leafyLanguage)
+        case .requiresTermsAcceptance:
+            showingTermsSheet = true
+            errorMessage = L10n.text("发布前需要先同意社区条款。", language: leafyLanguage)
+        case .failed(let message):
+            errorMessage = message
         }
     }
 
@@ -1827,16 +2408,18 @@ struct CommunityComposerSheet: View {
         }
 
         do {
-            _ = try await dependencies.communityRepository.createPost(
+            _ = try dependencies.communityRepository.enqueuePostPublication(
                 input: CreatePostInput(
                     title: title,
                     body: postBody,
                     category: category,
                     isAnonymous: isAnonymous
                 ),
-                images: draftImages.map(\.upload)
+                images: draftImages.map(\.upload),
+                attachments: draftAttachments.map(\.upload)
             )
-            onPosted(L10n.text("发布成功！", language: leafyLanguage))
+            cleanupComposerAttachments()
+            onPosted(L10n.text("已加入发布队列，可在社区顶部查看进度。", language: leafyLanguage))
             dismiss()
         } catch {
             if error.localizedDescription == CommunityServiceError.profileCompletionRequired.localizedDescription {
@@ -1913,6 +2496,77 @@ struct CommunityComposerSheet: View {
     private func removeDraftImage(_ id: UUID) {
         draftImages.removeAll { $0.id == id }
     }
+
+    private func handleAttachmentSelection(_ result: Result<[URL], Error>) {
+        do {
+            let urls = try result.get()
+            let remaining = CommunityPostAttachment.postAttachmentLimit - draftAttachments.count
+            guard remaining > 0 else { return }
+            if urls.count > remaining {
+                errorMessage = "单条帖子最多上传 2 个附件。"
+            }
+            for url in urls.prefix(remaining) {
+                draftAttachments.append(
+                    CommunityDraftAttachment(upload: try stageAttachment(from: url))
+                )
+            }
+        } catch {
+            errorMessage = "添加附件失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func stageAttachment(from sourceURL: URL) throws -> CommunityAttachmentUpload {
+        let accessed = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if accessed {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let fileExtension = sourceURL.pathExtension.lowercased()
+        guard CommunityPostAttachment.supportedExtensions.contains(fileExtension) else {
+            throw CommunityComposerAttachmentError.unsupportedType
+        }
+
+        let values = try sourceURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let byteSize = values.fileSize, byteSize > 0 else {
+            throw CommunityComposerAttachmentError.unreadableFile
+        }
+        guard byteSize <= CommunityPostAttachment.maxBytes else {
+            throw CommunityComposerAttachmentError.fileTooLarge
+        }
+
+        let directory = try CommunityComposerAttachmentTypes.stagingDirectory()
+        let id = UUID()
+        let destination = directory.appendingPathComponent("\(id.uuidString.lowercased()).\(fileExtension)")
+        try FileManager.default.copyItem(at: sourceURL, to: destination)
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: destination.path
+        )
+
+        return CommunityAttachmentUpload(
+            id: id,
+            localURL: destination,
+            displayName: CommunityComposerAttachmentTypes.sanitizedDisplayName(sourceURL.lastPathComponent),
+            contentType: CommunityComposerAttachmentTypes.contentType(for: fileExtension),
+            fileExtension: fileExtension,
+            byteSize: byteSize
+        )
+    }
+
+    private func removeDraftAttachment(_ id: UUID) {
+        guard let draft = draftAttachments.first(where: { $0.id == id }) else { return }
+        try? FileManager.default.removeItem(at: draft.upload.localURL)
+        draftAttachments.removeAll { $0.id == id }
+    }
+
+    private func cleanupComposerAttachments() {
+        for draft in draftAttachments {
+            try? FileManager.default.removeItem(at: draft.upload.localURL)
+        }
+        draftAttachments.removeAll()
+    }
 }
 
 struct RealCommunityPostDetailSheet: View {
@@ -1933,6 +2587,10 @@ struct RealCommunityPostDetailSheet: View {
     @State private var showingDeletePostConfirmation = false
     @State private var operationAlert: LeafyOperationAlert?
     @State private var isCommentSubmitInFlight = false
+    @State private var replyTarget: CommunityComment?
+    @State private var downloadingAttachmentIDs: Set<UUID> = []
+    @State private var attachmentDownloadError: String?
+    @State private var attachmentPreview: CommunityAttachmentPreview?
 
     private var communityAccessGate: CommunityAccessGate {
         CommunityAccessGate(
@@ -2020,6 +2678,17 @@ struct RealCommunityPostDetailSheet: View {
                         }
                     )
 
+                    if !viewModel.post.attachments.isEmpty {
+                        CommunityPostAttachmentsSection(
+                            attachments: viewModel.post.attachments,
+                            downloadingIDs: downloadingAttachmentIDs,
+                            errorMessage: attachmentDownloadError,
+                            onOpen: { attachment in
+                                Task { await openAttachment(attachment) }
+                            }
+                        )
+                    }
+
                     VStack(alignment: .leading, spacing: 12) {
                         Text("评论区")
                             .leafyHeadline()
@@ -2040,20 +2709,88 @@ struct RealCommunityPostDetailSheet: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .leafyCardStyle()
                         } else {
-                            ForEach(viewModel.comments) { comment in
+                            ForEach(viewModel.commentThreads) { thread in
                                 CommunityCommentCard(
-                                    comment: comment,
-                                    canDelete: comment.authorID == sessionManager.currentUserID,
+                                    comment: thread.root,
+                                    canDelete: thread.root.authorID == sessionManager.currentUserID,
+                                    canReply: CommunityCommentInteractionPolicy.canReply(
+                                        to: thread.root,
+                                        viewerID: sessionManager.currentUserID
+                                    ),
+                                    canLike: CommunityCommentInteractionPolicy.canLike(
+                                        thread.root,
+                                        viewerID: sessionManager.currentUserID
+                                    ),
+                                    isLikeLoading: viewModel.activeCommentLikeIDs.contains(thread.root.id),
+                                    onReply: {
+                                        replyTarget = thread.root
+                                    },
+                                    onToggleLike: {
+                                        Task { await toggleCommentLike(thread.root) }
+                                    },
                                     onReport: {
-                                        reportTarget = .comment(comment)
+                                        reportTarget = .comment(thread.root)
                                     },
                                     onBlock: {
-                                        blockTarget = .comment(comment)
+                                        blockTarget = .comment(thread.root)
                                     },
                                     onDelete: {
-                                        Task { await deleteComment(comment) }
+                                        Task { await deleteComment(thread.root) }
                                     }
                                 )
+
+                                if !thread.replies.isEmpty {
+                                    VStack(spacing: 10) {
+                                        ForEach(thread.replies) { reply in
+                                            CommunityCommentCard(
+                                                comment: reply,
+                                                canDelete: reply.authorID == sessionManager.currentUserID,
+                                                canReply: CommunityCommentInteractionPolicy.canReply(
+                                                    to: reply,
+                                                    viewerID: sessionManager.currentUserID
+                                                ),
+                                                canLike: CommunityCommentInteractionPolicy.canLike(
+                                                    reply,
+                                                    viewerID: sessionManager.currentUserID
+                                                ),
+                                                isLikeLoading: viewModel.activeCommentLikeIDs.contains(reply.id),
+                                                onReply: {
+                                                    replyTarget = reply
+                                                },
+                                                onToggleLike: {
+                                                    Task { await toggleCommentLike(reply) }
+                                                },
+                                                onReport: {
+                                                    reportTarget = .comment(reply)
+                                                },
+                                                onBlock: {
+                                                    blockTarget = .comment(reply)
+                                                },
+                                                onDelete: {
+                                                    Task { await deleteComment(reply) }
+                                                }
+                                            )
+                                        }
+                                    }
+                                    .padding(.leading, 28)
+                                }
+                            }
+
+                            if viewModel.nextCommentCursor != nil {
+                                Button {
+                                    Task { await viewModel.loadMoreComments() }
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        if viewModel.isLoadingMoreComments {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                        }
+                                        Text(viewModel.isLoadingMoreComments ? "正在加载" : "加载更多评论")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(viewModel.isLoadingMoreComments)
                             }
                         }
                     }
@@ -2070,6 +2807,25 @@ struct RealCommunityPostDetailSheet: View {
                     if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
                         CommunityInlineError(message: errorMessage)
                             .padding(.horizontal, AppSpacing.page)
+                    }
+
+                    if let replyTarget {
+                        HStack(spacing: 8) {
+                            Text("回复 @\(replyTarget.displayAuthorName)")
+                                .microCaption()
+                                .foregroundStyle(AppTheme.secondaryText)
+                                .lineLimit(1)
+                            Spacer()
+                            Button {
+                                self.replyTarget = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(AppTheme.tertiaryText)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("取消回复")
+                        }
+                        .padding(.horizontal, AppSpacing.page)
                     }
 
                     LeafyGlassGroup(spacing: 12) {
@@ -2096,6 +2852,10 @@ struct RealCommunityPostDetailSheet: View {
                     operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
                 }
                     .presentationDetents([.large])
+            }
+            .sheet(item: $attachmentPreview) { preview in
+                CommunityQuickLookPreview(url: preview.url)
+                    .ignoresSafeArea()
             }
             .leafyOperationAlert($operationAlert)
             .confirmationDialog("举报内容", isPresented: Binding(
@@ -2220,10 +2980,59 @@ struct RealCommunityPostDetailSheet: View {
             return
         }
 
-        let didSucceed = await viewModel.submitComment(body: pendingBody)
+        let didSucceed = await viewModel.submitComment(body: pendingBody, replyingTo: replyTarget)
         if didSucceed {
             commentBody = ""
+            replyTarget = nil
             operationAlert = .success(L10n.text("评论发布成功！", language: leafyLanguage))
+        }
+    }
+
+    @MainActor
+    private func toggleCommentLike(_ comment: CommunityComment) async {
+        switch await communityAccessGate.evaluate(.profileInteraction, forceBootstrap: true) {
+        case .allowed:
+            await viewModel.toggleCommentLike(comment)
+        case .requiresProfileCompletion:
+            viewModel.errorMessage = L10n.text("点赞前需要先完善社区资料。", language: leafyLanguage)
+            showingProfileEditor = true
+        case .requiresTermsAcceptance:
+            showingTermsSheet = true
+        case .failed(let message):
+            viewModel.errorMessage = message
+        }
+    }
+
+    @MainActor
+    private func openAttachment(_ attachment: CommunityPostAttachment) async {
+        guard !downloadingAttachmentIDs.contains(attachment.id) else { return }
+        downloadingAttachmentIDs.insert(attachment.id)
+        attachmentDownloadError = nil
+        defer { downloadingAttachmentIDs.remove(attachment.id) }
+
+        do {
+            let download = try await dependencies.communityRepository.attachmentDownloadURL(
+                attachmentID: attachment.id
+            )
+            let (temporaryURL, response) = try await URLSession.shared.download(from: download.url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                throw CommunityComposerAttachmentError.unreadableFile
+            }
+
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("CommunityAttachmentPreviews", isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+            let previewURL = directory.appendingPathComponent(
+                "\(UUID().uuidString)-\(CommunityComposerAttachmentTypes.sanitizedDisplayName(download.displayName))"
+            )
+            try FileManager.default.moveItem(at: temporaryURL, to: previewURL)
+            attachmentPreview = CommunityAttachmentPreview(url: previewURL)
+        } catch {
+            attachmentDownloadError = "附件下载失败：\(error.localizedDescription)"
         }
     }
 
@@ -2757,6 +3566,11 @@ private struct ZoomedRemoteImageDragModifier: ViewModifier {
 private struct CommunityCommentCard: View {
     let comment: CommunityComment
     var canDelete = false
+    var canReply = false
+    var canLike = false
+    var isLikeLoading = false
+    var onReply: () -> Void = {}
+    var onToggleLike: () -> Void = {}
     var onReport: (() -> Void)? = nil
     var onBlock: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
@@ -2773,12 +3587,87 @@ private struct CommunityCommentCard: View {
                 }
             }
 
-            Text(comment.body)
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
+            if let replyTarget = comment.replyTargetDisplayName, comment.isReply {
+                replyableContent(replyTarget: replyTarget)
+            } else {
+                replyableContent(replyTarget: nil)
+            }
+
+            if canLike {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    likeButton
+                }
+            }
         }
         .padding(16)
-        .leafyCardStyle()
+        .background(
+            AppTheme.cardElevated,
+            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .stroke(AppTheme.separator.opacity(0.7), lineWidth: 0.7)
+        )
+    }
+
+    @ViewBuilder
+    private func replyableContent(replyTarget: String?) -> some View {
+        if canReply {
+            Button {
+                onReply()
+            } label: {
+                commentContent(replyTarget: replyTarget)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("回复 \(comment.displayAuthorName)")
+        } else {
+            commentContent(replyTarget: replyTarget)
+        }
+    }
+
+    private func commentContent(replyTarget: String?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let replyTarget {
+                Text("回复 @\(replyTarget)")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.accentEmphasis)
+            }
+
+            Text(comment.isDeletedPlaceholder ? "该评论已删除" : comment.body)
+                .leafyBody()
+                .foregroundStyle(comment.isDeletedPlaceholder ? AppTheme.tertiaryText : AppTheme.secondaryText)
+                .italic(comment.isDeletedPlaceholder)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var likeButton: some View {
+        Button {
+            onToggleLike()
+        } label: {
+            HStack(spacing: 6) {
+                if isLikeLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: comment.viewerHasLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 20, weight: .medium))
+                }
+                if comment.likeCount > 0 {
+                    Text("\(comment.likeCount)")
+                        .microCaption()
+                }
+            }
+            .foregroundStyle(comment.viewerHasLiked ? .red : AppTheme.secondaryText)
+            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLikeLoading)
+        .accessibilityLabel(comment.viewerHasLiked ? "取消点赞" : "点赞")
     }
 
     @ViewBuilder
@@ -2973,7 +3862,7 @@ private struct CommunityErrorCard: View {
     }
 }
 
-private struct CommunityInlineError: View {
+struct CommunityInlineError: View {
     let message: String
 
     var body: some View {

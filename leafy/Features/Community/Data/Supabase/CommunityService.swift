@@ -863,6 +863,164 @@ extension CommunityService {
             images: []
         )
     }
+
+    func createPendingPost(
+        id: UUID,
+        input: CreatePostInput,
+        imageCount: Int,
+        attachmentCount: Int
+    ) async throws -> UUID {
+        guard imageCount >= 0, imageCount <= CommunityImageUpload.postImageLimit,
+              attachmentCount >= 0, attachmentCount <= CommunityPostAttachment.postAttachmentLimit else {
+            throw CommunityServiceError.edgeFunctionRejected("帖子媒体数量无效。")
+        }
+        let title = input.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = input.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title.count <= 80 else {
+            throw CommunityServiceError.edgeFunctionRejected("标题需为 1–80 个字符。")
+        }
+        guard !body.isEmpty, body.count <= 10_000 else {
+            throw CommunityServiceError.edgeFunctionRejected("正文需为 1–10,000 个字符。")
+        }
+
+        let client = try LeafySupabase.shared.requireClient()
+        guard client.auth.currentUser != nil else {
+            throw CommunityServiceError.missingAuthenticatedUser
+        }
+        let actorProfile = try await requireCompletedCurrentProfile()
+        try await requireAcceptedCurrentTerms()
+        try await enforcePostRateLimit(authorID: actorProfile.id, client: client)
+
+        let _: CommunityPostRecord = try await client
+            .rpc(
+                "create_community_post_v4",
+                params: CommunityCreatePostV4RPCParams(
+                    id: id,
+                    title: title,
+                    body: body,
+                    category: CommunityPostCategory.normalized(input.category),
+                    isAnonymous: input.isAnonymous,
+                    imageCount: imageCount,
+                    attachmentCount: attachmentCount
+                )
+            )
+            .execute()
+            .value
+        return id
+    }
+
+    func pendingPostContext(postID: UUID) async throws -> CommunityPendingPostContext? {
+        let client = try LeafySupabase.shared.requireClient()
+        let records: [CommunityPendingPostContextRecord] = try await client
+            .from("posts")
+            .select("id,author_id,status")
+            .eq("id", value: postID.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return records.first.map {
+            CommunityPendingPostContext(postID: $0.id, authorID: $0.authorID, status: $0.status)
+        }
+    }
+
+    func validateAndAttachPostImage(
+        postID: UUID,
+        imageID: UUID,
+        fullPath: String,
+        thumbnailPath: String,
+        sortOrder: Int
+    ) async throws {
+        let client = try LeafySupabase.shared.requireClient()
+        let session = try await client.auth.session
+        client.functions.setAuth(token: session.accessToken)
+        let validation: CommunityUploadValidationResponse = try await client.functions.invoke(
+            "community-validate-upload",
+            options: FunctionInvokeOptions(
+                headers: ["Authorization": "Bearer \(session.accessToken)"],
+                body: CommunityUploadValidationRequest(
+                    postID: postID,
+                    fullPath: fullPath,
+                    thumbnailPath: thumbnailPath
+                )
+            )
+        )
+        _ = try await client
+            .rpc(
+                "attach_community_post_image_v1",
+                params: CommunityAttachPostImageRPCParams(
+                    receiptID: validation.receiptID,
+                    imageID: imageID,
+                    sortOrder: sortOrder
+                )
+            )
+            .execute()
+    }
+
+    func validateAndAttachPostAttachment(
+        postID: UUID,
+        attachmentID: UUID,
+        objectPath: String,
+        displayName: String,
+        sortOrder: Int
+    ) async throws {
+        let client = try LeafySupabase.shared.requireClient()
+        let session = try await client.auth.session
+        client.functions.setAuth(token: session.accessToken)
+        let validation: CommunityAttachmentValidationResponse = try await client.functions.invoke(
+            "community-validate-attachment",
+            options: FunctionInvokeOptions(
+                headers: ["Authorization": "Bearer \(session.accessToken)"],
+                body: CommunityAttachmentValidationRequest(
+                    postID: postID,
+                    objectPath: objectPath,
+                    displayName: displayName
+                )
+            )
+        )
+        _ = try await client
+            .rpc(
+                "attach_community_post_attachment_v1",
+                params: CommunityAttachPostAttachmentRPCParams(
+                    receiptID: validation.receiptID,
+                    attachmentID: attachmentID,
+                    sortOrder: sortOrder
+                )
+            )
+            .execute()
+    }
+
+    func abortPendingPost(postID: UUID) async throws {
+        let client = try LeafySupabase.shared.requireClient()
+        _ = try await client
+            .rpc(
+                "abort_community_post_upload_v1",
+                params: CommunityPostIDRPCParams(postID: postID)
+            )
+            .execute()
+    }
+
+    func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload {
+        try await requireBackendEdgeFunction(
+            "community-attachment-download",
+            unavailableMessage: "社区服务需要更新后才能下载附件，请稍后重试。"
+        )
+        let client = try LeafySupabase.shared.requireClient()
+        let session = try await client.auth.session
+        client.functions.setAuth(token: session.accessToken)
+        let response: CommunityAttachmentDownloadResponse = try await client.functions.invoke(
+            "community-attachment-download",
+            options: FunctionInvokeOptions(
+                headers: ["Authorization": "Bearer \(session.accessToken)"],
+                body: CommunityAttachmentDownloadRequest(attachmentID: attachmentID)
+            )
+        )
+        return CommunityAttachmentDownload(
+            url: response.url,
+            displayName: response.displayName,
+            contentType: response.contentType,
+            byteSize: response.byteSize
+        )
+    }
 }
 
 // MARK: - Polls
@@ -1042,6 +1200,109 @@ extension CommunityService {
         return try await filterBlockedComments(comments, viewerID: viewerID, client: client)
     }
 
+    nonisolated func fetchCommentThreads(
+        postID: UUID,
+        cursor: CommunityCommentCursor?,
+        limit: Int = 20
+    ) async throws -> CommunityCommentPage {
+        let client = try LeafySupabase.shared.requireClient()
+        try await requireBackendRPC(
+            "list_community_comment_threads_v1",
+            unavailableMessage: "社区服务需要更新后才能加载两级评论，请稍后重试。"
+        )
+        let response: CommunityCommentThreadPageRecord = try await client
+            .rpc(
+                "list_community_comment_threads_v1",
+                params: CommunityCommentThreadPageRPCParams(
+                    postID: postID,
+                    afterCreatedAt: cursor?.createdAt,
+                    afterID: cursor?.id,
+                    limit: max(1, min(limit, 50))
+                )
+            )
+            .execute()
+            .value
+
+        let profileIDs = Set(
+            response.comments.map(\.authorID)
+                + response.comments.compactMap(\.replyToAuthorID)
+        )
+        let profiles = try await fetchProfiles(ids: Array(profileIDs), client: client)
+        let profileMap = LeafyFirstValueMap.build(profiles.map { ($0.id, $0) })
+        let viewerID = try? await fetchCurrentProfileID(client: client)
+        let blockedIDs = if let viewerID {
+            try await fetchBlockedUserIDs(viewerID: viewerID, client: client)
+        } else {
+            Set<UUID>()
+        }
+
+        let hydrated = response.comments.map { record in
+            CommunityComment(
+                id: record.id,
+                postID: record.postID,
+                authorID: record.authorID,
+                body: record.body,
+                isAnonymous: record.isAnonymous,
+                status: record.status,
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+                threadRootID: record.threadRootID,
+                parentCommentID: record.parentCommentID,
+                replyToCommentID: record.replyToCommentID,
+                replyToAuthorID: record.replyToAuthorID,
+                replyTargetIsVisible: record.replyTargetIsVisible,
+                likeCount: record.likeCount,
+                viewerHasLiked: record.viewerHasLiked,
+                isDeletedPlaceholder: record.isDeletedPlaceholder,
+                author: (record.isDeletedPlaceholder || record.isAnonymous)
+                    ? nil
+                    : profileMap[record.authorID],
+                replyToAuthor: record.replyToAuthorID.flatMap { profileMap[$0] }
+            )
+        }
+
+        let grouped = Dictionary(grouping: hydrated, by: \.threadRootID)
+        let orderedRootIDs = hydrated
+            .filter { !$0.isReply }
+            .map(\.id)
+        let threads = orderedRootIDs.compactMap { rootID -> CommunityCommentThread? in
+            guard let values = grouped[rootID],
+                  var root = values.first(where: { !$0.isReply }) else {
+                return nil
+            }
+            let replies = values
+                .filter(\.isReply)
+                .filter { !blockedIDs.contains($0.authorID) }
+            if blockedIDs.contains(root.authorID) {
+                guard !replies.isEmpty else { return nil }
+                root = CommunityComment(
+                    id: root.id,
+                    postID: root.postID,
+                    authorID: root.authorID,
+                    body: "",
+                    isAnonymous: true,
+                    status: root.status,
+                    createdAt: root.createdAt,
+                    updatedAt: root.updatedAt,
+                    threadRootID: root.threadRootID,
+                    likeCount: 0,
+                    isDeletedPlaceholder: true,
+                    author: nil
+                )
+            }
+            return CommunityCommentThread(root: root, replies: replies)
+        }
+
+        let nextCursor: CommunityCommentCursor? = if response.hasMore,
+                                                    let createdAt = response.nextCursorCreatedAt,
+                                                    let id = response.nextCursorID {
+            CommunityCommentCursor(createdAt: createdAt, id: id)
+        } else {
+            nil
+        }
+        return CommunityCommentPage(threads: threads, nextCursor: nextCursor)
+    }
+
     func fetchMyComments(limit: Int = 80) async throws -> [CommunityComment] {
         let client = try LeafySupabase.shared.requireClient()
         guard client.auth.currentUser != nil else {
@@ -1123,6 +1384,90 @@ extension CommunityService {
             updatedAt: createdRecord.updatedAt,
             author: actorProfile
         )
+    }
+
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?
+    ) async throws -> CommunityComment {
+        let normalizedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedBody.isEmpty, normalizedBody.count <= 2_000 else {
+            throw CommunityServiceError.edgeFunctionRejected("评论需为 1–2,000 个字符。")
+        }
+        let client = try LeafySupabase.shared.requireClient()
+        guard client.auth.currentUser != nil else {
+            throw CommunityServiceError.missingAuthenticatedUser
+        }
+        try await requireBackendRPC(
+            "create_community_comment_v2",
+            unavailableMessage: "社区服务需要更新后才能发布回复，请稍后重试。"
+        )
+        let actorProfile = try await requireCompletedCurrentProfile()
+        try await requireAcceptedCurrentTerms()
+
+        let createdRecord: CommunityCommentRecord
+        do {
+            createdRecord = try await client
+                .rpc(
+                    "create_community_comment_v2",
+                    params: CommunityCreateCommentV2RPCParams(
+                        id: UUID(),
+                        postID: postID,
+                        body: normalizedBody,
+                        parentCommentID: parentCommentID,
+                        replyToCommentID: replyToCommentID,
+                        isAnonymous: false
+                    )
+                )
+                .execute()
+                .value
+        } catch {
+            throw mapCommunityMutationError(error, fallback: "评论发布失败")
+        }
+
+        return CommunityComment(
+            id: createdRecord.id,
+            postID: createdRecord.postID,
+            authorID: createdRecord.authorID,
+            body: createdRecord.body,
+            isAnonymous: createdRecord.isAnonymous,
+            status: createdRecord.status,
+            createdAt: createdRecord.createdAt,
+            updatedAt: createdRecord.updatedAt,
+            threadRootID: createdRecord.parentCommentID ?? createdRecord.id,
+            parentCommentID: createdRecord.parentCommentID,
+            replyToCommentID: createdRecord.replyToCommentID,
+            author: actorProfile
+        )
+    }
+
+    func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState {
+        let client = try LeafySupabase.shared.requireClient()
+        guard client.auth.currentUser != nil else {
+            throw CommunityServiceError.missingAuthenticatedUser
+        }
+        try await requireBackendRPC(
+            "toggle_community_comment_like_v1",
+            unavailableMessage: "社区服务需要更新后才能点赞评论，请稍后重试。"
+        )
+        let records: [CommunityCommentLikeStateRecord]
+        do {
+            records = try await client
+                .rpc(
+                    "toggle_community_comment_like_v1",
+                    params: CommunityCommentIDRPCParams(
+                        commentID: commentID,
+                        requestID: UUID()
+                    )
+                )
+                .execute()
+                .value
+        } catch {
+            throw mapCommunityMutationError(error, fallback: "评论点赞失败")
+        }
+        return try CommunityCommentLikeResponseValidator.state(from: records)
     }
 
     func togglePostLike(postID: UUID) async throws -> CommunityPost {
@@ -1624,6 +1969,8 @@ extension CommunityService {
             try await dismissCommunityNotification(notificationID: notification.id)
         case .announcement(let announcement):
             try await dismissSiteAnnouncement(announcementID: announcement.id)
+        case .publication:
+            return
         }
     }
 
@@ -2455,11 +2802,13 @@ extension CommunityService {
         let postIDs = records.map(\.id)
         let profiles = try await fetchProfiles(ids: authorIDs, client: client)
         let images = try await fetchPostImages(postIDs: postIDs, client: client)
+        let attachments = try await fetchPostAttachments(postIDs: postIDs, client: client)
         let likes = try await fetchPostLikes(postIDs: postIDs, client: client)
         let favorites = try await fetchPostFavorites(postIDs: postIDs, viewerID: viewerID, client: client)
 
         let profileMap = LeafyFirstValueMap.build(profiles.map { ($0.id, $0) })
         let imageMap = Dictionary(grouping: images, by: \.postID)
+        let attachmentMap = Dictionary(grouping: attachments, by: \.postID)
         let likeMap = Dictionary(grouping: likes, by: \.postID)
         let favoritedPostIDs = Set(favorites.map(\.postID))
         let pinMap = preferredPinMap(from: pins)
@@ -2482,7 +2831,8 @@ extension CommunityService {
                 viewerHasFavorited: favoritedPostIDs.contains(record.id),
                 pin: pinMap[record.id],
                 author: profileMap[record.authorID],
-                images: imageMap[record.id] ?? []
+                images: imageMap[record.id] ?? [],
+                attachments: attachmentMap[record.id] ?? []
             )
         }
     }
@@ -2788,7 +3138,8 @@ extension CommunityService {
             viewerHasFavorited: post.viewerHasFavorited,
             pin: post.pin,
             author: post.author.map { profileWithPublicAvatarURL($0, config: config) },
-            images: post.images.map { imageWithPublicStorageURLs($0, config: config) }
+            images: post.images.map { imageWithPublicStorageURLs($0, config: config) },
+            attachments: post.attachments
         )
     }
 
@@ -3008,6 +3359,43 @@ extension CommunityService {
             .in("post_id", values: postIDs.map(\.uuidString))
             .execute()
             .value
+    }
+
+    private nonisolated func fetchPostAttachments(
+        postIDs: [UUID],
+        client: SupabaseClient
+    ) async throws -> [CommunityPostAttachment] {
+        guard !postIDs.isEmpty else { return [] }
+        if await backendFeatureSupport(.communityPostAttachments) == false {
+            let refreshed = try? await SupabaseBackendClient.shared.capabilities(forceRefresh: true)
+            if refreshed?.supports(.communityPostAttachments) != true {
+                CommunityDiagnostics.log.error(
+                    "Backend feature unavailable after refresh: community_post_attachments version=\(refreshed?.version ?? -1, privacy: .public)"
+                )
+                throw CommunityServiceError.edgeFunctionRejected("社区服务需要更新后才能加载帖子，请稍后重试。")
+            }
+        }
+        let records: [CommunityPostAttachmentRecord] = try await client
+            .from("post_attachments")
+            .select()
+            .in("post_id", values: postIDs.map(\.uuidString))
+            .order("sort_order", ascending: true)
+            .execute()
+            .value
+        return records.map {
+            CommunityPostAttachment(
+                id: $0.id,
+                postID: $0.postID,
+                path: $0.path,
+                displayName: $0.displayName,
+                contentType: $0.contentType,
+                fileExtension: $0.fileExtension,
+                byteSize: $0.byteSize,
+                sha256: $0.sha256,
+                sortOrder: $0.sortOrder,
+                createdAt: $0.createdAt
+            )
+        }
     }
 
     private nonisolated func fetchPostFavorites(
@@ -3247,6 +3635,45 @@ extension CommunityService {
         } catch {
             CommunityDiagnostics.log.info("Backend RPC capability unavailable for \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    private nonisolated func requireBackendRPC(
+        _ name: String,
+        unavailableMessage: String
+    ) async throws {
+        if await backendRPCSupport(name) == false {
+            let refreshed = try? await SupabaseBackendClient.shared.capabilities(forceRefresh: true)
+            if refreshed?.supportsRPC(name) != true {
+                CommunityDiagnostics.log.error(
+                    "Backend RPC unavailable after refresh: \(name, privacy: .public) version=\(refreshed?.version ?? -1, privacy: .public)"
+                )
+                throw CommunityServiceError.edgeFunctionRejected(unavailableMessage)
+            }
+        }
+    }
+
+    private nonisolated func requireBackendEdgeFunction(
+        _ name: String,
+        unavailableMessage: String
+    ) async throws {
+        do {
+            var capabilities = try await SupabaseBackendClient.shared.capabilities()
+            if !capabilities.edgeFunctions.contains(name) {
+                capabilities = try await SupabaseBackendClient.shared.capabilities(forceRefresh: true)
+                if !capabilities.edgeFunctions.contains(name) {
+                    CommunityDiagnostics.log.error(
+                        "Backend Edge Function unavailable after refresh: \(name, privacy: .public) version=\(capabilities.version, privacy: .public)"
+                    )
+                    throw CommunityServiceError.edgeFunctionRejected(unavailableMessage)
+                }
+            }
+        } catch let error as CommunityServiceError {
+            throw error
+        } catch {
+            CommunityDiagnostics.log.info(
+                "Backend Edge Function capability unavailable for \(name, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
@@ -3750,6 +4177,18 @@ private nonisolated struct CommunityPostRecord: Decodable, Sendable {
     }
 }
 
+private nonisolated struct CommunityPendingPostContextRecord: Decodable, Sendable {
+    let id: UUID
+    let authorID: UUID
+    let status: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case authorID = "author_id"
+        case status
+    }
+}
+
 private nonisolated struct CommunityPostRateLimitRecord: Decodable, Sendable {
     let id: UUID
 }
@@ -4110,6 +4549,26 @@ private nonisolated struct CommunityCreatePostRPCParams: Encodable, Sendable {
     }
 }
 
+private nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
+    let id: UUID
+    let title: String
+    let body: String
+    let category: String?
+    let isAnonymous: Bool
+    let imageCount: Int
+    let attachmentCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id = "p_id"
+        case title = "p_title"
+        case body = "p_body"
+        case category = "p_category"
+        case isAnonymous = "p_is_anonymous"
+        case imageCount = "p_image_count"
+        case attachmentCount = "p_attachment_count"
+    }
+}
+
 private nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
     let id: UUID
     let postID: UUID
@@ -4140,6 +4599,32 @@ private nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
     }
 }
 
+private nonisolated struct CommunityPostAttachmentRecord: Decodable, Sendable {
+    let id: UUID
+    let postID: UUID
+    let path: String
+    let displayName: String
+    let contentType: String
+    let fileExtension: String
+    let byteSize: Int
+    let sha256: String
+    let sortOrder: Int
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case postID = "post_id"
+        case path
+        case displayName = "display_name"
+        case contentType = "content_type"
+        case fileExtension = "file_extension"
+        case byteSize = "byte_size"
+        case sha256
+        case sortOrder = "sort_order"
+        case createdAt = "created_at"
+    }
+}
+
 private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable {
     let postID: UUID
     let fullPath: String
@@ -4149,6 +4634,60 @@ private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable
         case postID = "post_id"
         case fullPath = "full_path"
         case thumbnailPath = "thumbnail_path"
+    }
+}
+
+private nonisolated struct CommunityAttachmentValidationRequest: Encodable, Sendable {
+    let postID: UUID
+    let objectPath: String
+    let displayName: String
+
+    enum CodingKeys: String, CodingKey {
+        case postID = "post_id"
+        case objectPath = "object_path"
+        case displayName = "display_name"
+    }
+}
+
+private nonisolated struct CommunityAttachmentValidationResponse: Decodable, Sendable {
+    let receiptID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case receiptID = "receipt_id"
+    }
+}
+
+private nonisolated struct CommunityAttachPostAttachmentRPCParams: Encodable, Sendable {
+    let receiptID: UUID
+    let attachmentID: UUID
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case receiptID = "p_receipt_id"
+        case attachmentID = "p_attachment_id"
+        case sortOrder = "p_sort_order"
+    }
+}
+
+private nonisolated struct CommunityAttachmentDownloadRequest: Encodable, Sendable {
+    let attachmentID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case attachmentID = "attachment_id"
+    }
+}
+
+private nonisolated struct CommunityAttachmentDownloadResponse: Decodable, Sendable {
+    let url: URL
+    let displayName: String
+    let contentType: String
+    let byteSize: Int
+
+    enum CodingKeys: String, CodingKey {
+        case url
+        case displayName = "display_name"
+        case contentType = "content_type"
+        case byteSize = "byte_size"
     }
 }
 
@@ -4195,6 +4734,8 @@ private nonisolated struct CommunityCommentRecord: Decodable, Sendable {
     let status: String
     let createdAt: String
     let updatedAt: String
+    let parentCommentID: UUID?
+    let replyToCommentID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -4205,6 +4746,8 @@ private nonisolated struct CommunityCommentRecord: Decodable, Sendable {
         case status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case parentCommentID = "parent_comment_id"
+        case replyToCommentID = "reply_to_comment_id"
     }
 }
 
@@ -4219,5 +4762,126 @@ private nonisolated struct CommunityCreateCommentRPCParams: Encodable, Sendable 
         case postID = "p_post_id"
         case body = "p_body"
         case isAnonymous = "p_is_anonymous"
+    }
+}
+
+private nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
+    let id: UUID
+    let postID: UUID
+    let body: String
+    let parentCommentID: UUID?
+    let replyToCommentID: UUID?
+    let isAnonymous: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id = "p_id"
+        case postID = "p_post_id"
+        case body = "p_body"
+        case parentCommentID = "p_parent_comment_id"
+        case replyToCommentID = "p_reply_to_comment_id"
+        case isAnonymous = "p_is_anonymous"
+    }
+}
+
+private nonisolated struct CommunityCommentThreadPageRPCParams: Encodable, Sendable {
+    let postID: UUID
+    let afterCreatedAt: String?
+    let afterID: UUID?
+    let limit: Int
+
+    enum CodingKeys: String, CodingKey {
+        case postID = "p_post_id"
+        case afterCreatedAt = "p_after_created_at"
+        case afterID = "p_after_id"
+        case limit = "p_limit"
+    }
+}
+
+private nonisolated struct CommunityCommentThreadPageRecord: Decodable, Sendable {
+    let comments: [CommunityThreadCommentRecord]
+    let hasMore: Bool
+    let nextCursorCreatedAt: String?
+    let nextCursorID: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case comments
+        case hasMore = "has_more"
+        case nextCursorCreatedAt = "next_cursor_created_at"
+        case nextCursorID = "next_cursor_id"
+    }
+}
+
+private nonisolated struct CommunityThreadCommentRecord: Decodable, Sendable {
+    let threadRootID: UUID
+    let id: UUID
+    let postID: UUID
+    let authorID: UUID
+    let body: String
+    let isAnonymous: Bool
+    let status: String
+    let createdAt: String
+    let updatedAt: String
+    let parentCommentID: UUID?
+    let replyToCommentID: UUID?
+    let replyToAuthorID: UUID?
+    let replyTargetIsVisible: Bool
+    let likeCount: Int
+    let viewerHasLiked: Bool
+    let isDeletedPlaceholder: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case threadRootID = "thread_root_id"
+        case id
+        case postID = "post_id"
+        case authorID = "author_id"
+        case body
+        case isAnonymous = "is_anonymous"
+        case status
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case parentCommentID = "parent_comment_id"
+        case replyToCommentID = "reply_to_comment_id"
+        case replyToAuthorID = "reply_to_author_id"
+        case replyTargetIsVisible = "reply_target_is_visible"
+        case likeCount = "like_count"
+        case viewerHasLiked = "viewer_has_liked"
+        case isDeletedPlaceholder = "is_deleted_placeholder"
+    }
+}
+
+private nonisolated struct CommunityCommentIDRPCParams: Encodable, Sendable {
+    let commentID: UUID
+    let requestID: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case commentID = "p_comment_id"
+        case requestID = "p_request_id"
+    }
+}
+
+nonisolated struct CommunityCommentLikeStateRecord: Decodable, Sendable {
+    let commentID: UUID
+    let likeCount: Int
+    let viewerHasLiked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case commentID = "comment_id"
+        case likeCount = "like_count"
+        case viewerHasLiked = "viewer_has_liked"
+    }
+}
+
+nonisolated enum CommunityCommentLikeResponseValidator {
+    static func state(
+        from records: [CommunityCommentLikeStateRecord]
+    ) throws -> CommunityCommentLikeState {
+        guard records.count == 1, let record = records.first else {
+            throw CommunityServiceError.edgeFunctionRejected("评论点赞返回数据异常，请稍后重试。")
+        }
+        return CommunityCommentLikeState(
+            commentID: record.commentID,
+            likeCount: record.likeCount,
+            viewerHasLiked: record.viewerHasLiked
+        )
     }
 }

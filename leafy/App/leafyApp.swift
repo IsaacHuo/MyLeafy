@@ -13,6 +13,9 @@ import UIKit
 
 @main
 struct LeafyApp: App {
+    @UIApplicationDelegateAdaptor(LeafyBackgroundSessionAppDelegate.self)
+    private var backgroundSessionAppDelegate
+
     private let logger = Logger(subsystem: "com.isaachuo.leafy", category: "SemesterRollover")
     @StateObject private var networkManager = ActiveCampusContext.networkManager
     @StateObject private var appNavigation = AppNavigationCoordinator()
@@ -134,6 +137,7 @@ struct LeafyApp: App {
                 AppThemeColorPreference.migrateStoredThemeIfNeeded()
                 syncThemeAppearance()
                 LeafyNotificationCoordinator.shared.configure(appNavigation: appNavigation)
+                CommunityPublishCoordinator.shared.configureAndResume()
                 if ReviewDemoMode.isEnabled {
                     ReviewDemoDataSeeder.seedIfNeeded(using: sharedModelContainer.mainContext)
                 }
@@ -160,6 +164,7 @@ struct LeafyApp: App {
                     refreshWidgetSnapshot()
                 }
                 if newPhase == .active {
+                    CommunityPublishCoordinator.shared.configureAndResume()
                     refreshSemesterRuntimeConfig(prefetchTrigger: .foreground)
                     refreshScheduleReportNotifications()
                     externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
@@ -174,6 +179,7 @@ struct LeafyApp: App {
             }
         .onReceive(NotificationCenter.default.publisher(for: .campusIdentityDidChange)) { notification in
             guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
+            CommunityPublishCoordinator.shared.handleIdentityChange()
             reloadModelContainerForCampusIdentity(
                 prefetchTrigger: notification.object == nil ? .foreground : .login
             )

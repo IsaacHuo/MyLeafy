@@ -459,6 +459,62 @@ nonisolated struct CommunityPostImage: Codable, Identifiable, Hashable, Sendable
     }
 }
 
+nonisolated struct CommunityPostAttachment: Codable, Identifiable, Hashable, Sendable {
+    static let postAttachmentLimit = 2
+    static let maxBytes = 10 * 1024 * 1024
+    static let supportedExtensions = Set(["pdf", "xlsx", "docx", "md"])
+
+    let id: UUID
+    let postID: UUID
+    let path: String
+    let displayName: String
+    let contentType: String
+    let fileExtension: String
+    let byteSize: Int
+    let sha256: String
+    let sortOrder: Int
+    let createdAt: String
+
+    var systemImage: String {
+        switch fileExtension.lowercased() {
+        case "pdf": return "doc.richtext"
+        case "xlsx": return "tablecells"
+        case "docx": return "doc.text"
+        default: return "text.document"
+        }
+    }
+
+    var formattedByteSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(byteSize), countStyle: .file)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case postID = "post_id"
+        case path
+        case displayName = "display_name"
+        case contentType = "content_type"
+        case fileExtension = "file_extension"
+        case byteSize = "byte_size"
+        case sha256
+        case sortOrder = "sort_order"
+        case createdAt = "created_at"
+    }
+}
+
+nonisolated struct CommunityAttachmentDownload: Hashable, Sendable {
+    let url: URL
+    let displayName: String
+    let contentType: String
+    let byteSize: Int
+}
+
+nonisolated struct CommunityPendingPostContext: Hashable, Sendable {
+    let postID: UUID
+    let authorID: UUID
+    let status: String
+}
+
 nonisolated enum CommunityFeedMode: Codable, Hashable, Sendable {
     case latest
     case hot(days: Int)
@@ -634,6 +690,7 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
     let pin: CommunityPostPin?
     let author: CommunityProfile?
     let images: [CommunityPostImage]
+    let attachments: [CommunityPostAttachment]
 
     init(
         id: UUID,
@@ -651,7 +708,8 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
         viewerHasFavorited: Bool = false,
         pin: CommunityPostPin? = nil,
         author: CommunityProfile?,
-        images: [CommunityPostImage]
+        images: [CommunityPostImage],
+        attachments: [CommunityPostAttachment] = []
     ) {
         self.id = id
         self.authorID = authorID
@@ -669,6 +727,7 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
         self.pin = pin
         self.author = author
         self.images = images
+        self.attachments = attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -689,6 +748,7 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
         pin = try container.decodeIfPresent(CommunityPostPin.self, forKey: .pin)
         author = try container.decodeIfPresent(CommunityProfile.self, forKey: .author)
         images = try container.decodeIfPresent([CommunityPostImage].self, forKey: .images) ?? []
+        attachments = try container.decodeIfPresent([CommunityPostAttachment].self, forKey: .attachments) ?? []
     }
 
     var displayAuthorName: String {
@@ -743,7 +803,8 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
             viewerHasFavorited: viewerHasFavorited,
             pin: newPin,
             author: author,
-            images: images
+            images: images,
+            attachments: attachments
         )
     }
 
@@ -776,6 +837,7 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
         case pin
         case author
         case images
+        case attachments
     }
 }
 
@@ -985,15 +1047,122 @@ nonisolated struct CommunityComment: Codable, Identifiable, Hashable, Sendable {
     let status: String
     let createdAt: String
     let updatedAt: String
+    let threadRootID: UUID
+    let parentCommentID: UUID?
+    let replyToCommentID: UUID?
+    let replyToAuthorID: UUID?
+    let replyTargetIsVisible: Bool
+    let likeCount: Int
+    let viewerHasLiked: Bool
+    let isDeletedPlaceholder: Bool
     let author: CommunityProfile?
+    let replyToAuthor: CommunityProfile?
+
+    init(
+        id: UUID,
+        postID: UUID,
+        authorID: UUID,
+        body: String,
+        isAnonymous: Bool,
+        status: String,
+        createdAt: String,
+        updatedAt: String,
+        threadRootID: UUID? = nil,
+        parentCommentID: UUID? = nil,
+        replyToCommentID: UUID? = nil,
+        replyToAuthorID: UUID? = nil,
+        replyTargetIsVisible: Bool = true,
+        likeCount: Int = 0,
+        viewerHasLiked: Bool = false,
+        isDeletedPlaceholder: Bool = false,
+        author: CommunityProfile?,
+        replyToAuthor: CommunityProfile? = nil
+    ) {
+        self.id = id
+        self.postID = postID
+        self.authorID = authorID
+        self.body = body
+        self.isAnonymous = isAnonymous
+        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.threadRootID = threadRootID ?? parentCommentID ?? id
+        self.parentCommentID = parentCommentID
+        self.replyToCommentID = replyToCommentID
+        self.replyToAuthorID = replyToAuthorID
+        self.replyTargetIsVisible = replyTargetIsVisible
+        self.likeCount = likeCount
+        self.viewerHasLiked = viewerHasLiked
+        self.isDeletedPlaceholder = isDeletedPlaceholder
+        self.author = author
+        self.replyToAuthor = replyToAuthor
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        postID = try container.decode(UUID.self, forKey: .postID)
+        authorID = try container.decode(UUID.self, forKey: .authorID)
+        body = try container.decode(String.self, forKey: .body)
+        isAnonymous = try container.decode(Bool.self, forKey: .isAnonymous)
+        status = try container.decode(String.self, forKey: .status)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        updatedAt = try container.decode(String.self, forKey: .updatedAt)
+        parentCommentID = try container.decodeIfPresent(UUID.self, forKey: .parentCommentID)
+        threadRootID = try container.decodeIfPresent(UUID.self, forKey: .threadRootID)
+            ?? parentCommentID
+            ?? id
+        replyToCommentID = try container.decodeIfPresent(UUID.self, forKey: .replyToCommentID)
+        replyToAuthorID = try container.decodeIfPresent(UUID.self, forKey: .replyToAuthorID)
+        replyTargetIsVisible = try container.decodeIfPresent(Bool.self, forKey: .replyTargetIsVisible) ?? true
+        likeCount = try container.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
+        viewerHasLiked = try container.decodeIfPresent(Bool.self, forKey: .viewerHasLiked) ?? false
+        isDeletedPlaceholder = try container.decodeIfPresent(Bool.self, forKey: .isDeletedPlaceholder)
+            ?? (status == "deleted")
+        author = try container.decodeIfPresent(CommunityProfile.self, forKey: .author)
+        replyToAuthor = try container.decodeIfPresent(CommunityProfile.self, forKey: .replyToAuthor)
+    }
 
     var displayAuthorName: String {
+        if isDeletedPlaceholder { return L10n.text("已删除评论") }
         if isAnonymous { return L10n.text("匿名同学") }
         return author?.limitedResolvedDisplayName ?? L10n.text(ActiveCampusContext.descriptor.defaultStudentDisplayName)
     }
 
+    var replyTargetDisplayName: String? {
+        guard replyToCommentID != nil else { return nil }
+        guard replyTargetIsVisible else { return L10n.text("已删除评论") }
+        return replyToAuthor?.limitedResolvedDisplayName ?? L10n.text("匿名同学")
+    }
+
+    var isReply: Bool { parentCommentID != nil }
+
     var relativeTimestamp: String {
         CommunityTimestampFormatter.displayText(from: createdAt)
+    }
+
+    func replacingLikeState(_ state: CommunityCommentLikeState) -> CommunityComment {
+        guard state.commentID == id else { return self }
+        return CommunityComment(
+            id: id,
+            postID: postID,
+            authorID: authorID,
+            body: body,
+            isAnonymous: isAnonymous,
+            status: status,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            threadRootID: threadRootID,
+            parentCommentID: parentCommentID,
+            replyToCommentID: replyToCommentID,
+            replyToAuthorID: replyToAuthorID,
+            replyTargetIsVisible: replyTargetIsVisible,
+            likeCount: state.likeCount,
+            viewerHasLiked: state.viewerHasLiked,
+            isDeletedPlaceholder: isDeletedPlaceholder,
+            author: author,
+            replyToAuthor: replyToAuthor
+        )
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1005,8 +1174,40 @@ nonisolated struct CommunityComment: Codable, Identifiable, Hashable, Sendable {
         case status
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case threadRootID = "thread_root_id"
+        case parentCommentID = "parent_comment_id"
+        case replyToCommentID = "reply_to_comment_id"
+        case replyToAuthorID = "reply_to_author_id"
+        case replyTargetIsVisible = "reply_target_is_visible"
+        case likeCount = "like_count"
+        case viewerHasLiked = "viewer_has_liked"
+        case isDeletedPlaceholder = "is_deleted_placeholder"
         case author
+        case replyToAuthor = "reply_to_author"
     }
+}
+
+nonisolated struct CommunityCommentThread: Identifiable, Hashable, Sendable {
+    let root: CommunityComment
+    let replies: [CommunityComment]
+
+    var id: UUID { root.id }
+}
+
+nonisolated struct CommunityCommentCursor: Codable, Hashable, Sendable {
+    let createdAt: String
+    let id: UUID
+}
+
+nonisolated struct CommunityCommentPage: Hashable, Sendable {
+    let threads: [CommunityCommentThread]
+    let nextCursor: CommunityCommentCursor?
+}
+
+nonisolated struct CommunityCommentLikeState: Hashable, Sendable {
+    let commentID: UUID
+    let likeCount: Int
+    let viewerHasLiked: Bool
 }
 
 nonisolated struct CommunityNotification: Codable, Identifiable, Hashable, Sendable {
@@ -1142,9 +1343,33 @@ nonisolated enum SiteAnnouncementLevel: String, Codable, Hashable, Sendable {
     case urgent
 }
 
+nonisolated struct CommunityPublishNotification: Identifiable, Hashable, Sendable {
+    let task: CommunityPublishTask
+    let isRead: Bool
+
+    var id: UUID { task.id }
+    var title: String {
+        task.state == .published ? L10n.text("帖子发布成功") : L10n.text("帖子发布失败")
+    }
+    var body: String? {
+        task.state == .published
+            ? task.input.title
+            : task.errorMessage ?? L10n.text("请打开发布任务查看详情并重试。")
+    }
+    var relativeTimestamp: String {
+        CommunityTimestampFormatter.displayText(
+            from: ISO8601DateFormatter().string(from: task.completedAt ?? task.updatedAt)
+        )
+    }
+    var systemImage: String {
+        task.state == .published ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
+    }
+}
+
 nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
     case community(CommunityNotification)
     case announcement(SiteAnnouncement)
+    case publication(CommunityPublishNotification)
 
     var id: String {
         switch self {
@@ -1152,6 +1377,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return "community-\(notification.id.uuidString)"
         case .announcement(let announcement):
             return "announcement-\(announcement.id.uuidString)"
+        case .publication(let notification):
+            return "publication-\(notification.id.uuidString)"
         }
     }
 
@@ -1161,6 +1388,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return notification.title
         case .announcement(let announcement):
             return announcement.title
+        case .publication(let notification):
+            return notification.title
         }
     }
 
@@ -1170,6 +1399,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return notification.body
         case .announcement(let announcement):
             return announcement.body
+        case .publication(let notification):
+            return notification.body
         }
     }
 
@@ -1179,6 +1410,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return notification.isRead
         case .announcement(let announcement):
             return announcement.isRead
+        case .publication(let notification):
+            return notification.isRead
         }
     }
 
@@ -1188,6 +1421,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return notification.relativeTimestamp
         case .announcement(let announcement):
             return announcement.relativeTimestamp
+        case .publication(let notification):
+            return notification.relativeTimestamp
         }
     }
 
@@ -1197,6 +1432,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return notification.systemImage
         case .announcement(let announcement):
             return announcement.systemImage
+        case .publication(let notification):
+            return notification.systemImage
         }
     }
 
@@ -1206,6 +1443,8 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             return .community(notification.markingRead())
         case .announcement(let announcement):
             return .announcement(announcement.markingRead(at: timestamp))
+        case .publication(let notification):
+            return .publication(CommunityPublishNotification(task: notification.task, isRead: true))
         }
     }
 
@@ -1216,13 +1455,15 @@ nonisolated enum NotificationFeedItem: Identifiable, Hashable, Sendable {
             rawValue = notification.createdAt
         case .announcement(let announcement):
             rawValue = announcement.publishedAt ?? announcement.createdAt
+        case .publication(let notification):
+            return notification.task.completedAt ?? notification.task.updatedAt
         }
 
         return CommunityTimestampFormatter.parse(rawValue) ?? .distantPast
     }
 }
 
-nonisolated struct CreatePostInput: Sendable {
+nonisolated struct CreatePostInput: Codable, Hashable, Sendable {
     let title: String
     let body: String
     let category: String?
@@ -1791,6 +2032,31 @@ nonisolated struct CommunityImageUpload: Identifiable, Hashable, Sendable {
         self.fileExtension = fileExtension
         self.width = width
         self.height = height
+    }
+}
+
+nonisolated struct CommunityAttachmentUpload: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let localURL: URL
+    let displayName: String
+    let contentType: String
+    let fileExtension: String
+    let byteSize: Int
+
+    init(
+        id: UUID = UUID(),
+        localURL: URL,
+        displayName: String,
+        contentType: String,
+        fileExtension: String,
+        byteSize: Int
+    ) {
+        self.id = id
+        self.localURL = localURL
+        self.displayName = displayName
+        self.contentType = contentType
+        self.fileExtension = fileExtension.lowercased()
+        self.byteSize = byteSize
     }
 }
 

@@ -164,6 +164,9 @@ struct CommunityMasonryPostCard: View {
                 Spacer(minLength: 4)
 
                 HStack(spacing: 7) {
+                    if !post.attachments.isEmpty {
+                        CommunityMasonryMetric(icon: "paperclip", value: "\(post.attachments.count)")
+                    }
                     CommunityMasonryMetric(icon: "bubble.left", value: "\(post.commentCount)")
                     CommunityMasonryMetric(icon: "heart", value: "\(post.likeCount)")
 
