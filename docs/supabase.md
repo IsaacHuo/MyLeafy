@@ -112,7 +112,7 @@ MyLeafy 同时维护两个独立身份：
 - posts、comments、reactions、polls 和 favorites。
 - 内容分类、置顶、软删除与 Feed RPC。
 - notifications、announcements、feedback 和静音偏好。
-- 私有社区图片及其对象路径。
+- 私有社区图片、帖子附件及其对象路径。附件限 PDF、XLSX、DOCX 和 Markdown，每帖最多 2 个、每个最多 10 MB。
 
 核心规则：
 
@@ -194,14 +194,17 @@ MyLeafy 同时维护两个独立身份：
 
 ## 5. Storage
 
-社区图片使用私有 bucket，例如 `community-images`：
+社区图片和附件分别使用私有 bucket `community-images` 与 `community-attachments`：
 
 - 对象路径按用户或 profile 命名空间隔离。
 - 上传前由客户端进行大小、格式和尺寸处理；服务端策略仍限制路径与权限。
-- 图片帖创建时记录准确的预期图片数。每张图片使用短期、单次验证凭证挂载，最后一张验证图片在同一数据库事务中发布帖子。
-- `create_community_post_v2` 与 `publish_community_post_v1` 仅作为已安装客户端兼容入口；新客户端使用 `create_community_post_v3`，不得在图片全部挂载后再开启第二个发布窗口。
+- 帖子创建时记录准确的预期图片和附件数量。每个对象使用短期、单次验证凭证挂载；只有两类媒体都完整且数量匹配时，帖子才在同一数据库事务中发布。
+- `create_community_post_v1/v3` 与旧评论接口保留为已安装客户端兼容入口；新客户端使用 `create_community_post_v4`、`create_community_comment_v2`。
+- 附件验证扩展名、MIME、文件签名、Markdown UTF-8，以及 DOCX/XLSX 的 OOXML 容器结构；这不是病毒或恶意软件扫描。
+- 附件下载先校验登录、同校范围和帖子可见性，只签发 10 分钟 URL。公开分享页只显示“含附件”，不暴露文件名和地址。
 - 读取通过 signed URL 或受控函数。
-- 删除内容时考虑对象清理、软删除和审计之间的关系。
+- 帖子删除后媒体默认保留 30 天；存在未解决举报或后台隐藏状态时暂停清理。未完成上传草稿在 24 小时后清理。
+- 每日 `leafy-community-media-cleanup` Cron 通过 Vault 中的 `community_cleanup_project_url` 和专用 `community_media_cleanup_secret` 调用清理函数；该专用值同时配置为 Edge Function 的 `COMMUNITY_MEDIA_CLEANUP_SECRET`，不向 Cron 暴露 `service_role`。缺少任一 secret 时任务会明确失败并记录在 Cron 运行历史中。
 - 不使用可预测的公开 URL 暴露私有图片。
 
 头像、帖子图片和其他资源应使用独立路径约定，避免一个功能能覆盖另一个功能的对象。

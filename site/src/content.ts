@@ -415,7 +415,7 @@ export const privacySummaryCards: Array<{
   {
     icon: Cloud,
     title: "Community data is stored in MyLeafy Community",
-    body: "Nickname, avatar, posts, comments, likes, notifications, feedback, ratings, and shared timetable data are stored in MyLeafy Community."
+    body: "Nickname, avatar, posts, private post images and attachments, comments, likes, notifications, feedback, ratings, and shared timetable data are stored in MyLeafy Community."
   },
   {
     icon: ShieldCheck,
@@ -438,10 +438,10 @@ export const privacySections: Array<{
       "Login credentials: the school password is submitted to the Zhengfang academic system for login. This website does not collect the school password.",
       "Local cache: recently synced classes, grades, class notes, reminders, favorite classrooms, links, countdowns, theme preferences, sync time, and failure messages are stored on the current device. iPhone, iPad, and Mac keep separate local copies.",
       "Community profile: anonymous community session, bound school student ID, display name, nickname, avatar, major, grade, email verification state, and profile update time are used for community identity.",
-      "Community content: posts, images, comments, likes, notice read state, teacher star ratings, and rating summaries are stored in MyLeafy Community.",
+      "Community content: posts, private images, PDF/XLSX/DOCX/Markdown attachments, comments, likes, notice read state, teacher star ratings, and rating summaries are stored in MyLeafy Community.",
       "Shared timetable: sharing is created manually in the app. Published timetable data includes course name, teacher, location, week range, class period, semester, and publish time.",
       "Feedback: submitted feedback, optional contact information, device type, system version, app version, login state, and latest timetable sync time are used for support.",
-      "Photos and files: MyLeafy reads selected photos only when you choose a community avatar, post image, or timetable background. On Mac, files are accessed through system open or save panels.",
+      "Photos and files: MyLeafy reads only items you select. Post images and attachments are copied into protected app storage for background publication before upload.",
       "Location and calendar: location is used only for weather and commute suggestions. Calendar permission is used only when you export timetable or reminders.",
       "Leafy AI: when you use free or subscription requests, your question and the local context you approve are sent through the Leafy AI service to DeepSeek. We process an Apple app transaction identifier, verified subscription transaction details, quota usage, reset times, and minimal request diagnostics to provide and protect the service. Your full question is not stored in quota records."
     ]
@@ -452,7 +452,7 @@ export const privacySections: Array<{
     items: [
       "Request and display timetable, grades, exams, academic plans, and classroom information from the school system.",
       "Cache the latest successful sync on device for offline viewing.",
-      "Provide community profile, posting, image upload, comments, likes, notifications, notices, feedback, and ratings.",
+      "Provide community profile, posting, private image and attachment upload, threaded comments, likes, notifications, notices, feedback, and ratings.",
       "Let you share a read-only timetable with a seven-day, single-use invite code after you choose to publish it.",
       "Handle support requests for sync failures, login issues, parsing failures, and community service issues.",
       "Maintain community safety through deletion, posting limits, image limits, and admin audit logs."
@@ -464,7 +464,7 @@ export const privacySections: Array<{
     icon: Cloud,
     items: [
       "Beijing Forestry University Zhengfang academic system is used for school login and academic data lookup.",
-      "Supabase is used for MyLeafy Community, including anonymous auth, database, private image storage, Edge Functions, notifications, feedback, ratings, shared timetables, and admin tools.",
+      "Supabase is used for MyLeafy Community, including anonymous auth, database, private image and attachment storage, Edge Functions, notifications, feedback, ratings, shared timetables, and admin tools.",
       "Cloudflare is used for myleafy.space DNS, static hosting, and support@myleafy.space email routing.",
       "Apple system capabilities are used for app distribution, photo and file selection, location, calendar, system sharing, notifications, and local storage.",
       "DeepSeek processes Leafy AI questions and approved context to generate responses. In self-provided API key mode, requests go directly from your device; the API key remains in the device Keychain."
@@ -478,7 +478,8 @@ export const privacySections: Array<{
       "Local device data stays on the current device. iPhone, iPad, and Mac caches are separate. You can clear timetable, grades, notes, reminders, bookmarks, and related cache in the app.",
       "Signing out clears the school session and community session. Local timetable and grade cache may remain for offline viewing until you clear it.",
       "Shared timetable access can be revoked by the sharer or removed by the viewer. Unused invite codes expire automatically.",
-      "Community posts and comments may be soft-deleted or status-updated to keep notifications, audit logs, and safety records consistent.",
+      "Community posts and comments may be soft-deleted or status-updated to keep notifications, audit logs, and safety records consistent. Deleted post images and attachments are normally retained for 30 days; unresolved reports or an administrative hidden state pause media cleanup.",
+      "Incomplete community upload drafts are removed after 24 hours. Attachment type and container validation is not malware or virus scanning.",
       "You can request access, correction, or deletion of community profile, feedback, or content data through in-app feedback or support@myleafy.space."
     ]
   },
@@ -500,7 +501,7 @@ export const privacySections: Array<{
     items: [
       "MyLeafy uses limited data for the stated features, but school page changes, campus network restrictions, and third-party service outages may affect availability.",
       "Do not send school passwords, captchas, or full identity documents in support requests.",
-      "Community images are stored privately and read through signed links, but avoid uploading other people's private information."
+      "Community images and attachments are stored privately and read through short-lived signed links. Attachment validation does not provide virus scanning, so open files only when you trust their source and avoid uploading other people's private information."
     ]
   },
   {
