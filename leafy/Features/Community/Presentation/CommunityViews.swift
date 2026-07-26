@@ -3051,7 +3051,7 @@ struct RealCommunityPostDetailSheet: View {
             }
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.circle)
-            .controlSize(.regular)
+            .controlSize(.large)
             .tint(AppTheme.accent)
             .disabled(isSubmitDisabled)
             .accessibilityLabel(isCommentSubmitInFlight ? "正在发送评论" : "发送评论")
