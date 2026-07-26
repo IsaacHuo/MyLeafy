@@ -19,6 +19,25 @@ final class ShareRoutingAndTextTests: XCTestCase {
         XCTAssertEqual(CommunityPostDeepLink(url: universalLink)?.postID, postID)
     }
 
+    func testTimetableInviteShareTextUsesVisibleAddAction() throws {
+        let invite = TimetableInvite(
+            id: UUID(),
+            ownerID: UUID(),
+            semesterID: "2026-2027-1",
+            code: "ABCDEFGHJK23",
+            expiresAt: "2026-08-02T12:00:00Z",
+            acceptedBy: nil,
+            acceptedAt: nil,
+            createdAt: "2026-07-26T12:00:00Z"
+        )
+
+        let text = invite.shareText(ownerName: "同学")
+
+        XCTAssertTrue(text.contains("添加同学的课表"))
+        XCTAssertTrue(text.contains("https://myleafy.space/share/timetable/ABCDEFGHJK23"))
+        XCTAssertFalse(text.contains("-> +"))
+    }
+
     func testLinkedTextBuilderMarksDetectedURL() throws {
         let text = "这个网站可以点：https://example.com/path?q=1"
         let attributedText = LeafyLinkedTextBuilder.attributedString(from: text)

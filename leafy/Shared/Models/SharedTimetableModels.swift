@@ -242,7 +242,7 @@ nonisolated struct TimetableInvite: Codable, Identifiable, Hashable, Sendable {
         return [
             L10n.text("%@ 邀请你查看 TA 的 %@ 课表。", language: language, ownerName, AppBrand.displayName),
             L10n.text("邀请码：%@", language: language, code),
-            L10n.text("打开 %@ -> 我的 -> 共享课表 -> +，粘贴邀请码接受。", language: language, AppBrand.displayName),
+            L10n.text("打开 %@ -> 我的 -> 共享课表，点击“添加同学的课表”并粘贴邀请码。", language: language, AppBrand.displayName),
             "https://myleafy.space/share/timetable/\(code)"
         ].joined(separator: "\n")
     }

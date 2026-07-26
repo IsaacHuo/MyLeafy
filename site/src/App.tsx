@@ -892,7 +892,7 @@ function ShareTimetablePage({ code }: { code: string }) {
         icon={CalendarBlank}
         label="Shared timetable"
         title="Open a shared week in MyLeafy."
-        body="Copy the invite code, then accept it from Profile, Shared Timetable, and the add button."
+        body="Copy the invite code, then open Profile, Shared Timetable, and Add a classmate's timetable."
         image="/media/campus/spring-blossoms-cat.jpg"
         imageAlt="Spring blossoms and a campus cat at BJFU"
       >
@@ -912,7 +912,7 @@ function ShareTimetablePage({ code }: { code: string }) {
       </PageHero>
 
       <SectionShell title="Accept in the app">
-        <NumberedList items={["Open MyLeafy.", "Go to Profile -> Shared Timetable.", "Tap + in the top-right corner.", "Paste the invite code and accept it."]} />
+        <NumberedList items={["Open MyLeafy.", "Go to Profile -> Shared Timetable.", "Choose Add a classmate's timetable.", "Paste the invite code, then add and view the timetable."]} />
       </SectionShell>
     </>
   );
