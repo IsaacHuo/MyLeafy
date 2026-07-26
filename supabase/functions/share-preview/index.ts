@@ -76,10 +76,19 @@ async function communityPostPreview(idValue: string | null): Promise<SharePrevie
     return fallbackPreview("community-post", "not_found", canonicalURL);
   }
 
+  const { count: attachmentCount, error: attachmentCountError } = await client
+    .from("post_attachments")
+    .select("id", { count: "exact", head: true })
+    .eq("post_id", postID);
+  if (attachmentCountError) {
+    console.error("share-preview: attachment count query failed", attachmentCountError.message);
+  }
+
   const title = normalizeText(data.title) ?? "MyLeafy 社区帖子";
   const body = normalizeText(data.body) ?? "";
   const category = normalizeText(data.category) ?? "社区";
-  const stats = `${category} · ${data.comment_count ?? 0} 条评论 · ${data.like_count ?? 0} 个赞`;
+  const attachmentLabel = (attachmentCount ?? 0) > 0 ? " · 含附件" : "";
+  const stats = `${category} · ${data.comment_count ?? 0} 条评论 · ${data.like_count ?? 0} 个赞${attachmentLabel}`;
   const description = body.length > 0 ? `${truncate(body, 110)} · ${stats}` : stats;
 
   return {

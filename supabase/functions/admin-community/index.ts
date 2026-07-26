@@ -2699,18 +2699,22 @@ async function listAuditLogs(context: AdminContext, params: Record<string, unkno
 async function hydratePosts(context: AdminContext, posts: any[], includeSignedImages = false) {
   const authorMap = await fetchProfileMap(context.adminClient, posts.map((post) => post.author_id));
   const imageMap = await fetchPostImageMap(context.adminClient, posts.map((post) => post.id), includeSignedImages);
+  const attachmentMap = await fetchPostAttachmentMap(context.adminClient, posts.map((post) => post.id), includeSignedImages);
   const likeMap = await countPostLikes(context.adminClient, posts.map((post) => post.id));
   const pinMap = await fetchPostPinMap(context.adminClient, posts.map((post) => post.id));
 
   return posts.map((post) => {
     const images = imageMap.get(post.id) ?? [];
+    const attachments = attachmentMap.get(post.id) ?? [];
     return {
       ...post,
       display_status: post.status === "pending_review" ? "publish_exception" : post.status,
       author: authorMap.get(post.author_id) ?? null,
       images,
       image_count: images.length,
-      upload_state: postUploadState(post, images.length),
+      attachments,
+      attachment_count: attachments.length,
+      upload_state: postUploadState(post, images.length, attachments.length),
       like_count: likeMap.get(post.id) ?? 0,
       pin: pinMap.get(post.id) ?? null,
     };
@@ -3015,16 +3019,63 @@ async function fetchPostImageMap(client: any, postIDs: string[], includeSignedIm
   return grouped;
 }
 
-function postUploadState(post: any, imageCount: number) {
+async function fetchPostAttachmentMap(client: any, postIDs: string[], includeSignedURLs: boolean) {
+  const uniqueIDs = unique(postIDs);
+  if (uniqueIDs.length === 0) {
+    return new Map<string, any[]>();
+  }
+
+  const { data, error } = await client
+    .from("post_attachments")
+    .select("*")
+    .in("post_id", uniqueIDs)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw databaseError(error);
+  }
+
+  const attachments = data ?? [];
+  const signedMap = new Map<string, string>();
+  if (includeSignedURLs) {
+    const paths = unique(attachments.map((attachment: any) => attachment.path).filter(Boolean));
+    if (paths.length > 0) {
+      const { data: signed } = await client.storage
+        .from("community-attachments")
+        .createSignedUrls(paths, 10 * 60);
+      for (const result of signed ?? []) {
+        signedMap.set(result.path, result.signedUrl ?? result.signedURL);
+      }
+    }
+  }
+
+  const grouped = new Map<string, any[]>();
+  for (const attachment of attachments) {
+    const list = grouped.get(attachment.post_id) ?? [];
+    list.push({
+      ...attachment,
+      preview_signed_url: signedMap.get(attachment.path) ?? null,
+    });
+    grouped.set(attachment.post_id, list);
+  }
+  return grouped;
+}
+
+function postUploadState(post: any, imageCount: number, attachmentCount = 0) {
   if (post.status !== "pending_review") {
     return null;
   }
 
-  const expected = typeof post.expected_image_count === "number" ? post.expected_image_count : null;
-  if (expected === null) {
+  const expectedImages = typeof post.expected_image_count === "number" ? post.expected_image_count : null;
+  const expectedAttachments = typeof post.expected_attachment_count === "number" ? post.expected_attachment_count : 0;
+  if (expectedImages === null) {
     return imageCount > 0 ? "legacy_ready" : "legacy_incomplete";
   }
-  if (imageCount === expected && expected > 0) {
+  if (
+    imageCount === expectedImages
+    && attachmentCount === expectedAttachments
+    && (expectedImages > 0 || expectedAttachments > 0)
+  ) {
     return "publish_failed";
   }
 

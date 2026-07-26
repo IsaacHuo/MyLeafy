@@ -457,6 +457,7 @@ export function RecordDetailContent({ resource, detail }: { resource: string; de
 
 function PostDetail({ post, comments, compact = false }: { post: Record<string, any>; comments: Record<string, any>[]; compact?: boolean }) {
   const images = Array.isArray(post.images) ? post.images : [];
+  const attachments = Array.isArray(post.attachments) ? post.attachments : [];
   return (
     <Stack spacing={2}>
       <DetailHeading title={post.title} status={post.status === "pending_review" ? "publish_exception" : post.status} />
@@ -466,6 +467,7 @@ function PostDetail({ post, comments, compact = false }: { post: Record<string, 
         ["发布时间", formatDateTime(post.created_at)],
         ["发布链路", adminValueLabel("upload_state", post.upload_state)],
         ["图片", images.length],
+        ["附件", attachments.length],
       ]} />
       <Typography sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.body}</Typography>
       {images.length > 0 && (
@@ -491,14 +493,37 @@ function PostDetail({ post, comments, compact = false }: { post: Record<string, 
           </Box>
         </Box>
       )}
+      {attachments.length > 0 && (
+        <Box>
+          <Typography fontWeight={700} mb={1}>附件元数据</Typography>
+          <Stack spacing={1}>
+            {attachments.map((attachment: Record<string, any>, index: number) => (
+              <Box key={attachment.id ?? index} sx={detailCardSx}>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+                  <Box>
+                    <Typography fontWeight={700}>{attachment.display_name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {String(attachment.file_extension ?? "").toUpperCase()} · {formatBytes(attachment.byte_size)} · SHA-256 {attachment.sha256}
+                    </Typography>
+                  </Box>
+                  {attachment.preview_signed_url
+                    ? <Button component="a" href={attachment.preview_signed_url} target="_blank" rel="noreferrer" size="small">10 分钟预览</Button>
+                    : <Typography variant="caption" color="text.secondary">预览地址不可用</Typography>}
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      )}
       {!compact && (
         <Box>
           <Typography fontWeight={700} mb={1}>评论（{comments.length}）</Typography>
           <Stack spacing={1}>
             {comments.length ? comments.map((comment, index) => (
-              <Box key={comment.id ?? index} sx={detailCardSx}>
+              <Box key={comment.id ?? index} sx={{ ...detailCardSx, ml: comment.parent_comment_id ? { xs: 2, sm: 4 } : 0 }}>
                 <Typography variant="caption" color="text.secondary">{comment.author?.nickname ?? "未知用户"} · {formatDateTime(comment.created_at)}</Typography>
-                <Typography sx={{ whiteSpace: "pre-wrap" }}>{comment.body}</Typography>
+                {comment.parent_comment_id && <Typography variant="caption" color="primary.main">二级回复 · 点赞 {comment.like_count ?? 0}</Typography>}
+                <Typography sx={{ whiteSpace: "pre-wrap" }}>{comment.status === "deleted" ? "该评论已删除" : comment.body}</Typography>
               </Box>
             )) : <Typography color="text.secondary">暂无评论。</Typography>}
           </Stack>
@@ -522,6 +547,14 @@ function formatDateTime(value: unknown) {
   if (!value) return "—";
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("zh-CN");
+}
+
+function formatBytes(value: unknown) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function AdminPagination() {
