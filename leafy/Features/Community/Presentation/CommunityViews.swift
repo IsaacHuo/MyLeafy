@@ -155,6 +155,69 @@ nonisolated enum CommunityCommentInteractionPolicy {
     }
 }
 
+nonisolated enum CommunityCommentComposerPolicy {
+    static func mentionPrefix(for target: CommunityComment) -> String {
+        "@\(target.displayAuthorName) "
+    }
+
+    static func draft(
+        bySelecting target: CommunityComment,
+        currentBody: String,
+        previousTarget: CommunityComment?
+    ) -> String {
+        var body = currentBody
+        if let previousTarget {
+            let previousPrefix = mentionPrefix(for: previousTarget)
+            if body.hasPrefix(previousPrefix) {
+                body.removeFirst(previousPrefix.count)
+            }
+        }
+        return mentionPrefix(for: target) + body
+    }
+
+    static func retainsReplyTarget(_ target: CommunityComment, in body: String) -> Bool {
+        body.hasPrefix(mentionPrefix(for: target))
+    }
+
+    static func bodyAfterEditingReplyMention(
+        previousBody: String,
+        newBody: String,
+        target: CommunityComment
+    ) -> String {
+        let prefix = mentionPrefix(for: target)
+        guard previousBody.hasPrefix(prefix), !newBody.hasPrefix(prefix) else {
+            return newBody
+        }
+
+        let previousCharacters = Array(previousBody)
+        let newCharacters = Array(newBody)
+        guard previousCharacters.count == newCharacters.count + 1 else {
+            return newBody
+        }
+
+        let firstDifference = zip(previousCharacters, newCharacters)
+            .enumerated()
+            .first { $0.element.0 != $0.element.1 }?
+            .offset ?? newCharacters.count
+        guard firstDifference < prefix.count else {
+            return newBody
+        }
+
+        return String(previousBody.dropFirst(prefix.count))
+    }
+
+    static func submissionBody(from body: String, replyingTo target: CommunityComment?) -> String {
+        var content = body
+        if let target {
+            let prefix = mentionPrefix(for: target)
+            if content.hasPrefix(prefix) {
+                content.removeFirst(prefix.count)
+            }
+        }
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 @MainActor
 final class CommunityPostDetailViewModel: ObservableObject {
     @Published private(set) var post: CommunityPost
@@ -2651,6 +2714,7 @@ struct RealCommunityPostDetailSheet: View {
     @State private var downloadingAttachmentIDs: Set<UUID> = []
     @State private var attachmentDownloadError: String?
     @State private var attachmentPreview: CommunityAttachmentPreview?
+    @FocusState private var isCommentFieldFocused: Bool
 
     private var communityAccessGate: CommunityAccessGate {
         CommunityAccessGate(
@@ -2783,7 +2847,7 @@ struct RealCommunityPostDetailSheet: View {
                                     ),
                                     isLikeLoading: viewModel.activeCommentLikeIDs.contains(thread.root.id),
                                     onReply: {
-                                        replyTarget = thread.root
+                                        beginReply(to: thread.root)
                                     },
                                     onToggleLike: {
                                         Task { await toggleCommentLike(thread.root) }
@@ -2815,7 +2879,7 @@ struct RealCommunityPostDetailSheet: View {
                                                 ),
                                                 isLikeLoading: viewModel.activeCommentLikeIDs.contains(reply.id),
                                                 onReply: {
-                                                    replyTarget = reply
+                                                    beginReply(to: reply)
                                                 },
                                                 onToggleLike: {
                                                     Task { await toggleCommentLike(reply) }
@@ -2860,32 +2924,22 @@ struct RealCommunityPostDetailSheet: View {
                 .padding(.bottom, AppSpacing.page)
             }
             .background(LeafyPageBackground())
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("帖子详情")
             .leafyInlineNavigationTitle()
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完成") {
+                        isCommentFieldFocused = false
+                    }
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
                     if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
                         CommunityInlineError(message: errorMessage)
                             .padding(.horizontal, AppSpacing.page)
-                    }
-
-                    if let replyTarget {
-                        HStack(spacing: 8) {
-                            Text("回复 @\(replyTarget.displayAuthorName)")
-                                .microCaption()
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .lineLimit(1)
-                            Spacer()
-                            Button {
-                                self.replyTarget = nil
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(AppTheme.tertiaryText)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("取消回复")
-                        }
-                        .padding(.horizontal, AppSpacing.page)
                     }
 
                     LeafyGlassGroup(spacing: 12) {
@@ -2955,13 +3009,33 @@ struct RealCommunityPostDetailSheet: View {
     }
 
     private var isSubmitDisabled: Bool {
-        isCommentSubmitInFlight || viewModel.isSubmitting || commentBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isCommentSubmitInFlight
+            || viewModel.isSubmitting
+            || CommunityCommentComposerPolicy.submissionBody(
+                from: commentBody,
+                replyingTo: replyTarget
+            ).isEmpty
     }
 
     @ViewBuilder
     private var commentField: some View {
         let field = TextField("写评论…", text: $commentBody, axis: .vertical)
             .lineLimit(1...3)
+            .focused($isCommentFieldFocused)
+            .onChange(of: commentBody) { previousBody, newBody in
+                guard let replyTarget else { return }
+                if !CommunityCommentComposerPolicy.retainsReplyTarget(replyTarget, in: newBody) {
+                    self.replyTarget = nil
+                    let updatedBody = CommunityCommentComposerPolicy.bodyAfterEditingReplyMention(
+                        previousBody: previousBody,
+                        newBody: newBody,
+                        target: replyTarget
+                    )
+                    if updatedBody != newBody {
+                        commentBody = updatedBody
+                    }
+                }
+            }
             .leafyBody()
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -3017,8 +3091,12 @@ struct RealCommunityPostDetailSheet: View {
     @MainActor
     private func submitComment() async {
         guard !isCommentSubmitInFlight else { return }
-        let pendingBody = commentBody
-        guard !pendingBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let pendingReplyTarget = replyTarget
+        let pendingBody = CommunityCommentComposerPolicy.submissionBody(
+            from: commentBody,
+            replyingTo: pendingReplyTarget
+        )
+        guard !pendingBody.isEmpty else { return }
 
         isCommentSubmitInFlight = true
         defer { isCommentSubmitInFlight = false }
@@ -3039,12 +3117,25 @@ struct RealCommunityPostDetailSheet: View {
             return
         }
 
-        let didSucceed = await viewModel.submitComment(body: pendingBody, replyingTo: replyTarget)
+        let didSucceed = await viewModel.submitComment(body: pendingBody, replyingTo: pendingReplyTarget)
         if didSucceed {
             commentBody = ""
             replyTarget = nil
+            isCommentFieldFocused = false
             operationAlert = .success(L10n.text("评论发布成功！", language: leafyLanguage))
         }
+    }
+
+    @MainActor
+    private func beginReply(to target: CommunityComment) {
+        let updatedBody = CommunityCommentComposerPolicy.draft(
+            bySelecting: target,
+            currentBody: commentBody,
+            previousTarget: replyTarget
+        )
+        replyTarget = target
+        commentBody = updatedBody
+        isCommentFieldFocused = true
     }
 
     @MainActor

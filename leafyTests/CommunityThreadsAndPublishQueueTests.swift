@@ -106,6 +106,86 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         )
     }
 
+    func testCommentComposerPrefillsMentionAndStripsItBeforeSubmission() {
+        let firstTarget = makeComment(authorID: UUID())
+        let secondTarget = makeComment(authorID: UUID())
+        let firstDraft = CommunityCommentComposerPolicy.draft(
+            bySelecting: firstTarget,
+            currentBody: "原有内容",
+            previousTarget: nil
+        )
+
+        XCTAssertEqual(
+            firstDraft,
+            CommunityCommentComposerPolicy.mentionPrefix(for: firstTarget) + "原有内容"
+        )
+        XCTAssertTrue(
+            CommunityCommentComposerPolicy.retainsReplyTarget(firstTarget, in: firstDraft)
+        )
+        XCTAssertEqual(
+            CommunityCommentComposerPolicy.submissionBody(
+                from: firstDraft,
+                replyingTo: firstTarget
+            ),
+            "原有内容"
+        )
+
+        let switchedDraft = CommunityCommentComposerPolicy.draft(
+            bySelecting: secondTarget,
+            currentBody: firstDraft,
+            previousTarget: firstTarget
+        )
+        XCTAssertEqual(
+            switchedDraft,
+            CommunityCommentComposerPolicy.mentionPrefix(for: secondTarget) + "原有内容"
+        )
+    }
+
+    func testCommentComposerClearsReplyWhenMentionIsRemovedAndRejectsPrefixOnlyDraft() {
+        let target = makeComment(authorID: UUID())
+        let prefix = CommunityCommentComposerPolicy.mentionPrefix(for: target)
+
+        XCTAssertFalse(
+            CommunityCommentComposerPolicy.retainsReplyTarget(target, in: "普通评论")
+        )
+        XCTAssertTrue(
+            CommunityCommentComposerPolicy.submissionBody(
+                from: prefix,
+                replyingTo: target
+            ).isEmpty
+        )
+    }
+
+    func testCommentComposerTreatsReplyMentionAsOneBackspaceToken() {
+        let target = makeComment(authorID: UUID())
+        let prefix = CommunityCommentComposerPolicy.mentionPrefix(for: target)
+
+        XCTAssertEqual(
+            CommunityCommentComposerPolicy.bodyAfterEditingReplyMention(
+                previousBody: prefix,
+                newBody: String(prefix.dropLast()),
+                target: target
+            ),
+            ""
+        )
+        XCTAssertEqual(
+            CommunityCommentComposerPolicy.bodyAfterEditingReplyMention(
+                previousBody: prefix + "正文",
+                newBody: String(prefix.dropLast()) + "正文",
+                target: target
+            ),
+            "正文"
+        )
+        XCTAssertEqual(
+            CommunityCommentComposerPolicy.bodyAfterEditingReplyMention(
+                previousBody: prefix + "原内容",
+                newBody: "替换后的内容",
+                target: target
+            ),
+            "替换后的内容"
+        )
+    }
+
     func testPublishCapabilityRequirementsAreMediaSpecific() throws {
         let staleCapabilities = try decodeCapabilities(
             rpcs: ["create_community_post_v4": true],
