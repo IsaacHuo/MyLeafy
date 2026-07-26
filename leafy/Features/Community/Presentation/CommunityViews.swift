@@ -2927,14 +2927,6 @@ struct RealCommunityPostDetailSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("帖子详情")
             .leafyInlineNavigationTitle()
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("完成") {
-                        isCommentFieldFocused = false
-                    }
-                }
-            }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 10) {
                     if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
@@ -2942,8 +2934,8 @@ struct RealCommunityPostDetailSheet: View {
                             .padding(.horizontal, AppSpacing.page)
                     }
 
-                    LeafyGlassGroup(spacing: 12) {
-                        HStack(alignment: .bottom, spacing: 12) {
+                    LeafyGlassGroup(spacing: 8) {
+                        HStack(alignment: .bottom, spacing: 8) {
                             commentField
                             sendButton
                         }
@@ -3055,14 +3047,14 @@ struct RealCommunityPostDetailSheet: View {
             Button {
                 Task { await submitComment() }
             } label: {
-                Text(isCommentSubmitInFlight ? L10n.text("发送中", language: leafyLanguage) : L10n.text("发送", language: leafyLanguage))
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(minWidth: 54, minHeight: 30)
+                sendButtonLabel
             }
             .buttonStyle(.glassProminent)
+            .buttonBorderShape(.circle)
             .controlSize(.regular)
             .tint(AppTheme.accent)
             .disabled(isSubmitDisabled)
+            .accessibilityLabel(isCommentSubmitInFlight ? "正在发送评论" : "发送评论")
         } else {
             standardSendButton
         }
@@ -3075,17 +3067,30 @@ struct RealCommunityPostDetailSheet: View {
         Button {
             Task { await submitComment() }
         } label: {
-            Text(isCommentSubmitInFlight ? L10n.text("发送中", language: leafyLanguage) : L10n.text("发送", language: leafyLanguage))
-                .font(.system(size: 17, weight: .semibold))
+            sendButtonLabel
                 .foregroundStyle(AppTheme.textOnAccent)
-                .frame(width: 64, height: 44)
+                .frame(width: 44, height: 44)
                 .background(
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    Circle()
                         .fill(isSubmitDisabled ? AppTheme.accent.opacity(0.45) : AppTheme.accent)
                 )
         }
         .buttonStyle(.plain)
         .disabled(isSubmitDisabled)
+        .accessibilityLabel(isCommentSubmitInFlight ? "正在发送评论" : "发送评论")
+    }
+
+    @ViewBuilder
+    private var sendButtonLabel: some View {
+        if isCommentSubmitInFlight {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 20, height: 20)
+        } else {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 17, weight: .bold))
+                .frame(width: 20, height: 20)
+        }
     }
 
     @MainActor
