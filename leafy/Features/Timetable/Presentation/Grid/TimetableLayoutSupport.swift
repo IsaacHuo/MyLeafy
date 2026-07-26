@@ -296,6 +296,56 @@ struct TimetableAgendaItemCacheIdentity: Equatable {
     let totalClasses: Int
 }
 
+struct TimetableBackgroundLayer: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
+    let configuration: TimetableBackgroundConfiguration
+    let image: UIImage?
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                backgroundSource(size: proxy.size)
+
+                maskColor
+                    .opacity(configuration.overlayOpacity)
+
+                AppTheme.pageGradient(for: themeColorPreference)
+                    .opacity(colorScheme == .dark ? 0.18 : 0.28)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func backgroundSource(size: CGSize) -> some View {
+        switch configuration.kind {
+        case .photo:
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: configuration.displayMode.contentMode)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+                    .blur(radius: configuration.blurRadius)
+                    .opacity(configuration.imageOpacity)
+            } else {
+                Color.clear
+            }
+        case .solid:
+            (TimetableBackgroundStore.color(hex: configuration.solidColorHex) ?? AppTheme.accentSoft)
+                .opacity(configuration.imageOpacity)
+        }
+    }
+
+    private var maskColor: Color {
+        colorScheme == .dark ? .black : AppTheme.background
+    }
+}
+
 struct TimetableDaySelection: Identifiable {
     let week: Int
     let day: Int

@@ -697,6 +697,7 @@ final class PerformanceRefactorTests: XCTestCase {
             let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
 
             XCTAssertEqual(configuration.kind, .photo)
+            XCTAssertTrue(configuration.isEnabled)
             XCTAssertEqual(configuration.filename, "legacy-background.jpg")
             XCTAssertEqual(configuration.imageOpacity, 0.42)
         }
@@ -709,27 +710,53 @@ final class PerformanceRefactorTests: XCTestCase {
 
             let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
 
-            XCTAssertEqual(configuration.kind, .off)
+            XCTAssertEqual(configuration.kind, .photo)
+            XCTAssertFalse(configuration.isEnabled)
             XCTAssertEqual(configuration.filename, "kept-background.jpg")
             XCTAssertFalse(configuration.usesCustomBackground)
         }
     }
 
-    func testTimetableBackgroundConfigurationFallsBackFromInvalidValues() {
+    func testTimetableBackgroundConfigurationFallsBackFromDraftEffectToPhoto() {
         withTemporaryUserDefaults { defaults in
             defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
-            defaults.set(TimetableBackgroundKind.effect.rawValue, forKey: TimetableBackgroundStore.kindKey)
-            defaults.set("invalid-filter", forKey: TimetableBackgroundStore.photoFilterKey)
-            defaults.set("invalid-effect", forKey: TimetableBackgroundStore.shaderEffectKey)
-            defaults.set("invalid-palette", forKey: TimetableBackgroundStore.shaderPaletteKey)
+            defaults.set("effect", forKey: TimetableBackgroundStore.kindKey)
+            defaults.set("kept-background.jpg", forKey: TimetableBackgroundStore.filenameKey)
             defaults.set("invalid-color", forKey: TimetableBackgroundStore.solidColorHexKey)
 
             let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
 
-            XCTAssertEqual(configuration.photoFilter, .none)
-            XCTAssertEqual(configuration.shaderEffect, .staticMeshGradient)
-            XCTAssertEqual(configuration.shaderPalette, .forest)
+            XCTAssertEqual(configuration.kind, .photo)
+            XCTAssertTrue(configuration.isEnabled)
+            XCTAssertEqual(configuration.filename, "kept-background.jpg")
             XCTAssertEqual(configuration.solidColorHex, TimetableBackgroundStore.defaultSolidColorHex)
+        }
+    }
+
+    func testTimetableBackgroundDraftEffectWithoutPhotoStaysDisabled() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set("effect", forKey: TimetableBackgroundStore.kindKey)
+
+            let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(configuration.kind, .photo)
+            XCTAssertFalse(configuration.isEnabled)
+            XCTAssertFalse(configuration.usesCustomBackground)
+        }
+    }
+
+    func testTimetableBackgroundUnknownKindFallsBackToPhoto() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set("unknown", forKey: TimetableBackgroundStore.kindKey)
+            defaults.set("kept-background.jpg", forKey: TimetableBackgroundStore.filenameKey)
+
+            let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(configuration.kind, .photo)
+            XCTAssertTrue(configuration.isEnabled)
+            XCTAssertEqual(configuration.filename, "kept-background.jpg")
         }
     }
 
@@ -741,21 +768,39 @@ final class PerformanceRefactorTests: XCTestCase {
 
             let configuration = TimetableBackgroundConfiguration.load(defaults: defaults)
 
+            XCTAssertEqual(configuration.kind, .solid)
+            XCTAssertTrue(configuration.isEnabled)
             XCTAssertEqual(configuration.solidColorHex, "#2A7F62")
             XCTAssertEqual(configuration.coursePalette(colorScheme: .light)?.count, 7)
             XCTAssertEqual(configuration.coursePalette(colorScheme: .dark)?.count, 7)
         }
     }
 
-    func testTimetableBackgroundCatalogContainsPlannedFiltersEffectsAndPalettes() {
-        XCTAssertEqual(TimetablePhotoFilter.allCases.count, 7)
-        XCTAssertEqual(TimetableShaderEffect.allCases.count, 3)
-        XCTAssertEqual(TimetableShaderPalette.allCases.count, 3)
+    func testTimetableBackgroundCatalogContainsPhotoAndSolidOnly() {
+        XCTAssertEqual(TimetableBackgroundKind.allCases, [.photo, .solid])
     }
 
-    func testTimetableBackgroundColorSerializationRoundTripsValidColors() {
+    func testTimetableBackgroundKindSwitchKeepsStoredPhotoReference() {
+        withTemporaryUserDefaults { defaults in
+            defaults.set(true, forKey: TimetableBackgroundStore.isEnabledKey)
+            defaults.set("kept-background.jpg", forKey: TimetableBackgroundStore.filenameKey)
+            defaults.set(TimetableBackgroundKind.solid.rawValue, forKey: TimetableBackgroundStore.kindKey)
+
+            let solidConfiguration = TimetableBackgroundConfiguration.load(defaults: defaults)
+            defaults.set(TimetableBackgroundKind.photo.rawValue, forKey: TimetableBackgroundStore.kindKey)
+            let photoConfiguration = TimetableBackgroundConfiguration.load(defaults: defaults)
+
+            XCTAssertEqual(solidConfiguration.filename, "kept-background.jpg")
+            XCTAssertEqual(photoConfiguration.filename, "kept-background.jpg")
+            XCTAssertTrue(photoConfiguration.isEnabled)
+        }
+    }
+
+    func testTimetableBackgroundColorSerializationRoundTripsValidColors() throws {
+        let color = try XCTUnwrap(TimetableBackgroundRGB(hex: "#123456"))
         let serialized = TimetableBackgroundStore.serialize(hexes: ["#123456", "#ABCDEF"])
 
+        XCTAssertEqual(color.hexString, "#123456")
         XCTAssertEqual(serialized, "#123456,#ABCDEF")
         XCTAssertEqual(TimetableBackgroundStore.colors(from: serialized).count, 2)
     }

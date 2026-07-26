@@ -21,9 +21,6 @@ struct TimetableBackgroundSettingsView: View {
     @AppStorage(TimetableBackgroundStore.lightPaletteKey) private var lightPaletteHexes = ""
     @AppStorage(TimetableBackgroundStore.darkPaletteKey) private var darkPaletteHexes = ""
     @AppStorage(TimetableBackgroundStore.solidColorHexKey) private var solidColorHex = TimetableBackgroundStore.defaultSolidColorHex
-    @AppStorage(TimetableBackgroundStore.photoFilterKey) private var photoFilterRaw = TimetablePhotoFilter.none.rawValue
-    @AppStorage(TimetableBackgroundStore.shaderEffectKey) private var shaderEffectRaw = TimetableShaderEffect.staticMeshGradient.rawValue
-    @AppStorage(TimetableBackgroundStore.shaderPaletteKey) private var shaderPaletteRaw = TimetableShaderPalette.forest.rawValue
 
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var previewImage: UIImage?
@@ -31,23 +28,17 @@ struct TimetableBackgroundSettingsView: View {
     @State private var previewLoadFailed = false
     @State private var operationAlert: LeafyOperationAlert?
 
-    private let gridColumns = [GridItem(.adaptive(minimum: 96), spacing: 10)]
-
     private var selectedKind: TimetableBackgroundKind {
-        guard backgroundIsEnabled else { return .off }
-        return TimetableBackgroundKind(rawValue: kindRaw)
-            ?? (backgroundFilename.isEmpty ? .off : .photo)
+        TimetableBackgroundKind.resolved(rawValue: kindRaw)
     }
 
     private var kindBinding: Binding<TimetableBackgroundKind> {
         Binding(
             get: { selectedKind },
             set: { newValue in
-                if newValue == .off {
+                kindRaw = newValue.rawValue
+                if newValue == .photo, !hasBackgroundImage {
                     backgroundIsEnabled = false
-                } else {
-                    kindRaw = newValue.rawValue
-                    backgroundIsEnabled = true
                 }
             }
         )
@@ -57,24 +48,26 @@ struct TimetableBackgroundSettingsView: View {
         TimetableBackgroundDisplayMode(rawValue: displayModeRaw) ?? .fill
     }
 
-    private var photoFilter: TimetablePhotoFilter {
-        TimetablePhotoFilter(rawValue: photoFilterRaw) ?? .none
-    }
-
-    private var shaderEffect: TimetableShaderEffect {
-        TimetableShaderEffect(rawValue: shaderEffectRaw) ?? .staticMeshGradient
-    }
-
-    private var shaderPalette: TimetableShaderPalette {
-        TimetableShaderPalette(rawValue: shaderPaletteRaw) ?? .forest
-    }
-
     private var hasBackgroundImage: Bool {
         !backgroundFilename.isEmpty && previewImage != nil
     }
 
+    private var canEnableBackground: Bool {
+        selectedKind == .solid || hasBackgroundImage
+    }
+
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { backgroundIsEnabled && canEnableBackground },
+            set: { newValue in
+                backgroundIsEnabled = newValue && canEnableBackground
+            }
+        )
+    }
+
     private var previewConfiguration: TimetableBackgroundConfiguration {
         TimetableBackgroundConfiguration(
+            isEnabled: true,
             kind: selectedKind,
             filename: backgroundFilename,
             displayMode: displayMode,
@@ -84,17 +77,30 @@ struct TimetableBackgroundSettingsView: View {
             courseCardOpacity: courseCardOpacity,
             lightPaletteHexes: lightPaletteHexes,
             darkPaletteHexes: darkPaletteHexes,
-            solidColorHex: solidColorHex,
-            photoFilter: photoFilter,
-            shaderEffect: shaderEffect,
-            shaderPalette: shaderPalette
+            solidColorHex: solidColorHex
         )
     }
 
     @MainActor
     private var previewPalette: [Color] {
-        previewConfiguration.coursePalette(colorScheme: colorScheme)
-            ?? TimetableBackgroundPalette.fallbackLightHexes.compactMap(TimetableBackgroundStore.color(hex:))
+        let hexes: [String]
+        switch selectedKind {
+        case .photo:
+            let serialized = colorScheme == .dark ? darkPaletteHexes : lightPaletteHexes
+            let storedColors = TimetableBackgroundStore.colors(from: serialized)
+            if !storedColors.isEmpty {
+                return storedColors
+            }
+            hexes = colorScheme == .dark
+                ? TimetableBackgroundPalette.fallbackDarkHexes
+                : TimetableBackgroundPalette.fallbackLightHexes
+        case .solid:
+            let base = TimetableBackgroundRGB(hex: solidColorHex)
+                ?? TimetableBackgroundStore.defaultSolidColor
+            let palette = TimetableBackgroundPaletteExtractor.palette(baseColor: base)
+            hexes = colorScheme == .dark ? palette.darkHexes : palette.lightHexes
+        }
+        return hexes.compactMap { TimetableBackgroundStore.color(hex: $0) }
     }
 
     private var settingsSignature: String {
@@ -107,56 +113,26 @@ struct TimetableBackgroundSettingsView: View {
             String(blurRadius),
             String(overlayOpacity),
             String(courseCardOpacity),
-            solidColorHex,
-            photoFilterRaw,
-            shaderEffectRaw,
-            shaderPaletteRaw
+            solidColorHex
         ].joined(separator: "|")
     }
 
     var body: some View {
         List {
             previewSection
-            sourceSection
-
-            if previewConfiguration.requiresMetalEffects, !TimetableShaderAvailability.isAvailable {
-                Section {
-                    Label {
-                        Text(L10n.text("当前设备无法使用 Metal 视觉效果。课表会显示默认背景，请选择原图、纯色或稍后重试。", language: leafyLanguage))
-                            .leafyBody()
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                    }
-                    .foregroundStyle(AppTheme.danger)
-                }
-                .listRowBackground(AppTheme.cardBackground)
-            }
+            typeSection
 
             switch selectedKind {
-            case .off:
-                Section {
-                    ContentUnavailableView(
-                        L10n.text("课表背景已关闭", language: leafyLanguage),
-                        systemImage: "rectangle.slash"
-                    )
-                }
-                .listRowBackground(AppTheme.cardBackground)
             case .photo:
                 photoSection
                 if hasBackgroundImage {
-                    photoFilterSection
                     photoDisplayModeSection
                 }
             case .solid:
                 solidColorSection
-            case .effect:
-                shaderEffectSection
-                shaderPaletteSection
             }
 
-            if selectedKind != .off {
-                adjustmentSection
-            }
+            adjustmentSection
         }
         .leafyInsetGroupedListStyle()
         .scrollContentBackground(.hidden)
@@ -172,6 +148,9 @@ struct TimetableBackgroundSettingsView: View {
             TimetableBackgroundStore.notifySettingsDidChange()
         }
         .task(id: backgroundFilename) {
+            if TimetableBackgroundKind(rawValue: kindRaw) == nil {
+                kindRaw = TimetableBackgroundKind.photo.rawValue
+            }
             await loadPreview(filename: backgroundFilename)
         }
         .leafyOperationAlert($operationAlert)
@@ -187,18 +166,12 @@ struct TimetableBackgroundSettingsView: View {
             )
             .padding(.vertical, 6)
         } footer: {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(L10n.text("背景设置只保存在本机，只影响课表页；分享图和小组件会继续使用主题色。", language: leafyLanguage))
-                Link(
-                    L10n.text("效果基于 Paper Shaders", language: leafyLanguage),
-                    destination: URL(string: "https://shaders.paper.design")!
-                )
-            }
+            Text(L10n.text("背景设置只保存在本机，只影响课表页；分享图和小组件会继续使用主题色。", language: leafyLanguage))
         }
         .listRowBackground(AppTheme.cardBackground)
     }
 
-    private var sourceSection: some View {
+    private var typeSection: some View {
         Section(L10n.text("背景类型", language: leafyLanguage)) {
             Picker(L10n.text("背景类型", language: leafyLanguage), selection: kindBinding) {
                 ForEach(TimetableBackgroundKind.allCases) { kind in
@@ -222,6 +195,16 @@ struct TimetableBackgroundSettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(isImporting)
+
+            Toggle(isOn: enabledBinding) {
+                settingsRow(
+                    icon: "rectangle.on.rectangle.angled",
+                    title: "启用背景",
+                    detail: hasBackgroundImage ? "在课表页显示这张照片" : "选择照片后可开启"
+                )
+            }
+            .disabled(!hasBackgroundImage)
+            .tint(AppTheme.accent)
 
             if previewLoadFailed {
                 Label {
@@ -250,25 +233,22 @@ struct TimetableBackgroundSettingsView: View {
         .listRowBackground(AppTheme.cardBackground)
     }
 
-    private var photoFilterSection: some View {
-        Section(L10n.text("照片滤镜", language: leafyLanguage)) {
-            LazyVGrid(columns: gridColumns, spacing: 10) {
-                ForEach(TimetablePhotoFilter.allCases) { filter in
-                    Button {
-                        photoFilterRaw = filter.rawValue
-                    } label: {
-                        TimetablePhotoFilterOption(
-                            filter: filter,
-                            image: previewImage,
-                            configuration: previewConfiguration,
-                            isSelected: photoFilter == filter,
-                            language: leafyLanguage
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
+    private var solidColorSection: some View {
+        Section(L10n.text("纯色", language: leafyLanguage)) {
+            ColorPicker(
+                L10n.text("背景颜色", language: leafyLanguage),
+                selection: solidColorBinding,
+                supportsOpacity: false
+            )
+
+            Toggle(isOn: enabledBinding) {
+                settingsRow(
+                    icon: "rectangle.fill",
+                    title: "启用背景",
+                    detail: "在课表页显示这个颜色"
+                )
             }
-            .padding(.vertical, 4)
+            .tint(AppTheme.accent)
         }
         .listRowBackground(AppTheme.cardBackground)
     }
@@ -286,68 +266,6 @@ struct TimetableBackgroundSettingsView: View {
                             .foregroundStyle(AppTheme.primaryText)
                         Spacer()
                         selectionIndicator(isSelected: mode == displayMode)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .listRowBackground(AppTheme.cardBackground)
-    }
-
-    private var solidColorSection: some View {
-        Section(L10n.text("纯色", language: leafyLanguage)) {
-            ColorPicker(
-                L10n.text("背景颜色", language: leafyLanguage),
-                selection: solidColorBinding,
-                supportsOpacity: false
-            )
-        }
-        .listRowBackground(AppTheme.cardBackground)
-    }
-
-    private var shaderEffectSection: some View {
-        Section(L10n.text("视觉效果", language: leafyLanguage)) {
-            LazyVGrid(columns: gridColumns, spacing: 10) {
-                ForEach(TimetableShaderEffect.allCases) { effect in
-                    Button {
-                        shaderEffectRaw = effect.rawValue
-                    } label: {
-                        TimetableShaderEffectOption(
-                            effect: effect,
-                            palette: shaderPalette,
-                            isSelected: shaderEffect == effect,
-                            language: leafyLanguage
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-        .listRowBackground(AppTheme.cardBackground)
-    }
-
-    private var shaderPaletteSection: some View {
-        Section(L10n.text("预设配色", language: leafyLanguage)) {
-            ForEach(TimetableShaderPalette.allCases) { palette in
-                Button {
-                    shaderPaletteRaw = palette.rawValue
-                } label: {
-                    HStack(spacing: 12) {
-                        HStack(spacing: -5) {
-                            ForEach(Array(palette.shaderHexes(colorScheme: colorScheme).prefix(4).enumerated()), id: \.offset) { _, hex in
-                                Circle()
-                                    .fill(TimetableBackgroundStore.color(hex: hex) ?? AppTheme.accentSoft)
-                                    .frame(width: 24, height: 24)
-                                    .overlay(Circle().stroke(AppTheme.cardBackground, lineWidth: 2))
-                            }
-                        }
-                        Text(palette.title(language: leafyLanguage))
-                            .leafyBody()
-                            .foregroundStyle(AppTheme.primaryText)
-                        Spacer()
-                        selectionIndicator(isSelected: shaderPalette == palette)
                     }
                     .contentShape(Rectangle())
                 }
@@ -488,12 +406,18 @@ struct TimetableBackgroundSettingsView: View {
         guard !filename.isEmpty else {
             previewImage = nil
             previewLoadFailed = false
+            if selectedKind == .photo {
+                backgroundIsEnabled = false
+            }
             return
         }
         let image = await TimetableBackgroundStore.image(filename: filename)
         guard !Task.isCancelled, filename == backgroundFilename else { return }
         previewImage = image
         previewLoadFailed = image == nil
+        if selectedKind == .photo, image == nil {
+            backgroundIsEnabled = false
+        }
     }
 
     private func removeBackground() {
@@ -544,14 +468,8 @@ private struct TimetableBackgroundPreview: View {
 
             if configuration.kind == .photo, image == nil {
                 placeholder
-            } else if configuration.kind == .off {
-                disabledPlaceholder
             } else {
-                TimetableBackgroundLayer(
-                    configuration: configuration,
-                    image: image,
-                    allowsAnimation: true
-                )
+                TimetableBackgroundLayer(configuration: configuration, image: image)
                 sampleCards
             }
         }
@@ -573,17 +491,6 @@ private struct TimetableBackgroundPreview: View {
                     .foregroundStyle(AppTheme.accentEmphasis)
             }
             Text(isImporting ? L10n.text("正在读取照片", language: leafyLanguage) : L10n.text("尚未选择照片", language: leafyLanguage))
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
-        }
-    }
-
-    private var disabledPlaceholder: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "rectangle.slash")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(AppTheme.tertiaryText)
-            Text(L10n.text("课表背景已关闭", language: leafyLanguage))
                 .leafyBody()
                 .foregroundStyle(AppTheme.secondaryText)
         }
@@ -618,84 +525,5 @@ private struct TimetableBackgroundPreview: View {
     private func sampleColor(at index: Int) -> Color {
         guard !palette.isEmpty else { return AppTheme.accentSoft }
         return palette[index % palette.count]
-    }
-}
-
-private struct TimetablePhotoFilterOption: View {
-    let filter: TimetablePhotoFilter
-    let image: UIImage?
-    let configuration: TimetableBackgroundConfiguration
-    let isSelected: Bool
-    let language: AppLanguagePreference
-
-    var body: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                AppTheme.fill
-                if let image {
-                    TimetableBackgroundLayer(
-                        configuration: TimetableBackgroundConfiguration(
-                            kind: .photo,
-                            filename: configuration.filename,
-                            displayMode: .fill,
-                            imageOpacity: 0.75,
-                            blurRadius: 0,
-                            overlayOpacity: 0.06,
-                            courseCardOpacity: configuration.courseCardOpacity,
-                            lightPaletteHexes: configuration.lightPaletteHexes,
-                            darkPaletteHexes: configuration.darkPaletteHexes,
-                            solidColorHex: configuration.solidColorHex,
-                            photoFilter: filter,
-                            shaderEffect: configuration.shaderEffect,
-                            shaderPalette: configuration.shaderPalette
-                        ),
-                        image: image,
-                        allowsAnimation: false
-                    )
-                }
-            }
-            .frame(height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
-
-            Text(filter.title(language: language))
-                .microCaption()
-                .foregroundStyle(AppTheme.primaryText)
-                .lineLimit(1)
-        }
-        .padding(6)
-        .background(isSelected ? AppTheme.accentSoft : AppTheme.fill)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                .stroke(isSelected ? AppTheme.accent : AppTheme.separator, lineWidth: isSelected ? 2 : 1)
-        )
-        .contentShape(Rectangle())
-    }
-}
-
-private struct TimetableShaderEffectOption: View {
-    let effect: TimetableShaderEffect
-    let palette: TimetableShaderPalette
-    let isSelected: Bool
-    let language: AppLanguagePreference
-
-    var body: some View {
-        VStack(spacing: 6) {
-            TimetableShaderEffectView(effect: effect, palette: palette, allowsAnimation: false)
-                .frame(height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
-
-            Text(effect.title(language: language))
-                .microCaption()
-                .foregroundStyle(AppTheme.primaryText)
-        }
-        .padding(6)
-        .background(isSelected ? AppTheme.accentSoft : AppTheme.fill)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                .stroke(isSelected ? AppTheme.accent : AppTheme.separator, lineWidth: isSelected ? 2 : 1)
-        )
-        .contentShape(Rectangle())
     }
 }

@@ -125,10 +125,6 @@ struct TimetableView: View {
 
     private var usesCustomTimetableBackground: Bool {
         guard timetableBackgroundConfiguration.usesCustomBackground else { return false }
-        guard !timetableBackgroundConfiguration.requiresMetalEffects
-                || TimetableShaderAvailability.isAvailable else {
-            return false
-        }
         if timetableBackgroundConfiguration.kind == .photo {
             return timetableBackgroundImage != nil
         }
@@ -563,15 +559,7 @@ struct TimetableView: View {
         let previousConfiguration = timetableBackgroundConfiguration
         timetableBackgroundConfiguration = configuration
 
-        if configuration.requiresMetalEffects, !TimetableShaderAvailability.isAvailable {
-            timetableBackgroundImage = nil
-            Self.backgroundLogger.error(
-                "Configured timetable background requires Metal effects, but no Metal device is available"
-            )
-            return
-        }
-
-        guard configuration.kind == .photo else {
+        guard configuration.usesCustomBackground, configuration.kind == .photo else {
             timetableBackgroundImage = nil
             return
         }
