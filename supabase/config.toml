@@ -52,6 +52,15 @@ verify_jwt = false
 [functions.community-feed]
 verify_jwt = false
 
+[functions.community-validate-attachment]
+verify_jwt = false
+
+[functions.community-attachment-download]
+verify_jwt = false
+
+[functions.community-media-cleanup]
+verify_jwt = false
+
 [functions.campus-request]
 verify_jwt = false
 
