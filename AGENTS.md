@@ -16,6 +16,8 @@ Timetable direction:
 - Undergraduate and graduate timetable refreshes must use the same observable cache and error semantics.
 - User-created schedules use one editor and one user-facing concept: dates inside the current 20-week semester project into the timetable, while dates outside it appear as countdowns. School-provided exams remain a separate data source.
 - Schedule-report toggles apply immediately. Exam reminders run daily from 7 through 1 days before; important-date reports run 5, 3, and 1 days before.
+- Timetable backgrounds support off, photo, solid color, and native SwiftUI/Metal effects. Render one root background only; keep selection-grid previews static, cap Water and Mesh Gradient at 15 fps, and freeze animation in the background, Low Power Mode, serious thermal pressure, or Reduce Motion.
+- Personalized timetable backgrounds remain local and never appear in timetable share images or widgets.
 
 Campus heatmap direction:
 - Do not bundle semester-wide classroom occupancy data. The user explicitly logs in and updates the selected date and periods on demand.
