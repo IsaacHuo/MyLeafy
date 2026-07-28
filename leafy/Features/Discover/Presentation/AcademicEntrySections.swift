@@ -40,7 +40,7 @@ struct TeachingCultivationSectionView: View {
         if isCustomCampus {
             return "通用学校以本地维护为主：成绩可按模板导入，荣誉记录可手动维护。"
         }
-        return "成绩、荣誉、教学计划和培养方案统一收口；个人教务数据仅保存在本机。"
+        return "集中显示成绩、荣誉、教学计划和培养方案；个人教务数据仅保存在本机。"
     }
 }
 
@@ -106,7 +106,7 @@ struct ClassroomsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
-            LeafySectionTitle("空闲教室", subtitle: "快速搜索空闲教室，随心安静自习。")
+            LeafySectionTitle("空闲教室", subtitle: "按楼宇、日期和节次查询可用教室")
 
             ToolEntryCard(title: "空闲教室", subtitle: "按楼宇、日期和节次快速筛教室", icon: "building.2.crop.circle") {
                 openRoute(.emptyClassroom)

@@ -24,9 +24,9 @@ enum ProfileCommunityPostListKind {
 
     var emptyTitle: String {
         switch self {
-        case .authored: return L10n.text("还没有发过帖子")
-        case .liked: return L10n.text("还没有点赞过帖子")
-        case .favorited: return L10n.text("还没有收藏帖子")
+        case .authored: return L10n.text("暂无已发布帖子")
+        case .liked: return L10n.text("暂无点赞记录")
+        case .favorited: return L10n.text("暂无收藏记录")
         }
     }
 
@@ -218,11 +218,11 @@ struct ProfileCommunityPostListView: View {
             errorMessage = nil
             switch kind {
             case .authored:
-                operationAlert = .success(L10n.text("帖子已删除！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("帖子已删除。", language: leafyLanguage))
             case .liked:
-                operationAlert = .success(L10n.text("已取消点赞！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("已取消点赞。", language: leafyLanguage))
             case .favorited:
-                operationAlert = .success(L10n.text("已取消收藏！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -263,7 +263,7 @@ struct ProfileCommunityCommentListView: View {
                 }
             } else if comments.isEmpty {
                 Section {
-                    ContentUnavailableView("还没有评论", systemImage: "text.bubble")
+                    ContentUnavailableView("暂无评论", systemImage: "text.bubble")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 28)
                 }
@@ -347,7 +347,7 @@ struct ProfileCommunityCommentListView: View {
             try await dependencies.communityActivityRepository.deleteComment(commentID: comment.id)
             comments.removeAll { $0.id == comment.id }
             errorMessage = nil
-            operationAlert = .success(L10n.text("评论已删除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评论已删除。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -369,8 +369,8 @@ enum ProfileCommunityPollListKind: String, CaseIterable, Identifiable {
 
     var emptyTitle: String {
         switch self {
-        case .authored: return L10n.text("还没有发起投票")
-        case .voted: return L10n.text("还没有参与投票")
+        case .authored: return L10n.text("暂无已发起投票")
+        case .voted: return L10n.text("暂无投票记录")
         }
     }
 }
@@ -559,7 +559,7 @@ struct ProfileCommunityPollListView: View {
             replacePoll(updatedPoll)
             selectedPoll = updatedPoll
             errorMessage = nil
-            operationAlert = .success(L10n.text("已记录你的选择！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("已记录你的选择。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -581,7 +581,7 @@ struct ProfileCommunityPollListView: View {
             replacePoll(updatedPoll)
             selectedPoll = selectedPoll?.id == updatedPoll.id ? updatedPoll : selectedPoll
             errorMessage = nil
-            operationAlert = .success(L10n.text("删除申请已提交！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("删除申请已提交。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }

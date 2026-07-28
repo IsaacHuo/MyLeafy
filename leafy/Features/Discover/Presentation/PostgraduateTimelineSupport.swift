@@ -232,13 +232,13 @@ private extension PostgraduateTimelinePhase {
         case .confirmation:
             return "按报考点要求完成网上确认，留意材料上传、审核结果和补充提交窗口。"
         case .initialExam:
-            return "围绕准考证、考场、考试用品和最后一轮复盘做收口，避免临考前再找流程入口。"
+            return "核对准考证、考场和考试用品，并完成最后一轮复习。"
         case .scoreLine:
             return "关注初试成绩、国家线和目标学校复试线，整理可进入复试或调剂的判断依据。"
         case .retest:
             return "跟进复试通知、调剂系统、材料提交和面试安排，优先查看学校研究生院原文。"
         case .admission:
-            return "关注拟录取、调档、政审和后续通知，把重要来源和个人经验沉淀到本地备注。"
+            return "关注拟录取、调档、政审和后续通知，将重要来源和个人经验记录在本地备注中。"
         }
     }
 

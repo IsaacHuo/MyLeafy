@@ -33,7 +33,7 @@ struct HonorRecordsView: View {
             if records.isEmpty {
                 AcademicDetailCard {
                     ContentUnavailableView {
-                        Label("还没有荣誉记录", systemImage: "rosette")
+                        Label("暂无荣誉记录", systemImage: "rosette")
                     } description: {
                         Text("导入奖状、证书 PDF 或图片后，可补充标题、备注和日期。")
                     }

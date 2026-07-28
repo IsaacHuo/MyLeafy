@@ -511,7 +511,7 @@ struct GradesView: View {
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
                     reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
                 } else {
-                    alertMessage = L10n.text("抓取成绩失败：%@", language: leafyLanguage, error.localizedDescription)
+                    alertMessage = L10n.text("获取成绩失败：%@", language: leafyLanguage, error.localizedDescription)
                     showAlert = true
                 }
             }
@@ -1160,13 +1160,13 @@ struct GradeAnalyticsDetailView: View {
     private func rankingBandText(_ percentile: Double) -> String {
         switch percentile {
         case ..<0.1:
-            return L10n.text("处在前 10%，优势明显", language: leafyLanguage)
+            return L10n.text("官方排名位于前 10%", language: leafyLanguage)
         case ..<0.3:
-            return L10n.text("处在前 30%，整体表现靠前", language: leafyLanguage)
+            return L10n.text("官方排名位于前 30%", language: leafyLanguage)
         case ..<0.5:
-            return L10n.text("处在前半段，继续拉开差距", language: leafyLanguage)
+            return L10n.text("官方排名位于前 50%", language: leafyLanguage)
         default:
-            return L10n.text("仍有提升空间，优先处理高学分和低分课程", language: leafyLanguage)
+            return L10n.text("官方排名位于后 50%", language: leafyLanguage)
         }
     }
 
@@ -1976,27 +1976,27 @@ private struct RankingAnalysisCard: View {
         let averageText = analytics.displayWeightedAverage.map { String(format: "%.2f", $0) } ?? "--"
         let gpaText = analytics.displayGPA.map { String(format: "%.2f", $0) } ?? "未获取"
         let riskText = analytics.riskCourseCount > 0
-            ? L10n.text("还有 %d 门风险课程需要优先处理", language: leafyLanguage, analytics.riskCourseCount)
+            ? L10n.text("有 %d 门未通过课程需要处理", language: leafyLanguage, analytics.riskCourseCount)
             : L10n.text("目前没有未通过课程", language: leafyLanguage)
         let impactCourse = analytics.highImpactCourses.first
 
         if let impactCourse {
-            return L10n.text("结合均分 %@、官方 GPA %@ 和已通过学分，下一步最值得关注的是 %@：它有 %.1f 学分，对排名和整体成绩牵引更明显；%@。", language: leafyLanguage, averageText, gpaText, impactCourse.name, impactCourse.credit, riskText)
+            return L10n.text("当前均分 %@，官方 GPA %@。可优先检查 %@（%.1f 学分）；%@。", language: leafyLanguage, averageText, gpaText, impactCourse.name, impactCourse.credit, riskText)
         }
 
-        return L10n.text("结合均分 %@、官方 GPA %@ 和已通过学分，建议继续稳定高学分课程表现；%@。", language: leafyLanguage, averageText, gpaText, riskText)
+        return L10n.text("当前均分 %@，官方 GPA %@。可继续关注高学分课程；%@。", language: leafyLanguage, averageText, gpaText, riskText)
     }
 
     private func rankingBandText(_ percentile: Double) -> String {
         switch percentile {
         case ..<0.1:
-            return L10n.text("处在前 10%，优势明显", language: leafyLanguage)
+            return L10n.text("官方排名位于前 10%", language: leafyLanguage)
         case ..<0.3:
-            return L10n.text("处在前 30%，整体靠前", language: leafyLanguage)
+            return L10n.text("官方排名位于前 30%", language: leafyLanguage)
         case ..<0.5:
-            return L10n.text("处在前半段，继续拉开差距", language: leafyLanguage)
+            return L10n.text("官方排名位于前 50%", language: leafyLanguage)
         default:
-            return L10n.text("仍有提升空间", language: leafyLanguage)
+            return L10n.text("官方排名位于后 50%", language: leafyLanguage)
         }
     }
 }

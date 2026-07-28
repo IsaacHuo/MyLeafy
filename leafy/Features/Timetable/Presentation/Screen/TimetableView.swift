@@ -166,7 +166,7 @@ struct TimetableView: View {
                         } else {
                             emptyState(
                                 title: "暂无课表",
-                                description: "还没有本地课表缓存。连接校园网后在“我的”页重新拉取。"
+                                description: "暂无本地课表缓存。连接校园网后在“我的”页重新获取。"
                             )
                         }
                     }
@@ -2026,8 +2026,8 @@ struct TimetableView: View {
                     )
                 } else {
                     alertMessage = courses.isEmpty
-                        ? L10n.text("抓取课表失败：%@", language: leafyLanguage, error.localizedDescription)
-                        : L10n.text("抓取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, error.localizedDescription)
+                        ? L10n.text("获取课表失败：%@", language: leafyLanguage, error.localizedDescription)
+                        : L10n.text("获取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, error.localizedDescription)
                     showAlert = true
                 }
             }

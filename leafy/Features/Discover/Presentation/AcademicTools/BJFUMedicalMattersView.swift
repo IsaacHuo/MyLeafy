@@ -1068,7 +1068,7 @@ private enum MedicalLedgerFilter: String, CaseIterable, Identifiable {
         case .active: return "没有待处理台账"
         case .attention: return "没有临近或逾期台账"
         case .closed: return "没有已结束台账"
-        case .all: return "还没有医疗台账"
+        case .all: return "暂无医疗台账"
         }
     }
 

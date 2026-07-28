@@ -1182,7 +1182,7 @@ struct CustomScheduleEditorSheet: View {
 
         try? modelContext.save()
         operationAlert = .success(
-            L10n.text("日程已删除！", language: leafyLanguage),
+            L10n.text("日程已删除。", language: leafyLanguage),
             action: { dismiss() }
         )
     }
@@ -1195,7 +1195,7 @@ struct CustomScheduleEditorSheet: View {
         TimetableNotificationManager.cancelReminder(for: event)
         CustomScheduleStore.save(events)
         operationAlert = .success(
-            L10n.text("日程已删除！", language: leafyLanguage),
+            L10n.text("日程已删除。", language: leafyLanguage),
             action: { dismiss() }
         )
     }
@@ -1210,21 +1210,21 @@ struct CustomScheduleEditorSheet: View {
 
     private func saveSuccessMessage(reminderMinutes: Int, scheduledCount: Int) -> String {
         if reminderMinutes <= 0 {
-            return L10n.text("日程已保存！", language: leafyLanguage)
+            return L10n.text("日程已保存。", language: leafyLanguage)
         }
 
         return scheduledCount > 0
-            ? L10n.text("日程和提醒已保存！", language: leafyLanguage)
+            ? L10n.text("日程和提醒已保存。", language: leafyLanguage)
             : L10n.text("日程已保存，但提醒时间已过，不会发送通知。", language: leafyLanguage)
     }
 
     private func saveImportantDateSuccessMessage(reminderMinutes: Int, scheduledCount: Int) -> String {
         if reminderMinutes <= 0 {
-            return L10n.text("日程已保存！", language: leafyLanguage)
+            return L10n.text("日程已保存。", language: leafyLanguage)
         }
 
         return scheduledCount > 0
-            ? L10n.text("日程和提醒已保存！", language: leafyLanguage)
+            ? L10n.text("日程和提醒已保存。", language: leafyLanguage)
             : L10n.text("日程已保存，但提醒时间已过，不会发送通知。", language: leafyLanguage)
     }
 
@@ -1558,8 +1558,8 @@ struct CourseDetailSheet: View {
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
         operationAlert = .success(
             trimmed.isEmpty
-                ? L10n.text("备注已清空！", language: leafyLanguage)
-                : L10n.text("备注已保存！", language: leafyLanguage)
+                ? L10n.text("备注已清空。", language: leafyLanguage)
+                : L10n.text("备注已保存。", language: leafyLanguage)
         )
     }
 
@@ -1578,7 +1578,7 @@ struct CourseDetailSheet: View {
         noteText = ""
         try? modelContext.save()
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
-        operationAlert = .success(L10n.text("备注已删除！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("备注已删除。", language: leafyLanguage))
     }
 
     private func saveCourseNote(_ trimmed: String) {
@@ -1644,8 +1644,8 @@ struct CourseDetailSheet: View {
             LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
             operationAlert = .success(
                 reminderMinutes == 0
-                    ? L10n.text("已关闭这门课的提醒！", language: leafyLanguage)
-                    : L10n.text("提醒已设置！", language: leafyLanguage)
+                    ? L10n.text("已关闭这门课的提醒。", language: leafyLanguage)
+                    : L10n.text("提醒已设置。", language: leafyLanguage)
             )
         } catch {
             operationAlert = .failure(error.localizedDescription)

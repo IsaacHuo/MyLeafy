@@ -257,9 +257,9 @@ enum LeafyWidgetSnapshotBuilder {
             if let first = courses.first {
                 return "\(first.timeText) · \(first.locationText)"
             }
-            return extraCellReminderText ?? L10n.text("今天安排很轻。", language: language)
+            return extraCellReminderText ?? L10n.text("今日课程较少。", language: language)
         case .noCourses:
-            return extraCellReminderText ?? L10n.text("留一点空白给自己。", language: language)
+            return extraCellReminderText ?? L10n.text("今日暂无课程安排。", language: language)
         case .needsLogin:
             return L10n.text("连接校园网并打开 %@ 重新登录后，小组件会继续显示课表。", language: language, AppBrand.displayName)
         case .stale:

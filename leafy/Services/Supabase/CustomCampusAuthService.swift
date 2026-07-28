@@ -29,7 +29,7 @@ enum CustomCampusAuthError: LocalizedError {
         case .expiredCode:
             return "验证码已失效，请重新发送验证码。"
         case .emailNotConfirmed(let email):
-            return "\(email) 还没有完成邮箱验证。请切换到注册，重新发送验证码并完成验证。"
+            return "\(email) 尚未完成邮箱验证。请切换到注册，重新发送验证码并完成验证。"
         case .invalidCredentials:
             return "邮箱或密码不正确。如果是第一次使用，请先注册并完成邮箱验证码。"
         case .emailRateLimited:

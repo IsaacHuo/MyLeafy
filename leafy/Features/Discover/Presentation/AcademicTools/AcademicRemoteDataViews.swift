@@ -725,7 +725,7 @@ private struct GraduationProgressSummaryView: View {
                     publicElectiveDistribution(summary: creditSummary)
                 }
             } else {
-                Text("还没有培养方案缓存。连接校园网同步培养方案后，会按公选课、专选课和类别拆分毕业要求。")
+                Text("暂无培养方案缓存。连接校园网同步后，将按公选课、专选课和其他类别显示毕业要求。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -1774,16 +1774,16 @@ struct EmptyClassroomView: View {
     private func removeFavorite(_ favorite: FavoriteClassroom) {
         modelContext.delete(favorite)
         try? modelContext.save()
-        operationAlert = .success(L10n.text("已取消收藏！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
     }
 
     private func toggleFavorite(building: String, room: String) {
         if let existing = favoriteClassrooms.first(where: { $0.building == building && $0.room == room }) {
             modelContext.delete(existing)
-            operationAlert = .success(L10n.text("已取消收藏！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
         } else {
             modelContext.insert(FavoriteClassroom(building: building, room: room))
-            operationAlert = .success(L10n.text("已添加收藏！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("已添加收藏。", language: leafyLanguage))
         }
         try? modelContext.save()
     }

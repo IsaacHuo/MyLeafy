@@ -155,7 +155,7 @@ nonisolated struct LeafyWidgetSnapshot: Codable, Hashable, Sendable {
         weekText: "第 - 周",
         dayText: "",
         headline: "今天没有课程",
-        subtitle: "留一点空白给自己。",
+        subtitle: "今日暂无课程安排。",
         syncText: nil,
         lastFailureText: nil,
         nextExamText: nil,

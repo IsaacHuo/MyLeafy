@@ -104,7 +104,7 @@ struct CommunityAccessGate {
         case .pending:
             return "学校申请正在审核中，社区功能暂未开放。"
         case .rejected:
-            return "您申请的学校不通过，您现在是处于通用的模式下，社区功能暂不开放。"
+            return "学校申请未通过。当前处于通用模式，社区功能暂不可用。"
         case .approved:
             return "社区身份正在同步，请稍后重试。"
         case .general:

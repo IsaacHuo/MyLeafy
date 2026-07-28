@@ -461,7 +461,7 @@ struct CommunityProfileEditorView: View {
             }
             errorMessage = nil
             operationAlert = .success(
-                L10n.text("资料已保存！", language: leafyLanguage),
+                L10n.text("资料已保存。", language: leafyLanguage),
                 action: { dismiss() }
             )
         } catch {
@@ -502,7 +502,7 @@ private struct CommunityProfileCampusSection: View {
             return "社区身份尚未建立。"
         }
         if profile.hasApprovedCommunityAccess {
-            return "当前只归属一个学校社区；更换到其它已有学校需要审核。"
+            return "当前仅归属一个学校社区；更换到其他已有学校需要审核。"
         }
         switch profile.communityAccessStatus {
         case .pending:

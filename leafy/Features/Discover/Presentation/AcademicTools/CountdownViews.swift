@@ -82,7 +82,7 @@ struct CustomScheduleListView: View {
             modelContext.delete(reminder)
             do {
                 try modelContext.save()
-                operationAlert = .success(L10n.text("日程已删除！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
             } catch {
                 operationAlert = .failure(error.localizedDescription)
             }
@@ -92,7 +92,7 @@ struct CustomScheduleListView: View {
             TimetableNotificationManager.cancelReminder(for: event)
             CustomScheduleStore.save(events)
             importantDateEvents = events
-            operationAlert = .success(L10n.text("日程已删除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
         }
     }
 

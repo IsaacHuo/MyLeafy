@@ -119,7 +119,7 @@ private struct RatingCommunityAccessStatusCard: View {
                 ? "审核通过后会开放对应学校的评教、评课和评菜。"
                 : "\(school) 的申请审核通过后，会开放对应学校的评教、评课和评菜。"
         case .rejected:
-            return "您申请的学校不通过，您现在是处于通用的模式下，社区功能暂不开放。"
+            return "学校申请未通过。当前处于通用模式，社区功能暂不可用。"
         case .approved:
             return "评教、评课和评菜会按学校社区分别展示。"
         case .general:
@@ -367,7 +367,7 @@ private struct TeacherSectionView: View {
     }
 
     private var emptyTeacherTitle: String {
-        search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "还没有教师名录" : "没有找到老师"
+        search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "暂无教师名录" : "未找到教师"
     }
 
     private var emptyTeacherMessage: String {
@@ -652,7 +652,7 @@ private struct CourseSectionView: View {
 
     private var emptyCourseTitle: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedCategory == nil
-            ? "还没有课程库"
+            ? "暂无课程库"
             : "没有找到课程"
     }
 
@@ -929,7 +929,7 @@ private struct DishSectionView: View {
         search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         selectedCanteen == nil &&
         selectedLocation == nil
-            ? "还没有菜品库"
+            ? "暂无菜品库"
             : "没有找到菜品"
     }
 
@@ -2572,7 +2572,7 @@ struct TeacherDetailSheet: View {
             selectedStars = updatedSummary.myRating?.stars ?? selectedStars
             errorMessage = nil
             onUpdate(updatedSummary)
-            operationAlert = .success(L10n.text("评分已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评分已保存。", language: leafyLanguage))
             return
         }
 
@@ -2595,7 +2595,7 @@ struct TeacherDetailSheet: View {
             selectedStars = updatedSummary.myRating?.stars ?? selectedStars
             errorMessage = nil
             onUpdate(updatedSummary)
-            operationAlert = .success(L10n.text("评分已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评分已保存。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -2719,7 +2719,7 @@ struct CourseRatingDetailSheet: View {
             selectedStars = updatedSummary.myRating?.stars ?? selectedStars
             errorMessage = nil
             onUpdate(updatedSummary)
-            operationAlert = .success(L10n.text("评分已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评分已保存。", language: leafyLanguage))
             return
         }
 
@@ -2742,7 +2742,7 @@ struct CourseRatingDetailSheet: View {
             selectedStars = updatedSummary.myRating?.stars ?? selectedStars
             errorMessage = nil
             onUpdate(updatedSummary)
-            operationAlert = .success(L10n.text("评分已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评分已保存。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -2866,7 +2866,7 @@ struct DishDetailSheet: View {
             selectedStars = updatedSummary.myRating?.stars ?? selectedStars
             errorMessage = nil
             onUpdate(updatedSummary)
-            operationAlert = .success(L10n.text("评分已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评分已保存。", language: leafyLanguage))
             return
         }
 
@@ -2889,7 +2889,7 @@ struct DishDetailSheet: View {
             selectedStars = updatedSummary.myRating?.stars ?? selectedStars
             errorMessage = nil
             onUpdate(updatedSummary)
-            operationAlert = .success(L10n.text("评分已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评分已保存。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }

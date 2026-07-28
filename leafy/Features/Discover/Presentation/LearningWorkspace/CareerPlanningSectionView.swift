@@ -82,7 +82,7 @@ struct CareerPlanningSectionView: View {
         .sheet(item: $editingTask) { task in
             CareerTaskEditorSheet(task: task) { _ in
                 saveContext()
-                operationAlert = .success(L10n.text("任务已保存！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("任务已保存。", language: leafyLanguage))
             }
         }
         .sheet(isPresented: $isOpportunityEditorPresented) {
@@ -93,7 +93,7 @@ struct CareerPlanningSectionView: View {
         .sheet(item: $editingOpportunity) { opportunity in
             CareerOpportunityEditorSheet(opportunity: opportunity) { _ in
                 saveContext()
-                operationAlert = .success(L10n.text("岗位已保存！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("岗位已保存。", language: leafyLanguage))
             }
         }
         .alert("职业规划操作失败", isPresented: Binding(
@@ -240,14 +240,14 @@ struct CareerPlanningSectionView: View {
     private var suggestionsSection: some View {
         AcademicDetailCard {
             VStack(alignment: .leading, spacing: 12) {
-                Label("后续可扩展", systemImage: "sparkles")
+                Label("职业规划参考", systemImage: "sparkles")
                     .leafyHeadline()
                     .foregroundStyle(AppTheme.primaryText)
 
                 VStack(alignment: .leading, spacing: 9) {
                     CareerSuggestionRow(icon: "target", title: "岗位关键词匹配", detail: "用岗位描述检查简历关键词覆盖。")
                     CareerSuggestionRow(icon: "rectangle.grid.1x2", title: "投递进度看板", detail: "按关注、已投递、面试中和结束汇总进度。")
-                    CareerSuggestionRow(icon: "person.crop.rectangle.stack", title: "面试准备清单", detail: "沉淀项目经历、常见问题和复盘记录。")
+                    CareerSuggestionRow(icon: "person.crop.rectangle.stack", title: "面试准备清单", detail: "记录项目经历、常见问题和复盘内容。")
                     CareerSuggestionRow(icon: "calendar.badge.clock", title: "宣讲会日历", detail: "把宣讲会、网申截止和面试时间放进日程。")
                     CareerSuggestionRow(icon: "building.2", title: "目标行业收藏", detail: "按城市、行业和单位类型整理长期目标。")
                 }
@@ -280,7 +280,7 @@ struct CareerPlanningSectionView: View {
 
                 do {
                     try CareerDocumentFileStore.deleteFile(named: previousLocalFilename)
-                    operationAlert = .success(L10n.text("简历文件已替换！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("简历文件已替换。", language: leafyLanguage))
                 } catch {
                     alertMessage = "新简历已保存，但旧文件未能清理：\(error.localizedDescription)"
                 }
@@ -340,7 +340,7 @@ struct CareerPlanningSectionView: View {
             try CareerDocumentFileStore.deleteFile(named: resume.localFilename)
             modelContext.delete(resume)
             try modelContext.save()
-            operationAlert = .success(L10n.text("简历已删除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("简历已删除。", language: leafyLanguage))
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -349,7 +349,7 @@ struct CareerPlanningSectionView: View {
     private func insertTask(_ task: CareerTask) {
         modelContext.insert(task)
         saveContext()
-        operationAlert = .success(L10n.text("任务已添加！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("任务已添加。", language: leafyLanguage))
     }
 
     private func toggleTask(_ task: CareerTask) {
@@ -361,13 +361,13 @@ struct CareerPlanningSectionView: View {
     private func deleteTask(_ task: CareerTask) {
         modelContext.delete(task)
         saveContext()
-        operationAlert = .success(L10n.text("任务已删除！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("任务已删除。", language: leafyLanguage))
     }
 
     private func insertOpportunity(_ opportunity: CareerOpportunity) {
         modelContext.insert(opportunity)
         saveContext()
-        operationAlert = .success(L10n.text("岗位已添加！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("岗位已添加。", language: leafyLanguage))
     }
 
     private func openOpportunity(_ opportunity: CareerOpportunity) {
@@ -381,7 +381,7 @@ struct CareerPlanningSectionView: View {
     private func deleteOpportunity(_ opportunity: CareerOpportunity) {
         modelContext.delete(opportunity)
         saveContext()
-        operationAlert = .success(L10n.text("岗位已删除！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("岗位已删除。", language: leafyLanguage))
     }
 
     private func saveContext() {
@@ -506,7 +506,7 @@ private struct CareerEmptyResumeRow: View {
                     .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("还没有导入简历")
+                    Text("尚未导入简历")
                         .leafyHeadline()
                         .foregroundStyle(AppTheme.primaryText)
                         .lineLimit(2)

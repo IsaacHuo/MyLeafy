@@ -277,7 +277,7 @@ struct CommunityRootView: View {
             .sheet(isPresented: $showingCommunityTerms) {
                 CommunityTermsAgreementSheet {
                     hasAcceptedCommunityTerms = true
-                    operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
                     .presentationDetents([.large])
             }
@@ -582,7 +582,7 @@ private struct CommunityDiagnosticsShellView: View {
                 .leafyHeadline()
                 .foregroundStyle(AppTheme.primaryText)
 
-            Text("已跳过社区会话、条款、Feed 和通知启动链路。")
+            Text("已跳过社区会话、条款、Feed 和通知初始化。")
                 .leafyBody()
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -649,7 +649,7 @@ private struct CommunityCampusRequestGateView: View {
                 ? "申请通过后会自动进入对应学校社区。"
                 : "\(school) 的社区申请正在审核，审核通过后会自动进入学校社区。"
         case .rejected:
-            return "您申请的学校不通过，您现在是处于通用的模式下，社区功能暂不开放。"
+            return "学校申请未通过。当前处于通用模式，社区功能暂不可用。"
         case .approved:
             return "正在进入学校社区。"
         case .general:
@@ -1474,7 +1474,7 @@ private struct CommunityNotificationsSheet: View {
         if !item.isRead {
             onUnreadStateChanged()
         }
-        operationAlert = .success(L10n.text("通知已删除！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("通知已删除。", language: leafyLanguage))
     }
 }
 

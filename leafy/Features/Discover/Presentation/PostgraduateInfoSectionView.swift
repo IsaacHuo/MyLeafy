@@ -293,8 +293,8 @@ struct PostgraduateInfoSectionView: View {
     private var sourceFallbackText: String {
         if selectedTarget != nil {
             return isCustomCampus
-                ? "当前目标还没有匹配到通用公共来源，可先使用官方查询入口。"
-                : "当前目标还没有匹配到已维护来源，可先使用研招网、学信网和学校研究生院入口。"
+                ? "当前目标尚未匹配到通用公共来源，可使用官方查询入口。"
+                : "当前目标尚未匹配到已维护来源，可使用研招网、学信网和学校研究生院入口。"
         }
         return isCustomCampus
             ? "已维护来源不可用时，仍可从上方研招网和学信网入口继续查询。"
@@ -312,7 +312,7 @@ struct PostgraduateInfoSectionView: View {
             target.scoreAndPlanNote = draft.scoreAndPlanNote
             target.personalNote = draft.personalNote
             target.updatedAt = Date()
-            save(successMessage: "考研目标已保存！")
+            save(successMessage: "考研目标已保存。")
         } else {
             modelContext.insert(
                 PostgraduateTarget(
@@ -326,7 +326,7 @@ struct PostgraduateInfoSectionView: View {
                     personalNote: draft.personalNote
                 )
             )
-            save(successMessage: "考研目标已添加！")
+            save(successMessage: "考研目标已添加。")
         }
     }
 

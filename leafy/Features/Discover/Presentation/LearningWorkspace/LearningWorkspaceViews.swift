@@ -19,11 +19,11 @@ private enum LearningProjectDeletionText {
     static let fullDeleteMessage = "继续前请先导出需要保留的学习资料。确认后会删除空间内资料文件、任务和学习记录，无法恢复。"
     static let cancelAction = "取消"
     static let keepContentsSuccess = "学习空间已删除，内容已移到其他。"
-    static let deleteAllSuccess = "学习空间和内容已删除！"
+    static let deleteAllSuccess = "学习空间和内容已删除。"
     static let clearFixedTitle = "清空学习空间？"
     static let clearFixedMessage = "将删除这个固定学习空间中的全部资料文件、任务和学习记录，空间本身会保留。此操作无法恢复。"
     static let clearFixedAction = "清空全部内容"
-    static let clearFixedSuccess = "学习空间内容已清空！"
+    static let clearFixedSuccess = "学习空间内容已清空。"
 }
 
 private enum LearningWorkspaceListItem: Identifiable {
@@ -154,7 +154,7 @@ struct LearningWorkspaceView: View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle(
                 "学习空间",
-                subtitle: "在微信或QQ内点击文件后，选择“用其他应用打开”，点选 MyLeafy 即可轻松导入，存放的资料也可导出。"
+                subtitle: "在微信或 QQ 中打开文件，选择“用其他应用打开”并选取 MyLeafy。已导入的资料支持导出。"
             )
 
             existingWorkspacesSection(index: workspaceIndex)
@@ -289,7 +289,7 @@ struct LearningWorkspaceView: View {
             goal: draft.goal,
             isArchived: draft.isArchived
         ))
-        save(successMessage: "学习空间已创建！")
+        save(successMessage: "学习空间已创建。")
     }
 
     private func update(_ project: LearningProject, with draft: LearningProjectDraft) {
@@ -298,7 +298,7 @@ struct LearningWorkspaceView: View {
         project.goal = draft.goal
         project.isArchived = draft.isArchived
         project.updatedAt = Date()
-        save(successMessage: "学习空间已保存！")
+        save(successMessage: "学习空间已保存。")
     }
 
     private func deleteProjectKeepingContents(_ project: LearningProject) {
@@ -1174,7 +1174,7 @@ struct LearningWorkspaceDetailView: View {
 
             if scopedMaterials.isEmpty {
                 AcademicDetailCard {
-                    ContentUnavailableView("还没有学习资料", systemImage: "folder", description: Text("导入 PDF、图片、Word、PPT 或表格后，可预览、编辑和导出。"))
+                    ContentUnavailableView("暂无学习资料", systemImage: "folder", description: Text("导入 PDF、图片、Word、PPT 或表格后，可预览、编辑和导出。"))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, AppSpacing.compact)
                 }
@@ -1344,10 +1344,10 @@ struct LearningWorkspaceDetailView: View {
             case 0:
                 break
             case 1:
-                operationAlert = .success(L10n.text("资料已导入！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("资料已导入。", language: leafyLanguage))
                 editingMaterial = importedMaterials.first
             default:
-                operationAlert = .success(L10n.text("已导入 %d 份资料！", language: leafyLanguage, importedMaterials.count))
+                operationAlert = .success(L10n.text("已导入 %d 份资料。", language: leafyLanguage, importedMaterials.count))
             }
         } catch {
             alertMessage = error.localizedDescription
@@ -1375,7 +1375,7 @@ struct LearningWorkspaceDetailView: View {
             try LearningMaterialFileStore.deleteFile(named: material.localFilename)
             modelContext.delete(material)
             try modelContext.save()
-            operationAlert = .success(L10n.text("资料已删除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("资料已删除。", language: leafyLanguage))
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -1389,7 +1389,7 @@ struct LearningWorkspaceDetailView: View {
             note: draft.note,
             dueAt: draft.dueAt
         ))
-        save(successMessage: "任务已添加！")
+        save(successMessage: "任务已添加。")
     }
 
     private func update(_ task: LearningProjectTask, with draft: LearningProjectTaskDraft) {
@@ -1397,18 +1397,18 @@ struct LearningWorkspaceDetailView: View {
         task.note = draft.note
         task.dueAt = draft.dueAt
         task.updatedAt = Date()
-        save(successMessage: "任务已保存！")
+        save(successMessage: "任务已保存。")
     }
 
     private func toggle(_ task: LearningProjectTask) {
         task.isCompleted.toggle()
         task.updatedAt = Date()
-        save(successMessage: task.isCompleted ? "任务已完成！" : "任务已恢复！")
+        save(successMessage: task.isCompleted ? "任务已完成。" : "任务已恢复。")
     }
 
     private func deleteTask(_ task: LearningProjectTask) {
         modelContext.delete(task)
-        save(successMessage: "任务已删除！")
+        save(successMessage: "任务已删除。")
     }
 
     private func insertRecord(_ draft: StudyTimeRecordDraft) {
@@ -1424,7 +1424,7 @@ struct LearningWorkspaceDetailView: View {
             createdAt: now,
             updatedAt: now
         ))
-        save(successMessage: "记录已添加！")
+        save(successMessage: "记录已添加。")
     }
 
     private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) {
@@ -1436,12 +1436,12 @@ struct LearningWorkspaceDetailView: View {
         record.location = draft.location
         record.note = draft.note
         record.updatedAt = Date()
-        save(successMessage: "记录已保存！")
+        save(successMessage: "记录已保存。")
     }
 
     private func deleteRecord(_ record: StudyTimeRecord) {
         modelContext.delete(record)
-        save(successMessage: "记录已删除！")
+        save(successMessage: "记录已删除。")
     }
 
     private func stopFocusSession(_ session: StudyFocusSession, endedAt: Date) {
@@ -1457,7 +1457,7 @@ struct LearningWorkspaceDetailView: View {
             createdAt: now,
             updatedAt: now
         ))
-        save(successMessage: "专注记录已保存！")
+        save(successMessage: "专注记录已保存。")
     }
 
     @MainActor
@@ -1490,7 +1490,7 @@ struct LearningWorkspaceDetailView: View {
         project.goal = draft.goal
         project.isArchived = draft.isArchived
         project.updatedAt = Date()
-        save(successMessage: "学习空间已保存！")
+        save(successMessage: "学习空间已保存。")
     }
 
     private func deleteProjectKeepingContents(_ project: LearningProject) {
@@ -2229,7 +2229,7 @@ struct StudyTimeRecordsView: View {
             createdAt: now,
             updatedAt: now
         ))
-        save(successMessage: "记录已添加！")
+        save(successMessage: "记录已添加。")
     }
 
     private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) {
@@ -2241,12 +2241,12 @@ struct StudyTimeRecordsView: View {
         record.location = draft.location
         record.note = draft.note
         record.updatedAt = Date()
-        save(successMessage: "记录已保存！")
+        save(successMessage: "记录已保存。")
     }
 
     private func delete(_ record: StudyTimeRecord) {
         modelContext.delete(record)
-        save(successMessage: "记录已删除！")
+        save(successMessage: "记录已删除。")
     }
 
     private func stopFocusSession(_ session: StudyFocusSession, endedAt: Date) {
@@ -2262,7 +2262,7 @@ struct StudyTimeRecordsView: View {
             createdAt: now,
             updatedAt: now
         ))
-        save(successMessage: "专注记录已保存！")
+        save(successMessage: "专注记录已保存。")
     }
 
     @MainActor

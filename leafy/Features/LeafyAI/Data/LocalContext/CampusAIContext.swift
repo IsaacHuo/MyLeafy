@@ -699,42 +699,42 @@ nonisolated enum CampusAIContextBuilder {
                 isEnabled: settings.includesTimetable,
                 itemCount: timetableCount,
                 lastSyncAt: timetableLastSyncAt,
-                missingNote: "当前设备还没有可用课表缓存；需要连接校园网同步或导入。"
+                missingNote: "当前设备暂无可用课表缓存；需要连接校园网同步或导入。"
             ),
             sourceStatus(
                 scope: "成绩明细",
                 isEnabled: settings.includesGrades,
                 itemCount: gradeCount,
                 lastSyncAt: gradeDetailsLastSyncAt,
-                missingNote: "当前设备还没有可用成绩明细缓存；需要连接校园网同步或导入。"
+                missingNote: "当前设备暂无可用成绩明细缓存；需要连接校园网同步或导入。"
             ),
             sourceStatus(
                 scope: "成绩排名和学分汇总",
                 isEnabled: settings.includesGrades,
                 itemCount: gradeSupplementalCount,
                 lastSyncAt: gradeSupplementalLastSyncAt,
-                missingNote: "当前设备还没有可用排名或学分汇总缓存，教务系统也可能未开放排名。"
+                missingNote: "当前设备暂无可用排名或学分汇总缓存，教务系统也可能未开放排名。"
             ),
             sourceStatus(
                 scope: "考试安排",
                 isEnabled: settings.includesExamsAndPlans,
                 itemCount: examCount,
                 lastSyncAt: examScheduleLastSyncAt,
-                missingNote: "当前设备还没有可用考试安排缓存。"
+                missingNote: "当前设备暂无可用考试安排缓存。"
             ),
             sourceStatus(
                 scope: "教学计划",
                 isEnabled: settings.includesExamsAndPlans,
                 itemCount: teachingPlanCourseCount,
                 lastSyncAt: teachingPlanLastSyncAt,
-                missingNote: "当前设备还没有可用教学计划缓存。"
+                missingNote: "当前设备暂无可用教学计划缓存。"
             ),
             sourceStatus(
                 scope: "培养方案",
                 isEnabled: settings.includesExamsAndPlans,
                 itemCount: trainingProgramRequirementCount,
                 lastSyncAt: trainingProgramLastSyncAt,
-                missingNote: "当前设备还没有可用培养方案缓存。"
+                missingNote: "当前设备暂无可用培养方案缓存。"
             ),
             CampusAIContextSourceStatus(
                 scope: "本地保存数据",

@@ -202,7 +202,7 @@ struct FitnessTestRecordsView: View {
     }
 
     private var emptyTitle: String {
-        selectedItem.map { "还没有\($0.rawValue)记录" } ?? "还没有体测记录"
+        selectedItem.map { "暂无\($0.rawValue)记录" } ?? "暂无体测记录"
     }
 
     private var emptyDescription: String {
@@ -224,7 +224,7 @@ struct FitnessTestRecordsView: View {
             createdAt: now,
             updatedAt: now
         ))
-        save(successMessage: "体测记录已添加！")
+        save(successMessage: "体测记录已添加。")
     }
 
     private func update(_ record: FitnessTestRecord, with draft: FitnessTestRecordDraft) {
@@ -234,12 +234,12 @@ struct FitnessTestRecordsView: View {
         record.unitRawValue = draft.unit.rawValue
         record.note = draft.note
         record.updatedAt = Date()
-        save(successMessage: "体测记录已保存！")
+        save(successMessage: "体测记录已保存。")
     }
 
     private func delete(_ record: FitnessTestRecord) {
         modelContext.delete(record)
-        save(successMessage: "体测记录已删除！")
+        save(successMessage: "体测记录已删除。")
     }
 
     private func save(successMessage: String) {

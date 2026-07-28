@@ -454,7 +454,7 @@ struct TimetableSharingView: View {
 
     private var sharingManagementFooter: String {
         if members.isEmpty {
-            return "还没有同学可以查看你的课表。发送邀请后，对方接受时会显示在这里。重新同步教务课表时，共享课表也会自动更新。"
+            return "暂无获准查看课表的同学。发送邀请并由对方接受后，授权关系会显示在这里。重新同步教务课表时，共享内容也会更新。"
         }
         return "重新同步教务课表时，已发布的共享课表也会自动更新。"
     }
@@ -652,7 +652,7 @@ struct TimetableSharingView: View {
 
         do {
             mySnapshot = try await service.publishSnapshot(courses: snapshotCourses)
-            operationAlert = .success(L10n.text("共享课表已更新！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("共享课表已更新。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }
@@ -663,7 +663,7 @@ struct TimetableSharingView: View {
         do {
             try await service.revokeShare(viewerID: member.viewerID)
             members.removeAll { $0.id == member.id }
-            operationAlert = .success(L10n.text("查看权限已撤销！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("查看权限已撤销。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }
@@ -675,7 +675,7 @@ struct TimetableSharingView: View {
             try await service.stopSharing()
             members = []
             invites = []
-            operationAlert = .success(L10n.text("已停止共享！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("已停止共享。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }
@@ -686,7 +686,7 @@ struct TimetableSharingView: View {
         do {
             try await service.leaveShare(ownerID: snapshot.ownerID)
             viewableSnapshots.removeAll { $0.id == snapshot.id }
-            operationAlert = .success(L10n.text("共享课表已移除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("共享课表已移除。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }
@@ -1061,7 +1061,7 @@ private struct SharedTimetableGridDetailView: View {
                 ContentUnavailableView(
                     "暂无课表",
                     systemImage: "calendar",
-                    description: Text("对方发布的课表里还没有课程。")
+                    description: Text("对方发布的课表暂无课程。")
                 )
                 .padding(.horizontal, AppSpacing.page)
             } else {
