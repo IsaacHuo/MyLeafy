@@ -17,7 +17,7 @@ struct CampusAISettingsView: View {
             Form {
                 Section {
                     Picker("使用方式", selection: $settings.serviceMode) {
-                        Text("Leafy AI 额度")
+                        Text("MyLeafy AI 额度")
                             .tag(CampusAIServiceMode.leafyManaged)
                         Text("自备 API Key")
                             .tag(CampusAIServiceMode.ownAPIKey)
@@ -29,7 +29,7 @@ struct CampusAISettingsView: View {
                     } label: {
                         CampusAISettingsNavigationRow(
                             systemImage: "sparkles",
-                            title: "Leafy AI 额度",
+                            title: "MyLeafy AI 额度",
                             detail: quotaDetail,
                             status: settings.serviceMode == .leafyManaged
                                 ? "使用中"
@@ -100,13 +100,13 @@ struct CampusAISettingsView: View {
                 }
 
                 Section("隐私与限制") {
-                    Text("使用 Leafy AI 服务时，你的问题及获准上下文会经 Leafy 服务发送给 DeepSeek；使用自备 Key 时则由本机直接发送。开启联网研究后，搜索词会经过 Leafy 搜索服务。生成内容可能有错误，重要事项请核对来源。")
+                    Text("使用 MyLeafy AI 服务时，你的问题及获准上下文会经 MyLeafy 服务发送给 DeepSeek；使用自备 Key 时则由本机直接发送。开启联网研究后，搜索词会经过 MyLeafy 搜索服务。生成内容可能有错误，重要事项请核对来源。")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                         .textSelection(.enabled)
                 }
             }
-            .navigationTitle("Leafy 设置")
+            .navigationTitle("MyLeafy 设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -131,7 +131,7 @@ struct CampusAISettingsView: View {
                 Button("清空全部历史记录", role: .destructive, action: clearHistory)
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("这会删除当前设备上的 Leafy 对话、动作记录与卡片缓存，且无法撤销。")
+                Text("这会删除当前设备上的 MyLeafy 对话、动作记录与卡片缓存，且无法撤销。")
             }
         }
         .presentationDetents([.large])
@@ -140,7 +140,7 @@ struct CampusAISettingsView: View {
 
     private var promptSummary: String {
         settings.systemPrompt == CampusAISettingsStore.defaultSystemPrompt
-            ? "使用 Leafy 默认回答偏好"
+            ? "使用 MyLeafy 默认回答偏好"
             : "已追加自定义偏好"
     }
 
@@ -233,7 +233,7 @@ struct CampusAIAPIKeySetupView: View {
             Section {
                 Text("1. 登录 DeepSeek 开放平台。")
                 Text("2. 在 API Keys 页面创建并复制密钥。")
-                Text("3. 返回 Leafy，将密钥粘贴到下方并保存。")
+                Text("3. 返回 MyLeafy，将密钥粘贴到下方并保存。")
 
                 Link(destination: provider.apiKeyManagementURL) {
                     Label("前往 DeepSeek API Keys", systemImage: "arrow.up.right.square")
@@ -262,7 +262,7 @@ struct CampusAIAPIKeySetupView: View {
             } header: {
                 Text("API Key")
             } footer: {
-                Text("API Key 只保存在当前设备的 Keychain，输入框不会回显已保存的值。保存后会切换到自备 Key；清除后自动改回 Leafy AI 免费额度。")
+                Text("API Key 只保存在当前设备的 Keychain，输入框不会回显已保存的值。保存后会切换到自备 Key；清除后自动改回 MyLeafy AI 免费额度。")
             }
 
             Section("数据说明") {
@@ -344,7 +344,7 @@ struct CampusAISubscriptionView: View {
                             .frame(width: 64, height: 64)
                             .background(AppTheme.accent.opacity(0.10), in: Circle())
 
-                        Text("Leafy AI 周订阅")
+                        Text("MyLeafy AI 周订阅")
                             .font(.title2.weight(.bold))
                         if let displayPrice = store.displayPrice {
                             Text("\(displayPrice)/周")
@@ -363,7 +363,7 @@ struct CampusAISubscriptionView: View {
                         subscriptionBenefit("每个订阅周期 120 次")
                         subscriptionBenefit("每日最多 40 次")
                         subscriptionBenefit("未订阅每日可免费使用 10 次")
-                        subscriptionBenefit("Leafy AI 服务固定使用 Flash")
+                        subscriptionBenefit("MyLeafy AI 服务固定使用 Flash")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(20)
@@ -437,7 +437,7 @@ struct CampusAISubscriptionView: View {
                 .padding(.vertical, 28)
             }
             .background(AppTheme.cardElevated.ignoresSafeArea())
-            .navigationTitle("Leafy AI 订阅")
+            .navigationTitle("MyLeafy AI 订阅")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -531,7 +531,7 @@ private struct CampusAIPromptSettingsPage: View {
             } header: {
                 Text("回答偏好")
             } footer: {
-                Text("偏好会追加到 Leafy 的基础安全提示词后，并用于之后的新请求。")
+                Text("偏好会追加到 MyLeafy 的基础安全提示词后，并用于之后的新请求。")
             }
         }
         .navigationTitle("回答偏好")

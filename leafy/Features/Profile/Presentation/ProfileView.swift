@@ -194,14 +194,6 @@ struct ProfileView: View {
             profileRow(icon: "rectangle.3.group.fill", title: "课表背景", detail: timetableBackgroundDetail)
         }
 
-        if !isCustomCampus {
-            NavigationLink {
-                CampusLinksView()
-            } label: {
-                profileRow(icon: "link", title: "常用链接", detail: "教务系统等网站")
-            }
-        }
-
         Toggle(isOn: $timetableHidesWeekends) {
             HStack(spacing: 12) {
                 LeafyCompactProfileIconBadge(systemName: "calendar.badge.minus", size: profileRowIconSize)
@@ -240,7 +232,12 @@ struct ProfileView: View {
             feedbackInitialBody = ""
             showingFeedbackSheet = true
         } label: {
-            profileRow(icon: "bubble.left.and.bubble.right.fill", title: "举报与反馈", detail: "建议和问题反馈")
+            profileRow(
+                icon: "bubble.left.and.bubble.right.fill",
+                title: "举报与反馈",
+                detail: "建议和问题反馈",
+                showsDisclosure: true
+            )
         }
 
         Button {
@@ -249,7 +246,8 @@ struct ProfileView: View {
             profileRow(
                 icon: "star.bubble.fill",
                 title: "给 \(AppBrand.displayName) 评分",
-                detail: isOpeningReviewPage ? "打开中" : "前往 App Store"
+                detail: isOpeningReviewPage ? "打开中" : "前往 App Store",
+                showsDisclosure: true
             )
         }
         .disabled(isOpeningReviewPage)
@@ -265,10 +263,23 @@ struct ProfileView: View {
         }
         .disabled(isCheckingForUpdate)
 
+        if !isCustomCampus {
+            NavigationLink {
+                CampusLinksView()
+            } label: {
+                profileRow(icon: "link", title: "常用链接", detail: "教务系统等网站")
+            }
+        }
+
         Button {
             browserItem = ProfileBrowserItem(url: LeafyExternalLinks.authorBlog)
         } label: {
-            profileRow(icon: "safari.fill", title: "项目介绍", detail: "此项目的开源页面")
+            profileRow(
+                icon: "safari.fill",
+                title: "项目介绍",
+                detail: "此项目的开源页面",
+                showsDisclosure: true
+            )
         }
     }
 
@@ -407,7 +418,13 @@ struct ProfileView: View {
     }
 
     @ViewBuilder
-    private func profileRow(icon: String, title: String, detail: String, tint: Color = AppTheme.accent) -> some View {
+    private func profileRow(
+        icon: String,
+        title: String,
+        detail: String,
+        tint: Color = AppTheme.accent,
+        showsDisclosure: Bool = false
+    ) -> some View {
         HStack(alignment: .center, spacing: 11) {
             LeafyCompactProfileIconBadge(systemName: icon, tint: tint, size: profileRowIconSize)
 
@@ -425,6 +442,10 @@ struct ProfileView: View {
                     .minimumScaleFactor(0.78)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showsDisclosure {
+                LeafyDisclosureIndicator()
+            }
         }
         .padding(.vertical, 1)
     }
@@ -1250,7 +1271,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "产品用途", body: "北林的教务和校园服务分布在多个系统。\(AppBrand.displayName) 集中提供常用入口，并保留最近一次成功同步的数据供离线查看。"),
                 ManualInfo(title: "与学校系统的关系", body: "\(AppBrand.displayName) 是第三方校园应用，不属于北京林业大学官方教务系统。登录、验证码、校园网、VPN 和访问权限均受学校系统限制。成绩、培养方案和考试安排等正式结果以学校系统为准。"),
-                ManualInfo(title: "主要入口", body: "“课表”显示当天和当前周安排；“社区”用于同学交流、公告和反馈；“校园”提供成绩、考试、教学培养、空闲教室、校历和评教；“我的”用于管理资料、同步、个性化和安全设置。Leafy AI 当前不提供公开入口。"),
+                ManualInfo(title: "主要入口", body: "“课表”显示当天和当前周安排；“社区”用于同学交流、公告和反馈；“校园”提供成绩、考试、教学培养、空闲教室、校历和评教；“我的”用于管理资料、同步、个性化和安全设置。MyLeafy AI 当前不提供公开入口。"),
                 ManualInfo(title: "需要同步的情况", body: "选课、调课、成绩发布或考试安排更新后，可连接能够访问北林教务的网络重新同步。同步失败不会删除最近一次成功缓存。")
             ],
             steps: [
@@ -2108,6 +2129,7 @@ private struct CampusLinksView: View {
                 Spacer()
                 Image(systemName: "safari")
                     .foregroundStyle(AppTheme.tertiaryText)
+                LeafyDisclosureIndicator()
             }
         }
         .buttonStyle(.plain)

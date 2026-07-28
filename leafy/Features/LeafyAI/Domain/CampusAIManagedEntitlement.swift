@@ -15,9 +15,9 @@ nonisolated enum CampusAIManagedEntitlementError: LocalizedError {
         case .appTransactionUnavailable:
             return "无法验证当前 App 安装记录，请稍后再试。"
         case .productUnavailable:
-            return "Leafy AI 订阅暂时不可用。"
+            return "MyLeafy AI 订阅暂时不可用。"
         case .productNotReturned:
-            return "无法从 App Store 读取 Leafy AI 周订阅商品，请稍后重试。"
+            return "无法从 App Store 读取 MyLeafy AI 周订阅商品，请稍后重试。"
         case .purchasePending:
             return "购买正在等待确认。"
         case .purchaseCancelled:
@@ -274,7 +274,7 @@ final class CampusAISubscriptionStore: ObservableObject {
         do {
             quota = try await quotaSynchronizer(transactionJWS)
         } catch {
-            errorMessage = "同步 Leafy AI 额度失败：\(error.localizedDescription)"
+            errorMessage = "同步 MyLeafy AI 额度失败：\(error.localizedDescription)"
         }
     }
 

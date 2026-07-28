@@ -406,7 +406,7 @@ private struct FitnessTestShareCard: View {
                 )
             }
 
-            Text("记录仅保存在当前设备 · 由 Leafy 生成")
+            Text("记录仅保存在当前设备 · 由 MyLeafy 生成")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AppTheme.tertiaryText)
                 .frame(maxWidth: .infinity, alignment: .center)

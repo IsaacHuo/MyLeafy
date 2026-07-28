@@ -1,14 +1,14 @@
 export type ColumnConfig = {
   source: string;
   label: string;
-  kind?: "text" | "date" | "number" | "boolean" | "json";
+  kind?: "text" | "date" | "number" | "boolean" | "json" | "image";
   sortable?: boolean;
 };
 
 export type FormFieldConfig = {
   source: string;
   label: string;
-  kind?: "text" | "longtext" | "number" | "date" | "datetime" | "boolean" | "json" | "select" | "password";
+  kind?: "text" | "longtext" | "number" | "date" | "datetime" | "boolean" | "json" | "select" | "password" | "image";
   required?: boolean;
   choices?: Array<{ id: string | number; name: string }>;
 };
@@ -153,6 +153,29 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     defaultFilters: { status: "all" },
     ...forms([{ source: "title", label: "标题", required: true }, { source: "body", label: "正文", kind: "longtext", required: true }, { source: "level", label: "级别", kind: "select", choices: [{ id: "info", name: "普通" }, { id: "warning", name: "重要" }, { id: "urgent", name: "紧急" }] }, { source: "status", label: "状态", kind: "select", choices: status("published", "draft", "archived") }, { source: "publishedAt", label: "发布时间", kind: "datetime" }, { source: "expiresAt", label: "过期时间", kind: "datetime" }]),
   },
+  "community-banners": {
+    label: "社区 Banner",
+    columns: columns(
+      ["signed_image_url", "预览", "image"],
+      ["title", "标题"],
+      ["subtitle", "副标题"],
+      ["revision", "版本", "number"],
+      ["destination_kind", "目标类型"],
+      ["status", "状态"],
+      ["published_at", "发布时间", "date"],
+      ["expires_at", "过期时间", "date"]
+    ),
+    statusChoices: status("published", "draft", "archived", "all"),
+    defaultFilters: { status: "all" },
+    editable: true,
+    searchable: true,
+    createForm: communityBannerForm(false),
+    editForm: communityBannerForm(true),
+    actions: [
+      { label: "发布", action: "publishCommunityBanner", visible: (record) => record.status !== "published", build: idParams },
+      { label: "归档", action: "archiveCommunityBanner", tone: "danger", visible: (record) => record.status !== "archived", build: idParams },
+    ],
+  },
   postgraduate: {
     label: "考研信息",
     columns: columns(["title", "标题"], ["source_kind", "类型"], ["trust_level", "可信度"], ["school", "学校"], ["exam_year", "年份", "number"], ["status", "状态"]),
@@ -230,6 +253,29 @@ function catalog(label: string, rawColumns: any[], form: FormFieldConfig[]): Res
 }
 
 function statusField(): FormFieldConfig { return { source: "status", label: "状态", kind: "select", choices: status("published", "hidden"), required: true }; }
+
+function communityBannerForm(editing: boolean): FormFieldConfig[] {
+  return [
+    { source: "title", label: "短标题", required: true },
+    { source: "subtitle", label: "副标题", kind: "longtext", required: true },
+    { source: "imageDataURL", label: editing ? "更换图片（JPEG/PNG，最多 2 MB）" : "横幅图片（可选，JPEG/PNG，最多 2 MB）", kind: "image" },
+    ...(editing ? [{ source: "removeImage", label: "移除现有图片", kind: "boolean" as const }] : []),
+    {
+      source: "destinationKind",
+      label: "目标类型",
+      kind: "select",
+      choices: [
+        { id: "none", name: "无跳转" },
+        { id: "community_post", name: "社区帖子" },
+        { id: "app_route", name: "App 路由" },
+        { id: "https_url", name: "HTTPS 网页" },
+      ],
+      required: true,
+    },
+    { source: "destinationValue", label: "目标值（无跳转时留空）" },
+    { source: "expiresAt", label: "过期时间", kind: "datetime" },
+  ];
+}
 
 function columns(...items: any[]): ColumnConfig[] {
   return items.map(([source, label, kind = "text", sortable = false]) => ({ source, label, kind, sortable }));

@@ -36,7 +36,9 @@ struct CustomScheduleListView: View {
                 }
             }
 
-            AcademicDetailFooterText(text: "日程仅保存在当前设备。学期内自动显示在课表，学期外自动显示倒计时。")
+            AcademicDetailFooterText(
+                text: "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学期内时，还会同时显示在课表。"
+            )
         }
         .navigationTitle("自定日程")
         .leafyInlineNavigationTitle()
@@ -177,9 +179,9 @@ private enum CustomScheduleListItem: Identifiable {
     var badge: String {
         switch self {
         case .timetable:
-            return "课表显示"
+            return "课表 · 倒计时"
         case .importantDate(let event):
-            return event.timetableProjection == nil ? "倒计时" : "课表显示"
+            return event.timetableProjection == nil ? "倒计时" : "课表 · 倒计时"
         }
     }
 

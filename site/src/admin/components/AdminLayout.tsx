@@ -42,6 +42,7 @@ import School from "@mui/icons-material/School";
 import Search from "@mui/icons-material/Search";
 import Settings from "@mui/icons-material/Settings";
 import Star from "@mui/icons-material/Star";
+import ViewCarousel from "@mui/icons-material/ViewCarousel";
 import type { AdminDataProvider } from "../providers/dataProvider";
 import type { GlobalSearchResult } from "../contracts";
 import { readCampusScope, saveCampusScope } from "../providers/session";
@@ -154,7 +155,7 @@ function AdminAppBar() {
 
 const groups = [
   { label: "概览", items: [["/", "总览", <Dashboard />], ["/manual", "手册", <MenuBook />]] },
-  { label: "社区运营", items: [["/campuses", "学校", <Apartment />], ["/posts", "帖子", <Chat />], ["/polls", "投票", <Poll />], ["/comments", "评论", <Comment />], ["/reports", "举报", <Flag />], ["/profiles", "用户", <AccountCircle />], ["/feedback", "反馈", <RateReview />], ["/announcements", "公告", <Campaign />]] },
+  { label: "社区运营", items: [["/campuses", "学校", <Apartment />], ["/posts", "帖子", <Chat />], ["/polls", "投票", <Poll />], ["/comments", "评论", <Comment />], ["/reports", "举报", <Flag />], ["/profiles", "用户", <AccountCircle />], ["/feedback", "反馈", <RateReview />], ["/announcements", "公告", <Campaign />], ["/community-banners", "Banner", <ViewCarousel />]] },
   { label: "资料名录", items: [["/postgraduate", "考研信息", <School />], ["/suggestions", "名录建议", <FactCheck />], ["/teachers", "教师", <HowToReg />], ["/courses", "课程", <LibraryBooks />], ["/dishes", "菜品", <FoodBank />], ["/ratings", "评分", <Star />]] },
   { label: "运行配置", items: [["/semester-configs", "学期配置", <Settings />], ["/national-calendar", "国家日历", <Event />]] },
   { label: "系统管理", items: [["/admins", "管理员", <ManageAccounts />], ["/sessions", "会话", <Assessment />], ["/audit-logs", "审计日志", <History />]] },

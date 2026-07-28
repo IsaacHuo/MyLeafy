@@ -190,7 +190,8 @@ struct TimetableBackgroundSettingsView: View {
                 settingsRow(
                     icon: "photo.on.rectangle.angled",
                     title: isImporting ? "读取中" : (hasBackgroundImage ? "更换照片" : "选择照片"),
-                    detail: "从照片中选择一张图片"
+                    detail: "从照片中选择一张图片",
+                    showsDisclosureIndicator: true
                 )
             }
             .buttonStyle(.plain)
@@ -236,10 +237,16 @@ struct TimetableBackgroundSettingsView: View {
     private var solidColorSection: some View {
         Section(L10n.text("纯色", language: leafyLanguage)) {
             ColorPicker(
-                L10n.text("背景颜色", language: leafyLanguage),
                 selection: solidColorBinding,
                 supportsOpacity: false
-            )
+            ) {
+                HStack(spacing: 12) {
+                    LeafyIconBadge(systemName: "paintpalette.fill")
+                    Text(L10n.text("背景颜色", language: leafyLanguage))
+                        .leafyBody()
+                        .foregroundStyle(AppTheme.primaryText)
+                }
+            }
 
             Toggle(isOn: enabledBinding) {
                 settingsRow(
@@ -322,7 +329,13 @@ struct TimetableBackgroundSettingsView: View {
         )
     }
 
-    private func settingsRow(icon: String, title: String, detail: String, tint: Color = AppTheme.accent) -> some View {
+    private func settingsRow(
+        icon: String,
+        title: String,
+        detail: String,
+        tint: Color = AppTheme.accent,
+        showsDisclosureIndicator: Bool = false
+    ) -> some View {
         HStack(spacing: 12) {
             LeafyIconBadge(systemName: icon, tint: tint)
             VStack(alignment: .leading, spacing: 2) {
@@ -334,6 +347,9 @@ struct TimetableBackgroundSettingsView: View {
                     .foregroundStyle(AppTheme.tertiaryText)
             }
             Spacer()
+            if showsDisclosureIndicator {
+                LeafyDisclosureIndicator()
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())

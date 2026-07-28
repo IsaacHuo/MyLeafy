@@ -1,10 +1,10 @@
-# Leafy AI 免费额度鉴权与回复链路
+# MyLeafy AI 免费额度鉴权与回复链路
 
-本文记录 Leafy AI 服务端 Flash 模式的当前身份、额度和回复链路，以及 2026 年 7 月对 `401 App Store 安装记录验证失败`、额度 RPC 失败和问候误生成动作卡问题的根因修复。它既是故障复盘，也是后续修改 Leafy AI 鉴权时的约束说明。
+本文记录 MyLeafy AI 服务端 Flash 模式的当前身份、额度和回复链路，以及 2026 年 7 月对 `401 App Store 安装记录验证失败`、额度 RPC 失败和问候误生成动作卡问题的根因修复。它既是故障复盘，也是后续修改 MyLeafy AI 鉴权时的约束说明。
 
 ## 1. 最终结论
 
-Leafy AI 必须区分两种证明：
+MyLeafy AI 必须区分两种证明：
 
 - **免费额度身份**：由已经通过 Supabase Auth 认证的用户 ID 提供，不依赖 App Store、TestFlight 或 `AppTransaction`。
 - **订阅额度权益**：只能由服务端验证成功的 Apple 订阅交易 JWS 激活，客户端提交的商品 ID、交易 ID 或 `AppTransaction ID` 不能单独授予权益。权益激活后可通过已绑定的 Supabase 用户继续识别，不要求每次 AI 请求都重新提交交易 JWS。
@@ -43,7 +43,7 @@ campus-ai-assistant: quota reserve failed Invalid schema: private
 
 ```mermaid
 flowchart TD
-    A["iOS Leafy AI"] --> B["Supabase Auth 会话"]
+    A["iOS MyLeafy AI"] --> B["Supabase Auth 会话"]
     B --> C["campus-ai-assistant"]
     C --> D["验证可选 AppTransaction 证明"]
     D --> G["service_role 专用公开 RPC 包装层"]

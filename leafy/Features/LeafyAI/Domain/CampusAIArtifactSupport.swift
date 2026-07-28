@@ -162,7 +162,7 @@ nonisolated enum CampusAIArtifactAssembler {
                 id: "local-\(result.id)",
                 title: result.title.nonEmptyTrimmed ?? result.domain.title,
                 url: "leafy://local/\(result.domain.rawValue)/\(result.sourceID)",
-                siteName: "Leafy 本机数据",
+                siteName: "MyLeafy 本机数据",
                 summary: result.summary.nonEmptyTrimmed,
                 trustScore: 1
             )

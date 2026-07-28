@@ -659,7 +659,7 @@ function FeatureImageShowcase() {
             A focused view for every routine.
           </h2>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
-            Timetable, community, grades, study materials, campus information, and Leafy AI.
+            Timetable, community, grades, study materials, campus information, and MyLeafy AI.
           </p>
         </ScrollReveal>
       </div>

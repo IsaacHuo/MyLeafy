@@ -6,7 +6,9 @@ import {
   CreateButton,
   Datagrid,
   DateField,
+  FileInput,
   FunctionField,
+  ImageField,
   FilterButton,
   List,
   NumberField,
@@ -163,6 +165,10 @@ function renderColumn(config: ColumnConfig) {
   if (config.kind === "number") return <NumberField key={config.source} {...props} emptyText="—" />;
   if (config.kind === "boolean") return <BooleanField key={config.source} {...props} />;
   if (config.kind === "json") return <FunctionField key={config.source} {...props} render={(record: RaRecord) => truncate(JSON.stringify(getValue(record, config.source)), 80)} />;
+  if (config.kind === "image") return <FunctionField key={config.source} {...props} render={(record: RaRecord) => {
+    const source = getValue(record, config.source);
+    return source ? <Box component="img" src={String(source)} alt="" sx={{ width: 96, height: 40, objectFit: "cover", borderRadius: 1 }} /> : "—";
+  }} />;
   return <FunctionField key={config.source} {...props} render={(record: RaRecord) => truncate(adminValueLabel(config.source, getValue(record, config.source)), config.source.includes("body") ? 120 : 60)} />;
 }
 
@@ -305,7 +311,7 @@ function ResourceCreate({ resource, config }: { resource: string; config: Resour
   );
 }
 
-const campusScopedCreateResources = new Set(["teachers", "courses", "dishes"]);
+const campusScopedCreateResources = new Set(["teachers", "courses", "dishes", "community-banners"]);
 
 function useCampusScope() {
   const [campusID, setCampusID] = useState(readCampusScope());
@@ -323,6 +329,7 @@ function useCampusScope() {
 
 function AdminInput({ field }: { field: FormFieldConfig }) {
   const validate = field.required ? [(value: unknown) => value === undefined || value === null || value === "" ? "必填" : undefined] : undefined;
+  if (field.kind === "image") return <FileInput source={field.source} label={field.label} accept={{ "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"] }} maxSize={2 * 1024 * 1024} validate={validate}><ImageField source="src" title="title" /></FileInput>;
   if (field.kind === "select") return <SelectInput source={field.source} label={field.label} choices={field.choices ?? []} validate={validate} fullWidth />;
   if (field.kind === "boolean") return <SelectInput source={field.source} label={field.label} choices={[{ id: true, name: "是" }, { id: false, name: "否" }]} validate={validate} />;
   return <TextInput source={field.source} label={field.label} type={field.kind === "password" ? "password" : field.kind === "number" ? "number" : field.kind === "date" ? "date" : field.kind === "datetime" ? "datetime-local" : "text"} multiline={field.kind === "longtext" || field.kind === "json"} minRows={field.kind === "json" ? 8 : field.kind === "longtext" ? 4 : undefined} validate={validate} fullWidth />;
@@ -330,6 +337,28 @@ function AdminInput({ field }: { field: FormFieldConfig }) {
 
 function DialogField({ field, value, onChange }: { field: FormFieldConfig; value: unknown; onChange: (value: unknown) => void }) {
   if (field.kind === "boolean") return <FormControlLabel control={<Checkbox checked={value === true} onChange={(event) => onChange(event.target.checked)} />} label={field.label} />;
+  if (field.kind === "image") {
+    const preview = typeof value === "string" && value.startsWith("data:image/") ? value : null;
+    return (
+      <Stack spacing={1}>
+        <Button label={field.label} component="label">
+          <input hidden type="file" accept="image/jpeg,image/png" onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            if (file.size > 2 * 1024 * 1024) {
+              onChange("");
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => onChange(String(reader.result ?? ""));
+            reader.readAsDataURL(file);
+          }} />
+        </Button>
+        {preview && <Box component="img" src={preview} alt="Banner 图片预览" sx={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 2 }} />}
+        <Typography variant="caption" color="text.secondary">建议 2.5:1 至 3.5:1；服务端会校验 JPEG/PNG、尺寸、大小和比例。</Typography>
+      </Stack>
+    );
+  }
   return (
     <MuiTextField
       label={field.label}

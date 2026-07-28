@@ -983,7 +983,7 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private var sheetSubtitle: String {
-        "选择日期和开始时间，按需添加结束时间、地点、备注和本地提醒。学期内显示在课表，学期外显示倒计时。"
+        "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学期内时，还会同时显示在课表。"
     }
 
     private var canDelete: Bool {

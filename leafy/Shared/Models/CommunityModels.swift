@@ -1343,6 +1343,49 @@ nonisolated enum SiteAnnouncementLevel: String, Codable, Hashable, Sendable {
     case urgent
 }
 
+nonisolated struct CommunityBanner: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let campusID: String
+    let revision: Int
+    let title: String
+    let subtitle: String
+    let imagePath: String?
+    let imageURL: URL?
+    let destinationKind: CommunityBannerDestinationKind
+    let destinationValue: String?
+    let publishedAt: String?
+    let expiresAt: String?
+
+    var dismissalKey: String {
+        "communityBanner.dismissed.\(campusID).\(id.uuidString).r\(revision)"
+    }
+
+    var hasDestination: Bool {
+        destinationKind != .none && destinationValue?.isEmpty == false
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case campusID = "campus_id"
+        case revision
+        case title
+        case subtitle
+        case imagePath = "image_path"
+        case imageURL = "signed_image_url"
+        case destinationKind = "destination_kind"
+        case destinationValue = "destination_value"
+        case publishedAt = "published_at"
+        case expiresAt = "expires_at"
+    }
+}
+
+nonisolated enum CommunityBannerDestinationKind: String, Codable, Hashable, Sendable {
+    case none
+    case communityPost = "community_post"
+    case appRoute = "app_route"
+    case httpsURL = "https_url"
+}
+
 nonisolated struct CommunityPublishNotification: Identifiable, Hashable, Sendable {
     let task: CommunityPublishTask
     let isRead: Bool

@@ -25,6 +25,7 @@ const listActions: Record<string, string> = {
   profiles: "listProfiles",
   feedback: "listFeedback",
   announcements: "listAnnouncements",
+  "community-banners": "listCommunityBanners",
   postgraduate: "listPostgraduateSources",
   "postgraduate-suggestions": "listPostgraduateSuggestions",
   suggestions: "listCatalogSuggestions",
@@ -88,12 +89,14 @@ const providerImplementation = {
       throw new Error("新增前必须先选择具体学校。");
     }
     const action = createAction(resource);
-    const response = await actionRequest<RaRecord>(action, withCampus(action, params.data));
+    const data = resource === "community-banners" ? await encodeBannerImage(params.data) : params.data;
+    const response = await actionRequest<RaRecord>(action, withCampus(action, data));
     return { data: ensureID(response.data) };
   },
   update: async (resource: string, params: UpdateParams) => {
     const action = updateAction(resource);
-    const response = await actionRequest<RaRecord>(action, withCampus(action, { id: params.id, ...params.data }));
+    const data = resource === "community-banners" ? await encodeBannerImage(params.data) : params.data;
+    const response = await actionRequest<RaRecord>(action, withCampus(action, { id: params.id, ...data }));
     return { data: ensureID(response.data, params.id) };
   },
   updateMany: async (resource: string, params: UpdateManyParams) => {
@@ -139,7 +142,7 @@ const providerImplementation = {
   },
 };
 
-const campusScopedCreateResources = new Set(["teachers", "courses", "dishes"]);
+const campusScopedCreateResources = new Set(["teachers", "courses", "dishes", "community-banners"]);
 
 export const dataProvider = providerImplementation as unknown as AdminDataProvider;
 
@@ -157,6 +160,7 @@ function requireMapping(mapping: Record<string, string>, resource: string) {
 function createAction(resource: string) {
   return requireMapping({
     announcements: "createAnnouncement",
+    "community-banners": "createCommunityBanner",
     postgraduate: "upsertPostgraduateSource",
     teachers: "upsertTeacher",
     courses: "upsertCourse",
@@ -170,6 +174,7 @@ function createAction(resource: string) {
 function updateAction(resource: string) {
   return requireMapping({
     announcements: "updateAnnouncement",
+    "community-banners": "updateCommunityBanner",
     postgraduate: "upsertPostgraduateSource",
     teachers: "upsertTeacher",
     courses: "upsertCourse",
@@ -179,6 +184,23 @@ function updateAction(resource: string) {
     "semester-configs": "upsertSemesterRuntimeConfig",
     "national-calendar": "upsertNationalCalendarRuntimeConfig",
   }, resource);
+}
+
+async function encodeBannerImage(data: Record<string, unknown>) {
+  const value = data.imageDataURL as { rawFile?: File } | Array<{ rawFile?: File }> | string | undefined;
+  if (!value || typeof value === "string") return data;
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate?.rawFile) return { ...data, imageDataURL: undefined };
+  return { ...data, imageDataURL: await fileAsDataURL(candidate.rawFile) };
+}
+
+function fileAsDataURL(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("无法读取 Banner 图片。"));
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+  });
 }
 
 function deleteAction(resource: string, record?: Record<string, unknown>) {

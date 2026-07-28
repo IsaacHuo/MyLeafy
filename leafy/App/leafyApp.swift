@@ -6,6 +6,7 @@
 //
 
 import OSLog
+import BackgroundTasks
 import SwiftData
 import SwiftUI
 import StoreKit
@@ -67,6 +68,7 @@ struct LeafyApp: App {
         let setup = AppModelContainerFactory.make()
         self._modelContainerSetup = State(initialValue: setup)
         self._modelRecoveryMessage = State(initialValue: setup.recoveryMessage)
+        ScheduleReportBackgroundRefreshCoordinator.shared.register()
 
         #if DEBUG
         DebugNetworkDiagnostics.runStartupProbe()
@@ -145,6 +147,7 @@ struct LeafyApp: App {
                 refreshSemesterRuntimeConfig(force: true, prefetchTrigger: .foreground)
                 refreshWidgetSnapshot()
                 refreshScheduleReportNotifications()
+                ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
                 externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
             }
             .onChange(of: networkManager.hasCachedIdentity) { _, _ in
@@ -168,6 +171,7 @@ struct LeafyApp: App {
                     CommunityPublishCoordinator.shared.configureAndResume()
                     refreshSemesterRuntimeConfig(prefetchTrigger: .foreground)
                     refreshScheduleReportNotifications()
+                    ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
                     externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
                 }
                 if newPhase != .active {
@@ -274,8 +278,18 @@ struct LeafyApp: App {
         scheduleReportRefreshTask?.cancel()
         scheduleReportRefreshTask = Task { @MainActor in
             do {
+                let service = LeafyDependencies.live.timetableWeatherService
+                let weather: TimetableWeatherSnapshot?
+                if let cached = service.cachedWeather(maxAge: 30 * 60) {
+                    weather = cached
+                } else if service.authorizationState() == .authorized {
+                    weather = try? await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+                } else {
+                    weather = nil
+                }
                 try await ScheduleReportNotificationManager.refreshIfEnabled(
-                    modelContext: sharedModelContainer.mainContext
+                    modelContext: sharedModelContainer.mainContext,
+                    weather: weather
                 )
                 guard !Task.isCancelled else { return }
             } catch {

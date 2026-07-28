@@ -129,7 +129,7 @@ struct CampusAIAssistantView: View {
             switch alert {
             case .experimentalNotice:
                 return Alert(
-                    title: Text("Leafy AI 仍在实验阶段"),
+                    title: Text("MyLeafy AI 仍在实验阶段"),
                     message: Text("AI 问答功能还在测试中，回复可能会有错误、遗漏或过时内容。涉及课程、考试、成绩、医疗、手续等事项，请以学校官方系统和最新通知为准。"),
                     dismissButton: .default(Text("我知道了")) {
                         experimentalNoticeAcknowledged = true
@@ -673,7 +673,7 @@ struct CampusAIAssistantView: View {
                     "> 生成中断：\(error.localizedDescription)"
                 ].filter { !$0.isEmpty }.joined(separator: "\n\n")
             } else {
-                assistantMessage.text = "Leafy 暂时不可用：\(error.localizedDescription)"
+                assistantMessage.text = "MyLeafy 暂时不可用：\(error.localizedDescription)"
             }
             conversation.updatedAt = Date()
             persistModelContext(operation: "message.failure")

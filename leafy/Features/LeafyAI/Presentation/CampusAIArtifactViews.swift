@@ -33,7 +33,7 @@ struct CampusAIArtifactCard: View {
                         .background(AppTheme.accent.opacity(0.11), in: Circle())
 
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(deliverable.title.nonEmptyTrimmed ?? "Leafy 卡片")
+                        Text(deliverable.title.nonEmptyTrimmed ?? "MyLeafy 卡片")
                             .font(.headline)
                             .foregroundStyle(AppTheme.primaryText)
                             .fixedSize(horizontal: false, vertical: true)
@@ -171,7 +171,7 @@ struct CampusAIArtifactReaderView: View {
             }
         }
         .background(AppTheme.cardElevated)
-        .navigationTitle(deliverable.title.nonEmptyTrimmed ?? "Leafy 卡片")
+        .navigationTitle(deliverable.title.nonEmptyTrimmed ?? "MyLeafy 卡片")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {

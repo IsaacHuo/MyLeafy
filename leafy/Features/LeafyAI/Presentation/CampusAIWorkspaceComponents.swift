@@ -22,7 +22,7 @@ struct CampusAIChatTopBar: View {
 
                     LeafyGlassIconButton(
                         systemName: "gearshape",
-                        accessibilityLabel: "Leafy 设置",
+                        accessibilityLabel: "MyLeafy 设置",
                         action: openSettings
                     )
 
@@ -137,7 +137,7 @@ struct CampusAIHistorySheet: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("这只会删除当前设备上的 Leafy 聊天记录。")
+                Text("这只会删除当前设备上的 MyLeafy 聊天记录。")
             }
         }
     }
@@ -199,11 +199,11 @@ struct CampusAIEmptyConversationPanel: View {
     var body: some View {
         VStack(spacing: 28) {
             VStack(spacing: 12) {
-                Text("Leafy")
+                Text("MyLeafy")
                     .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(AppTheme.accent(for: themeColorPreference))
 
-                Text("和 Leafy 聊聊，获取建议。")
+                Text("和 MyLeafy 聊聊，获取建议。")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
                     .multilineTextAlignment(.center)
@@ -267,7 +267,7 @@ struct CampusAIMissingKeyPanel: View {
                 .font(.headline)
                 .foregroundStyle(AppTheme.primaryText)
 
-            Text("API Key 只保存在当前设备的 Keychain。Leafy 会把你允许的本机上下文直接发送给 DeepSeek；联网研究只通过 Leafy Tool Gateway 执行公开搜索和网页读取。")
+            Text("API Key 只保存在当前设备的 Keychain。MyLeafy 会把你允许的本机上下文直接发送给 DeepSeek；联网研究只通过 MyLeafy Tool Gateway 执行公开搜索和网页读取。")
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -363,7 +363,7 @@ struct CampusAIComposerBar: View {
                 .disabled(isSending)
                 .accessibilityLabel("卡片选项")
 
-                TextField("问问 Leafy", text: $draftText, axis: .vertical)
+                TextField("问问 MyLeafy", text: $draftText, axis: .vertical)
                     .focused(isFocused)
                     .lineLimit(1...6)
                     .textFieldStyle(.plain)

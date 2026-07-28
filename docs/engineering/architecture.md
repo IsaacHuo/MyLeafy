@@ -149,7 +149,7 @@ Features/
 - `Domain`：不依赖 UI 的模型、规则、投影、索引和纯计算。
 - `Data`：某些领域的 live service 实现或数据适配。
 
-依赖方向保持为 `Presentation → Application → Domain`。`Data` 实现应用层定义的窄协议，组合根负责将实现注入页面；Domain 不依赖 SwiftUI、Supabase 或具体持久化。Leafy AI、社区和课表的旧类型名与公开方法签名保留，目录迁移不代表业务或存储 schema 变化。
+依赖方向保持为 `Presentation → Application → Domain`。`Data` 实现应用层定义的窄协议，组合根负责将实现注入页面；Domain 不依赖 SwiftUI、Supabase 或具体持久化。MyLeafy AI、社区和课表的旧类型名与公开方法签名保留，目录迁移不代表业务或存储 schema 变化。
 
 历史代码仍有部分跨层文件。新增代码应遵守依赖方向；旧文件只在相关功能改动时迁移。
 
@@ -177,7 +177,7 @@ Features/
 6. 社区能力按需恢复匿名 Supabase 会话和 profile，不阻塞 App 首屏。
 7. 进入前台或用户主动刷新时更新学期配置、通知计数和必要数据。
 
-2.9 build 22 的公开根 Tab 顺序为 `课表 / 社区 / 校园 / 我的`，默认选中课表。Leafy AI 的类型、页面和服务代码暂时保留，但没有公开导航入口；旧状态选择 `.leafy` 时重定向到课表。社区不可用时直接移除对应入口，不显示无法使用的空页面。
+2.9 build 22 的公开根 Tab 顺序为 `课表 / 社区 / 校园 / 我的`，默认选中课表。MyLeafy AI 的类型、页面和服务代码暂时保留，但没有公开导航入口；旧状态选择 `.leafy` 时重定向到课表。社区不可用时直接移除对应入口，不显示无法使用的空页面。
 
 ## 5. 教务访问链路
 
@@ -282,11 +282,11 @@ SwiftData 保存需要离线读取或跨启动保留的本地模型，包括课�
 
 性能优化应优先减少重复计算和无关状态传播，不应通过删除错误、空状态或可访问性信息换取表面流畅。
 
-### 6.3 社区与 Leafy AI 投影
+### 6.3 社区与 MyLeafy AI 投影
 
 - 社区评价页只创建当前栏目的视图树并按需执行首次加载；栏目级 store 保留搜索、筛选和分页生命周期。
 - 社区 Feed 的时间格式化器集中复用，瀑布流左右列只在输入数组变化时重建。
-- Leafy AI 使用 `CampusAIConversationProjection` 一次完成会话筛选和消息—动作索引，消息行按消息 ID 读取动作。
+- MyLeafy AI 使用 `CampusAIConversationProjection` 一次完成会话筛选和消息—动作索引，消息行按消息 ID 读取动作。
 - 流式文本保存在 `CampusAIChatSession` 的瞬时状态中，SwiftData 仅按检查点、完成、取消或失败边界持久化。
 
 性能测量使用相同设备、构建配置、数据和交互，各采集三次并比较中位数。`LeafyPerformanceSignposter` 只记录课表快照、AI projection、评分加载和社区 Feed projection 的区间，不记录用户文本或个人数据。只有中位数改善至少 10%、峰值内存回退不超过 5% 且无新增 app-owned 泄漏时，才对外宣称提速。
@@ -335,14 +335,14 @@ Supabase 不接管学校登录。常规链路是：
 
 不得上传成绩、备注、提醒或其他不属于共享课表最小字段集的数据。
 
-## 10. Leafy AI 边界
+## 10. MyLeafy AI 边界
 
 AI 功能由对话 UI、上下文构建、模型访问、Artifact 生成和动作路由组成。
 
 - 自备 API Key 保存在 Keychain。
 - 本机学业上下文应按请求最小化组装。
 - 对话与 Artifact 元数据主要保存在本机。
-- 默认 Leafy AI 服务由 `campus-ai-assistant` 固定调用 Flash；免费额度按 Supabase Auth 用户计数，不依赖 App Transaction，订阅额度只接受服务端验证成功的 StoreKit 2 交易 JWS。两者统一通过服务端额度 RPC 控制次数，完整链路见[Leafy AI 免费额度鉴权](leafy-ai-quota-authentication.md)。
+- 默认 MyLeafy AI 服务由 `campus-ai-assistant` 固定调用 Flash；免费额度按 Supabase Auth 用户计数，不依赖 App Transaction，订阅额度只接受服务端验证成功的 StoreKit 2 交易 JWS。两者统一通过服务端额度 RPC 控制次数，完整链路见[MyLeafy AI 免费额度鉴权](leafy-ai-quota-authentication.md)。
 - 自备 DeepSeek API Key 保存在 Keychain 并由设备直连 DeepSeek；Pro 仅在这一模式开放。
 - AI 可以建议或准备动作，但不直接修改学校数据、代替用户发布社区内容或绕过页面确认。
 - 完整 Markdown、公式和复杂 Artifact 在独立阅读页渲染，聊天列表保持轻量。

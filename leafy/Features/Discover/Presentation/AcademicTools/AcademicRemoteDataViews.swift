@@ -962,17 +962,6 @@ struct TrainingProgramView: View {
                 PlanBadge(text: "\(document.sections.count) 个正文部分")
             }
 
-            if let sourcePageURL, !isCustomCampus {
-                Button {
-                    browserItem = TrainingProgramBrowserItem(url: sourcePageURL)
-                } label: {
-                    Label("查看学校原页面", systemImage: "safari")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(AppTheme.accent)
-                .accessibilityHint("在 App 内浏览器中打开")
-            }
         }
         .padding(.vertical, 5 * leafyControlScale)
     }
@@ -1090,10 +1079,6 @@ struct TrainingProgramView: View {
         .padding(.horizontal, AppSpacing.card)
         .padding(.vertical, 8 * leafyControlScale)
         .leafyCardStyle()
-    }
-
-    private var sourcePageURL: URL? {
-        URL(string: "\(networkManager.baseURL)/jsxsd/pyfa/pyfazd_query")
     }
 
     private var sourceBaseURL: URL {

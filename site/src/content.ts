@@ -143,8 +143,8 @@ export const appScreenshots = [
     alt: "MyLeafy academic tools on iPhone 17 Pro"
   },
   {
-    label: "Leafy AI",
-    title: "Leafy AI",
+    label: "MyLeafy AI",
+    title: "MyLeafy AI",
     body: "Campus questions can be answered with structured information and source context.",
     image: "/media/app-ai-policy.webp",
     alt: "MyLeafy AI policy answer on iPhone 17 Pro"
@@ -223,11 +223,11 @@ export const featureShowcases = [
     alt: "Teacher ratings in MyLeafy on iPhone 17 Pro"
   },
   {
-    label: "Leafy AI",
+    label: "MyLeafy AI",
     title: "Campus answers",
     body: "Ask a campus question and receive a structured answer with the relevant policy context.",
     image: "/media/app-ai-policy.webp",
-    alt: "Leafy AI campus answer on iPhone 17 Pro"
+    alt: "MyLeafy AI campus answer on iPhone 17 Pro"
   }
 ];
 
@@ -443,7 +443,7 @@ export const privacySections: Array<{
       "Feedback: submitted feedback, optional contact information, device type, system version, app version, login state, and latest timetable sync time are used for support.",
       "Photos and files: MyLeafy reads only items you select. Post images and attachments are copied into protected app storage for background publication before upload.",
       "Location and calendar: location is used only for weather and commute suggestions. Calendar permission is used only when you export timetable or reminders.",
-      "Leafy AI: when you use free or subscription requests, your question and the local context you approve are sent through the Leafy AI service to DeepSeek. We process an Apple app transaction identifier, verified subscription transaction details, quota usage, reset times, and minimal request diagnostics to provide and protect the service. Your full question is not stored in quota records."
+      "MyLeafy AI: when you use free or subscription requests, your question and the local context you approve are sent through the MyLeafy AI service to DeepSeek. We process an Apple app transaction identifier, verified subscription transaction details, quota usage, reset times, and minimal request diagnostics to provide and protect the service. Your full question is not stored in quota records."
     ]
   },
   {
@@ -467,7 +467,7 @@ export const privacySections: Array<{
       "Supabase is used for MyLeafy Community, including anonymous auth, database, private image and attachment storage, Edge Functions, notifications, feedback, ratings, shared timetables, and admin tools.",
       "Cloudflare is used for myleafy.space DNS, static hosting, and support@myleafy.space email routing.",
       "Apple system capabilities are used for app distribution, photo and file selection, location, calendar, system sharing, notifications, and local storage.",
-      "DeepSeek processes Leafy AI questions and approved context to generate responses. In self-provided API key mode, requests go directly from your device; the API key remains in the device Keychain."
+      "DeepSeek processes MyLeafy AI questions and approved context to generate responses. In self-provided API key mode, requests go directly from your device; the API key remains in the device Keychain."
     ]
   },
   {
@@ -492,7 +492,7 @@ export const privacySections: Array<{
       "Shared timetables are published by you. You can stop sharing or revoke a viewer at any time.",
       "Photo, file, location, and calendar permissions are controlled by you. Timetable, grades, academic tools, and community features can be used independently where permission is not needed.",
       "In a request, describe the data you want to access, correct, or delete. We may ask you to confirm identity through the signed-in app state or another reasonable method.",
-      "Leafy AI subscriptions are processed by Apple. You can view or manage renewal in your Apple account, restore verified purchases in the app, or continue with the daily free allowance without subscribing."
+      "MyLeafy AI subscriptions are processed by Apple. You can view or manage renewal in your Apple account, restore verified purchases in the app, or continue with the daily free allowance without subscribing."
     ]
   },
   {

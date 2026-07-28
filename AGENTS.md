@@ -35,9 +35,9 @@ Community security direction:
 - `posts.status = pending_review` is an upload/publication exception, never a normal editorial queue. Polls may still use `pending_review` for explicit manual approval or rejection.
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
 
-Leafy AI direction:
-- For the 2.9 build 22 review submission, Leafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.
-- Leafy AI defaults to the server-backed Flash service: free users receive 10 requests per Beijing day; the current weekly subscription receives 120 requests per Apple billing period with a 40-request Beijing daily cap.
+MyLeafy AI direction:
+- For the 2.9 build 22 review submission, MyLeafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.
+- MyLeafy AI defaults to the server-backed Flash service: free users receive 10 requests per Beijing day; the current weekly subscription receives 120 requests per Apple billing period with a 40-request Beijing daily cap.
 - BYOK is an optional fallback. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek; Pro is available only in BYOK mode.
 - The only supported subscription product is `com.isaachuo.leafy.ai.weekly.v2`; legacy products grant no entitlement.
 - Web research uses the authenticated `campus-ai-tools` Supabase Tool Gateway. The gateway may receive search queries and signed result receipts, but never receives the model key or local campus context.
@@ -51,7 +51,7 @@ Leafy AI direction:
 Architecture and performance direction:
 - Feature dependencies flow from Presentation to Application to Domain; Data implements narrow application protocols and is wired at the app composition root.
 - Preserve existing public type names, repository contracts, SwiftData schema, Supabase interfaces, UI, copy, and navigation during structural refactors.
-- Keep transient Leafy AI streaming text out of broad SwiftData invalidation; persist only at explicit checkpoints and terminal states.
+- Keep transient MyLeafy AI streaming text out of broad SwiftData invalidation; persist only at explicit checkpoints and terminal states.
 - Build timetable render input and its signature once per refresh, and consume indexed snapshot data from child views.
 - Community rating sections load on demand while retaining per-section state; feed projections and formatters must not be rebuilt per card body evaluation.
 - Performance claims require three comparable runs, at least 10% median improvement, no more than 5% peak-memory regression, and no new app-owned leaks. Signposts must never include user content or personal data.

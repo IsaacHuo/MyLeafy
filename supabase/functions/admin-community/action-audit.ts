@@ -13,7 +13,9 @@ export const auditedAdminActionNames = [
   "listPolls", "getPoll", "moderatePoll", "reviewPollDeletion", "listPostPins", "pinPost", "unpinPost",
   "listComments", "listModerationReports", "getModerationReport", "resolveModerationReport", "moderateComment", "bulkModerateComments",
   "listProfiles", "getProfile", "muteProfile", "unmuteProfile", "listFeedback", "updateFeedback",
-  "listAnnouncements", "createAnnouncement", "updateAnnouncement", "listPostgraduateSources",
+  "listAnnouncements", "createAnnouncement", "updateAnnouncement",
+  "listCommunityBanners", "createCommunityBanner", "updateCommunityBanner", "publishCommunityBanner", "archiveCommunityBanner",
+  "listPostgraduateSources",
   "upsertPostgraduateSource", "setPostgraduateSourceStatus", "listPostgraduateSuggestions",
   "approvePostgraduateSuggestion", "rejectPostgraduateSuggestion", "listCatalogSuggestions",
   "approveCatalogSuggestion", "rejectCatalogSuggestion", "listTeachers", "upsertTeacher", "setTeacherStatus",
@@ -28,7 +30,8 @@ const operatorActions = new Set<string>([
   "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "moderatePoll",
   "reviewPollDeletion", "pinPost", "unpinPost", "resolveModerationReport", "moderateComment",
   "bulkModerateComments", "muteProfile", "unmuteProfile", "updateFeedback", "createAnnouncement",
-  "updateAnnouncement", "upsertPostgraduateSource", "setPostgraduateSourceStatus",
+  "updateAnnouncement", "createCommunityBanner", "updateCommunityBanner", "publishCommunityBanner", "archiveCommunityBanner",
+  "upsertPostgraduateSource", "setPostgraduateSourceStatus",
   "approvePostgraduateSuggestion", "rejectPostgraduateSuggestion", "approveCatalogSuggestion",
   "rejectCatalogSuggestion", "upsertTeacher", "setTeacherStatus", "upsertCourse", "setCourseStatus",
   "upsertDish", "setDishStatus", "deleteTeacherRating", "deleteDishRating", "upsertSemesterRuntimeConfig",
@@ -48,12 +51,12 @@ const globalActions = new Set<string>([
   "revokeAdminSession", "listNationalCalendarRuntimeConfigs", "upsertNationalCalendarRuntimeConfig",
 ]);
 
-const requiredCampusActions = new Set<string>(["upsertTeacher", "upsertCourse", "upsertDish"]);
+const requiredCampusActions = new Set<string>(["createCommunityBanner", "upsertTeacher", "upsertCourse", "upsertDish"]);
 const transactionRPCActions = new Set<string>([
   "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "pinPost",
   "resolveModerationReport", "approvePostgraduateSuggestion", "approveCatalogSuggestion",
   "upsertSemesterRuntimeConfig", "createAdmin", "updateAdmin", "disableAdmin",
-  "upsertNationalCalendarRuntimeConfig",
+  "upsertNationalCalendarRuntimeConfig", "publishCommunityBanner",
 ]);
 
 export const adminActionAuditMatrix: readonly AdminActionAuditRow[] = auditedAdminActionNames.map((action) => {
@@ -73,6 +76,7 @@ function auditTargetFor(action: string) {
   if (action.includes("CatalogSuggestion")) return "catalog_suggestion";
   if (action.includes("PostgraduateSuggestion")) return "postgraduate_source_suggestion";
   if (action.includes("PostgraduateSource")) return "postgraduate_source";
+  if (action.includes("CommunityBanner")) return "community_banner";
   if (action.includes("ModerationReport")) return "community_report";
   if (action.includes("Post")) return "post";
   if (action.includes("Poll")) return "poll";

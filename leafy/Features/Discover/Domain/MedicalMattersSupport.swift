@@ -451,7 +451,7 @@ enum MedicalLedgerExporter {
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let filename = "LeafyMedicalLedger-\(formatter.string(from: Date())).zip"
+        let filename = "MyLeafyMedicalLedger-\(formatter.string(from: Date())).zip"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         try data.write(to: url, options: .atomic)
         return url

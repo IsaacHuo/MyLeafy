@@ -448,7 +448,7 @@ nonisolated enum CampusAIToolRegistry {
     static let actionPlan = CampusAIToolDescriptor(
         id: "action.plan",
         title: "动作规划",
-        detail: "把回答整理成用户确认后执行的 Leafy 动作。",
+        detail: "把回答整理成用户确认后执行的 MyLeafy 动作。",
         systemImageName: "wand.and.stars",
         actionKind: nil,
         toolName: "action.plan",
@@ -458,7 +458,7 @@ nonisolated enum CampusAIToolRegistry {
     static let openAcademicRoute = CampusAIToolDescriptor(
         id: CampusAIActionKind.openAcademicRoute.rawValue,
         title: "打开页面",
-        detail: "打开 Leafy 内的指定校园页面。",
+        detail: "打开 MyLeafy 内的指定校园页面。",
         systemImageName: "arrow.up.right.square",
         actionKind: .openAcademicRoute,
         toolName: nil,
@@ -611,7 +611,7 @@ nonisolated enum CampusAIServiceMode: String, Codable, CaseIterable, Hashable, I
         case .ownAPIKey:
             return "自备 DeepSeek API Key"
         case .leafyManaged:
-            return "Leafy AI 服务"
+            return "MyLeafy AI 服务"
         }
     }
 
@@ -620,7 +620,7 @@ nonisolated enum CampusAIServiceMode: String, Codable, CaseIterable, Hashable, I
         case .ownAPIKey:
             return "DeepSeek Key"
         case .leafyManaged:
-            return "Leafy AI"
+            return "MyLeafy AI"
         }
     }
 }
@@ -861,11 +861,11 @@ nonisolated struct CampusAICapabilitySet: Codable, Hashable {
 
 nonisolated enum CampusAISettingsStore {
     static let defaultSystemPrompt = """
-    你是 Leafy 的通用 AI 助手。请用专业、克制的中文回答，默认简短直接，先给结论和下一步；相关时可以结合用户允许的本机数据提供具体建议。避免先否定后转折的模板化句式和带有营销意味的抽象口号，也不要为了结构完整重复结论。使用清晰的 Markdown 层级：不同主题换段或使用短标题，三项以上并列信息使用列表，不要用 emoji、连续加粗或挤在一段中的序号模拟结构。信息不足时直接说明缺少的内容，不要编造。
+    你是 MyLeafy 的通用 AI 助手。请用专业、克制的中文回答，默认简短直接，先给结论和下一步；相关时可以结合用户允许的本机数据提供具体建议。避免先否定后转折的模板化句式和带有营销意味的抽象口号，也不要为了结构完整重复结论。使用清晰的 Markdown 层级：不同主题换段或使用短标题，三项以上并列信息使用列表，不要用 emoji、连续加粗或挤在一段中的序号模拟结构。信息不足时直接说明缺少的内容，不要编造。
     """
 
     static let previousGeneralDefaultSystemPrompt = """
-    你是 Leafy 的通用 AI 助手。请用中文回答，默认简短直接，先给结论和下一步；相关时可以结合用户允许的本机数据提供更具体的建议。信息不足时直接说缺什么，不要编造。
+    你是 MyLeafy 的通用 AI 助手。请用中文回答，默认简短直接，先给结论和下一步；相关时可以结合用户允许的本机数据提供更具体的建议。信息不足时直接说缺什么，不要编造。
     """
 
     static let legacyCampusDefaultSystemPrompt = """

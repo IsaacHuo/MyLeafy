@@ -77,6 +77,17 @@ struct LeafyIconBadge: View {
     }
 }
 
+struct LeafyDisclosureIndicator: View {
+    @Environment(\.leafyControlScale) private var leafyControlScale
+
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 13 * leafyControlScale, weight: .semibold))
+            .foregroundStyle(AppTheme.tertiaryText)
+            .accessibilityHidden(true)
+    }
+}
+
 struct LeafyGlassIconButton: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference

@@ -68,7 +68,7 @@ struct ScheduleSectionView: View {
                 openRoute(.examSchedule)
             }
 
-            ToolEntryCard(title: "自定日程", subtitle: "添加日程，学期内显示在课表，学期外显示倒计时", icon: "calendar.badge.plus") {
+            ToolEntryCard(title: "自定日程", subtitle: "每条日程都有倒计时，学期内同时显示在课表", icon: "calendar.badge.plus") {
                 openRoute(.customCountdowns)
             }
 

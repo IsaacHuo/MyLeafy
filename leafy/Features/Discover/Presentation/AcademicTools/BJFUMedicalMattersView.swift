@@ -17,7 +17,7 @@ struct MedicalMattersSectionView: View {
                         .foregroundStyle(AppTheme.accentEmphasis)
                         .frame(width: 24, height: 24)
 
-                    Text("个人台账均只保存在本机，Leafy 只做资料收集并提供参考参考，不上传医疗数据，也不会实时更新政策。")
+                    Text("个人台账均只保存在本机，MyLeafy 只做资料收集并提供参考，不上传医疗数据，也不会实时更新政策。")
                         .leafySubheadline()
                         .foregroundStyle(AppTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)

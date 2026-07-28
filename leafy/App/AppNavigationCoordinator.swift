@@ -33,7 +33,7 @@ extension RootTab: CaseIterable, Identifiable {
         case .community:
             return L10n.text("社区", language: language)
         case .leafy:
-            return "Leafy"
+            return AppBrand.displayName
         case .academics:
             return L10n.text("校园", language: language)
         case .profile:

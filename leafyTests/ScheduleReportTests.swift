@@ -8,6 +8,13 @@ final class ScheduleReportTests: XCTestCase {
         let scheduledNotificationIDs: [String]
     }
 
+    private struct LegacyScheduleReportSettingsWithReminder: Codable {
+        let isEnabled: Bool
+        let modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
+        let customReminder: ScheduleReportCustomSetting
+        let scheduledNotificationIDs: [String]
+    }
+
     private struct LegacyCountdownEvent: Codable {
         let id: String
         let title: String
@@ -42,7 +49,7 @@ final class ScheduleReportTests: XCTestCase {
         let loaded = ScheduleReportSettingsStore.load(defaults: defaults)
 
         XCTAssertTrue(key.hasPrefix("leafy.campus."))
-        XCTAssertTrue(key.hasSuffix("scheduleReport.settings.v1"))
+        XCTAssertTrue(key.hasSuffix("scheduleReport.settings.v2"))
         XCTAssertEqual(loaded.setting(for: .eveningReport).hour, 23)
         XCTAssertEqual(loaded.setting(for: .eveningReport).minute, 0)
         XCTAssertEqual(loaded.scheduledNotificationIDs, ["one", "two"])
@@ -67,6 +74,34 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertFalse(decoded.customReminder.isEnabled)
         XCTAssertEqual(decoded.setting(for: .morningReport).hour, 8)
         XCTAssertEqual(decoded.scheduledNotificationIDs, ["legacy"])
+    }
+
+    func testV1StoreMigratesSingleReminderIntoV2List() throws {
+        let defaults = try makeDefaults()
+        let fireDate = try makeDateTime("2026-03-10 09:30")
+        let legacy = LegacyScheduleReportSettingsWithReminder(
+            isEnabled: true,
+            modeSettings: [:],
+            customReminder: ScheduleReportCustomSetting(
+                isEnabled: true,
+                title: "提交材料",
+                body: "带上盖章版",
+                fireDate: fireDate
+            ),
+            scheduledNotificationIDs: ["legacy-id"]
+        )
+        let legacyKey = ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)
+            .replacingOccurrences(of: ".v2", with: ".v1")
+        defaults.set(try JSONEncoder().encode(legacy), forKey: legacyKey)
+
+        let migrated = ScheduleReportSettingsStore.load(defaults: defaults)
+
+        XCTAssertEqual(migrated.reminders.count, 1)
+        XCTAssertEqual(migrated.customReminder.title, "提交材料")
+        XCTAssertEqual(migrated.customReminder.body, "带上盖章版")
+        XCTAssertEqual(migrated.customReminder.fireDate, fireDate)
+        XCTAssertEqual(migrated.reminders.first?.leadMinutes, [0])
+        XCTAssertNotNil(defaults.data(forKey: ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)))
     }
 
     func testCustomReminderBuildsOneDraftWithDefaultBody() throws {
@@ -225,6 +260,163 @@ final class ScheduleReportTests: XCTestCase {
         )
 
         XCTAssertTrue(drafts.isEmpty)
+    }
+
+    func testReminderSupportsMultipleUniqueLeadTimesWithStableIDs() throws {
+        let now = try makeDateTime("2026-03-09 08:00")
+        let occurrence = try makeDateTime("2026-03-10 10:00")
+        let reminderID = UUID(uuidString: "11111111-2222-3333-8444-555555555555")!
+        let settings = ScheduleReportSettings(
+            reminders: [
+                ScheduleReminder(
+                    id: reminderID,
+                    source: .freeform(title: "答辩", body: "", fireDate: occurrence),
+                    leadMinutes: [60, 0, 60, 10]
+                )
+            ]
+        )
+        let input = ScheduleReportInput(courses: [], exams: [], countdowns: [], cellReminders: [])
+
+        let first = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now, calendar: calendar)
+        let second = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now, calendar: calendar)
+
+        XCTAssertEqual(first.count, 3)
+        XCTAssertEqual(first.map(\.id), second.map(\.id))
+        XCTAssertEqual(Set(first.map(\.fireDate)), Set([
+            occurrence,
+            occurrence.addingTimeInterval(-10 * 60),
+            occurrence.addingTimeInterval(-60 * 60),
+        ]))
+    }
+
+    func testMissingSourceIsDisabledWithoutDeletingConfiguration() {
+        let reminder = ScheduleReminder(
+            id: UUID(),
+            isEnabled: true,
+            source: .customSchedule(eventID: "removed-event"),
+            leadMinutes: [0, 60]
+        )
+        let settings = ScheduleReportSettings(reminders: [reminder])
+
+        let resolved = ScheduleReportPlanner.resolvingReminderSources(
+            in: settings,
+            input: ScheduleReportInput(courses: [], exams: [], countdowns: [], cellReminders: [])
+        )
+
+        XCTAssertEqual(resolved.reminders.count, 1)
+        XCTAssertFalse(resolved.reminders[0].isEnabled)
+        XCTAssertEqual(resolved.reminders[0].availability, .sourceUnavailable)
+        XCTAssertEqual(resolved.reminders[0].source, reminder.source)
+        XCTAssertEqual(resolved.reminders[0].leadMinutes, [0, 60])
+    }
+
+    func testCourseReminderCanTargetOneOccurrenceOrRemainingSemester() throws {
+        let now = SemesterConfig.startOfSemesterDate.addingTimeInterval(-60)
+        let courseID = UUID()
+        let course = Course(
+            id: courseID,
+            courseName: "森林生态",
+            teacher: "林老师",
+            room: "二教 203",
+            dayOfWeek: 1,
+            weeks: [1, 2],
+            duration: [1, 2]
+        )
+        let firstOccurrence = try XCTUnwrap(TimetablePeriodSchedule.startDate(for: course, week: 1))
+        let input = ScheduleReportInput(courses: [course], exams: [], countdowns: [], cellReminders: [])
+        let single = ScheduleReportSettings(reminders: [
+            ScheduleReminder(
+                source: .course(
+                    courseID: courseID,
+                    scope: .singleOccurrence,
+                    occurrenceDate: firstOccurrence
+                )
+            )
+        ])
+        let remaining = ScheduleReportSettings(reminders: [
+            ScheduleReminder(
+                source: .course(
+                    courseID: courseID,
+                    scope: .remainingSemester,
+                    occurrenceDate: nil
+                )
+            )
+        ])
+
+        XCTAssertEqual(
+            ScheduleReportPlanner.drafts(settings: single, input: input, now: now, calendar: calendar).count,
+            1
+        )
+        XCTAssertEqual(
+            ScheduleReportPlanner.drafts(settings: remaining, input: input, now: now, calendar: calendar).count,
+            1,
+            "滚动窗口只调度未来 7 天内的课程；后一周由后续刷新补入"
+        )
+    }
+
+    func testReportWeatherIsAppendedOnlyWhenForecastExistsForTargetDay() throws {
+        let now = try makeDateTime("2026-03-09 06:00")
+        var settings = ScheduleReportSettings(isEnabled: true)
+        settings.set(ScheduleReportModeSetting(isEnabled: true, hour: 7, minute: 30), for: .morningReport)
+        let input = ScheduleReportInput(courses: [], exams: [], countdowns: [], cellReminders: [])
+        let weather = TimetableWeatherSnapshot(
+            temperature: 20,
+            condition: "多云",
+            symbolName: "cloud",
+            observedAt: now,
+            hourlyForecast: [
+                TimetableHourlyWeather(
+                    date: try makeDateTime("2026-03-09 09:00"),
+                    temperature: 22,
+                    condition: "多云",
+                    symbolName: "cloud",
+                    precipitationChance: 0,
+                    uvIndex: 2,
+                    isDaylight: true
+                )
+            ],
+            attribution: .appleWeather
+        )
+
+        let withWeather = ScheduleReportPlanner.drafts(
+            settings: settings,
+            input: input,
+            weather: weather,
+            now: now,
+            calendar: calendar
+        )
+        let withoutWeather = ScheduleReportPlanner.drafts(
+            settings: settings,
+            input: input,
+            weather: nil,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(withWeather.first?.body.contains("天气：") == true)
+        XCTAssertFalse(withoutWeather.first?.body.contains("天气") == true)
+        XCTAssertFalse(withoutWeather.first?.body.contains("不可用") == true)
+    }
+
+    func testNotificationCapacityReservesOtherPendingSlotsAndKeepsEarliestDrafts() throws {
+        let base = try makeDateTime("2026-03-09 08:00")
+        let drafts = (0..<10).reversed().map { offset in
+            ScheduleReportNotificationDraft(
+                id: "draft-\(offset)",
+                mode: .custom,
+                fireDate: base.addingTimeInterval(Double(offset) * 60),
+                title: "提醒",
+                body: "正文",
+                targetURL: ScheduleReportPlanner.targetURL
+            )
+        }
+
+        let selected = ScheduleReportNotificationCapacityPlanner.selectedDrafts(
+            from: drafts,
+            otherPendingCount: 61
+        )
+
+        XCTAssertEqual(selected.map(\.id), ["draft-0", "draft-1", "draft-2"])
     }
 
     private var calendar: Calendar {

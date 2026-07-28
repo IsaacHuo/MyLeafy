@@ -531,6 +531,7 @@ struct RealCommunitySectionView: View {
     @State private var deleteTargetPost: CommunityPost?
     @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var operationAlert: LeafyOperationAlert?
+    @State private var bannerRefreshID = UUID()
 
     private var feedQuery: CommunityFeedQuery {
         if isShowingHotPosts {
@@ -571,6 +572,10 @@ struct RealCommunitySectionView: View {
                         .frame(height: 0)
 
                         LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                            CommunityBannerSlot(
+                                refreshID: bannerRefreshID,
+                                campusID: ActiveCampusContext.descriptor.id.rawValue
+                            )
                             if !publishCoordinator.visibleTasks.isEmpty {
                                 CommunityPublishTaskStrip(tasks: publishCoordinator.visibleTasks)
                             }
@@ -594,6 +599,7 @@ struct RealCommunitySectionView: View {
                         return
                     }
                     await viewModel.load(mode: .refresh, query: feedQuery)
+                    bannerRefreshID = UUID()
                 }
             }
         }

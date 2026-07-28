@@ -617,7 +617,13 @@ struct TimetableView: View {
             isQuickAccessPresented.toggle()
         } label: {
             toolbarIconLabel(systemName: "slider.horizontal.3")
+                .frame(
+                    width: LeafyRootChromeMetrics.controlDiameter,
+                    height: LeafyRootChromeMetrics.controlDiameter
+                )
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .popover(
             isPresented: $isQuickAccessPresented,
             attachmentAnchor: .point(.bottomLeading),

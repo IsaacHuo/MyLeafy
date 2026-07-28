@@ -759,7 +759,7 @@ nonisolated enum CampusAIContextBuilder {
                 itemCount: 0,
                 lastSyncAt: nil,
                 state: .disabled,
-                note: "用户已在 Leafy AI 设置中关闭此上下文。"
+                note: "用户已在 MyLeafy AI 设置中关闭此上下文。"
             )
         }
 

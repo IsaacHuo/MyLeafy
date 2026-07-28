@@ -15,6 +15,7 @@ Deno.test("operator can export operational data but not sensitive resources", ()
   assertEquals(roleCanExport("operator", "feedback"), false);
   assertEquals(permissions.find((item) => item.resource === "feedback")?.actions.includes("create"), false);
   assertEquals(permissions.find((item) => item.resource === "ratings")?.actions.includes("delete"), true);
+  assertEquals(permissions.find((item) => item.resource === "community-banners")?.actions.includes("create"), true);
 });
 
 Deno.test("super admin receives system permissions and sensitive export", () => {

@@ -288,7 +288,7 @@ npm run dev:pages
 export SUPABASE_DB_URL='postgresql://...'
 export ADMIN_USERNAME='admin'
 export ADMIN_PASSWORD='replace-with-a-long-unique-password'
-export ADMIN_DISPLAY_NAME='Leafy Admin'
+export ADMIN_DISPLAY_NAME='MyLeafy Admin'
 bash supabase/scripts/create-admin-account.sh
 ```
 

@@ -94,6 +94,11 @@ const actionRegistry = {
   listAnnouncements: defineAction("listAnnouncements", listAnnouncements, { domain: "admin" }),
   createAnnouncement: defineAction("createAnnouncement", createAnnouncement, { domain: "admin", permission: "operator", mutating: true }),
   updateAnnouncement: defineAction("updateAnnouncement", updateAnnouncement, { domain: "admin", permission: "operator", mutating: true }),
+  listCommunityBanners: defineAction("listCommunityBanners", listCommunityBanners, { domain: "admin" }),
+  createCommunityBanner: defineAction("createCommunityBanner", createCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
+  updateCommunityBanner: defineAction("updateCommunityBanner", updateCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
+  publishCommunityBanner: defineAction("publishCommunityBanner", publishCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
+  archiveCommunityBanner: defineAction("archiveCommunityBanner", archiveCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
   listPostgraduateSources: defineAction("listPostgraduateSources", listPostgraduateSources, { domain: "catalog-ratings" }),
   upsertPostgraduateSource: defineAction("upsertPostgraduateSource", upsertPostgraduateSource, { domain: "catalog-ratings", permission: "operator", mutating: true }),
   setPostgraduateSourceStatus: defineAction("setPostgraduateSourceStatus", setPostgraduateSourceStatus, { domain: "catalog-ratings", permission: "operator", mutating: true }),
@@ -1712,6 +1717,180 @@ async function updateAnnouncement(context: AdminContext, params: Record<string, 
   return data;
 }
 
+const communityBannerBucket = "community-banner-assets";
+const communityBannerAppRoutes = new Set([
+  "timetable",
+  "community",
+  "schedule_reports",
+  "custom_schedules",
+  "timetable_background",
+  "profile",
+]);
+
+async function listCommunityBanners(context: AdminContext, params: Record<string, unknown>) {
+  const { from, to, page, pageSize } = pagination(params);
+  let query: any = context.adminClient
+    .from("community_banners")
+    .select("*", { count: "exact" })
+    .order("updated_at", { ascending: false })
+    .range(from, to);
+
+  const status = textParam(params, "status");
+  if (status && status !== "all") {
+    query = query.eq("status", status);
+  }
+  const search = textParam(params, "search");
+  if (search) {
+    const safe = likeText(search);
+    query = query.or(`title.ilike.%${safe}%,subtitle.ilike.%${safe}%`);
+  }
+  query = applyCampusIDFilter(query, params);
+
+  const { data, count, error } = await query;
+  if (error) throw databaseError(error);
+
+  const paths = unique((data ?? []).map((item: any) => item.image_path).filter(Boolean));
+  const signedMap = new Map<string, string>();
+  if (paths.length > 0) {
+    const { data: signed, error: signedError } = await context.adminClient.storage
+      .from(communityBannerBucket)
+      .createSignedUrls(paths, 15 * 60);
+    if (signedError) throw databaseError(signedError);
+    for (const result of signed ?? []) {
+      signedMap.set(result.path, result.signedUrl ?? result.signedURL);
+    }
+  }
+
+  return {
+    items: (data ?? []).map((item: any) => ({
+      ...item,
+      signed_image_url: item.image_path ? signedMap.get(item.image_path) ?? null : null,
+    })),
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
+}
+
+async function createCommunityBanner(context: AdminContext, params: Record<string, unknown>) {
+  const campusID = scopedCampusID(params);
+  if (!campusID) {
+    throw new HttpError(400, "创建 Banner 前必须选择具体学校。");
+  }
+
+  const id = crypto.randomUUID();
+  const revision = 1;
+  const imagePath = await uploadCommunityBannerImage(context, params, campusID, id, revision);
+  const payload = normalizeCommunityBannerPayload(params, false);
+
+  const { data, error } = await context.adminClient
+    .from("community_banners")
+    .insert({
+      id,
+      campus_id: campusID,
+      revision,
+      ...payload,
+      image_path: imagePath,
+      status: "draft",
+      created_by: context.admin.id,
+      updated_by: context.admin.id,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (imagePath) {
+      await context.adminClient.storage.from(communityBannerBucket).remove([imagePath]);
+    }
+    throw databaseError(error);
+  }
+  return data;
+}
+
+async function updateCommunityBanner(context: AdminContext, params: Record<string, unknown>) {
+  const id = requiredText(params, "id");
+  const { data: current, error: currentError } = await context.adminClient
+    .from("community_banners")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (currentError) throw databaseError(currentError);
+  if (!current) throw new HttpError(404, "Banner not found.");
+
+  const campusID = scopedCampusID(params) ?? current.campus_id;
+  if (campusID !== current.campus_id) {
+    throw new HttpError(400, "Banner 所属学校不可更改。");
+  }
+
+  const revision = Number(current.revision ?? 1) + 1;
+  const uploadedPath = await uploadCommunityBannerImage(context, params, campusID, id, revision);
+  const removeImage = params.removeImage === true || params.remove_image === true;
+  const imagePath = uploadedPath ?? (removeImage ? null : current.image_path);
+  const payload = normalizeCommunityBannerPayload(params, true, current);
+
+  const { data, error } = await context.adminClient
+    .from("community_banners")
+    .update({
+      ...payload,
+      image_path: imagePath,
+      revision,
+      status: current.status === "published" ? "draft" : current.status,
+      published_at: current.status === "published" ? null : current.published_at,
+      updated_by: context.admin.id,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (uploadedPath) {
+      await context.adminClient.storage.from(communityBannerBucket).remove([uploadedPath]);
+    }
+    throw databaseError(error);
+  }
+
+  if ((uploadedPath || removeImage) && current.image_path && current.image_path !== imagePath) {
+    await context.adminClient.storage.from(communityBannerBucket).remove([current.image_path]);
+  }
+  return data;
+}
+
+async function publishCommunityBanner(context: AdminContext, params: Record<string, unknown>) {
+  const id = requiredText(params, "id");
+  const { data: current, error: currentError } = await context.adminClient
+    .from("community_banners")
+    .select("id, expires_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (currentError) throw databaseError(currentError);
+  if (!current) throw new HttpError(404, "Banner not found.");
+  if (current.expires_at && new Date(current.expires_at).getTime() <= Date.now()) {
+    throw new HttpError(400, "已过期的 Banner 不能发布。");
+  }
+
+  const { data, error } = await context.adminClient.rpc("publish_community_banner", {
+    p_banner_id: id,
+    p_admin_id: context.admin.id,
+  });
+  if (error) throw databaseError(error);
+  return data;
+}
+
+async function archiveCommunityBanner(context: AdminContext, params: Record<string, unknown>) {
+  const id = requiredText(params, "id");
+  const { data, error } = await context.adminClient
+    .from("community_banners")
+    .update({
+      status: "archived",
+      updated_by: context.admin.id,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw databaseError(error);
+  return data;
+}
+
 async function listPostgraduateSources(context: AdminContext, params: Record<string, unknown>) {
   const { from, to, page, pageSize } = pagination(params);
   let query: any = context.adminClient
@@ -3309,6 +3488,175 @@ function normalizeAnnouncementPayload(params: Record<string, unknown>, partial: 
   }
 
   return payload;
+}
+
+function normalizeCommunityBannerPayload(params: Record<string, unknown>, partial: boolean, current?: any) {
+  const payload: Record<string, unknown> = {};
+  const has = (key: string) => Object.prototype.hasOwnProperty.call(params, key);
+
+  if (!partial || has("title")) {
+    const title = normalizeText(params.title);
+    if (!title) throw new HttpError(400, "Banner 标题不能为空。");
+    if (title.length > 60) throw new HttpError(400, "Banner 标题最多 60 个字符。");
+    payload.title = title;
+  }
+
+  if (!partial || has("subtitle")) {
+    const subtitle = normalizeText(params.subtitle);
+    if (!subtitle) throw new HttpError(400, "Banner 副标题不能为空。");
+    if (subtitle.length > 180) throw new HttpError(400, "Banner 副标题最多 180 个字符。");
+    payload.subtitle = subtitle;
+  }
+
+  if (!partial || has("destinationKind") || has("destination_kind")) {
+    const kind = normalizeText(params.destinationKind ?? params.destination_kind) ?? "none";
+    if (!["none", "community_post", "app_route", "https_url"].includes(kind)) {
+      throw new HttpError(400, "不支持的 Banner 目标类型。");
+    }
+    payload.destination_kind = kind;
+  }
+
+  if (!partial || has("destinationValue") || has("destination_value")) {
+    payload.destination_value = normalizeText(params.destinationValue ?? params.destination_value);
+  }
+
+  if (has("expiresAt") || has("expires_at")) {
+    payload.expires_at = normalizeDate(params.expiresAt ?? params.expires_at);
+  }
+
+  const kind = String(payload.destination_kind ?? current?.destination_kind ?? "none");
+  const value = normalizeText(payload.destination_value ?? current?.destination_value);
+  if (kind === "none") {
+    payload.destination_value = null;
+  } else if (!value) {
+    throw new HttpError(400, "选择跳转类型后必须填写目标值。");
+  } else if (kind === "community_post") {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+      throw new HttpError(400, "社区帖子目标必须是有效 UUID。");
+    }
+    payload.destination_value = value;
+  } else if (kind === "app_route") {
+    if (!communityBannerAppRoutes.has(value)) {
+      throw new HttpError(400, "App 路由不在允许列表中。");
+    }
+    payload.destination_value = value;
+  } else if (kind === "https_url") {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new HttpError(400, "网页目标必须是有效 HTTPS URL。");
+    }
+    if (url.protocol !== "https:" || !url.hostname) {
+      throw new HttpError(400, "网页目标只允许 HTTPS URL。");
+    }
+    payload.destination_value = url.toString();
+  }
+
+  const publishedAt = current?.published_at ?? null;
+  const expiresAt = Object.prototype.hasOwnProperty.call(payload, "expires_at")
+    ? payload.expires_at
+    : current?.expires_at ?? null;
+  if (publishedAt && expiresAt && new Date(String(expiresAt)).getTime() <= new Date(String(publishedAt)).getTime()) {
+    throw new HttpError(400, "Banner 过期时间必须晚于发布时间。");
+  }
+  return payload;
+}
+
+async function uploadCommunityBannerImage(
+  context: AdminContext,
+  params: Record<string, unknown>,
+  campusID: string,
+  bannerID: string,
+  revision: number,
+) {
+  const dataURL = normalizeText(params.imageDataURL ?? params.image_data_url);
+  if (!dataURL) return null;
+
+  const parsed = parseCommunityBannerImage(dataURL);
+  const extension = parsed.mimeType === "image/png" ? "png" : "jpg";
+  const path = `${campusID}/${bannerID}/r${revision}-${crypto.randomUUID()}.${extension}`;
+  const { error } = await context.adminClient.storage
+    .from(communityBannerBucket)
+    .upload(path, parsed.bytes, {
+      contentType: parsed.mimeType,
+      cacheControl: "31536000",
+      upsert: false,
+    });
+  if (error) throw databaseError(error);
+  return path;
+}
+
+function parseCommunityBannerImage(dataURL: string) {
+  const match = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataURL);
+  if (!match) {
+    throw new HttpError(400, "Banner 图片只支持 JPEG 或 PNG。");
+  }
+
+  let binary: string;
+  try {
+    binary = atob(match[2].replace(/\s/g, ""));
+  } catch {
+    throw new HttpError(400, "Banner 图片编码无效。");
+  }
+  if (binary.length === 0 || binary.length > 2 * 1024 * 1024) {
+    throw new HttpError(413, "Banner 图片不得超过 2 MB。", { code: "payload_too_large" });
+  }
+
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const dimensions = match[1] === "image/png"
+    ? pngDimensions(bytes)
+    : jpegDimensions(bytes);
+  if (!dimensions) {
+    throw new HttpError(400, "无法读取 Banner 图片尺寸。");
+  }
+  const ratio = dimensions.width / dimensions.height;
+  if (
+    dimensions.width < 600 ||
+    dimensions.height < 200 ||
+    dimensions.width > 4096 ||
+    dimensions.height > 2048 ||
+    ratio < 1.8 ||
+    ratio > 4.5
+  ) {
+    throw new HttpError(400, "Banner 图片需为 1.8:1 至 4.5:1，且至少 600×200。");
+  }
+  return { mimeType: match[1], bytes, ...dimensions };
+}
+
+function pngDimensions(bytes: Uint8Array) {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 24 || !signature.every((value, index) => bytes[index] === value)) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+function jpegDimensions(bytes: Uint8Array) {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = bytes[offset + 1];
+    if (marker === 0xd9 || marker === 0xda) break;
+    const length = (bytes[offset + 2] << 8) + bytes[offset + 3];
+    if (length < 2 || offset + length + 2 > bytes.length) return null;
+    if (
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf)
+    ) {
+      return {
+        height: (bytes[offset + 5] << 8) + bytes[offset + 6],
+        width: (bytes[offset + 7] << 8) + bytes[offset + 8],
+      };
+    }
+    offset += length + 2;
+  }
+  return null;
 }
 
 function normalizePostgraduateSourcePayload(params: Record<string, unknown>, partial: boolean) {

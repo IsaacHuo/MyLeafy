@@ -636,7 +636,7 @@ nonisolated enum CampusAILocalArtifactBuilder {
                 id: "local-\(result.id)",
                 title: result.title.nonEmptyTrimmed ?? result.domain.title,
                 url: "leafy://local/\(result.domain.rawValue)/\(result.sourceID)",
-                siteName: "Leafy \(result.domain.title)",
+                siteName: "MyLeafy \(result.domain.title)",
                 summary: result.summary.nonEmptyTrimmed,
                 excerpt: nil,
                 trustScore: 1,

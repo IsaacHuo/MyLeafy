@@ -131,47 +131,129 @@ struct ScheduleReportCustomSetting: Codable, Hashable, Identifiable {
     }
 }
 
+enum ScheduleReminderCourseScope: String, Codable, CaseIterable, Hashable {
+    case singleOccurrence
+    case remainingSemester
+
+    var title: String {
+        switch self {
+        case .singleOccurrence: return "仅这次上课"
+        case .remainingSemester: return "本学期后续全部上课"
+        }
+    }
+}
+
+enum ScheduleReminderSource: Codable, Hashable {
+    case freeform(title: String, body: String, fireDate: Date?)
+    case customSchedule(eventID: String)
+    case exam(examID: Int)
+    case calendar(eventID: String)
+    case course(courseID: UUID, scope: ScheduleReminderCourseScope, occurrenceDate: Date?)
+
+    var kindTitle: String {
+        switch self {
+        case .freeform: return "自由输入"
+        case .customSchedule: return "自定日程"
+        case .exam: return "教务考试"
+        case .calendar: return "校历节点"
+        case .course: return "课程"
+        }
+    }
+}
+
+enum ScheduleReminderAvailability: String, Codable, Hashable {
+    case available
+    case sourceUnavailable
+}
+
+struct ScheduleReminder: Codable, Hashable, Identifiable {
+    static let presetLeadMinutes = [0, 10, 30, 60, 1_440, 4_320, 10_080]
+    static let customLeadMinuteRange = 1...10_080
+
+    var id: UUID
+    var isEnabled: Bool
+    var source: ScheduleReminderSource
+    var leadMinutes: [Int]
+    var availability: ScheduleReminderAvailability
+
+    init(
+        id: UUID = UUID(),
+        isEnabled: Bool = true,
+        source: ScheduleReminderSource,
+        leadMinutes: [Int] = [0],
+        availability: ScheduleReminderAvailability = .available
+    ) {
+        self.id = id
+        self.isEnabled = isEnabled
+        self.source = source
+        self.leadMinutes = Self.normalizedLeadMinutes(leadMinutes)
+        self.availability = availability
+    }
+
+    static func normalizedLeadMinutes(_ values: [Int]) -> [Int] {
+        Array(Set(values.map { min(max($0, 0), customLeadMinuteRange.upperBound) })).sorted()
+    }
+}
+
 struct ScheduleReportSettings: Codable, Hashable {
     var isEnabled: Bool
     var modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
-    var customReminder: ScheduleReportCustomSetting
+    var reminders: [ScheduleReminder]
     var scheduledNotificationIDs: [String]
+    var scheduledCount: Int
+    var waitingCount: Int
 
     init(
         isEnabled: Bool = false,
         modeSettings: [ScheduleReportMode: ScheduleReportModeSetting] = [:],
-        customReminder: ScheduleReportCustomSetting = ScheduleReportCustomSetting(),
-        scheduledNotificationIDs: [String] = []
+        reminders: [ScheduleReminder] = [],
+        customReminder: ScheduleReportCustomSetting? = nil,
+        scheduledNotificationIDs: [String] = [],
+        scheduledCount: Int = 0,
+        waitingCount: Int = 0
     ) {
         self.isEnabled = isEnabled
         self.modeSettings = Self.normalizedModeSettings(modeSettings)
-        self.customReminder = customReminder
+        self.reminders = reminders
+        if let customReminder,
+           customReminder.isConfigured || customReminder.isEnabled {
+            self.reminders.append(Self.migratedReminder(from: customReminder))
+        }
         self.scheduledNotificationIDs = scheduledNotificationIDs
+        self.scheduledCount = max(0, scheduledCount)
+        self.waitingCount = max(0, waitingCount)
     }
 
     private enum CodingKeys: String, CodingKey {
         case isEnabled
         case modeSettings
+        case reminders
         case customReminder
         case scheduledNotificationIDs
+        case scheduledCount
+        case waitingCount
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacyReminder = try container.decodeIfPresent(
+            ScheduleReportCustomSetting.self,
+            forKey: .customReminder
+        )
         self.init(
             isEnabled: try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false,
             modeSettings: try container.decodeIfPresent(
                 [ScheduleReportMode: ScheduleReportModeSetting].self,
                 forKey: .modeSettings
             ) ?? [:],
-            customReminder: try container.decodeIfPresent(
-                ScheduleReportCustomSetting.self,
-                forKey: .customReminder
-            ) ?? ScheduleReportCustomSetting(),
+            reminders: try container.decodeIfPresent([ScheduleReminder].self, forKey: .reminders) ?? [],
+            customReminder: legacyReminder,
             scheduledNotificationIDs: try container.decodeIfPresent(
                 [String].self,
                 forKey: .scheduledNotificationIDs
-            ) ?? []
+            ) ?? [],
+            scheduledCount: try container.decodeIfPresent(Int.self, forKey: .scheduledCount) ?? 0,
+            waitingCount: try container.decodeIfPresent(Int.self, forKey: .waitingCount) ?? 0
         )
     }
 
@@ -179,8 +261,10 @@ struct ScheduleReportSettings: Codable, Hashable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(isEnabled, forKey: .isEnabled)
         try container.encode(modeSettings, forKey: .modeSettings)
-        try container.encode(customReminder, forKey: .customReminder)
+        try container.encode(reminders, forKey: .reminders)
         try container.encode(scheduledNotificationIDs, forKey: .scheduledNotificationIDs)
+        try container.encode(scheduledCount, forKey: .scheduledCount)
+        try container.encode(waitingCount, forKey: .waitingCount)
     }
 
     static let disabled = ScheduleReportSettings()
@@ -202,12 +286,57 @@ struct ScheduleReportSettings: Codable, Hashable {
     }
 
     mutating func deriveEnabledState(now: Date = Date()) {
-        if customReminder.isEnabled,
-           let fireDate = customReminder.fireDate,
-           fireDate <= now {
-            customReminder.isEnabled = false
+        for index in reminders.indices {
+            reminders[index].leadMinutes = ScheduleReminder.normalizedLeadMinutes(reminders[index].leadMinutes)
+            if case .freeform(_, _, let fireDate) = reminders[index].source,
+               let fireDate,
+               fireDate <= now {
+                reminders[index].isEnabled = false
+            }
         }
-        isEnabled = !enabledModes.isEmpty || customReminder.isEnabled
+        isEnabled = !enabledModes.isEmpty || reminders.contains(where: \.isEnabled)
+    }
+
+    var customReminder: ScheduleReportCustomSetting {
+        get {
+            guard let reminder = reminders.first(where: {
+                if case .freeform = $0.source { return true }
+                return false
+            }),
+                  case .freeform(let title, let body, let fireDate) = reminder.source
+            else {
+                return ScheduleReportCustomSetting()
+            }
+            return ScheduleReportCustomSetting(
+                isEnabled: reminder.isEnabled,
+                title: title,
+                body: body,
+                fireDate: fireDate
+            )
+        }
+        set {
+            let migrated = Self.migratedReminder(from: newValue)
+            if let index = reminders.firstIndex(where: {
+                if case .freeform = $0.source { return true }
+                return false
+            }) {
+                reminders[index] = migrated
+            } else if newValue.isConfigured || newValue.isEnabled {
+                reminders.append(migrated)
+            }
+        }
+    }
+
+    private static func migratedReminder(from setting: ScheduleReportCustomSetting) -> ScheduleReminder {
+        ScheduleReminder(
+            isEnabled: setting.isEnabled,
+            source: .freeform(
+                title: setting.title,
+                body: setting.body,
+                fireDate: setting.fireDate
+            ),
+            leadMinutes: [0]
+        )
     }
 
     private static func normalizedModeSettings(
@@ -230,21 +359,27 @@ struct ScheduleReportSettings: Codable, Hashable {
 }
 
 enum ScheduleReportSettingsStore {
-    private static let key = "scheduleReport.settings.v1"
+    private static let key = "scheduleReport.settings.v2"
+    private static let legacyKey = "scheduleReport.settings.v1"
 
     static func load(defaults: UserDefaults = .standard) -> ScheduleReportSettings {
-        guard let data = defaults.data(forKey: scopedKey(defaults: defaults)),
+        let currentKey = scopedKey(key, defaults: defaults)
+        let legacyStorageKey = scopedKey(legacyKey, defaults: defaults)
+        guard let data = defaults.data(forKey: currentKey) ?? defaults.data(forKey: legacyStorageKey),
               let settings = try? JSONDecoder().decode(ScheduleReportSettings.self, from: data)
-        else {
-            return .disabled
-        }
+        else { return .disabled }
         var normalized = ScheduleReportSettings(
             isEnabled: settings.isEnabled,
             modeSettings: settings.modeSettings,
-            customReminder: settings.customReminder,
-            scheduledNotificationIDs: settings.scheduledNotificationIDs
+            reminders: settings.reminders,
+            scheduledNotificationIDs: settings.scheduledNotificationIDs,
+            scheduledCount: settings.scheduledCount,
+            waitingCount: settings.waitingCount
         )
         normalized.deriveEnabledState()
+        if defaults.data(forKey: currentKey) == nil {
+            save(normalized, defaults: defaults)
+        }
         return normalized
     }
 
@@ -252,19 +387,20 @@ enum ScheduleReportSettingsStore {
         var normalized = settings
         normalized.deriveEnabledState()
         guard let data = try? JSONEncoder().encode(normalized) else { return }
-        defaults.set(data, forKey: scopedKey(defaults: defaults))
+        defaults.set(data, forKey: scopedKey(key, defaults: defaults))
     }
 
     static func clear(defaults: UserDefaults = .standard) {
-        defaults.removeObject(forKey: scopedKey(defaults: defaults))
+        defaults.removeObject(forKey: scopedKey(key, defaults: defaults))
+        defaults.removeObject(forKey: scopedKey(legacyKey, defaults: defaults))
     }
 
     static func scopedStorageKey(defaults: UserDefaults = .standard) -> String {
-        scopedKey(defaults: defaults)
+        scopedKey(key, defaults: defaults)
     }
 
-    private static func scopedKey(defaults: UserDefaults) -> String {
-        CampusScopedDefaults.key(key, defaults: defaults)
+    private static func scopedKey(_ storageKey: String, defaults: UserDefaults) -> String {
+        CampusScopedDefaults.key(storageKey, defaults: defaults)
     }
 }
 
@@ -303,11 +439,18 @@ enum ScheduleReportPlanner {
     static func drafts(
         settings: ScheduleReportSettings,
         input: ScheduleReportInput,
+        weather: TimetableWeatherSnapshot? = nil,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> [ScheduleReportNotificationDraft] {
         var normalizedSettings = settings
         normalizedSettings.deriveEnabledState(now: now)
+        normalizedSettings = resolvingReminderSources(
+            in: normalizedSettings,
+            input: input,
+            now: now,
+            calendar: calendar
+        )
         guard normalizedSettings.isEnabled else { return [] }
 
         let today = calendar.startOfDay(for: now)
@@ -317,14 +460,18 @@ enum ScheduleReportPlanner {
                 mode: mode,
                 setting: normalizedSettings.setting(for: mode),
                 input: input,
+                weather: weather,
                 now: now,
                 startDay: today,
                 calendar: calendar
             )
         }
-        if let customDraft = customDraft(normalizedSettings.customReminder, now: now, calendar: calendar) {
-            scheduledDrafts.append(customDraft)
-        }
+        scheduledDrafts.append(contentsOf: reminderDrafts(
+            normalizedSettings.reminders,
+            input: input,
+            now: now,
+            calendar: calendar
+        ))
         return scheduledDrafts.sorted { lhs, rhs in
             if lhs.fireDate != rhs.fireDate { return lhs.fireDate < rhs.fireDate }
             return lhs.id < rhs.id
@@ -361,6 +508,7 @@ enum ScheduleReportPlanner {
         mode: ScheduleReportMode,
         setting: ScheduleReportModeSetting,
         input: ScheduleReportInput,
+        weather: TimetableWeatherSnapshot?,
         now: Date,
         startDay: Date,
         calendar: Calendar
@@ -377,7 +525,13 @@ enum ScheduleReportPlanner {
                     mode: mode,
                     fireDate: fireDate,
                     title: "今日早报",
-                    body: reportBody(for: reportDay, input: input, label: "今天", calendar: calendar),
+                    body: reportBody(
+                        for: reportDay,
+                        input: input,
+                        label: "今天",
+                        weather: weather,
+                        calendar: calendar
+                    ),
                     calendar: calendar
                 )
             }
@@ -396,6 +550,7 @@ enum ScheduleReportPlanner {
                         input: input,
                         label: "明天",
                         includesAllCourses: true,
+                        weather: weather,
                         calendar: calendar
                     ),
                     calendar: calendar
@@ -430,25 +585,169 @@ enum ScheduleReportPlanner {
         }
     }
 
-    private static func customDraft(
-        _ setting: ScheduleReportCustomSetting,
+    static func resolvingReminderSources(
+        in settings: ScheduleReportSettings,
+        input: ScheduleReportInput,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> ScheduleReportSettings {
+        var resolved = settings
+        for index in resolved.reminders.indices {
+            let hasSource = !resolvedOccurrences(
+                for: resolved.reminders[index],
+                input: input,
+                now: now,
+                calendar: calendar,
+                includesPastOccurrences: true
+            ).isEmpty
+            resolved.reminders[index].availability = hasSource ? .available : .sourceUnavailable
+            if !hasSource {
+                resolved.reminders[index].isEnabled = false
+            }
+        }
+        resolved.deriveEnabledState(now: now)
+        return resolved
+    }
+
+    private struct ResolvedReminderOccurrence {
+        let sourceDate: Date
+        let title: String
+        let body: String
+    }
+
+    private static func reminderDrafts(
+        _ reminders: [ScheduleReminder],
+        input: ScheduleReportInput,
         now: Date,
         calendar: Calendar
-    ) -> ScheduleReportNotificationDraft? {
-        guard setting.isEnabled,
-              !setting.trimmedTitle.isEmpty,
-              let fireDate = setting.fireDate,
-              fireDate > now
-        else {
-            return nil
+    ) -> [ScheduleReportNotificationDraft] {
+        let windowEnd = calendar.date(byAdding: .day, value: lookaheadDays, to: now)
+            ?? now.addingTimeInterval(Double(lookaheadDays) * 86_400)
+
+        return reminders
+            .filter { $0.isEnabled && $0.availability == .available }
+            .flatMap { reminder -> [ScheduleReportNotificationDraft] in
+                let occurrences = resolvedOccurrences(
+                    for: reminder,
+                    input: input,
+                    now: now,
+                    calendar: calendar
+                )
+                return occurrences.flatMap { occurrence in
+                    reminder.leadMinutes.compactMap { leadMinutes in
+                        let fireDate = occurrence.sourceDate.addingTimeInterval(-Double(leadMinutes) * 60)
+                        guard fireDate > now, fireDate <= windowEnd else { return nil }
+                        return ScheduleReportNotificationDraft(
+                            id: reminderNotificationID(
+                                reminderID: reminder.id,
+                                sourceDate: occurrence.sourceDate,
+                                leadMinutes: leadMinutes
+                            ),
+                            mode: .custom,
+                            fireDate: fireDate,
+                            title: occurrence.title,
+                            body: occurrence.body,
+                            targetURL: targetURL
+                        )
+                    }
+                }
+            }
+    }
+
+    private static func resolvedOccurrences(
+        for reminder: ScheduleReminder,
+        input: ScheduleReportInput,
+        now: Date,
+        calendar: Calendar,
+        includesPastOccurrences: Bool = false
+    ) -> [ResolvedReminderOccurrence] {
+        switch reminder.source {
+        case .freeform(let title, let body, let fireDate):
+            guard let fireDate else { return [] }
+            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedTitle.isEmpty else { return [] }
+            let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            return [
+                ResolvedReminderOccurrence(
+                    sourceDate: fireDate,
+                    title: trimmedTitle,
+                    body: trimmedBody.isEmpty ? ScheduleReportCustomSetting.defaultBody : trimmedBody
+                )
+            ]
+
+        case .customSchedule(let eventID):
+            guard let event = input.countdowns.first(where: { $0.id == eventID }) else { return [] }
+            return [
+                ResolvedReminderOccurrence(
+                    sourceDate: event.startsAt,
+                    title: event.title,
+                    body: [event.location, event.note]
+                        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " · ")
+                        .nonEmptyOrDefault("自定日程即将开始。")
+                )
+            ]
+
+        case .exam(let examID):
+            guard let exam = input.exams.first(where: { $0.id == examID }),
+                  let startsAt = exam.startsAt else { return [] }
+            return [
+                ResolvedReminderOccurrence(
+                    sourceDate: startsAt,
+                    title: exam.name,
+                    body: "\(exam.date) \(exam.start) · \(exam.location)"
+                )
+            ]
+
+        case .calendar(let eventID):
+            guard let event = AcademicCalendarEvents.displayEvents().first(where: { $0.id == eventID }),
+                  let startsAt = event.startDate else { return [] }
+            return [
+                ResolvedReminderOccurrence(
+                    sourceDate: startsAt,
+                    title: event.title,
+                    body: "校历节点即将开始。"
+                )
+            ]
+
+        case .course(let courseID, let scope, let occurrenceDate):
+            guard let course = input.courses.first(where: { $0.id == courseID }) else { return [] }
+            let allOccurrences = course.weeks.compactMap { week -> ResolvedReminderOccurrence? in
+                guard let startsAt = TimetablePeriodSchedule.startDate(for: course, week: week) else {
+                    return nil
+                }
+                return ResolvedReminderOccurrence(
+                    sourceDate: startsAt,
+                    title: course.courseName,
+                    body: [course.teacher, course.room]
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " · ")
+                        .nonEmptyOrDefault("课程即将开始。")
+                )
+            }
+            switch scope {
+            case .singleOccurrence:
+                guard let occurrenceDate else { return [] }
+                return allOccurrences.filter {
+                    abs($0.sourceDate.timeIntervalSince(occurrenceDate)) < 60
+                }
+            case .remainingSemester:
+                return allOccurrences.filter {
+                    includesPastOccurrences || $0.sourceDate >= now
+                }
+            }
         }
-        return draft(
-            mode: .custom,
-            fireDate: fireDate,
-            title: setting.trimmedTitle,
-            body: setting.resolvedBody,
-            calendar: calendar
-        )
+    }
+
+    private static func reminderNotificationID(
+        reminderID: UUID,
+        sourceDate: Date,
+        leadMinutes: Int
+    ) -> String {
+        let occurrenceMinute = Int(sourceDate.timeIntervalSince1970 / 60)
+        return "leafy.scheduleReminder.\(reminderID.uuidString.lowercased()).\(occurrenceMinute).\(leadMinutes)"
     }
 
     private static func singleDraftIfNeeded(
@@ -583,6 +882,7 @@ enum ScheduleReportPlanner {
         input: ScheduleReportInput,
         label: String,
         includesAllCourses: Bool = false,
+        weather: TimetableWeatherSnapshot? = nil,
         calendar: Calendar
     ) -> String {
         let courses = courses(on: date, from: input.courses)
@@ -612,6 +912,15 @@ enum ScheduleReportPlanner {
 
         if !events.isEmpty {
             parts.append(events.map(\.title).joined(separator: "、"))
+        }
+
+        if let weather,
+           let supplement = ScheduleReportWeatherSupplementBuilder.supplement(
+               snapshot: weather,
+               for: date,
+               calendar: calendar
+           ) {
+            parts.append(supplement)
         }
 
         return parts.joined(separator: "；")
@@ -750,27 +1059,102 @@ enum ScheduleReportPlanner {
     }
 }
 
+enum ScheduleReportWeatherSupplementBuilder {
+    static func supplement(
+        snapshot: TimetableWeatherSnapshot?,
+        for date: Date,
+        calendar: Calendar = .current
+    ) -> String? {
+        guard let snapshot else { return nil }
+        let hours = snapshot.hourlyForecast
+            .filter { calendar.isDate($0.date, inSameDayAs: date) }
+            .sorted { $0.date < $1.date }
+        guard !hours.isEmpty else { return nil }
+
+        let minimum = Int((hours.map(\.temperature).min() ?? snapshot.temperature).rounded())
+        let maximum = Int((hours.map(\.temperature).max() ?? snapshot.temperature).rounded())
+        let representative = hours.first(where: { calendar.component(.hour, from: $0.date) >= 8 })
+            ?? hours.first!
+        let advice: String
+        if hours.contains(where: { $0.precipitationChance >= 0.35 || $0.symbolName.contains("rain") || $0.symbolName.contains("snow") }) {
+            advice = "出门建议带伞，并留意路面湿滑"
+        } else if minimum <= 8 {
+            advice = "早晚偏凉，建议加一层衣物"
+        } else if maximum >= 30 || hours.contains(where: { $0.uvIndex >= 7 }) {
+            advice = "注意防晒并及时补水"
+        } else {
+            advice = "出门前可再留意天气变化"
+        }
+        return "天气：\(minimum)～\(maximum)℃ \(representative.condition)；\(advice)"
+    }
+}
+
+enum ScheduleReportNotificationCapacityPlanner {
+    static let systemLimit = 64
+
+    static func selectedDrafts(
+        from drafts: [ScheduleReportNotificationDraft],
+        otherPendingCount: Int,
+        systemLimit: Int = ScheduleReportNotificationCapacityPlanner.systemLimit
+    ) -> [ScheduleReportNotificationDraft] {
+        let availableSlots = max(0, systemLimit - max(0, otherPendingCount))
+        return Array(
+            drafts
+                .sorted {
+                    if $0.fireDate != $1.fireDate { return $0.fireDate < $1.fireDate }
+                    return $0.id < $1.id
+                }
+                .prefix(availableSlots)
+        )
+    }
+}
+
 @MainActor
 enum ScheduleReportNotificationManager {
     static func updateNotifications(
         settings: ScheduleReportSettings,
         input: ScheduleReportInput,
+        weather: TimetableWeatherSnapshot? = nil,
         now: Date = Date()
     ) async throws -> ScheduleReportSettings {
-        var updatedSettings = settings
-        updatedSettings.deriveEnabledState(now: now)
+        var updatedSettings = ScheduleReportPlanner.resolvingReminderSources(
+            in: settings,
+            input: input,
+            now: now
+        )
         updatedSettings.scheduledNotificationIDs = []
+        updatedSettings.scheduledCount = 0
+        updatedSettings.waitingCount = 0
 
-        let drafts = ScheduleReportPlanner.drafts(settings: updatedSettings, input: input, now: now)
+        let drafts = ScheduleReportPlanner.drafts(
+            settings: updatedSettings,
+            input: input,
+            weather: weather,
+            now: now
+        )
         guard updatedSettings.isEnabled, !drafts.isEmpty else {
             cancelScheduledNotifications(settings: settings)
             return updatedSettings
         }
 
         let center = try await authorizedNotificationCenter()
+        let pendingRequests = await center.pendingNotificationRequests()
+        let previousIDs = Set(settings.scheduledNotificationIDs)
+        let otherPendingCount = pendingRequests.filter {
+            !previousIDs.contains($0.identifier)
+                && !$0.identifier.hasPrefix("leafy.scheduleReport.")
+                && !$0.identifier.hasPrefix("leafy.scheduleReminder.")
+        }.count
+        let selectedDrafts = ScheduleReportNotificationCapacityPlanner.selectedDrafts(
+            from: drafts,
+            otherPendingCount: otherPendingCount
+        )
+        updatedSettings.scheduledCount = selectedDrafts.count
+        updatedSettings.waitingCount = max(0, drafts.count - selectedDrafts.count)
+
         cancelScheduledNotifications(settings: settings)
         do {
-            for draft in drafts {
+            for draft in selectedDrafts {
                 try Task.checkCancellation()
                 let content = UNMutableNotificationContent()
                 content.title = draft.title
@@ -785,7 +1169,7 @@ enum ScheduleReportNotificationManager {
                 updatedSettings.scheduledNotificationIDs.append(draft.id)
             }
         } catch {
-            center.removePendingNotificationRequests(withIdentifiers: drafts.map(\.id))
+            center.removePendingNotificationRequests(withIdentifiers: selectedDrafts.map(\.id))
             throw error
         }
 
@@ -807,13 +1191,18 @@ enum ScheduleReportNotificationManager {
 
     static func refreshIfEnabled(
         modelContext: ModelContext,
+        weather: TimetableWeatherSnapshot? = nil,
         defaults: UserDefaults = .standard
     ) async throws {
         let settings = ScheduleReportSettingsStore.load(defaults: defaults)
         guard settings.isEnabled else { return }
 
         let input = ScheduleReportDataSource.input(modelContext: modelContext)
-        let updatedSettings = try await updateNotifications(settings: settings, input: input)
+        let updatedSettings = try await updateNotifications(
+            settings: settings,
+            input: input,
+            weather: weather
+        )
         ScheduleReportSettingsStore.save(updatedSettings, defaults: defaults)
     }
 
@@ -844,5 +1233,11 @@ enum ScheduleReportDataSource {
 
     private static func fetch<T: PersistentModel>(_ type: T.Type, in modelContext: ModelContext) -> [T] {
         (try? modelContext.fetch(FetchDescriptor<T>())) ?? []
+    }
+}
+
+private extension String {
+    func nonEmptyOrDefault(_ fallback: String) -> String {
+        isEmpty ? fallback : self
     }
 }

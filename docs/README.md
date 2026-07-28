@@ -33,7 +33,7 @@
 |---|---|
 | [架构说明](engineering/architecture.md) | 技术分层、数据流、外部系统和架构约束 |
 | [Supabase 接入](engineering/supabase.md) | Auth、Database、RLS、Storage、Functions 和联调 |
-| [Leafy AI 额度鉴权](engineering/leafy-ai-quota-authentication.md) | 免费/订阅身份、额度 RPC、安全边界和排查方法 |
+| [MyLeafy AI 额度鉴权](engineering/leafy-ai-quota-authentication.md) | 免费/订阅身份、额度 RPC、安全边界和排查方法 |
 | [运营后台](engineering/admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 |
 | [后台可靠性](engineering/admin-backend-reliability.md) | 管理动作、错误契约和发布顺序 |
 

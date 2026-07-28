@@ -109,7 +109,7 @@ function translateMessage(template: string, options: Record<string, unknown>) {
 }
 
 const regularResources = [
-  "posts", "polls", "comments", "reports", "profiles", "feedback", "announcements",
+  "posts", "polls", "comments", "reports", "profiles", "feedback", "announcements", "community-banners",
   "suggestions", "teachers", "courses", "dishes", "ratings", "semester-configs",
   "national-calendar", "admins", "sessions", "audit-logs",
 ] as const;

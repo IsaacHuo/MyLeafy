@@ -13,11 +13,11 @@ nonisolated enum CampusAIServiceError: LocalizedError, Equatable {
         case .emptyMessage:
             return "请先输入想问的问题。"
         case .missingAPIKey:
-            return "请先在 Leafy 设置中填写 DeepSeek API Key。"
+            return "请先在 MyLeafy 设置中填写 DeepSeek API Key。"
         case .invalidBaseURL:
             return "Base URL 设置不正确，请使用 HTTPS 地址。"
         case .managedServiceUnavailable:
-            return "Leafy AI 服务暂时不可用，请稍后再试。"
+            return "MyLeafy AI 服务暂时不可用，请稍后再试。"
         case .quotaExhausted(let message):
             return message
         case .providerRejected(let message):
@@ -964,7 +964,7 @@ nonisolated struct CampusAIService {
     static func systemPrompt(userPrompt: String, preparesArtifact: Bool = false) -> String {
         let customPrompt = userPrompt.nonEmptyTrimmed.map { String($0.prefix(3000)) }
         return [
-            "你是 Leafy 的通用 AI 助手，当前是测试功能。",
+            "你是 MyLeafy 的通用 AI 助手，当前是测试功能。",
             "回答要直接、具体、可执行；能给结论就先给结论，不要反复解释内部数据来源。",
             "使用专业、克制的中文。避免先否定后转折的模板化句式和带有营销意味的抽象口号，也不要为了结构完整重复结论。",
             "可以回答通用问题；个人课表、考试、成绩、日程和其他本机资料默认不参与回答。只有输入明确包含必要的 context 或 local_retrieval 时，才把其中最相关的少量结果用于用户确实要求的个人事实或个性化安排。不要为了显得个性化而主动提及这些资料，也不要把不确定内容说成事实。",
@@ -1233,12 +1233,12 @@ nonisolated struct CampusAIService {
         if let data = trimmedBody.data(using: .utf8),
            let payload = try? JSONDecoder().decode(CampusAIManagedErrorPayload.self, from: data),
            let error = payload.error?.nonEmptyTrimmed {
-            return statusCode == 402 ? error : "Leafy AI 服务返回了 \(statusCode) 错误：\(error)"
+            return statusCode == 402 ? error : "MyLeafy AI 服务返回了 \(statusCode) 错误：\(error)"
         }
         if trimmedBody.isEmpty {
-            return "Leafy AI 服务返回了 \(statusCode) 错误。"
+            return "MyLeafy AI 服务返回了 \(statusCode) 错误。"
         }
-        return "Leafy AI 服务返回了 \(statusCode) 错误：\(trimmedBody)"
+        return "MyLeafy AI 服务返回了 \(statusCode) 错误：\(trimmedBody)"
     }
 }
 

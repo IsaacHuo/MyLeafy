@@ -10,7 +10,7 @@ final class CampusAIArtifactExportService {
     ) async throws -> URL {
         let markdown = try canonicalMarkdown(for: artifact)
         let directory = try exportDirectory(messageID: messageID)
-        let filename = sanitizedFilename(artifact.title.nonEmptyTrimmed ?? "Leafy Artifact")
+        let filename = sanitizedFilename(artifact.title.nonEmptyTrimmed ?? "MyLeafy Artifact")
         let fileURL = directory
             .appendingPathComponent(filename)
             .appendingPathExtension(format.fileExtension)
@@ -86,7 +86,7 @@ final class CampusAIArtifactExportService {
         let candidate = scalars.joined()
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return String((candidate.nonEmptyTrimmed ?? "Leafy Artifact").prefix(80))
+        return String((candidate.nonEmptyTrimmed ?? "MyLeafy Artifact").prefix(80))
     }
 }
 
