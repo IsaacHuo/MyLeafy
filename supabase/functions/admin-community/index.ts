@@ -1783,7 +1783,7 @@ async function createCommunityBanner(context: AdminContext, params: Record<strin
   const imagePath = await uploadCommunityBannerImage(context, params, campusID, id, revision);
   const payload = normalizeCommunityBannerPayload(params, false);
 
-  const { data, error } = await context.adminClient
+  const { error } = await context.adminClient
     .from("community_banners")
     .insert({
       id,
@@ -1794,9 +1794,7 @@ async function createCommunityBanner(context: AdminContext, params: Record<strin
       status: "draft",
       created_by: context.admin.id,
       updated_by: context.admin.id,
-    })
-    .select()
-    .single();
+    });
 
   if (error) {
     if (imagePath) {
@@ -1804,7 +1802,26 @@ async function createCommunityBanner(context: AdminContext, params: Record<strin
     }
     throw databaseError(error);
   }
-  return data;
+
+  const { data: published, error: publishError } = await context.adminClient.rpc(
+    "publish_community_banner",
+    {
+      p_banner_id: id,
+      p_admin_id: context.admin.id,
+    },
+  );
+  if (publishError || !published) {
+    throw new HttpError(
+      503,
+      "Banner 已保存为草稿，但自动发布失败，请在列表中点击“发布”重试。",
+      {
+        code: "backend_unavailable",
+        retryable: true,
+        details: { bannerID: id },
+      },
+    );
+  }
+  return published;
 }
 
 async function updateCommunityBanner(context: AdminContext, params: Record<string, unknown>) {

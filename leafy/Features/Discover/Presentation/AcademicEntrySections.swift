@@ -81,7 +81,7 @@ struct ScheduleSectionView: View {
             }
 
             if !isCustomCampus {
-                ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息资源", icon: "calendar.badge.clock") {
+                ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {
                     openRoute(.schoolCalendar)
                 }
             }

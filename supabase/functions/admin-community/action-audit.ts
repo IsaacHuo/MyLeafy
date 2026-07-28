@@ -56,7 +56,7 @@ const transactionRPCActions = new Set<string>([
   "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "pinPost",
   "resolveModerationReport", "approvePostgraduateSuggestion", "approveCatalogSuggestion",
   "upsertSemesterRuntimeConfig", "createAdmin", "updateAdmin", "disableAdmin",
-  "upsertNationalCalendarRuntimeConfig", "publishCommunityBanner",
+  "upsertNationalCalendarRuntimeConfig", "createCommunityBanner", "publishCommunityBanner",
 ]);
 
 export const adminActionAuditMatrix: readonly AdminActionAuditRow[] = auditedAdminActionNames.map((action) => {

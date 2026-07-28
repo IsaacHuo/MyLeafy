@@ -31,7 +31,7 @@ Deno.test("critical multi-write actions declare transaction RPC boundaries", () 
   for (const action of [
     "approveCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "pinPost",
     "resolveModerationReport", "approvePostgraduateSuggestion", "approveCatalogSuggestion",
-    "publishCommunityBanner",
+    "createCommunityBanner", "publishCommunityBanner",
   ]) {
     assertEquals(adminActionAuditMatrix.find((row) => row.action === action)?.transactionBoundary, "transaction_rpc");
   }
@@ -66,6 +66,8 @@ Deno.test("community banners validate targets and private image uploads", () => 
   assert(source.includes('const path = `${campusID}/${bannerID}/r${revision}-'));
   assert(source.includes('.from("community_banners")'));
   assert(source.includes('.rpc("publish_community_banner"'));
+  assert(source.includes("Banner 已保存为草稿，但自动发布失败"));
+  assert(source.includes("return published;"));
 });
 
 Deno.test("global search enforces length, per-resource and total limits", () => {

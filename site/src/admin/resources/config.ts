@@ -31,6 +31,8 @@ export type ResourceConfig = {
   defaultFilters?: Record<string, string | number | boolean>;
   filters?: FormFieldConfig[];
   createForm?: FormFieldConfig[];
+  createSubmitLabel?: string;
+  createDescription?: string;
   editForm?: FormFieldConfig[];
   actions?: RowActionConfig[];
   exportable?: boolean;
@@ -170,6 +172,8 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
     editable: true,
     searchable: true,
     createForm: communityBannerForm(false),
+    createSubmitLabel: "创建并发布",
+    createDescription: "保存后会立即上线，并自动归档当前学校此前发布的 Banner。",
     editForm: communityBannerForm(true),
     actions: [
       { label: "发布", action: "publishCommunityBanner", visible: (record) => record.status !== "published", build: idParams },

@@ -274,6 +274,37 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         XCTAssertFalse(snapshot.yearMonths.contains { $0.isInVacation })
     }
 
+    func testTimeScopeEdgeDismissRequiresRightwardSwipeFromLeftEdge() {
+        XCTAssertTrue(
+            TimetableTimeScopeEdgeDismissPolicy.shouldDismiss(
+                startX: 12,
+                translation: CGSize(width: 88, height: 8),
+                predictedEndTranslation: CGSize(width: 120, height: 10)
+            )
+        )
+        XCTAssertFalse(
+            TimetableTimeScopeEdgeDismissPolicy.shouldDismiss(
+                startX: 80,
+                translation: CGSize(width: 120, height: 4),
+                predictedEndTranslation: CGSize(width: 150, height: 5)
+            )
+        )
+        XCTAssertFalse(
+            TimetableTimeScopeEdgeDismissPolicy.shouldDismiss(
+                startX: 10,
+                translation: CGSize(width: -110, height: 4),
+                predictedEndTranslation: CGSize(width: -150, height: 5)
+            )
+        )
+        XCTAssertFalse(
+            TimetableTimeScopeEdgeDismissPolicy.shouldDismiss(
+                startX: 10,
+                translation: CGSize(width: 74, height: 90),
+                predictedEndTranslation: CGSize(width: 88, height: 110)
+            )
+        )
+    }
+
     private static let firstSemesterCalendarEvents = [
         SchoolCalendarEvent(
             id: "bjfu-anniversary-74-2026",

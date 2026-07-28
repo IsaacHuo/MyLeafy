@@ -248,6 +248,20 @@ struct TimetableTimeScopeMonthMark: Identifiable, Equatable {
     var id: Int { month }
 }
 
+nonisolated enum TimetableTimeScopeEdgeDismissPolicy {
+    static func shouldDismiss(
+        startX: CGFloat,
+        translation: CGSize,
+        predictedEndTranslation: CGSize,
+        controlScale: CGFloat = 1
+    ) -> Bool {
+        guard startX <= 28 * controlScale else { return false }
+        let horizontalDistance = max(translation.width, predictedEndTranslation.width)
+        guard horizontalDistance > 0 else { return false }
+        return horizontalDistance > max(72 * controlScale, abs(translation.height) * 1.25)
+    }
+}
+
 struct TimetableTimeScopeView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
@@ -319,6 +333,22 @@ struct TimetableTimeScopeView: View {
                 }
             }
         }
+        .simultaneousGesture(edgeDismissGesture)
+    }
+
+    private var edgeDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onEnded { value in
+                guard TimetableTimeScopeEdgeDismissPolicy.shouldDismiss(
+                    startX: value.startLocation.x,
+                    translation: value.translation,
+                    predictedEndTranslation: value.predictedEndTranslation,
+                    controlScale: leafyControlScale
+                ) else {
+                    return
+                }
+                onDismiss()
+            }
     }
 
     private var header: some View {

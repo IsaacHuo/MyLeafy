@@ -1271,6 +1271,7 @@ struct EmptyClassroomView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyDependencies) private var dependencies
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query(sort: \FavoriteClassroom.createdAt, order: .reverse) private var favoriteClassrooms: [FavoriteClassroom]
 
     @State private var networkManager = ActiveCampusContext.networkManager
@@ -1363,24 +1364,7 @@ struct EmptyClassroomView: View {
                                 }
                             }
                         } else {
-                            Picker("教学楼", selection: building) {
-                                ForEach(ClassroomLookupCatalog.buildingOptions) { item in
-                                    Text(item.title).tag(item.id)
-                                }
-                            }
-                            .onChange(of: buildingOptionID) { _, newValue in
-                                selectedRoomID = ClassroomLookupCatalog.roomOption(
-                                    preferredBuilding: nil,
-                                    preferredRoom: nil,
-                                    in: buildingOption(for: newValue)
-                                ).id
-                            }
-
-                            Picker("教室", selection: room) {
-                                ForEach(currentRoomOptions) { item in
-                                    Text(item.title).tag(item.id)
-                                }
-                            }
+                            classroomSelectionPickers
                         }
 
                         Button {
@@ -1501,6 +1485,46 @@ struct EmptyClassroomView: View {
             Task { await submitQuery(userInitiated: true) }
         }
         .leafyOperationAlert($operationAlert)
+    }
+
+    @ViewBuilder
+    private var classroomSelectionPickers: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: AppSpacing.compact) {
+                buildingPicker
+                roomPicker
+            }
+        } else {
+            HStack(spacing: AppSpacing.compact) {
+                buildingPicker
+                roomPicker
+            }
+        }
+    }
+
+    private var buildingPicker: some View {
+        Picker("教学楼", selection: building) {
+            ForEach(ClassroomLookupCatalog.buildingOptions) { item in
+                Text(item.title).tag(item.id)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .onChange(of: buildingOptionID) { _, newValue in
+            selectedRoomID = ClassroomLookupCatalog.roomOption(
+                preferredBuilding: nil,
+                preferredRoom: nil,
+                in: buildingOption(for: newValue)
+            ).id
+        }
+    }
+
+    private var roomPicker: some View {
+        Picker("教室", selection: room) {
+            ForEach(currentRoomOptions) { item in
+                Text(item.title).tag(item.id)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func submitQuery(userInitiated: Bool) async {

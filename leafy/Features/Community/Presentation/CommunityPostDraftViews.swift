@@ -97,7 +97,7 @@ struct CommunityPostDraftsView: View {
                 ContentUnavailableView(
                     "暂无草稿",
                     systemImage: "doc.text",
-                    description: Text("开始写帖子后，内容会自动保存在这里。")
+                    description: Text("保存的帖子会显示在这里。")
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)

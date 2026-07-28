@@ -14,6 +14,11 @@ describe("admin resource capabilities", () => {
     expect(resourceConfigs.admins.editForm?.find((field) => field.source === "password")?.required).not.toBe(true);
   });
 
+  it("makes new community banners publish immediately", () => {
+    expect(resourceConfigs["community-banners"].createSubmitLabel).toBe("创建并发布");
+    expect(resourceConfigs["community-banners"].createDescription).toContain("立即上线");
+  });
+
   it("uses delete permission for destructive row actions", () => {
     expect(resourceConfigs.ratings.actions?.[0].permissionAction).toBe("delete");
     expect(resourceConfigs.sessions.actions?.[0].permissionAction).toBe("delete");

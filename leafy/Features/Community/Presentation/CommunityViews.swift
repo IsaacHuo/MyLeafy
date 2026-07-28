@@ -57,6 +57,31 @@ private struct CommunityDraftAutosaveSignature: Hashable {
     let attachmentIDs: [UUID]
 }
 
+nonisolated enum CommunityComposerDraftCloseAction: Equatable {
+    case dismiss
+    case saveExistingDraft
+    case askToSaveNewDraft
+}
+
+nonisolated enum CommunityComposerDraftPolicy {
+    static func closeAction(
+        draftExists: Bool,
+        hasMeaningfulContent: Bool
+    ) -> CommunityComposerDraftCloseAction {
+        if draftExists {
+            return .saveExistingDraft
+        }
+        if hasMeaningfulContent {
+            return .askToSaveNewDraft
+        }
+        return .dismiss
+    }
+
+    static func shouldAutosave(draftExists: Bool) -> Bool {
+        draftExists
+    }
+}
+
 private struct CommunityAttachmentPreview: Identifiable {
     let id = UUID()
     let url: URL
@@ -2268,7 +2293,8 @@ struct CommunityComposerSheet: View {
     @State private var errorMessage: String?
     @State private var showingProfileEditor = false
     @State private var showingTermsSheet = false
-    @State private var showingDiscardUnsavedConfirmation = false
+    @State private var showingNewDraftCloseConfirmation = false
+    @State private var showingDraftSaveFailureConfirmation = false
     @State private var operationAlert: LeafyOperationAlert?
     @State private var draftSaveState: CommunityDraftSaveState = .idle
     @State private var draftSaveTask: Task<Void, Never>?
@@ -2404,7 +2430,7 @@ struct CommunityComposerSheet: View {
                 draftSaveTask?.cancel()
                 errorMessage = nil
                 if oldMode == .post, newMode == .poll,
-                   draftExists || hasMeaningfulDraftContent {
+                   draftExists {
                     saveDraftNow(allowWhenPoll: true)
                 }
             }
@@ -2412,7 +2438,12 @@ struct CommunityComposerSheet: View {
                 scheduleDraftSave()
             }
             .onChange(of: scenePhase) { _, newPhase in
-                guard newPhase != .active, composerMode == .post else { return }
+                guard newPhase != .active,
+                      composerMode == .post,
+                      CommunityComposerDraftPolicy.shouldAutosave(draftExists: draftExists)
+                else {
+                    return
+                }
                 draftSaveTask?.cancel()
                 saveDraftNow()
             }
@@ -2434,8 +2465,23 @@ struct CommunityComposerSheet: View {
                     .presentationDetents([.large])
             }
             .confirmationDialog(
-                "草稿尚未保存",
-                isPresented: $showingDiscardUnsavedConfirmation,
+                "是否存入草稿箱？",
+                isPresented: $showingNewDraftCloseConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("存入草稿箱") {
+                    saveNewDraftAndDismiss()
+                }
+                Button("放弃", role: .destructive) {
+                    discardNewDraftAndDismiss()
+                }
+                Button("继续编辑", role: .cancel) {}
+            } message: {
+                Text("保存后可以在“我的发帖”中的草稿箱继续编辑。")
+            }
+            .confirmationDialog(
+                "草稿修改尚未保存",
+                isPresented: $showingDraftSaveFailureConfirmation,
                 titleVisibility: .visible
             ) {
                 Button("继续编辑", role: .cancel) {}
@@ -2446,7 +2492,7 @@ struct CommunityComposerSheet: View {
                 Text("请检查设备存储空间后重试，或放弃这次未保存的更改。")
             }
             .interactiveDismissDisabled(
-                composerMode == .post && (draftExists || hasMeaningfulDraftContent)
+                draftExists || hasMeaningfulDraftContent
             )
             .leafyOperationAlert($operationAlert)
         }
@@ -2888,7 +2934,7 @@ struct CommunityComposerSheet: View {
     private func scheduleDraftSave() {
         guard !isLoadingDraft, composerMode == .post else { return }
         draftSaveTask?.cancel()
-        guard draftExists || hasMeaningfulDraftContent else {
+        guard CommunityComposerDraftPolicy.shouldAutosave(draftExists: draftExists) else {
             draftSaveState = .idle
             return
         }
@@ -2965,13 +3011,39 @@ struct CommunityComposerSheet: View {
 
     private func closeComposer() {
         draftSaveTask?.cancel()
-        if composerMode == .post, draftExists || hasMeaningfulDraftContent {
+        guard composerMode == .post || draftExists || hasMeaningfulDraftContent else {
+            dismiss()
+            return
+        }
+
+        switch CommunityComposerDraftPolicy.closeAction(
+            draftExists: draftExists,
+            hasMeaningfulContent: hasMeaningfulDraftContent
+        ) {
+        case .dismiss:
+            dismiss()
+
+        case .saveExistingDraft:
             saveDraftNow()
             if draftSaveState.isFailure {
-                showingDiscardUnsavedConfirmation = true
+                showingDraftSaveFailureConfirmation = true
                 return
             }
+            dismiss()
+
+        case .askToSaveNewDraft:
+            showingNewDraftCloseConfirmation = true
         }
+    }
+
+    private func saveNewDraftAndDismiss() {
+        saveDraftNow(allowWhenPoll: composerMode == .poll)
+        guard !draftSaveState.isFailure else { return }
+        dismiss()
+    }
+
+    private func discardNewDraftAndDismiss() {
+        cleanupComposerAttachments()
         dismiss()
     }
 }

@@ -8,16 +8,11 @@ struct ScheduleReportsView: View {
     @State private var settings = ScheduleReportSettingsStore.load()
     @State private var lastAppliedSettings = ScheduleReportSettingsStore.load()
     @State private var operationAlert: LeafyOperationAlert?
-    @State private var isApplying = false
     @State private var applyTask: Task<Void, Never>?
     @State private var editorState: ScheduleReminderEditorState?
 
     private var input: ScheduleReportInput {
         ScheduleReportDataSource.input(modelContext: modelContext)
-    }
-
-    private var enabledModeCount: Int {
-        settings.enabledModes.count + settings.reminders.filter(\.isEnabled).count
     }
 
     var body: some View {
@@ -44,7 +39,7 @@ struct ScheduleReportsView: View {
             AcademicDetailSectionHeader(title: "自定义提醒")
             if settings.reminders.isEmpty {
                 AcademicDetailCard {
-                    Text("可以从自由输入、自定日程、教务考试、校历节点或课程创建提醒，并为一条日程设置多个提前量。")
+                    Text("暂无自定义提醒")
                         .leafyBody()
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -60,37 +55,22 @@ struct ScheduleReportsView: View {
                 }
             }
 
-            Button {
-                editorState = ScheduleReminderEditorState(reminder: nil)
-            } label: {
-                Label("添加提醒", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-
-            AcademicDetailCard {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(
-                        isApplying ? "正在更新推送" : "已开启 \(enabledModeCount) 个提醒",
-                        systemImage: isApplying ? "arrow.triangle.2.circlepath" : "checkmark.circle"
-                    )
-                    .leafySubheadline()
-                    .foregroundStyle(AppTheme.secondaryText)
-
-                    if settings.scheduledCount > 0 || settings.waitingCount > 0 {
-                        Text("已安排 \(settings.scheduledCount) 条 · 等待后续刷新 \(settings.waitingCount) 条")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.tertiaryText)
-                    }
-                }
-            }
-
             AcademicDetailFooterText(
                 text: "获取到天气时，今日早报会附上当天预报与出门建议，明日晚报会附上明天预报与建议。系统后台刷新为尽力而为。"
             )
         }
         .navigationTitle("推送")
         .leafyInlineNavigationTitle()
+        .toolbar {
+            ToolbarItem(placement: .leafyTrailing) {
+                Button {
+                    editorState = ScheduleReminderEditorState(reminder: nil)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("添加提醒")
+            }
+        }
         .onAppear {
             let loaded = ScheduleReportSettingsStore.load()
             settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: input)
@@ -175,7 +155,6 @@ struct ScheduleReportsView: View {
                 }
             }
             guard !Task.isCancelled else { return }
-            isApplying = true
             do {
                 let weather = await availableWeather()
                 let applied = try await ScheduleReportNotificationManager.updateNotifications(
@@ -195,7 +174,6 @@ struct ScheduleReportsView: View {
                 ScheduleReportSettingsStore.save(lastAppliedSettings)
                 operationAlert = .failure(error.localizedDescription)
             }
-            isApplying = false
         }
     }
 

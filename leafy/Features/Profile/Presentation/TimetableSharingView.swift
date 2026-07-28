@@ -111,7 +111,7 @@ struct TimetableSharingView: View {
                     } label: {
                         Label("停止共享", systemImage: "person.2.slash.fill")
                     }
-                    .accessibilityHint("撤销所有同学的查看权限，并让未使用的邀请码失效")
+                    .accessibilityHint("撤销所有同学的查看权限，并让已生成的邀请码失效")
                 }
                 .listRowBackground(AppTheme.cardBackground)
             }
@@ -158,7 +158,7 @@ struct TimetableSharingView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("这会撤销所有同学的查看权限，并让未使用的邀请码立即失效。已发布的课表仍只对你自己可见。")
+            Text("这会撤销所有同学的查看权限，并让已生成的邀请码立即失效。已发布的课表仍只对你自己可见。")
         }
     }
 
@@ -288,9 +288,9 @@ struct TimetableSharingView: View {
             return "正在更新已发布的课程安排。"
         case .idle:
             if mySnapshot == nil {
-                return L10n.text("%d 门课程 · 发布并生成单次邀请", language: leafyLanguage, courses.count)
+                return L10n.text("%d 门课程 · 发布并生成邀请码", language: leafyLanguage, courses.count)
             }
-            return L10n.text("%d 门课程 · 邀请前自动更新", language: leafyLanguage, courses.count)
+            return L10n.text("%d 门课程 · 生成邀请码前自动更新", language: leafyLanguage, courses.count)
         }
     }
 
@@ -312,7 +312,7 @@ struct TimetableSharingView: View {
         if !canUseSharing {
             return "请先完善社区资料"
         }
-        return "发布最新课程安排并生成一个仅限一位同学接受的邀请码"
+        return "发布最新课程安排并生成一个 7 天有效的邀请码"
     }
 
     private var canStartSharing: Bool {
@@ -382,20 +382,6 @@ struct TimetableSharingView: View {
                 publishedTimetableRow
             }
 
-            if !activeInvites.isEmpty {
-                compactOverviewRow(
-                    icon: "ticket.fill",
-                    title: "未使用邀请",
-                    detail: "7 天内有效；旧邀请码不会再次显示明文。"
-                ) {
-                    Text(L10n.text("%d 个", language: leafyLanguage, activeInvites.count))
-                        .microCaption()
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityLabel(L10n.text("%d 个未使用邀请", language: leafyLanguage, activeInvites.count))
-                }
-            }
-
             if !members.isEmpty {
                 ForEach(members) { member in
                     TimetableShareMemberRow(member: member) {
@@ -454,7 +440,7 @@ struct TimetableSharingView: View {
 
     private var sharingManagementFooter: String {
         if members.isEmpty {
-            return "暂无获准查看课表的同学。发送邀请并由对方接受后，授权关系会显示在这里。重新同步教务课表时，共享内容也会更新。"
+            return "同学使用邀请码后会显示在这里。重新同步教务课表时，共享内容也会更新。"
         }
         return "重新同步教务课表时，已发布的共享课表也会自动更新。"
     }
@@ -816,7 +802,7 @@ private struct TimetableInviteShareSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .leafyCardStyle()
 
-                Text("邀请码 7 天内有效，只能被一位同学接受。旧邀请码不会再次显示明文。")
+                Text("邀请码 7 天内有效，被一位同学使用后失效。")
                     .microCaption()
                     .foregroundStyle(AppTheme.secondaryText)
 

@@ -77,6 +77,7 @@ struct CommunityUserProfileView: View {
         }
         .refreshable {
             await load()
+            loadDraftCount()
         }
         .onChange(of: sessionManager.profile) { _, newProfile in
             guard allowsEditing, let newProfile else { return }
@@ -259,25 +260,57 @@ struct CommunityUserProfileView: View {
                 }
 
                 Spacer()
+            }
 
-                if allowsEditing {
-                    NavigationLink {
-                        CommunityPostDraftsView()
-                    } label: {
-                        Label(
-                            draftCount > 0 ? "草稿箱 · \(draftCount)" : "草稿箱",
-                            systemImage: "doc.text"
-                        )
-                        .microCaption()
-                        .fontWeight(.semibold)
-                        .foregroundStyle(AppTheme.accentEmphasis)
-                    }
-                    .accessibilityLabel(draftCount > 0 ? "草稿箱，\(draftCount) 份草稿" : "草稿箱")
-                }
+            if allowsEditing {
+                draftBoxCard
             }
 
             postsContent
         }
+    }
+
+    private var draftBoxCard: some View {
+        NavigationLink {
+            CommunityPostDraftsView()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentEmphasis)
+                    .frame(width: 42, height: 42)
+                    .background(AppTheme.softFill, in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("草稿箱")
+                        .leafyHeadline()
+                        .foregroundStyle(AppTheme.primaryText)
+
+                    Text(draftCount > 0 ? "\(draftCount) 篇未发布内容" : "暂无草稿")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppTheme.tertiaryText)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                    .stroke(AppTheme.separator, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(draftCount > 0 ? "草稿箱，\(draftCount) 篇未发布内容" : "草稿箱，暂无草稿")
+        .accessibilityHint("打开草稿箱")
     }
 
     @ViewBuilder

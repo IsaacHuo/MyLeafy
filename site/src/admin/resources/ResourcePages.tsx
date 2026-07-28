@@ -12,10 +12,12 @@ import {
   FilterButton,
   List,
   NumberField,
+  SaveButton,
   SelectInput,
   SimpleForm,
   TextField,
   TextInput,
+  Toolbar,
   TopToolbar,
   useCanAccess,
   useDataProvider,
@@ -306,7 +308,20 @@ function ResourceCreate({ resource, config }: { resource: string; config: Resour
   }
   return (
     <Create title={`新增${config.label}`}>
-      <SimpleForm>{config.createForm?.map((field) => <AdminInput key={field.source} field={field} />)}</SimpleForm>
+      <SimpleForm
+        toolbar={config.createSubmitLabel ? (
+          <Toolbar>
+            <SaveButton label={config.createSubmitLabel} />
+          </Toolbar>
+        ) : undefined}
+      >
+        {config.createDescription && (
+          <Typography color="text.secondary">
+            {config.createDescription}
+          </Typography>
+        )}
+        {config.createForm?.map((field) => <AdminInput key={field.source} field={field} />)}
+      </SimpleForm>
     </Create>
   );
 }

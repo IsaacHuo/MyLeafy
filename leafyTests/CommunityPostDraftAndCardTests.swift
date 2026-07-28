@@ -145,6 +145,35 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
         XCTAssertFalse(draft.hasMeaningfulContent)
     }
 
+    func testNewComposerRequiresExplicitDraftChoice() {
+        XCTAssertEqual(
+            CommunityComposerDraftPolicy.closeAction(
+                draftExists: false,
+                hasMeaningfulContent: false
+            ),
+            .dismiss
+        )
+        XCTAssertEqual(
+            CommunityComposerDraftPolicy.closeAction(
+                draftExists: false,
+                hasMeaningfulContent: true
+            ),
+            .askToSaveNewDraft
+        )
+        XCTAssertEqual(
+            CommunityComposerDraftPolicy.closeAction(
+                draftExists: true,
+                hasMeaningfulContent: true
+            ),
+            .saveExistingDraft
+        )
+    }
+
+    func testOnlyExistingDraftAutosaves() {
+        XCTAssertFalse(CommunityComposerDraftPolicy.shouldAutosave(draftExists: false))
+        XCTAssertTrue(CommunityComposerDraftPolicy.shouldAutosave(draftExists: true))
+    }
+
     func testPublishHandoffKeepsDraftWhenEnqueueFailsAndDeletesAfterSuccess() throws {
         let fixture = try makeFixture()
         defer { fixture.cleanup() }
