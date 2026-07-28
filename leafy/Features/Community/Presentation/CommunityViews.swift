@@ -2935,10 +2935,7 @@ struct RealCommunityPostDetailSheet: View {
                     }
 
                     LeafyGlassGroup(spacing: 8) {
-                        HStack(alignment: .bottom, spacing: 8) {
-                            commentField
-                            sendButton
-                        }
+                        commentComposer
                     }
                     .padding(.horizontal, AppSpacing.page)
                     .padding(.top, 8)
@@ -3009,9 +3006,24 @@ struct RealCommunityPostDetailSheet: View {
             ).isEmpty
     }
 
-    @ViewBuilder
+    private var commentComposer: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            commentField
+
+            sendButton
+                .frame(width: 44, height: 44)
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 2)
+        .frame(minHeight: 44)
+        .leafyGlassSurface(
+            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous),
+            isInteractive: true
+        )
+    }
+
     private var commentField: some View {
-        let field = TextField("写评论…", text: $commentBody, axis: .vertical)
+        TextField("写评论…", text: $commentBody, axis: .vertical)
             .lineLimit(1...3)
             .focused($isCommentFieldFocused)
             .onChange(of: commentBody) { previousBody, newBody in
@@ -3029,15 +3041,8 @@ struct RealCommunityPostDetailSheet: View {
                 }
             }
             .leafyBody()
-            .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(minHeight: 44, alignment: .center)
-
-        field
-            .leafyGlassSurface(
-                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous),
-                isInteractive: true
-            )
     }
 
     @ViewBuilder
@@ -3051,7 +3056,7 @@ struct RealCommunityPostDetailSheet: View {
             }
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.circle)
-            .controlSize(.large)
+            .controlSize(.regular)
             .tint(AppTheme.accent)
             .disabled(isSubmitDisabled)
             .accessibilityLabel(isCommentSubmitInFlight ? "正在发送评论" : "发送评论")
@@ -3069,7 +3074,7 @@ struct RealCommunityPostDetailSheet: View {
         } label: {
             sendButtonLabel
                 .foregroundStyle(AppTheme.textOnAccent)
-                .frame(width: 44, height: 44)
+                .frame(width: 34, height: 34)
                 .background(
                     Circle()
                         .fill(isSubmitDisabled ? AppTheme.accent.opacity(0.45) : AppTheme.accent)
