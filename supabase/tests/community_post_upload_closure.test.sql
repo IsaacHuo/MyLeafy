@@ -151,6 +151,14 @@ select throws_ok(
   'a consumed receipt cannot be reused'
 );
 
+update public.posts
+set created_at = now() - interval '2 hours',
+    updated_at = now() - interval '2 hours'
+where id in (
+  '94000000-0000-0000-0000-000000000001',
+  '94000000-0000-0000-0000-000000000002'
+);
+
 insert into public.posts (
   id, campus_id, author_id, title, body, category, status, expected_image_count
 ) values (
