@@ -60,7 +60,7 @@ flowchart LR
 | 个性化 | 浅色/深色外观、主题色、显示密度、多语言，以及照片和纯色课表背景 |
 | 运营 | 独立 Web 管理后台、角色权限、内容管理、配置管理、审计与受控导出 |
 
-功能是否显示由校园能力配置、用户身份与后端配置共同决定，并非所有入口都会在每个校园环境中开放。
+功能是否显示由校园能力配置、用户身份与后端配置共同决定。各校园环境仅开放符合当前配置的入口。
 
 ## 设计与架构
 
@@ -73,7 +73,7 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 - Leafy AI 默认通过 Supabase Edge Function 使用固定 Flash，并提供每日免费额度与周订阅额度；用户也可改用设备 Keychain 中的 DeepSeek Key 直连模型，此时可切换 Flash/Pro。搜索 Gateway 不接收用户自备模型 Key。
 - Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，管理会话不暴露给浏览器 JavaScript。
 
-详细边界、数据流和依赖方向见[架构说明](docs/architecture.md)。
+详细边界、数据流和依赖方向见[架构说明](docs/engineering/architecture.md)。
 
 ## 技术栈
 
@@ -147,7 +147,7 @@ npm run dev
 npm run dev:pages
 ```
 
-环境变量与安全边界见[运营后台](docs/admin-console.md)。
+环境变量与安全边界见[运营后台](docs/engineering/admin-console.md)。
 
 ### Supabase
 
@@ -161,20 +161,20 @@ supabase secrets set CAMPUS_AI_TOOL_SIGNING_SECRET=<strong-random-secret>
 supabase functions deploy campus-ai-tools
 ```
 
-不要在 iOS、网站前端或公开配置中使用 `service_role`。完整说明见[Supabase 接入](docs/supabase.md)。
+不要在 iOS、网站前端或公开配置中使用 `service_role`。完整说明见[Supabase 接入](docs/engineering/supabase.md)。
 
 ## 文档
 
 | 文档 | 适用读者 | 内容 |
 |---|---|---|
-| [项目总览](docs/overview.md) | 所有人 | 产品定位、能力范围、数据边界与限制 |
-| [架构说明](docs/architecture.md) | iOS/后端开发者 | 分层、依赖、教务链路、本地存储与系统边界 |
-| [App 产品设计](docs/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
-| [UI 风格规范](docs/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
-| [Supabase 接入](docs/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
-| [Leafy AI 免费额度鉴权](docs/leafy-ai-quota-authentication.md) | iOS/后端开发者 | 免费身份、订阅权益、额度 RPC、安全边界与排查方法 |
-| [运营后台](docs/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
-| [贡献规范](docs/contributing.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
+| [项目总览](docs/product/overview.md) | 所有人 | 产品定位、能力范围、数据边界与限制 |
+| [架构说明](docs/engineering/architecture.md) | iOS/后端开发者 | 分层、依赖、教务链路、本地存储与系统边界 |
+| [App 产品设计](docs/design/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
+| [UI 风格规范](docs/design/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
+| [Supabase 接入](docs/engineering/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
+| [Leafy AI 免费额度鉴权](docs/engineering/leafy-ai-quota-authentication.md) | iOS/后端开发者 | 免费身份、订阅权益、额度 RPC、安全边界与排查方法 |
+| [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
+| [贡献规范](docs/operations/contributing.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
 文档索引见 [`docs/README.md`](docs/README.md)。
 
@@ -192,11 +192,11 @@ supabase functions deploy campus-ai-tools
 
 ## 发展方向
 
-项目近期优先级是提高教务解析韧性、完善错误与恢复体验、收紧后端安全边界，并让不同校园能够通过能力配置复用基础架构。未来功能以真实使用反馈为依据，不承诺固定时间表。
+项目近期优先提高教务解析稳定性、完善错误与恢复流程、收紧后端安全边界，并支持不同校园通过能力配置复用基础架构。未来功能以实际使用反馈为依据，不承诺固定时间表。
 
 ## 参与贡献
 
-提交代码前请阅读[贡献规范](docs/contributing.md)。涉及新功能或行为变化的 PR 应同时更新对应文档；涉及用户数据、认证、校园身份或管理权限的改动必须说明安全边界与验证方式。
+提交代码前请阅读[贡献规范](docs/operations/contributing.md)。涉及新功能或行为变化的 PR 应同时更新对应文档；涉及用户数据、认证、校园身份或管理权限的改动必须说明安全边界与验证方式。
 
 ## 许可
 

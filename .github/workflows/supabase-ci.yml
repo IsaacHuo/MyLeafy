@@ -1,0 +1,63 @@
+name: Supabase CI
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  functions:
+    name: Function contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.0
+
+      - name: Check Edge Functions
+        shell: bash
+        run: |
+          mapfile -t entrypoints < <(find supabase/functions -name '*.ts' -type f | sort)
+          deno check "${entrypoints[@]}"
+
+      - name: Run Edge Function tests
+        run: deno test --allow-env --allow-read --allow-sys supabase/functions
+
+  database:
+    name: Database migrations and tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.0
+
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor
+
+      - name: Reset database from migrations
+        run: supabase db reset --local
+
+      - name: Run database tests
+        run: bash supabase/tests/run_database_tests.sh

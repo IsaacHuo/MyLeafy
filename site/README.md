@@ -19,7 +19,7 @@ SUPABASE_PUBLISHABLE_KEY=...
 ADMIN_PROXY_SECRET=...
 ```
 
-`ADMIN_PROXY_SECRET` 必须同时配置为 Supabase Edge Function secret。分享页继续通过 `share-preview` 获取脱敏卡片摘要；完整后台部署说明见 `docs/admin-console.md`。
+`ADMIN_PROXY_SECRET` 必须同时配置为 Supabase Edge Function secret。分享页继续通过 `share-preview` 获取脱敏卡片摘要；完整后台部署说明见 [`docs/engineering/admin-console.md`](../docs/engineering/admin-console.md)。
 
 置顶和客户端 Feed 预览依赖已部署的 `admin-community`、`community-feed` Edge Functions，以及包含 `community_post_pins` 和 `community_feed_v1` 的最新 migrations。帖子和共享课表链接卡片依赖已部署的 `share-preview` Edge Function。
 

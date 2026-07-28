@@ -1,0 +1,53 @@
+name: iOS CI
+
+on:
+  pull_request:
+    paths:
+      - "leafy/**"
+      - "leafyTests/**"
+      - "leafyWidget/**"
+      - "LeafyWidgetShared/**"
+      - "LeafyShareExtension/**"
+      - "LeafyExternalImportShared/**"
+      - "Config/**"
+      - "leafy.xcodeproj/**"
+      - ".github/workflows/ios-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "leafy/**"
+      - "leafyTests/**"
+      - "leafyWidget/**"
+      - "LeafyWidgetShared/**"
+      - "LeafyShareExtension/**"
+      - "LeafyExternalImportShared/**"
+      - "Config/**"
+      - "leafy.xcodeproj/**"
+      - ".github/workflows/ios-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: iOS 17 build
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build for the iOS 17 deployment target
+        run: |
+          xcodebuild build \
+            -project leafy.xcodeproj \
+            -scheme leafy \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            CODE_SIGNING_ALLOWED=NO

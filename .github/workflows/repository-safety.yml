@@ -1,0 +1,40 @@
+name: Repository safety
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-safety-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safety:
+    name: Private files and secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check for non-public tracked files
+        shell: bash
+        run: |
+          banned='(^stargazer/|^marketing/|^admin-console/|^微信公众号文案/|^\.codex/|^supabase/\.temp/|^testPython.*\.py$|^test.*\.swift$|^test_.*\.swift$|(^|/)xcuserdata/|\.xcuserstate$|\.DS_Store$|\.mobileprovision$|GoogleService-Info\.plist$|ServiceAccount.*\.json$|\.p8$|\.p12$|\.pem$|\.key$)'
+          if git ls-files | grep -E "${banned}"; then
+            echo "Tracked non-public files were found. Remove them before merging."
+            exit 1
+          fi
+
+      - name: Check for obvious secret patterns
+        shell: bash
+        run: |
+          secret_patterns='(AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[0-9A-Za-z_]{20,}|github_pat_[0-9A-Za-z_]{20,}|sk-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{20,}|BEGIN (RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'
+          if git grep -I -n -E "${secret_patterns}" -- .; then
+            echo "Possible secret found. Remove it and rotate the credential if it was real."
+            exit 1
+          fi
