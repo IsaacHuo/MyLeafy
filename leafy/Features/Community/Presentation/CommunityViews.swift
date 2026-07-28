@@ -17,6 +17,46 @@ private struct CommunityDraftAttachment: Identifiable, Hashable {
     var id: UUID { upload.id }
 }
 
+private enum CommunityDraftSaveState: Equatable {
+    case idle
+    case saving
+    case saved(Date)
+    case failed(String)
+
+    var statusText: String? {
+        switch self {
+        case .idle:
+            return nil
+        case .saving:
+            return L10n.text("正在保存草稿…")
+        case .saved:
+            return L10n.text("草稿已保存")
+        case .failed:
+            return L10n.text("草稿保存失败")
+        }
+    }
+
+    var isFailure: Bool {
+        if case .failed = self { return true }
+        return false
+    }
+
+    var failureMessage: String? {
+        guard case .failed(let message) = self else { return nil }
+        return message
+    }
+}
+
+private struct CommunityDraftAutosaveSignature: Hashable {
+    let mode: CommunityComposerMode
+    let title: String
+    let body: String
+    let category: String
+    let isAnonymous: Bool
+    let imageIDs: [UUID]
+    let attachmentIDs: [UUID]
+}
+
 private struct CommunityAttachmentPreview: Identifiable {
     let id = UUID()
     let url: URL
@@ -489,6 +529,7 @@ struct RealCommunitySectionView: View {
     @State private var reportTarget: CommunityModerationTarget?
     @State private var blockTargetPost: CommunityPost?
     @State private var deleteTargetPost: CommunityPost?
+    @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var operationAlert: LeafyOperationAlert?
 
     private var feedQuery: CommunityFeedQuery {
@@ -574,7 +615,7 @@ struct RealCommunitySectionView: View {
         .sheet(isPresented: $showingTermsSheet) {
             CommunityTermsAgreementSheet {
                 hasAcceptedTerms = true
-                operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
             }
             .presentationDetents([.large])
         }
@@ -589,6 +630,9 @@ struct RealCommunitySectionView: View {
                 onDelete: {}
             )
             .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $shareCardSource) { source in
+            CommunityPostCardPreviewSheet(source: source)
         }
         .leafyOperationAlert($operationAlert)
         .confirmationDialog("举报内容", isPresented: Binding(
@@ -696,8 +740,14 @@ struct RealCommunitySectionView: View {
                 }
             )
             .contextMenu {
+                Button {
+                    shareCardSource = CommunityPostCardPreviewSource(content: .post(post))
+                } label: {
+                    Label("生成图文卡片", systemImage: "rectangle.on.rectangle.angled")
+                }
+
                 ShareLink(item: post.shareURL, subject: Text(post.title), message: Text(post.shareText)) {
-                    Label("分享", systemImage: "square.and.arrow.up")
+                    Label("分享链接", systemImage: "link")
                 }
 
                 Button {
@@ -810,7 +860,7 @@ struct RealCommunitySectionView: View {
                 if let error = await viewModel.report(post: post, reason: reason) {
                     viewModel.errorMessage = error
                 } else {
-                    operationAlert = .success(L10n.text("举报已提交！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("举报已提交。", language: leafyLanguage))
                 }
             case .comment:
                 break
@@ -825,7 +875,7 @@ struct RealCommunitySectionView: View {
             if let error = await viewModel.blockAuthor(of: post) {
                 viewModel.errorMessage = error
             } else {
-                operationAlert = .success(L10n.text("已屏蔽该用户！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("已屏蔽该用户。", language: leafyLanguage))
             }
         }
     }
@@ -837,7 +887,7 @@ struct RealCommunitySectionView: View {
             if let error = await viewModel.delete(post: post) {
                 viewModel.errorMessage = error
             } else {
-                operationAlert = .success(L10n.text("帖子已删除！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("帖子已删除。", language: leafyLanguage))
             }
         }
     }
@@ -863,8 +913,8 @@ struct RealCommunitySectionView: View {
             viewModel.errorMessage = error
         } else {
             let message = post.viewerHasFavorited
-                ? L10n.text("已取消收藏！", language: leafyLanguage)
-                : L10n.text("已添加收藏！", language: leafyLanguage)
+                ? L10n.text("已取消收藏。", language: leafyLanguage)
+                : L10n.text("已添加收藏。", language: leafyLanguage)
             operationAlert = .success(message)
         }
     }
@@ -891,7 +941,7 @@ struct RealCommunitySectionView: View {
 
         if let updatedPoll = await viewModel.votePoll(pollID: poll.id, optionID: option.id) {
             selectedPoll = updatedPoll
-            operationAlert = .success(L10n.text("已记录你的选择！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("已记录你的选择。", language: leafyLanguage))
         }
     }
 }
@@ -1258,7 +1308,7 @@ struct CommunityPollsSheet: View {
             }
             .sheet(isPresented: $showingComposer) {
                 CommunityPollComposerSheet(viewModel: viewModel) {
-                    operationAlert = .success(L10n.text("投票已提交审核！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("投票已提交审核。", language: leafyLanguage))
                 }
                     .presentationDetents([.medium, .large])
             }
@@ -1268,7 +1318,7 @@ struct CommunityPollsSheet: View {
             }
             .sheet(isPresented: $showingTermsSheet) {
                 CommunityTermsAgreementSheet {
-                    operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
                     .presentationDetents([.large])
             }
@@ -1355,7 +1405,7 @@ struct CommunityPollsSheet: View {
         }
 
         if await viewModel.vote(pollID: poll.id, optionID: option.id) {
-            operationAlert = .success(L10n.text("已记录你的选择！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("已记录你的选择。", language: leafyLanguage))
         }
     }
 
@@ -1364,7 +1414,7 @@ struct CommunityPollsSheet: View {
         deletionTarget = nil
         Task {
             if await viewModel.requestDeletion(poll: poll, reason: nil) {
-                operationAlert = .success(L10n.text("删除申请已提交！", language: leafyLanguage))
+                operationAlert = .success(L10n.text("删除申请已提交。", language: leafyLanguage))
             }
         }
     }
@@ -2183,12 +2233,17 @@ private enum CommunityComposerMode: String, CaseIterable, Identifiable, Hashable
 
 struct CommunityComposerSheet: View {
     let onPosted: (String) -> Void
+    let onDraftChanged: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyDependencies) private var dependencies
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
 
+    private let initialDraftID: UUID?
+    @State private var draftID: UUID
+    @State private var draftExists: Bool
     @State private var composerMode: CommunityComposerMode = .post
     @State private var title = ""
     @State private var postBody = ""
@@ -2207,8 +2262,25 @@ struct CommunityComposerSheet: View {
     @State private var errorMessage: String?
     @State private var showingProfileEditor = false
     @State private var showingTermsSheet = false
+    @State private var showingDiscardUnsavedConfirmation = false
     @State private var operationAlert: LeafyOperationAlert?
+    @State private var draftSaveState: CommunityDraftSaveState = .idle
+    @State private var draftSaveTask: Task<Void, Never>?
+    @State private var isLoadingDraft = false
+    @State private var draftLoadFailed = false
     @StateObject private var pollViewModel = CommunityPollsViewModel()
+
+    init(
+        draftID: UUID? = nil,
+        onDraftChanged: @escaping () -> Void = {},
+        onPosted: @escaping (String) -> Void
+    ) {
+        initialDraftID = draftID
+        self.onDraftChanged = onDraftChanged
+        self.onPosted = onPosted
+        _draftID = State(initialValue: draftID ?? UUID())
+        _draftExists = State(initialValue: draftID != nil)
+    }
 
     private var communityAccessGate: CommunityAccessGate {
         CommunityAccessGate(
@@ -2238,22 +2310,55 @@ struct CommunityComposerSheet: View {
         }
     }
 
+    private var autosaveSignature: CommunityDraftAutosaveSignature {
+        CommunityDraftAutosaveSignature(
+            mode: composerMode,
+            title: title,
+            body: postBody,
+            category: category,
+            isAnonymous: isAnonymous,
+            imageIDs: draftImages.map(\.id),
+            attachmentIDs: draftAttachments.map(\.id)
+        )
+    }
+
+    private var hasMeaningfulDraftContent: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !postBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !draftImages.isEmpty
+            || !draftAttachments.isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.card) {
                     LeafySectionTitle(composerMode.sectionTitle, subtitle: composerMode.subtitle)
 
-                    Picker("发布类型", selection: $composerMode) {
-                        ForEach(CommunityComposerMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                    if initialDraftID == nil {
+                        Picker("发布类型", selection: $composerMode) {
+                            ForEach(CommunityComposerMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("发布类型")
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("发布类型")
 
                     if let errorMessage {
                         CommunityInlineError(message: errorMessage)
+                    }
+
+                    if composerMode == .post, let statusText = draftSaveState.statusText {
+                        Label(
+                            statusText,
+                            systemImage: draftSaveState.isFailure
+                                ? "exclamationmark.triangle.fill"
+                                : "checkmark.circle"
+                        )
+                        .microCaption()
+                        .foregroundStyle(draftSaveState.isFailure ? AppTheme.danger : AppTheme.secondaryText)
+                        .accessibilityLabel(statusText)
                     }
 
                     composerFields
@@ -2265,8 +2370,8 @@ struct CommunityComposerSheet: View {
             .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .leafyLeading) {
-                    Button("取消") {
-                        dismiss()
+                    Button("关闭") {
+                        closeComposer()
                     }
                 }
                 ToolbarItem(placement: .leafyTrailing) {
@@ -2278,15 +2383,32 @@ struct CommunityComposerSheet: View {
             }
             .task {
                 await sessionManager.restoreProfileIfPossible()
+                loadInitialDraftIfNeeded()
                 await preflightPostCreation()
+            }
+            .onDisappear {
+                draftSaveTask?.cancel()
             }
             .onChange(of: selectedItems) { _, newValue in
                 Task {
                     await loadSelectedImages(from: newValue)
                 }
             }
-            .onChange(of: composerMode) { _, _ in
+            .onChange(of: composerMode) { oldMode, newMode in
+                draftSaveTask?.cancel()
                 errorMessage = nil
+                if oldMode == .post, newMode == .poll,
+                   draftExists || hasMeaningfulDraftContent {
+                    saveDraftNow(allowWhenPoll: true)
+                }
+            }
+            .onChange(of: autosaveSignature) { _, _ in
+                scheduleDraftSave()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase != .active, composerMode == .post else { return }
+                draftSaveTask?.cancel()
+                saveDraftNow()
             }
             .fileImporter(
                 isPresented: $showingAttachmentImporter,
@@ -2301,10 +2423,25 @@ struct CommunityComposerSheet: View {
             }
             .sheet(isPresented: $showingTermsSheet) {
                 CommunityTermsAgreementSheet {
-                    operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
                     .presentationDetents([.large])
             }
+            .confirmationDialog(
+                "草稿尚未保存",
+                isPresented: $showingDiscardUnsavedConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("继续编辑", role: .cancel) {}
+                Button("放弃未保存的更改", role: .destructive) {
+                    dismiss()
+                }
+            } message: {
+                Text("请检查设备存储空间后重试，或放弃这次未保存的更改。")
+            }
+            .interactiveDismissDisabled(
+                composerMode == .post && (draftExists || hasMeaningfulDraftContent)
+            )
             .leafyOperationAlert($operationAlert)
         }
     }
@@ -2338,7 +2475,7 @@ struct CommunityComposerSheet: View {
 
             Text("正文")
                 .leafyHeadline()
-            TextField("把问题或经验写清楚一点，别人更容易回复你。", text: $postBody, axis: .vertical)
+            TextField("补充具体的问题或经验，便于他人回复。", text: $postBody, axis: .vertical)
                 .lineLimit(8, reservesSpace: true)
                 .padding(14)
                 .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
@@ -2531,18 +2668,38 @@ struct CommunityComposerSheet: View {
         }
 
         do {
-            _ = try dependencies.communityRepository.enqueuePostPublication(
-                input: CreatePostInput(
-                    title: title,
-                    body: postBody,
-                    category: category,
-                    isAnonymous: isAnonymous
-                ),
-                images: draftImages.map(\.upload),
-                attachments: draftAttachments.map(\.upload)
+            let handoff = try CommunityPostDraftPublishHandoff.enqueue(
+                draftID: draftExists ? draftID : nil,
+                ownerProfileID: sessionManager.currentUserID,
+                repository: dependencies.communityPostDraftRepository
+            ) {
+                try dependencies.communityRepository.enqueuePostPublication(
+                    input: CreatePostInput(
+                        title: title,
+                        body: postBody,
+                        category: category,
+                        isAnonymous: isAnonymous
+                    ),
+                    images: draftImages.map(\.upload),
+                    attachments: draftAttachments.map(\.upload)
+                )
+            }
+            var postedMessage = L10n.text(
+                "已加入发布队列，可在社区顶部查看进度。",
+                language: leafyLanguage
             )
+            if handoff.deletedDraft {
+                draftExists = false
+                onDraftChanged()
+            } else if let cleanupError = handoff.draftCleanupError {
+                postedMessage = L10n.text(
+                    "帖子已加入发布队列，但草稿未能删除：%@",
+                    language: leafyLanguage,
+                    cleanupError
+                )
+            }
             cleanupComposerAttachments()
-            onPosted(L10n.text("已加入发布队列，可在社区顶部查看进度。", language: leafyLanguage))
+            onPosted(postedMessage)
             dismiss()
         } catch {
             if error.localizedDescription == CommunityServiceError.profileCompletionRequired.localizedDescription {
@@ -2575,7 +2732,7 @@ struct CommunityComposerSheet: View {
         }
 
         if await pollViewModel.createPoll(input: pollInput) {
-            onPosted(L10n.text("投票已提交审核！", language: leafyLanguage))
+            onPosted(L10n.text("投票已提交审核。", language: leafyLanguage))
             dismiss()
         } else {
             errorMessage = pollViewModel.errorMessage
@@ -2679,8 +2836,6 @@ struct CommunityComposerSheet: View {
     }
 
     private func removeDraftAttachment(_ id: UUID) {
-        guard let draft = draftAttachments.first(where: { $0.id == id }) else { return }
-        try? FileManager.default.removeItem(at: draft.upload.localURL)
         draftAttachments.removeAll { $0.id == id }
     }
 
@@ -2689,6 +2844,129 @@ struct CommunityComposerSheet: View {
             try? FileManager.default.removeItem(at: draft.upload.localURL)
         }
         draftAttachments.removeAll()
+    }
+
+    private func loadInitialDraftIfNeeded() {
+        guard let initialDraftID, let ownerProfileID = sessionManager.currentUserID else { return }
+        isLoadingDraft = true
+        defer { isLoadingDraft = false }
+
+        do {
+            let payload = try dependencies.communityPostDraftRepository.loadDraft(
+                id: initialDraftID,
+                ownerProfileID: ownerProfileID
+            )
+            title = payload.draft.input.title
+            postBody = payload.draft.input.body
+            category = payload.draft.input.category ?? communityCategories[0]
+            isAnonymous = payload.draft.input.isAnonymous
+            draftImages = try payload.images.map { upload in
+                guard let preview = ImageDataDecoder.decodedImage(
+                    from: upload.data,
+                    targetSize: CGSize(width: 420, height: 420)
+                ) else {
+                    throw CommunityPostDraftError.invalidImage(upload.id.uuidString)
+                }
+                return CommunityDraftImage(id: upload.id, image: preview, upload: upload)
+            }
+            draftAttachments = payload.attachments.map(CommunityDraftAttachment.init(upload:))
+            draftLoadFailed = false
+            draftSaveState = .saved(payload.draft.updatedAt)
+        } catch {
+            draftLoadFailed = true
+            errorMessage = error.localizedDescription
+            draftSaveState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func scheduleDraftSave() {
+        guard !isLoadingDraft, composerMode == .post else { return }
+        draftSaveTask?.cancel()
+        guard draftExists || hasMeaningfulDraftContent else {
+            draftSaveState = .idle
+            return
+        }
+
+        draftSaveState = .saving
+        draftSaveTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                saveDraftNow()
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func saveDraftNow(allowWhenPoll: Bool = false) {
+        guard composerMode == .post || allowWhenPoll,
+              draftExists || hasMeaningfulDraftContent else { return }
+        guard !draftLoadFailed else {
+            let message = draftSaveState.failureMessage
+                ?? L10n.text("草稿读取失败，无法安全覆盖原文件。")
+            draftSaveState = .failed(message)
+            errorMessage = message
+            return
+        }
+        guard let ownerProfileID = sessionManager.currentUserID else {
+            let message = L10n.text("当前社区身份不可用，草稿尚未保存。请继续编辑或放弃更改。")
+            draftSaveState = .failed(message)
+            errorMessage = message
+            return
+        }
+
+        draftSaveTask?.cancel()
+        draftSaveState = .saving
+        let previousAttachmentURLs = draftAttachments.map(\.upload.localURL)
+
+        do {
+            let payload = try dependencies.communityPostDraftRepository.saveDraft(
+                id: draftID,
+                ownerProfileID: ownerProfileID,
+                input: CreatePostInput(
+                    title: title,
+                    body: postBody,
+                    category: category,
+                    isAnonymous: isAnonymous
+                ),
+                images: draftImages.map(\.upload),
+                attachments: draftAttachments.map(\.upload)
+            )
+            draftExists = true
+            draftImages = try payload.images.map { upload in
+                guard let preview = ImageDataDecoder.decodedImage(
+                    from: upload.data,
+                    targetSize: CGSize(width: 420, height: 420)
+                ) else {
+                    throw CommunityPostDraftError.invalidImage(upload.id.uuidString)
+                }
+                return CommunityDraftImage(id: upload.id, image: preview, upload: upload)
+            }
+            draftAttachments = payload.attachments.map(CommunityDraftAttachment.init(upload:))
+            for url in previousAttachmentURLs
+            where url.path.contains("CommunityComposerAttachments")
+                && !draftAttachments.contains(where: { $0.upload.localURL == url }) {
+                try? FileManager.default.removeItem(at: url)
+            }
+            draftSaveState = .saved(payload.draft.updatedAt)
+            onDraftChanged()
+        } catch {
+            draftSaveState = .failed(error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func closeComposer() {
+        draftSaveTask?.cancel()
+        if composerMode == .post, draftExists || hasMeaningfulDraftContent {
+            saveDraftNow()
+            if draftSaveState.isFailure {
+                showingDiscardUnsavedConfirmation = true
+                return
+            }
+        }
+        dismiss()
     }
 }
 
@@ -2795,8 +3073,8 @@ struct RealCommunityPostDetailSheet: View {
                                 onPostChanged(updatedPost)
                                 operationAlert = .success(
                                     updatedPost.viewerHasFavorited
-                                        ? L10n.text("已添加收藏！", language: leafyLanguage)
-                                        : L10n.text("已取消收藏！", language: leafyLanguage)
+                                        ? L10n.text("已添加收藏。", language: leafyLanguage)
+                                        : L10n.text("已取消收藏。", language: leafyLanguage)
                                 )
                             }
                         }
@@ -2826,7 +3104,7 @@ struct RealCommunityPostDetailSheet: View {
                                 Task { await viewModel.load() }
                             }
                         } else if viewModel.comments.isEmpty {
-                            Text("还没有评论，先来第一条。")
+                            Text("暂无评论。")
                                 .leafyBody()
                                 .foregroundStyle(AppTheme.secondaryText)
                                 .padding(14)
@@ -2952,7 +3230,7 @@ struct RealCommunityPostDetailSheet: View {
             }
             .sheet(isPresented: $showingTermsSheet) {
                 CommunityTermsAgreementSheet {
-                    operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
                     .presentationDetents([.large])
             }
@@ -3132,7 +3410,7 @@ struct RealCommunityPostDetailSheet: View {
             commentBody = ""
             replyTarget = nil
             isCommentFieldFocused = false
-            operationAlert = .success(L10n.text("评论发布成功！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评论发布成功。", language: leafyLanguage))
         }
     }
 
@@ -3205,7 +3483,7 @@ struct RealCommunityPostDetailSheet: View {
             case .post:
                 if await viewModel.reportPost(reason: reason) {
                     operationAlert = .success(
-                        L10n.text("举报已提交！", language: leafyLanguage),
+                        L10n.text("举报已提交。", language: leafyLanguage),
                         action: {
                             onPostRemoved()
                             dismiss()
@@ -3215,7 +3493,7 @@ struct RealCommunityPostDetailSheet: View {
             case .comment(let comment):
                 await viewModel.reportComment(comment, reason: reason)
                 if viewModel.errorMessage == nil {
-                    operationAlert = .success(L10n.text("举报已提交！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("举报已提交。", language: leafyLanguage))
                 }
             }
         }
@@ -3230,7 +3508,7 @@ struct RealCommunityPostDetailSheet: View {
             case .post:
                 if await viewModel.blockPostAuthor() {
                     operationAlert = .success(
-                        L10n.text("已屏蔽该用户！", language: leafyLanguage),
+                        L10n.text("已屏蔽该用户。", language: leafyLanguage),
                         action: {
                             onPostRemoved()
                             dismiss()
@@ -3240,7 +3518,7 @@ struct RealCommunityPostDetailSheet: View {
             case .comment(let comment):
                 await viewModel.blockCommentAuthor(comment)
                 if viewModel.errorMessage == nil {
-                    operationAlert = .success(L10n.text("已屏蔽该用户！", language: leafyLanguage))
+                    operationAlert = .success(L10n.text("已屏蔽该用户。", language: leafyLanguage))
                 }
             }
         }
@@ -3250,7 +3528,7 @@ struct RealCommunityPostDetailSheet: View {
     private func deleteCurrentPost() async {
         if await viewModel.deletePost() {
             operationAlert = .success(
-                L10n.text("帖子已删除！", language: leafyLanguage),
+                L10n.text("帖子已删除。", language: leafyLanguage),
                 action: {
                     onPostRemoved()
                     dismiss()
@@ -3264,7 +3542,7 @@ struct RealCommunityPostDetailSheet: View {
         do {
             try await dependencies.communityRepository.deleteComment(commentID: comment.id)
             await viewModel.load()
-            operationAlert = .success(L10n.text("评论已删除！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("评论已删除。", language: leafyLanguage))
         } catch {
             viewModel.errorMessage = error.localizedDescription
         }
@@ -3290,6 +3568,7 @@ struct RealCommunityPostCard: View {
     var onToggleFavorite: (() async -> Void)? = nil
 
     @State private var selectedImagePreviewIndex: Int?
+    @State private var shareCardSource: CommunityPostCardPreviewSource?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -3353,6 +3632,9 @@ struct RealCommunityPostCard: View {
                     initialIndex: selectedImagePreviewIndex
                 )
             }
+        }
+        .sheet(item: $shareCardSource) { source in
+            CommunityPostCardPreviewSheet(source: source)
         }
     }
 
@@ -3448,8 +3730,14 @@ struct RealCommunityPostCard: View {
 
     private var moderationMenu: some View {
         Menu {
+            Button {
+                shareCardSource = CommunityPostCardPreviewSource(content: .post(post))
+            } label: {
+                Label("生成图文卡片", systemImage: "rectangle.on.rectangle.angled")
+            }
+
             ShareLink(item: post.shareURL, subject: Text(post.title), message: Text(post.shareText)) {
-                Label("分享", systemImage: "square.and.arrow.up")
+                Label("分享链接", systemImage: "link")
             }
 
             Button {

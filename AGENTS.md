@@ -30,6 +30,8 @@ Community security direction:
 - Posts and comments are created through validated RPCs, reports never auto-hide content, and post images require a short-lived single-use server validation receipt. Image posts record the exact expected image count; the final validated attachment publishes the post atomically.
 - Community posts support at most two comment levels. Post images and up to two PDF/XLSX/DOCX/Markdown attachments are stored in private Supabase Storage buckets and read only through short-lived signed access. Attachment validation checks structure and type but is not malware scanning.
 - Deleted post media is retained for 30 days before cleanup unless an unresolved report or administrative hidden state requires preservation. Incomplete upload drafts expire after 24 hours.
+- Ordinary-post composer drafts are account-scoped local files and remain on the device until the user deletes them or the post successfully enters the publish queue. Polls do not use this draft store.
+- Community share-card JPEGs are generated locally and never uploaded by the card flow. Draft content enters the community service only after publish validation succeeds and the post is enqueued.
 - `posts.status = pending_review` is an upload/publication exception, never a normal editorial queue. Polls may still use `pending_review` for explicit manual approval or rejection.
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
 

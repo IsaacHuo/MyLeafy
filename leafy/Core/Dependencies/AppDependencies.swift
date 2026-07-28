@@ -4,6 +4,7 @@ struct LeafyDependencies {
     var schoolTimetableRepository: any SchoolTimetableRepository
     var communityRepository: any CommunityRepository
     var communityActivityRepository: any CommunityActivityRepository
+    var communityPostDraftRepository: any CommunityPostDraftRepository
     var communityImageProcessor: any CommunityImageProcessing
     var classroomLookupService: any ClassroomLookupServicing
     var campusHeatmapService: any CampusHeatmapServicing
@@ -15,6 +16,7 @@ struct LeafyDependencies {
         schoolTimetableRepository: LiveSchoolTimetableRepository(),
         communityRepository: LiveCommunityRepository(),
         communityActivityRepository: LiveCommunityActivityRepository(),
+        communityPostDraftRepository: LocalCommunityPostDraftRepository.shared,
         communityImageProcessor: CommunityImageProcessor.shared,
         classroomLookupService: LiveClassroomLookupService(),
         campusHeatmapService: LiveCampusHeatmapService(),

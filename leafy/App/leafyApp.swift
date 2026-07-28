@@ -63,6 +63,7 @@ struct LeafyApp: App {
     init() {
         AppAppearancePreference.migrateStoredAppearanceIfNeeded()
         AppThemeColorPreference.migrateStoredThemeIfNeeded()
+        CommunityPostCardGenerator.cleanupStaleRenderedFiles()
         let setup = AppModelContainerFactory.make()
         self._modelContainerSetup = State(initialValue: setup)
         self._modelRecoveryMessage = State(initialValue: setup.recoveryMessage)

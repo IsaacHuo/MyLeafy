@@ -3,6 +3,11 @@ import os
 import SwiftUI
 
 struct CommunityUserProfileView: View {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "MyLeafy",
+        category: "CommunityProfile"
+    )
+
     @Environment(\.leafyDependencies) private var dependencies
     @Environment(\.leafyLanguage) private var leafyLanguage
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
@@ -17,6 +22,7 @@ struct CommunityUserProfileView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var selectedPost: CommunityPost?
+    @State private var draftCount = 0
 
     init(
         profileID: UUID?,
@@ -67,6 +73,7 @@ struct CommunityUserProfileView: View {
         }
         .task(id: loadTaskID) {
             await load()
+            loadDraftCount()
         }
         .refreshable {
             await load()
@@ -74,6 +81,10 @@ struct CommunityUserProfileView: View {
         .onChange(of: sessionManager.profile) { _, newProfile in
             guard allowsEditing, let newProfile else { return }
             profile = newProfile
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .communityPostDraftsDidChange)) { notification in
+            guard allowsEditing, notification.object as? UUID == sessionManager.currentUserID else { return }
+            loadDraftCount()
         }
         .sheet(item: $selectedPost) { post in
             RealCommunityPostDetailSheet(post: post) { updatedPost in
@@ -237,13 +248,32 @@ struct CommunityUserProfileView: View {
 
     private var postsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(allowsEditing ? "我的发帖" : "公开帖子")
-                    .leafyTitle3()
-                    .foregroundStyle(AppTheme.primaryText)
-                Text(allowsEditing ? "已发布的内容会展示在这里" : "匿名、待审核和隐藏内容不会出现在个人主页。")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(allowsEditing ? "我的发帖" : "公开帖子")
+                        .leafyTitle3()
+                        .foregroundStyle(AppTheme.primaryText)
+                    Text(allowsEditing ? "已发布的内容会展示在这里" : "匿名、待审核和隐藏内容不会出现在个人主页。")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
+                Spacer()
+
+                if allowsEditing {
+                    NavigationLink {
+                        CommunityPostDraftsView()
+                    } label: {
+                        Label(
+                            draftCount > 0 ? "草稿箱 · \(draftCount)" : "草稿箱",
+                            systemImage: "doc.text"
+                        )
+                        .microCaption()
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.accentEmphasis)
+                    }
+                    .accessibilityLabel(draftCount > 0 ? "草稿箱，\(draftCount) 份草稿" : "草稿箱")
+                }
             }
 
             postsContent
@@ -270,7 +300,7 @@ struct CommunityUserProfileView: View {
             .padding(.vertical, 8)
         } else if posts.isEmpty {
             ContentUnavailableView(
-                allowsEditing ? "还没有发过帖子" : "还没有公开帖子",
+                allowsEditing ? "暂无已发布帖子" : "暂无公开帖子",
                 systemImage: "text.bubble",
                 description: Text(allowsEditing ? "发布后会自动出现在这里。" : "匿名、待审核和隐藏内容不会出现在个人主页。")
             )
@@ -298,8 +328,8 @@ struct CommunityUserProfileView: View {
 
     private var emptyBioText: String {
         allowsEditing
-            ? L10n.text("还没有写签名", language: leafyLanguage)
-            : L10n.text("这个同学还没有写签名", language: leafyLanguage)
+            ? L10n.text("尚未填写签名", language: leafyLanguage)
+            : L10n.text("该用户尚未填写签名", language: leafyLanguage)
     }
 
     private var profileEducationLine: String? {
@@ -397,6 +427,23 @@ struct CommunityUserProfileView: View {
             return
         }
         posts = posts.map { $0.id == updatedPost.id ? updatedPost : $0 }
+    }
+
+    private func loadDraftCount() {
+        guard allowsEditing, let ownerProfileID = sessionManager.currentUserID else {
+            draftCount = 0
+            return
+        }
+        do {
+            draftCount = try dependencies.communityPostDraftRepository
+                .listDrafts(ownerProfileID: ownerProfileID)
+                .count
+        } catch {
+            draftCount = 0
+            Self.logger.error(
+                "Load community draft count failed owner=\(ownerProfileID.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .private)"
+            )
+        }
     }
 }
 

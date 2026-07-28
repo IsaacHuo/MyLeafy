@@ -951,7 +951,7 @@ private struct FeedbackSheetView: View {
             feedbackBody = ""
             contact = ""
             operationAlert = .success(
-                L10n.text("反馈已提交！", language: leafyLanguage),
+                L10n.text("反馈已提交。", language: leafyLanguage),
                 action: { dismiss() }
             )
         } catch {
@@ -1119,7 +1119,7 @@ private struct CommunityTermsPreferenceSheet: View {
                 try await dependencies.communityActivityRepository.revokeCurrentTerms()
             }
             originalAccepted = isAccepted
-            operationAlert = .success(L10n.text("设置已保存！", language: leafyLanguage))
+            operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1208,7 +1208,7 @@ private struct ContactUsSheetView: View {
         defer { isSaving = false }
 
         do {
-            try await FeedbackImageSaver.save(image)
+            try await LeafyPhotoLibrarySaver.save(image)
 #if os(macOS)
             saveResultMessage = L10n.text("已保存到所选文件。", language: leafyLanguage)
 #else
@@ -1234,82 +1234,6 @@ private enum FeedbackImageAsset {
     }
 }
 
-private enum FeedbackImageSaver {
-    static func save(_ image: UIImage) async throws {
-#if os(macOS)
-        guard let data = image.jpegData(compressionQuality: 0.92) else {
-            throw FeedbackImageSaveError.saveFailed
-        }
-
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.jpeg]
-        panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "MyLeafy-feedback.jpg"
-
-        guard panel.runModal() == .OK, let url = panel.url else {
-            throw FeedbackImageSaveError.cancelled
-        }
-        try data.write(to: url, options: .atomic)
-#else
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-
-        switch status {
-        case .authorized, .limited:
-            break
-        case .notDetermined:
-            let requestedStatus = await requestAuthorization()
-            guard requestedStatus == .authorized || requestedStatus == .limited else {
-                throw FeedbackImageSaveError.permissionDenied
-            }
-        default:
-            throw FeedbackImageSaveError.permissionDenied
-        }
-
-        let _: Void = try await withCheckedThrowingContinuation { continuation in
-            PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
-            } completionHandler: { success, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if success {
-                    continuation.resume(returning: ())
-                } else {
-                    continuation.resume(throwing: FeedbackImageSaveError.saveFailed)
-                }
-            }
-        }
-#endif
-    }
-
-#if !os(macOS)
-    private static func requestAuthorization() async -> PHAuthorizationStatus {
-        await withCheckedContinuation { continuation in
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-                continuation.resume(returning: status)
-            }
-        }
-    }
-#endif
-}
-
-private enum FeedbackImageSaveError: LocalizedError {
-    case cancelled
-    case permissionDenied
-    case saveFailed
-
-    var errorDescription: String? {
-        switch self {
-        case .cancelled:
-            return L10n.text("已取消保存。")
-        case .permissionDenied:
-            return L10n.text("没有相册保存权限，请在系统设置中允许 %@ 添加照片。", AppBrand.displayName)
-        case .saveFailed:
-            return L10n.text("保存失败，请稍后重试。")
-        }
-    }
-}
-
-
 private struct LeafyGuideAndDataSecurityView: View {
     @State private var showingCommunityTermsSheet = false
 
@@ -1321,112 +1245,113 @@ private struct LeafyGuideAndDataSecurityView: View {
         ManualChapter(
             icon: "leaf.fill",
             title: "开始使用",
-            detail: "定位、边界和入口",
-            intro: "\(AppBrand.displayName) 当前面向北京林业大学的校园日常使用。它把课表、成绩、考试、培养方案、自习室、社区和反馈集中在一个入口里，适合每天快速查看和处理校园事务。",
+            detail: "产品定位与主要入口",
+            intro: "\(AppBrand.displayName) 面向北京林业大学，提供课表、成绩、考试、培养方案、空闲教室、社区和反馈等功能。",
             rows: [
-                ManualInfo(title: "为什么会有 \(AppBrand.displayName)", body: "北林学生常用的课表、成绩、考试、自习室、校历、评教、社区和反馈入口分散在不同系统里。\(AppBrand.displayName) 的目标是把这些高频事务整理成一个安静、清楚、可离线兜底的学生端工具。"),
-                ManualInfo(title: "它不替代什么", body: "\(AppBrand.displayName) 不是北京林业大学官方教务系统，也不会绕过学校的登录、验证码、校园网、VPN 或权限限制。涉及成绩、培养方案、考试安排等正式结果时，仍以学校系统为准。"),
-                ManualInfo(title: "主要入口怎么用", body: "课表用于查看当天和当前周安排；社区用于同学交流、公告和反馈；校园收纳成绩、考试、教学培养、自习室、校历和评教；我的用于管理资料、同步、个性化、支持和安全设置。Leafy AI 正在继续打磨，当前版本暂不开放入口。"),
-                ManualInfo(title: "什么时候需要同步", body: "选课、调课、成绩发布、考试安排更新、培养方案或空教室查询结果变化后，可以连接能访问北林教务的网络重新同步。同步失败时，App 会优先保留最近一次成功缓存。")
+                ManualInfo(title: "产品用途", body: "北林的教务和校园服务分布在多个系统。\(AppBrand.displayName) 集中提供常用入口，并保留最近一次成功同步的数据供离线查看。"),
+                ManualInfo(title: "与学校系统的关系", body: "\(AppBrand.displayName) 是第三方校园应用，不属于北京林业大学官方教务系统。登录、验证码、校园网、VPN 和访问权限均受学校系统限制。成绩、培养方案和考试安排等正式结果以学校系统为准。"),
+                ManualInfo(title: "主要入口", body: "“课表”显示当天和当前周安排；“社区”用于同学交流、公告和反馈；“校园”提供成绩、考试、教学培养、空闲教室、校历和评教；“我的”用于管理资料、同步、个性化和安全设置。Leafy AI 当前不提供公开入口。"),
+                ManualInfo(title: "需要同步的情况", body: "选课、调课、成绩发布或考试安排更新后，可连接能够访问北林教务的网络重新同步。同步失败不会删除最近一次成功缓存。")
             ],
             steps: [
-                ManualStep(title: "先从课表确认日常安排", body: "打开课表页看当前周和今天的课程，确认是否需要刷新或调整显示设置。"),
-                ManualStep(title: "再进入校园查看教务结果", body: "成绩、考试、培养方案、自习室、校历、评教、学习资料和体育记录都在校园里。"),
-                ManualStep(title: "最后到我的处理账号和安全", body: "登录状态、同步缓存、共享课表、反馈、联系和本手册都在我的页面集中管理。")
+                ManualStep(title: "查看课表", body: "确认当前周和当天课程，按需刷新数据或调整显示设置。"),
+                ManualStep(title: "查看校园数据", body: "成绩、考试、培养方案、空闲教室、校历、评教、学习资料和体育记录位于“校园”。"),
+                ManualStep(title: "管理账号与数据", body: "登录状态、同步缓存、共享课表、反馈和本手册位于“我的”。")
             ]
         ),
         ManualChapter(
             icon: "wifi",
             title: "数据来源",
             detail: "教务同步与本地维护",
-            intro: "北京林业大学教务数据来自学校强智教务系统。\(AppBrand.displayName) 代表你发起查询并解析结果，本机缓存用于离线查看和失败兜底。",
+            intro: "课表、成绩等教务数据来自北京林业大学强智教务系统。查询由用户主动发起，解析结果按功能保存在本机。",
             rows: [
-                ManualInfo(title: "为什么要连接校园网", body: "北林强智教务系统通常要求校园网、校内网络或学校认可的 VPN 环境。\(AppBrand.displayName) 不能突破学校系统的网络边界；如果浏览器也打不开教务系统，App 通常也无法同步。"),
-                ManualInfo(title: "教务数据来自哪里", body: "课表、成绩、考试安排、教学计划、培养方案、空教室和教室占用来自北林教务页面。App 会按功能保存解析后的结果，用于展示、检索和离线查看。"),
-                ManualInfo(title: "本机数据来自哪里", body: "课程备注、课表提醒、收藏、自定日程、学习资料、学习空间、任务、专注记录和体测记录，是你在当前设备上创建、导入或维护的数据。"),
-                ManualInfo(title: "保持登录状态的用途", body: "学校登录态用于减少重复输入学号、密码和验证码；会话失效、换网或学校页面变化时，部分教务功能会要求重新认证。"),
-                ManualInfo(title: "遇到问题先看什么", body: "同步失败先确认网络能访问北林教务，再看是否需要重新登录；如果只有某个页面长期异常，通常需要反馈页面名称、错误提示和发生时间。")
+                ManualInfo(title: "校园网要求", body: "北林强智教务系统通常只能通过校园网或学校认可的 VPN 访问。浏览器无法打开教务系统时，App 也无法同步相关数据。"),
+                ManualInfo(title: "教务数据", body: "课表、成绩、考试安排、教学计划、培养方案、空闲教室和教室占用来自北林教务页面。解析结果用于展示、检索和离线查看。"),
+                ManualInfo(title: "本机数据", body: "课程备注、课表提醒、收藏、自定日程、学习资料、学习空间、任务、专注记录和体测记录由用户在当前设备创建、导入或维护。"),
+                ManualInfo(title: "登录状态", body: "学校登录状态用于减少重复认证。会话失效、网络切换或学校页面变化时，相关功能会要求重新登录。"),
+                ManualInfo(title: "同步问题", body: "先确认当前网络能够访问北林教务，再检查是否需要重新登录。单个页面持续异常时，请记录页面名称、错误提示和发生时间。")
             ],
             steps: [
-                ManualStep(title: "先确认网络", body: "连接 bjfu-wifi、校园网或学校 VPN，并确认浏览器可以访问北林教务系统。"),
-                ManualStep(title: "再重新登录", body: "如果 App 提示会话失效或登录态异常，先完成重新认证，再回到原页面刷新。"),
-                ManualStep(title: "仍失败再反馈", body: "保留页面名称、错误提示、发生时间，以及浏览器能否打开学校系统，再提交反馈。")
+                ManualStep(title: "确认网络", body: "连接 bjfu-wifi、校园网或学校 VPN，并确认浏览器能够访问北林教务系统。"),
+                ManualStep(title: "重新登录", body: "出现会话失效或登录状态异常提示时，完成认证后返回原页面刷新。"),
+                ManualStep(title: "提交反馈", body: "问题仍未解决时，请附上页面名称、错误提示、发生时间和浏览器访问结果。")
             ]
         ),
         ManualChapter(
             icon: "arrow.triangle.2.circlepath",
             title: "同步与缓存",
             detail: "本地缓存和重试顺序",
-            intro: "\(AppBrand.displayName) 会把最近一次成功同步的教务数据保存在本机。网络不稳定、学校系统暂时不可用或登录态失效时，你仍然可以查看旧数据。",
+            intro: "最近一次成功同步的教务数据保存在本机。网络或学校系统异常时，现有缓存仍可查看。",
             rows: [
-                ManualInfo(title: "缓存保存什么", body: "课表、成绩、考试安排、教学计划、培养方案、空教室查询结果、学习资料和体育记录会按功能保存在本机，用于离线查看和失败兜底。"),
-                ManualInfo(title: "本地数据是什么", body: "课程备注、课表提醒、收藏、自定日程、学习资料、学习空间、任务、专注记录和体测记录等，是你在当前设备上创建或导入的数据。"),
-                ManualInfo(title: "旧数据为什么还在", body: "同步或导入失败不会立刻删除旧数据。这样在网络不可用、学校系统维护或文件格式错误时，课表和成绩仍然可以临时查看。成功更新后，新数据会替换对应缓存。"),
-                ManualInfo(title: "清除缓存会怎样", body: "清除缓存会删除本地身份、教务登录态、教务缓存，以及本机保存的备注、提醒、收藏、学习资料、学习空间、任务、学习记录、体测记录等内容。"),
-                ManualInfo(title: "什么时候适合清缓存", body: "账号切换、身份异常、旧缓存明显不一致，或需要彻底移除本机数据时再清除。普通同步失败通常先重试或重新登录，不需要马上清缓存。")
+                ManualInfo(title: "教务缓存", body: "课表、成绩、考试安排、教学计划、培养方案和空闲教室查询结果按功能保存在本机，供离线查看。"),
+                ManualInfo(title: "本地记录", body: "课程备注、课表提醒、收藏、自定日程、学习资料、学习空间、任务、专注记录和体测记录由用户在当前设备创建或导入。"),
+                ManualInfo(title: "同步失败时", body: "同步或导入失败不会删除现有数据。成功更新后，新数据会替换对应缓存。"),
+                ManualInfo(title: "清除本地缓存", body: "此操作会删除本地身份、教务登录状态、教务缓存，以及备注、提醒、收藏、学习资料、任务和体测记录等本机内容。"),
+                ManualInfo(title: "适用情况", body: "仅在切换账号、身份异常、缓存明显不一致或需要移除本机数据时清除缓存。普通同步失败应先重试或重新登录。")
             ],
             steps: [
-                ManualStep(title: "先确认网络", body: "连接 bjfu-wifi、校园网或其它能访问北林教务的网络，并确认学校页面本身可打开。"),
-                ManualStep(title: "再重新同步", body: "回到对应页面刷新，或在我的页使用重新同步入口集中更新教务数据。"),
-                ManualStep(title: "再管理本地数据", body: "进入“重新同步”，查看缓存状态并决定是否清理。"),
-                ManualStep(title: "仍失败再反馈", body: "如果同一功能多次失败，记录页面名称、入口类型、错误提示和发生时间，再提交反馈。")
+                ManualStep(title: "确认网络", body: "连接能够访问北林教务的网络，并确认学校页面可以打开。"),
+                ManualStep(title: "重新同步", body: "返回对应页面刷新，或在“我的”中集中更新教务数据。"),
+                ManualStep(title: "检查缓存", body: "进入“缓存与同步”查看状态，确认是否需要清理。"),
+                ManualStep(title: "提交反馈", body: "同一功能多次失败时，请附上页面名称、错误提示和发生时间。")
             ]
         ),
         ManualChapter(
             icon: "person.2.fill",
             title: "社区、反馈与共享课表",
-            detail: "主动发布才进入服务",
-            intro: "社区能力由 \(AppBrand.displayName) 社区服务承接，和北林教务系统不是同一个系统。学校身份用于确认校园归属，社区资料用于展示、互动、通知和安全处理。",
+            detail: "社区数据与主动发布内容",
+            intro: "\(AppBrand.displayName) 社区服务与北林教务系统相互独立。学校身份用于确认校园归属，社区资料用于展示、互动、通知和安全处理。",
             rows: [
-                ManualInfo(title: "社区会保存什么", body: "昵称、头像、学院、年级、帖子、评论、点赞、收藏、通知、举报、反馈、评教，以及你主动发布的共享课表数据会保存到 \(AppBrand.displayName) 社区服务。"),
-                ManualInfo(title: "帖子图片和附件", body: "你主动选择的帖子图片，以及 PDF、Excel、Word 或 Markdown 附件会存入 Supabase 私有存储，并通过短期签名链接访问。附件会校验类型和文件结构，但不提供病毒扫描。删帖后媒体通常保留 30 天再清理；存在未解决举报或后台隐藏时会暂停清理。"),
-                ManualInfo(title: "不会自动上传什么", body: "成绩、考试安排、课程备注、提醒、收藏、自定日程、学习资料文件、学习空间、任务、专注记录和体测记录不会因为你打开社区而自动上传。"),
-                ManualInfo(title: "共享课表包含什么", body: "共享课表只包含课程安排，用来让被授权的人查看；它不包含成绩、考试、课程备注、提醒、收藏或学习资料。你可以撤销查看权限。"),
-                ManualInfo(title: "反馈会附带什么", body: "举报与反馈会提交你的文字说明。必要时会附带设备型号、iOS 版本、App 版本、登录状态和最近同步时间，方便定位同步失败、登录异常、学校页面解析变化或社区问题。"),
-                ManualInfo(title: "社区安全怎么处理", body: "遇到不当内容、骚扰、冒充、刷屏、恶意评分、泄露隐私或其它滥用行为，可以在“举报与反馈”选择“社区安全”，也可以通过联系我们里的邮箱或反馈群说明。")
+                ManualInfo(title: "社区服务保存的内容", body: "昵称、头像、学院、年级、帖子、评论、点赞、收藏、通知、举报、反馈、评教和主动发布的共享课表数据会保存到 \(AppBrand.displayName) 社区服务。"),
+                ManualInfo(title: "草稿和图文卡片", body: "普通帖子草稿按社区账号保存在本机，仅在原账号登录后显示。图文卡片也保存在本机。帖子通过发布校验并进入发布队列后，内容才会提交到社区服务。"),
+                ManualInfo(title: "帖子图片和附件", body: "用户选择的帖子图片及 PDF、Excel、Word 或 Markdown 附件存入 Supabase 私有存储，并通过短期签名链接访问。附件会校验类型和文件结构，但不提供病毒扫描。删帖后媒体通常保留 30 天；存在未解决举报或后台隐藏时暂停清理。"),
+                ManualInfo(title: "保留在本机的内容", body: "成绩、考试安排、课程备注、提醒、收藏、自定日程、学习资料文件、学习空间、任务、专注记录和体测记录不会因进入社区自动上传。"),
+                ManualInfo(title: "共享课表", body: "共享内容仅包含课程安排，不包含成绩、考试、课程备注、提醒、收藏或学习资料。查看权限可随时撤销。"),
+                ManualInfo(title: "反馈信息", body: "举报与反馈会提交文字说明。必要时还会提交设备型号、iOS 版本、App 版本、登录状态和最近同步时间，用于定位问题。"),
+                ManualInfo(title: "社区安全", body: "发现不当内容、骚扰、冒充、刷屏、恶意评分或隐私泄露时，可在“举报与反馈”中选择“社区安全”，也可通过联系邮箱或反馈群说明情况。")
             ],
             steps: [
-                ManualStep(title: "发布前确认内容", body: "帖子、评论、评分和共享课表属于主动发布内容，提交前确认没有个人隐私、他人隐私或不适合公开的信息。"),
-                ManualStep(title: "发现问题先举报", body: "看到不当内容时优先使用举报入口，说明问题类型和位置，方便后续处理。"),
-                ManualStep(title: "需要撤回就到对应入口处理", body: "共享课表权限可以撤销；帖子、评论或资料相关问题可以通过反馈说明需要处理的内容。")
+                ManualStep(title: "发布前检查", body: "提交帖子、评论、评分或共享课表前，请确认内容不含个人隐私、他人隐私或其他不宜公开的信息。"),
+                ManualStep(title: "举报问题", body: "发现不当内容时，请通过举报入口说明问题类型和位置。"),
+                ManualStep(title: "撤销或删除", body: "共享课表权限可在对应入口撤销；帖子、评论或资料问题可通过反馈说明。")
             ]
         ),
         ManualChapter(
             icon: "lock.shield.fill",
             title: "数据安全边界",
             detail: "本机、学校和社区服务",
-            intro: "理解哪些数据留在本机、哪些请求发往学校系统、哪些内容进入社区服务，可以更清楚地判断什么时候适合清缓存、反馈、退出登录或撤销共享。",
+            intro: "数据分别由本机、学校系统和社区服务处理。清除缓存、退出登录或撤销共享前，请先确认对应的数据范围。",
             rows: [
-                ManualInfo(title: "教务账号和密码", body: "教务账号和密码只用于向北林强智教务系统发起登录请求，不用于 \(AppBrand.displayName) 社区资料，也不会作为帖子、评论、反馈或共享课表内容保存。"),
-                ManualInfo(title: "学校教务数据", body: "课表、成绩、考试、教学计划和培养方案等个人教务数据优先保存在本机，用来支持离线查看。\(AppBrand.displayName) 社区服务不替代学校教务系统。"),
-                ManualInfo(title: "本机私有数据", body: "学习资料文件、简历文件、课程备注、提醒、学习空间、任务、专注记录、体测记录和常用收藏保存在当前 App 的本机空间。卸载 App、清缓存或更换设备前，请先确认是否需要导出。"),
-                ManualInfo(title: "社区服务数据", body: "你主动参与社区、反馈、评教或共享课表时，相关内容会进入 \(AppBrand.displayName) 社区服务，以便展示、通知、审核、处理反馈和维护社区安全。"),
-                ManualInfo(title: "退出登录和清缓存区别", body: "退出登录会清理当前学校会话和社区会话；清除缓存会进一步删除本机保存的数据。只想重新登录时不一定需要清缓存，想移除本机数据时再清除缓存。"),
-                ManualInfo(title: "设备权限", body: "相册、文件、通知等权限只在对应功能需要时使用。导入资料会把文件放进 App 私有目录；通知用于课程提醒和本机提醒；拒绝权限通常只影响对应功能。")
+                ManualInfo(title: "教务账号和密码", body: "教务账号和密码仅用于向北林强智教务系统发起登录请求，不用于社区资料，也不会作为帖子、评论、反馈或共享课表内容保存。"),
+                ManualInfo(title: "学校教务数据", body: "课表、成绩、考试、教学计划和培养方案等个人教务数据优先保存在本机，供离线查看。学校教务系统仍是正式数据来源。"),
+                ManualInfo(title: "本机私有数据", body: "学习资料、简历、社区帖子草稿、图文卡片、课程备注、提醒、学习空间、任务、专注记录、体测记录和收藏保存在 App 的本机空间。卸载 App、清除缓存或更换设备前，请按需导出。"),
+                ManualInfo(title: "社区服务数据", body: "主动参与社区、反馈、评教或共享课表时，相关内容会进入 \(AppBrand.displayName) 社区服务，用于展示、通知、审核、反馈处理和社区安全。"),
+                ManualInfo(title: "退出登录与清除缓存", body: "退出登录会清理当前学校会话和社区会话；清除缓存还会删除本机保存的数据。仅需重新认证时无需清除缓存。"),
+                ManualInfo(title: "设备权限", body: "相册、文件和通知权限仅在对应功能中使用。导入资料保存在 App 私有目录，通知用于课程和本机提醒。拒绝权限只影响对应功能。")
             ],
             steps: [
-                ManualStep(title: "判断数据来源", body: "学校教务结果看学校系统，本地记录看当前设备，社区内容看你主动发布或反馈的内容。"),
-                ManualStep(title: "处理账号问题", body: "登录异常先退出并重新登录；身份错乱或换号使用时，再考虑清除缓存。"),
-                ManualStep(title: "处理设备迁移", body: "更换设备、卸载 App 或清理本机文件前，先导出仍需要保留的资料。")
+                ManualStep(title: "确认数据来源", body: "教务结果以学校系统为准；个人记录位于当前设备；社区内容来自主动发布或反馈。"),
+                ManualStep(title: "处理账号问题", body: "登录异常时先重新认证。身份不一致或切换账号时，再考虑清除缓存。"),
+                ManualStep(title: "迁移或卸载", body: "更换设备、卸载 App 或清理本机文件前，请导出需要保留的资料。")
             ]
         ),
         ManualChapter(
             icon: "questionmark.circle.fill",
             title: "常见问题",
-            detail: "从网络到反馈的排查顺序",
-            intro: "大多数问题来自网络不可达、教务会话过期、验证码失败、学校页面变化、本地缓存旧数据或社区服务暂时不可用。可以按下面顺序排查。",
+            detail: "网络、登录与数据问题",
+            intro: "常见原因包括网络不可达、教务会话过期、验证码失效、学校页面变化、缓存未更新或社区服务暂时不可用。",
             rows: [
-                ManualInfo(title: "课表或成绩刷新失败", body: "先检查是否连接了能访问北林教务的网络。如果 App 提示需要重新登录，就先完成教务登录，再回到功能页刷新。若浏览器也打不开学校教务，通常是网络或学校服务问题。"),
-                ManualInfo(title: "登录一直失败", body: "确认账号密码、验证码、网络环境和学校页面状态。验证码过期时刷新后再试；刚切换网络或从后台回来时，重新打开登录页通常比连续提交更可靠。"),
-                ManualInfo(title: "旧数据还在是不是异常", body: "不是。\(AppBrand.displayName) 会保留最近一次成功同步的数据，避免你在校园网不可用时完全看不到课表或成绩。刷新成功后会用新数据替换旧缓存。"),
-                ManualInfo(title: "空教室或培养计划不准", body: "学校页面结构、教室目录、周次节次和实时占用状态都可能变化。先重新同步，再确认查询条件；如果同一页面长期异常，可以反馈页面名称和时间。"),
-                ManualInfo(title: "社区功能不能用", body: "先确认教务身份仍然有效，并完成社区资料。若社区服务异常，可以稍后重试；如果是内容、举报、评分或共享课表问题，通过“举报与反馈”提交更容易定位。"),
-                ManualInfo(title: "仍然解决不了", body: "在反馈里写清楚发生在哪个页面、你当时是否连接校园网、是否刚重新登录过、看到的错误提示、发生时间，以及是否能在浏览器打开学校系统。这样比只写“打不开”更容易定位。")
+                ManualInfo(title: "课表或成绩无法刷新", body: "确认当前网络能够访问北林教务。出现重新登录提示时，完成认证后返回功能页刷新。浏览器也无法访问时，请等待网络或学校服务恢复。"),
+                ManualInfo(title: "无法登录", body: "检查账号、密码、验证码、网络和学校页面状态。验证码过期后需刷新；切换网络或从后台返回时，可重新打开登录页。"),
+                ManualInfo(title: "仍显示旧数据", body: "当前显示的是最近一次成功同步的缓存。刷新成功后，新数据会替换旧缓存。"),
+                ManualInfo(title: "空闲教室或培养计划异常", body: "先重新同步并确认查询条件。问题持续存在时，请反馈页面名称和发生时间。"),
+                ManualInfo(title: "社区功能不可用", body: "确认教务身份有效并已完成社区资料。服务异常时可稍后重试；内容、举报、评分或共享课表问题可通过“举报与反馈”提交。"),
+                ManualInfo(title: "提交反馈", body: "请说明页面名称、网络状态、是否重新登录、错误提示、发生时间，以及浏览器能否访问学校系统。")
             ],
             steps: [
-                ManualStep(title: "判断是哪类入口", body: "教务数据先查校园网和登录；社区功能先查社区身份和网络；本地资料先查当前设备和文件权限。"),
-                ManualStep(title: "保留错误提示", body: "反馈前尽量保留错误文字、页面名称和发生时间，不要只描述“不能用”。"),
-                ManualStep(title: "带着上下文反馈", body: "说明是否连接校园网、是否刚重新登录、是否清过缓存、浏览器能否打开学校页面。")
+                ManualStep(title: "确认问题类型", body: "教务数据检查校园网和登录；社区功能检查社区身份和网络；本地资料检查设备存储和文件权限。"),
+                ManualStep(title: "保留错误信息", body: "记录错误文字、页面名称和发生时间。"),
+                ManualStep(title: "补充环境信息", body: "说明网络连接、重新登录、缓存清理和浏览器访问情况。")
             ]
         )
     ]
@@ -1521,7 +1446,7 @@ private struct ManualIntroBlock: View {
                 }
             }
 
-            Text("这里集中说明 \(AppBrand.displayName) 的定位、校园网和教务登录要求、同步缓存逻辑、社区与共享课表的数据边界，以及遇到登录或同步失败时可以先按什么顺序自行排查。")
+            Text("本手册说明 \(AppBrand.displayName) 的产品定位、教务登录要求、同步与缓存规则、社区数据范围和常见问题处理方式。")
                 .leafySubheadline()
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1946,7 +1871,7 @@ private struct CacheAndSyncView: View {
         isClearing = false
         message = L10n.text("教务缓存已清除，本地数据与登录状态已保留。", language: leafyLanguage)
         refreshCacheSummary()
-        operationAlert = .success(L10n.text("教务缓存已清除！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("教务缓存已清除。", language: leafyLanguage))
     }
 
     @MainActor
@@ -2012,7 +1937,7 @@ private struct CacheAndSyncView: View {
         isClearing = false
         message = L10n.text("本地缓存和本地身份已清除。", language: leafyLanguage)
         refreshCacheSummary()
-        operationAlert = .success(L10n.text("本地缓存已清除！", language: leafyLanguage))
+        operationAlert = .success(L10n.text("本地缓存已清除。", language: leafyLanguage))
     }
 }
 
@@ -2029,7 +1954,7 @@ private struct CampusNetworkConnectionGuideView: View {
                 Label("连接 bjfu-wifi", systemImage: "wifi")
                     .leafyHeadline()
 
-                Text("根据学校相关规定，课表、成绩等教务信息需要在连接校园网的情况下获取。连接校园网后回到 MyLeafy，即可登录教务并同步课表、成绩、考试安排或查询空教室。")
+                Text("课表、成绩等教务信息需要通过校园网获取。连接校园网后返回 MyLeafy，可登录教务并同步课表、成绩和考试安排，或查询空闲教室。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -2038,7 +1963,7 @@ private struct CampusNetworkConnectionGuideView: View {
                 Label("通过北林 VPN 连接", systemImage: "network.badge.shield.half.filled")
                     .leafyHeadline()
 
-                Text("先安装 EasyConnect，并登入账号密码，连接北林 VPN ,这样您便相当于处于校园网中，之后回到 Leafy ，即可使用需要校园网的教务功能。")
+                Text("先安装 EasyConnect，使用学校账号连接北林 VPN。连接成功后返回 MyLeafy，可使用需要校园网的教务功能。")
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
 
