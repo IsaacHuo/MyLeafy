@@ -462,6 +462,7 @@ function humanizeDatabaseMessage(message: string) {
     ADMIN_POST_DELETED: "作者已删除该帖子，不能修改其状态。",
     ADMIN_POST_NOT_PENDING: "该帖子已不在发布异常队列，请刷新。",
     ADMIN_POST_IMAGE_UPLOAD_INCOMPLETE: "图片上传尚未完整，不能重新发布。",
+    ADMIN_POST_MEDIA_UPLOAD_INCOMPLETE: "图片或附件上传尚未完整，不能重新发布。",
     ADMIN_PENDING_POST_REQUIRES_RETRY: "发布异常帖子必须使用“重新发布”操作。",
     ADMIN_COMMENT_DELETED: "作者已删除该评论，不能修改其状态。",
     ADMIN_POST_NOT_FOUND: "未找到该帖子。",

@@ -190,7 +190,7 @@ select throws_ok(
     '93000000-0000-0000-0000-000000000001'
   )$$,
   '23514',
-  'ADMIN_POST_IMAGE_UPLOAD_INCOMPLETE',
+  'ADMIN_POST_MEDIA_UPLOAD_INCOMPLETE',
   'admin retry refuses an incomplete upload'
 );
 
