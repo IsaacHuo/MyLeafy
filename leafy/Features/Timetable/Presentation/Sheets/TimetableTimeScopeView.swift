@@ -248,39 +248,20 @@ struct TimetableTimeScopeMonthMark: Identifiable, Equatable {
     var id: Int { month }
 }
 
-nonisolated enum TimetableTimeScopeEdgeDismissPolicy {
-    static func shouldDismiss(
-        startX: CGFloat,
-        translation: CGSize,
-        predictedEndTranslation: CGSize,
-        controlScale: CGFloat = 1
-    ) -> Bool {
-        guard startX <= 28 * controlScale else { return false }
-        let horizontalDistance = max(translation.width, predictedEndTranslation.width)
-        guard horizontalDistance > 0 else { return false }
-        return horizontalDistance > max(72 * controlScale, abs(translation.height) * 1.25)
-    }
-}
-
 struct TimetableTimeScopeView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.leafyLanguage) private var leafyLanguage
 
     let snapshot: TimetableTimeScopeSnapshot
-    let onDismiss: () -> Void
 
     @State private var hasAppeared = false
     @State private var isGatherOverlayVisible = true
     @State private var displayedSnapshot: TimetableTimeScopeSnapshot
     @State private var monthTransitionDirection = 1
 
-    init(
-        snapshot: TimetableTimeScopeSnapshot,
-        onDismiss: @escaping () -> Void
-    ) {
+    init(snapshot: TimetableTimeScopeSnapshot) {
         self.snapshot = snapshot
-        self.onDismiss = onDismiss
         _displayedSnapshot = State(initialValue: snapshot)
     }
 
@@ -333,48 +314,15 @@ struct TimetableTimeScopeView: View {
                 }
             }
         }
-        .simultaneousGesture(edgeDismissGesture)
-    }
-
-    private var edgeDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .local)
-            .onEnded { value in
-                guard TimetableTimeScopeEdgeDismissPolicy.shouldDismiss(
-                    startX: value.startLocation.x,
-                    translation: value.translation,
-                    predictedEndTranslation: value.predictedEndTranslation,
-                    controlScale: leafyControlScale
-                ) else {
-                    return
-                }
-                onDismiss()
-            }
+        .navigationTitle("年度视图")
+        .leafyInlineNavigationTitle()
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: AppSpacing.card) {
-            Button(action: onDismiss) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18 * leafyControlScale, weight: .bold))
-                    .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                    .frame(width: 44 * leafyControlScale, height: 44 * leafyControlScale)
-                    .contentShape(Circle())
-                    .leafyGlassSurface(in: Circle(), isInteractive: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("返回时间日程")
-
-            VStack(alignment: .leading, spacing: 4 * leafyControlScale) {
-                Text("年度视图")
-                    .font(.system(size: 26 * leafyControlScale, weight: .bold))
-                    .foregroundStyle(AppTheme.primaryText)
-                Text(displayedSnapshot.currentDateText)
-                    .font(.system(size: 13 * leafyControlScale, weight: .medium))
-                    .foregroundStyle(AppTheme.secondaryText)
-            }
-
-            Spacer(minLength: AppSpacing.compact)
-        }
+        Text(displayedSnapshot.currentDateText)
+            .font(.system(size: 13 * leafyControlScale, weight: .medium))
+            .foregroundStyle(AppTheme.secondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var summaryCards: some View {

@@ -95,6 +95,7 @@ const actionRegistry = {
   createAnnouncement: defineAction("createAnnouncement", createAnnouncement, { domain: "admin", permission: "operator", mutating: true }),
   updateAnnouncement: defineAction("updateAnnouncement", updateAnnouncement, { domain: "admin", permission: "operator", mutating: true }),
   listCommunityBanners: defineAction("listCommunityBanners", listCommunityBanners, { domain: "admin" }),
+  prepareCommunityBannerImageUpload: defineAction("prepareCommunityBannerImageUpload", prepareCommunityBannerImageUpload, { domain: "admin", permission: "operator", mutating: true }),
   createCommunityBanner: defineAction("createCommunityBanner", createCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
   updateCommunityBanner: defineAction("updateCommunityBanner", updateCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
   publishCommunityBanner: defineAction("publishCommunityBanner", publishCommunityBanner, { domain: "admin", permission: "operator", mutating: true }),
@@ -1772,6 +1773,37 @@ async function listCommunityBanners(context: AdminContext, params: Record<string
   };
 }
 
+async function prepareCommunityBannerImageUpload(context: AdminContext, params: Record<string, unknown>) {
+  const campusID = scopedCampusID(params);
+  if (!campusID) {
+    throw new HttpError(400, "上传 Banner 图片前必须选择具体学校。");
+  }
+
+  const mimeType = (normalizeText(params.mimeType ?? params.mime_type) ?? "").toLowerCase();
+  if (mimeType !== "image/jpeg" && mimeType !== "image/png") {
+    throw new HttpError(400, "Banner 图片只支持 JPEG 或 PNG。");
+  }
+  const declaredSize = Number(params.byteSize ?? params.byte_size);
+  if (!Number.isFinite(declaredSize) || declaredSize <= 0 || declaredSize > 2 * 1024 * 1024) {
+    throw new HttpError(413, "Banner 图片不得超过 2 MB。", { code: "payload_too_large" });
+  }
+
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const path = `${campusID}/pending/${context.admin.id}/${crypto.randomUUID()}.${extension}`;
+  const { data, error } = await context.adminClient.storage
+    .from(communityBannerBucket)
+    .createSignedUploadUrl(path, { upsert: false });
+  if (error || !data?.signedUrl) {
+    throw databaseError(error ?? new Error("Signed upload URL was not returned."));
+  }
+
+  return {
+    path,
+    signed_url: data.signedUrl,
+    max_bytes: 2 * 1024 * 1024,
+  };
+}
+
 async function createCommunityBanner(context: AdminContext, params: Record<string, unknown>) {
   const campusID = scopedCampusID(params);
   if (!campusID) {
@@ -1780,8 +1812,8 @@ async function createCommunityBanner(context: AdminContext, params: Record<strin
 
   const id = crypto.randomUUID();
   const revision = 1;
-  const imagePath = await uploadCommunityBannerImage(context, params, campusID, id, revision);
   const payload = normalizeCommunityBannerPayload(params, false);
+  const imagePath = await uploadCommunityBannerImage(context, params, campusID, id, revision);
 
   const { error } = await context.adminClient
     .from("community_banners")
@@ -1840,10 +1872,10 @@ async function updateCommunityBanner(context: AdminContext, params: Record<strin
   }
 
   const revision = Number(current.revision ?? 1) + 1;
+  const payload = normalizeCommunityBannerPayload(params, true, current);
   const uploadedPath = await uploadCommunityBannerImage(context, params, campusID, id, revision);
   const removeImage = params.removeImage === true || params.remove_image === true;
   const imagePath = uploadedPath ?? (removeImage ? null : current.image_path);
-  const payload = normalizeCommunityBannerPayload(params, true, current);
 
   const { data, error } = await context.adminClient
     .from("community_banners")
@@ -3587,6 +3619,17 @@ async function uploadCommunityBannerImage(
   bannerID: string,
   revision: number,
 ) {
+  const pendingPath = normalizeText(params.imageUploadPath ?? params.image_upload_path);
+  if (pendingPath) {
+    return consumeCommunityBannerImageUpload(
+      context,
+      pendingPath,
+      campusID,
+      bannerID,
+      revision,
+    );
+  }
+
   const dataURL = normalizeText(params.imageDataURL ?? params.image_data_url);
   if (!dataURL) return null;
 
@@ -3604,6 +3647,59 @@ async function uploadCommunityBannerImage(
   return path;
 }
 
+async function consumeCommunityBannerImageUpload(
+  context: AdminContext,
+  pendingPath: string,
+  campusID: string,
+  bannerID: string,
+  revision: number,
+) {
+  const parts = pendingPath.split("/");
+  const fileName = parts[3] ?? "";
+  if (
+    parts.length !== 4 ||
+    parts[0] !== campusID ||
+    parts[1] !== "pending" ||
+    parts[2] !== context.admin.id ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png)$/.test(fileName)
+  ) {
+    throw new HttpError(400, "Banner 图片上传凭据无效，请重新选择图片。");
+  }
+
+  const bucket = context.adminClient.storage.from(communityBannerBucket);
+  const { data: blob, error: downloadError } = await bucket.download(pendingPath);
+  if (downloadError || !blob) {
+    throw new HttpError(400, "Banner 图片尚未上传完成，请重试。", {
+      code: "bad_request",
+      retryable: true,
+    });
+  }
+
+  let parsed: ReturnType<typeof parseCommunityBannerImageBytes>;
+  try {
+    parsed = parseCommunityBannerImageBytes(
+      new Uint8Array(await blob.arrayBuffer()),
+      fileName.endsWith(".png") ? "image/png" : "image/jpeg",
+    );
+  } catch (error) {
+    const { error: cleanupError } = await bucket.remove([pendingPath]);
+    if (cleanupError) {
+      console.error(JSON.stringify({
+        event: "community_banner_pending_upload_cleanup_failed",
+        path: pendingPath,
+        error: String(cleanupError),
+      }));
+    }
+    throw error;
+  }
+
+  const extension = parsed.mimeType === "image/png" ? "png" : "jpg";
+  const finalPath = `${campusID}/${bannerID}/r${revision}-${crypto.randomUUID()}.${extension}`;
+  const { error: moveError } = await bucket.move(pendingPath, finalPath);
+  if (moveError) throw databaseError(moveError);
+  return finalPath;
+}
+
 function parseCommunityBannerImage(dataURL: string) {
   const match = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=\s]+)$/.exec(dataURL);
   if (!match) {
@@ -3616,12 +3712,16 @@ function parseCommunityBannerImage(dataURL: string) {
   } catch {
     throw new HttpError(400, "Banner 图片编码无效。");
   }
-  if (binary.length === 0 || binary.length > 2 * 1024 * 1024) {
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return parseCommunityBannerImageBytes(bytes, match[1]);
+}
+
+function parseCommunityBannerImageBytes(bytes: Uint8Array, mimeType: string) {
+  if (bytes.byteLength === 0 || bytes.byteLength > 2 * 1024 * 1024) {
     throw new HttpError(413, "Banner 图片不得超过 2 MB。", { code: "payload_too_large" });
   }
 
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  const dimensions = match[1] === "image/png"
+  const dimensions = mimeType === "image/png"
     ? pngDimensions(bytes)
     : jpegDimensions(bytes);
   if (!dimensions) {
@@ -3638,7 +3738,7 @@ function parseCommunityBannerImage(dataURL: string) {
   ) {
     throw new HttpError(400, "Banner 图片需为 1.8:1 至 4.5:1，且至少 600×200。");
   }
-  return { mimeType: match[1], bytes, ...dimensions };
+  return { mimeType, bytes, ...dimensions };
 }
 
 function pngDimensions(bytes: Uint8Array) {

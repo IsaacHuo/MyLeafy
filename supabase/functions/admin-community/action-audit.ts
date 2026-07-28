@@ -14,7 +14,7 @@ export const auditedAdminActionNames = [
   "listComments", "listModerationReports", "getModerationReport", "resolveModerationReport", "moderateComment", "bulkModerateComments",
   "listProfiles", "getProfile", "muteProfile", "unmuteProfile", "listFeedback", "updateFeedback",
   "listAnnouncements", "createAnnouncement", "updateAnnouncement",
-  "listCommunityBanners", "createCommunityBanner", "updateCommunityBanner", "publishCommunityBanner", "archiveCommunityBanner",
+  "listCommunityBanners", "prepareCommunityBannerImageUpload", "createCommunityBanner", "updateCommunityBanner", "publishCommunityBanner", "archiveCommunityBanner",
   "listPostgraduateSources",
   "upsertPostgraduateSource", "setPostgraduateSourceStatus", "listPostgraduateSuggestions",
   "approvePostgraduateSuggestion", "rejectPostgraduateSuggestion", "listCatalogSuggestions",
@@ -30,7 +30,7 @@ const operatorActions = new Set<string>([
   "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "moderatePoll",
   "reviewPollDeletion", "pinPost", "unpinPost", "resolveModerationReport", "moderateComment",
   "bulkModerateComments", "muteProfile", "unmuteProfile", "updateFeedback", "createAnnouncement",
-  "updateAnnouncement", "createCommunityBanner", "updateCommunityBanner", "publishCommunityBanner", "archiveCommunityBanner",
+  "updateAnnouncement", "prepareCommunityBannerImageUpload", "createCommunityBanner", "updateCommunityBanner", "publishCommunityBanner", "archiveCommunityBanner",
   "upsertPostgraduateSource", "setPostgraduateSourceStatus",
   "approvePostgraduateSuggestion", "rejectPostgraduateSuggestion", "approveCatalogSuggestion",
   "rejectCatalogSuggestion", "upsertTeacher", "setTeacherStatus", "upsertCourse", "setCourseStatus",
@@ -51,7 +51,7 @@ const globalActions = new Set<string>([
   "revokeAdminSession", "listNationalCalendarRuntimeConfigs", "upsertNationalCalendarRuntimeConfig",
 ]);
 
-const requiredCampusActions = new Set<string>(["createCommunityBanner", "upsertTeacher", "upsertCourse", "upsertDish"]);
+const requiredCampusActions = new Set<string>(["prepareCommunityBannerImageUpload", "createCommunityBanner", "upsertTeacher", "upsertCourse", "upsertDish"]);
 const transactionRPCActions = new Set<string>([
   "approveCampusRequest", "rejectCampusRequest", "retryPostPublish", "moderatePost", "bulkModeratePosts", "pinPost",
   "resolveModerationReport", "approvePostgraduateSuggestion", "approveCatalogSuggestion",

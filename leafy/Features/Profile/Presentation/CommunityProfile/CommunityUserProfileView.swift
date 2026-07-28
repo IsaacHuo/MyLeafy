@@ -262,10 +262,6 @@ struct CommunityUserProfileView: View {
                 Spacer()
             }
 
-            if allowsEditing {
-                draftBoxCard
-            }
-
             postsContent
         }
     }
@@ -274,47 +270,69 @@ struct CommunityUserProfileView: View {
         NavigationLink {
             CommunityPostDraftsView()
         } label: {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "doc.text.fill")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.accentEmphasis)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 38, height: 38)
                     .background(AppTheme.softFill, in: Circle())
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("草稿箱")
-                        .leafyHeadline()
-                        .foregroundStyle(AppTheme.primaryText)
+                Text("草稿箱")
+                    .leafySubheadline()
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppTheme.primaryText)
 
-                    Text(draftCount > 0 ? "\(draftCount) 篇未发布内容" : "暂无草稿")
-                        .microCaption()
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(AppTheme.tertiaryText)
+                Text(draftCount > 0 ? "\(draftCount) 篇未发布内容" : "暂无草稿")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .multilineTextAlignment(.leading)
             }
-            .padding(14)
+            .padding(11)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
             .background(
                 AppTheme.cardBackground,
-                in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                    .stroke(AppTheme.separator, lineWidth: 1)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    .stroke(AppTheme.separator.opacity(0.7), lineWidth: 0.7)
             )
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            .contentShape(.interaction, RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         }
         .buttonStyle(.plain)
+        .contentShape(.interaction, RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         .accessibilityLabel(draftCount > 0 ? "草稿箱，\(draftCount) 篇未发布内容" : "草稿箱，暂无草稿")
         .accessibilityHint("打开草稿箱")
     }
 
     @ViewBuilder
     private var postsContent: some View {
+        if allowsEditing {
+            editablePostsContent
+        } else {
+            publicPostsContent
+        }
+    }
+
+    private var editablePostsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CommunityMasonryGrid(items: editableMasonryItems, spacing: 10) { item in
+                switch item {
+                case .draftBox:
+                    draftBoxCard
+                case .post(let post):
+                    masonryPostCard(post)
+                }
+            }
+
+            editablePostsStatus
+        }
+    }
+
+    @ViewBuilder
+    private var editablePostsStatus: some View {
         if isLoading && posts.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
@@ -333,9 +351,42 @@ struct CommunityUserProfileView: View {
             .padding(.vertical, 8)
         } else if posts.isEmpty {
             ContentUnavailableView(
-                allowsEditing ? "暂无已发布帖子" : "暂无公开帖子",
+                "暂无已发布帖子",
                 systemImage: "text.bubble",
-                description: Text(allowsEditing ? "发布后会自动出现在这里。" : "匿名、待审核和隐藏内容不会出现在个人主页。")
+                description: Text("发布后会自动出现在这里。")
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
+        } else if let errorMessage {
+            Text(errorMessage)
+                .leafyBody()
+                .foregroundStyle(AppTheme.danger)
+        }
+    }
+
+    @ViewBuilder
+    private var publicPostsContent: some View {
+        if isLoading && posts.isEmpty {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+        } else if let errorMessage, posts.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(errorMessage)
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                Button("重试") {
+                    Task { await load() }
+                }
+                .foregroundStyle(AppTheme.accentEmphasis)
+            }
+            .padding(.vertical, 8)
+        } else if posts.isEmpty {
+            ContentUnavailableView(
+                "暂无公开帖子",
+                systemImage: "text.bubble",
+                description: Text("匿名、待审核和隐藏内容不会出现在个人主页。")
             )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
@@ -347,16 +398,24 @@ struct CommunityUserProfileView: View {
             }
 
             CommunityMasonryGrid(items: posts, spacing: 10) { post in
-                CommunityMasonryPostCard(
-                    post: post,
-                    showsAuthor: !allowsEditing,
-                    showsCategory: !allowsEditing,
-                    onOpen: {
-                        selectedPost = post
-                    }
-                )
+                masonryPostCard(post)
             }
         }
+    }
+
+    private var editableMasonryItems: [CommunityProfileMasonryItem] {
+        [.draftBox] + posts.map(CommunityProfileMasonryItem.post)
+    }
+
+    private func masonryPostCard(_ post: CommunityPost) -> some View {
+        CommunityMasonryPostCard(
+            post: post,
+            showsAuthor: !allowsEditing,
+            showsCategory: !allowsEditing,
+            onOpen: {
+                selectedPost = post
+            }
+        )
     }
 
     private var emptyBioText: String {
@@ -476,6 +535,20 @@ struct CommunityUserProfileView: View {
             Self.logger.error(
                 "Load community draft count failed owner=\(ownerProfileID.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .private)"
             )
+        }
+    }
+}
+
+enum CommunityProfileMasonryItem: Identifiable, Equatable {
+    case draftBox
+    case post(CommunityPost)
+
+    var id: String {
+        switch self {
+        case .draftBox:
+            return "draft-box"
+        case .post(let post):
+            return "post-\(post.id.uuidString)"
         }
     }
 }

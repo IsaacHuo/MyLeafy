@@ -3,17 +3,17 @@ import { adminActionAuditMatrix } from "./action-audit.ts";
 
 const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
 
-Deno.test("admin-community keeps 72 registered action contracts", () => {
+Deno.test("admin-community keeps 73 registered action contracts", () => {
   const names = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm), (match) => match[1]);
-  assertEquals(names.length, 72);
+  assertEquals(names.length, 73);
   for (const required of ["overview", "retryPostPublish", "getModerationReport", "bulkModeratePosts", "globalSearch", "listAdminSessions", "revokeAdminSession", "listNationalCalendarRuntimeConfigs", "upsertNationalCalendarRuntimeConfig"]) {
     assert(names.includes(required), `missing ${required}`);
   }
 });
 
-Deno.test("all 72 runtime actions match the machine-readable audit matrix", () => {
+Deno.test("all 73 runtime actions match the machine-readable audit matrix", () => {
   const matches = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm));
-  assertEquals(adminActionAuditMatrix.length, 72);
+  assertEquals(adminActionAuditMatrix.length, 73);
   assertEquals(adminActionAuditMatrix.map((row) => row.action), matches.map((match) => match[1]));
   for (const [index, match] of matches.entries()) {
     const block = source.slice(match.index ?? 0, matches[index + 1]?.index ?? source.indexOf("} satisfies Record"));
@@ -59,10 +59,15 @@ Deno.test("community banners validate targets and private image uploads", () => 
   }
   assert(source.includes('url.protocol !== "https:"'));
   assert(source.includes("image\\/(?:jpeg|png)"));
-  assert(source.includes("binary.length > 2 * 1024 * 1024"));
+  assert(source.includes("bytes.byteLength > 2 * 1024 * 1024"));
   assert(source.includes("dimensions.width < 600"));
   assert(source.includes("ratio < 1.8"));
   assert(source.includes("ratio > 4.5"));
+  assert(source.includes(".createSignedUploadUrl(path, { upsert: false })"));
+  assert(source.includes("imageUploadPath"));
+  assert(source.includes(".download(pendingPath)"));
+  assert(source.includes(".move(pendingPath, finalPath)"));
+  assert(source.includes('`${campusID}/pending/${context.admin.id}/'));
   assert(source.includes('const path = `${campusID}/${bannerID}/r${revision}-'));
   assert(source.includes('.from("community_banners")'));
   assert(source.includes('.rpc("publish_community_banner"'));

@@ -41,7 +41,10 @@ struct CommunityBannerSlot: View {
     let campusID: String
 
     var body: some View {
-        Group {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(height: 0)
+
             if let banner = viewModel.banner {
                 CommunityBannerCard(
                     banner: banner,
@@ -52,8 +55,9 @@ struct CommunityBannerSlot: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.easeOut(duration: 0.2), value: viewModel.banner?.dismissalKey)
-        .task(id: refreshID) {
+        .task(id: CommunityBannerLoadID(refreshID: refreshID, campusID: campusID)) {
             await viewModel.load(campusID: campusID)
         }
         .sheet(item: $browserItem) { item in
@@ -93,6 +97,11 @@ struct CommunityBannerSlot: View {
     }
 }
 
+private struct CommunityBannerLoadID: Hashable {
+    let refreshID: UUID
+    let campusID: String
+}
+
 private struct CommunityBannerCard: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
@@ -125,9 +134,9 @@ private struct CommunityBannerCard: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                AppTheme.accent(for: themeColorPreference).opacity(0.17),
-                                AppTheme.cardElevated.opacity(0.96),
-                                AppTheme.accent(for: themeColorPreference).opacity(0.08),
+                                AppTheme.accent(for: themeColorPreference).opacity(0.38),
+                                AppTheme.accentSoft(for: themeColorPreference),
+                                AppTheme.accent(for: themeColorPreference).opacity(0.22),
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -135,7 +144,7 @@ private struct CommunityBannerCard: View {
                     )
                     .overlay {
                         RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                            .stroke(AppTheme.accent(for: themeColorPreference).opacity(0.16), lineWidth: 1)
+                            .stroke(AppTheme.accent(for: themeColorPreference).opacity(0.24), lineWidth: 1)
                     }
             }
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))

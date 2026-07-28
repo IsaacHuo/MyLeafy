@@ -95,6 +95,7 @@ nonisolated enum CampusAcademicVisibility {
         case .grades,
              .examSchedule,
              .scheduleReports,
+             .yearOverview,
              .honorRecords,
              .gradeAnalytics,
              .timetableProcessing,
@@ -144,6 +145,7 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
     case gradeAnalytics
     case examSchedule
     case scheduleReports
+    case yearOverview
     case timetableProcessing
     case honorRecords
     case comprehensiveQuality
@@ -175,6 +177,7 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
             return .cultivation
         case .examSchedule,
              .scheduleReports,
+             .yearOverview,
              .timetableProcessing,
              .schoolCalendar,
              .countdowns,

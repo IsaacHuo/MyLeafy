@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AcademicRouteDestinationView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
+
     let route: AcademicDetailRoute
     let openRoute: (AcademicDetailRoute) -> Void
 
@@ -16,6 +18,14 @@ struct AcademicRouteDestinationView: View {
             ExamScheduleView()
         case .scheduleReports:
             ScheduleReportsView()
+        case .yearOverview:
+            TimetableTimeScopeView(
+                snapshot: TimetableTimeScopeSnapshot.make(
+                    currentWeek: SemesterConfig.currentWeek(),
+                    referenceDate: Date(),
+                    language: leafyLanguage
+                )
+            )
         case .timetableProcessing:
             TimetableProcessingView()
         case .honorRecords:

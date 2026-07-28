@@ -3740,6 +3740,15 @@ final class PerformanceProjectionTests: XCTestCase {
         XCTAssertEqual(columns.right, [1, 3, 5])
     }
 
+    func testProfileDraftBoxOccupiesFirstMasonrySlot() {
+        let columns = CommunityMasonryColumns(
+            items: ["draft-box", "post-0", "post-1", "post-2"]
+        )
+
+        XCTAssertEqual(columns.left, ["draft-box", "post-1"])
+        XCTAssertEqual(columns.right, ["post-0", "post-2"])
+    }
+
     func testCompactTimestampFormatterKeepsExistingFeedFormat() throws {
         let calendar = Calendar.current
         let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 7, day: 22, hour: 9, minute: 5)))

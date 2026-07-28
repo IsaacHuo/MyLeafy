@@ -89,13 +89,13 @@ const providerImplementation = {
       throw new Error("新增前必须先选择具体学校。");
     }
     const action = createAction(resource);
-    const data = resource === "community-banners" ? await encodeBannerImage(params.data) : params.data;
+    const data = resource === "community-banners" ? await uploadBannerImage(params.data) : params.data;
     const response = await actionRequest<RaRecord>(action, withCampus(action, data));
     return { data: ensureID(response.data) };
   },
   update: async (resource: string, params: UpdateParams) => {
     const action = updateAction(resource);
-    const data = resource === "community-banners" ? await encodeBannerImage(params.data) : params.data;
+    const data = resource === "community-banners" ? await uploadBannerImage(params.data) : params.data;
     const response = await actionRequest<RaRecord>(action, withCampus(action, { id: params.id, ...data }));
     return { data: ensureID(response.data, params.id) };
   },
@@ -186,21 +186,55 @@ function updateAction(resource: string) {
   }, resource);
 }
 
-async function encodeBannerImage(data: Record<string, unknown>) {
+type BannerImageUploadTarget = {
+  path: string;
+  signed_url: string;
+  max_bytes: number;
+};
+
+async function uploadBannerImage(data: Record<string, unknown>) {
   const value = data.imageDataURL as { rawFile?: File } | Array<{ rawFile?: File }> | string | undefined;
   if (!value || typeof value === "string") return data;
   const candidate = Array.isArray(value) ? value[0] : value;
   if (!candidate?.rawFile) return { ...data, imageDataURL: undefined };
-  return { ...data, imageDataURL: await fileAsDataURL(candidate.rawFile) };
-}
 
-function fileAsDataURL(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("无法读取 Banner 图片。"));
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.readAsDataURL(file);
+  const file = candidate.rawFile;
+  if (file.type !== "image/jpeg" && file.type !== "image/png") {
+    throw new Error("Banner 图片只支持 JPEG 或 PNG。");
+  }
+  if (file.size <= 0 || file.size > 2 * 1024 * 1024) {
+    throw new Error("Banner 图片不得超过 2 MB。");
+  }
+
+  const campusID = readCampusScope();
+  const prepared = await actionRequest<BannerImageUploadTarget>("prepareCommunityBannerImageUpload", {
+    campusID,
+    mimeType: file.type,
+    byteSize: file.size,
   });
+  const form = new FormData();
+  form.append("cacheControl", "31536000");
+  form.append("", file);
+  let uploadResponse: Response;
+  try {
+    uploadResponse = await fetch(prepared.data.signed_url, {
+      method: "PUT",
+      headers: { "x-upsert": "false" },
+      body: form,
+    });
+  } catch {
+    throw new Error("无法连接图片存储，请检查网络后重试。");
+  }
+  if (!uploadResponse.ok) {
+    const payload = await uploadResponse.json().catch(() => ({}));
+    throw new Error(payload?.message ?? payload?.error ?? "Banner 图片上传失败，请重试。");
+  }
+
+  return {
+    ...data,
+    imageDataURL: undefined,
+    imageUploadPath: prepared.data.path,
+  };
 }
 
 function deleteAction(resource: string, record?: Record<string, unknown>) {

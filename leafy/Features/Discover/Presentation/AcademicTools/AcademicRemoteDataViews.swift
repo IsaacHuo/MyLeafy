@@ -1271,7 +1271,6 @@ struct EmptyClassroomView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyDependencies) private var dependencies
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query(sort: \FavoriteClassroom.createdAt, order: .reverse) private var favoriteClassrooms: [FavoriteClassroom]
 
     @State private var networkManager = ActiveCampusContext.networkManager
@@ -1487,28 +1486,27 @@ struct EmptyClassroomView: View {
         .leafyOperationAlert($operationAlert)
     }
 
-    @ViewBuilder
     private var classroomSelectionPickers: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: AppSpacing.compact) {
-                buildingPicker
-                roomPicker
-            }
-        } else {
-            HStack(spacing: AppSpacing.compact) {
-                buildingPicker
-                roomPicker
-            }
+        VStack(spacing: 0) {
+            buildingPicker
+
+            AcademicDetailDivider()
+
+            roomPicker
         }
     }
 
     private var buildingPicker: some View {
-        Picker("教学楼", selection: building) {
-            ForEach(ClassroomLookupCatalog.buildingOptions) { item in
-                Text(item.title).tag(item.id)
+        Menu {
+            Picker("教学楼", selection: building) {
+                ForEach(ClassroomLookupCatalog.buildingOptions) { item in
+                    Text(item.title).tag(item.id)
+                }
             }
+        } label: {
+            classroomSelectionLabel(title: "教学楼", value: selectedBuildingOption.title)
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
         .onChange(of: buildingOptionID) { _, newValue in
             selectedRoomID = ClassroomLookupCatalog.roomOption(
                 preferredBuilding: nil,
@@ -1519,12 +1517,54 @@ struct EmptyClassroomView: View {
     }
 
     private var roomPicker: some View {
-        Picker("教室", selection: room) {
-            ForEach(currentRoomOptions) { item in
-                Text(item.title).tag(item.id)
+        Menu {
+            Picker("教室", selection: room) {
+                ForEach(currentRoomOptions) { item in
+                    Text(item.title).tag(item.id)
+                }
+            }
+        } label: {
+            classroomSelectionLabel(title: "教室", value: selectedRoom.title)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func classroomSelectionLabel(
+        title: String,
+        value: String
+    ) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: AppSpacing.compact) {
+                Text(title)
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Spacer(minLength: AppSpacing.compact)
+
+                HStack(spacing: AppSpacing.micro) {
+                    Text(value)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(AppTheme.accentEmphasis)
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.micro) {
+                Text(title)
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.primaryText)
+
+                HStack(spacing: AppSpacing.micro) {
+                    Text(value)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(AppTheme.accentEmphasis)
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     private func submitQuery(userInitiated: Bool) async {

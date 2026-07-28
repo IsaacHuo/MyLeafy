@@ -36,6 +36,7 @@ const legacyAdminActionNames = [
   "createAnnouncement",
   "updateAnnouncement",
   "listCommunityBanners",
+  "prepareCommunityBannerImageUpload",
   "createCommunityBanner",
   "updateCommunityBanner",
   "publishCommunityBanner",

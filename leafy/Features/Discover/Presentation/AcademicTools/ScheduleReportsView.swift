@@ -9,62 +9,87 @@ struct ScheduleReportsView: View {
     @State private var lastAppliedSettings = ScheduleReportSettingsStore.load()
     @State private var operationAlert: LeafyOperationAlert?
     @State private var applyTask: Task<Void, Never>?
-    @State private var editorState: ScheduleReminderEditorState?
+    @State private var isEditorPresented = false
 
     private var input: ScheduleReportInput {
         ScheduleReportDataSource.input(modelContext: modelContext)
     }
 
     var body: some View {
-        AcademicDetailScrollContainer {
-            AcademicDetailCard {
-                VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Label("日程推送", systemImage: "bell.badge")
-                        .leafyHeadline()
-                    Text("报告和提醒仅在本机规划，不上传课表、考试、校历或自定日程。")
-                        .leafyBody()
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-            }
-
-            AcademicDetailSectionHeader(title: "报告")
-            ForEach(ScheduleReportMode.builtInCases) { mode in
-                ScheduleReportModeCard(
-                    mode: mode,
-                    setting: binding(for: mode),
-                    time: dateBinding(for: mode)
-                )
-            }
-
-            AcademicDetailSectionHeader(title: "自定义提醒")
-            if settings.reminders.isEmpty {
+        List {
+            Section {
                 AcademicDetailCard {
-                    Text("暂无自定义提醒")
-                        .leafyBody()
-                        .foregroundStyle(AppTheme.secondaryText)
+                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                        Label("日程推送", systemImage: "bell.badge")
+                            .leafyHeadline()
+                        Text("报告和提醒仅在本机规划，不上传课表、考试、校历或自定日程。")
+                            .leafyBody()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
                 }
-            } else {
-                ForEach(settings.reminders) { reminder in
-                    ScheduleReminderCard(
-                        reminder: reminder,
-                        input: input,
-                        onToggle: { toggleReminder(reminder.id, isEnabled: $0) },
-                        onEdit: { editorState = ScheduleReminderEditorState(reminder: reminder) },
-                        onDelete: { deleteReminder(reminder.id) }
-                    )
-                }
+                .scheduleReportListRow()
             }
 
-            AcademicDetailFooterText(
-                text: "获取到天气时，今日早报会附上当天预报与出门建议，明日晚报会附上明天预报与建议。系统后台刷新为尽力而为。"
-            )
+            Section {
+                ForEach(ScheduleReportMode.builtInCases) { mode in
+                    ScheduleReportModeCard(
+                        mode: mode,
+                        setting: binding(for: mode),
+                        time: dateBinding(for: mode)
+                    )
+                    .scheduleReportListRow()
+                }
+            } header: {
+                AcademicDetailSectionHeader(title: "报告")
+            }
+
+            Section {
+                if settings.reminders.isEmpty {
+                    AcademicDetailCard {
+                        Text("暂无自定义提醒")
+                            .leafyBody()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .scheduleReportListRow()
+                } else {
+                    ForEach(settings.reminders) { reminder in
+                        ScheduleReminderCard(
+                            reminder: reminder,
+                            input: input,
+                            onToggle: { toggleReminder(reminder.id, isEnabled: $0) }
+                        )
+                        .scheduleReportListRow()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                deleteReminder(reminder.id)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                            .tint(.red)
+                        }
+                    }
+                }
+            } header: {
+                AcademicDetailSectionHeader(title: "自定义提醒")
+            }
+
+            Section {
+                AcademicDetailFooterText(
+                    text: "获取到天气时，今日早报会附上当天预报与出门建议，明日晚报会附上明天预报与建议。系统后台刷新为尽力而为。"
+                )
+                .scheduleReportListRow(verticalPadding: 4)
+            }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(LeafyPageBackground())
+        .environment(\.defaultMinListRowHeight, 1)
         .navigationTitle("推送")
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
                 Button {
-                    editorState = ScheduleReminderEditorState(reminder: nil)
+                    isEditorPresented = true
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -79,17 +104,10 @@ struct ScheduleReportsView: View {
             ScheduleReportSettingsStore.save(settings)
         }
         .onDisappear { applyTask?.cancel() }
-        .sheet(item: $editorState) { state in
-            ScheduleReminderEditor(
-                reminder: state.reminder,
-                input: input
-            ) { savedReminder in
+        .sheet(isPresented: $isEditorPresented) {
+            ScheduleReminderEditor(input: input) { savedReminder in
                 var updated = settings
-                if let index = updated.reminders.firstIndex(where: { $0.id == savedReminder.id }) {
-                    updated.reminders[index] = savedReminder
-                } else {
-                    updated.reminders.append(savedReminder)
-                }
+                updated.reminders.append(savedReminder)
                 updated.deriveEnabledState()
                 apply(updated, debounce: false)
             }
@@ -191,17 +209,25 @@ struct ScheduleReportsView: View {
     }
 }
 
-private struct ScheduleReminderEditorState: Identifiable {
-    let reminder: ScheduleReminder?
-    let id = UUID()
+private extension View {
+    func scheduleReportListRow(verticalPadding: CGFloat = 6) -> some View {
+        listRowInsets(
+            EdgeInsets(
+                top: verticalPadding,
+                leading: AppSpacing.page,
+                bottom: verticalPadding,
+                trailing: AppSpacing.page
+            )
+        )
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
 }
 
 private struct ScheduleReminderCard: View {
     let reminder: ScheduleReminder
     let input: ScheduleReportInput
     let onToggle: (Bool) -> Void
-    let onEdit: () -> Void
-    let onDelete: () -> Void
 
     var body: some View {
         AcademicDetailCard {
@@ -209,10 +235,11 @@ private struct ScheduleReminderCard: View {
                 Toggle(
                     isOn: Binding(get: { reminder.isEnabled }, set: onToggle)
                 ) {
-                    Label(
-                        ScheduleReminderPresentation.title(for: reminder, input: input),
-                        systemImage: systemImage
-                    )
+                    HStack(spacing: 8) {
+                        Image(systemName: systemImage)
+                            .frame(width: 28, alignment: .leading)
+                        Text(ScheduleReminderPresentation.title(for: reminder, input: input))
+                    }
                     .font(.headline)
                 }
                 .disabled(reminder.availability == .sourceUnavailable)
@@ -234,23 +261,6 @@ private struct ScheduleReminderCard: View {
                         .foregroundStyle(AppTheme.tertiaryText)
                 }
 
-                HStack {
-                    Button(action: onEdit) {
-                        HStack {
-                            Text("编辑")
-                            Spacer()
-                            LeafyDisclosureIndicator()
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(role: .destructive, action: onDelete) {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel("删除提醒")
-                }
             }
         }
     }
@@ -288,7 +298,6 @@ private enum ScheduleReminderEditorSourceKind: String, CaseIterable, Identifiabl
 private struct ScheduleReminderEditor: View {
     @Environment(\.dismiss) private var dismiss
 
-    let reminder: ScheduleReminder?
     let input: ScheduleReportInput
     let onSave: (ScheduleReminder) -> Void
 
@@ -306,64 +315,24 @@ private struct ScheduleReminderEditor: View {
     @State private var customLeadMinutes: Int
 
     init(
-        reminder: ScheduleReminder?,
         input: ScheduleReportInput,
         onSave: @escaping (ScheduleReminder) -> Void
     ) {
-        self.reminder = reminder
         self.input = input
         self.onSave = onSave
 
-        var kind: ScheduleReminderEditorSourceKind = .freeform
-        var initialTitle = ""
-        var initialBody = ""
-        var initialDate = Date().addingTimeInterval(60 * 60)
-        var customID = input.countdowns.first?.id ?? ""
-        var examID = input.exams.first?.id
-        var calendarID = AcademicCalendarEvents.displayEvents().first?.id ?? ""
-        var courseID = input.courses.first?.id
-        var scope: ScheduleReminderCourseScope = .singleOccurrence
-        var occurrence: Date?
-
-        if let reminder {
-            switch reminder.source {
-            case .freeform(let valueTitle, let valueBody, let valueDate):
-                kind = .freeform
-                initialTitle = valueTitle
-                initialBody = valueBody
-                initialDate = max(valueDate ?? initialDate, Date().addingTimeInterval(60))
-            case .customSchedule(let eventID):
-                kind = .customSchedule
-                customID = eventID
-            case .exam(let value):
-                kind = .exam
-                examID = value
-            case .calendar(let eventID):
-                kind = .calendar
-                calendarID = eventID
-            case .course(let value, let valueScope, let occurrenceDate):
-                kind = .course
-                courseID = value
-                scope = valueScope
-                occurrence = occurrenceDate
-            }
-        }
-
-        let leads = Set(reminder?.leadMinutes ?? [0])
-        _sourceKind = State(initialValue: kind)
-        _title = State(initialValue: initialTitle)
-        _bodyText = State(initialValue: initialBody)
-        _fireDate = State(initialValue: initialDate)
-        _selectedCustomScheduleID = State(initialValue: customID)
-        _selectedExamID = State(initialValue: examID)
-        _selectedCalendarID = State(initialValue: calendarID)
-        _selectedCourseID = State(initialValue: courseID)
-        _courseScope = State(initialValue: scope)
-        _selectedOccurrenceDate = State(initialValue: occurrence)
-        _selectedLeadMinutes = State(initialValue: leads)
-        _customLeadMinutes = State(initialValue: leads.first(where: {
-            !ScheduleReminder.presetLeadMinutes.contains($0)
-        }) ?? 120)
+        _sourceKind = State(initialValue: .freeform)
+        _title = State(initialValue: "")
+        _bodyText = State(initialValue: "")
+        _fireDate = State(initialValue: Date().addingTimeInterval(60 * 60))
+        _selectedCustomScheduleID = State(initialValue: input.countdowns.first?.id ?? "")
+        _selectedExamID = State(initialValue: input.exams.first?.id)
+        _selectedCalendarID = State(initialValue: AcademicCalendarEvents.displayEvents().first?.id ?? "")
+        _selectedCourseID = State(initialValue: input.courses.first?.id)
+        _courseScope = State(initialValue: .singleOccurrence)
+        _selectedOccurrenceDate = State(initialValue: nil)
+        _selectedLeadMinutes = State(initialValue: [0])
+        _customLeadMinutes = State(initialValue: 120)
     }
 
     private var canSave: Bool {
@@ -388,13 +357,15 @@ private struct ScheduleReminderEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("来源") {
+                Section {
                     Picker("提醒来源", selection: $sourceKind) {
                         ForEach(ScheduleReminderEditorSourceKind.allCases) {
                             Text($0.title).tag($0)
                         }
                     }
                     sourceFields
+                } header: {
+                    Text("来源")
                 }
 
                 Section {
@@ -442,7 +413,7 @@ private struct ScheduleReminderEditor: View {
                     Text("可同时选择多个提前量；自定义范围为 1 分钟至 7 天。")
                 }
             }
-            .navigationTitle(reminder == nil ? "添加提醒" : "编辑提醒")
+            .navigationTitle("添加提醒")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -596,7 +567,7 @@ private struct ScheduleReminderEditor: View {
             )
         }
         return ScheduleReminder(
-            id: reminder?.id ?? UUID(),
+            id: UUID(),
             isEnabled: true,
             source: source,
             leadMinutes: Array(selectedLeadMinutes),

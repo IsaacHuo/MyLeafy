@@ -74,4 +74,45 @@ describe("admin data provider campus scope", () => {
     await dataProvider.create("teachers", { data: { name: "测试", unit: "学院" } });
     expect(mockedAction).toHaveBeenCalledWith("upsertTeacher", expect.objectContaining({ campusID: "campus-a" }));
   });
+
+  it("uploads banner images directly and submits only the private object path", async () => {
+    saveCampusScope("campus-a");
+    const file = new File(["banner"], "banner.png", { type: "image/png" });
+    mockedAction
+      .mockResolvedValueOnce({
+        data: {
+          path: "campus-a/pending/admin-1/upload.png",
+          signed_url: "https://storage.example/upload?token=signed",
+          max_bytes: 2 * 1024 * 1024,
+        },
+        meta: {},
+      })
+      .mockResolvedValueOnce({ data: { id: "banner-1", status: "published" }, meta: {} });
+    const upload = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", upload);
+
+    await dataProvider.create("community-banners", {
+      data: {
+        title: "测试",
+        subtitle: "测试 Banner",
+        imageDataURL: { rawFile: file },
+      },
+    });
+
+    expect(mockedAction).toHaveBeenNthCalledWith(1, "prepareCommunityBannerImageUpload", {
+      campusID: "campus-a",
+      mimeType: "image/png",
+      byteSize: file.size,
+    });
+    expect(upload).toHaveBeenCalledWith(
+      "https://storage.example/upload?token=signed",
+      expect.objectContaining({ method: "PUT", body: expect.any(FormData) }),
+    );
+    expect(mockedAction).toHaveBeenNthCalledWith(2, "createCommunityBanner", expect.objectContaining({
+      campusID: "campus-a",
+      imageUploadPath: "campus-a/pending/admin-1/upload.png",
+      imageDataURL: undefined,
+    }));
+    vi.unstubAllGlobals();
+  });
 });

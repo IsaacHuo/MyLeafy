@@ -33,6 +33,7 @@ export const adminActionNames = [
   "createAnnouncement",
   "updateAnnouncement",
   "listCommunityBanners",
+  "prepareCommunityBannerImageUpload",
   "createCommunityBanner",
   "updateCommunityBanner",
   "publishCommunityBanner",
