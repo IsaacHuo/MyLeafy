@@ -127,7 +127,7 @@ struct ProfileCommunityPostListView: View {
                             } label: {
                                 Label(kind.deleteActionTitle, systemImage: kind.deleteActionIcon)
                             }
-                            .tint(.red)
+                            .tint(AppTheme.danger)
                         }
                     }
                 }
@@ -301,12 +301,13 @@ struct ProfileCommunityCommentListView: View {
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
-                        .tint(.red)
+                        .tint(AppTheme.danger)
                     }
                 }
             }
         }
         .navigationTitle("我的评论")
+        .leafyInlineNavigationTitle()
         .task {
             await load()
         }
@@ -464,7 +465,7 @@ struct ProfileCommunityPollListView: View {
                                 } label: {
                                     Label("申请删除", systemImage: "trash")
                                 }
-                                .tint(.red)
+                                .tint(AppTheme.danger)
                             }
                         }
                     }
@@ -783,5 +784,6 @@ struct ProfilePlaceholderListView: View {
             }
         }
         .navigationTitle(title)
+        .leafyInlineNavigationTitle()
     }
 }

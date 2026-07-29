@@ -316,7 +316,8 @@ struct ProfileView: View {
             profileRow(
                 icon: "arrow.down.circle.fill",
                 title: "检查更新",
-                detail: isCheckingForUpdate ? "检查中" : "跳转到 App Store"
+                detail: isCheckingForUpdate ? "检查中" : "跳转到 App Store",
+                showsDisclosure: true
             )
         }
         .disabled(isCheckingForUpdate)
@@ -1844,6 +1845,7 @@ private struct CacheAndSyncView: View {
             }
         }
         .navigationTitle(isCustomCampus ? "管理本地数据" : "缓存与同步")
+        .leafyInlineNavigationTitle()
         .confirmationDialog("确认清除教务缓存？", isPresented: $showingAcademicCacheClearConfirmation, titleVisibility: .visible) {
             Button("清除教务缓存", role: .destructive) {
                 clearAcademicCaches()
@@ -2219,6 +2221,7 @@ private struct CampusLinksView: View {
             }
         }
         .navigationTitle("常用链接")
+        .leafyInlineNavigationTitle()
         .sheet(item: $browserItem) { item in
             ProfileSafariView(url: item.url)
         }

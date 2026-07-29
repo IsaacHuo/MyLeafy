@@ -111,7 +111,7 @@ struct CampusAIHistorySheet: View {
                 }
             }
             .navigationTitle("历史记录")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
@@ -179,6 +179,7 @@ struct CampusAIHistorySheet: View {
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
+                    .tint(AppTheme.danger)
                 }
             }
         }

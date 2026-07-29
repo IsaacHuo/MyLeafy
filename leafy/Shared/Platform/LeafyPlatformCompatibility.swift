@@ -201,6 +201,21 @@ extension View {
     func leafyInlineNavigationTitle() -> some View {
         #if os(iOS)
         navigationBarTitleDisplayMode(.inline)
+            .leafyTranslucentNavigationBar()
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func leafyTranslucentNavigationBar() -> some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            toolbarBackground(.hidden, for: .navigationBar)
+        } else {
+            toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+        }
         #else
         self
         #endif

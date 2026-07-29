@@ -138,6 +138,7 @@ struct CommunityPostDraftsView: View {
                             } label: {
                                 Label("删除", systemImage: "trash")
                             }
+                            .tint(AppTheme.danger)
                             Button {
                                 generateCard(for: draft)
                             } label: {

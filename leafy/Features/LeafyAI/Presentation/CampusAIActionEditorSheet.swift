@@ -84,7 +84,7 @@ struct CampusAIActionEditorSheet: View {
                 scheduleSection
             }
             .navigationTitle("添加日程")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {

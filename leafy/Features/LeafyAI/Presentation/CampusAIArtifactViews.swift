@@ -172,7 +172,7 @@ struct CampusAIArtifactReaderView: View {
         }
         .background(AppTheme.cardElevated)
         .navigationTitle(deliverable.title.nonEmptyTrimmed ?? "MyLeafy 卡片")
-        .navigationBarTitleDisplayMode(.inline)
+        .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if !deliverable.sources.isEmpty {
@@ -274,7 +274,7 @@ private struct CampusAIArtifactSourcesSheet: View {
                 }
             }
             .navigationTitle("卡片来源")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }

@@ -66,6 +66,42 @@ final class CommunityProfileModelTests: XCTestCase {
         XCTAssertEqual(CommunityProfileBio.normalized(longBio)?.count, CommunityProfileBio.maxLength)
     }
 
+    func testCommunityProfileGradeOptionsStayWithinSupportedCohorts() {
+        XCTAssertEqual(
+            CommunityProfileOptions.grades,
+            (2022...2030).reversed().map { "\($0)级" }
+        )
+    }
+
+    func testCommunityProfileMediaDraftClearsPendingUploadsOnlyAfterSuccess() throws {
+        let image = makeTestImage(size: CGSize(width: 320, height: 142))
+        let upload = try CommunityImageUpload.compressedJPEG(
+            from: image,
+            maxPixelDimension: CommunityImageUpload.profileCoverImageMaxPixelDimension,
+            maxBytes: CommunityImageUpload.profileCoverImageMaxBytes
+        )
+        let draft = CommunityProfileMediaDraftState(
+            avatarPreview: image,
+            avatarUpload: upload,
+            coverPreview: image,
+            coverUpload: upload,
+            resetCoverToDefault: true
+        )
+
+        let failedDraft = draft
+        XCTAssertNotNil(failedDraft.avatarUpload)
+        XCTAssertNotNil(failedDraft.coverUpload)
+        XCTAssertTrue(failedDraft.resetCoverToDefault)
+
+        var savedDraft = draft
+        savedDraft.markSaved()
+        XCTAssertNil(savedDraft.avatarUpload)
+        XCTAssertNil(savedDraft.coverUpload)
+        XCTAssertFalse(savedDraft.resetCoverToDefault)
+        XCTAssertNotNil(savedDraft.avatarPreview)
+        XCTAssertNotNil(savedDraft.coverPreview)
+    }
+
     func testCommunityProfileStatsDecodesRPCProfilePayload() throws {
         let data = Data("""
         {

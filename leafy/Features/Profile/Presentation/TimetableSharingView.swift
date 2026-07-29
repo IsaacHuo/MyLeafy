@@ -90,6 +90,7 @@ struct TimetableSharingView: View {
                             } label: {
                                 Label("移除", systemImage: "trash")
                             }
+                            .tint(AppTheme.danger)
                         }
                     }
                 } header: {
@@ -123,6 +124,7 @@ struct TimetableSharingView: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(LeafyPageBackground())
         .navigationTitle("共享课表")
+        .leafyInlineNavigationTitle()
         .task {
             await bootstrapAndLoad()
             presentInitialInviteIfNeeded()
@@ -2030,6 +2032,7 @@ private struct SharedTimetableSnapshotDetailView: View {
         .scrollContentBackground(.hidden)
         .background(LeafyPageBackground())
         .navigationTitle("共享课表")
+        .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
                 Menu {

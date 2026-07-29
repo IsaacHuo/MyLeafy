@@ -1401,6 +1401,7 @@ private struct CommunityNotificationsSheet: View {
                                 } label: {
                                     Label("删除", systemImage: "trash")
                                 }
+                                .tint(AppTheme.danger)
                             }
                             .listRowInsets(EdgeInsets(top: 4, leading: AppSpacing.page, bottom: 4, trailing: AppSpacing.page))
                             .listRowBackground(Color.clear)

@@ -11,10 +11,25 @@ import AppKit
 
 enum CommunityProfileOptions {
     static let colleges = CommunityCatalogOptions.units
+    static let grades = stride(from: 2030, through: 2022, by: -1).map { "\($0)级" }
+}
 
-    static var grades: [String] {
-        let currentYear = Calendar.current.component(.year, from: Date())
-        return stride(from: currentYear, through: currentYear - 6, by: -1).map { "\($0)级" }
+private enum CommunityProfileSaveOutcome {
+    case success
+    case failure(String)
+}
+
+struct CommunityProfileMediaDraftState {
+    var avatarPreview: UIImage?
+    var avatarUpload: CommunityImageUpload?
+    var coverPreview: UIImage?
+    var coverUpload: CommunityImageUpload?
+    var resetCoverToDefault = false
+
+    mutating func markSaved() {
+        avatarUpload = nil
+        coverUpload = nil
+        resetCoverToDefault = false
     }
 }
 
@@ -111,11 +126,7 @@ struct CommunityProfileEditorView: View {
     @State private var showingAvatarPicker = false
     @State private var selectedAvatarItem: PhotosPickerItem?
     @State private var avatarCropDraft: CommunityAvatarCropDraft?
-    @State private var avatarPreview: UIImage?
-    @State private var avatarUpload: CommunityImageUpload?
-    @State private var coverPreview: UIImage?
-    @State private var coverUpload: CommunityImageUpload?
-    @State private var resetCoverToDefault = false
+    @State private var mediaDraft = CommunityProfileMediaDraftState()
     @State private var errorMessage: String?
     @State private var isLoadingAvatar = false
     @State private var isSaving = false
@@ -141,7 +152,7 @@ struct CommunityProfileEditorView: View {
 
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 16) {
-                        CommunityAvatarPreview(image: avatarPreview, profile: sessionManager.profile, size: 72)
+                        CommunityAvatarPreview(image: mediaDraft.avatarPreview, profile: sessionManager.profile, size: 72)
 
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
@@ -171,9 +182,17 @@ struct CommunityProfileEditorView: View {
                                 NavigationLink {
                                     CommunityProfileCoverEditorView(
                                         profile: sessionManager.profile,
-                                        coverPreview: $coverPreview,
-                                        coverUpload: $coverUpload,
-                                        resetCoverToDefault: $resetCoverToDefault
+                                        coverPreview: $mediaDraft.coverPreview,
+                                        coverUpload: $mediaDraft.coverUpload,
+                                        resetCoverToDefault: $mediaDraft.resetCoverToDefault,
+                                        isSaving: isSaving,
+                                        canSaveProfile: !CommunityNickname.normalized(nickname).isEmpty,
+                                        onSave: saveProfile,
+                                        onSaved: {
+                                            operationAlert = .success(
+                                                L10n.text("资料已保存。", language: leafyLanguage)
+                                            )
+                                        }
                                     )
                                 } label: {
                                     Text(L10n.text("选择主页背景", language: leafyLanguage))
@@ -327,7 +346,15 @@ struct CommunityProfileEditorView: View {
             ToolbarItem(placement: .leafyTrailing) {
                 Button(isSaving ? L10n.text("保存中", language: leafyLanguage) : L10n.text("保存", language: leafyLanguage)) {
                     Task {
-                        await saveProfile()
+                        switch await saveProfile() {
+                        case .success:
+                            operationAlert = .success(
+                                L10n.text("资料已保存。", language: leafyLanguage),
+                                action: { dismiss() }
+                            )
+                        case .failure(let message):
+                            errorMessage = message
+                        }
                     }
                 }
                 .disabled(isSaving || CommunityNickname.normalized(nickname).isEmpty)
@@ -350,10 +377,10 @@ struct CommunityProfileEditorView: View {
     }
 
     private var mediaStatusText: String {
-        if resetCoverToDefault {
+        if mediaDraft.resetCoverToDefault {
             return L10n.text("保存后主页会使用默认背景。", language: leafyLanguage)
         }
-        if coverUpload != nil {
+        if mediaDraft.coverUpload != nil {
             return L10n.text("已选择新的主页背景，保存后生效。", language: leafyLanguage)
         }
         return L10n.text("头像和主页背景都可以不填，未设置时使用默认样式。", language: leafyLanguage)
@@ -417,30 +444,35 @@ struct CommunityProfileEditorView: View {
                 maxPixelDimension: CommunityImageUpload.avatarImageMaxPixelDimension,
                 maxBytes: CommunityImageUpload.avatarImageMaxBytes
             )
-            avatarPreview = ImageDataDecoder.decodedImage(
+            mediaDraft.avatarPreview = ImageDataDecoder.decodedImage(
                 from: upload.data,
                 targetSize: CGSize(width: 128, height: 128)
             ) ?? image
-            avatarUpload = upload
+            mediaDraft.avatarUpload = upload
             errorMessage = nil
         } catch {
             errorMessage = L10n.text("加载头像失败：%@", language: leafyLanguage, error.localizedDescription)
         }
     }
 
-    private func saveProfile() async {
+    @MainActor
+    private func saveProfile() async -> CommunityProfileSaveOutcome {
+        guard !isSaving else {
+            return .failure(L10n.text("资料正在保存，请稍候。", language: leafyLanguage))
+        }
+
         isSaving = true
         defer { isSaving = false }
 
         await sessionManager.bootstrapCommunityUser(force: true)
         if let bootstrapError = sessionManager.bootstrapError {
-            errorMessage = bootstrapError
-            return
+            return .failure(bootstrapError)
         }
 
         guard sessionManager.profile != nil else {
-            errorMessage = L10n.text("社区身份尚未建立，请确认教务登录仍有效后重试。", language: leafyLanguage)
-            return
+            return .failure(
+                L10n.text("社区身份尚未建立，请确认教务登录仍有效后重试。", language: leafyLanguage)
+            )
         }
 
         do {
@@ -452,20 +484,18 @@ struct CommunityProfileEditorView: View {
                     bio: CommunityProfileBio.normalized(bio),
                     showsEduVerificationBadge: showsEduVerificationBadge
                 ),
-                avatar: avatarUpload,
-                cover: coverUpload,
-                resetCoverToDefault: resetCoverToDefault
+                avatar: mediaDraft.avatarUpload,
+                cover: mediaDraft.coverUpload,
+                resetCoverToDefault: mediaDraft.resetCoverToDefault
             )
-            if let avatarUpload {
+            if let avatarUpload = mediaDraft.avatarUpload {
                 try? CommunityAvatarCache.shared.save(data: avatarUpload.data, for: updatedProfile)
             }
+            mediaDraft.markSaved()
             errorMessage = nil
-            operationAlert = .success(
-                L10n.text("资料已保存。", language: leafyLanguage),
-                action: { dismiss() }
-            )
+            return .success
         } catch {
-            errorMessage = error.localizedDescription
+            return .failure(error.localizedDescription)
         }
     }
 }
@@ -625,12 +655,17 @@ private struct CommunityCampusChangeSheet: View {
 }
 
 private struct CommunityProfileCoverEditorView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
 
     let profile: CommunityProfile?
     @Binding var coverPreview: UIImage?
     @Binding var coverUpload: CommunityImageUpload?
     @Binding var resetCoverToDefault: Bool
+    let isSaving: Bool
+    let canSaveProfile: Bool
+    let onSave: () async -> CommunityProfileSaveOutcome
+    let onSaved: () -> Void
 
     @State private var showingCoverPicker = false
     @State private var selectedCoverItem: PhotosPickerItem?
@@ -706,6 +741,28 @@ private struct CommunityProfileCoverEditorView: View {
         .background(LeafyPageBackground())
         .navigationTitle(L10n.text("主页背景", language: leafyLanguage))
         .leafyInlineNavigationTitle()
+        .toolbar {
+            ToolbarItem(placement: .leafyTrailing) {
+                Button(isSaving ? L10n.text("保存中", language: leafyLanguage) : L10n.text("保存", language: leafyLanguage)) {
+                    Task {
+                        switch await onSave() {
+                        case .success:
+                            dismiss()
+                            await Task.yield()
+                            onSaved()
+                        case .failure(let message):
+                            errorMessage = message
+                        }
+                    }
+                }
+                .disabled(
+                    isSaving ||
+                    isLoadingCover ||
+                    !canSaveProfile ||
+                    (coverUpload == nil && !resetCoverToDefault)
+                )
+            }
+        }
         .photosPicker(
             isPresented: $showingCoverPicker,
             selection: $selectedCoverItem,

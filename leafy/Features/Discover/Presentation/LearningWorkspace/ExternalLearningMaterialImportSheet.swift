@@ -61,7 +61,7 @@ struct ExternalLearningMaterialImportSheet: View {
                 }
             }
             .navigationTitle("保存到学习空间")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {

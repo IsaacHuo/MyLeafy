@@ -250,54 +250,29 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
         }
     }
 
-    func testPaginatorPreservesMixedTextWithoutLossOrDuplication() {
-        let body = """
-        第一段包含中文、English words 和 Emoji 👨‍👩‍👧‍👦🌿。
+    func testLongCardLayoutPreservesSnapshotContentAndGrowsWithBody() {
+        let shortBody = "第一段包含中文、English words 和 Emoji 👨‍👩‍👧‍👦🌿。"
+        let longBody = shortBody + String(repeating: "\n长段落🙂abcdef。", count: 80)
+        let shortSnapshot = makeCardSnapshot(body: shortBody)
+        let longSnapshot = makeCardSnapshot(body: longBody)
 
-        Second paragraph keeps punctuation, spacing, and line breaks exactly.
-        """ + String(repeating: "长段落🙂abcdef。", count: 900)
-
-        let pages = CommunityPostCardPaginator.pages(
-            title: "分页测试",
-            body: body,
-            attachmentNames: ["说明.pdf", "数据.xlsx", "忽略.docx"]
+        XCTAssertEqual(longSnapshot.body, longBody)
+        XCTAssertEqual(
+            longSnapshot.attachmentNames,
+            ["说明.pdf", "数据.xlsx", "忽略.docx"]
         )
-        let fragments = pages.compactMap { page -> String? in
-            guard case .text(let fragment, _, _) = page else { return nil }
-            return fragment
-        }
-        let attachmentSummaries = pages.compactMap { page -> [String]? in
-            guard case .text(_, _, let names) = page, !names.isEmpty else { return nil }
-            return names
-        }
-
-        XCTAssertEqual(fragments.joined(), body)
-        XCTAssertGreaterThan(pages.count, 1)
-        XCTAssertEqual(attachmentSummaries.last, ["说明.pdf", "数据.xlsx"])
+        XCTAssertGreaterThan(
+            CommunityPostCardLayout.estimatedHeight(snapshot: longSnapshot, photos: []),
+            CommunityPostCardLayout.estimatedHeight(snapshot: shortSnapshot, photos: [])
+        )
     }
 
-    func testPaginatorPreservesTenThousandCharacters() {
-        let body = String(repeating: "林🌿A\n", count: 2_500)
-        let pages = CommunityPostCardPaginator.pages(
-            title: "一万字符",
-            body: body,
-            attachmentNames: []
-        )
-        let reconstructed = pages.compactMap { page -> String? in
-            guard case .text(let fragment, _, _) = page else { return nil }
-            return fragment
-        }.joined()
-
-        XCTAssertEqual(reconstructed, body)
-        XCTAssertEqual(reconstructed.count, body.count)
-    }
-
-    func testRendererProduces1080By1920JPEGPagesInTextThenPhotoOrder() throws {
+    func testRendererProducesSingle1080PixelWideLongJPEG() throws {
         let photo = try XCTUnwrap(
-            UIGraphicsImageRenderer(size: CGSize(width: 80, height: 40))
+            UIGraphicsImageRenderer(size: CGSize(width: 80, height: 120))
                 .image { context in
                     UIColor.systemGreen.setFill()
-                    context.fill(CGRect(x: 0, y: 0, width: 80, height: 40))
+                    context.fill(CGRect(x: 0, y: 0, width: 80, height: 120))
                 }
                 .jpegData(compressionQuality: 0.9)
         )
@@ -307,22 +282,39 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
             dateText: "7月28日",
             category: "校园生活",
             title: "卡片测试",
-            body: "正文",
+            body: String(repeating: "这是一段用于验证长图高度的正文。\n", count: 40),
             attachmentNames: ["附件.pdf"],
             photoData: [photo],
             isAnonymous: true
         )
 
-        let urls = try CommunityPostCardGenerator.render(snapshot)
-        defer { CommunityPostCardGenerator.deleteRenderedFiles(urls) }
+        let url = try CommunityPostCardGenerator.render(snapshot)
+        defer { CommunityPostCardGenerator.deleteRenderedFile(url) }
 
-        XCTAssertEqual(urls.count, 2)
-        for url in urls {
-            let image = try XCTUnwrap(UIImage(contentsOfFile: url.path))
-            XCTAssertEqual(image.cgImage?.width, 1_080)
-            XCTAssertEqual(image.cgImage?.height, 1_920)
-            XCTAssertEqual(url.pathExtension.lowercased(), "jpg")
+        let image = try XCTUnwrap(UIImage(contentsOfFile: url.path))
+        XCTAssertEqual(image.cgImage?.width, 1_080)
+        XCTAssertGreaterThan(image.cgImage?.height ?? 0, 1_920)
+        XCTAssertLessThanOrEqual(
+            image.cgImage?.height ?? .max,
+            CommunityPostCardLayout.maxPixelHeight
+        )
+        XCTAssertEqual(url.lastPathComponent, "MyLeafy-card.jpg")
+    }
+
+    func testRendererRejectsUnsafeLongImageWithoutCreatingFiles() {
+        CommunityPostCardGenerator.cleanupStaleRenderedFiles()
+        let snapshot = makeCardSnapshot(body: String(repeating: "综", count: 10_000))
+
+        XCTAssertThrowsError(try CommunityPostCardGenerator.render(snapshot)) { error in
+            guard case CommunityPostCardGenerationError.contentTooLong = error else {
+                return XCTFail("Expected contentTooLong, got \(error)")
+            }
         }
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: CommunityPostCardGenerator.temporaryRoot.path
+            )
+        )
     }
 
     func testAnonymousPublishedPostSnapshotDoesNotExposeAuthorIdentity() async throws {
@@ -360,6 +352,20 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
             title: title,
             body: body,
             category: "校园生活",
+            isAnonymous: false
+        )
+    }
+
+    private func makeCardSnapshot(body: String) -> CommunityPostCardSnapshot {
+        CommunityPostCardSnapshot(
+            authorName: "测试同学",
+            avatarData: nil,
+            dateText: "7月29日",
+            category: "校园生活",
+            title: "长图测试",
+            body: body,
+            attachmentNames: ["说明.pdf", "数据.xlsx", "忽略.docx"],
+            photoData: [],
             isAnonymous: false
         )
     }

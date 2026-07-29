@@ -129,7 +129,7 @@ struct ProfileEmailBindingView: View {
         .scrollContentBackground(.hidden)
         .background(LeafyPageBackground())
         .navigationTitle("绑定邮箱")
-        .navigationBarTitleDisplayMode(.inline)
+        .leafyInlineNavigationTitle()
         .task {
             sessionManager.startBootstrapIfNeeded()
             seedEmailIfNeeded()

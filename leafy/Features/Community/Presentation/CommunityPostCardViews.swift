@@ -19,16 +19,12 @@ nonisolated struct CommunityPostCardSnapshot: Sendable {
     let isAnonymous: Bool
 }
 
-nonisolated enum CommunityPostCardPage: Sendable {
-    case text(body: String, showsTitle: Bool, attachmentNames: [String])
-    case photo(Data)
-}
-
 nonisolated enum CommunityPostCardGenerationError: LocalizedError, Sendable {
     case avatarDownloadFailed
     case photoDownloadFailed(Int)
     case invalidImage(Int)
-    case renderFailed(Int)
+    case contentTooLong
+    case renderFailed
     case writeFailed(String)
 
     var errorDescription: String? {
@@ -39,128 +35,90 @@ nonisolated enum CommunityPostCardGenerationError: LocalizedError, Sendable {
             return L10n.text("第 %d 张帖子图片下载失败，请检查网络后重试。", index)
         case .invalidImage(let index):
             return L10n.text("第 %d 张帖子图片无法读取。", index)
-        case .renderFailed(let index):
-            return L10n.text("第 %d 页图文卡片生成失败，请稍后重试。", index)
+        case .contentTooLong:
+            return L10n.text("图文卡片内容过长，无法生成清晰的单张长图。请精简正文或图片后重试。")
+        case .renderFailed:
+            return L10n.text("图文卡片生成失败，请稍后重试。")
         case .writeFailed(let message):
             return L10n.text("图文卡片写入失败：%@", message)
         }
     }
 }
 
-nonisolated enum CommunityPostCardPaginator {
-    static let textWidth: CGFloat = 304
-    static let firstPageBodyHeight: CGFloat = 330
-    static let continuationBodyHeight: CGFloat = 420
+@MainActor
+enum CommunityPostCardLayout {
+    static let canvasWidth: CGFloat = 360
+    static let renderScale: CGFloat = 3
+    static let maxPixelHeight = 16_384
+    static let contentWidth: CGFloat = 284
 
-    static func pages(
-        title _: String,
-        body: String,
-        attachmentNames: [String]
-    ) -> [CommunityPostCardPage] {
-        var remaining = body
-        var textPages: [(body: String, showsTitle: Bool)] = []
-        var isFirstPage = true
-
-        repeat {
-            let height = isFirstPage ? firstPageBodyHeight : continuationBodyHeight
-            let prefixCount = fittingPrefixCount(in: remaining, maxHeight: height)
-            let count = remaining.isEmpty ? 0 : max(1, prefixCount)
-            let splitIndex = remaining.index(remaining.startIndex, offsetBy: count)
-            let fragment = String(remaining[..<splitIndex])
-            textPages.append((fragment, isFirstPage))
-            remaining = String(remaining[splitIndex...])
-            isFirstPage = false
-        } while !remaining.isEmpty
-
-        if textPages.isEmpty {
-            textPages = [("", true)]
+    static func estimatedHeight(
+        snapshot: CommunityPostCardSnapshot,
+        photos: [UIImage]
+    ) -> CGFloat {
+        var sectionHeights: [CGFloat] = [42]
+        sectionHeights.append(measuredHeight(snapshot.title, fontSize: 25, weight: .bold))
+        if !snapshot.body.isEmpty {
+            sectionHeights.append(
+                measuredHeight(snapshot.body, fontSize: 17, weight: .regular, lineSpacing: 5)
+            )
         }
 
-        let names = Array(attachmentNames.prefix(CommunityPostAttachment.postAttachmentLimit))
-        if !names.isEmpty, let last = textPages.last {
-            let availableHeight = last.showsTitle ? firstPageBodyHeight : continuationBodyHeight
-            let attachmentHeight = CGFloat(38 + names.count * 24)
-            let bodyHeight = measuredHeight(last.body)
-            if bodyHeight + attachmentHeight <= availableHeight {
-                textPages.removeLast()
-                return textPages.map {
-                    .text(body: $0.body, showsTitle: $0.showsTitle, attachmentNames: [])
-                } + [
-                    .text(body: last.body, showsTitle: last.showsTitle, attachmentNames: names)
-                ]
-            }
-            return textPages.map {
-                .text(body: $0.body, showsTitle: $0.showsTitle, attachmentNames: [])
-            } + [
-                .text(body: "", showsTitle: false, attachmentNames: names)
-            ]
+        let attachmentCount = min(
+            snapshot.attachmentNames.count,
+            CommunityPostAttachment.postAttachmentLimit
+        )
+        if attachmentCount > 0 {
+            sectionHeights.append(38 + CGFloat(attachmentCount * 22))
         }
 
-        return textPages.map {
-            .text(body: $0.body, showsTitle: $0.showsTitle, attachmentNames: [])
-        }
+        sectionHeights.append(contentsOf: photos.map { photoHeight(for: $0) })
+        sectionHeights.append(16)
+
+        let sectionSpacing = CGFloat(max(0, sectionHeights.count - 1)) * 16
+        let outerAndCardPadding: CGFloat = 76
+        let measurementSafetyMargin: CGFloat = 24
+        return ceil(
+            sectionHeights.reduce(0, +) +
+            sectionSpacing +
+            outerAndCardPadding +
+            measurementSafetyMargin
+        )
     }
 
-    private static func fittingPrefixCount(in text: String, maxHeight: CGFloat) -> Int {
-        guard !text.isEmpty else { return 0 }
-        let totalCount = text.count
-        var best = 0
-        var probe = min(512, totalCount)
-
-        while true {
-            let index = text.index(text.startIndex, offsetBy: probe)
-            let candidate = String(text[..<index])
-            guard measuredHeight(candidate) <= maxHeight else { break }
-            best = probe
-            guard probe < totalCount else { return totalCount }
-            probe = min(totalCount, probe * 2)
-        }
-
-        var lower = best + 1
-        var upper = probe - 1
-
-        while lower <= upper {
-            let middle = (lower + upper) / 2
-            let index = text.index(text.startIndex, offsetBy: middle)
-            let candidate = String(text[..<index])
-            if measuredHeight(candidate) <= maxHeight {
-                best = middle
-                lower = middle + 1
-            } else {
-                upper = middle - 1
-            }
-        }
-
-        guard best > 0, best < text.count else { return best }
-        let bestIndex = text.index(text.startIndex, offsetBy: best)
-        let candidate = String(text[..<bestIndex])
-        let preferredBreaks = ["\n", "。", "！", "？", ".", "!", "?", " "]
-        let minimumPreferredCount = max(1, Int(Double(best) * 0.72))
-        for token in preferredBreaks {
-            if let range = candidate.range(of: token, options: .backwards) {
-                let count = candidate.distance(from: candidate.startIndex, to: range.upperBound)
-                if count >= minimumPreferredCount {
-                    return count
-                }
-            }
-        }
-        return best
+    static func exceedsSafeHeight(
+        snapshot: CommunityPostCardSnapshot,
+        photos: [UIImage]
+    ) -> Bool {
+        estimatedHeight(snapshot: snapshot, photos: photos) * renderScale >
+            CGFloat(maxPixelHeight)
     }
 
-    private static func measuredHeight(_ text: String) -> CGFloat {
+    private static func photoHeight(for image: UIImage) -> CGFloat {
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return 0 }
+        return ceil(contentWidth * size.height / size.width)
+    }
+
+    private static func measuredHeight(
+        _ text: String,
+        fontSize: CGFloat,
+        weight: LeafyCardFontWeight,
+        lineSpacing: CGFloat = 0
+    ) -> CGFloat {
         guard !text.isEmpty else { return 0 }
 #if canImport(UIKit)
-        let font = UIFont.systemFont(ofSize: 17, weight: .regular)
+        let font = UIFont.systemFont(ofSize: fontSize, weight: weight.uiKitWeight)
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 5
+        paragraph.lineSpacing = lineSpacing
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .paragraphStyle: paragraph
         ]
 #elseif canImport(AppKit)
-        let font = NSFont.systemFont(ofSize: 17, weight: .regular)
+        let font = NSFont.systemFont(ofSize: fontSize, weight: weight.appKitWeight)
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 5
+        paragraph.lineSpacing = lineSpacing
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .paragraphStyle: paragraph
@@ -168,7 +126,7 @@ nonisolated enum CommunityPostCardPaginator {
 #endif
         return ceil(
             (text as NSString).boundingRect(
-                with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+                with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: attributes,
                 context: nil
@@ -177,13 +135,34 @@ nonisolated enum CommunityPostCardPaginator {
     }
 }
 
+private enum LeafyCardFontWeight {
+    case regular
+    case bold
+
+#if canImport(UIKit)
+    var uiKitWeight: UIFont.Weight {
+        switch self {
+        case .regular: return .regular
+        case .bold: return .bold
+        }
+    }
+#elseif canImport(AppKit)
+    var appKitWeight: NSFont.Weight {
+        switch self {
+        case .regular: return .regular
+        case .bold: return .bold
+        }
+    }
+#endif
+}
+
 @MainActor
 enum CommunityPostCardGenerator {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "MyLeafy",
         category: "CommunityShareCards"
     )
-    private static let temporaryRoot = FileManager.default.temporaryDirectory
+    static let temporaryRoot = FileManager.default.temporaryDirectory
         .appendingPathComponent("CommunityPostCards", isDirectory: true)
 
     static func snapshot(from post: CommunityPost) async throws -> CommunityPostCardSnapshot {
@@ -261,42 +240,43 @@ enum CommunityPostCardGenerator {
         )
     }
 
-    static func render(_ snapshot: CommunityPostCardSnapshot) throws -> [URL] {
-        var pages = CommunityPostCardPaginator.pages(
-            title: snapshot.title,
-            body: snapshot.body,
-            attachmentNames: snapshot.attachmentNames
-        )
-        pages.append(contentsOf: snapshot.photoData.map(CommunityPostCardPage.photo))
+    static func render(_ snapshot: CommunityPostCardSnapshot) throws -> URL {
+        let photos = try snapshot.photoData.enumerated().map { index, data in
+            guard let image = UIImage(data: data),
+                  image.size.width > 0,
+                  image.size.height > 0 else {
+                throw CommunityPostCardGenerationError.invalidImage(index + 1)
+            }
+            return image
+        }
+        guard !CommunityPostCardLayout.exceedsSafeHeight(snapshot: snapshot, photos: photos) else {
+            throw CommunityPostCardGenerationError.contentTooLong
+        }
+
+        let view = CommunityPostLongCardView(snapshot: snapshot, photos: photos)
+            .frame(width: CommunityPostCardLayout.canvasWidth)
+            .fixedSize(horizontal: false, vertical: true)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = CommunityPostCardLayout.renderScale
+        guard let image = renderer.leafyPlatformImage,
+              let cgImage = image.cgImage else {
+            throw CommunityPostCardGenerationError.renderFailed
+        }
+        guard cgImage.height <= CommunityPostCardLayout.maxPixelHeight else {
+            throw CommunityPostCardGenerationError.contentTooLong
+        }
+        guard let data = image.jpegData(compressionQuality: 0.92) else {
+            throw CommunityPostCardGenerationError.renderFailed
+        }
 
         let directory = temporaryRoot
             .appendingPathComponent(UUID().uuidString.lowercased(), isDirectory: true)
+        let url = directory.appendingPathComponent("MyLeafy-card.jpg")
 
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            var urls: [URL] = []
-            for (index, page) in pages.enumerated() {
-                let view = CommunityPostShareCardPageView(
-                    snapshot: snapshot,
-                    page: page,
-                    pageNumber: index + 1,
-                    totalPages: pages.count
-                )
-                .frame(width: 360, height: 640)
-
-                let renderer = ImageRenderer(content: view)
-                renderer.scale = 3
-                guard let image = renderer.leafyPlatformImage,
-                      let data = image.jpegData(compressionQuality: 0.92) else {
-                    throw CommunityPostCardGenerationError.renderFailed(index + 1)
-                }
-                let url = directory.appendingPathComponent(
-                    String(format: "MyLeafy-card-%02d.jpg", index + 1)
-                )
-                try data.write(to: url, options: .atomic)
-                urls.append(url)
-            }
-            return urls
+            try data.write(to: url, options: .atomic)
+            return url
         } catch let error as CommunityPostCardGenerationError {
             try? FileManager.default.removeItem(at: directory)
             throw error
@@ -306,8 +286,8 @@ enum CommunityPostCardGenerator {
         }
     }
 
-    static func deleteRenderedFiles(_ urls: [URL]) {
-        guard let directory = urls.first?.deletingLastPathComponent() else { return }
+    static func deleteRenderedFile(_ url: URL?) {
+        guard let directory = url?.deletingLastPathComponent() else { return }
         do {
             try FileManager.default.removeItem(at: directory)
         } catch {
@@ -353,8 +333,7 @@ struct CommunityPostCardPreviewSheet: View {
     let source: CommunityPostCardPreviewSource
 
     @Environment(\.dismiss) private var dismiss
-    @State private var pageURLs: [URL] = []
-    @State private var selectedPage = 0
+    @State private var cardURL: URL?
     @State private var isGenerating = false
     @State private var isSaving = false
     @State private var isSharing = false
@@ -378,33 +357,26 @@ struct CommunityPostCardPreviewSheet: View {
                         }
                         .buttonStyle(.borderedProminent)
                     }
-                } else if pageURLs.isEmpty {
-                    ContentUnavailableView("没有可预览的页面", systemImage: "photo.on.rectangle")
-                } else {
-                    VStack(spacing: 12) {
-                        TabView(selection: $selectedPage) {
-                            ForEach(Array(pageURLs.enumerated()), id: \.offset) { index, url in
-                                if let image = UIImage(contentsOfFile: url.path) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
-                                        .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
-                                        .padding(.horizontal, AppSpacing.page)
-                                        .tag(index)
-                                } else {
-                                    ContentUnavailableView("页面无法读取", systemImage: "photo.badge.exclamationmark")
-                                        .tag(index)
-                                }
-                            }
+                } else if let cardURL {
+                    ScrollView {
+                        if let image = UIImage(contentsOfFile: cardURL.path) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                                .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+                                .padding(AppSpacing.page)
+                        } else {
+                            ContentUnavailableView(
+                                "长图无法读取",
+                                systemImage: "photo.badge.exclamationmark"
+                            )
+                            .frame(maxWidth: .infinity, minHeight: 320)
+                            .padding(AppSpacing.page)
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-
-                        Text("\(selectedPage + 1) / \(pageURLs.count)")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
                     }
-                    .padding(.vertical, AppSpacing.compact)
+                } else {
+                    ContentUnavailableView("没有可预览的长图", systemImage: "photo.on.rectangle")
                 }
             }
             .background(LeafyPageBackground())
@@ -416,30 +388,32 @@ struct CommunityPostCardPreviewSheet: View {
                 }
                 ToolbarItemGroup(placement: .leafyTrailing) {
                     Button {
-                        Task { await saveAllPages() }
+                        Task { await saveCard() }
                     } label: {
                         Image(systemName: "square.and.arrow.down")
                     }
-                    .disabled(pageURLs.isEmpty || isGenerating || isSaving)
-                    .accessibilityLabel(isSaving ? "正在保存卡片" : "保存全部卡片")
+                    .disabled(cardURL == nil || isGenerating || isSaving)
+                    .accessibilityLabel(isSaving ? "正在保存长图" : "保存长图")
 
                     Button {
                         isSharing = true
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
-                    .disabled(pageURLs.isEmpty || isGenerating)
-                    .accessibilityLabel("分享全部卡片")
+                    .disabled(cardURL == nil || isGenerating)
+                    .accessibilityLabel("分享长图")
                 }
             }
             .task {
                 await generate()
             }
             .onDisappear {
-                CommunityPostCardGenerator.deleteRenderedFiles(pageURLs)
+                CommunityPostCardGenerator.deleteRenderedFile(cardURL)
             }
             .sheet(isPresented: $isSharing) {
-                ShareSheet(activityItems: pageURLs)
+                if let cardURL {
+                    ShareSheet(activityItems: [cardURL])
+                }
             }
             .alert("保存结果", isPresented: Binding(
                 get: { resultMessage != nil },
@@ -457,9 +431,8 @@ struct CommunityPostCardPreviewSheet: View {
         guard !isGenerating else { return }
         isGenerating = true
         errorMessage = nil
-        CommunityPostCardGenerator.deleteRenderedFiles(pageURLs)
-        pageURLs = []
-        selectedPage = 0
+        CommunityPostCardGenerator.deleteRenderedFile(cardURL)
+        cardURL = nil
         defer { isGenerating = false }
 
         do {
@@ -470,23 +443,23 @@ struct CommunityPostCardPreviewSheet: View {
             case .draft(let payload, let profile):
                 snapshot = try await CommunityPostCardGenerator.snapshot(from: payload, profile: profile)
             }
-            pageURLs = try CommunityPostCardGenerator.render(snapshot)
+            cardURL = try CommunityPostCardGenerator.render(snapshot)
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     @MainActor
-    private func saveAllPages() async {
-        guard !pageURLs.isEmpty, !isSaving else { return }
+    private func saveCard() async {
+        guard let cardURL, !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
         do {
-            try await LeafyPhotoLibrarySaver.saveImageFiles(pageURLs)
+            try await LeafyPhotoLibrarySaver.saveImageFiles([cardURL])
 #if os(macOS)
             resultMessage = L10n.text("已保存到所选文件夹。")
 #else
-            resultMessage = L10n.text("已保存 %d 张图文卡片到系统相册。", pageURLs.count)
+            resultMessage = L10n.text("图文长图已保存到系统相册。")
 #endif
         } catch {
             resultMessage = error.localizedDescription
@@ -494,11 +467,9 @@ struct CommunityPostCardPreviewSheet: View {
     }
 }
 
-private struct CommunityPostShareCardPageView: View {
+private struct CommunityPostLongCardView: View {
     let snapshot: CommunityPostCardSnapshot
-    let page: CommunityPostCardPage
-    let pageNumber: Int
-    let totalPages: Int
+    let photos: [UIImage]
 
     private let background = Color(red: 0.965, green: 0.958, blue: 0.935)
     private let card = Color.white
@@ -507,28 +478,37 @@ private struct CommunityPostShareCardPageView: View {
     private let accent = Color(red: 0.12, green: 0.48, blue: 0.32)
 
     var body: some View {
-        ZStack {
-            background
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(card)
-                .shadow(color: .black.opacity(0.08), radius: 18, y: 9)
-                .padding(18)
-
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 identityHeader
+                title
 
-                switch page {
-                case .text(let body, let showsTitle, let attachmentNames):
-                    textContent(body: body, showsTitle: showsTitle, attachmentNames: attachmentNames)
-                case .photo(let data):
-                    photoContent(data: data)
+                if !snapshot.body.isEmpty {
+                    bodyText
                 }
 
-                Spacer(minLength: 0)
+                if !attachmentNames.isEmpty {
+                    attachments
+                }
+
+                ForEach(Array(photos.enumerated()), id: \.offset) { _, image in
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+
                 footer
             }
-            .padding(38)
+            .padding(20)
+            .background(card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: .black.opacity(0.08), radius: 18, y: 9)
+            .padding(18)
         }
+        .background(background)
+        .frame(width: CommunityPostCardLayout.canvasWidth)
+        .fixedSize(horizontal: false, vertical: true)
         .environment(\.colorScheme, .light)
     }
 
@@ -566,54 +546,39 @@ private struct CommunityPostShareCardPageView: View {
         }
     }
 
-    private func textContent(
-        body: String,
-        showsTitle: Bool,
-        attachmentNames: [String]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if showsTitle {
-                Text(snapshot.title)
-                    .font(.system(size: 25, weight: .bold))
-                    .foregroundStyle(ink)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !body.isEmpty {
-                Text(body)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(ink)
-                    .lineSpacing(5)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !attachmentNames.isEmpty {
-                Divider()
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("附件")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(secondary)
-                    ForEach(attachmentNames, id: \.self) { name in
-                        Label(name, systemImage: "paperclip")
-                            .font(.system(size: 11))
-                            .foregroundStyle(ink)
-                            .lineLimit(1)
-                    }
-                }
-            }
-        }
+    private var title: some View {
+        Text(snapshot.title)
+            .font(.system(size: 25, weight: .bold))
+            .foregroundStyle(ink)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
-    @ViewBuilder
-    private func photoContent(data: Data) -> some View {
-        if let image = UIImage(data: data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: 460)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        } else {
-            ContentUnavailableView("图片无法读取", systemImage: "photo.badge.exclamationmark")
+    private var bodyText: some View {
+        Text(snapshot.body)
+            .font(.system(size: 17, weight: .regular))
+            .foregroundStyle(ink)
+            .lineSpacing(5)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var attachmentNames: [String] {
+        Array(snapshot.attachmentNames.prefix(CommunityPostAttachment.postAttachmentLimit))
+    }
+
+    private var attachments: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Divider()
+
+            Text("附件")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(secondary)
+
+            ForEach(attachmentNames, id: \.self) { name in
+                Label(name, systemImage: "paperclip")
+                    .font(.system(size: 11))
+                    .foregroundStyle(ink)
+                    .lineLimit(1)
+            }
         }
     }
 
@@ -623,7 +588,7 @@ private struct CommunityPostShareCardPageView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(accent)
             Spacer()
-            Text("\(pageNumber) / \(totalPages)")
+            Text("图文长图")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(secondary)
         }

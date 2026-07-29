@@ -107,7 +107,7 @@ struct CampusAISettingsView: View {
                 }
             }
             .navigationTitle("MyLeafy 设置")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") {
@@ -272,7 +272,7 @@ struct CampusAIAPIKeySetupView: View {
             }
         }
         .navigationTitle("DeepSeek Key")
-        .navigationBarTitleDisplayMode(.inline)
+        .leafyInlineNavigationTitle()
         .onAppear {
             refreshAPIKeyState()
             if focusesOnAppear {
@@ -438,7 +438,7 @@ struct CampusAISubscriptionView: View {
             }
             .background(AppTheme.cardElevated.ignoresSafeArea())
             .navigationTitle("MyLeafy AI 订阅")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
@@ -535,7 +535,7 @@ private struct CampusAIPromptSettingsPage: View {
             }
         }
         .navigationTitle("回答偏好")
-        .navigationBarTitleDisplayMode(.inline)
+        .leafyInlineNavigationTitle()
     }
 }
 
@@ -588,7 +588,7 @@ private struct CampusAIContextSettingsPage: View {
             }
         }
         .navigationTitle("本机上下文")
-        .navigationBarTitleDisplayMode(.inline)
+        .leafyInlineNavigationTitle()
     }
 
     private func contextStatusText(_ status: CampusAIContextSourceStatus) -> String {

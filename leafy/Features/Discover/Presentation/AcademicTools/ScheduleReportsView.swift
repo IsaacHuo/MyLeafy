@@ -65,7 +65,7 @@ struct ScheduleReportsView: View {
                             } label: {
                                 Label("删除", systemImage: "trash")
                             }
-                            .tint(.red)
+                            .tint(AppTheme.danger)
                         }
                     }
                 }
@@ -414,7 +414,7 @@ private struct ScheduleReminderEditor: View {
                 }
             }
             .navigationTitle("添加提醒")
-            .navigationBarTitleDisplayMode(.inline)
+            .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
