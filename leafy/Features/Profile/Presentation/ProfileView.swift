@@ -57,6 +57,18 @@ struct ProfileView: View {
         ActiveCampusContext.identity?.isCustom == true
     }
 
+    private var isReviewDemoAccount: Bool {
+        ReviewDemoMode.isEnabled ||
+            ReviewDemoDataSeeder.isDemoEduID(ActiveCampusContext.networkManager.authenticatedEduID)
+    }
+
+    private var canDeleteAccount: Bool {
+        AppAccountDeletionPolicy.canDelete(
+            isReviewDemoMode: ReviewDemoMode.isEnabled,
+            eduID: ActiveCampusContext.networkManager.authenticatedEduID
+        )
+    }
+
     private var profileDisplayName: String {
         if !isCommunityEnabled {
             let displayName = ActiveCampusContext.identity?.displayName?
@@ -98,13 +110,13 @@ struct ProfileView: View {
             .sheet(item: $browserItem) { item in
                 ProfileSafariView(url: item.url)
             }
-            .alert("确认退出？", isPresented: $showingLogoutAlert) {
-                Button("退出", role: .destructive) {
+            .alert(logoutConfirmationTitle, isPresented: $showingLogoutAlert) {
+                Button(logoutButtonTitle, role: .destructive) {
                     AppSessionResetter.returnToLogin(modelContext: modelContext)
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("退出后需重新登录，本地缓存的课表和成绩数据将保留。")
+                Text(logoutConfirmationMessage)
             }
             .confirmationDialog(
                 "删除 MyLeafy 账户？",
@@ -189,10 +201,14 @@ struct ProfileView: View {
             Section {
                 logoutButton
 
-                if !AppAccountDeletionPolicy.canDelete(isReviewDemoMode: ReviewDemoMode.isEnabled) {
-                    demoAccountDeletionNotice
-                } else {
+                if canDeleteAccount {
                     deleteAccountButton
+                }
+            } header: {
+                Text("账户")
+            } footer: {
+                if isReviewDemoAccount {
+                    Text("演示账户不支持账户删除。退出演示模式不会影响正式账户与数据。")
                 }
             }
             .listRowBackground(AppTheme.cardBackground)
@@ -326,52 +342,40 @@ struct ProfileView: View {
     }
 
     private var logoutButton: some View {
-        Button {
+        Button(logoutButtonTitle, role: .destructive) {
             showingLogoutAlert = true
-        } label: {
-            Text("退出登录")
-                .leafyTitle3()
-                .foregroundStyle(AppTheme.danger)
-                .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 
     private var deleteAccountButton: some View {
-        Button(role: .destructive) {
+        Button(
+            isDeletingAccount ? "正在删除账户…" : "删除 MyLeafy 账户",
+            role: .destructive
+        ) {
             showingDeleteAccountConfirmation = true
-        } label: {
-            HStack {
-                Text(isDeletingAccount ? "正在删除账户…" : "删除 MyLeafy 账户")
-                    .leafyTitle3()
-                Spacer()
-                if isDeletingAccount {
-                    ProgressView()
-                }
-            }
-            .foregroundStyle(AppTheme.danger)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .disabled(isDeletingAccount)
         .accessibilityHint("永久删除社区账户和当前设备上的 MyLeafy 数据")
     }
 
-    private var demoAccountDeletionNotice: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("演示账户不可删除")
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
-            Text("退出演示模式不会影响正式用户的账户与数据。")
-                .microCaption()
-                .foregroundStyle(AppTheme.tertiaryText)
+    private var logoutButtonTitle: String {
+        isReviewDemoAccount ? "退出演示模式" : "退出登录"
+    }
+
+    private var logoutConfirmationTitle: String {
+        isReviewDemoAccount ? "退出演示模式？" : "确认退出？"
+    }
+
+    private var logoutConfirmationMessage: String {
+        if isReviewDemoAccount {
+            return "退出后会返回登录页，正式账户与数据不会受到影响。"
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        return "退出后需重新登录，本地缓存的课表和成绩数据将保留。"
     }
 
     @MainActor
     private func deleteAccount() async {
-        guard AppAccountDeletionPolicy.canDelete(isReviewDemoMode: ReviewDemoMode.isEnabled),
-              !isDeletingAccount else {
+        guard canDeleteAccount, !isDeletingAccount else {
             return
         }
         isDeletingAccount = true

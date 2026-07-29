@@ -165,7 +165,7 @@ final class SchoolNetworkManager: ObservableObject {
         self.authenticatedDisplayName = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedDisplayName"))
         if ReviewDemoMode.isEnabled {
             self.isLoggedIn = true
-            self.authenticatedEduID = "review-demo"
+            self.authenticatedEduID = ReviewDemoDataSeeder.demoEduID
             self.authenticatedDisplayName = ReviewDemoDataSeeder.displayName
         }
     }

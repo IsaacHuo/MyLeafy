@@ -36,9 +36,28 @@ final class ReviewDemoModeTests: XCTestCase {
         XCTAssertEqual(ReviewDemoDataSeeder.campusID, CampusID.bjfu.rawValue)
     }
 
+    @MainActor
+    func testColdStartRestoresInstallationUniqueDemoIdentity() {
+        let wasEnabled = ReviewDemoMode.isEnabled
+        defer { ReviewDemoMode.isEnabled = wasEnabled }
+
+        let expectedEduID = ReviewDemoDataSeeder.demoEduID
+        ReviewDemoMode.isEnabled = true
+
+        let manager = SchoolNetworkManager()
+
+        XCTAssertEqual(manager.authenticatedEduID, expectedEduID)
+        XCTAssertNotEqual(manager.authenticatedEduID, "review-demo")
+    }
+
     func testDemoAccountCannotEnterAccountDeletionFlow() {
-        XCTAssertFalse(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: true))
-        XCTAssertTrue(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: false))
+        XCTAssertFalse(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: true, eduID: nil))
+        XCTAssertFalse(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: false, eduID: "review-demo"))
+        XCTAssertFalse(AppAccountDeletionPolicy.canDelete(
+            isReviewDemoMode: false,
+            eduID: "review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca"
+        ))
+        XCTAssertTrue(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: false, eduID: "230206108"))
     }
 
     @MainActor

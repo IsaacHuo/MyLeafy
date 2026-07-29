@@ -2,8 +2,8 @@ import Foundation
 import SwiftData
 
 nonisolated enum AppAccountDeletionPolicy {
-    static func canDelete(isReviewDemoMode: Bool) -> Bool {
-        !isReviewDemoMode
+    static func canDelete(isReviewDemoMode: Bool, eduID: String?) -> Bool {
+        !isReviewDemoMode && !ReviewDemoDataSeeder.isDemoEduID(eduID)
     }
 }
 
@@ -26,7 +26,8 @@ enum AppAccountDeletionCoordinator {
 @MainActor
 enum AppSessionResetter {
     static func returnToLogin(modelContext: ModelContext? = nil) {
-        if ReviewDemoMode.isEnabled {
+        if ReviewDemoMode.isEnabled ||
+            ReviewDemoDataSeeder.isDemoEduID(ActiveCampusContext.networkManager.authenticatedEduID) {
             ReviewDemoDataSeeder.exit(using: modelContext)
         }
         ActiveCampusContext.networkManager.clearSession()

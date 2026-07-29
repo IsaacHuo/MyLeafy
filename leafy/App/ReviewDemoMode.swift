@@ -84,6 +84,13 @@ enum ReviewDemoDataSeeder {
         return "review-demo-\(installationID.lowercased())"
     }
 
+    nonisolated static func isDemoEduID(_ eduID: String?) -> Bool {
+        let normalized = eduID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        return normalized == "review-demo" || normalized.hasPrefix("review-demo-")
+    }
+
     static func emptyClassrooms(for date: Date, start: Int, end: Int) -> [EmptyClassroom] {
         let rooms = [
             EmptyClassroom(building: "二教", room: "205"),
