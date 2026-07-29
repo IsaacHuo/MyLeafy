@@ -617,6 +617,13 @@ enum LearningMaterialFileStore {
         }
     }
 
+    static func deleteAllFiles() throws {
+        guard FileManager.default.fileExists(atPath: directoryURL.path(percentEncoded: false)) else {
+            return
+        }
+        try FileManager.default.removeItem(at: directoryURL)
+    }
+
     private static var directoryURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory

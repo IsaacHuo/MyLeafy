@@ -15,6 +15,7 @@ enum CommunityServiceError: LocalizedError {
     case contentRejected
     case invalidPoll
     case pollClosed
+    case accountDeletionFailed
     case edgeFunctionRejected(String)
 
     var errorDescription: String? {
@@ -43,6 +44,8 @@ enum CommunityServiceError: LocalizedError {
             return "投票内容不完整，请检查问题和选项。"
         case .pollClosed:
             return "投票已截止。"
+        case .accountDeletionFailed:
+            return "账户删除失败，线上数据和本机数据均未清除，请稍后重试。"
         case .edgeFunctionRejected(let message):
             return message
         }
@@ -121,6 +124,36 @@ actor CommunityService {
 // MARK: - Identity and Profile
 
 extension CommunityService {
+    func deleteCurrentAccount() async throws {
+        let client = try LeafySupabase.shared.requireClient()
+        let config = try LeafySupabase.shared.requireConfig()
+        let session = try await client.auth.session
+        client.functions.setAuth(token: session.accessToken)
+
+        do {
+            let response: CommunityAccountDeletionResponse = try await client.functions.invoke(
+                "community-delete-account",
+                options: FunctionInvokeOptions(
+                    method: .post,
+                    headers: [
+                        "Authorization": "Bearer \(session.accessToken)"
+                    ],
+                    region: config.edgeRegion
+                )
+            )
+            guard response.deleted else {
+                throw CommunityServiceError.accountDeletionFailed
+            }
+        } catch let error as CommunityServiceError {
+            throw error
+        } catch {
+            CommunityDiagnostics.log.error(
+                "Community account deletion failed: \(error.localizedDescription, privacy: .public)"
+            )
+            throw CommunityServiceError.accountDeletionFailed
+        }
+    }
+
     func bootstrapCommunityUser(
         eduID: String,
         displayName: String?,
@@ -3862,6 +3895,10 @@ private nonisolated struct CommunityBootstrapResponse: Decodable, Sendable {
         case isNewUser = "is_new_user"
         case isProfileComplete = "is_profile_complete"
     }
+}
+
+private nonisolated struct CommunityAccountDeletionResponse: Decodable, Sendable {
+    let deleted: Bool
 }
 
 private nonisolated struct CommunityFeedResponse: Decodable, Sendable {

@@ -185,7 +185,12 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     private var bootstrapCampusID: String {
-        ActiveCampusContext.identity?.isCustom == true ? "general" : ActiveCampusContext.descriptor.id.rawValue
+        if ReviewDemoMode.isEnabled {
+            return ReviewDemoDataSeeder.campusID
+        }
+        return ActiveCampusContext.identity?.isCustom == true
+            ? "general"
+            : ActiveCampusContext.descriptor.id.rawValue
     }
 
     private func matchesCurrentBootstrap(profile: CommunityProfile, eduID: String, campusID: String) -> Bool {
@@ -197,6 +202,18 @@ final class CommunitySessionManager: ObservableObject {
     func signOut() async {
         if let client = LeafySupabase.shared.client {
             try? await client.auth.signOut()
+        }
+
+        profile = nil
+        bootstrapError = nil
+    }
+
+    func deleteCurrentAccount() async throws {
+        cancelInFlightWork()
+        try await service.deleteCurrentAccount()
+
+        if let client = LeafySupabase.shared.client {
+            try? await client.auth.signOut(scope: .local)
         }
 
         profile = nil

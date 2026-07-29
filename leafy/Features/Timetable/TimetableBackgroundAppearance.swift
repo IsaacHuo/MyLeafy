@@ -253,6 +253,13 @@ enum TimetableBackgroundStore {
         try removeBackgroundFile(named: filename)
     }
 
+    static func deleteAllBackgroundFiles() throws {
+        guard FileManager.default.fileExists(atPath: directoryURL.path(percentEncoded: false)) else {
+            return
+        }
+        try FileManager.default.removeItem(at: directoryURL)
+    }
+
     static func serialize(hexes: [String]) -> String {
         hexes.joined(separator: ",")
     }

@@ -34,6 +34,7 @@ Community security direction:
 - Community share-card JPEGs are generated locally and never uploaded by the card flow. Draft content enters the community service only after publish validation succeeds and the post is enqueued.
 - `posts.status = pending_review` is an upload/publication exception, never a normal editorial queue. Polls may still use `pending_review` for explicit manual approval or rejection.
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
+- Formal users can permanently delete their MyLeafy account in App. Deletion removes the linked community profile, authored content, private media, the current Supabase Auth user, and local MyLeafy data, but never changes the university's official academic account. Review demo identities are installation-unique, bootstrap into `bjfu`, and cannot enter the account-deletion flow.
 
 MyLeafy AI direction:
 - For the 2.9 build 22 review submission, MyLeafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.

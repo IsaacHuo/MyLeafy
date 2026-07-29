@@ -1079,7 +1079,7 @@ private struct ComprehensiveQualityImagePreviewSheet: View {
     }
 }
 
-private enum ComprehensiveQualityEvidenceFileStore {
+enum ComprehensiveQualityEvidenceFileStore {
     struct StoredFile {
         let localFilename: String
         let contentTypeIdentifier: String
@@ -1123,6 +1123,13 @@ private enum ComprehensiveQualityEvidenceFileStore {
         if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
             try FileManager.default.removeItem(at: url)
         }
+    }
+
+    static func deleteAllFiles() throws {
+        guard FileManager.default.fileExists(atPath: directoryURL.path(percentEncoded: false)) else {
+            return
+        }
+        try FileManager.default.removeItem(at: directoryURL)
     }
 
     private static var directoryURL: URL {

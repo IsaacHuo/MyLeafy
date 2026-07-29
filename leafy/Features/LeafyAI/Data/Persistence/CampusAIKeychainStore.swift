@@ -74,6 +74,17 @@ nonisolated enum CampusAIKeychainStore {
         )
     }
 
+    static func deleteAll() throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw CampusAIKeychainError.unexpectedStatus(status)
+        }
+    }
+
     static func removeLegacyKeysIfNeeded(userDefaults: UserDefaults = .standard) throws {
         try removeLegacyKeysIfNeeded(userDefaults: userDefaults) { account in
             SecItemDelete(baseQuery(account: account) as CFDictionary)

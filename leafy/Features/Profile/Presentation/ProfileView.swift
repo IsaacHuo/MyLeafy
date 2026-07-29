@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import PhotosUI
 import Photos
 import SafariServices
@@ -27,6 +28,10 @@ struct ProfileView: View {
 
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
     @State private var showingLogoutAlert = false
+    @State private var showingDeleteAccountConfirmation = false
+    @State private var showingFinalDeleteAccountConfirmation = false
+    @State private var isDeletingAccount = false
+    @State private var accountDeletionError: String?
     @State private var showingFeedbackSheet = false
     @State private var feedbackInitialIssueType = "问题反馈"
     @State private var feedbackInitialBody = ""
@@ -101,6 +106,37 @@ struct ProfileView: View {
             } message: {
                 Text("退出后需重新登录，本地缓存的课表和成绩数据将保留。")
             }
+            .confirmationDialog(
+                "删除 MyLeafy 账户？",
+                isPresented: $showingDeleteAccountConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("继续删除", role: .destructive) {
+                    showingFinalDeleteAccountConfirmation = true
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("这会永久删除社区资料、帖子、评论、互动和私有媒体，并清除当前设备上的课表、成绩、草稿、学习资料和其他 MyLeafy 数据。此操作不会删除或修改北京林业大学官方教务账户。")
+            }
+            .alert("最终确认删除？", isPresented: $showingFinalDeleteAccountConfirmation) {
+                Button("永久删除账户", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("删除后无法恢复。完成后 App 会清除本机数据并返回登录页。")
+            }
+            .alert("账户删除失败", isPresented: Binding(
+                get: { accountDeletionError != nil },
+                set: { if !$0 { accountDeletionError = nil } }
+            )) {
+                Button("重试", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text(accountDeletionError ?? "")
+            }
             .alert("检查更新", isPresented: Binding(
                 get: { updateCheckMessage != nil },
                 set: { if !$0 { updateCheckMessage = nil } }
@@ -152,6 +188,12 @@ struct ProfileView: View {
 
             Section {
                 logoutButton
+
+                if !AppAccountDeletionPolicy.canDelete(isReviewDemoMode: ReviewDemoMode.isEnabled) {
+                    demoAccountDeletionNotice
+                } else {
+                    deleteAccountButton
+                }
             }
             .listRowBackground(AppTheme.cardBackground)
         }
@@ -291,6 +333,64 @@ struct ProfileView: View {
                 .leafyTitle3()
                 .foregroundStyle(AppTheme.danger)
                 .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var deleteAccountButton: some View {
+        Button(role: .destructive) {
+            showingDeleteAccountConfirmation = true
+        } label: {
+            HStack {
+                Text(isDeletingAccount ? "正在删除账户…" : "删除 MyLeafy 账户")
+                    .leafyTitle3()
+                Spacer()
+                if isDeletingAccount {
+                    ProgressView()
+                }
+            }
+            .foregroundStyle(AppTheme.danger)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .disabled(isDeletingAccount)
+        .accessibilityHint("永久删除社区账户和当前设备上的 MyLeafy 数据")
+    }
+
+    private var demoAccountDeletionNotice: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("演示账户不可删除")
+                .leafyBody()
+                .foregroundStyle(AppTheme.secondaryText)
+            Text("退出演示模式不会影响正式用户的账户与数据。")
+                .microCaption()
+                .foregroundStyle(AppTheme.tertiaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    @MainActor
+    private func deleteAccount() async {
+        guard AppAccountDeletionPolicy.canDelete(isReviewDemoMode: ReviewDemoMode.isEnabled),
+              !isDeletingAccount else {
+            return
+        }
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            let localCleanupError = try await AppAccountDeletionCoordinator.delete {
+                try await sessionManager.deleteCurrentAccount()
+            } locally: {
+                try AppSessionResetter.deleteAllUserData(modelContext: modelContext)
+            }
+            if let localCleanupError {
+                CommunityDiagnostics.log.error(
+                    "Remote account deletion succeeded but local cleanup failed: \(localCleanupError.localizedDescription, privacy: .public)"
+                )
+                AppSessionResetter.returnToLogin()
+            }
+        } catch {
+            accountDeletionError = error.localizedDescription
         }
     }
 
@@ -1323,7 +1423,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             detail: "社区数据与主动发布内容",
             intro: "\(AppBrand.displayName) 社区服务与北林教务系统相互独立。学校身份用于确认校园归属，社区资料用于展示、互动、通知和安全处理。",
             rows: [
-                ManualInfo(title: "社区服务保存的内容", body: "昵称、头像、学院、年级、帖子、评论、点赞、收藏、通知、举报、反馈、评教和主动发布的共享课表数据会保存到 \(AppBrand.displayName) 社区服务。"),
+                ManualInfo(title: "社区服务保存的内容", body: "昵称、头像、学院、年级、帖子、评论、点赞、收藏、通知、举报、反馈、评教和主动发布的共享课表数据会保存到 \(AppBrand.displayName) 社区服务。正式账户可在“我的”底部直接发起永久删除。"),
                 ManualInfo(title: "草稿和图文卡片", body: "普通帖子草稿按社区账号保存在本机，仅在原账号登录后显示。图文卡片也保存在本机。帖子通过发布校验并进入发布队列后，内容才会提交到社区服务。"),
                 ManualInfo(title: "帖子图片和附件", body: "用户选择的帖子图片及 PDF、Excel、Word 或 Markdown 附件存入 Supabase 私有存储，并通过短期签名链接访问。附件会校验类型和文件结构，但不提供病毒扫描。删帖后媒体通常保留 30 天；存在未解决举报或后台隐藏时暂停清理。"),
                 ManualInfo(title: "保留在本机的内容", body: "成绩、考试安排、课程备注、提醒、收藏、自定日程、学习资料文件、学习空间、任务、专注记录和体测记录不会因进入社区自动上传。"),
@@ -1334,7 +1434,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             steps: [
                 ManualStep(title: "发布前检查", body: "提交帖子、评论、评分或共享课表前，请确认内容不含个人隐私、他人隐私或其他不宜公开的信息。"),
                 ManualStep(title: "举报问题", body: "发现不当内容时，请通过举报入口说明问题类型和位置。"),
-                ManualStep(title: "撤销或删除", body: "共享课表权限可在对应入口撤销；帖子、评论或资料问题可通过反馈说明。")
+                ManualStep(title: "撤销或删除", body: "共享课表权限可在对应入口撤销；正式账户可在“我的”底部删除 MyLeafy 账户及关联线上内容。演示账户不可删除。")
             ]
         ),
         ManualChapter(
@@ -1347,7 +1447,7 @@ private struct LeafyGuideAndDataSecurityView: View {
                 ManualInfo(title: "学校教务数据", body: "课表、成绩、考试、教学计划和培养方案等个人教务数据优先保存在本机，供离线查看。学校教务系统仍是正式数据来源。"),
                 ManualInfo(title: "本机私有数据", body: "学习资料、简历、社区帖子草稿、图文卡片、课程备注、提醒、学习空间、任务、专注记录、体测记录和收藏保存在 App 的本机空间。卸载 App、清除缓存或更换设备前，请按需导出。"),
                 ManualInfo(title: "社区服务数据", body: "主动参与社区、反馈、评教或共享课表时，相关内容会进入 \(AppBrand.displayName) 社区服务，用于展示、通知、审核、反馈处理和社区安全。"),
-                ManualInfo(title: "退出登录与清除缓存", body: "退出登录会清理当前学校会话和社区会话；清除缓存还会删除本机保存的数据。仅需重新认证时无需清除缓存。"),
+                ManualInfo(title: "退出登录、清除缓存与删除账户", body: "退出登录只结束当前会话并保留本机缓存；清除本地缓存会删除当前设备保存的数据；删除 MyLeafy 账户还会永久删除社区账户与关联线上内容。以上操作都不会删除或修改北京林业大学官方教务账户。"),
                 ManualInfo(title: "设备权限", body: "相册、文件和通知权限仅在对应功能中使用。导入资料保存在 App 私有目录，通知用于课程和本机提醒。拒绝权限只影响对应功能。")
             ],
             steps: [

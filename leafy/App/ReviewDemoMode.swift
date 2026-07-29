@@ -16,10 +16,16 @@ enum ReviewDemoMode {
 
 enum ReviewDemoDataSeeder {
     private static let seededKey = "reviewDemoMode.seeded"
+    private static let installationIDKey = "reviewDemoMode.installationID"
     private static let courseBackupKey = "reviewDemoMode.backup.courses"
     private static let gradeBackupKey = "reviewDemoMode.backup.grades"
     private static let defaultsBackupKey = "reviewDemoMode.backup.defaults"
-    private static let demoEduID = "review-demo"
+
+    static var demoEduID: String {
+        demoEduID(userDefaults: .standard)
+    }
+
+    static let campusID = CampusID.bjfu.rawValue
 
     static var displayName: String {
         "\(AppBrand.displayName) 审核演示"
@@ -64,6 +70,18 @@ enum ReviewDemoDataSeeder {
 
     static func refreshSchoolCaches() {
         seedSchoolCaches()
+    }
+
+    static func demoEduID(userDefaults: UserDefaults) -> String {
+        if let stored = userDefaults.string(forKey: installationIDKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           UUID(uuidString: stored) != nil {
+            return "review-demo-\(stored.lowercased())"
+        }
+
+        let installationID = UUID().uuidString
+        userDefaults.set(installationID, forKey: installationIDKey)
+        return "review-demo-\(installationID.lowercased())"
     }
 
     static func emptyClassrooms(for date: Date, start: Int, end: Int) -> [EmptyClassroom] {

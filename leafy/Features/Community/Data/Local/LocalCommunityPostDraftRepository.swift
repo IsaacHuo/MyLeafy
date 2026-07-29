@@ -228,6 +228,18 @@ final class LocalCommunityPostDraftRepository: CommunityPostDraftRepository {
         }
     }
 
+    func deleteAllDraftData() throws {
+        let versionedRoot = rootDirectory.deletingLastPathComponent()
+        guard fileManager.fileExists(atPath: versionedRoot.path) else { return }
+        do {
+            try fileManager.removeItem(at: versionedRoot)
+            NotificationCenter.default.post(name: .communityPostDraftsDidChange, object: nil)
+        } catch {
+            logger.error("Delete all community draft data failed")
+            throw CommunityPostDraftError.storageFailure(error.localizedDescription)
+        }
+    }
+
     func thumbnailData(
         draftID: UUID,
         ownerProfileID: UUID,

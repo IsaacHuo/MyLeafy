@@ -757,6 +757,10 @@ struct LoginView: View {
         ReviewDemoDataSeeder.enter(using: modelContext)
         schoolNetworkManager.isLoggedIn = true
         isEnteringDemo = false
+
+        Task { @MainActor in
+            await CommunitySessionManager.shared.bootstrapCommunityUser(force: true)
+        }
     }
 }
 

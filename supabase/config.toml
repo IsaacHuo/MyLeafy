@@ -53,6 +53,9 @@ deno_version = 2
 [functions.community-bootstrap-user]
 verify_jwt = false
 
+[functions.community-delete-account]
+verify_jwt = false
+
 [functions.community-feed]
 verify_jwt = false
 
