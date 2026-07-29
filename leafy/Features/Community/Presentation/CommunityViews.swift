@@ -557,6 +557,7 @@ struct RealCommunitySectionView: View {
     @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var operationAlert: LeafyOperationAlert?
     @State private var bannerRefreshID = UUID()
+    @State private var isBannerVisible = false
 
     private var feedQuery: CommunityFeedQuery {
         if isShowingHotPosts {
@@ -596,15 +597,25 @@ struct RealCommunitySectionView: View {
                         }
                         .frame(height: 0)
 
-                        LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
                             CommunityBannerSlot(
                                 refreshID: bannerRefreshID,
-                                campusID: ActiveCampusContext.descriptor.id.rawValue
+                                campusID: ActiveCampusContext.descriptor.id.rawValue,
+                                isVisible: $isBannerVisible
                             )
                             if !publishCoordinator.visibleTasks.isEmpty {
                                 CommunityPublishTaskStrip(tasks: publishCoordinator.visibleTasks)
+                                    .padding(.top, isBannerVisible ? AppSpacing.card : 0)
                             }
-                            feedContent
+                            VStack(alignment: .leading, spacing: AppSpacing.card) {
+                                feedContent
+                            }
+                            .padding(
+                                .top,
+                                isBannerVisible || !publishCoordinator.visibleTasks.isEmpty
+                                    ? AppSpacing.card
+                                    : 0
+                            )
                         }
                         .padding(.top, topContentInset + 10 * leafyControlScale)
                         .padding(.bottom, 40)

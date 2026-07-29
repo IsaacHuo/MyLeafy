@@ -39,6 +39,7 @@ struct CommunityBannerSlot: View {
 
     let refreshID: UUID
     let campusID: String
+    @Binding var isVisible: Bool
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -57,6 +58,11 @@ struct CommunityBannerSlot: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.easeOut(duration: 0.2), value: viewModel.banner?.dismissalKey)
+        .onChange(of: viewModel.banner?.dismissalKey, initial: true) { _, dismissalKey in
+            withAnimation(.easeOut(duration: 0.2)) {
+                isVisible = dismissalKey != nil
+            }
+        }
         .task(id: CommunityBannerLoadID(refreshID: refreshID, campusID: campusID)) {
             await viewModel.load(campusID: campusID)
         }
