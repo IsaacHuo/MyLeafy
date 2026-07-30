@@ -1002,6 +1002,7 @@ final class ComprehensiveQualityEvidenceDocument {
     }
 }
 
+// Kept only so existing stores containing historical AI data remain readable.
 @Model
 final class CampusAIConversation {
     var id: UUID

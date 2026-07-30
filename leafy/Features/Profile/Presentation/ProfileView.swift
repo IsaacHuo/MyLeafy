@@ -1376,7 +1376,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "产品用途", body: "北林的教务和校园服务分布在多个系统。\(AppBrand.displayName) 集中提供常用入口，并保留最近一次成功同步的数据供离线查看。"),
                 ManualInfo(title: "与学校系统的关系", body: "\(AppBrand.displayName) 是第三方校园应用，不属于北京林业大学官方教务系统。登录、验证码、校园网、VPN 和访问权限均受学校系统限制。成绩、培养方案和考试安排等正式结果以学校系统为准。"),
-                ManualInfo(title: "主要入口", body: "“课表”显示当天和当前周安排；“社区”用于同学交流、公告和反馈；“校园”提供成绩、考试、教学培养、空闲教室、校历和评教；“我的”用于管理资料、同步、个性化和安全设置。MyLeafy AI 当前不提供公开入口。"),
+                ManualInfo(title: "主要入口", body: "“课表”显示当天和当前周安排；“社区”用于同学交流、公告和反馈；“校园”提供成绩、考试、教学培养、空闲教室、校历和评教；“我的”用于管理资料、同步、个性化和安全设置。"),
                 ManualInfo(title: "需要同步的情况", body: "选课、调课、成绩发布或考试安排更新后，可连接能够访问北林教务的网络重新同步。同步失败不会删除最近一次成功缓存。")
             ],
             steps: [
