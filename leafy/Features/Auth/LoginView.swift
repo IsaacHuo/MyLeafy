@@ -97,7 +97,7 @@ struct LoginView: View {
 
                         if !isCustomCampusSelected {
                             demoModeButton
-                                .frame(maxWidth: 360)
+                                .frame(maxWidth: 360, minHeight: scaledButtonHeight)
                         }
 
                         if let captchaLoadMessage {
@@ -385,22 +385,63 @@ struct LoginView: View {
 
     @ViewBuilder
     private var demoModeButton: some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            Button {
+                enterDemoMode()
+            } label: {
+                HStack(spacing: 10) {
+                    if isEnteringDemo {
+                        ProgressView()
+                    }
+
+                    Text(L10n.text("Demo Mode", language: leafyLanguage))
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(AppTheme.accent)
+            .disabled(isEnteringDemo)
+            .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
+        } else {
+            Button {
+                enterDemoMode()
+            } label: {
+                HStack(spacing: 10) {
+                    if isEnteringDemo {
+                        ProgressView()
+                    }
+
+                    Text(L10n.text("Demo Mode", language: leafyLanguage))
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.accent)
+            .disabled(isEnteringDemo)
+            .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
+        }
+        #else
         Button {
             enterDemoMode()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if isEnteringDemo {
                     ProgressView()
                 }
-                Image(systemName: "sparkles")
+
                 Text(L10n.text("Demo Mode", language: leafyLanguage))
                     .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.borderedProminent)
         .tint(AppTheme.accent)
         .disabled(isEnteringDemo)
         .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
+        #endif
     }
 
     @ViewBuilder
