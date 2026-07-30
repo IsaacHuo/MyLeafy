@@ -393,14 +393,14 @@ struct LoginView: View {
                     ProgressView()
                 }
                 Image(systemName: "sparkles")
-                Text(L10n.text("进入演示模式", language: leafyLanguage))
+                Text(L10n.text("Demo Mode", language: leafyLanguage))
                     .frame(maxWidth: .infinity)
             }
         }
         .buttonStyle(.bordered)
         .tint(AppTheme.accent)
         .disabled(isEnteringDemo)
-        .accessibilityLabel(L10n.text("进入演示模式", language: leafyLanguage))
+        .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
     }
 
     @ViewBuilder
