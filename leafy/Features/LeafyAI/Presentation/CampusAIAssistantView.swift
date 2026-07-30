@@ -1,0 +1,1236 @@
+import SwiftData
+import SwiftUI
+
+nonisolated enum CampusAINewConversationPolicy {
+    static func canStartNewConversation(messageCount: Int, isSending: Bool) -> Bool {
+        messageCount > 0 && !isSending
+    }
+}
+
+struct CampusAIAssistantView: View {
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var appNavigation: AppNavigationCoordinator
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @AppStorage(Self.experimentalNoticeAcknowledgedKey) private var experimentalNoticeAcknowledged = false
+    @FocusState private var isComposerFocused: Bool
+    @Query(sort: \CampusAIConversation.updatedAt, order: .reverse) private var conversations: [CampusAIConversation]
+    @Query(sort: \CampusAIMessage.createdAt, order: .forward) private var messages: [CampusAIMessage]
+    @Query(sort: \CampusAIActionRecord.createdAt, order: .forward) private var actionRecords: [CampusAIActionRecord]
+
+    var service = CampusAIService()
+
+    @State private var selectedConversationID: UUID?
+    @State private var draftText = ""
+    @State private var outputMode: CampusAIOutputMode = .automatic
+    @State private var chatSession = CampusAIChatSession()
+    @State private var pendingRegenerationUserMessageID: UUID?
+    @State private var editingUserMessageID: UUID?
+    @State private var pendingRewindAssistantMessageID: UUID?
+    @State private var discardedStreamMessageIDs: Set<UUID> = []
+    @State private var userSettings = CampusAISettingsStore.load()
+    @State private var activeSheet: CampusAISheetDestination?
+    @State private var activeAlert: CampusAIAlert?
+    @State private var operationAlert: LeafyOperationAlert?
+    @State private var visibleSuggestionPrompts = Self.randomSuggestionPrompts()
+    @State private var configuredProviderIDs: Set<CampusAIProviderID> = []
+    @State private var artifactCompletionSignal = 0
+    @StateObject private var subscriptionStore = CampusAISubscriptionStore()
+
+    private var hasAPIKey: Bool {
+        configuredProviderIDs.contains(userSettings.selectedProviderID)
+    }
+
+    private var canUseCurrentService: Bool {
+        userSettings.serviceMode == .leafyManaged || hasAPIKey
+    }
+
+    private var isSending: Bool { chatSession.isSending }
+
+    private var selectedConversation: CampusAIConversation? {
+        if let selectedConversationID,
+           let selected = conversations.first(where: { $0.id == selectedConversationID }) {
+            return selected
+        }
+        return conversations.first
+    }
+
+    private var selectedConversationKey: String? {
+        selectedConversation?.id.uuidString
+    }
+
+    private var selectedMessages: [CampusAIMessage] {
+        guard let key = selectedConversationKey else { return [] }
+        return messages.filter { $0.conversationID == key }
+    }
+
+    var body: some View {
+        let projection = CampusAIConversationProjection(
+            selectedConversationID: selectedConversationID,
+            conversations: conversations,
+            messages: messages,
+            actionRecords: actionRecords
+        )
+
+        assistantNavigation(projection: projection)
+        .onAppear {
+            selectInitialConversationIfNeeded()
+            presentExperimentalNoticeIfNeeded()
+            refreshConfiguredProviders()
+            Task { await subscriptionStore.refresh() }
+            pruneOrphanedDeliverableArtifacts()
+            markInterruptedResearchIfNeeded()
+        }
+        .onChange(of: conversations.map(\.id)) { _, _ in
+            selectInitialConversationIfNeeded()
+        }
+        .sheet(item: $activeSheet, onDismiss: handleSheetDismissal) { destination in
+            switch destination {
+            case .history:
+                CampusAIHistorySheet(
+                    conversations: conversations,
+                    selectedConversationID: projection.conversation?.id,
+                    selectConversation: selectConversationFromHistory,
+                    deleteConversation: deleteConversation,
+                    clearHistory: clearAllHistory
+                )
+                .presentationDetents([.large])
+            case .settings:
+                CampusAISettingsView(
+                    settings: $userSettings,
+                    subscriptionStore: subscriptionStore,
+                    hasHistory: !conversations.isEmpty,
+                    clearHistory: clearAllHistory
+                )
+            case .subscription:
+                CampusAISubscriptionView(store: subscriptionStore) {
+                    userSettings.serviceMode = .leafyManaged
+                    _ = CampusAISettingsStore.save(userSettings)
+                }
+            case .apiKey:
+                NavigationStack {
+                    CampusAIAPIKeySetupView(
+                        settings: $userSettings,
+                        focusesOnAppear: true,
+                        onAPIKeyChanged: refreshConfiguredProviders
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("取消") { activeSheet = nil }
+                        }
+                    }
+                }
+            case .actionEditor(let presentation):
+                CampusAIActionEditorSheet(presentation: presentation) { draft in
+                    await confirmActionEditor(presentation, draft: draft)
+                }
+            }
+        }
+        .alert(item: $activeAlert) { alert in
+            switch alert {
+            case .experimentalNotice:
+                return Alert(
+                    title: Text("MyLeafy AI 仍在实验阶段"),
+                    message: Text("AI 问答功能还在测试中，回复可能会有错误、遗漏或过时内容。涉及课程、考试、成绩、医疗、手续等事项，请以学校官方系统和最新通知为准。"),
+                    dismissButton: .default(Text("我知道了")) {
+                        experimentalNoticeAcknowledged = true
+                    }
+                )
+            }
+        }
+        .leafyOperationAlert($operationAlert)
+        .confirmationDialog(
+            "回到这一轮问答之前？",
+            isPresented: Binding(
+                get: { pendingRewindAssistantMessageID != nil },
+                set: { if !$0 { pendingRewindAssistantMessageID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("删除这一轮及之后内容", role: .destructive) {
+                guard let messageID = pendingRewindAssistantMessageID,
+                      let message = messages.first(where: { $0.id == messageID })
+                else {
+                    pendingRewindAssistantMessageID = nil
+                    return
+                }
+                pendingRewindAssistantMessageID = nil
+                rewindConversation(from: message)
+            }
+            Button("取消", role: .cancel) {
+                pendingRewindAssistantMessageID = nil
+            }
+        } message: {
+            Text("这会删除所选问答以及它之后的消息、动作和卡片，且无法撤销。")
+        }
+        .sensoryFeedback(.success, trigger: artifactCompletionSignal)
+    }
+
+    private func assistantNavigation(projection: CampusAIConversationProjection) -> some View {
+        NavigationStack {
+            conversationScroll(projection: projection)
+                .background(AppTheme.cardElevated.ignoresSafeArea())
+                .toolbar(.hidden, for: .navigationBar)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    CampusAIChatTopBar(
+                        openHistory: openHistory,
+                        openSettings: openSettings,
+                        selectedModelID: userSettings.selectedModelID,
+                        allowsModelSelection: userSettings.serviceMode == .ownAPIKey,
+                        isModelSelectionDisabled: isSending,
+                        isNewConversationDisabled: isNewConversationDisabled(
+                            messageCount: projection.messages.count
+                        ),
+                        selectModel: selectModel,
+                        startNewConversation: startNewConversation
+                    )
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    CampusAIComposerBar(
+                        draftText: $draftText,
+                        outputMode: $outputMode,
+                        isFocused: $isComposerFocused,
+                        isSending: isSending,
+                        canSend: canSend,
+                        canUseService: canUseCurrentService,
+                        isEditingMessage: editingUserMessageID != nil,
+                        configureAPIKey: openAPIKeySetup,
+                        cancelEditing: cancelEditingMessage,
+                        submit: submitDraft,
+                        cancelStreaming: cancelStreaming
+                    )
+                }
+        }
+    }
+
+    private func conversationScroll(projection: CampusAIConversationProjection) -> some View {
+        let projectedMessages = projection.messages
+
+        return ScrollViewReader { proxy in
+            ScrollView {
+                if projectedMessages.isEmpty {
+                    CampusAIEmptyConversationPanel(
+                        prompts: visibleSuggestionPrompts,
+                        canUseService: canUseCurrentService,
+                        quotaText: emptyStateQuotaText,
+                        openSubscription: openSubscription,
+                        configureAPIKey: openAPIKeySetup,
+                        selectPrompt: { prompt in
+                            draftText = prompt
+                            isComposerFocused = true
+                        }
+                    )
+                    .leafyAdaptiveContentWidth(maxWidth: 820, horizontalPadding: AppSpacing.page)
+                    .containerRelativeFrame(.vertical, alignment: .center)
+                    .padding(.vertical, AppSpacing.card)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                        ForEach(projectedMessages) { message in
+                            CampusAIMessageRow(
+                                message: message,
+                                actions: projection.actionRecords(for: message),
+                                displayText: chatSession.displayText(for: message.id),
+                                isStreaming: isSending
+                                    && projectedMessages.last?.id == message.id
+                                    && message.roleRawValue == CampusAIMessageRole.assistant.rawValue,
+                                interactionsDisabled: isSending,
+                                executeAction: { action in
+                                    Task {
+                                        await executeActionRecord(action)
+                                    }
+                                },
+                                cancelAction: cancelActionRecord,
+                                edit: {
+                                    beginEditing(message)
+                                },
+                                regenerate: {
+                                    regenerateResponse(for: message)
+                                },
+                                rewind: {
+                                    requestRewind(from: message)
+                                }
+                            )
+                                .transition(.opacity)
+                                .id(message.id)
+                        }
+                        if isSending, projectedMessages.last?.roleRawValue == CampusAIMessageRole.user.rawValue {
+                            CampusAITypingRow()
+                                .id("campus-ai-typing")
+                        }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("campus-ai-bottom")
+                    }
+                    .leafyAdaptiveContentWidth(maxWidth: 820, horizontalPadding: AppSpacing.page)
+                    .padding(.top, AppSpacing.card)
+                    .padding(.bottom, AppSpacing.card)
+                    .animation(
+                        accessibilityReduceMotion ? nil : .easeOut(duration: 0.18),
+                        value: projectedMessages.map(\.id)
+                    )
+                }
+            }
+            .campusAIKeyboardDismissBehavior()
+            .onChange(of: projectedMessages.map(\.id)) { _, _ in
+                scrollToBottom(proxy)
+            }
+            .onChange(of: projectedMessages.map(\.text)) { _, _ in
+                scrollToBottom(proxy)
+            }
+            .onChange(of: projectedMessages.map(\.agentMetadataJSON)) { _, _ in
+                scrollToBottom(proxy)
+            }
+            .onChange(of: chatSession.streamingText) { _, _ in
+                scrollToBottom(proxy)
+            }
+            .onChange(of: isSending) { _, _ in
+                scrollToBottom(proxy)
+            }
+            .onChange(of: selectedConversationID) { _, _ in
+                scrollToBottom(proxy, animated: false)
+            }
+        }
+    }
+
+    private var canSend: Bool {
+        canUseCurrentService && !isSending && !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func isNewConversationDisabled(messageCount: Int) -> Bool {
+        !CampusAINewConversationPolicy.canStartNewConversation(
+            messageCount: messageCount,
+            isSending: isSending
+        )
+    }
+
+    private var emptyStateQuotaText: String {
+        guard userSettings.serviceMode == .leafyManaged else { return "正在使用自备 DeepSeek API Key" }
+        if let quota = subscriptionStore.quota {
+            if quota.planSource == "subscription" {
+                return "订阅额度：本周期 \(quota.periodRemaining ?? quota.remaining)/\(quota.periodLimit ?? 120) · 今日 \(quota.dailyRemaining)/\(quota.dailyLimit)"
+            }
+            return "今日免费剩余 \(quota.dailyRemaining)/\(quota.dailyLimit) · 查看订阅"
+        }
+        return "每日免费 10 次 · 查看订阅"
+    }
+
+    private static let suggestionPrompts = [
+        "查查北林最新保研政策",
+        "整理本周课程复习表",
+        "制定期末七天复习计划",
+        "比较保研和考研路线",
+        "列出今天三件要事",
+        "规划明天的学习时间",
+        "把会议记录变成清单",
+        "整理考试日期和地点",
+        "查找北林期末安排",
+        "总结这篇文章的重点",
+        "解释什么是线性回归",
+        "用例子讲清概率分布",
+        "优化这段自我介绍",
+        "润色这封申请邮件",
+        "列一份面试准备清单",
+        "比较两款电脑的差异",
+        "制定每月存钱计划",
+        "安排周末北京一日游",
+        "生成读书笔记框架",
+        "拆解这个项目的步骤"
+    ]
+
+    private static func randomSuggestionPrompts() -> [String] {
+        Array(suggestionPrompts.shuffled().prefix(3))
+    }
+
+    private static let experimentalNoticeAcknowledgedKey = "campusAI.experimentalNoticeAcknowledged.v1"
+
+    private func openHistory() {
+        isComposerFocused = false
+        activeSheet = .history
+    }
+
+    private func selectConversationFromHistory(_ conversation: CampusAIConversation) {
+        cancelEditingMessage()
+        selectedConversationID = conversation.id
+    }
+
+    private func openSettings() {
+        isComposerFocused = false
+        activeSheet = .settings
+    }
+
+    private func selectModel(_ modelID: CampusAIModelID) {
+        guard !isSending, modelID != userSettings.selectedModelID else { return }
+        userSettings.selectedModelID = modelID
+        guard CampusAISettingsStore.save(userSettings) else {
+            operationAlert = .failure("模型设置保存失败，请重试。")
+            return
+        }
+    }
+
+    private func selectInitialConversationIfNeeded() {
+        if let selectedConversationID,
+           conversations.contains(where: { $0.id == selectedConversationID }) {
+            return
+        }
+        selectedConversationID = conversations.first?.id
+    }
+
+    private func startNewConversation() {
+        guard !isNewConversationDisabled(messageCount: selectedMessages.count) else { return }
+        cancelEditingMessage()
+        let conversation = CampusAIConversation()
+        modelContext.insert(conversation)
+        selectedConversationID = conversation.id
+        visibleSuggestionPrompts = Self.randomSuggestionPrompts()
+        persistModelContext(operation: "conversation.create")
+        if userSettings.serviceMode == .ownAPIKey && !hasAPIKey {
+            openAPIKeySetup()
+        }
+    }
+
+    private func presentExperimentalNoticeIfNeeded() {
+        guard !experimentalNoticeAcknowledged else { return }
+        activeAlert = .experimentalNotice
+    }
+
+    private func refreshConfiguredProviders() {
+        configuredProviderIDs = CampusAIKeychainStore.configuredProviderIDs()
+    }
+
+    private func markInterruptedResearchIfNeeded() {
+        guard !chatSession.isSending else { return }
+        var changed = false
+        for message in messages where message.roleRawValue == CampusAIMessageRole.assistant.rawValue {
+            var metadata = message.agentMetadata
+            let wasRunning = metadata.statusText?.nonEmptyTrimmed != nil
+            let hasNoAnswer = message.text.nonEmptyTrimmed == nil
+            guard wasRunning || hasNoAnswer else { continue }
+            let notice = "> 研究已中断。可以从上一条问题重新运行。"
+            if hasNoAnswer {
+                message.text = notice
+            } else if !message.text.contains("研究已中断") {
+                message.text += "\n\n\(notice)"
+            }
+            metadata.statusText = nil
+            if let data = try? JSONEncoder().encode(metadata),
+               let json = String(data: data, encoding: .utf8) {
+                message.agentMetadataJSON = json
+            }
+            changed = true
+        }
+        if changed {
+            persistModelContext(operation: "message.recover.interrupted", showsAlert: false)
+        }
+    }
+
+    private func openAPIKeySetup() {
+        isComposerFocused = false
+        activeSheet = .apiKey
+    }
+
+    private func openSubscription() {
+        isComposerFocused = false
+        activeSheet = .subscription
+    }
+
+    private func submitDraft() {
+        guard !isSending,
+              !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        chatSession.start { streamRunID in
+            await sendCurrentDraft(streamRunID: streamRunID)
+        }
+    }
+
+    private func cancelStreaming() {
+        chatSession.cancel()
+    }
+
+    private func beginEditing(_ message: CampusAIMessage) {
+        guard !isSending,
+              message.roleRawValue == CampusAIMessageRole.user.rawValue,
+              message.conversationID == selectedConversationKey
+        else { return }
+        editingUserMessageID = message.id
+        pendingRegenerationUserMessageID = nil
+        outputMode.resetToAutomatic()
+        draftText = message.text
+        isComposerFocused = true
+    }
+
+    private func cancelEditingMessage() {
+        guard editingUserMessageID != nil else { return }
+        editingUserMessageID = nil
+        draftText = ""
+        outputMode.resetToAutomatic()
+    }
+
+    @MainActor
+    private func sendCurrentDraft(streamRunID: UUID) async {
+        let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, canUseCurrentService else {
+            if userSettings.serviceMode == .ownAPIKey && !hasAPIKey { openAPIKeySetup() }
+            return
+        }
+        let requestSettings = userSettings.normalizedForLocalRuntime
+        let requestOutputMode = outputMode
+        let editingUserMessage = editingUserMessageID.flatMap { messageID in
+            messages.first(where: { $0.id == messageID && $0.roleRawValue == CampusAIMessageRole.user.rawValue })
+        }
+        let regenerationUserMessage = pendingRegenerationUserMessageID.flatMap { messageID in
+            messages.first(where: { $0.id == messageID && $0.roleRawValue == CampusAIMessageRole.user.rawValue })
+        }
+        let reusableUserMessage = editingUserMessage ?? regenerationUserMessage
+        if let editingUserMessage {
+            guard truncateConversation(after: editingUserMessage, operation: "message.edit.prepare") else { return }
+            editingUserMessage.text = text
+        }
+        editingUserMessageID = nil
+        pendingRegenerationUserMessageID = nil
+        outputMode.resetToAutomatic()
+
+        let conversation = selectedConversation ?? {
+            let newConversation = CampusAIConversation()
+            modelContext.insert(newConversation)
+            selectedConversationID = newConversation.id
+            return newConversation
+        }()
+
+        let conversationKey = conversation.id.uuidString
+        let context = CampusAIContextBuilder.build(modelContext: modelContext, settings: requestSettings.contextSettings)
+        let userMessage = reusableUserMessage ?? CampusAIMessage(
+            conversationID: conversationKey,
+            roleRawValue: CampusAIMessageRole.user.rawValue,
+            text: text
+        )
+        if reusableUserMessage == nil {
+            modelContext.insert(userMessage)
+        }
+        conversation.updatedAt = Date()
+        if conversation.title == "新的对话" || selectedMessages.first(where: {
+            $0.roleRawValue == CampusAIMessageRole.user.rawValue
+        })?.id == userMessage.id {
+            conversation.title = Self.conversationTitle(from: text)
+        }
+        draftText = ""
+        guard persistModelContext(operation: "message.user.insert") else {
+            return
+        }
+
+        let recentMessages = messages
+            .filter { $0.conversationID == conversationKey && $0.createdAt <= userMessage.createdAt }
+            .suffix(10)
+            .compactMap(CampusAIChatMessage.init(message:))
+        let assistantMessage = CampusAIMessage(
+            conversationID: conversationKey,
+            roleRawValue: CampusAIMessageRole.assistant.rawValue,
+            text: ""
+        )
+        modelContext.insert(assistantMessage)
+        guard persistModelContext(operation: "message.assistant.insert") else {
+            modelContext.delete(assistantMessage)
+            return
+        }
+        chatSession.markStreaming(conversationID: conversation.id, messageID: assistantMessage.id)
+
+        defer {
+            chatSession.finish(runID: streamRunID, messageID: assistantMessage.id)
+            discardedStreamMessageIDs.remove(assistantMessage.id)
+        }
+
+        var streamedAnswer = ""
+        do {
+            var agentMetadata = CampusAIMessageAgentMetadata.empty
+            agentMetadata.statusText = "正在分析问题"
+            persistAgentMetadata(agentMetadata, for: assistantMessage)
+            var lastSaveAt = Date.distantPast
+            for try await event in service.stream(
+                message: text,
+                context: context,
+                recentMessages: Array(recentMessages),
+                settings: requestSettings,
+                outputMode: requestOutputMode
+            ) {
+                try Task.checkCancellation()
+                switch event {
+                case .delta(let delta):
+                    if streamedAnswer.isEmpty, agentMetadata.statusText == "正在分析问题" {
+                        agentMetadata.statusText = "正在生成回答"
+                        persistAgentMetadata(agentMetadata, for: assistantMessage)
+                    }
+                    streamedAnswer = chatSession.append(delta: delta, messageID: assistantMessage.id)
+                    if Date().timeIntervalSince(lastSaveAt) > 0.35 {
+                        assistantMessage.text = streamedAnswer
+                        conversation.updatedAt = Date()
+                        persistModelContext(operation: "message.stream.checkpoint", showsAlert: false)
+                        lastSaveAt = Date()
+                    }
+                case .reasoningDelta:
+                    break
+                case .quota(let quota):
+                    subscriptionStore.applyQuota(quota)
+                case .agentStatus(let status):
+                    let displayStatus = CampusAIAgentPresentation.sanitizedStatusText(status)
+                    chatSession.update(statusText: displayStatus)
+                    agentMetadata.statusText = displayStatus
+                    if status.contains("卡片") {
+                        agentMetadata.artifactState = .generating
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentStep(let step):
+                    if !agentMetadata.agentTrace.contains(where: { $0.id == step.id }) {
+                        agentMetadata.agentTrace.append(step)
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentTool(let tool):
+                    agentMetadata.statusText = CampusAIAgentPresentation.toolStatusText(tool)
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentSearchResults(let results):
+                    for result in results {
+                        if let index = agentMetadata.searchResults.firstIndex(where: { $0.url == result.url }) {
+                            agentMetadata.searchResults[index] = result
+                        } else {
+                            agentMetadata.searchResults.append(result)
+                        }
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .agentCitation(let citation):
+                    if let index = agentMetadata.citations.firstIndex(where: { $0.url == citation.url }) {
+                        agentMetadata.citations[index] = citation
+                    } else {
+                        agentMetadata.citations.append(citation)
+                    }
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                case .done(let response):
+                    if streamedAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       let answer = response.answer.nonEmptyTrimmed {
+                        streamedAnswer = answer
+                    }
+                    assistantMessage.text = streamedAnswer
+                    if let notice = Self.completionNotice(for: response.finishReason),
+                       !assistantMessage.text.contains(notice) {
+                        assistantMessage.text = [
+                            assistantMessage.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "> \(notice)"
+                        ].filter { !$0.isEmpty }.joined(separator: "\n\n")
+                    }
+                    streamedAnswer = assistantMessage.text
+                    if let suggestedTitle = response.suggestedTitle?.nonEmptyTrimmed {
+                        conversation.title = Self.conversationTitle(from: suggestedTitle)
+                    }
+                    if let summary = response.summary?.nonEmptyTrimmed {
+                        conversation.summary = summary
+                    }
+                    agentMetadata.statusText = nil
+                    agentMetadata.citations = response.citations
+                    agentMetadata.searchResults = []
+                    if !response.agentTrace.isEmpty {
+                        agentMetadata.agentTrace = response.agentTrace
+                    }
+                    if !response.deliverables.isEmpty {
+                        agentMetadata.deliverables = response.deliverables
+                    }
+                    agentMetadata.artifactState = response.artifactState
+                    agentMetadata.artifactErrorMessage = response.artifactErrorMessage
+                    persistAgentMetadata(agentMetadata, for: assistantMessage)
+                    if response.artifactState == .ready {
+                        artifactCompletionSignal += 1
+                    }
+                    persistActionRecords(
+                        response.actions,
+                        conversationID: conversationKey,
+                        messageID: assistantMessage.id.uuidString
+                    )
+                case .error(let message):
+                    throw CampusAIServiceError.providerRejected(message)
+                }
+            }
+            assistantMessage.text = streamedAnswer
+            guard assistantMessage.text.nonEmptyTrimmed != nil else {
+                throw CampusAIServiceError.invalidProviderResponse
+            }
+            conversation.contextDigest = contextDigest(context)
+            conversation.updatedAt = Date()
+            persistModelContext(operation: "message.complete")
+        } catch is CancellationError {
+            guard !discardedStreamMessageIDs.contains(assistantMessage.id) else { return }
+            assistantMessage.text = streamedAnswer
+            if assistantMessage.text.nonEmptyTrimmed == nil {
+                assistantMessage.text = "已停止生成。"
+            } else {
+                assistantMessage.text += "\n\n> 已停止生成。"
+            }
+            conversation.updatedAt = Date()
+            persistModelContext(operation: "message.cancel")
+        } catch {
+            assistantMessage.text = streamedAnswer
+            if userSettings.serviceMode == .leafyManaged {
+                await subscriptionStore.refreshQuota()
+            }
+            if assistantMessage.text.nonEmptyTrimmed != nil {
+                assistantMessage.text = [
+                    assistantMessage.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                    "> 生成中断：\(error.localizedDescription)"
+                ].filter { !$0.isEmpty }.joined(separator: "\n\n")
+            } else {
+                assistantMessage.text = "MyLeafy 暂时不可用：\(error.localizedDescription)"
+            }
+            conversation.updatedAt = Date()
+            persistModelContext(operation: "message.failure")
+            if userSettings.serviceMode == .leafyManaged,
+               !subscriptionStore.isPurchased,
+               error.localizedDescription.contains("今日次数已用完") {
+                activeSheet = .subscription
+            } else {
+                operationAlert = .failure(error.localizedDescription)
+            }
+        }
+    }
+
+    private func regenerateResponse(for message: CampusAIMessage) {
+        guard !isSending,
+              message.roleRawValue == CampusAIMessageRole.assistant.rawValue,
+              let index = selectedMessages.firstIndex(where: { $0.id == message.id }),
+              let userMessage = selectedMessages[..<index].last(where: {
+                  $0.roleRawValue == CampusAIMessageRole.user.rawValue
+              })
+        else { return }
+
+        let metadata = message.agentMetadata
+        outputMode = metadata.artifactState == .none && metadata.deliverables.isEmpty ? .automatic : .artifact
+        guard truncateConversation(after: userMessage, operation: "message.regenerate.prepare") else { return }
+
+        pendingRegenerationUserMessageID = userMessage.id
+        draftText = userMessage.text
+        submitDraft()
+    }
+
+    private func requestRewind(from message: CampusAIMessage) {
+        guard !isSending,
+              message.roleRawValue == CampusAIMessageRole.assistant.rawValue,
+              let index = selectedMessages.firstIndex(where: { $0.id == message.id })
+        else { return }
+        if index < selectedMessages.index(before: selectedMessages.endIndex) {
+            pendingRewindAssistantMessageID = message.id
+        } else {
+            rewindConversation(from: message)
+        }
+    }
+
+    private func rewindConversation(from message: CampusAIMessage) {
+        guard !isSending,
+              let index = selectedMessages.firstIndex(where: { $0.id == message.id }),
+              let userMessage = selectedMessages[..<index].last(where: {
+                  $0.roleRawValue == CampusAIMessageRole.user.rawValue
+              })
+        else { return }
+        cancelEditingMessage()
+        _ = truncateConversation(from: userMessage, operation: "message.rewind")
+    }
+
+    @discardableResult
+    private func truncateConversation(after message: CampusAIMessage, operation: String) -> Bool {
+        let removedIDs = Set(CampusAITimelineMutationPlan.removedMessageIDs(
+            orderedMessageIDs: selectedMessages.map(\.id),
+            targetID: message.id,
+            includesTarget: false
+        ))
+        let removed = selectedMessages.filter { removedIDs.contains($0.id) }
+        return deleteMessages(removed, operation: operation)
+    }
+
+    @discardableResult
+    private func truncateConversation(from message: CampusAIMessage, operation: String) -> Bool {
+        let removedIDs = Set(CampusAITimelineMutationPlan.removedMessageIDs(
+            orderedMessageIDs: selectedMessages.map(\.id),
+            targetID: message.id,
+            includesTarget: true
+        ))
+        return deleteMessages(selectedMessages.filter { removedIDs.contains($0.id) }, operation: operation)
+    }
+
+    @discardableResult
+    private func deleteMessages(_ removedMessages: [CampusAIMessage], operation: String) -> Bool {
+        guard let conversation = selectedConversation else { return false }
+        let removedMessageIDs = Set(removedMessages.map { $0.id.uuidString })
+        for action in actionRecords where removedMessageIDs.contains(action.messageID) {
+            modelContext.delete(action)
+        }
+        for message in removedMessages {
+            discardedStreamMessageIDs.insert(message.id)
+            do {
+                try CampusAIDeliverableFileBuilder.removeArtifacts(for: message.id)
+            } catch {
+                CampusAIDiagnostics.failure(error, stage: "artifact.cleanup", requestID: message.id)
+            }
+            modelContext.delete(message)
+        }
+        let remaining = selectedMessages.filter { candidate in
+            !removedMessages.contains(where: { $0.id == candidate.id })
+        }
+        conversation.summary = ""
+        conversation.contextDigest = ""
+        conversation.updatedAt = Date()
+        if remaining.isEmpty {
+            conversation.title = "新的对话"
+        }
+        return persistModelContext(operation: operation)
+    }
+
+    private func deleteConversation(_ conversation: CampusAIConversation) {
+        if editingUserMessageID.flatMap({ id in messages.first(where: { $0.id == id }) })?.conversationID == conversation.id.uuidString {
+            cancelEditingMessage()
+        }
+        let key = conversation.id.uuidString
+        if chatSession.activeConversationID == conversation.id {
+            if let activeStreamMessageID = chatSession.activeMessageID {
+                discardedStreamMessageIDs.insert(activeStreamMessageID)
+            }
+            cancelStreaming()
+        }
+        for action in actionRecords where action.conversationID == key {
+            modelContext.delete(action)
+        }
+        for message in messages where message.conversationID == key {
+            discardedStreamMessageIDs.insert(message.id)
+            do {
+                try CampusAIDeliverableFileBuilder.removeArtifacts(for: message.id)
+            } catch {
+                CampusAIDiagnostics.failure(error, stage: "artifact.cleanup", requestID: message.id)
+            }
+            modelContext.delete(message)
+        }
+        modelContext.delete(conversation)
+        if selectedConversationID == conversation.id {
+            selectedConversationID = conversations.first(where: { $0.id != conversation.id })?.id
+        }
+        persistModelContext(operation: "conversation.delete")
+    }
+
+    private func persistActionRecords(
+        _ drafts: [CampusAIActionDraft],
+        conversationID: String,
+        messageID: String
+    ) {
+        guard !drafts.isEmpty else { return }
+        guard !actionRecords.contains(where: { $0.conversationID == conversationID && $0.messageID == messageID }) else {
+            return
+        }
+        let encoder = JSONEncoder()
+        for draft in CampusAIActionValidation.validated(drafts).prefix(3) {
+            do {
+                let payloadData = try encoder.encode(draft.payload)
+                guard let payloadJSON = String(data: payloadData, encoding: .utf8) else {
+                    throw CampusAIServiceError.invalidProviderResponse
+                }
+                modelContext.insert(
+                    CampusAIActionRecord(
+                        conversationID: conversationID,
+                        messageID: messageID,
+                        kindRawValue: draft.kind.rawValue,
+                        title: draft.title,
+                        detail: draft.detail,
+                        payloadJSON: payloadJSON,
+                        statusRawValue: CampusAIActionStatus.pending.rawValue
+                    )
+                )
+            } catch {
+                CampusAIDiagnostics.persistenceFailure(error, operation: "action.encode")
+                operationAlert = .failure("动作保存失败，请重试生成。")
+                return
+            }
+        }
+    }
+
+    private func persistAgentMetadata(
+        _ metadata: CampusAIMessageAgentMetadata,
+        for message: CampusAIMessage
+    ) {
+        do {
+            let data = try JSONEncoder().encode(metadata)
+            guard let json = String(data: data, encoding: .utf8) else {
+                throw CampusAIServiceError.invalidProviderResponse
+            }
+            message.agentMetadataJSON = json
+            persistModelContext(operation: "message.metadata", showsAlert: false)
+        } catch {
+            CampusAIDiagnostics.persistenceFailure(error, operation: "message.metadata.encode")
+            operationAlert = .failure("卡片状态保存失败，请重试。")
+        }
+    }
+
+    @MainActor
+    private func cancelActionRecord(_ record: CampusAIActionRecord) {
+        guard record.status == .pending else { return }
+        withAnimation(accessibilityReduceMotion ? .easeOut(duration: 0.14) : .easeInOut(duration: 0.2)) {
+            record.statusRawValue = CampusAIActionStatus.cancelled.rawValue
+            record.updatedAt = Date()
+        }
+        persistModelContext(operation: "action.cancel")
+    }
+
+    @MainActor
+    private func executeActionRecord(_ record: CampusAIActionRecord) async {
+        guard record.status == .pending else { return }
+        guard let draft = record.actionDraft,
+              let validated = CampusAIActionValidation.validate(draft)
+        else {
+            markAction(record, status: .failed)
+            operationAlert = .failure("动作内容无效，无法执行。")
+            return
+        }
+
+        do {
+            switch validated.kind {
+            case .openAcademicRoute:
+                try executeOpenAcademicRoute(validated)
+                markAction(record, status: .completed)
+            case .createSchedule:
+                activeSheet = .actionEditor(CampusAIActionEditorPresentation(record: record, draft: validated))
+            case .createCountdown:
+                activeSheet = .actionEditor(CampusAIActionEditorPresentation(record: record, draft: validated))
+            case .createTimetableReminder:
+                activeSheet = .actionEditor(CampusAIActionEditorPresentation(record: record, draft: validated))
+            }
+        } catch {
+            markAction(record, status: .failed)
+            operationAlert = .failure(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func confirmActionEditor(
+        _ presentation: CampusAIActionEditorPresentation,
+        draft: CampusAIActionDraft
+    ) async -> Bool {
+        guard presentation.record.status == .pending else {
+            return false
+        }
+        guard let validated = CampusAIActionValidation.validate(draft) else {
+            operationAlert = .failure("动作内容无效，无法执行。")
+            return false
+        }
+
+        do {
+            switch validated.kind {
+            case .openAcademicRoute:
+                try executeOpenAcademicRoute(validated)
+            case .createSchedule:
+                try await executeCreateSchedule(validated)
+            case .createCountdown:
+                try executeCreateCountdown(validated)
+            case .createTimetableReminder:
+                try await executeCreateTimetableReminder(validated)
+            }
+            markAction(presentation.record, status: .completed)
+            return true
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
+            return false
+        }
+    }
+
+    private func handleSheetDismissal() {
+        refreshConfiguredProviders()
+    }
+
+    private func executeOpenAcademicRoute(_ draft: CampusAIActionDraft) throws {
+        guard let routeID = CampusAIActionValidation.routeID(for: draft) else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        appNavigation.openAcademicDetailRoute(routeID.detailRoute)
+        operationAlert = .success("已打开\(routeID.title)。")
+    }
+
+    private func executeCreateCountdown(_ draft: CampusAIActionDraft) throws {
+        guard let title = draft.payload.countdownTitle?.nonEmptyTrimmed,
+              let targetDate = CampusAIActionValidation.countdownDate(for: draft)
+        else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        var events = CustomScheduleStore.load()
+        events.append(CustomScheduleEvent(title: title, startsAt: targetDate))
+        CustomScheduleStore.save(events)
+        operationAlert = .success("日程已保存：\(title)。")
+    }
+
+    @MainActor
+    private func executeCreateSchedule(_ draft: CampusAIActionDraft) async throws {
+        guard let title = draft.payload.title?.nonEmptyTrimmed,
+              let startsAt = CampusAIActionValidation.scheduleStartDate(for: draft)
+        else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        let endsAt = CampusAIActionValidation.scheduleEndDate(for: draft)
+        let event = CustomScheduleEvent(
+            title: title,
+            startsAt: startsAt,
+            endsAt: endsAt,
+            location: draft.payload.location ?? "",
+            note: draft.payload.note ?? "",
+            minutesBefore: max(0, draft.payload.minutesBefore ?? 0)
+        )
+        var events = CustomScheduleStore.load()
+        events.append(event)
+        events.sort { $0.startsAt < $1.startsAt }
+        CustomScheduleStore.save(events)
+
+        do {
+            _ = try await TimetableNotificationManager.applyReminder(for: event)
+            operationAlert = .success("日程已保存：\(title)。")
+        } catch {
+            operationAlert = .success("日程已保存，但提醒未创建：\(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func executeCreateTimetableReminder(_ draft: CampusAIActionDraft) async throws {
+        guard let week = draft.payload.week,
+              let dayOfWeek = draft.payload.dayOfWeek,
+              let period = draft.payload.period,
+              let title = draft.payload.title?.nonEmptyTrimmed
+        else {
+            throw CampusAIActionExecutionError.invalidPayload
+        }
+        let endPeriod = draft.payload.endPeriod.flatMap { $0 >= period ? $0 : nil }
+        let cellKey = TimetableCellReminder.cellKey(week: week, dayOfWeek: dayOfWeek, period: period)
+        let descriptor = FetchDescriptor<TimetableCellReminder>(
+            predicate: #Predicate { reminder in
+                reminder.cellKey == cellKey
+            }
+        )
+        let existingReminders = try modelContext.fetch(descriptor)
+        let reminder: TimetableCellReminder
+        if let existing = existingReminders.first {
+            TimetableNotificationManager.cancelReminder(for: existing)
+            existing.week = week
+            existing.dayOfWeek = dayOfWeek
+            existing.period = period
+            existing.endPeriod = endPeriod
+            existing.cellKey = cellKey
+            existing.title = title
+            existing.location = TimetableCellReminder.normalizedOptionalText(draft.payload.location ?? "")
+            existing.note = TimetableCellReminder.normalizedOptionalText(draft.payload.note ?? "")
+            existing.startsAt = TimetablePeriodSchedule.startDate(week: week, dayOfWeek: dayOfWeek, period: period)
+            existing.endsAt = TimetablePeriodSchedule.endDate(week: week, dayOfWeek: dayOfWeek, period: endPeriod ?? period)
+            existing.minutesBefore = max(0, draft.payload.minutesBefore ?? 0)
+            existing.updatedAt = Date()
+            reminder = existing
+        } else {
+            let newReminder = TimetableCellReminder(
+                week: week,
+                dayOfWeek: dayOfWeek,
+                period: period,
+                endPeriod: endPeriod,
+                title: title,
+                location: draft.payload.location ?? "",
+                note: draft.payload.note ?? "",
+                startsAt: TimetablePeriodSchedule.startDate(week: week, dayOfWeek: dayOfWeek, period: period),
+                endsAt: TimetablePeriodSchedule.endDate(week: week, dayOfWeek: dayOfWeek, period: endPeriod ?? period),
+                minutesBefore: max(0, draft.payload.minutesBefore ?? 0)
+            )
+            modelContext.insert(newReminder)
+            reminder = newReminder
+        }
+
+        for duplicate in existingReminders.dropFirst() {
+            TimetableNotificationManager.cancelReminder(for: duplicate)
+            modelContext.delete(duplicate)
+        }
+
+        try modelContext.save()
+        do {
+            let scheduled = try await TimetableNotificationManager.applyReminder(for: reminder)
+            operationAlert = .success(
+                scheduled
+                    ? "已创建课表提醒：\(title)。"
+                    : "已创建课表提醒：\(title)。"
+            )
+        } catch {
+            operationAlert = .success("已创建课表提醒：\(title)。通知注册失败，可稍后在系统设置中检查通知权限。")
+        }
+    }
+
+    private func markAction(_ record: CampusAIActionRecord, status: CampusAIActionStatus) {
+        withAnimation(accessibilityReduceMotion ? .easeOut(duration: 0.14) : .spring(response: 0.3, dampingFraction: 0.88)) {
+            record.statusRawValue = status.rawValue
+            record.updatedAt = Date()
+        }
+        persistModelContext(operation: "action.update")
+    }
+
+    private func clearAllHistory() {
+        cancelEditingMessage()
+        if chatSession.isSending || chatSession.activeMessageID != nil {
+            if let activeStreamMessageID = chatSession.activeMessageID {
+                discardedStreamMessageIDs.insert(activeStreamMessageID)
+            }
+            cancelStreaming()
+        }
+        do {
+            try CampusAIDeliverableFileBuilder.removeAllArtifacts()
+        } catch {
+            CampusAIDiagnostics.failure(error, stage: "artifact.cleanup.all")
+            operationAlert = .failure("部分卡片缓存清理失败，聊天记录仍会继续清除。")
+        }
+        for action in actionRecords {
+            modelContext.delete(action)
+        }
+        for message in messages {
+            discardedStreamMessageIDs.insert(message.id)
+            modelContext.delete(message)
+        }
+        for conversation in conversations {
+            modelContext.delete(conversation)
+        }
+        selectedConversationID = nil
+        persistModelContext(operation: "history.clear")
+    }
+
+    private func pruneOrphanedDeliverableArtifacts() {
+        let retainedMessageIDs = Set(messages.map(\.id))
+        Task.detached {
+            do {
+                try CampusAIDeliverableFileBuilder.pruneArtifacts(keeping: retainedMessageIDs)
+            } catch {
+                CampusAIDiagnostics.failure(error, stage: "artifact.prune")
+            }
+        }
+    }
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        guard !selectedMessages.isEmpty else { return }
+        let action = {
+            proxy.scrollTo("campus-ai-bottom", anchor: .bottom)
+        }
+        if animated && !accessibilityReduceMotion {
+            withAnimation(.easeOut(duration: 0.22), action)
+        } else {
+            action()
+        }
+    }
+
+    @discardableResult
+    private func persistModelContext(operation: String, showsAlert: Bool = true) -> Bool {
+        do {
+            try modelContext.save()
+            return true
+        } catch {
+            CampusAIDiagnostics.persistenceFailure(error, operation: operation)
+            if showsAlert {
+                operationAlert = .failure("本机保存失败，请重试。")
+            }
+            return false
+        }
+    }
+
+    private func contextDigest(_ context: CampusAIContextPayload) -> String {
+        [
+            "week:\(context.currentWeek)",
+            "courses:\(context.timetable.allCourses.count)",
+            "grades:\(context.grades.courseCount)",
+            "exams:\(context.exams.count)",
+            "learning:\(context.learningWorkspace.projects.count + context.learningWorkspace.tasks.count)",
+            "medical:\(context.medicalLedger.entries.count)"
+        ].joined(separator: "|")
+    }
+
+    private static func conversationTitle(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 10 else { return trimmed.isEmpty ? "新的对话" : trimmed }
+        return String(trimmed.prefix(9)) + "…"
+    }
+
+    private static func historyTitle(from text: String) -> String {
+        conversationTitle(from: text)
+    }
+
+    private static func completionNotice(for finishReason: String?) -> String? {
+        switch finishReason?.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "length":
+            return "生成到达长度上限，已保留当前内容。"
+        case "content_filter":
+            return "部分内容触发了供应商安全策略，已保留可显示内容。"
+        case "insufficient_system_resource":
+            return "供应商资源暂时不足，已保留当前内容。"
+        default:
+            return nil
+        }
+    }
+
+}
+
+private enum CampusAISheetDestination: Identifiable {
+    case history
+    case settings
+    case apiKey
+    case subscription
+    case actionEditor(CampusAIActionEditorPresentation)
+
+    var id: String {
+        switch self {
+        case .history:
+            return "history"
+        case .settings:
+            return "settings"
+        case .apiKey:
+            return "apiKey"
+        case .subscription:
+            return "subscription"
+        case .actionEditor(let presentation):
+            return "actionEditor-\(presentation.id.uuidString)"
+        }
+    }
+}
+
+private enum CampusAIAlert: Identifiable {
+    case experimentalNotice
+
+    var id: String {
+        switch self {
+        case .experimentalNotice:
+            return "experimentalNotice"
+        }
+    }
+}
+
+private enum CampusAIActionExecutionError: LocalizedError {
+    case invalidPayload
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidPayload:
+            return "动作内容无效，无法执行。"
+        }
+    }
+}
+
+private extension CampusAIChatMessage {
+    init?(message: CampusAIMessage) {
+        guard let role = CampusAIMessageRole(rawValue: message.roleRawValue),
+              let text = message.text.nonEmptyTrimmed
+        else {
+            return nil
+        }
+        self.init(role: role, text: text)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func campusAIKeyboardDismissBehavior() -> some View {
+        #if os(iOS)
+        scrollDismissesKeyboard(.interactively)
+        #else
+        self
+        #endif
+    }
+
+}
+
+private extension String {
+    var nonEmptyTrimmed: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}

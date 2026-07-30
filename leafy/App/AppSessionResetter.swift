@@ -80,8 +80,8 @@ enum AppSessionResetter {
             try LocalCommunityPostDraftRepository.shared.deleteAllDraftData()
         }
         CommunityPostCardGenerator.cleanupStaleRenderedFiles()
-        attempt("历史 AI Keychain") {
-            try LegacyCampusAIDataCleanup.deleteKeychainData()
+        attempt("MyLeafy AI Keychain") {
+            try CampusAIKeychainStore.deleteAll()
         }
 
         SchoolDataCache.clearDiscoverCaches()

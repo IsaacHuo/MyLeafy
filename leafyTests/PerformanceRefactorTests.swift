@@ -3649,6 +3649,76 @@ private func makeCommunityPollOption(
 
 final class PerformanceProjectionTests: XCTestCase {
     @MainActor
+    func testConversationProjectionFiltersOnceAndIndexesActions() {
+        let selectedID = UUID()
+        let otherID = UUID()
+        let selected = CampusAIConversation(id: selectedID, title: "Selected")
+        let other = CampusAIConversation(id: otherID, title: "Other")
+        let firstMessage = CampusAIMessage(
+            conversationID: selectedID.uuidString,
+            roleRawValue: CampusAIMessageRole.user.rawValue,
+            text: "Question"
+        )
+        let secondMessage = CampusAIMessage(
+            conversationID: selectedID.uuidString,
+            roleRawValue: CampusAIMessageRole.assistant.rawValue,
+            text: "Answer"
+        )
+        let unrelatedMessage = CampusAIMessage(
+            conversationID: otherID.uuidString,
+            roleRawValue: CampusAIMessageRole.user.rawValue,
+            text: "Other"
+        )
+        let indexedAction = CampusAIActionRecord(
+            conversationID: selectedID.uuidString,
+            messageID: secondMessage.id.uuidString,
+            kindRawValue: CampusAIActionKind.createCountdown.rawValue,
+            title: "Countdown",
+            detail: "Detail",
+            payloadJSON: "{}",
+            statusRawValue: CampusAIActionStatus.pending.rawValue
+        )
+        let unrelatedAction = CampusAIActionRecord(
+            conversationID: otherID.uuidString,
+            messageID: unrelatedMessage.id.uuidString,
+            kindRawValue: CampusAIActionKind.createCountdown.rawValue,
+            title: "Other",
+            detail: "Detail",
+            payloadJSON: "{}",
+            statusRawValue: CampusAIActionStatus.pending.rawValue
+        )
+
+        let projection = CampusAIConversationProjection(
+            selectedConversationID: selectedID,
+            conversations: [other, selected],
+            messages: [firstMessage, unrelatedMessage, secondMessage],
+            actionRecords: [unrelatedAction, indexedAction]
+        )
+
+        XCTAssertEqual(projection.conversation?.id, selectedID)
+        XCTAssertEqual(projection.messages.map(\.id), [firstMessage.id, secondMessage.id])
+        XCTAssertEqual(projection.actionRecords(for: firstMessage).count, 0)
+        XCTAssertEqual(projection.actionRecords(for: secondMessage).map(\.id), [indexedAction.id])
+    }
+
+    @MainActor
+    func testChatSessionKeepsTransientStreamingTextOutOfPersistentMessage() {
+        let session = CampusAIChatSession()
+        let conversationID = UUID()
+        let messageID = UUID()
+
+        session.markStreaming(conversationID: conversationID, messageID: messageID)
+        XCTAssertEqual(session.append(delta: "Leafy", messageID: messageID), "Leafy")
+        XCTAssertEqual(session.append(delta: " AI", messageID: messageID), "Leafy AI")
+        XCTAssertEqual(session.displayText(for: messageID), "Leafy AI")
+
+        session.cancel()
+        XCTAssertNil(session.displayText(for: messageID))
+        XCTAssertEqual(session.streamingText, "")
+        XCTAssertFalse(session.isSending)
+    }
+
+    @MainActor
     func testRatingCatalogWorkspaceLoadsEachSectionOnceOnDemand() {
         let workspace = RatingCatalogWorkspace()
 
