@@ -423,13 +423,12 @@ private struct AccountDeletionOutcomeAlertModifier: ViewModifier {
     @Binding var outcome: AppAccountDeletionOutcome?
 
     func body(content: Content) -> some View {
-        content.alert(outcome?.title ?? "MyLeafy 账户已删除", isPresented: Binding(
-            get: { outcome != nil },
-            set: { if !$0 { outcome = nil } }
-        )) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text(outcome?.message ?? "")
+        content.alert(item: $outcome) { outcome in
+            Alert(
+                title: Text(outcome.title),
+                message: Text(outcome.message),
+                dismissButton: .cancel(Text("知道了"))
+            )
         }
     }
 }

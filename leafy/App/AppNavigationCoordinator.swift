@@ -15,9 +15,18 @@ enum RootTab: Hashable {
     case profile
 }
 
-enum AppAccountDeletionOutcome: Equatable {
+enum AppAccountDeletionOutcome: Equatable, Identifiable {
     case deleted
     case deletedWithLocalCleanupWarning(String)
+
+    var id: Int {
+        switch self {
+        case .deleted:
+            return 0
+        case .deletedWithLocalCleanupWarning:
+            return 1
+        }
+    }
 
     var title: String {
         switch self {
