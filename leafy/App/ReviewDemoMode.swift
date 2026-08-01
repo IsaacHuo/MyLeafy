@@ -91,6 +91,21 @@ enum ReviewDemoDataSeeder {
         return normalized == "review-demo" || normalized.hasPrefix("review-demo-")
     }
 
+    nonisolated static func isLegacySharedDemoEduID(_ eduID: String?) -> Bool {
+        eduID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() == "review-demo"
+    }
+
+    nonisolated static func isInstallationScopedDemoEduID(_ eduID: String?) -> Bool {
+        let normalized = eduID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        let prefix = "review-demo-"
+        guard normalized.hasPrefix(prefix) else { return false }
+        return UUID(uuidString: String(normalized.dropFirst(prefix.count))) != nil
+    }
+
     static func emptyClassrooms(for date: Date, start: Int, end: Int) -> [EmptyClassroom] {
         let rooms = [
             EmptyClassroom(building: "二教", room: "205"),

@@ -34,10 +34,10 @@ Community security direction:
 - Community share-card JPEGs are generated locally and never uploaded by the card flow. Draft content enters the community service only after publish validation succeeds and the post is enqueued.
 - `posts.status = pending_review` is an upload/publication exception, never a normal editorial queue. Polls may still use `pending_review` for explicit manual approval or rejection.
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
-- Formal users can permanently delete their MyLeafy account in App. Deletion removes the linked community profile, authored content, private media, the current Supabase Auth user, and local MyLeafy data, but never changes the university's official academic account. Review demo identities are installation-unique, bootstrap into `bjfu`, and cannot enter the account-deletion flow.
+- Formal users can permanently delete their MyLeafy account in App. Deletion removes the linked community profile, authored content, private media, the current Supabase Auth user, and local MyLeafy data, but never changes the university's official academic account. Review demo identities are installation-unique, bootstrap into `bjfu`, and complete the same real account-deletion flow; only the legacy shared `review-demo` identity remains protected from deletion.
 
 MyLeafy AI direction:
-- For the 2.9 build 22 review submission, MyLeafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.
+- For the 2.9 build 27 review submission, MyLeafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.
 - MyLeafy AI defaults to the server-backed Flash service: free users receive 10 requests per Beijing day; the current weekly subscription receives 120 requests per Apple billing period with a 40-request Beijing daily cap.
 - BYOK is an optional fallback. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek; Pro is available only in BYOK mode.
 - The only supported subscription product is `com.isaachuo.leafy.ai.weekly.v2`; legacy products grant no entitlement.

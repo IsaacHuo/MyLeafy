@@ -3,7 +3,10 @@ import SwiftData
 
 nonisolated enum AppAccountDeletionPolicy {
     static func canDelete(isReviewDemoMode: Bool, eduID: String?) -> Bool {
-        !isReviewDemoMode && !ReviewDemoDataSeeder.isDemoEduID(eduID)
+        if isReviewDemoMode || ReviewDemoDataSeeder.isDemoEduID(eduID) {
+            return ReviewDemoDataSeeder.isInstallationScopedDemoEduID(eduID)
+        }
+        return true
     }
 }
 
@@ -97,6 +100,9 @@ enum AppSessionResetter {
         if let bundleIdentifier = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleIdentifier)
         }
+        // Keep Demo disabled after the domain wipe so the active process cannot
+        // re-persist its pre-deletion state before the root view changes.
+        ReviewDemoMode.disable()
 
         if !cleanupFailures.isEmpty {
             throw AppLocalDataDeletionError(failures: cleanupFailures)

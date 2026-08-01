@@ -50,14 +50,44 @@ final class ReviewDemoModeTests: XCTestCase {
         XCTAssertNotEqual(manager.authenticatedEduID, "review-demo")
     }
 
-    func testDemoAccountCannotEnterAccountDeletionFlow() {
+    func testAccountDeletionPolicyAllowsOnlyInstallationScopedDemoAccounts() {
         XCTAssertFalse(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: true, eduID: nil))
         XCTAssertFalse(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: false, eduID: "review-demo"))
-        XCTAssertFalse(AppAccountDeletionPolicy.canDelete(
-            isReviewDemoMode: false,
+        XCTAssertTrue(AppAccountDeletionPolicy.canDelete(
+            isReviewDemoMode: true,
             eduID: "review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca"
         ))
+        XCTAssertFalse(AppAccountDeletionPolicy.canDelete(
+            isReviewDemoMode: true,
+            eduID: "review-demo-not-an-installation-uuid"
+        ))
         XCTAssertTrue(AppAccountDeletionPolicy.canDelete(isReviewDemoMode: false, eduID: "230206108"))
+    }
+
+    func testDemoIdentityClassificationSeparatesSharedAndInstallationScopedAccounts() {
+        XCTAssertTrue(ReviewDemoDataSeeder.isLegacySharedDemoEduID(" review-demo "))
+        XCTAssertFalse(ReviewDemoDataSeeder.isLegacySharedDemoEduID(
+            "review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca"
+        ))
+        XCTAssertTrue(ReviewDemoDataSeeder.isInstallationScopedDemoEduID(
+            "review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca"
+        ))
+        XCTAssertFalse(ReviewDemoDataSeeder.isInstallationScopedDemoEduID("review-demo"))
+    }
+
+    @MainActor
+    func testAccountDeletionForcesLoginUntilAuthenticationResumes() {
+        let coordinator = AppNavigationCoordinator()
+
+        coordinator.completeAccountDeletion(with: .deleted)
+
+        XCTAssertTrue(coordinator.requiresLoginAfterAccountDeletion)
+        XCTAssertEqual(coordinator.accountDeletionOutcome, .deleted)
+        XCTAssertEqual(coordinator.selectedRootTab, .timetable)
+
+        coordinator.authenticationDidResume()
+
+        XCTAssertFalse(coordinator.requiresLoginAfterAccountDeletion)
     }
 
     @MainActor

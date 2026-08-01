@@ -31,6 +31,10 @@ export type AccountDeletionServices = {
   deleteAuthUser(authUserID: string): Promise<void>;
 };
 
+export function isProtectedDemoEduID(eduID: string): boolean {
+  return eduID.trim().toLowerCase() === "review-demo";
+}
+
 export async function handler(
   request: Request,
   providedServices?: AccountDeletionServices,
@@ -205,8 +209,7 @@ function liveServices(token: string): AccountDeletionServices {
       const eduID = typeof data.edu_id === "string" ? data.edu_id : "";
       return {
         profileID: data.profile_id,
-        isProtectedDemo: eduID === "review-demo" ||
-          eduID.startsWith("review-demo-"),
+        isProtectedDemo: isProtectedDemoEduID(eduID),
       };
     },
     async listObjects(bucket, prefix, limit, offset) {

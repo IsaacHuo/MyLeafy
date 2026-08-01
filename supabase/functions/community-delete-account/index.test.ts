@@ -1,4 +1,9 @@
-import { bearerToken, handler, profileStorageRoots } from "./index.ts";
+import {
+  bearerToken,
+  handler,
+  isProtectedDemoEduID,
+  profileStorageRoots,
+} from "./index.ts";
 import type { AccountDeletionServices } from "./index.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -147,6 +152,49 @@ Deno.test("account deletion protects demo profiles before media cleanup", async 
   assert(!mediaListed, "demo media must remain untouched");
   assert(!profileDeleted, "demo profile must remain intact");
   assert(!authDeleted, "demo auth session must remain intact");
+});
+
+Deno.test("only the legacy shared demo identity is protected", () => {
+  assert(isProtectedDemoEduID("review-demo"), "legacy demo must be protected");
+  assert(
+    isProtectedDemoEduID(" REVIEW-DEMO "),
+    "legacy demo matching must be normalized",
+  );
+  assert(
+    !isProtectedDemoEduID(
+      "review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca",
+    ),
+    "installation-scoped demo must be deletable",
+  );
+});
+
+Deno.test("installation-scoped demo deletion removes profile and auth", async () => {
+  let profileDeleted = false;
+  let authDeleted = false;
+  const response = await handler(
+    new Request("https://example.test", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token" },
+    }),
+    services({
+      deletionTarget: async () => ({
+        profileID: "installation-demo-profile",
+        isProtectedDemo: isProtectedDemoEduID(
+          "review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca",
+        ),
+      }),
+      deleteCommunityProfile: async () => {
+        profileDeleted = true;
+      },
+      deleteAuthUser: async () => {
+        authDeleted = true;
+      },
+    }),
+  );
+
+  assert(response.status === 200, "installation demo deletion must succeed");
+  assert(profileDeleted, "installation demo profile must be deleted");
+  assert(authDeleted, "installation demo auth user must be deleted");
 });
 
 Deno.test("account deletion succeeds for an authenticated user without a profile", async () => {

@@ -404,6 +404,7 @@ struct LoginView: View {
             .tint(AppTheme.accent)
             .disabled(isEnteringDemo)
             .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
+            .accessibilityIdentifier("login.demo-mode")
         } else {
             Button {
                 enterDemoMode()
@@ -422,6 +423,7 @@ struct LoginView: View {
             .tint(AppTheme.accent)
             .disabled(isEnteringDemo)
             .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
+            .accessibilityIdentifier("login.demo-mode")
         }
         #else
         Button {
@@ -441,6 +443,7 @@ struct LoginView: View {
         .tint(AppTheme.accent)
         .disabled(isEnteringDemo)
         .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
+        .accessibilityIdentifier("login.demo-mode")
         #endif
     }
 

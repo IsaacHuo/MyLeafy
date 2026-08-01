@@ -78,7 +78,8 @@ struct LeafyApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled {
+                if !appNavigation.requiresLoginAfterAccountDeletion,
+                   networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled {
                     ContentView(
                         appNavigation: appNavigation,
                         communityNotificationBadgeViewModel: communityNotificationBadgeViewModel
@@ -123,6 +124,7 @@ struct LeafyApp: App {
             } message: {
                 Text(authCallbackMessage ?? "")
             }
+            .leafyAccountDeletionOutcomeAlert(outcome: $appNavigation.accountDeletionOutcome)
             .alert("无法导入学习资料", isPresented: Binding(
                 get: { externalImportCoordinator.alertMessage != nil },
                 set: { if !$0 { externalImportCoordinator.alertMessage = nil } }
@@ -152,6 +154,11 @@ struct LeafyApp: App {
             }
             .onChange(of: networkManager.hasCachedIdentity) { _, _ in
                 externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
+            }
+            .onChange(of: networkManager.authenticatedEduID) { _, eduID in
+                if eduID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    appNavigation.authenticationDidResume()
+                }
             }
             .onChange(of: appThemeColorPreferenceRaw) { _, _ in
                 syncThemeAppearance()
@@ -409,5 +416,28 @@ struct LeafyApp: App {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
             ?? "unknown"
+    }
+}
+
+private struct AccountDeletionOutcomeAlertModifier: ViewModifier {
+    @Binding var outcome: AppAccountDeletionOutcome?
+
+    func body(content: Content) -> some View {
+        content.alert(outcome?.title ?? "MyLeafy 账户已删除", isPresented: Binding(
+            get: { outcome != nil },
+            set: { if !$0 { outcome = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(outcome?.message ?? "")
+        }
+    }
+}
+
+private extension View {
+    func leafyAccountDeletionOutcomeAlert(
+        outcome: Binding<AppAccountDeletionOutcome?>
+    ) -> some View {
+        modifier(AccountDeletionOutcomeAlertModifier(outcome: outcome))
     }
 }

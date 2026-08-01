@@ -15,6 +15,29 @@ enum RootTab: Hashable {
     case profile
 }
 
+enum AppAccountDeletionOutcome: Equatable {
+    case deleted
+    case deletedWithLocalCleanupWarning(String)
+
+    var title: String {
+        switch self {
+        case .deleted:
+            return "MyLeafy 账户已删除"
+        case .deletedWithLocalCleanupWarning:
+            return "账户已删除，本机清理未全部完成"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .deleted:
+            return "线上账户与当前设备上的 MyLeafy 数据已永久删除。北京林业大学官方教务账户未受影响。"
+        case .deletedWithLocalCleanupWarning(let detail):
+            return "线上账户已永久删除，但部分本机数据未能清理：\(detail) 如仍有残留，可删除并重新安装 App。"
+        }
+    }
+}
+
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
         [.timetable, .community, .academics, .profile]
@@ -80,7 +103,19 @@ final class AppNavigationCoordinator: ObservableObject {
     @Published var requestedTimetableInviteCode: String?
     @Published var requestedTimetableCourseID: UUID?
     @Published var requestedCommunityPostID: UUID?
+    @Published var accountDeletionOutcome: AppAccountDeletionOutcome?
+    @Published private(set) var requiresLoginAfterAccountDeletion = false
     private var deferredRouteRequestTask: Task<Void, Never>?
+
+    func completeAccountDeletion(with outcome: AppAccountDeletionOutcome) {
+        requiresLoginAfterAccountDeletion = true
+        selectedRootTab = .timetable
+        accountDeletionOutcome = outcome
+    }
+
+    func authenticationDidResume() {
+        requiresLoginAfterAccountDeletion = false
+    }
 
     func leaveLeafyWorkspace() {
         selectedRootTab = lastNonLeafyRootTab == .leafy ? .timetable : lastNonLeafyRootTab

@@ -209,7 +209,22 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func deleteCurrentAccount() async throws {
-        cancelInFlightWork()
+        if ReviewDemoMode.isEnabled {
+            await bootstrapCommunityUser()
+            guard currentAuthUserID != nil else {
+                throw CommunityServiceError.missingAuthenticatedUser
+            }
+            guard profile != nil else {
+                throw CommunityServiceError.edgeFunctionRejected(
+                    bootstrapError ?? "演示账户尚未准备完成，请检查网络后重试。"
+                )
+            }
+        } else {
+            if let activeBootstrapTask {
+                await waitForBootstrapTask(activeBootstrapTask)
+            }
+        }
+
         try await service.deleteCurrentAccount()
 
         if let client = LeafySupabase.shared.client {

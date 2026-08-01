@@ -207,8 +207,8 @@ struct ProfileView: View {
             } header: {
                 Text("账户")
             } footer: {
-                if isReviewDemoAccount {
-                    Text("演示账户不支持账户删除。退出演示模式不会影响正式账户与数据。")
+                if isReviewDemoAccount, !canDeleteAccount {
+                    Text("此共享演示账户受保护，不能删除。退出演示模式不会影响正式账户与数据。")
                 }
             }
             .listRowBackground(AppTheme.cardBackground)
@@ -357,6 +357,7 @@ struct ProfileView: View {
         }
         .disabled(isDeletingAccount)
         .accessibilityHint("永久删除社区账户和当前设备上的 MyLeafy 数据")
+        .accessibilityIdentifier("profile.delete-account")
     }
 
     private var logoutButtonTitle: String {
@@ -392,7 +393,12 @@ struct ProfileView: View {
                 CommunityDiagnostics.log.error(
                     "Remote account deletion succeeded but local cleanup failed: \(localCleanupError.localizedDescription, privacy: .public)"
                 )
+                appNavigation.completeAccountDeletion(
+                    with: .deletedWithLocalCleanupWarning(localCleanupError.localizedDescription)
+                )
                 AppSessionResetter.returnToLogin()
+            } else {
+                appNavigation.completeAccountDeletion(with: .deleted)
             }
         } catch {
             accountDeletionError = error.localizedDescription

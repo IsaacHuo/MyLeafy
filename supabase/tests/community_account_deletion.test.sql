@@ -3,13 +3,14 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(10);
+select plan(12);
 
 insert into auth.users (id)
 values
   ('71000000-0000-0000-0000-000000000001'),
   ('71000000-0000-0000-0000-000000000002'),
-  ('71000000-0000-0000-0000-000000000003');
+  ('71000000-0000-0000-0000-000000000003'),
+  ('71000000-0000-0000-0000-000000000004');
 
 insert into public.profiles (
   id,
@@ -45,9 +46,19 @@ values
   (
     '72000000-0000-0000-0000-000000000003',
     'bjfu',
-    'review-demo-test-installation',
-    '演示账户',
-    '演示账户',
+    'review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca',
+    '安装级演示账户',
+    '安装级演示账户',
+    'bjfu',
+    'approved',
+    true
+  ),
+  (
+    '72000000-0000-0000-0000-000000000004',
+    'bjfu',
+    'review-demo',
+    '共享演示账户',
+    '共享演示账户',
     'bjfu',
     'approved',
     true
@@ -76,7 +87,13 @@ values
     '71000000-0000-0000-0000-000000000003',
     '72000000-0000-0000-0000-000000000003',
     'bjfu',
-    'review-demo-test-installation'
+    'review-demo-7d9f06b3-f8c0-42e3-9c6f-0b54a0a2d3ca'
+  ),
+  (
+    '71000000-0000-0000-0000-000000000004',
+    '72000000-0000-0000-0000-000000000004',
+    'bjfu',
+    'review-demo'
   );
 
 insert into public.posts (id, campus_id, author_id, title, body, category, status)
@@ -202,14 +219,28 @@ select is(
   'repeated profile deletion is idempotent'
 );
 
+select is(
+  public.edge_delete_community_account(
+    '71000000-0000-0000-0000-000000000003'
+  ) ->> 'deleted',
+  'true',
+  'installation-scoped review demo deletion succeeds'
+);
+
+select is(
+  (select count(*) from public.profiles where id = '72000000-0000-0000-0000-000000000003'),
+  0::bigint,
+  'installation-scoped review demo profile is deleted'
+);
+
 select throws_like(
   $$
     select public.edge_delete_community_account(
-      '71000000-0000-0000-0000-000000000003'
+      '71000000-0000-0000-0000-000000000004'
     )
   $$,
   '%COMMUNITY_DEMO_ACCOUNT_PROTECTED%',
-  'review demo accounts cannot be deleted'
+  'legacy shared review demo remains protected'
 );
 
 select * from finish();
