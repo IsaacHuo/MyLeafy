@@ -24,6 +24,13 @@ Campus heatmap direction:
 - Keep only the latest successful heatmap data per campus account and overwrite it after each successful update.
 - User-facing copy says “更新数据” and “上次更新”; avoid unfamiliar implementation terminology.
 
+Personal activity direction:
+- Personal activity has two independent channels: focus records from learning spaces and exercise records from exercise spaces. They share the activity heat map and date interaction, but never produce a combined score.
+- Exercise spaces include the fixed running, fitness, ball-sports, and other destinations plus local custom spaces. Deleting a custom space either moves its records to Other or deletes them after a second confirmation; fixed spaces can only clear records.
+- Focus and exercise records, spaces, timers, filters, and summaries stay on device. Exercise does not write to Sunshine Running, fitness tests, or venue reference data, and the campus occupancy heatmap remains a separate school-data feature.
+- Personal activity defaults to the semantic current-semester range and may switch to a rolling year. Cross-midnight records split by calendar day, and current streaks may end today or yesterday.
+- The MVP does not use HealthKit, cloud sync, widgets, Live Activities, share cards, or a cross-channel activity score.
+
 Community security direction:
 - One `(campus_id, edu_id)` maps to exactly one durable community profile. Multiple replaceable device Supabase Auth sessions may link to that profile, while one Auth session maps to at most one profile.
 - School login automatically inherits the matching community profile and content. A verified bound email is notification-only and never participates in school login or community recovery.

@@ -18,7 +18,7 @@ enum AppModelContainerFactory {
             FavoriteClassroom.self, FavoriteCampusLink.self, PostgraduateTarget.self, StudyTimeRecord.self, HonorRecord.self,
             LearningMaterialDocument.self, LearningProject.self, LearningProjectTask.self,
             CareerResumeDocument.self, CareerTask.self, CareerOpportunity.self,
-            FitnessTestRecord.self,
+            FitnessTestRecord.self, ExerciseSpace.self, ExerciseRecord.self,
             ComprehensiveQualityRecord.self, ComprehensiveQualityComponentEntry.self, ComprehensiveQualityEvidenceDocument.self,
             CampusAIConversation.self, CampusAIMessage.self, CampusAIActionRecord.self,
             MedicalLedgerEntry.self, MedicalLedgerPhoto.self,

@@ -150,12 +150,24 @@ struct LearningWorkspaceView: View {
         archivedProjects.map(LearningWorkspaceListItem.project)
     }
 
+    private var focusOverviewProjection: ActivityProjection {
+        ActivityProjection.make(
+            intervals: FocusActivityRecordAdapter.intervals(from: records),
+            channel: .focus,
+            interval: ActivityDateRangeResolver.recentWeeks()
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle(
                 "学习空间",
                 subtitle: "在微信或 QQ 中打开文件，选择“用其他应用打开”并选取 MyLeafy。已导入的资料支持导出。"
             )
+
+            PersonalActivityOverviewCard(channel: .focus, projection: focusOverviewProjection) {
+                openRoute(.studyTimeRecords)
+            }
 
             existingWorkspacesSection(index: workspaceIndex)
             archivedWorkspacesSection(index: workspaceIndex)
@@ -857,6 +869,7 @@ struct LearningWorkspaceDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let destination: LearningWorkspaceDestination
+    let openRoute: (AcademicDetailRoute) -> Void
 
     @Query(sort: \LearningProject.updatedAt, order: .reverse) private var projects: [LearningProject]
     @Query(sort: \LearningMaterialDocument.updatedAt, order: .reverse) private var materials: [LearningMaterialDocument]
@@ -886,8 +899,13 @@ struct LearningWorkspaceDetailView: View {
     @State private var workspaceIndex = LearningWorkspaceIndex.empty
     @State private var workspaceIndexSignature = LearningWorkspaceIndexSignature()
 
-    init(destination: LearningWorkspaceDestination, initialTab: LearningWorkspaceInitialTab = .tasks) {
+    init(
+        destination: LearningWorkspaceDestination,
+        initialTab: LearningWorkspaceInitialTab = .tasks,
+        openRoute: @escaping (AcademicDetailRoute) -> Void = { _ in }
+    ) {
         self.destination = destination
+        self.openRoute = openRoute
         self._selectedTab = State(initialValue: LearningWorkspaceDetailTab(initialTab: initialTab))
     }
 
@@ -1239,6 +1257,17 @@ struct LearningWorkspaceDetailView: View {
 
     private var recordsContent: some View {
         VStack(alignment: .leading, spacing: AppSpacing.compact) {
+            PersonalActivityOverviewCard(
+                channel: .focus,
+                projection: ActivityProjection.make(
+                    intervals: FocusActivityRecordAdapter.intervals(from: scopedRecords),
+                    channel: .focus,
+                    interval: ActivityDateRangeResolver.recentWeeks()
+                )
+            ) {
+                openRoute(.studyTimeRecords)
+            }
+
             StudyFocusTimerPanel(
                 topicOptions: topicOptions,
                 lockedTopic: focusTopic,
@@ -1898,7 +1927,7 @@ struct StudyFocusTopicOption: Identifiable, Hashable {
     }
 }
 
-private struct StudyFocusSession: Identifiable {
+struct StudyFocusSession: Identifiable {
     let id = UUID()
     let startedAt: Date
     let topic: StudyFocusTopicOption
@@ -1909,7 +1938,7 @@ private struct StudyTimeShareItem: Identifiable {
     let image: UIImage
 }
 
-private struct StudyFocusTimerPanel: View {
+struct StudyFocusTimerPanel: View {
     let topicOptions: [StudyFocusTopicOption]
     let lockedTopic: StudyFocusTopicOption?
     @Binding var selectedTopic: StudyFocusTopicOption
@@ -2342,7 +2371,7 @@ private struct StudyTimeSummaryMetric: View {
     }
 }
 
-private struct StudyTimeRecordRow: View {
+struct StudyTimeRecordRow: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
 
     let record: StudyTimeRecord
@@ -2419,7 +2448,7 @@ private struct StudyTimeRecordRow: View {
     }
 }
 
-private struct StudyTimeRecordDraft {
+struct StudyTimeRecordDraft {
     var projectID: String
     var categoryRawValue: String
     var startedAt: Date
@@ -2429,7 +2458,7 @@ private struct StudyTimeRecordDraft {
     var note: String
 }
 
-private struct StudyTimeRecordEditorView: View {
+struct StudyTimeRecordEditorView: View {
     let record: StudyTimeRecord?
     let topicOptions: [StudyFocusTopicOption]
     let lockedTopic: StudyFocusTopicOption?
@@ -2469,10 +2498,24 @@ private struct StudyTimeRecordEditorView: View {
         topicOptions: [StudyFocusTopicOption],
         initialTopic: StudyFocusTopicOption,
         lockedTopic: StudyFocusTopicOption? = nil,
+        initialDate: Date? = nil,
         onSave: @escaping (StudyTimeRecordDraft) -> Void
     ) {
         let now = Date()
-        let defaultStart = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
+        let calendar = Calendar.current
+        let defaultEnd: Date
+        if let initialDate, record == nil {
+            let components = calendar.dateComponents([.hour, .minute], from: now)
+            defaultEnd = calendar.date(
+                bySettingHour: components.hour ?? 18,
+                minute: components.minute ?? 0,
+                second: 0,
+                of: initialDate
+            ) ?? initialDate
+        } else {
+            defaultEnd = now
+        }
+        let defaultStart = calendar.date(byAdding: .hour, value: -1, to: defaultEnd) ?? defaultEnd
         let availableOptions = topicOptions.isEmpty ? [.none] : topicOptions
         let resolvedTopic: StudyFocusTopicOption
         if let lockedTopic {
@@ -2490,7 +2533,7 @@ private struct StudyTimeRecordEditorView: View {
         self.onSave = onSave
         _selectedTopic = State(initialValue: resolvedTopic)
         _startedAt = State(initialValue: record?.startedAt ?? defaultStart)
-        _endedAt = State(initialValue: record?.endedAt ?? now)
+        _endedAt = State(initialValue: record?.endedAt ?? defaultEnd)
         _content = State(initialValue: record?.content ?? "")
         _location = State(initialValue: record?.location ?? "图书馆")
         _note = State(initialValue: record?.note ?? "")
@@ -2558,7 +2601,7 @@ private struct StudyTimeRecordEditorView: View {
     }
 }
 
-private enum StudyTimeDurationFormatter {
+enum StudyTimeDurationFormatter {
     static func timerText(for duration: TimeInterval) -> String {
         let totalSeconds = max(Int(duration), 0)
         let hours = totalSeconds / 3600
