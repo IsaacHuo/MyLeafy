@@ -109,7 +109,7 @@ enum AppSessionResetter {
         }
     }
 
-    static func deleteAllModels(in modelContext: ModelContext) throws {
+    private static func deleteAllModels(in modelContext: ModelContext) throws {
         try modelContext.delete(model: Course.self)
         try modelContext.delete(model: Grade.self)
         try modelContext.delete(model: CourseNote.self)
@@ -128,8 +128,6 @@ enum AppSessionResetter {
         try modelContext.delete(model: CareerTask.self)
         try modelContext.delete(model: CareerOpportunity.self)
         try modelContext.delete(model: FitnessTestRecord.self)
-        try modelContext.delete(model: ExerciseRecord.self)
-        try modelContext.delete(model: ExerciseSpace.self)
         try modelContext.delete(model: ComprehensiveQualityRecord.self)
         try modelContext.delete(model: ComprehensiveQualityComponentEntry.self)
         try modelContext.delete(model: ComprehensiveQualityEvidenceDocument.self)

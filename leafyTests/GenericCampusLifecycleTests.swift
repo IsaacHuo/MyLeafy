@@ -166,9 +166,6 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertEqual(AcademicDetailRoute.countdowns.tab, .schedule)
         XCTAssertEqual(AcademicDetailRoute.customCountdowns.tab, .schedule)
         XCTAssertEqual(AcademicDetailRoute.schoolCalendar.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.studyTimeRecords.tab, .learning)
-        XCTAssertEqual(AcademicDetailRoute.exerciseActivity.tab, .sports)
-        XCTAssertEqual(AcademicDetailRoute.exerciseWorkspace(.fixed(.running)).tab, .sports)
         XCTAssertEqual(AcademicDetailRoute.medicalPolicy.tab, .medical)
         XCTAssertEqual(AcademicDetailRoute.medicalLedger.tab, .medical)
         XCTAssertEqual(

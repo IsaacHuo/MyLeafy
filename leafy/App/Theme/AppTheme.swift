@@ -483,7 +483,6 @@ enum AppTheme {
         colorScheme == .dark ? .black : .white
     }
 
-    static let exercise = Color.orange
     static let warning = Color.orange
     static let danger = Color.red
     static let destructive = danger

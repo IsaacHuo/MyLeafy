@@ -107,6 +107,9 @@ struct ClassroomsSectionView: View {
                 openRoute(.campusHeatmap)
             }
 
+            ToolEntryCard(title: "专注记录", subtitle: "记录每段学习时间、地点和备注", icon: "clock.badge.checkmark") {
+                openRoute(.studyTimeRecords)
+            }
         }
         .sheet(item: $browserItem) { item in
             LeafySafariView(url: item.url)
@@ -124,10 +127,6 @@ struct SportsSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle("体育", subtitle: isCustomCampus ? "本地记录阳光长跑和体测，可按学校要求自定义长跑规则。" : "阳光长跑、体测和场馆开放集中管理。")
-
-            ExerciseWorkspaceSectionView(openRoute: openRoute)
-
-            LeafySectionTitle("校园体育", subtitle: "阳光长跑、体测和场馆信息与个人运动记录分开管理。")
 
             ToolEntryCard(title: "阳光长跑", subtitle: isCustomCampus ? "自定义目标次数、周期和假期周规则" : "每两周四次，满分 34 次", icon: "figure.run") {
                 openRoute(.sunshineRun)

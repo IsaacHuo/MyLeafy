@@ -101,8 +101,6 @@ nonisolated enum CampusAcademicVisibility {
              .timetableProcessing,
              .studyTimeRecords,
              .learningWorkspace,
-             .exerciseActivity,
-             .exerciseWorkspace,
              .sunshineRun,
              .fitnessTestRecords,
              .countdowns,
@@ -158,8 +156,6 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
     case campusHeatmap
     case studyTimeRecords
     case learningWorkspace(LearningWorkspaceDestination, initialTab: LearningWorkspaceInitialTab = .tasks)
-    case exerciseActivity
-    case exerciseWorkspace(ExerciseSpaceDestination)
     case sunshineRun
     case fitnessTestRecords
     case sportsVenues
@@ -189,14 +185,12 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
             return .schedule
         case .emptyClassroom,
              .classroomLookup,
-             .campusHeatmap:
+             .campusHeatmap,
+             .studyTimeRecords:
             return .classrooms
-        case .studyTimeRecords,
-             .learningWorkspace:
+        case .learningWorkspace:
             return .learning
-        case .exerciseActivity,
-             .exerciseWorkspace,
-             .sunshineRun,
+        case .sunshineRun,
              .fitnessTestRecords,
              .sportsVenues:
             return .sports
