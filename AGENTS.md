@@ -66,6 +66,13 @@ Before changing code:
 - Do not introduce heavy architecture unless needed.
 - Keep campus features stable and user-facing behavior predictable.
 
+Git branch workflow:
+- `codex/leafy-ai` is frozen by default. Unless the user explicitly resumes AI work, do not switch to it, modify it, rebase it, merge into it, synchronize it, push it, or otherwise advance it.
+- Before every new task, fetch `origin`, switch to `main`, update it with a fast-forward-only merge from `origin/main`, verify that local `main` matches `origin/main`, and create a dedicated `codex/<task>` branch from that commit. Do not implement task changes directly on `main`.
+- After a task is verified, integrate it into `main`, push `origin/main`, switch back to `main`, and verify that local and remote `main` match.
+- Delete the completed task's local branch and any same-name remote branch created for that task. Do not delete unrelated collaborators' branches. The only long-lived branches maintained by Codex are `main` and `codex/leafy-ai`.
+- If the worktree is dirty, `main` has diverged, or a fast-forward update is not possible, preserve existing work and stop for explicit resolution instead of resetting, overwriting, or force-updating `main`.
+
 Principles:
 
 1. **Fail Fast / No Silent Failures**
