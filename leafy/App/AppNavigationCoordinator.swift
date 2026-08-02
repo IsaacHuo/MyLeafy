@@ -10,6 +10,7 @@ enum ProfileRoute: Hashable {
 enum RootTab: Hashable {
     case timetable
     case community
+    case schedule
     case leafy
     case academics
     case profile
@@ -49,7 +50,7 @@ enum AppAccountDeletionOutcome: Equatable, Identifiable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.timetable, .community, .academics, .profile]
+        [.timetable, .community, .schedule, .academics, .profile]
     }
 
     static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {
@@ -64,6 +65,8 @@ extension RootTab: CaseIterable, Identifiable {
             return L10n.text("课表", language: language)
         case .community:
             return L10n.text("社区", language: language)
+        case .schedule:
+            return L10n.text("日程", language: language)
         case .leafy:
             return AppBrand.displayName
         case .academics:
@@ -77,6 +80,7 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2"
+        case .schedule: return "clock"
         case .leafy: return "sparkles"
         case .academics: return "book.closed"
         case .profile: return "person"
@@ -87,6 +91,7 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2.fill"
+        case .schedule: return "clock.fill"
         case .leafy: return "sparkles"
         case .academics: return "book.closed.fill"
         case .profile: return "person.fill"

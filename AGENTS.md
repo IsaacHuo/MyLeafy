@@ -37,7 +37,7 @@ Community security direction:
 - Formal users can permanently delete their MyLeafy account in App. Deletion removes the linked community profile, authored content, private media, the current Supabase Auth user, and local MyLeafy data, but never changes the university's official academic account. Review demo identities are installation-unique, bootstrap into `bjfu`, and complete the same real account-deletion flow; only the legacy shared `review-demo` identity remains protected from deletion.
 
 MyLeafy AI direction:
-- For the 2.9 build 27 review submission, MyLeafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 校园 / 我的`; selecting the legacy `.leafy` state redirects to `课表`.
+- For the 2.9 build 27 review submission, MyLeafy AI and its purchase flow remain in source but have no public navigation entry. The public root tabs are `课表 / 社区 / 日程 / 校园 / 我的` (or `课表 / 日程 / 校园 / 我的` when Community is unavailable); selecting the legacy `.leafy` state redirects to `课表`.
 - MyLeafy AI defaults to the server-backed Flash service: free users receive 10 requests per Beijing day; the current weekly subscription receives 120 requests per Apple billing period with a 40-request Beijing daily cap.
 - BYOK is an optional fallback. DeepSeek keys stay in the device Keychain and model requests go directly from iOS to DeepSeek; Pro is available only in BYOK mode.
 - The only supported subscription product is `com.isaachuo.leafy.ai.weekly.v2`; legacy products grant no entitlement.

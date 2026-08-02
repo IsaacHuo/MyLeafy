@@ -1864,12 +1864,12 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .schedule, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .schedule, .academics, .profile])
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .schedule, .academics, .profile])
     }
 
     @MainActor
@@ -1884,6 +1884,12 @@ final class PerformanceRefactorTests: XCTestCase {
 
     func testAcademicRootTabUsesCampusProductName() {
         XCTAssertEqual(RootTab.academics.title(language: .zhHans), "校园")
+    }
+
+    func testScheduleRootTabUsesClockIdentity() {
+        XCTAssertEqual(RootTab.schedule.title(language: .zhHans), "日程")
+        XCTAssertEqual(RootTab.schedule.systemImage, "clock")
+        XCTAssertEqual(RootTab.schedule.selectedSystemImage, "clock.fill")
     }
 
     func testCampusIdentityScopeKeySeparatesSchoolPortalAndCustomSupabase() {

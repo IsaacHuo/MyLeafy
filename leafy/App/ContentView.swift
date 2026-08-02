@@ -104,6 +104,14 @@ struct ContentView: View {
             }
 
             Tab(
+                RootTab.schedule.title(language: leafyLanguage),
+                systemImage: RootTab.schedule.systemImage,
+                value: RootTab.schedule
+            ) {
+                ClockScheduleView()
+            }
+
+            Tab(
                 RootTab.academics.title(language: leafyLanguage),
                 systemImage: RootTab.academics.systemImage,
                 value: RootTab.academics
@@ -151,6 +159,12 @@ struct ContentView: View {
                     .badge(communityNotificationBadgeViewModel.unreadCount)
                     .tag(RootTab.community)
             }
+
+            ClockScheduleView()
+                .tabItem {
+                    Label(RootTab.schedule.title(language: leafyLanguage), systemImage: RootTab.schedule.systemImage)
+                }
+                .tag(RootTab.schedule)
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
                 .tabItem {

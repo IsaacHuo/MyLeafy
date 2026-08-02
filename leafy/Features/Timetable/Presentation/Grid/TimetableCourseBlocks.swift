@@ -702,38 +702,46 @@ struct CustomScheduleEditorPresentation: Identifiable {
     let importantDateEvent: CustomScheduleEvent?
     let initialMode: CustomScheduleEditorMode
     let allowsModeSelection: Bool
+    /// Optional date supplied by a caller creating a new entry from a
+    /// date-scoped surface. Existing editing callers keep their source date.
+    let suggestedDate: Date?
 
     var id: String {
         [
             initialMode.rawValue,
             timetableContext.id,
             importantDateEvent?.id ?? "new",
-            allowsModeSelection ? "switchable" : "locked"
+            allowsModeSelection ? "switchable" : "locked",
+            suggestedDate.map { String($0.timeIntervalSinceReferenceDate) } ?? "no-suggested-date"
         ].joined(separator: "-")
     }
 
     static func timetable(
         _ context: TimetableCellReminderContext,
-        allowsModeSelection: Bool? = nil
+        allowsModeSelection: Bool? = nil,
+        suggestedDate: Date? = nil
     ) -> CustomScheduleEditorPresentation {
         CustomScheduleEditorPresentation(
             timetableContext: context,
             importantDateEvent: nil,
             initialMode: .timetable,
-            allowsModeSelection: allowsModeSelection ?? (context.allowsDateSelection && context.reminder == nil)
+            allowsModeSelection: allowsModeSelection ?? (context.allowsDateSelection && context.reminder == nil),
+            suggestedDate: suggestedDate
         )
     }
 
     static func importantDate(
         _ event: CustomScheduleEvent?,
         defaultContext: TimetableCellReminderContext,
-        allowsModeSelection: Bool? = nil
+        allowsModeSelection: Bool? = nil,
+        suggestedDate: Date? = nil
     ) -> CustomScheduleEditorPresentation {
         CustomScheduleEditorPresentation(
             timetableContext: defaultContext,
             importantDateEvent: event,
             initialMode: .importantDate,
-            allowsModeSelection: allowsModeSelection ?? (event == nil && defaultContext.reminder == nil)
+            allowsModeSelection: allowsModeSelection ?? (event == nil && defaultContext.reminder == nil),
+            suggestedDate: suggestedDate
         )
     }
 }
@@ -783,8 +791,9 @@ struct CustomScheduleEditorSheet: View {
             ? event?.minutesBefore ?? 0
             : context.reminder?.minutesBefore ?? 0
         let startDate = initialMode == .importantDate
-            ? event?.startsAt ?? Date()
+            ? event?.startsAt ?? presentation.suggestedDate ?? Date()
             : context.reminder?.resolvedStartDate
+                ?? presentation.suggestedDate
                 ?? TimetablePeriodSchedule.startDate(week: context.week, dayOfWeek: context.day, period: context.period)
                 ?? context.date
         let endDate = initialMode == .importantDate
