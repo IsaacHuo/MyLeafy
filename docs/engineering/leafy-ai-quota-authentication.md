@@ -1,6 +1,8 @@
-# MyLeafy AI 免费额度鉴权与回复链路
+# 历史记录：MyLeafy AI 免费额度鉴权与回复链路
 
-本文记录 MyLeafy AI 服务端 Flash 模式的当前身份、额度和回复链路，以及 2026 年 7 月对 `401 App Store 安装记录验证失败`、额度 RPC 失败和问候误生成动作卡问题的根因修复。它既是故障复盘，也是后续修改 MyLeafy AI 鉴权时的约束说明。
+> 适用范围：本文记录 2026 年 7 月的 AI iOS/后端实现。当前 `main` 已移出 iOS AI 功能，只保留旧本地数据清理和后端兼容资产；完整 iOS 实现位于默认冻结的 `codex/leafy-ai`。当前产品事实见[项目总览](../product/overview.md)，当前后端边界见[Supabase 接入](supabase.md)。
+
+本文保存当时的 MyLeafy AI 服务端 Flash 身份、额度和回复链路，以及对 `401 App Store 安装记录验证失败`、额度 RPC 失败和问候误生成动作卡问题的根因修复。它是历史故障与安全设计记录，不代表当前公开 App 提供 AI 服务或购买入口。
 
 ## 1. 最终结论
 
@@ -39,7 +41,7 @@ campus-ai-assistant: quota reserve failed Invalid schema: private
 
 动作意图必须来自用户原始问题，不能从模型自己的建议中反向推导，否则模型可以无意间为自己创造执行权限。
 
-## 3. 当前请求流程
+## 3. 当时的请求流程
 
 ```mermaid
 flowchart TD
@@ -196,6 +198,8 @@ deno test --allow-env \
 2026 年 7 月修复验收中，Simulator 连续成功回复，额度从 `9/10` 变为 `8/10`，冷启动后再次变为 `7/10`。
 
 ## 8. 代码位置
+
+下表中的 iOS 文件和 Swift 测试只存在于 `codex/leafy-ai`；服务端文件与迁移仍在 `main` 中作为兼容资产保留。
 
 | 职责 | 文件 |
 |---|---|

@@ -33,7 +33,7 @@
 |---|---|
 | [架构说明](engineering/architecture.md) | 技术分层、数据流、外部系统和架构约束 |
 | [Supabase 接入](engineering/supabase.md) | Auth、Database、RLS、Storage、Functions 和联调 |
-| [MyLeafy AI 额度鉴权](engineering/leafy-ai-quota-authentication.md) | 免费/订阅身份、额度 RPC、安全边界和排查方法 |
+| [历史 AI 额度鉴权](engineering/leafy-ai-quota-authentication.md) | 冻结 iOS 分支与现存后端兼容资产的鉴权、安全和排查记录 |
 | [运营后台](engineering/admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 |
 | [后台可靠性](engineering/admin-backend-reliability.md) | 管理动作、错误契约和发布顺序 |
 
@@ -44,7 +44,7 @@
 | 文档 | 内容 |
 |---|---|
 | [贡献规范](operations/contributing.md) | 分支、PR、日常 CI 和发布前验证 |
-| [发布说明](operations/release-notes.md) | 已使用的 App Store 更新文案 |
+| [发布记录](operations/release-notes.md) | 正式版本、Git tag、发布源码和用户可见更新摘要 |
 | [App Store 记录](operations/app-store/) | 特定版本的审核、元数据和重新提交记录 |
 | [事故复盘](operations/incidents/) | 可复用的故障定位证据、根因和经验 |
 
@@ -55,6 +55,7 @@
 - 文档默认使用中文，代码标识、命令和协议名保留原文。
 - README 负责快速理解和入口，不复制所有实施细节。
 - 当前产品事实进入 Product、Design 或 Engineering；发布记录和复盘进入 Operations。
+- Product、Design 和 Engineering 默认描述当前 `main`，不嵌入容易过期的版本/build 限定；正式版本、tag 和源码提交统一记录在发布记录中。
 - 不建立通用历史归档目录。仍有明确复用价值的历史材料放入具体运维分类，无维护价值的临时计划和操作记录直接删除。
 - 链接使用仓库相对路径，不写本机绝对路径。
 - 用户可见能力必须注明数据来源、可用条件和失败边界。

@@ -12,9 +12,11 @@
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-555555" alt="CC BY-NC-SA 4.0">
 </p>
 
-MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校园社区、共享课表与 MyLeafy AI 整合在一个原生 iOS 客户端中。项目直接连接目标学校的教务系统获取授权数据，并使用 Supabase 承载社区、通知、评分、共享与运营数据。
+MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校园社区与共享课表整合在一个原生 iOS 客户端中。北京林业大学入口直接连接学校教务系统获取用户授权的数据；通用入口只提供本机导入能力。Supabase 承载社区、通知、评分、共享与运营数据。
 
 > 仓库名、Xcode target 与部分内部类型仍使用 `leafy` / `Leafy`。对外产品名称统一为 **MyLeafy**。
+
+> 当前 `main` 不包含 MyLeafy AI 的 iOS 对话与购买实现，只保留旧本地数据清理和后端兼容资产。完整 iOS 实现位于默认冻结的 `codex/leafy-ai` 维护分支，不属于当前公开 App。
 
 ```mermaid
 flowchart LR
@@ -23,7 +25,7 @@ flowchart LR
 
     subgraph Product["MyLeafy 系统边界"]
         direction TB
-        IOS["MyLeafy iOS<br/>课表 · 校园 · 社区 · AI"]
+        IOS["MyLeafy iOS<br/>课表 · 社区 · 校园 · 我的"]
         Local[("设备本地数据<br/>SwiftData · Keychain · 缓存")]
         Web["官网与运营后台<br/>公开页面 · 分享 · 内容治理"]
         IOS -->|读写本地状态| Local
@@ -54,7 +56,6 @@ flowchart LR
 |---|---|
 | 课表 | 周课表、课程详情、时间范围、日程叠加、提醒、分享图、小组件与共享课表 |
 | 校园 | 成绩、考试、教学计划、培养方案、空教室、校历、学习空间、体育与职业相关工具 |
-| MyLeafy AI | 默认提供 Flash 免费额度与周订阅，自备 DeepSeek Key 时可切换 Flash/Pro；支持带来源研究与 Artifact |
 | 社区 | 帖子、图片、评论、点赞、投票、通知、公告、个人内容与内容分享 |
 | 评价 | 教师、课程等结构化评分；数据能力按校园配置开放 |
 | 个性化 | 浅色/深色外观、主题色、显示密度、多语言，以及照片和纯色课表背景 |
@@ -70,7 +71,6 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 - 教务数据通过 `URLSession`、显式 Cookie 管理和 SwiftSoup 解析；课表链路在必要时使用 `WKWebView` 复现浏览器路径。
 - SwiftData 保存课表、成绩和用户侧本地数据；页面通过预计算投影与展示数据降低复杂网格的渲染成本。
 - Supabase Auth、PostgreSQL、Storage 与 Edge Functions 承载非教务业务；RLS、校园范围和资源所有权共同约束数据访问。
-- MyLeafy AI 默认通过 Supabase Edge Function 使用固定 Flash，并提供每日免费额度与周订阅额度；用户也可改用设备 Keychain 中的 DeepSeek Key 直连模型，此时可切换 Flash/Pro。搜索 Gateway 不接收用户自备模型 Key。
 - Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，管理会话不暴露给浏览器 JavaScript。
 
 详细边界、数据流和依赖方向见[架构说明](docs/engineering/architecture.md)。
@@ -122,7 +122,7 @@ leafy/
 ### iOS App
 
 ```bash
-git clone https://github.com/IsaacHuo/leafy.git
+git clone https://github.com/IsaacHuo/MyLeafy.git
 cd leafy
 
 cp Config/Leafy.example.xcconfig Config/Leafy.local.xcconfig
@@ -157,8 +157,6 @@ npm run dev:pages
 supabase link --project-ref <project-ref>
 supabase db push
 supabase functions deploy community-bootstrap-user
-supabase secrets set CAMPUS_AI_TOOL_SIGNING_SECRET=<strong-random-secret>
-supabase functions deploy campus-ai-tools
 ```
 
 不要在 iOS、网站前端或公开配置中使用 `service_role`。完整说明见[Supabase 接入](docs/engineering/supabase.md)。
@@ -172,7 +170,7 @@ supabase functions deploy campus-ai-tools
 | [App 产品设计](docs/design/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
 | [UI 风格规范](docs/design/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
 | [Supabase 接入](docs/engineering/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
-| [MyLeafy AI 免费额度鉴权](docs/engineering/leafy-ai-quota-authentication.md) | iOS/后端开发者 | 免费身份、订阅权益、额度 RPC、安全边界与排查方法 |
+| [历史 AI 额度链路](docs/engineering/leafy-ai-quota-authentication.md) | 后端维护者 | 冻结 iOS 分支与现存后端兼容资产的历史鉴权设计 |
 | [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
 | [贡献规范](docs/operations/contributing.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
@@ -183,10 +181,7 @@ supabase functions deploy campus-ai-tools
 - 教务系统不是稳定 API。页面结构、登录流程或网络策略变化可能使解析暂时失效。
 - 当前教务身份绑定由 App 在登录成功后发起；它不等同于服务端对学校身份进行独立证明。
 - 社区、评价和共享能力依赖正确部署的 Supabase schema、RLS 与 Edge Functions。
-- 联网研究默认开启，但可在 MyLeafy 设置中关闭。北林官网检索和 DuckDuckGo Lite 都是 best-effort 免费入口，可能限流、验证码或因页面结构变化暂时不可用；这条链路没有搜索供应商按次费用，但仍消耗 Supabase Edge Function 套餐额度。
-- 联网研究只向规划器提供当前问题和有限的近期对话；搜索结果会先做相关性筛选，只有成功读取且在最终回答中实际采用的网页、PDF 或 Excel 来源才会显示。
-- 联网研究采用动态的安全上限：最多 10 轮、15 次搜索、20 个网页、4 个带文本层 PDF 和 4 个 XLSX 表格；资料足够时会立即结束，不会为了跑满次数继续搜索。PDF 最大 10 MB，Excel 最大 8 MB；旧版 XLS 与 DOC/DOCX/PPT/PPTX 只提供打开入口，扫描 PDF 不做 OCR。
-- 开启联网研究时，搜索词会经过 MyLeafy Tool Gateway。DeepSeek API Key 和用户允许的本机校园数据不会发送给该 Gateway；Gateway 的私有使用记录不保存原始搜索词或网页正文。
+- 仓库仍保留 AI 相关 Edge Functions、迁移和旧 SwiftData schema，以支持历史数据清理和冻结分支兼容；这些资产不代表当前公开 App 提供 AI 服务或购买入口。
 - 教师与课程等目录型数据需要经过可信来源整理或后台审核，仓库不会自动保证数据完整性。
 - 这是持续演进中的校园产品，内部数据模型与未稳定接口可能变化。
 
@@ -204,5 +199,5 @@ supabase functions deploy campus-ai-tools
 
 ## 联系
 
-- 问题与建议：[GitHub Issues](../../issues)
+- 问题与建议：[GitHub Issues](https://github.com/IsaacHuo/MyLeafy/issues)
 - 邮箱：`support@myleafy.space`

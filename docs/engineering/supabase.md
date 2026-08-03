@@ -143,15 +143,15 @@ MyLeafy 同时维护两个独立身份：
 
 本地 SwiftData 课表仍是个人数据的权威副本。不得把成绩、考试结果、课程备注、提醒或其他私密字段加入共享课表数据。
 
-### 3.5 AI 与额度
+### 3.5 AI 兼容资产与额度
 
-- MyLeafy AI 默认通过 `campus-ai-assistant` 使用固定 Flash；免费额度为北京时间每日 10 次。
-- 免费额度按 Supabase Auth 用户计数，不要求 App Store 安装记录；Xcode 或 Simulator 缺少有效 AppTransaction 时仍可使用免费额度。
-- `com.isaachuo.leafy.ai.weekly.v2` 周订阅按 Apple 实际周期提供 120 次，同时北京时间每日最多 40 次；旧商品不再授予权益。
-- 订阅额度只接受服务端验证成功的 Apple 订阅交易 JWS，客户端提交的交易 ID 或 App Transaction ID 不能单独授予权益。
-- `private` 额度函数通过仅授予 `service_role` 的公开 RPC 包装层供 Edge Function 调用，不向 `anon` 或 `authenticated` 开放。实现与排查见[MyLeafy AI 免费额度鉴权](leafy-ai-quota-authentication.md)。
-- 自备 DeepSeek API Key 是可选直连模式，Pro 仅在该模式开放。
-- 自备 API Key 不存入 Supabase。
+当前 `main` 的公开 iOS App 不调用 AI 服务或展示购买入口。以下后端资产继续保留，用于历史数据、已部署环境和默认冻结的 `codex/leafy-ai` 维护分支兼容：
+
+- `campus-ai-assistant` 的托管模式固定使用 Flash；历史免费额度为北京时间每日 10 次。
+- 免费额度按 Supabase Auth 用户计数，不要求 App Store 安装记录。
+- `com.isaachuo.leafy.ai.weekly.v2` 是历史实现唯一接受的周订阅商品；权益只接受服务端验证成功的 Apple 交易 JWS。
+- `private` 额度函数通过仅授予 `service_role` 的公开 RPC 包装层供 Edge Function 调用，不向 `anon` 或 `authenticated` 开放。实现与排查见[历史 AI 额度鉴权](leafy-ai-quota-authentication.md)。
+- 历史 BYOK 模式的 DeepSeek API Key 只保存在设备 Keychain，不进入 Supabase。
 - AI 请求日志应最小化，不长期保存完整个人学业上下文。
 
 ### 3.6 运营与审计
@@ -218,7 +218,7 @@ MyLeafy 同时维护两个独立身份：
 |---|---|
 | 社区初始化与 Feed | `community-bootstrap-user`、`community-feed` |
 | 校园服务 | `campus-request`、`campus-weather` |
-| MyLeafy AI 免费与订阅服务 | `campus-ai-assistant`、`campus-ai-entitlement`、`app-store-server-notifications` |
+| 历史 AI 兼容服务 | `campus-ai-assistant`、`campus-ai-entitlement`、`app-store-server-notifications` |
 | 分享 | `share-preview` |
 | 管理认证 | `admin-login`、`admin-me`、`admin-logout` |
 | 管理业务 | `admin-community`、`admin-export`、公告相关函数 |

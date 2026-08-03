@@ -1,6 +1,6 @@
 # App Store Guideline 2.3.6 Metadata Correction
 
-> 历史记录：本文保存当次年龄分级元数据驳回的修正内容；当前提交应以 App Store Connect 实际问卷和最新版审核指南为准。
+> 历史记录：本文保存当次年龄分级元数据驳回的修正内容；当前提交应以 App Store Connect 实际问卷和最新版审核指南为准。当前版本状态见[发布记录](../release-notes.md)，当前产品事实见[项目总览](../../product/overview.md)。
 
 Use this checklist for the Guideline 2.3.6 rejection about inaccurate Age Rating metadata.
 

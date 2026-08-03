@@ -51,3 +51,16 @@ PR 和推送到 `main` 会按改动范围触发 CI：
 npm --prefix site run test:e2e
 bash scripts/test-ios17-compatibility.sh
 ```
+
+## 正式版本与 Git tag
+
+正式发布保持轻量，但版本、源码和 App Store 构建必须能够互相追溯：
+
+1. 确认主 App、Widget 和 Share Extension 的 `MARKETING_VERSION` 与 `CURRENT_PROJECT_VERSION` 一致。
+2. 完成与发布风险相称的构建、测试、真机和 App Store 验收，并锁定实际上架二进制对应的提交。
+3. 在 [`release-notes.md`](release-notes.md) 记录版本、build、发布源码和用户可见摘要。
+4. 对发布提交创建 `v<marketing-version>` 形式的 annotated tag；tag message 记录版本、build、源码定版或发布日期，以及是否为历史补录。
+5. 单独推送每个 tag，并在 GitHub 创建同名正式 Release。Release 不默认附加 IPA、dSYM、证书或签名材料。
+6. 分别验证本地 tag、远端 tag、GitHub Release 和 Xcode 工程中的版本/build 完全一致。
+
+正式 tag 是不可变的发布锚点。创建后不得移动、覆盖、删除后重建或强制推送；如果发布内容有误，应创建后续版本或明确的修正记录。候选构建需要标记时使用独立的 prerelease 命名，不提前占用正式版本 tag。
