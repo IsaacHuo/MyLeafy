@@ -50,7 +50,7 @@ export const appStoreLinks = [
 export const capabilityStats = [
   { label: "服务校园", value: "北京林业大学" },
   { label: "默认入口", value: "课表" },
-  { label: "教务数据", value: "正方教务系统" },
+  { label: "教务数据", value: "教务系统" },
   { label: "社区服务", value: "Supabase" },
   { label: "技术支持", value: "App 内反馈" }
 ];
@@ -405,7 +405,7 @@ export const privacySummaryCards: Array<{
   {
     icon: LockKey,
     title: "学校登录相互独立",
-    body: "学校密码用于向正方教务系统发起登录。社区功能使用独立的 MyLeafy 会话。"
+    body: "学校密码用于向教务系统发起登录。社区功能使用独立的 MyLeafy 会话。"
   },
   {
     icon: Database,
@@ -434,8 +434,8 @@ export const privacySections: Array<{
     title: "我们处理的数据",
     icon: Database,
     items: [
-      "学校教务数据：学号、验证码、学校会话 Cookie、课表、成绩、考试、学习计划、毕业要求、空闲教室与教室占用信息来自正方教务系统。",
-      "登录凭据：学校密码会提交给正方教务系统用于登录；本网站不收集学校密码。",
+      "学校教务数据：学号、验证码、学校会话 Cookie、课表、成绩、考试、学习计划、毕业要求、空闲教室与教室占用信息来自教务系统。",
+      "登录凭据：学校密码会提交给教务系统用于登录；本网站不收集学校密码。",
       "本地缓存：最近同步的课程、成绩、课堂笔记、提醒、收藏教室、链接、倒计时、主题偏好、同步时间与失败信息保存在当前设备；iPhone、iPad 与 Mac 分别保存本地副本。",
       "社区资料：匿名社区会话、绑定学号、显示名称、昵称、头像、专业、年级、邮箱验证状态与资料更新时间用于建立社区身份。",
       "社区内容：帖子、私有图片、PDF/XLSX/DOCX/Markdown 附件、评论、点赞、公告阅读状态、教师星级评价与评价摘要保存在 MyLeafy Community。",
@@ -463,7 +463,7 @@ export const privacySections: Array<{
     title: "第三方服务",
     icon: Cloud,
     items: [
-      "北京林业大学正方教务系统用于学校登录与教务数据查询。",
+      "北京林业大学教务系统用于学校登录与教务数据查询。",
       "Supabase 用于 MyLeafy Community，包括匿名认证、数据库、私有图片与附件存储、Edge Functions、通知、反馈、评价、共享课表与管理工具。",
       "Cloudflare 用于 myleafy.space 的 DNS、静态托管与 support@myleafy.space 邮件转发。",
       "Apple 系统能力用于 App 分发、照片与文件选择、位置、日历、系统分享、通知与本地存储。",
