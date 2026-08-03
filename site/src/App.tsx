@@ -531,7 +531,7 @@ function HomeDataTrust() {
             <LockKey size={24} weight="bold" aria-hidden />
           </span>
           <h2 className="mt-8 max-w-lg text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-5xl">
-            每类数据，都有清晰边界。
+            每类数据，<br />都有清晰边界。
           </h2>
           <p className="mt-5 max-w-md text-base leading-relaxed text-ivory/60">
             学校数据、本地存储、社区服务与公共官网各自独立，来源和用途清楚可见。
@@ -585,7 +585,7 @@ function FeaturesPage({ navigate }: { navigate: (href: string) => void }) {
 
       <CapabilityRail />
 
-      <SectionShell id="product" title="四个入口，一条日常动线" body="每个入口各有职责，需要的信息一眼就能找到。">
+      <SectionShell id="product" title={<>四个入口，<br />一条日常动线</>} body="每个入口各有职责，需要的信息一眼就能找到。">
         <FeatureBandList />
       </SectionShell>
 
@@ -652,7 +652,7 @@ function FeatureImageShowcase() {
         <ScrollReveal className="max-w-3xl">
           <p className="text-sm font-semibold text-accent">App 实景</p>
           <h2 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">
-            每个日常，都有专注的视图。
+            每个日常，<br />都有专注的视图。
           </h2>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
             课表、社区、成绩、学习资料、校园信息与 MyLeafy AI。
@@ -789,7 +789,7 @@ function SupportPage() {
       <PageHero
         icon={Headset}
         label="技术支持"
-        title="校园数据遇到问题时，我们在这里。"
+        title={<>校园数据遇到问题时，<br />我们在这里。</>}
         body="登录、同步、课表解析、社区、分享或评价出现问题时，可通过邮件或 App 内反馈联系我们。"
         image="/media/campus/snowy-campus-building.jpg"
         imageAlt="雪中的北京林业大学校园建筑"
@@ -841,8 +841,8 @@ function PrivacyPage() {
       <PageHero
         icon={ShieldCheck}
         label="隐私"
-        title="用清楚的话，说明数据边界。"
-        body={"了解 MyLeafy 如何处理学校登录、本地缓存、社区、反馈、评价、分享与官网数据。最后更新于 " + site.updatedAt + "。"}
+        title={<>用清楚的话，<br />说明数据边界。</>}
+        body={"了解 MyLeafy 如何处理学校登录、设备数据、社区、反馈、评价、分享与官网数据。最后更新于 " + site.updatedAt + "。"}
         image="/media/campus/classroom-at-dusk.jpg"
         imageAlt="暮色中的北京林业大学教室"
       >
@@ -988,7 +988,7 @@ function PageHero({
 }: {
   icon: IconComponent;
   label: string;
-  title: string;
+  title: ReactNode;
   body: string;
   image: string;
   imageAlt: string;
@@ -1020,7 +1020,7 @@ function SectionShell({
   children,
   id
 }: {
-  title: string;
+  title: ReactNode;
   body?: string;
   children: ReactNode;
   id?: string;
