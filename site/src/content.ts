@@ -288,7 +288,7 @@ export const featureBands: Array<{
 export const homeDataBoundaries = [
   {
     label: "学校系统",
-    value: "正方教务系统",
+    value: "教务系统",
     body: "登录、课表、成绩、考试、学习计划、毕业要求与教室查询来自学校系统。"
   },
   {
