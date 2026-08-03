@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import {
   ArrowRight,
   Buildings,
@@ -16,6 +16,7 @@ import {
   List,
   LockKey,
   ShieldCheck,
+  WarningCircle,
   X
 } from "@phosphor-icons/react";
 import {
@@ -78,6 +79,10 @@ function routeFromHref(href: string) {
   }
 }
 
+function shouldUseClientNavigation(event: MouseEvent<HTMLAnchorElement>) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
 function usePathname() {
   const [path, setPath] = useState(() => normalizedPath(window.location.pathname));
 
@@ -109,9 +114,16 @@ export default function App() {
           : "/";
   const timetableInviteCode = isShareTimetablePath ? path.split("/").pop() ?? "" : "";
   const communityPostID = isShareCommunityPostPath ? path.split("/").pop() ?? "" : "";
+  const previousPath = useRef(activePath);
 
   useEffect(() => {
     document.title = pageTitles[activePath];
+    if (previousPath.current !== activePath) {
+      window.setTimeout(() => {
+        document.querySelector<HTMLElement>("#main-content h1")?.focus({ preventScroll: true });
+      }, 0);
+    }
+    previousPath.current = activePath;
   }, [activePath]);
 
   function navigate(href: string) {
@@ -141,10 +153,11 @@ export default function App() {
     setPath(targetPath);
 
     window.setTimeout(() => {
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
       if (hash) {
-        document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        document.getElementById(hash)?.scrollIntoView({ behavior, block: "start" });
       } else {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior });
       }
     }, 0);
   }
@@ -159,8 +172,9 @@ export default function App() {
 
   return (
     <div className="public-site min-h-[100dvh] bg-paper text-text">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <Header activePath={activePath} navigate={navigate} />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {activePath === "/" && <HomePage navigate={navigate} />}
         {activePath === "/features" && <FeaturesPage navigate={navigate} />}
         {activePath === "/support" && <SupportPage />}
@@ -175,8 +189,22 @@ export default function App() {
 
 function Header({ activePath, navigate }: { activePath: string; navigate: (href: string) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => setMenuOpen(false), [activePath]);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
 
   function go(href: string) {
     setMenuOpen(false);
@@ -189,17 +217,18 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
         <a
           href="/"
           onClick={(event) => {
+            if (!shouldUseClientNavigation(event)) return;
             event.preventDefault();
             go("/");
           }}
-          className="leafy-pressable flex min-w-fit items-center gap-3 rounded-full"
+          className="leafy-pressable flex min-h-11 min-w-fit items-center gap-3 rounded-full"
           aria-label="MyLeafy home"
         >
           <img className="h-9 w-9 rounded-[11px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy app icon" />
           <strong className="text-lg font-semibold leading-none tracking-[-0.025em] text-ivory">MyLeafy</strong>
         </a>
 
-        <nav className="ml-8 hidden flex-1 items-center justify-center gap-1 md:flex">
+        <nav aria-label="Primary navigation" className="ml-8 hidden flex-1 items-center justify-center gap-1 md:flex">
           {navItems.map((item) => {
             const route = routeFromHref(item.href).split("#")[0];
             const isActive = route === "/" ? activePath === "/" : activePath === route;
@@ -208,11 +237,13 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
                 key={item.href}
                 href={item.href}
                 onClick={(event) => {
+                  if (!shouldUseClientNavigation(event)) return;
                   event.preventDefault();
                   go(item.href);
                 }}
+                aria-current={isActive ? "page" : undefined}
                 className={
-                  "leafy-pressable whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors " +
+                  "leafy-pressable inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors " +
                   (isActive ? "bg-white/10 text-ivory" : "text-ivory/60 hover:bg-white/[0.07] hover:text-ivory")
                 }
               >
@@ -225,7 +256,7 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
         <div className="ml-auto flex items-center gap-2">
           <a
             href={"mailto:" + site.supportEmail}
-            className="leafy-pressable hidden rounded-full px-3 py-2 text-sm font-medium text-ivory/60 hover:bg-white/[0.07] hover:text-ivory lg:inline-flex"
+            className="leafy-pressable hidden min-h-11 items-center rounded-full px-3 py-2 text-sm font-medium text-ivory/60 hover:bg-white/[0.07] hover:text-ivory lg:inline-flex"
           >
             Contact
           </a>
@@ -233,10 +264,12 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
             <AppStoreBadge compact />
           </div>
           <button
+            ref={menuButtonRef}
             type="button"
             className="leafy-pressable grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/[0.06] text-ivory md:hidden"
             aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={menuOpen}
+            aria-controls="mobile-navigation"
             onClick={() => setMenuOpen((value) => !value)}
           >
             {menuOpen ? <X size={21} weight="bold" aria-hidden /> : <List size={21} weight="bold" aria-hidden />}
@@ -245,20 +278,29 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
       </div>
 
       {menuOpen && (
-        <nav className="mx-auto mt-2 grid max-w-7xl gap-1 rounded-[24px] border border-white/10 bg-forest/95 p-3 shadow-deep backdrop-blur-2xl md:hidden">
-          {navItems.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              onClick={(event) => {
-                event.preventDefault();
-                go(item.href);
-              }}
-              className="leafy-pressable rounded-2xl px-4 py-3 text-sm font-medium text-ivory/80 hover:bg-white/[0.07] hover:text-ivory"
-            >
-              {item.label}
-            </a>
-          ))}
+        <nav id="mobile-navigation" aria-label="Mobile navigation" className="mx-auto mt-2 grid max-w-7xl gap-1 rounded-[24px] border border-white/10 bg-forest/95 p-3 shadow-deep backdrop-blur-2xl md:hidden">
+          {navItems.map((item) => {
+            const route = routeFromHref(item.href).split("#")[0];
+            const isActive = route === "/" ? activePath === "/" : activePath === route;
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={(event) => {
+                  if (!shouldUseClientNavigation(event)) return;
+                  event.preventDefault();
+                  go(item.href);
+                }}
+                aria-current={isActive ? "page" : undefined}
+                className={
+                  "leafy-pressable flex min-h-11 items-center rounded-2xl px-4 py-3 text-sm font-medium hover:bg-white/[0.07] hover:text-ivory " +
+                  (isActive ? "bg-white/10 text-ivory" : "text-ivory/80")
+                }
+              >
+                {item.label}
+              </a>
+            );
+          })}
           <a className="leafy-pressable rounded-2xl px-4 py-3 text-sm font-medium text-accent" href={"mailto:" + site.supportEmail}>
             Contact support
           </a>
@@ -271,7 +313,7 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
 function HomePage({ navigate }: { navigate: (href: string) => void }) {
   return (
     <>
-      <section className="hero-canvas relative isolate flex min-h-[100dvh] items-end overflow-hidden pt-24 lg:min-h-[760px]">
+      <section className="hero-canvas relative isolate flex min-h-[min(100dvh,860px)] items-end overflow-hidden pt-24 lg:min-h-[760px]">
         <img
           className="absolute inset-0 -z-20 h-full w-full object-cover object-[48%_center]"
           src="/media/campus/rainy-woodland-path.jpg"
@@ -283,7 +325,7 @@ function HomePage({ navigate }: { navigate: (href: string) => void }) {
         <div className="mx-auto grid w-full max-w-7xl items-end gap-8 px-4 pb-10 md:px-6 md:pb-14 lg:grid-cols-[0.88fr_1.12fr] lg:gap-4">
           <StaggerReveal className="relative z-10 max-w-xl pb-4 lg:pb-12">
             <p className="mb-5 text-sm font-semibold text-accent">Built for BJFU students</p>
-            <h1 className="max-w-[720px] text-[clamp(3.4rem,7vw,6.6rem)] font-semibold leading-[0.91] tracking-[-0.065em] text-ivory">
+            <h1 tabIndex={-1} className="max-w-[720px] text-[clamp(3.15rem,7vw,6.6rem)] font-semibold leading-[0.94] tracking-[-0.045em] text-ivory">
               Campus life,<br />in one place.
             </h1>
             <p className="mt-6 max-w-[500px] text-base leading-relaxed text-ivory/70 md:text-lg">
@@ -304,7 +346,6 @@ function HomePage({ navigate }: { navigate: (href: string) => void }) {
 
       <CampusIdentitySection />
       <AppExperienceSection />
-      <CampusSeasonsSection />
       <HomeDataTrust />
 
       <section className="relative isolate overflow-hidden px-4 py-24 md:px-6 md:py-32">
@@ -338,10 +379,10 @@ function AppStoreBadge({ compact = false }: { compact?: boolean }) {
   return (
     <a
       href={site.appStoreUrl}
-      className={"app-store-badge leafy-pressable inline-flex shrink-0 " + (compact ? "h-10" : "h-12")}
+      className="app-store-badge leafy-pressable inline-flex min-h-11 shrink-0 items-center"
       aria-label="Download MyLeafy on the App Store"
     >
-      <img className="h-full w-auto max-w-none" src="/media/download-on-the-app-store.svg" alt="Download on the App Store" />
+      <img className={(compact ? "h-10" : "h-12") + " w-auto max-w-none"} src="/media/download-on-the-app-store.svg" alt="Download on the App Store" />
     </a>
   );
 }
@@ -389,9 +430,17 @@ function HeroPhones() {
 
 function CampusIdentitySection() {
   return (
-    <section className="bg-paper px-4 py-16 md:px-6 md:py-20">
-      <ScrollReveal className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.65fr_1.35fr] lg:items-end">
-        <div className="lg:order-2">
+    <section className="bg-paper px-4 py-20 md:px-6 md:py-28">
+      <div className="mx-auto max-w-7xl">
+        <ScrollReveal className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
+          <div>
+            <h2 className="max-w-xl text-4xl font-semibold leading-[1.06] tracking-[-0.03em] text-ivory md:text-5xl">
+              Made from the life already happening here.
+            </h2>
+            <p className="mt-5 max-w-lg text-base leading-relaxed text-ivory/60">
+              MyLeafy brings school systems and everyday campus routines into one calmer experience.
+            </p>
+          </div>
           <div className="overflow-hidden rounded-[28px] border border-white/10 bg-forest-elevated shadow-deep">
             <img
               className="aspect-[16/9] h-full w-full object-cover"
@@ -401,27 +450,20 @@ function CampusIdentitySection() {
               decoding="async"
             />
           </div>
+        </ScrollReveal>
+        <div className="mt-10 grid gap-x-8 sm:grid-cols-2 lg:grid-cols-4">
+          {featureBands.map((item) => {
+            const Icon = item.icon;
+            return (
+              <ScrollReveal key={item.label} className="border-t border-white/10 py-6">
+                <Icon size={21} weight="bold" className="text-accent" aria-hidden />
+                <p className="mt-4 text-sm font-semibold text-accent">{item.label}</p>
+                <p className="mt-2 text-sm leading-relaxed text-ivory/60">{item.body}</p>
+              </ScrollReveal>
+            );
+          })}
         </div>
-        <div className="grid gap-8 lg:order-1 lg:pb-5">
-          <div>
-            <h2 className="max-w-xl text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ivory md:text-5xl">
-              Made from the life already happening here.
-            </h2>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-ivory/60">
-              MyLeafy brings school systems and everyday campus routines into one calmer experience.
-            </p>
-          </div>
-          <div className="overflow-hidden rounded-[24px] border border-white/10 shadow-deep">
-            <img
-              className="aspect-[3/2] w-full object-cover"
-              src="/media/campus/campus-entrance-bicycles.jpg"
-              alt="Bicycles beside a stone lion at a BJFU campus entrance"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        </div>
-      </ScrollReveal>
+      </div>
     </section>
   );
 }
@@ -470,53 +512,6 @@ function AppExperienceSection() {
                 <PhoneFrame image={shot.image} alt={shot.alt} loading={index === 0 ? "eager" : "lazy"} />
               </div>
             ))}
-          </ScrollReveal>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CampusSeasonsSection() {
-  return (
-    <section className="bg-paper px-4 py-24 md:px-6 md:py-36">
-      <div className="mx-auto max-w-7xl">
-        <ScrollReveal className="max-w-3xl">
-          <h2 className="text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ivory md:text-6xl">
-            One campus, through every season.
-          </h2>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
-            The tools stay consistent while the campus around them keeps changing.
-          </p>
-        </ScrollReveal>
-
-        <div className="mt-14 grid gap-5 md:grid-cols-[1.08fr_0.92fr] md:grid-rows-2">
-          <ScrollReveal className="overflow-hidden rounded-[28px] border border-white/10 md:row-span-2">
-            <img
-              className="h-full min-h-[520px] w-full object-cover"
-              src="/media/campus/autumn-campus-canopy.jpg"
-              alt="Golden autumn trees framing a BJFU campus building"
-              loading="lazy"
-              decoding="async"
-            />
-          </ScrollReveal>
-          <ScrollReveal className="overflow-hidden rounded-[28px] border border-white/10">
-            <img
-              className="aspect-[16/10] h-full w-full object-cover object-[center_70%]"
-              src="/media/campus/spring-blossoms-cat.jpg"
-              alt="A campus cat under spring blossoms at BJFU"
-              loading="lazy"
-              decoding="async"
-            />
-          </ScrollReveal>
-          <ScrollReveal className="overflow-hidden rounded-[28px] border border-white/10">
-            <img
-              className="aspect-[16/10] h-full w-full object-cover object-[center_58%]"
-              src="/media/campus/snowy-campus-building.jpg"
-              alt="A BJFU campus building surrounded by snow-covered trees"
-              loading="lazy"
-              decoding="async"
-            />
           </ScrollReveal>
         </div>
       </div>
@@ -574,7 +569,7 @@ function FeaturesPage({ navigate }: { navigate: (href: string) => void }) {
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_0.7fr] lg:items-end">
           <StaggerReveal className="max-w-3xl">
             <p className="text-sm font-semibold text-accent">Features</p>
-            <h1 className="mt-5 text-[clamp(3.4rem,7vw,6.4rem)] font-semibold leading-[0.92] tracking-[-0.06em] text-ivory">
+            <h1 tabIndex={-1} className="mt-5 text-[clamp(3.15rem,7vw,6.4rem)] font-semibold leading-[0.94] tracking-[-0.045em] text-ivory">
               Built around<br />campus rhythm.
             </h1>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-ivory/70 md:text-lg">
@@ -618,7 +613,7 @@ function CapabilityRail() {
       <div className="leafy-scrollbar-none mx-auto flex max-w-7xl overflow-x-auto px-4 md:px-6">
         {capabilityStats.map((metric) => (
           <div key={metric.label} className="min-w-[220px] flex-1 border-r border-white/[0.08] px-5 py-7 first:pl-0 last:border-r-0 last:pr-0">
-            <span className="block text-xs font-medium text-ivory/40">{metric.label}</span>
+            <span className="block text-xs font-medium text-ivory/60">{metric.label}</span>
             <span className="mt-2 block text-sm font-semibold text-ivory">{metric.value}</span>
           </div>
         ))}
@@ -672,7 +667,7 @@ function FeatureImageShowcase() {
             </div>
             <p className="mt-5 text-sm font-semibold text-accent">{shot.label}</p>
             <h3 className="mt-2 text-2xl font-semibold leading-tight tracking-[-0.025em] text-ivory">{shot.title}</h3>
-            <p className="mt-3 text-sm leading-relaxed text-ivory/50">{shot.body}</p>
+            <p className="mt-3 text-sm leading-relaxed text-ivory/60">{shot.body}</p>
           </article>
         ))}
       </div>
@@ -744,6 +739,7 @@ function ResourcesSection({ navigate }: { navigate: (href: string) => void }) {
                 key={link.title}
                 href={link.href}
                 onClick={(event) => {
+                  if (!shouldUseClientNavigation(event)) return;
                   event.preventDefault();
                   navigate(link.href);
                 }}
@@ -766,7 +762,7 @@ function ResourcesSection({ navigate }: { navigate: (href: string) => void }) {
               key={link.label}
               href={link.value}
               onClick={(event) => {
-                if (link.value.includes(site.domain)) {
+                if (link.value.includes(site.domain) && shouldUseClientNavigation(event)) {
                   event.preventDefault();
                   navigate(link.value);
                 }
@@ -877,13 +873,19 @@ function PrivacyPage() {
 }
 
 function ShareTimetablePage({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const normalizedCode = code.toUpperCase().replace(/[^A-Z2-7]/g, "");
+  const isValidCode = /^[A-Z2-7]{12}$/.test(normalizedCode);
 
   async function copyCode() {
-    await navigator.clipboard?.writeText(normalizedCode);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(normalizedCode);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1800);
+    } catch {
+      setCopyState("error");
+    }
   }
 
   return (
@@ -891,23 +893,30 @@ function ShareTimetablePage({ code }: { code: string }) {
       <PageHero
         icon={CalendarBlank}
         label="Shared timetable"
-        title="Open a shared week in MyLeafy."
-        body="Copy the invite code, then open Profile, Shared Timetable, and Add a classmate's timetable."
+        title={isValidCode ? "Open a shared week in MyLeafy." : "This timetable link is incomplete."}
+        body={isValidCode ? "Copy the invite code, then open Profile, Shared Timetable, and Add a classmate's timetable." : "Ask the sharer to send the complete link again. A valid invite code contains 12 characters."}
         image="/media/campus/spring-blossoms-cat.jpg"
         imageAlt="Spring blossoms and a campus cat at BJFU"
       >
         <div className="mt-8 grid max-w-xl gap-4">
-          <div className={featuredPanelClass}>
+          <div className={featuredPanelClass} role={isValidCode ? undefined : "alert"}>
             <p className="text-sm font-semibold text-ivory/50">Invite code</p>
-            <p className="mt-3 break-all text-5xl font-semibold tracking-[-0.03em] text-ivory">{normalizedCode || "Not recognized"}</p>
+            <p className="mt-3 break-all text-4xl font-semibold tracking-[-0.02em] text-ivory sm:text-5xl">{isValidCode ? normalizedCode : "Invalid link"}</p>
             <p className="mt-4 text-sm leading-relaxed text-ivory/60">
-              Invite codes are valid for seven days and can be accepted by one person. Access can be revoked later.
+              {isValidCode
+                ? "Invite codes are valid for seven days and can be accepted by one person. Access can be revoked later."
+                : "No timetable can be opened from this URL. Please return to the message where the link was shared."}
             </p>
           </div>
-          <button type="button" onClick={copyCode} className={primaryButtonClass + " leafy-pressable inline-flex min-h-11 w-fit items-center gap-2 rounded-full px-5 text-sm font-medium"}>
-            <CheckCircle size={18} weight="bold" aria-hidden />
-            {copied ? "Copied" : "Copy invite code"}
-          </button>
+          {isValidCode && (
+            <button type="button" onClick={copyCode} className={primaryButtonClass + " leafy-pressable inline-flex min-h-11 w-fit items-center gap-2 rounded-full px-5 text-sm font-medium"}>
+              {copyState === "error" ? <WarningCircle size={18} weight="bold" aria-hidden /> : <CheckCircle size={18} weight="bold" aria-hidden />}
+              {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed — try again" : "Copy invite code"}
+            </button>
+          )}
+          <p className="min-h-6 text-sm text-ivory/60" role="status" aria-live="polite">
+            {copyState === "copied" ? "Invite code copied to the clipboard." : copyState === "error" ? "Clipboard access is unavailable. Select the code and copy it manually." : ""}
+          </p>
         </div>
       </PageHero>
 
@@ -919,29 +928,38 @@ function ShareTimetablePage({ code }: { code: string }) {
 }
 
 function ShareCommunityPostPage({ postID }: { postID: string }) {
-  const normalizedPostID = postID.match(/^[0-9a-fA-F-]{36}$/) ? postID : "";
-  const appURL = normalizedPostID ? "https://" + site.domain + "/share/community/post/" + normalizedPostID + "?open=1" : site.homeUrl;
+  const normalizedPostID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(postID) ? postID : "";
+  const appURL = normalizedPostID ? "leafy://community-post?id=" + encodeURIComponent(normalizedPostID) : "";
 
   return (
     <>
       <PageHero
         icon={ChatsCircle}
         label="Community post"
-        title="Continue the conversation in MyLeafy."
-        body="This share link opens the post detail in the latest version of the app."
+        title={normalizedPostID ? "Continue the conversation in MyLeafy." : "This community post link is invalid."}
+        body={normalizedPostID ? "This share link opens the post detail in the latest version of the app." : "The post ID is missing or malformed. Ask the sharer to send the link again."}
         image="/media/campus/campus-entrance-bicycles.jpg"
         imageAlt="Bicycles parked at a BJFU campus entrance"
       >
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <TapButton href={appURL} className={primaryButtonClass}>
-            <DeviceMobile size={18} weight="bold" aria-hidden />
-            Open MyLeafy
-          </TapButton>
-          <TapButton href={site.appStoreUrl || site.supportUrl} className={secondaryButtonClass}>
-            <ArrowRight size={18} weight="bold" aria-hidden />
-            Get MyLeafy
-          </TapButton>
-        </div>
+        {normalizedPostID ? (
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <TapButton href={appURL} className={primaryButtonClass}>
+              <DeviceMobile size={18} weight="bold" aria-hidden />
+              Open MyLeafy
+            </TapButton>
+            <TapButton href={site.appStoreUrl || site.supportUrl} className={secondaryButtonClass}>
+              <ArrowRight size={18} weight="bold" aria-hidden />
+              Get MyLeafy
+            </TapButton>
+          </div>
+        ) : (
+          <div className={featuredPanelClass + " mt-8 max-w-xl"} role="alert">
+            <p className="font-semibold text-ivory">The post cannot be opened from this URL.</p>
+            <a className="leafy-pressable mt-4 inline-flex min-h-11 items-center rounded-full text-sm font-semibold text-accent" href="/support">
+              Contact support
+            </a>
+          </div>
+        )}
       </PageHero>
 
       <SectionShell title="Community content opens in the app">
@@ -983,7 +1001,7 @@ function PageHero({
             <Icon size={24} weight="regular" aria-hidden />
           </span>
           <p className="mt-7 text-sm font-semibold text-accent">{label}</p>
-          <h1 className="mt-5 text-5xl font-semibold leading-[0.96] tracking-[-0.055em] text-ivory md:text-7xl">{title}</h1>
+          <h1 tabIndex={-1} className="mt-5 text-5xl font-semibold leading-[1] tracking-[-0.035em] text-ivory md:text-7xl">{title}</h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-ivory/60 md:text-lg">{body}</p>
           {children}
         </StaggerReveal>
@@ -1104,7 +1122,7 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
           </a>
         </div>
 
-        <nav className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <nav aria-label="Footer navigation" className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {footerGroups.map((group) => (
             <div key={group.title}>
               <h2 className="text-sm font-semibold text-ivory">{group.title}</h2>
@@ -1116,10 +1134,11 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
                     onClick={(event) => {
                       if (link.href.startsWith("http") && !link.href.includes(site.domain)) return;
                       if (link.href.startsWith("mailto:")) return;
+                      if (!shouldUseClientNavigation(event)) return;
                       event.preventDefault();
                       navigate(link.href);
                     }}
-                    className="break-words text-sm font-medium leading-relaxed text-ivory/50 hover:text-accent"
+                    className="leafy-pressable flex min-h-11 items-center break-words text-sm font-medium leading-relaxed text-ivory/60 hover:text-accent"
                   >
                     {link.label}
                   </a>
@@ -1130,16 +1149,17 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
         </nav>
       </div>
       <div className="border-t border-white/[0.07] px-4 py-5 md:px-6">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-xs font-medium text-ivory/40 md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-xs font-medium text-ivory/60 md:flex-row md:items-center md:justify-between">
           <div className="grid gap-1">
             <span>Last updated: {site.updatedAt}</span>
             <span>Apple, the Apple logo, App Store, and iPhone are trademarks of Apple Inc.</span>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <a
-              className="inline-flex items-center gap-2 hover:text-accent"
+              className="leafy-pressable inline-flex min-h-11 items-center gap-2 hover:text-accent"
               href="/"
               onClick={(event) => {
+                if (!shouldUseClientNavigation(event)) return;
                 event.preventDefault();
                 navigate("/");
               }}
@@ -1147,7 +1167,7 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
               <House size={15} aria-hidden />
               Home
             </a>
-            <a className="inline-flex items-center gap-2 hover:text-accent" href={"mailto:" + site.supportEmail}>
+            <a className="leafy-pressable inline-flex min-h-11 items-center gap-2 hover:text-accent" href={"mailto:" + site.supportEmail}>
               <EnvelopeSimple size={15} aria-hidden />
               Contact
             </a>

@@ -19,7 +19,7 @@ export function StaggerReveal({ children, className }: PropsWithChildren<{ class
         hidden: {},
         visible: {
           transition: {
-            staggerChildren: 0.055
+            staggerChildren: 0.08
           }
         }
       }}
@@ -136,7 +136,7 @@ export function TapButton({
         href={href}
         className={classes}
         whileHover={shouldReduceMotion ? undefined : { transform: "translate3d(0, -1px, 0)" }}
-        whileTap={shouldReduceMotion ? undefined : { transform: "translate3d(0, 0, 0) scale(0.97)" }}
+        whileTap={shouldReduceMotion ? undefined : { transform: "translate3d(0, 0, 0) scale(0.96)" }}
         transition={{ duration: 0.16, ease: easeOut }}
       >
         {children}
@@ -151,7 +151,7 @@ export function TapButton({
       disabled={disabled}
       className={classes}
       whileHover={shouldReduceMotion ? undefined : { transform: "translate3d(0, -1px, 0)" }}
-      whileTap={shouldReduceMotion ? undefined : { transform: "translate3d(0, 0, 0) scale(0.97)" }}
+      whileTap={shouldReduceMotion ? undefined : { transform: "translate3d(0, 0, 0) scale(0.96)" }}
       transition={{ duration: 0.16, ease: easeOut }}
     >
       {children}

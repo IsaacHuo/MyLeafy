@@ -5,14 +5,19 @@ const defaultPreview = {
   description: "MyLeafy 是校园课表、社区和共享课表工具。",
   imageURL: appIconURL,
 };
+const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const inviteCodePattern = /^[A-Z2-7]{12}$/;
 
 export async function onRequestGet(context) {
   const requestURL = new URL(context.request.url);
-  const communityPostMatch = requestURL.pathname.match(/^\/share\/community\/post\/([0-9a-fA-F-]{36})\/?$/);
-  const timetableMatch = requestURL.pathname.match(/^\/share\/timetable\/([A-Za-z2-7-]+)\/?$/);
+  const communityPostMatch = requestURL.pathname.match(/^\/share\/community\/post\/([^/]+)\/?$/);
+  const timetableMatch = requestURL.pathname.match(/^\/share\/timetable\/([^/]+)\/?$/);
 
   if (communityPostMatch) {
     const postID = communityPostMatch[1];
+    if (!uuidPattern.test(postID)) {
+      return invalidShareResponse("This community post link is invalid.", "Ask the sharer to send the complete link again.");
+    }
     const preview = await fetchPreview(context, `kind=community-post&id=${encodeURIComponent(postID)}`);
     return htmlResponse(renderSharePage({
       kind: "community-post",
@@ -29,6 +34,9 @@ export async function onRequestGet(context) {
 
   if (timetableMatch) {
     const code = normalizeInviteCode(timetableMatch[1]);
+    if (!inviteCodePattern.test(code)) {
+      return invalidShareResponse("This timetable link is incomplete.", "A valid invite code contains 12 characters. Ask the sharer to send the complete link again.");
+    }
     const preview = await fetchPreview(context, `kind=timetable-invite&code=${encodeURIComponent(code)}`);
     return htmlResponse(renderSharePage({
       kind: "timetable-invite",
@@ -43,16 +51,21 @@ export async function onRequestGet(context) {
     }));
   }
 
+  return invalidShareResponse("This share link cannot be opened.", "Check that the complete URL was copied, or return to the MyLeafy website.");
+}
+
+function invalidShareResponse(title, description) {
   return htmlResponse(renderSharePage({
     kind: "unknown",
-    title: defaultPreview.title,
-    description: defaultPreview.description,
+    title,
+    description,
     canonicalURL: `${siteOrigin}/`,
     imageURL: defaultPreview.imageURL,
-    appURL: "leafy://timetable",
-    eyebrow: "MyLeafy",
-    actionTitle: "打开 MyLeafy",
-    fallbackTitle: "了解 MyLeafy",
+    appURL: `${siteOrigin}/`,
+    fallbackURL: `${siteOrigin}/support`,
+    eyebrow: "Invalid share link",
+    actionTitle: "返回 MyLeafy 官网",
+    fallbackTitle: "联系支持",
   }), 404);
 }
 
@@ -91,6 +104,7 @@ function renderSharePage({
   canonicalURL,
   imageURL,
   appURL,
+  fallbackURL = "https://apps.apple.com/cn/search?term=MyLeafy%20%E5%8C%97%E4%BA%AC%E6%9E%97%E4%B8%9A%E5%A4%A7%E5%AD%A6",
   eyebrow,
   actionTitle,
   fallbackTitle,
@@ -100,6 +114,7 @@ function renderSharePage({
   const escapedCanonicalURL = escapeHTML(canonicalURL);
   const escapedImageURL = escapeHTML(imageURL);
   const escapedAppURL = escapeHTML(appURL);
+  const escapedFallbackURL = escapeHTML(fallbackURL);
   const accentLabel = kind === "timetable-invite" ? "共享课表邀请" : kind === "community-post" ? "社区帖子" : "MyLeafy";
 
   return `<!doctype html>
@@ -108,7 +123,7 @@ function renderSharePage({
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="${escapedDescription}" />
-    <meta name="theme-color" content="#eef5ef" />
+    <meta name="theme-color" content="#091611" />
     <meta property="og:title" content="${escapedTitle}" />
     <meta property="og:description" content="${escapedDescription}" />
     <meta property="og:type" content="website" />
@@ -126,15 +141,20 @@ function renderSharePage({
     <title>${escapedTitle}</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: dark;
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-        color: #1d261f;
-        background: #eef5ef;
+        color: #f0f4ef;
+        background: #091611;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
       }
       body {
         margin: 0;
         min-height: 100dvh;
-        background: #eef5ef;
+        background:
+          radial-gradient(circle at 82% 18%, rgba(72, 118, 80, 0.16), transparent 30rem),
+          #091611;
       }
       main {
         box-sizing: border-box;
@@ -145,26 +165,26 @@ function renderSharePage({
       }
       article {
         width: min(100%, 720px);
-        border: 1px solid rgba(20, 40, 25, 0.12);
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 24px;
+        background: rgba(13, 29, 22, 0.9);
         padding: clamp(24px, 5vw, 44px);
-        box-shadow: 0 24px 70px rgba(20, 40, 25, 0.08);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
       }
       img {
         width: 56px;
         height: 56px;
         border-radius: 12px;
-        border: 1px solid rgba(20, 40, 25, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.12);
       }
       p {
-        color: rgba(29, 38, 31, 0.68);
+        color: rgba(240, 244, 239, 0.72);
         font-size: 16px;
         line-height: 1.7;
       }
       .eyebrow {
         margin-top: 22px;
-        color: #2d6c43;
+        color: #9bc8a2;
         font-size: 13px;
         font-weight: 700;
       }
@@ -178,8 +198,8 @@ function renderSharePage({
         display: inline-flex;
         margin-top: 20px;
         border-radius: 999px;
-        background: rgba(54, 118, 74, 0.12);
-        color: #245736;
+        background: rgba(155, 200, 162, 0.12);
+        color: #b7ddbd;
         padding: 7px 12px;
         font-size: 13px;
         font-weight: 700;
@@ -195,20 +215,24 @@ function renderSharePage({
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border-radius: 8px;
+        border-radius: 999px;
         padding: 0 18px;
         text-decoration: none;
         font-size: 15px;
         font-weight: 700;
       }
       .primary {
-        background: #36764a;
-        color: white;
+        background: #9bc8a2;
+        color: #091611;
       }
       .secondary {
-        border: 1px solid rgba(20, 40, 25, 0.14);
-        color: #1d261f;
-        background: white;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #f0f4ef;
+        background: rgba(255, 255, 255, 0.04);
+      }
+      a:focus-visible {
+        outline: 2px solid #9bc8a2;
+        outline-offset: 4px;
       }
     </style>
   </head>
@@ -222,7 +246,7 @@ function renderSharePage({
         <p>${escapedDescription}</p>
         <div class="actions">
           <a class="primary" href="${escapedAppURL}">${escapeHTML(actionTitle)}</a>
-          <a class="secondary" href="https://apps.apple.com/cn/search?term=MyLeafy%20%E5%8C%97%E4%BA%AC%E6%9E%97%E4%B8%9A%E5%A4%A7%E5%AD%A6">${escapeHTML(fallbackTitle)}</a>
+          <a class="secondary" href="${escapedFallbackURL}">${escapeHTML(fallbackTitle)}</a>
         </div>
       </article>
     </main>

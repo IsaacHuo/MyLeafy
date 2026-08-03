@@ -6,7 +6,6 @@
   color: #f0f4ef;
   background: #091611;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -60,6 +59,36 @@ img {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: 12px;
+  z-index: 100;
+  min-height: 44px;
+  transform: translateY(-160%);
+  border: 1px solid rgba(155, 200, 162, 0.55);
+  border-radius: 999px;
+  background: #f0f4ef;
+  color: #091611;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 160ms var(--ease-out);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.public-site h1,
+.public-site h2 {
+  text-wrap: balance;
+}
+
+.public-site p {
+  text-wrap: pretty;
+}
+
 .public-site.bg-paper,
 .public-site .bg-paper {
   background-color: #091611;
@@ -99,11 +128,11 @@ button {
 .leafy-pressable {
   transform: translate3d(0, 0, 0);
   transition: transform 160ms var(--ease-out), background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
-  will-change: transform;
+  touch-action: manipulation;
 }
 
 .leafy-pressable:active {
-  transform: translate3d(0, 0, 0) scale(0.97) !important;
+  transform: translate3d(0, 0, 0) scale(0.96) !important;
 }
 
 .phone-frame {
@@ -117,7 +146,8 @@ button {
 }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+h1:focus-visible {
   outline: 2px solid #9bc8a2;
   outline-offset: 4px;
   box-shadow: 0 0 0 4px rgba(155, 200, 162, 0.2);
@@ -155,6 +185,15 @@ a:focus-visible {
   }
 
   .leafy-pressable:active {
-    transform: scale(0.99) !important;
+    transform: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  button:focus-visible,
+  a:focus-visible,
+  h1:focus-visible {
+    outline: 2px solid CanvasText;
+    box-shadow: none;
   }
 }
