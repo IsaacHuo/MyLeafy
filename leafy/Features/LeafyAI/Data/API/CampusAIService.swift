@@ -2,8 +2,6 @@ nonisolated enum CampusAIServiceError: LocalizedError, Equatable {
     case emptyMessage
     case missingAPIKey
     case invalidBaseURL
-    case managedServiceUnavailable
-    case quotaExhausted(String)
     case providerRejected(String)
     case invalidProviderResponse
     case incompleteStream
@@ -16,10 +14,6 @@ nonisolated enum CampusAIServiceError: LocalizedError, Equatable {
             return "请先在 MyLeafy 设置中填写 DeepSeek API Key。"
         case .invalidBaseURL:
             return "Base URL 设置不正确，请使用 HTTPS 地址。"
-        case .managedServiceUnavailable:
-            return "MyLeafy AI 服务暂时不可用，请稍后再试。"
-        case .quotaExhausted(let message):
-            return message
         case .providerRejected(let message):
             return message
         case .invalidProviderResponse:
@@ -40,7 +34,6 @@ nonisolated private extension String {
 nonisolated enum CampusAIStreamEvent: Equatable {
     case delta(String)
     case reasoningDelta(String)
-    case quota(CampusAIQuotaSnapshot)
     case agentStatus(String)
     case agentStep(CampusAIAgentTraceStep)
     case agentTool(CampusAIAgentToolEvent)
@@ -140,11 +133,6 @@ nonisolated struct CampusAISSEParser {
         }
 
         let payloadData = Data(payloadText.utf8)
-        if let managedPayload = try? decoder.decode(CampusAIManagedStreamPayload.self, from: payloadData),
-           managedPayload.type != nil {
-            return try parseManagedPayload(managedPayload)
-        }
-
         let payload: CampusAIProviderStreamPayload
         do {
             payload = try decoder.decode(CampusAIProviderStreamPayload.self, from: payloadData)
@@ -179,64 +167,6 @@ nonisolated struct CampusAISSEParser {
             events.append(.delta(contentDelta))
         }
         return events
-    }
-
-    private mutating func parseManagedPayload(_ payload: CampusAIManagedStreamPayload) throws -> [CampusAIStreamEvent] {
-        switch payload.type {
-        case "delta":
-            let text = payload.text ?? ""
-            accumulatedAnswer += text
-            return text.isEmpty ? [] : [.delta(text)]
-        case "reasoning_delta":
-            let text = payload.text ?? ""
-            accumulatedReasoning += text
-            return text.isEmpty ? [] : [.reasoningDelta(text)]
-        case "quota":
-            guard let quota = payload.quota else { return [] }
-            return [.quota(quota)]
-        case "agent_status":
-            let text = payload.text ?? ""
-            return text.isEmpty ? [] : [.agentStatus(text)]
-        case "agent_step":
-            guard let step = payload.step else { return [] }
-            return [.agentStep(step)]
-        case "agent_tool":
-            guard let tool = payload.tool else { return [] }
-            return [.agentTool(tool)]
-        case "agent_citation":
-            guard let citation = payload.citation else { return [] }
-            return [.agentCitation(citation)]
-        case "agent_search_results":
-            guard let results = payload.results, !results.isEmpty else { return [] }
-            return [.agentSearchResults(results)]
-        case "done":
-            emittedDone = true
-            let answer = payload.answer ?? accumulatedAnswer
-            let reasoning = payload.reasoning ?? accumulatedReasoning
-            guard answer.nonEmptyTrimmed != nil else {
-                throw CampusAIServiceError.invalidProviderResponse
-            }
-            return [
-                .done(
-                    CampusAIResponse(
-                        answer: answer,
-                        reasoning: reasoning,
-                        finishReason: payload.finishReason,
-                        suggestedTitle: payload.suggestedTitle,
-                        summary: payload.summary,
-                        actions: payload.actions ?? [],
-                        citations: payload.citations ?? [],
-                        agentTrace: payload.agentTrace ?? payload.agentTraceSnake ?? [],
-                        deliverables: payload.deliverables ?? []
-                    )
-                )
-            ]
-        case "error":
-            let message = payload.error?.nonEmptyTrimmed ?? "AI 助手暂时不可用，请稍后重试。"
-            throw CampusAIServiceError.providerRejected(CampusAIService.redactProviderError(message))
-        default:
-            return []
-        }
     }
 
     private func doneEvent() -> CampusAIStreamEvent {
@@ -279,48 +209,6 @@ nonisolated private struct CampusAIProviderStreamPayload: Decodable {
 
     struct ProviderError: Decodable {
         let message: String?
-    }
-}
-
-nonisolated private struct CampusAIManagedStreamPayload: Decodable {
-    let type: String?
-    let text: String?
-    let answer: String?
-    let reasoning: String?
-    let finishReason: String?
-    let suggestedTitle: String?
-    let summary: String?
-    let actions: [CampusAIActionDraft]?
-    let citations: [CampusAICitation]?
-    let agentTrace: [CampusAIAgentTraceStep]?
-    let agentTraceSnake: [CampusAIAgentTraceStep]?
-    let deliverables: [CampusAIDeliverable]?
-    let step: CampusAIAgentTraceStep?
-    let tool: CampusAIAgentToolEvent?
-    let citation: CampusAICitation?
-    let results: [CampusAISearchResultPreview]?
-    let error: String?
-    let quota: CampusAIQuotaSnapshot?
-
-    enum CodingKeys: String, CodingKey {
-        case type
-        case text
-        case answer
-        case reasoning
-        case finishReason = "finish_reason"
-        case suggestedTitle = "suggested_title"
-        case summary
-        case actions
-        case citations
-        case agentTrace
-        case agentTraceSnake = "agent_trace"
-        case deliverables
-        case step
-        case tool
-        case citation
-        case results
-        case error
-        case quota
     }
 }
 
@@ -437,8 +325,6 @@ nonisolated struct CampusAIService {
                 accumulatedAnswer += text
             case .reasoningDelta(let text):
                 accumulatedReasoning += text
-            case .quota:
-                break
             case .agentStatus, .agentStep, .agentTool, .agentSearchResults, .agentCitation:
                 break
             case .done(let response):
@@ -479,9 +365,7 @@ nonisolated struct CampusAIService {
             message: trimmed,
             context: context,
             recentMessages: recentMessages,
-            model: normalizedSettings.serviceMode == .leafyManaged
-                ? CampusAIModelCatalog.flash.modelIdentifier
-                : normalizedSettings.selectedModel.modelIdentifier,
+            model: normalizedSettings.selectedModel.modelIdentifier,
             userSystemPrompt: normalizedSettings.effectiveSystemPrompt,
             contextSettings: normalizedSettings.contextSettings,
             agentMode: .auto,
@@ -503,9 +387,6 @@ nonisolated struct CampusAIService {
         settings: CampusAIUserSettings
     ) -> AsyncThrowingStream<CampusAIStreamEvent, Error> {
         let normalizedSettings = settings.normalizedForLocalRuntime
-        if normalizedSettings.serviceMode == .leafyManaged {
-            return invokeManagedStream(request, settings: normalizedSettings)
-        }
         if request.agentMode == .auto,
            request.webSearchEnabled,
            request.capabilities.webSearchEnabled {
@@ -687,64 +568,6 @@ nonisolated struct CampusAIService {
         }
     }
 
-    private static func invokeManagedStream(
-        _ request: CampusAIRequest,
-        settings: CampusAIUserSettings
-    ) -> AsyncThrowingStream<CampusAIStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    let urlRequest = try await makeManagedFunctionRequest(for: request, settings: settings)
-                    let (bytes, response) = try await URLSession.shared.bytes(for: urlRequest)
-                    guard let httpResponse = response as? HTTPURLResponse else {
-                        throw CampusAIServiceError.invalidProviderResponse
-                    }
-                    guard (200..<300).contains(httpResponse.statusCode) else {
-                        let body = try await providerErrorBody(from: bytes)
-                        let message = managedHTTPErrorMessage(statusCode: httpResponse.statusCode, body: body)
-                        if httpResponse.statusCode == 402 {
-                            throw CampusAIServiceError.quotaExhausted(message)
-                        }
-                        throw CampusAIServiceError.providerRejected(message)
-                    }
-
-                    var parser = CampusAISSEParser(requiresExplicitTerminal: true)
-                    var chunk = Data()
-                    chunk.reserveCapacity(4_096)
-                    for try await byte in bytes {
-                        try Task.checkCancellation()
-                        chunk.append(byte)
-                        if chunk.count >= 4_096 {
-                            for event in try parser.append(chunk) {
-                                continuation.yield(event)
-                            }
-                            chunk.removeAll(keepingCapacity: true)
-                        }
-                    }
-
-                    if !chunk.isEmpty {
-                        for event in try parser.append(chunk) {
-                            continuation.yield(event)
-                        }
-                    }
-
-                    for event in try parser.finish() {
-                        continuation.yield(event)
-                    }
-                    continuation.finish()
-                } catch is CancellationError {
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
-        }
-    }
-
     static func makeChatCompletionsRequest(
         for request: CampusAIRequest,
         baseURLString: String,
@@ -831,38 +654,6 @@ nonisolated struct CampusAIService {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try providerJSONEncoder().encode(actionPlannerPayload(for: request, answer: answer))
-        return urlRequest
-    }
-
-    static func makeManagedFunctionRequest(
-        for request: CampusAIRequest,
-        settings: CampusAIUserSettings
-    ) async throws -> URLRequest {
-        try await CommunityService.shared.ensureAnonymousSession()
-        let client = try LeafySupabase.shared.requireClient()
-        let config = try LeafySupabase.shared.requireConfig()
-        let session = try await client.auth.session
-        let appTransaction = await CampusAIManagedEntitlementClient.optionalAppTransactionPayload()
-
-        var url = config.url
-        url.appendPathComponent("functions")
-        url.appendPathComponent("v1")
-        url.appendPathComponent(config.campusAIFunctionName)
-
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        urlRequest.setValue(config.publishableKey, forHTTPHeaderField: "apikey")
-        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.httpBody = try providerJSONEncoder().encode(
-            CampusAIManagedFunctionRequest(
-                request: request,
-                appTransactionID: appTransaction?.appTransactionID,
-                appTransactionJWS: appTransaction?.jwsRepresentation,
-                serviceMode: settings.serviceMode
-            )
-        )
         return urlRequest
     }
 
@@ -1228,18 +1019,6 @@ nonisolated struct CampusAIService {
         return "AI 助手返回了 \(statusCode) 错误：\(trimmedBody)"
     }
 
-    private static func managedHTTPErrorMessage(statusCode: Int, body: String) -> String {
-        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let data = trimmedBody.data(using: .utf8),
-           let payload = try? JSONDecoder().decode(CampusAIManagedErrorPayload.self, from: data),
-           let error = payload.error?.nonEmptyTrimmed {
-            return statusCode == 402 ? error : "MyLeafy AI 服务返回了 \(statusCode) 错误：\(error)"
-        }
-        if trimmedBody.isEmpty {
-            return "MyLeafy AI 服务返回了 \(statusCode) 错误。"
-        }
-        return "MyLeafy AI 服务返回了 \(statusCode) 错误：\(trimmedBody)"
-    }
 }
 
 nonisolated private struct CampusAIProviderUserContent: Encodable {
@@ -1358,74 +1137,5 @@ nonisolated private struct CampusAIActionPlannerUserContent: Encodable {
 
 }
 
-nonisolated struct CampusAIManagedFunctionRequest: Encodable {
-    let requestID: String
-    let appTransactionID: String?
-    let appTransactionJWS: String?
-    let serviceMode: String
-    let message: String
-    let context: CampusAIContextPayload
-    let recentMessages: [CampusAIChatMessage]
-    let userSystemPrompt: String
-    let contextSettings: CampusAIContextSettings
-    let agentMode: CampusAIAgentMode
-    let webSearchEnabled: Bool
-    let capabilities: CampusAICapabilitySet
-    let localRetrieval: CampusAILocalRetrievalPayload
-    let outputMode: CampusAIOutputMode
-    let currentLocalTime: String
-    let timeZoneIdentifier: String
-
-    enum CodingKeys: String, CodingKey {
-        case requestID = "request_id"
-        case appTransactionID = "app_transaction_id"
-        case appTransactionJWS = "app_transaction_jws"
-        case serviceMode = "service_mode"
-        case message
-        case context
-        case recentMessages = "recent_messages"
-        case userSystemPrompt = "user_system_prompt"
-        case contextSettings = "context_settings"
-        case agentMode = "agent_mode"
-        case webSearchEnabled = "web_search_enabled"
-        case capabilities
-        case localRetrieval = "local_retrieval"
-        case outputMode = "output_mode"
-        case currentLocalTime = "current_local_time"
-        case timeZoneIdentifier = "time_zone_identifier"
-    }
-
-    init(
-        request: CampusAIRequest,
-        appTransactionID: String?,
-        appTransactionJWS: String?,
-        serviceMode: CampusAIServiceMode
-    ) {
-        self.requestID = request.requestID.uuidString
-        self.appTransactionID = appTransactionID
-        self.appTransactionJWS = appTransactionJWS
-        self.serviceMode = serviceMode.rawValue
-        self.message = request.message
-        self.context = request.context
-        self.recentMessages = request.recentMessages
-        self.userSystemPrompt = request.userSystemPrompt
-        self.contextSettings = request.contextSettings
-        self.agentMode = request.agentMode
-        self.webSearchEnabled = request.webSearchEnabled
-        self.capabilities = request.capabilities
-        self.localRetrieval = request.localRetrieval
-        self.outputMode = request.outputMode
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXX"
-        self.currentLocalTime = formatter.string(from: Date())
-        self.timeZoneIdentifier = TimeZone.current.identifier
-    }
-}
-
-nonisolated private struct CampusAIManagedErrorPayload: Decodable {
-    let error: String?
-}
 import Foundation
 import Supabase

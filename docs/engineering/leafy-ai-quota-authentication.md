@@ -1,6 +1,6 @@
-# 历史记录：MyLeafy AI 免费额度鉴权与回复链路
+# 已退役：MyLeafy AI 免费额度鉴权与回复链路
 
-> 适用范围：本文记录 2026 年 7 月的 AI iOS/后端实现。当前 `main` 已移出 iOS AI 功能，只保留旧本地数据清理和后端兼容资产；完整 iOS 实现位于默认冻结的 `codex/leafy-ai`。当前产品事实见[项目总览](../product/overview.md)，当前后端边界见[Supabase 接入](supabase.md)。
+> 适用范围：本文记录 MyLeafy 3.0 以前的托管额度与订阅实现。当前产品为 BYOK-only；旧代码冻结在 `codex/leafy-ai-managed-archive`，不属于现行部署或客户端调用链路。当前产品事实见[项目总览](../product/overview.md)，当前后端边界见[Supabase 接入](supabase.md)。
 
 本文保存当时的 MyLeafy AI 服务端 Flash 身份、额度和回复链路，以及对 `401 App Store 安装记录验证失败`、额度 RPC 失败和问候误生成动作卡问题的根因修复。它是历史故障与安全设计记录，不代表当前公开 App 提供 AI 服务或购买入口。
 

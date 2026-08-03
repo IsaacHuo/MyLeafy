@@ -5,7 +5,6 @@ struct CampusAISettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @Binding var settings: CampusAIUserSettings
-    @ObservedObject var subscriptionStore: CampusAISubscriptionStore
     let hasHistory: Bool
     let clearHistory: () -> Void
     @State private var hasAPIKey = false
@@ -16,27 +15,6 @@ struct CampusAISettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("使用方式", selection: $settings.serviceMode) {
-                        Text("MyLeafy AI 额度")
-                            .tag(CampusAIServiceMode.leafyManaged)
-                        Text("自备 API Key")
-                            .tag(CampusAIServiceMode.ownAPIKey)
-                    }
-                    .pickerStyle(.segmented)
-
-                    NavigationLink {
-                        CampusAISubscriptionView(store: subscriptionStore) {}
-                    } label: {
-                        CampusAISettingsNavigationRow(
-                            systemImage: "sparkles",
-                            title: "MyLeafy AI 额度",
-                            detail: quotaDetail,
-                            status: settings.serviceMode == .leafyManaged
-                                ? "使用中"
-                                : (subscriptionStore.isPurchased ? "已订阅" : "可切换")
-                        )
-                    }
-
                     NavigationLink {
                         CampusAIAPIKeySetupView(settings: $settings) {
                             hasAPIKey = true
@@ -45,7 +23,7 @@ struct CampusAISettingsView: View {
                         CampusAISettingsNavigationRow(
                             systemImage: "key.fill",
                             title: "自备 DeepSeek API Key",
-                            detail: "备选方式 · 可使用 Flash 或 Pro",
+                            detail: "模型调用方式 · 可使用 Flash 或 Pro",
                             status: apiKeyStatus
                         )
                     }
@@ -56,7 +34,7 @@ struct CampusAISettingsView: View {
                 } header: {
                     Text("AI 服务")
                 } footer: {
-                    Text(serviceModeDescription)
+                    Text(apiKeyDescription)
                 }
 
                 Section {
@@ -89,7 +67,7 @@ struct CampusAISettingsView: View {
 
                 Section("历史记录") {
                     LabeledContent("保存位置", value: "当前设备")
-                    Text("清除 API Key 后仍可使用免费或订阅额度；聊天历史不会自动同步到云端。")
+                    Text("API Key 与聊天历史仅保存在当前设备；聊天历史不会自动同步到云端。")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
 
@@ -100,7 +78,7 @@ struct CampusAISettingsView: View {
                 }
 
                 Section("隐私与限制") {
-                    Text("使用 MyLeafy AI 服务时，你的问题及获准上下文会经 MyLeafy 服务发送给 DeepSeek；使用自备 Key 时则由本机直接发送。开启联网研究后，搜索词会经过 MyLeafy 搜索服务。生成内容可能有错误，重要事项请核对来源。")
+                    Text("模型请求由本机直接发送给 DeepSeek。开启联网研究后，搜索词会经过 MyLeafy 搜索服务，但该服务不会收到你的 DeepSeek API Key。生成内容可能有错误，重要事项请核对来源。")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                         .textSelection(.enabled)
@@ -118,7 +96,6 @@ struct CampusAISettingsView: View {
             .onAppear {
                 normalizeSettings()
                 refreshAPIKeyState()
-                Task { await subscriptionStore.refresh() }
             }
             .onChange(of: settings) { _, _ in
                 persistSettings()
@@ -144,32 +121,14 @@ struct CampusAISettingsView: View {
             : "已追加自定义偏好"
     }
 
-    private var quotaDetail: String {
-        guard let quota = subscriptionStore.quota else {
-            return subscriptionStore.isLoading ? "正在刷新额度" : "每日免费 10 次"
-        }
-        if quota.planSource == "subscription" {
-            return "本周期 \(quota.periodRemaining ?? quota.remaining)/\(quota.periodLimit ?? 120) · 今日 \(quota.dailyRemaining)/\(quota.dailyLimit)"
-        }
-        return "今日剩余 \(quota.dailyRemaining)/\(quota.dailyLimit)"
-    }
-
     private var apiKeyStatus: String {
-        if settings.serviceMode == .ownAPIKey {
-            return hasAPIKey ? "使用中" : "需配置"
-        }
-        return hasAPIKey ? "已配置" : "未配置"
+        hasAPIKey ? "使用中" : "需配置"
     }
 
-    private var serviceModeDescription: String {
-        switch settings.serviceMode {
-        case .leafyManaged:
-            return "当前使用免费或订阅额度，模型固定为 Flash。自备 Key 是可选方式。"
-        case .ownAPIKey:
-            return hasAPIKey
-                ? "当前使用本机保存的 DeepSeek API Key，不消耗免费或订阅额度，可使用 Flash 或 Pro。"
-                : "请先配置 DeepSeek API Key；保存后即可使用 Flash 或 Pro。"
-        }
+    private var apiKeyDescription: String {
+        hasAPIKey
+            ? "当前使用本机保存的 DeepSeek API Key，可使用 Flash 或 Pro。"
+            : "请先配置 DeepSeek API Key；保存后即可使用 Flash 或 Pro。"
     }
 
     private var enabledContextScopeCount: Int {
@@ -262,11 +221,11 @@ struct CampusAIAPIKeySetupView: View {
             } header: {
                 Text("API Key")
             } footer: {
-                Text("API Key 只保存在当前设备的 Keychain，输入框不会回显已保存的值。保存后会切换到自备 Key；清除后自动改回 MyLeafy AI 免费额度。")
+                Text("API Key 只保存在当前设备的 Keychain，输入框不会回显已保存的值。清除后 AI 将停止使用，直到你再次配置 API Key。")
             }
 
             Section("数据说明") {
-                Text("选择自备 Key 后，模型请求会从本机直接发送到 DeepSeek，不使用免费或订阅额度。联网研究服务不会收到你的 DeepSeek API Key。")
+                Text("模型请求会从本机直接发送到 DeepSeek。联网研究服务不会收到你的 DeepSeek API Key。")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -290,7 +249,6 @@ struct CampusAIAPIKeySetupView: View {
         do {
             try CampusAIKeychainStore.save(trimmed, providerID: provider.id)
             settings.selectedProviderID = provider.id
-            settings.serviceMode = .ownAPIKey
             guard CampusAISettingsStore.save(settings) else {
                 operationAlert = .failure("API Key 已保存，但设置写入失败，请重试。")
                 return
@@ -307,9 +265,8 @@ struct CampusAIAPIKeySetupView: View {
     private func clearAPIKey() {
         do {
             try CampusAIKeychainStore.delete(providerID: provider.id)
-            settings.serviceMode = .leafyManaged
             guard CampusAISettingsStore.save(settings) else {
-                operationAlert = .failure("API Key 已清除，但服务设置写入失败，请重试。")
+                operationAlert = .failure("API Key 已清除，但设置写入失败，请重试。")
                 return
             }
             apiKeyDraft = ""
@@ -322,161 +279,6 @@ struct CampusAIAPIKeySetupView: View {
 
     private func refreshAPIKeyState() {
         hasSavedAPIKey = CampusAIKeychainStore.hasAPIKey(providerID: provider.id)
-    }
-}
-
-struct CampusAISubscriptionView: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var store: CampusAISubscriptionStore
-    let onSubscribed: () -> Void
-
-    private let privacyURL = URL(string: "https://myleafy.space/privacy")!
-    private let termsURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
-                            .frame(width: 64, height: 64)
-                            .background(AppTheme.accent.opacity(0.10), in: Circle())
-
-                        Text("MyLeafy AI 周订阅")
-                            .font(.title2.weight(.bold))
-                        if let displayPrice = store.displayPrice {
-                            Text("\(displayPrice)/周")
-                                .font(.title3.weight(.semibold))
-                        } else {
-                            Text(productStatusText)
-                                .font(.subheadline)
-                                .foregroundStyle(AppTheme.secondaryText)
-                        }
-                        Text("自动续订")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        subscriptionBenefit("每个订阅周期 120 次")
-                        subscriptionBenefit("每日最多 40 次")
-                        subscriptionBenefit("未订阅每日可免费使用 10 次")
-                        subscriptionBenefit("MyLeafy AI 服务固定使用 Flash")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(20)
-                    .background(AppTheme.softFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-                    if let quota = store.quota {
-                        Text(quotaText(quota))
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if let pendingMessage = store.pendingMessage {
-                        Label(pendingMessage, systemImage: "clock")
-                            .font(.footnote)
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if let errorMessage = store.errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if store.productLoadState == .unavailable && !store.isPurchased {
-                        Button {
-                            Task { await store.refresh() }
-                        } label: {
-                            Text("重新加载订阅商品")
-                                .font(.body.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.accent)
-                        .disabled(store.isLoading)
-                    } else {
-                        Button {
-                            Task {
-                                if await store.purchase() {
-                                    onSubscribed()
-                                    dismiss()
-                                }
-                            }
-                        } label: {
-                            Text(store.isPurchased ? "已订阅" : subscribeButtonTitle)
-                                .font(.body.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.accent)
-                        .disabled(store.product == nil || store.isLoading || store.isPurchased)
-                    }
-
-                    Button("恢复购买") {
-                        Task { await store.restorePurchases() }
-                    }
-                    .disabled(store.isLoading)
-
-                    HStack(spacing: 18) {
-                        Link("隐私政策", destination: privacyURL)
-                        Link("使用条款", destination: termsURL)
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.secondaryText)
-                }
-                .leafyAdaptiveContentWidth(maxWidth: 560, horizontalPadding: AppSpacing.page)
-                .padding(.vertical, 28)
-            }
-            .background(AppTheme.cardElevated.ignoresSafeArea())
-            .navigationTitle("MyLeafy AI 订阅")
-            .leafyInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
-            .task { await store.refresh() }
-        }
-    }
-
-    private var subscribeButtonTitle: String {
-        guard let displayPrice = store.displayPrice else { return "正在加载" }
-        return "订阅 · \(displayPrice)/周"
-    }
-
-    private var productStatusText: String {
-        switch store.productLoadState {
-        case .idle, .loading:
-            return "正在读取 App Store 价格"
-        case .available:
-            return "App Store 价格已读取"
-        case .unavailable:
-            return "暂时无法读取订阅价格"
-        }
-    }
-
-    private func subscriptionBenefit(_ text: String) -> some View {
-        Label {
-            Text(text).foregroundStyle(AppTheme.primaryText)
-        } icon: {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(AppTheme.accent)
-        }
-    }
-
-    private func quotaText(_ quota: CampusAIQuotaSnapshot) -> String {
-        if quota.planSource == "subscription" {
-            return "订阅额度：本周期剩余 \(quota.periodRemaining ?? quota.remaining)/\(quota.periodLimit ?? 120)，今日剩余 \(quota.dailyRemaining)/\(quota.dailyLimit)。"
-        }
-        return "免费额度：今日剩余 \(quota.dailyRemaining)/\(quota.dailyLimit)。"
     }
 }
 

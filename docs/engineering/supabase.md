@@ -143,16 +143,14 @@ MyLeafy 同时维护两个独立身份：
 
 本地 SwiftData 课表仍是个人数据的权威副本。不得把成绩、考试结果、课程备注、提醒或其他私密字段加入共享课表数据。
 
-### 3.5 AI 兼容资产与额度
+### 3.5 MyLeafy AI Tool Gateway
 
-当前 `main` 的公开 iOS App 不调用 AI 服务或展示购买入口。以下后端资产继续保留，用于历史数据、已部署环境和默认冻结的 `codex/leafy-ai` 维护分支兼容：
+MyLeafy 3.0 只使用用户自行配置的 DeepSeek API Key。密钥保存在设备 Keychain，模型请求从设备直接发送到 DeepSeek，不进入 Supabase。
 
-- `campus-ai-assistant` 的托管模式固定使用 Flash；历史免费额度为北京时间每日 10 次。
-- 免费额度按 Supabase Auth 用户计数，不要求 App Store 安装记录。
-- `com.isaachuo.leafy.ai.weekly.v2` 是历史实现唯一接受的周订阅商品；权益只接受服务端验证成功的 Apple 交易 JWS。
-- `private` 额度函数通过仅授予 `service_role` 的公开 RPC 包装层供 Edge Function 调用，不向 `anon` 或 `authenticated` 开放。实现与排查见[历史 AI 额度鉴权](leafy-ai-quota-authentication.md)。
-- 历史 BYOK 模式的 DeepSeek API Key 只保存在设备 Keychain，不进入 Supabase。
-- AI 请求日志应最小化，不长期保存完整个人学业上下文。
+- `campus-ai-tools` 为登录用户提供受限的公开搜索、网页和文档读取，并保留独立的工具调用限流与审计。
+- Tool Gateway 可以接收搜索词和已签名的读取凭据，但不接收 DeepSeek API Key 或本机上下文。
+- `campus-ai-assistant`、`campus-ai-entitlement`、`app-store-server-notifications` 以及托管额度/权益表和 RPC 已由前向 migration 退役。
+- 退役实现冻结在 `codex/leafy-ai-managed-archive`；历史鉴权说明见[已退役的 AI 额度鉴权](leafy-ai-quota-authentication.md)。
 
 ### 3.6 运营与审计
 
@@ -218,13 +216,12 @@ MyLeafy 同时维护两个独立身份：
 |---|---|
 | 社区初始化与 Feed | `community-bootstrap-user`、`community-feed` |
 | 校园服务 | `campus-request`、`campus-weather` |
-| 历史 AI 兼容服务 | `campus-ai-assistant`、`campus-ai-entitlement`、`app-store-server-notifications` |
+| AI 联网研究 | `campus-ai-tools` |
 | 分享 | `share-preview` |
 | 管理认证 | `admin-login`、`admin-me`、`admin-logout` |
 | 管理业务 | `admin-community`、`admin-export`、公告相关函数 |
-| 平台通知 | `app-store-server-notifications` |
 
-共享代码位于 `_shared/`，负责权限、CSV、安全响应和 AI 计费等跨函数逻辑。
+共享代码位于 `_shared/`，负责权限、CSV、安全响应和 AI 网页工具等跨函数逻辑。
 
 函数约定：
 
@@ -270,7 +267,6 @@ SUPABASE_PUBLISHABLE_KEY = sb_publishable_xxx
 SUPABASE_COMMUNITY_BOOTSTRAP_FUNCTION = community-bootstrap-user
 SUPABASE_COMMUNITY_FEED_FUNCTION = community-feed
 SUPABASE_WEATHER_FUNCTION = campus-weather
-SUPABASE_CAMPUS_AI_FUNCTION = campus-ai-assistant
 SUPABASE_CAMPUS_AI_TOOLS_FUNCTION = campus-ai-tools
 SUPABASE_COMMUNITY_EDGE_REGION = ap-northeast-1
 SUPABASE_COMMUNITY_API_BASE_URL =
@@ -290,7 +286,7 @@ supabase db push
 supabase functions deploy community-bootstrap-user
 supabase functions deploy community-feed
 supabase functions deploy campus-weather
-supabase functions deploy campus-ai-assistant
+supabase functions deploy campus-ai-tools
 ```
 
 只部署你实际配置和需要的函数。管理函数还依赖额外的服务端 secrets 和 Cloudflare 代理，见[运营后台](admin-console.md)。

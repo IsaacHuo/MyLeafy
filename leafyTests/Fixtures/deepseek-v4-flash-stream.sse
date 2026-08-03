@@ -59,4 +59,3 @@ data: {"id":"c2c54448-adeb-49f9-bbdc-23e8f070d002","object":"chat.completion.chu
 data: {"id":"c2c54448-adeb-49f9-bbdc-23e8f070d002","object":"chat.completion.chunk","created":1782561135,"model":"deepseek-v4-flash","system_fingerprint":"fp_8b330d02d0_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":"","reasoning_content":null},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":18,"completion_tokens":29,"total_tokens":47,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":26},"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":18}}
 
 data: [DONE]
-

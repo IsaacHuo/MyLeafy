@@ -245,16 +245,6 @@ nonisolated enum CampusAIDiagnostics {
         logger.info("personal_context request=\(requestID.uuidString, privacy: .public) stage=\(stage, privacy: .public) scopes=\(summary, privacy: .public) results=\(resultCount, privacy: .public)")
     }
 
-    static func subscriptionProductFailure(
-        stage: String,
-        productID: String,
-        error: Error? = nil
-    ) {
-        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
-        let errorType = error.map { String(describing: type(of: $0)) } ?? "none"
-        logger.error("subscription_product stage=\(stage, privacy: .public) product=\(productID, privacy: .public) bundle=\(bundleID, privacy: .public) error=\(errorType, privacy: .public)")
-    }
-
     static func routing(
         route: String,
         usesPersonalContext: Bool,

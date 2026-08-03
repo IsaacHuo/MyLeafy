@@ -34,14 +34,13 @@ struct CampusAIAssistantView: View {
     @State private var visibleSuggestionPrompts = Self.randomSuggestionPrompts()
     @State private var configuredProviderIDs: Set<CampusAIProviderID> = []
     @State private var artifactCompletionSignal = 0
-    @StateObject private var subscriptionStore = CampusAISubscriptionStore()
 
     private var hasAPIKey: Bool {
         configuredProviderIDs.contains(userSettings.selectedProviderID)
     }
 
     private var canUseCurrentService: Bool {
-        userSettings.serviceMode == .leafyManaged || hasAPIKey
+        hasAPIKey
     }
 
     private var isSending: Bool { chatSession.isSending }
@@ -76,7 +75,6 @@ struct CampusAIAssistantView: View {
             selectInitialConversationIfNeeded()
             presentExperimentalNoticeIfNeeded()
             refreshConfiguredProviders()
-            Task { await subscriptionStore.refresh() }
             pruneOrphanedDeliverableArtifacts()
             markInterruptedResearchIfNeeded()
         }
@@ -97,15 +95,9 @@ struct CampusAIAssistantView: View {
             case .settings:
                 CampusAISettingsView(
                     settings: $userSettings,
-                    subscriptionStore: subscriptionStore,
                     hasHistory: !conversations.isEmpty,
                     clearHistory: clearAllHistory
                 )
-            case .subscription:
-                CampusAISubscriptionView(store: subscriptionStore) {
-                    userSettings.serviceMode = .leafyManaged
-                    _ = CampusAISettingsStore.save(userSettings)
-                }
             case .apiKey:
                 NavigationStack {
                     CampusAIAPIKeySetupView(
@@ -175,7 +167,7 @@ struct CampusAIAssistantView: View {
                         openHistory: openHistory,
                         openSettings: openSettings,
                         selectedModelID: userSettings.selectedModelID,
-                        allowsModelSelection: userSettings.serviceMode == .ownAPIKey,
+                        allowsModelSelection: true,
                         isModelSelectionDisabled: isSending,
                         isNewConversationDisabled: isNewConversationDisabled(
                             messageCount: projection.messages.count
@@ -211,8 +203,6 @@ struct CampusAIAssistantView: View {
                     CampusAIEmptyConversationPanel(
                         prompts: visibleSuggestionPrompts,
                         canUseService: canUseCurrentService,
-                        quotaText: emptyStateQuotaText,
-                        openSubscription: openSubscription,
                         configureAPIKey: openAPIKeySetup,
                         selectPrompt: { prompt in
                             draftText = prompt
@@ -303,17 +293,6 @@ struct CampusAIAssistantView: View {
         )
     }
 
-    private var emptyStateQuotaText: String {
-        guard userSettings.serviceMode == .leafyManaged else { return "正在使用自备 DeepSeek API Key" }
-        if let quota = subscriptionStore.quota {
-            if quota.planSource == "subscription" {
-                return "订阅额度：本周期 \(quota.periodRemaining ?? quota.remaining)/\(quota.periodLimit ?? 120) · 今日 \(quota.dailyRemaining)/\(quota.dailyLimit)"
-            }
-            return "今日免费剩余 \(quota.dailyRemaining)/\(quota.dailyLimit) · 查看订阅"
-        }
-        return "每日免费 10 次 · 查看订阅"
-    }
-
     private static let suggestionPrompts = [
         "查查北林最新保研政策",
         "整理本周课程复习表",
@@ -383,7 +362,7 @@ struct CampusAIAssistantView: View {
         selectedConversationID = conversation.id
         visibleSuggestionPrompts = Self.randomSuggestionPrompts()
         persistModelContext(operation: "conversation.create")
-        if userSettings.serviceMode == .ownAPIKey && !hasAPIKey {
+        if !hasAPIKey {
             openAPIKeySetup()
         }
     }
@@ -428,11 +407,6 @@ struct CampusAIAssistantView: View {
         activeSheet = .apiKey
     }
 
-    private func openSubscription() {
-        isComposerFocused = false
-        activeSheet = .subscription
-    }
-
     private func submitDraft() {
         guard !isSending,
               !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -469,7 +443,7 @@ struct CampusAIAssistantView: View {
     private func sendCurrentDraft(streamRunID: UUID) async {
         let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, canUseCurrentService else {
-            if userSettings.serviceMode == .ownAPIKey && !hasAPIKey { openAPIKeySetup() }
+            if !hasAPIKey { openAPIKeySetup() }
             return
         }
         let requestSettings = userSettings.normalizedForLocalRuntime
@@ -567,8 +541,6 @@ struct CampusAIAssistantView: View {
                     }
                 case .reasoningDelta:
                     break
-                case .quota(let quota):
-                    subscriptionStore.applyQuota(quota)
                 case .agentStatus(let status):
                     let displayStatus = CampusAIAgentPresentation.sanitizedStatusText(status)
                     chatSession.update(statusText: displayStatus)
@@ -664,9 +636,6 @@ struct CampusAIAssistantView: View {
             persistModelContext(operation: "message.cancel")
         } catch {
             assistantMessage.text = streamedAnswer
-            if userSettings.serviceMode == .leafyManaged {
-                await subscriptionStore.refreshQuota()
-            }
             if assistantMessage.text.nonEmptyTrimmed != nil {
                 assistantMessage.text = [
                     assistantMessage.text.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -677,13 +646,7 @@ struct CampusAIAssistantView: View {
             }
             conversation.updatedAt = Date()
             persistModelContext(operation: "message.failure")
-            if userSettings.serviceMode == .leafyManaged,
-               !subscriptionStore.isPurchased,
-               error.localizedDescription.contains("今日次数已用完") {
-                activeSheet = .subscription
-            } else {
-                operationAlert = .failure(error.localizedDescription)
-            }
+            operationAlert = .failure(error.localizedDescription)
         }
     }
 
@@ -1164,7 +1127,6 @@ private enum CampusAISheetDestination: Identifiable {
     case history
     case settings
     case apiKey
-    case subscription
     case actionEditor(CampusAIActionEditorPresentation)
 
     var id: String {
@@ -1175,8 +1137,6 @@ private enum CampusAISheetDestination: Identifiable {
             return "settings"
         case .apiKey:
             return "apiKey"
-        case .subscription:
-            return "subscription"
         case .actionEditor(let presentation):
             return "actionEditor-\(presentation.id.uuidString)"
         }

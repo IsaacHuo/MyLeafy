@@ -333,14 +333,14 @@ Supabase 不接管学校登录。常规链路是：
 
 不得上传成绩、备注、提醒或其他不属于共享课表最小字段集的数据。
 
-## 10. 历史 AI 兼容边界
+## 10. MyLeafy AI
 
-当前 `main` 已移出 MyLeafy AI 的 iOS 对话、上下文、模型访问、Artifact 和购买实现。为兼容旧版本与冻结分支，主线仍保留旧 SwiftData schema、Keychain 清理路径，以及 AI 相关 Supabase Functions 和迁移；这些资产不构成当前公开 App 的运行链路。
+MyLeafy 3.0 恢复对话、联网研究、本机上下文、Artifact、Markdown/KaTeX 渲染和本地历史。`CampusAIConversation`、`CampusAIMessage` 与 `CampusAIActionRecord` 继续属于 SwiftData schema，账户删除会一并清理这些模型、Artifact 缓存和 Keychain 密钥。
 
-- `RootTab.leafy` 仅用于兼容旧导航状态，进入时会重定向到课表。
-- 旧 `CampusAIConversation`、`CampusAIMessage` 与 `CampusAIActionRecord` 模型只用于读取或删除既有本地数据，不应承载新功能。
-- 完整 iOS 实现位于默认冻结的 `codex/leafy-ai`，除非明确恢复 AI 工作，否则不得从该分支同步实现到 `main`。
-- 后端额度与订阅设计的历史记录见[AI 额度鉴权与回复链路](leafy-ai-quota-authentication.md)。
+- 模型访问只支持 BYOK：DeepSeek API Key 保存在 Keychain，请求从设备直接发送到 DeepSeek，可选择 Flash 或 Pro。
+- iOS 26 使用位于“我的”右侧的系统独立 AI Tab；iOS 17–25 使用标准第五 Tab。
+- 联网研究通过已认证的 `campus-ai-tools` 调用公开搜索与网页读取；Tool Gateway 不接收模型密钥或本机上下文。
+- 托管推理、免费额度、订阅购买和权益同步已经退役。历史设计仅保留为迁移与排查记录，见[已退役的 AI 额度鉴权](leafy-ai-quota-authentication.md)。
 
 ## 11. 运营后台链路
 

@@ -1,6 +1,6 @@
 # MyLeafy Supabase Schema Ledger
 
-Last updated: 2026-07-25
+Last updated: 2026-08-03
 
 This ledger records the deployed schema facts that the app relies on. It is not
 a replacement for migrations, and existing migration history should not be
@@ -17,7 +17,7 @@ contract.
 | `catalog-ratings` | Teachers, courses, dishes, ratings, catalog suggestions, postgraduate sources | Teacher/course/dish tables and rating CRUD paths, catalog suggestion admin actions |
 | `timetable-sharing` | Timetable snapshots, invite codes, share members, owner/viewer state changes | `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | Campuses, campus membership requests, semester and national calendar runtime configs | `campus-request`, `current_profile_campus_id`, campus request admin actions |
-| `campus-ai` | AI usage, quota reservations, managed entitlements, App Store notification sync | `campus-ai-assistant`, `campus-ai-entitlement`, `app-store-server-notifications`, private quota RPCs |
+| `campus-ai-tools` | Authenticated public search, bounded page/document reads, tool-call rate limits and audit | `campus-ai-tools`, public tool-call wrappers |
 | `admin` | Admin accounts, sessions, login attempts, audit logs, overview analytics, announcements, feedback | `admin-login`, `admin-me`, `admin-logout`, `admin-community`, announcement wrappers |
 
 ## Compatibility Rules
@@ -29,8 +29,7 @@ contract.
 - Use `public.backend_capabilities_v1()` for feature availability. Clients
   should branch on capability booleans instead of matching localized error text.
 - Do not add client writes for state machines that already have RPC ownership
-  such as timetable sharing, poll lifecycle, campus membership requests, and AI
-  quota accounting.
+  such as timetable sharing, poll lifecycle, and campus membership requests.
 - New high-traffic read paths should prefer hydrated RPC or Edge payloads over
   client-side multi-query assembly.
 
@@ -49,8 +48,6 @@ contract.
 - `features.campus_runtime`
 - `features.campus_weather`
 - `features.school_community_access`
-- `features.campus_ai`
-- `features.campus_ai_managed_entitlements`
 - `features.admin_console`
 
 The RPC also exposes an `rpcs` object for versioned RPC availability and an
@@ -65,7 +62,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 | `catalog-ratings` | `teachers`, `teacher_ratings`, `course_catalog`, `course_ratings`, `dish_catalog`, `dish_ratings`, `catalog_suggestions`, `postgraduate_sources`, `postgraduate_source_suggestions` |
 | `timetable-sharing` | `timetable_snapshots`, `timetable_invites`, `timetable_share_members` |
 | `campus-runtime` | `campuses`, `campus_membership_requests`, `semester_runtime_configs`, `national_calendar_runtime_configs`, `campus_weather_cache` |
-| `campus-ai` | `private.campus_ai_usage_events`, `private.campus_ai_entitlements` |
+| `campus-ai-tools` | `private.campus_ai_tool_events` |
 | `admin` | `admin_accounts`, `admin_sessions`, `admin_login_attempts`, `admin_audit_logs`, `site_announcements`, `feedback_submissions` |
 
 ## Core RPCs
@@ -76,7 +73,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 | `community-social` polls | `my_authored_community_polls_v1`, `my_voted_community_polls_v1`, `request_delete_community_poll_v1`, `delete_own_community_poll_v1` |
 | `timetable-sharing` | `can_view_timetable_snapshot`, `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config`, `admin_upsert_semester_runtime_config`, `admin_upsert_national_calendar_runtime_config` |
-| `campus-ai` | `private.campus_ai_quota_snapshot`, `private.reserve_campus_ai_quota`, `private.complete_campus_ai_usage`, `private.sync_campus_ai_entitlement` |
+| `campus-ai-tools` | `reserve_campus_ai_tool_call`, `complete_campus_ai_tool_call` |
 | `admin` | `admin_login`, `admin_create_account`, `admin_update_account`, `admin_login_rate_limit_status`, `admin_begin_login_attempt`, `admin_finish_login_attempt`, `admin_cleanup_login_attempts`, `admin_daily_counts`, `admin_activity_heatmap`, `admin_category_mix`, `admin_top_content` |
 
 ## Edge Functions
@@ -93,9 +90,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `community-feed`
 - `campus-request`
 - `campus-weather`
-- `campus-ai-assistant`
-- `campus-ai-entitlement`
-- `app-store-server-notifications`
+- `campus-ai-tools`
 - `share-preview`
 
 ## Migration Ledger
@@ -163,6 +158,12 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260722160000_admin_backend_hardening.sql`
 - `20260725190000_community_post_upload_closure.sql`
 - `20260725203000_admin_database_lint_closure.sql`
+- `20260803120000_retire_managed_campus_ai.sql`
+
+The managed AI migrations remain in history so an empty database can reproduce
+the old schema before the forward-only retirement migration removes its quota,
+entitlement, and StoreKit objects. The retired function source is frozen on
+`codex/leafy-ai-managed-archive`.
 
 ## Community Post Upload Invariants
 

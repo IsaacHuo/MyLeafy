@@ -49,7 +49,7 @@ enum AppAccountDeletionOutcome: Equatable, Identifiable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.timetable, .community, .academics, .profile]
+        [.timetable, .community, .academics, .profile, .leafy]
     }
 
     static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {
@@ -65,7 +65,7 @@ extension RootTab: CaseIterable, Identifiable {
         case .community:
             return L10n.text("社区", language: language)
         case .leafy:
-            return AppBrand.displayName
+            return L10n.text("AI", language: language)
         case .academics:
             return L10n.text("校园", language: language)
         case .profile:
@@ -131,8 +131,7 @@ final class AppNavigationCoordinator: ObservableObject {
     }
 
     func sanitizePublicRootTab(isCommunityEnabled: Bool) {
-        if selectedRootTab == .leafy ||
-           (selectedRootTab == .community && !isCommunityEnabled) {
+        if selectedRootTab == .community && !isCommunityEnabled {
             selectedRootTab = .timetable
         }
     }

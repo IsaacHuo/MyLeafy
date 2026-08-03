@@ -80,9 +80,6 @@ verify_jwt = false
 [functions.campus-weather]
 verify_jwt = false
 
-[functions.app-store-server-notifications]
-verify_jwt = false
-
 [functions.admin-publish-announcement]
 verify_jwt = false
 

@@ -1864,22 +1864,22 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .academics, .profile, .leafy])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .academics, .profile, .leafy])
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .academics, .profile, .leafy])
     }
 
     @MainActor
-    func testHiddenLeafyRootTabRedirectsToTimetable() {
+    func testLeafyRootTabRemainsPublic() {
         let coordinator = AppNavigationCoordinator()
         coordinator.selectedRootTab = .leafy
 
         coordinator.sanitizePublicRootTab(isCommunityEnabled: true)
 
-        XCTAssertEqual(coordinator.selectedRootTab, .timetable)
+        XCTAssertEqual(coordinator.selectedRootTab, .leafy)
     }
 
     func testAcademicRootTabUsesCampusProductName() {

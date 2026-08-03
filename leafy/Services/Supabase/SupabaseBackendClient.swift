@@ -15,8 +15,6 @@ nonisolated enum BackendFeature: String, CaseIterable, Sendable {
     case campusRuntime = "campus_runtime"
     case campusWeather = "campus_weather"
     case schoolCommunityAccess = "school_community_access"
-    case campusAI = "campus_ai"
-    case campusAIManagedEntitlements = "campus_ai_managed_entitlements"
     case adminConsole = "admin_console"
 }
 

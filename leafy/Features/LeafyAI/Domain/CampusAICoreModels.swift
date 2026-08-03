@@ -600,31 +600,6 @@ nonisolated enum CampusAIModelCatalog {
     }
 }
 
-nonisolated enum CampusAIServiceMode: String, Codable, CaseIterable, Hashable, Identifiable {
-    case ownAPIKey
-    case leafyManaged
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .ownAPIKey:
-            return "自备 DeepSeek API Key"
-        case .leafyManaged:
-            return "MyLeafy AI 服务"
-        }
-    }
-
-    var shortTitle: String {
-        switch self {
-        case .ownAPIKey:
-            return "DeepSeek Key"
-        case .leafyManaged:
-            return "MyLeafy AI"
-        }
-    }
-}
-
 nonisolated enum CampusAIAgentMode: String, Codable, Hashable {
     case auto
     case off
@@ -687,7 +662,6 @@ nonisolated struct CampusAIContextSettings: Codable, Hashable {
 }
 
 nonisolated struct CampusAIUserSettings: Codable, Hashable {
-    var serviceMode: CampusAIServiceMode
     var selectedProviderID: CampusAIProviderID
     var selectedModelID: CampusAIModelID
     var systemPrompt: String
@@ -696,7 +670,6 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
 
     static var defaultValue: CampusAIUserSettings {
         CampusAIUserSettings(
-            serviceMode: .leafyManaged,
             selectedProviderID: CampusAIProviderCatalog.defaultProvider.id,
             selectedModelID: CampusAIModelCatalog.defaultModel.id,
             systemPrompt: CampusAISettingsStore.defaultSystemPrompt,
@@ -706,14 +679,12 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
     }
 
     init(
-        serviceMode: CampusAIServiceMode = .leafyManaged,
         selectedProviderID: CampusAIProviderID = CampusAIProviderCatalog.defaultProvider.id,
         selectedModelID: CampusAIModelID = CampusAIModelCatalog.defaultModel.id,
         systemPrompt: String,
         contextSettings: CampusAIContextSettings,
         webSearchEnabled: Bool = true
     ) {
-        self.serviceMode = serviceMode
         self.selectedProviderID = selectedProviderID
         self.selectedModelID = selectedModelID
         self.systemPrompt = systemPrompt
@@ -722,7 +693,6 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case serviceMode
         case selectedProviderID
         case selectedModelID
         case systemPrompt
@@ -732,7 +702,6 @@ nonisolated struct CampusAIUserSettings: Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        serviceMode = try container.decodeIfPresent(CampusAIServiceMode.self, forKey: .serviceMode) ?? .leafyManaged
         selectedProviderID = try container.decodeIfPresent(CampusAIProviderID.self, forKey: .selectedProviderID) ??
             CampusAIProviderCatalog.defaultProvider.id
         selectedModelID = try container.decodeIfPresent(CampusAIModelID.self, forKey: .selectedModelID) ??
@@ -795,7 +764,7 @@ nonisolated struct CampusAICapabilitySet: Codable, Hashable {
         self.officialDocumentSearchEnabled = officialDocumentSearchEnabled
     }
 
-    init(serviceMode: CampusAIServiceMode, webSearchEnabled requestedWebSearch: Bool) {
+    init(webSearchEnabled requestedWebSearch: Bool) {
         let canUseWeb = requestedWebSearch
         self.init(
             nonWebAgentEnabled: true,
@@ -808,7 +777,7 @@ nonisolated struct CampusAICapabilitySet: Codable, Hashable {
     }
 
     init(settings: CampusAIUserSettings) {
-        self.init(serviceMode: settings.serviceMode, webSearchEnabled: settings.webSearchEnabled)
+        self.init(webSearchEnabled: settings.webSearchEnabled)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -872,9 +841,10 @@ nonisolated enum CampusAISettingsStore {
     请用中文回答，默认简短直接，先给结论和下一步。可以围绕校园学习、生活安排和个人事项整理建议；信息不足时直接说缺什么，不要编造。
     """
 
-    private static let storageKey = "campusAI.userSettings.v7"
+    private static let storageKey = "campusAI.userSettings.v8"
+    private static let byokMigrationStorageKey = "campusAI.userSettings.v7"
     private static let communityContextStorageKey = "campusAI.userSettings.v6"
-    private static let managedDefaultMigrationStorageKey = "campusAI.userSettings.v5"
+    private static let v5MigrationStorageKey = "campusAI.userSettings.v5"
     private static let unsafeDefaultsStorageKey = "campusAI.userSettings.v4"
     private static let previousStorageKey = "campusAI.userSettings.v3"
     private static let olderStorageKey = "campusAI.userSettings.v2"
@@ -890,6 +860,14 @@ nonisolated enum CampusAISettingsStore {
             return normalized
         }
 
+        if let data = userDefaults.data(forKey: byokMigrationStorageKey),
+           let settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
+            let migrated = migrateDefaultPrompt(in: settings.normalizedForLocalRuntime)
+            save(migrated, userDefaults: userDefaults)
+            userDefaults.removeObject(forKey: byokMigrationStorageKey)
+            return migrated
+        }
+
         if let data = userDefaults.data(forKey: communityContextStorageKey),
            let settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
             let migrated = migrateDefaultPrompt(in: settings.normalizedForLocalRuntime)
@@ -898,12 +876,11 @@ nonisolated enum CampusAISettingsStore {
             return migrated
         }
 
-        if let data = userDefaults.data(forKey: managedDefaultMigrationStorageKey),
-           var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
-            settings.serviceMode = .leafyManaged
+        if let data = userDefaults.data(forKey: v5MigrationStorageKey),
+           let settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
             let migrated = migrateDefaultPrompt(in: settings.normalizedForLocalRuntime)
             save(migrated, userDefaults: userDefaults)
-            userDefaults.removeObject(forKey: managedDefaultMigrationStorageKey)
+            userDefaults.removeObject(forKey: v5MigrationStorageKey)
             return migrated
         }
 
@@ -920,7 +897,6 @@ nonisolated enum CampusAISettingsStore {
 
         if let data = userDefaults.data(forKey: previousStorageKey),
            var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
-            settings.serviceMode = .leafyManaged
             settings.contextSettings = .defaultValue
             let migrated = migrateDefaultPrompt(in: settings)
             save(migrated, userDefaults: userDefaults)
@@ -930,7 +906,6 @@ nonisolated enum CampusAISettingsStore {
 
         if let data = userDefaults.data(forKey: olderStorageKey),
            var settings = try? JSONDecoder().decode(CampusAIUserSettings.self, from: data) {
-            settings.serviceMode = .leafyManaged
             settings.webSearchEnabled = true
             settings.contextSettings = .defaultValue
             let migrated = migrateDefaultPrompt(in: settings)
@@ -945,7 +920,6 @@ nonisolated enum CampusAISettingsStore {
             return .defaultValue
         }
         let migrated = migrateDefaultPrompt(in: CampusAIUserSettings(
-            serviceMode: .leafyManaged,
             systemPrompt: legacySettings.systemPrompt ?? defaultSystemPrompt,
             contextSettings: .defaultValue
         ))
@@ -968,8 +942,9 @@ nonisolated enum CampusAISettingsStore {
 
     static func reset(userDefaults: UserDefaults = .standard) -> CampusAIUserSettings {
         userDefaults.removeObject(forKey: storageKey)
+        userDefaults.removeObject(forKey: byokMigrationStorageKey)
         userDefaults.removeObject(forKey: communityContextStorageKey)
-        userDefaults.removeObject(forKey: managedDefaultMigrationStorageKey)
+        userDefaults.removeObject(forKey: v5MigrationStorageKey)
         userDefaults.removeObject(forKey: unsafeDefaultsStorageKey)
         userDefaults.removeObject(forKey: previousStorageKey)
         userDefaults.removeObject(forKey: olderStorageKey)

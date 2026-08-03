@@ -126,17 +126,18 @@ iOS 26 及以上：
 - 使用系统 `TabView`。
 - 社区 Tab 支持未读 badge。
 - 使用系统 tab bar 外观并禁止最小化行为。
-- 旧状态选择 MyLeafy 时重定向到课表。
+- AI 位于“我的”右侧，使用系统 `TabRole.search` 形成独立圆形 Tab，不添加搜索框。
 
 iOS 17 到 iOS 25：
 
 - 使用系统 `TabView` 与原生 tab item。
 - 社区 Tab 使用系统 badge。
 
-历史 AI 界面：
+MyLeafy AI 界面：
 
-- 当前 `main` 不包含 MyLeafy AI 页面、输入栏或 Artifact 视图，这些界面不属于现行 UI 实现。
-- 完整 iOS 实现位于默认冻结的 `codex/leafy-ai` 维护分支；未来恢复时需要按当时的系统能力重新验收并更新本文。
+- 无 Key 状态提供明确的 DeepSeek API Key 配置入口，不展示额度、订阅或购买控件。
+- 对话保留输入栏、模型选择、研究状态、来源、Artifact 和历史记录。
+- iOS 17–25 使用标准第五 Tab；各版本都保持系统原生 TabView 行为。
 
 ## 6. 登录页设计
 

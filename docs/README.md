@@ -33,7 +33,7 @@
 |---|---|
 | [架构说明](engineering/architecture.md) | 技术分层、数据流、外部系统和架构约束 |
 | [Supabase 接入](engineering/supabase.md) | Auth、Database、RLS、Storage、Functions 和联调 |
-| [历史 AI 额度鉴权](engineering/leafy-ai-quota-authentication.md) | 冻结 iOS 分支与现存后端兼容资产的鉴权、安全和排查记录 |
+| [已退役的 AI 额度鉴权](engineering/leafy-ai-quota-authentication.md) | 3.0 以前托管额度与订阅实现的历史鉴权和排查记录 |
 | [运营后台](engineering/admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 |
 | [后台可靠性](engineering/admin-backend-reliability.md) | 管理动作、错误契约和发布顺序 |
 

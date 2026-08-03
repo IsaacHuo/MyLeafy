@@ -192,8 +192,6 @@ struct CampusAIEmptyConversationPanel: View {
 
     let prompts: [String]
     let canUseService: Bool
-    let quotaText: String
-    let openSubscription: () -> Void
     let configureAPIKey: () -> Void
     let selectPrompt: (String) -> Void
 
@@ -243,13 +241,6 @@ struct CampusAIEmptyConversationPanel: View {
                 }
                 .background(AppTheme.softFill.opacity(0.72), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .frame(maxWidth: 520)
-
-                Button(action: openSubscription) {
-                    Text(quotaText)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(AppTheme.accent)
-                }
-                .buttonStyle(.plain)
             } else {
                 CampusAIMissingKeyPanel(configureAPIKey: configureAPIKey)
                     .frame(maxWidth: 520)
@@ -268,7 +259,7 @@ struct CampusAIMissingKeyPanel: View {
                 .font(.headline)
                 .foregroundStyle(AppTheme.primaryText)
 
-            Text("API Key 只保存在当前设备的 Keychain。MyLeafy 会把你允许的本机上下文直接发送给 DeepSeek；联网研究只通过 MyLeafy Tool Gateway 执行公开搜索和网页读取。")
+            Text("API Key 只保存在当前设备的 Keychain。MyLeafy 只会把你允许且与问题相关的本机检索结果直接发送给 DeepSeek；联网研究只通过 MyLeafy Tool Gateway 执行公开搜索和网页读取。")
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)

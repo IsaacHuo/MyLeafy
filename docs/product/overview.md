@@ -112,9 +112,9 @@ flowchart LR
 
 具体入口根据校园、后端能力和当前版本配置动态显示。
 
-### 4.4 历史 AI 兼容边界
+### 4.4 MyLeafy AI
 
-当前 `main` 不包含 MyLeafy AI 的 iOS 对话、模型访问和购买实现，公开导航中也没有 AI 入口。App 只保留旧 SwiftData 模型和 Keychain 清理路径，避免升级或删除账户时遗留历史数据；Supabase 中现存的 AI Functions 与迁移用于后端兼容。完整 iOS 实现仅位于默认冻结的 `codex/leafy-ai` 维护分支，不属于当前能力范围。
+MyLeafy 3.0 提供本机保存的 AI 对话、联网研究、按授权读取的本机上下文、Artifact 和 Markdown/KaTeX 展示。用户需要自行配置 DeepSeek API Key，可选择 Flash 或 Pro；密钥保存在 Keychain，模型请求从设备直接发送。Supabase 只保留 `campus-ai-tools` 作为公开网页研究网关，不提供托管额度或订阅。
 
 ### 4.5 社区与通知
 

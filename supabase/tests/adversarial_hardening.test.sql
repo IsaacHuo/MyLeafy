@@ -60,52 +60,13 @@ select ok(
   'direct post status transitions are guarded'
 );
 
-select is(private.campus_ai_entitlement_status_rank('revoked'), 5, 'revoked has terminal precedence');
-select is(private.campus_ai_entitlement_status_rank('active'), 2, 'active has lower terminal precedence');
-
-do $$
-begin
-  perform private.sync_campus_ai_entitlement(
-    null, 'audit-monotonic', 'com.isaachuo.leafy.ai.weekly.v2', 'original-1', 'transaction-1', 'Sandbox',
-    'active', now() - interval '1 day', now() + interval '6 days', 'notification-active', timestamptz '2026-07-22 00:00:00+00'
-  );
-  perform private.sync_campus_ai_entitlement(
-    null, 'audit-monotonic', 'com.isaachuo.leafy.ai.weekly.v2', 'original-1', 'transaction-2', 'Sandbox',
-    'refunded', now() - interval '1 day', now() + interval '6 days', 'notification-refund', timestamptz '2026-07-22 00:10:00+00'
-  );
-  perform private.sync_campus_ai_entitlement(
-    null, 'audit-monotonic', 'com.isaachuo.leafy.ai.weekly.v2', 'original-1', 'transaction-old', 'Sandbox',
-    'active', now() - interval '1 day', now() + interval '6 days', 'notification-old-active', timestamptz '2026-07-22 00:05:00+00'
-  );
-end $$;
-
-select is(
-  (select status from private.campus_ai_entitlements where app_transaction_id = 'audit-monotonic'),
-  'refunded',
-  'an older active transaction cannot overwrite a refund'
-);
-select is(
-  (select last_signed_at from private.campus_ai_entitlements where app_transaction_id = 'audit-monotonic'),
-  timestamptz '2026-07-22 00:10:00+00',
-  'the entitlement signed timestamp never moves backwards'
-);
-select is(
-  (private.sync_campus_ai_entitlement(
-    null, 'audit-monotonic', null, null, null, null,
-    'refunded', null, null, 'notification-refund', timestamptz '2026-07-22 00:10:00+00'
-  ) ->> 'duplicate')::boolean,
-  true,
-  'duplicate StoreKit notifications are idempotent'
-);
-select is(
-  (select count(*) from private.campus_ai_storekit_notification_ledger where notification_uuid = 'notification-refund'),
-  1::bigint,
-  'the notification ledger stores one row per UUID'
-);
-select ok(
-  not has_table_privilege('authenticated', 'private.campus_ai_storekit_notification_ledger', 'SELECT'),
-  'the StoreKit notification ledger is private'
-);
+select ok(to_regclass('private.campus_ai_usage_events') is null, 'managed AI usage events are retired');
+select ok(to_regclass('private.campus_ai_entitlements') is null, 'managed AI entitlements are retired');
+select ok(to_regclass('private.campus_ai_storekit_notification_ledger') is null, 'StoreKit notification ledger is retired');
+select ok(to_regprocedure('public.edge_campus_ai_quota_snapshot(uuid,text,timestamptz)') is null, 'quota snapshot wrapper is retired');
+select ok(to_regprocedure('public.edge_campus_ai_reserve_quota(uuid,uuid,text,text,timestamptz)') is null, 'quota reservation wrapper is retired');
+select ok(to_regprocedure('public.edge_campus_ai_complete_usage(uuid,text,boolean,integer,integer,integer,integer,integer,integer,integer,integer,numeric,text)') is null, 'usage completion wrapper is retired');
+select ok(to_regprocedure('public.edge_campus_ai_sync_entitlement(uuid,text,text,text,text,text,text,timestamptz,timestamptz,text,timestamptz)') is null, 'entitlement wrapper is retired');
 
 select * from finish();
 rollback;
