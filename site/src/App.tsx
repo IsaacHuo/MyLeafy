@@ -53,7 +53,7 @@ const pageTitles: Record<string, string> = {
 };
 
 const primaryButtonClass =
-  "border border-accent bg-accent text-forest shadow-accent hover:border-accent-strong hover:bg-accent-strong";
+  "border border-accent bg-accent text-forest shadow-[0_8px_24px_rgba(120,182,132,0.12)] hover:border-accent-strong hover:bg-accent-strong";
 const secondaryButtonClass =
   "border border-white/20 bg-forest-elevated/80 text-ivory shadow-deep backdrop-blur-xl hover:border-white/30 hover:bg-forest-elevated";
 const panelClass =
@@ -326,8 +326,8 @@ function HomePage({ navigate }: { navigate: (href: string) => void }) {
         <div className="mx-auto grid w-full max-w-7xl items-end gap-8 px-4 pb-10 md:px-6 md:pb-14 lg:grid-cols-[0.88fr_1.12fr] lg:gap-4">
           <StaggerReveal className="relative z-10 max-w-xl pb-4 lg:pb-12">
             <p className="mb-5 text-sm font-semibold text-accent">为北林学生而做</p>
-            <h1 tabIndex={-1} className="max-w-[720px] text-[clamp(3.15rem,7vw,6.6rem)] font-semibold leading-[0.98] tracking-[-0.025em] text-ivory">
-              把校园生活，<br />放进一处。
+            <h1 tabIndex={-1} className="max-w-[720px] text-[clamp(2.75rem,6.25vw,5.8rem)] font-semibold leading-[0.98] tracking-[-0.025em] text-ivory">
+              <span className="whitespace-nowrap">把校园生活，</span><br /><span className="whitespace-nowrap">放进一处。</span>
             </h1>
             <p className="mt-6 max-w-[500px] text-base leading-relaxed text-ivory/70 md:text-lg">
               课表、教务、社区与校园问答，集中在一款简洁的 iPhone App 中。
@@ -362,8 +362,8 @@ function HomePage({ navigate }: { navigate: (href: string) => void }) {
         <ScrollReveal className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-9 md:flex-row md:items-end">
           <div className="max-w-3xl">
             <img className="h-16 w-16 rounded-[18px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy 应用图标" />
-            <h2 className="mt-8 text-4xl font-semibold leading-[1.04] tracking-[-0.025em] text-ivory md:text-6xl">
-              校园日常，<br />触手可及。
+            <h2 className="mt-8 text-3xl font-semibold leading-[1.04] tracking-[-0.025em] text-ivory md:text-5xl">
+              <span className="whitespace-nowrap">校园日常，</span><br /><span className="whitespace-nowrap">触手可及。</span>
             </h2>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
               打开 MyLeafy，从眼前这一周开始。
@@ -435,8 +435,8 @@ function CampusIdentitySection() {
       <div className="mx-auto max-w-7xl">
         <ScrollReveal className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
           <div>
-            <h2 className="max-w-xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-ivory md:text-5xl">
-              从正在发生的校园生活出发。
+            <h2 className="max-w-xl text-3xl font-semibold leading-[1.1] tracking-[-0.02em] text-ivory md:text-4xl">
+              <span className="whitespace-nowrap">从正在发生的</span><br /><span className="whitespace-nowrap">校园生活出发。</span>
             </h2>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-ivory/60">
               MyLeafy 将学校系统与校园日常汇在一起，让每次查看都更从容。
@@ -481,8 +481,8 @@ function AppExperienceSection() {
       <div className="mx-auto max-w-7xl">
         <ScrollReveal className="max-w-3xl">
           <p className="text-sm font-semibold text-accent">MyLeafy 里面有什么</p>
-          <h2 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">
-            先看这一周，<br />其他事情也不远。
+          <h2 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-5xl">
+            <span className="whitespace-nowrap">先看这一周，</span><br /><span className="whitespace-nowrap">其他事情也不远。</span>
           </h2>
         </ScrollReveal>
 
@@ -530,8 +530,8 @@ function HomeDataTrust() {
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-muted text-accent">
             <LockKey size={24} weight="bold" aria-hidden />
           </span>
-          <h2 className="mt-8 max-w-lg text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-5xl">
-            每类数据，<br />都有清晰边界。
+          <h2 className="mt-8 max-w-lg text-3xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-4xl">
+            <span className="whitespace-nowrap">每类数据，</span><br /><span className="whitespace-nowrap">都有清晰边界。</span>
           </h2>
           <p className="mt-5 max-w-md text-base leading-relaxed text-ivory/60">
             学校数据、本地存储、社区服务与公共官网各自独立，来源和用途清楚可见。
@@ -570,8 +570,8 @@ function FeaturesPage({ navigate }: { navigate: (href: string) => void }) {
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_0.7fr] lg:items-end">
           <StaggerReveal className="max-w-3xl">
             <p className="text-sm font-semibold text-accent">功能</p>
-            <h1 tabIndex={-1} className="mt-5 text-[clamp(3.15rem,7vw,6.4rem)] font-semibold leading-[0.98] tracking-[-0.025em] text-ivory">
-              围绕校园节奏，<br />安排每一天。
+            <h1 tabIndex={-1} className="mt-5 text-[clamp(2.75rem,6.25vw,5.7rem)] font-semibold leading-[0.98] tracking-[-0.025em] text-ivory">
+              <span className="whitespace-nowrap">围绕校园节奏，</span><br /><span className="whitespace-nowrap">安排每一天。</span>
             </h1>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-ivory/70 md:text-lg">
               从第一节课到当天最后一条校园通知，MyLeafy 让日程始终清楚。
@@ -585,7 +585,7 @@ function FeaturesPage({ navigate }: { navigate: (href: string) => void }) {
 
       <CapabilityRail />
 
-      <SectionShell id="product" title={<>四个入口，<br />一条日常动线</>} body="每个入口各有职责，需要的信息一眼就能找到。">
+      <SectionShell id="product" title={<><span className="whitespace-nowrap">四个入口，</span><br /><span className="whitespace-nowrap">一条日常动线</span></>} body="每个入口各有职责，需要的信息一眼就能找到。">
         <FeatureBandList />
       </SectionShell>
 
@@ -651,8 +651,8 @@ function FeatureImageShowcase() {
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <ScrollReveal className="max-w-3xl">
           <p className="text-sm font-semibold text-accent">App 实景</p>
-          <h2 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">
-            每个日常，<br />都有专注的视图。
+          <h2 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-5xl">
+            <span className="whitespace-nowrap">每个日常，</span><br /><span className="whitespace-nowrap">都有专注的视图。</span>
           </h2>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
             课表、社区、成绩、学习资料、校园信息与 MyLeafy AI。
@@ -789,14 +789,14 @@ function SupportPage() {
       <PageHero
         icon={Headset}
         label="技术支持"
-        title={<>校园数据遇到问题时，<br />我们在这里。</>}
+        title={<><span className="whitespace-nowrap">校园数据</span><br className="xl:hidden" /><span className="whitespace-nowrap">遇到问题时，</span><br /><span className="whitespace-nowrap">我们在这里。</span></>}
         body="登录、同步、课表解析、社区、分享或评价出现问题时，可通过邮件或 App 内反馈联系我们。"
         image="/media/campus/snowy-campus-building.jpg"
         imageAlt="雪中的北京林业大学校园建筑"
       >
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <TapButton href={mailto} className={primaryButtonClass}>
-            <EnvelopeSimple size={18} weight="bold" aria-hidden />
+        <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row">
+          <TapButton href={mailto} className={primaryButtonClass + " min-h-12 px-5"}>
+            <EnvelopeSimple size={20} weight="bold" aria-hidden />
             发送邮件
           </TapButton>
           <CopyEmailButton email={site.supportEmail} />
@@ -841,7 +841,7 @@ function PrivacyPage() {
       <PageHero
         icon={ShieldCheck}
         label="隐私"
-        title={<>用清楚的话，<br />说明数据边界。</>}
+        title={<><span className="whitespace-nowrap">用清楚的话，</span><br /><span className="whitespace-nowrap">说明数据边界。</span></>}
         body={"了解 MyLeafy 如何处理学校登录、设备数据、社区、反馈、评价、分享与官网数据。最后更新于 " + site.updatedAt + "。"}
         image="/media/campus/classroom-at-dusk.jpg"
         imageAlt="暮色中的北京林业大学教室"
@@ -1002,7 +1002,7 @@ function PageHero({
             <Icon size={24} weight="regular" aria-hidden />
           </span>
           <p className="mt-7 text-sm font-semibold text-accent">{label}</p>
-          <h1 tabIndex={-1} className="mt-5 text-5xl font-semibold leading-[1.06] tracking-[-0.02em] text-ivory md:text-7xl">{title}</h1>
+          <h1 tabIndex={-1} className="mt-5 text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-ivory md:text-5xl xl:text-6xl">{title}</h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-ivory/60 md:text-lg">{body}</p>
           {children}
         </StaggerReveal>
@@ -1028,7 +1028,7 @@ function SectionShell({
   return (
     <section id={id} className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 md:px-6 md:py-28">
       <ScrollReveal className="mb-12 max-w-4xl">
-        <h2 className="text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">{title}</h2>
+        <h2 className="text-3xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-5xl">{title}</h2>
         {body && <p className="mt-5 max-w-2xl text-base leading-relaxed text-ivory/60">{body}</p>}
       </ScrollReveal>
       {children}
