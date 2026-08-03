@@ -43,13 +43,13 @@ import { ScrollReveal, StaggerReveal, TapButton } from "./components/MotionBits"
 const AdminConsole = lazy(() => import("./admin/AdminConsole"));
 
 const pageTitles: Record<string, string> = {
-  "/": "MyLeafy | Campus Timetable and Student Tools",
-  "/features": "MyLeafy Features",
-  "/support": "MyLeafy Support",
-  "/privacy": "MyLeafy Privacy Policy",
+  "/": "MyLeafy｜校园课表与校园工具",
+  "/features": "MyLeafy 功能",
+  "/support": "MyLeafy 技术支持",
+  "/privacy": "MyLeafy 隐私政策",
   "/admin": "MyLeafy Admin",
-  "/share/timetable": "MyLeafy Shared Timetable",
-  "/share/community/post": "MyLeafy Community Post"
+  "/share/timetable": "MyLeafy 共享课表",
+  "/share/community/post": "MyLeafy 社区帖子"
 };
 
 const primaryButtonClass =
@@ -118,6 +118,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = pageTitles[activePath];
+    document.documentElement.lang = activePath === "/admin" ? "en" : "zh-CN";
     if (previousPath.current !== activePath) {
       window.setTimeout(() => {
         document.querySelector<HTMLElement>("#main-content h1")?.focus({ preventScroll: true });
@@ -172,7 +173,7 @@ export default function App() {
 
   return (
     <div className="public-site min-h-[100dvh] bg-paper text-text">
-      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <a className="skip-link" href="#main-content">跳到主要内容</a>
       <Header activePath={activePath} navigate={navigate} />
       <main id="main-content" tabIndex={-1}>
         {activePath === "/" && <HomePage navigate={navigate} />}
@@ -222,13 +223,13 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
             go("/");
           }}
           className="leafy-pressable flex min-h-11 min-w-fit items-center gap-3 rounded-full"
-          aria-label="MyLeafy home"
+          aria-label="MyLeafy 首页"
         >
-          <img className="h-9 w-9 rounded-[11px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy app icon" />
+          <img className="h-9 w-9 rounded-[11px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy 应用图标" />
           <strong className="text-lg font-semibold leading-none tracking-[-0.025em] text-ivory">MyLeafy</strong>
         </a>
 
-        <nav aria-label="Primary navigation" className="ml-8 hidden flex-1 items-center justify-center gap-1 md:flex">
+        <nav aria-label="主导航" className="ml-8 hidden flex-1 items-center justify-center gap-1 md:flex">
           {navItems.map((item) => {
             const route = routeFromHref(item.href).split("#")[0];
             const isActive = route === "/" ? activePath === "/" : activePath === route;
@@ -258,7 +259,7 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
             href={"mailto:" + site.supportEmail}
             className="leafy-pressable hidden min-h-11 items-center rounded-full px-3 py-2 text-sm font-medium text-ivory/60 hover:bg-white/[0.07] hover:text-ivory lg:inline-flex"
           >
-            Contact
+            联系我们
           </a>
           <div className="hidden sm:block">
             <AppStoreBadge compact />
@@ -267,7 +268,7 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
             ref={menuButtonRef}
             type="button"
             className="leafy-pressable grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/[0.06] text-ivory md:hidden"
-            aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-label={menuOpen ? "关闭导航菜单" : "打开导航菜单"}
             aria-expanded={menuOpen}
             aria-controls="mobile-navigation"
             onClick={() => setMenuOpen((value) => !value)}
@@ -278,7 +279,7 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
       </div>
 
       {menuOpen && (
-        <nav id="mobile-navigation" aria-label="Mobile navigation" className="mx-auto mt-2 grid max-w-7xl gap-1 rounded-[24px] border border-white/10 bg-forest/95 p-3 shadow-deep backdrop-blur-2xl md:hidden">
+        <nav id="mobile-navigation" aria-label="移动端导航" className="mx-auto mt-2 grid max-w-7xl gap-1 rounded-[24px] border border-white/10 bg-forest/95 p-3 shadow-deep backdrop-blur-2xl md:hidden">
           {navItems.map((item) => {
             const route = routeFromHref(item.href).split("#")[0];
             const isActive = route === "/" ? activePath === "/" : activePath === route;
@@ -302,7 +303,7 @@ function Header({ activePath, navigate }: { activePath: string; navigate: (href:
             );
           })}
           <a className="leafy-pressable rounded-2xl px-4 py-3 text-sm font-medium text-accent" href={"mailto:" + site.supportEmail}>
-            Contact support
+            联系支持
           </a>
         </nav>
       )}
@@ -324,17 +325,17 @@ function HomePage({ navigate }: { navigate: (href: string) => void }) {
         <div className="hero-scrim absolute inset-0 -z-10" aria-hidden />
         <div className="mx-auto grid w-full max-w-7xl items-end gap-8 px-4 pb-10 md:px-6 md:pb-14 lg:grid-cols-[0.88fr_1.12fr] lg:gap-4">
           <StaggerReveal className="relative z-10 max-w-xl pb-4 lg:pb-12">
-            <p className="mb-5 text-sm font-semibold text-accent">Built for BJFU students</p>
-            <h1 tabIndex={-1} className="max-w-[720px] text-[clamp(3.15rem,7vw,6.6rem)] font-semibold leading-[0.94] tracking-[-0.045em] text-ivory">
-              Campus life,<br />in one place.
+            <p className="mb-5 text-sm font-semibold text-accent">为北林学生而做</p>
+            <h1 tabIndex={-1} className="max-w-[720px] text-[clamp(3.15rem,7vw,6.6rem)] font-semibold leading-[0.98] tracking-[-0.025em] text-ivory">
+              把校园生活，<br />放进一处。
             </h1>
             <p className="mt-6 max-w-[500px] text-base leading-relaxed text-ivory/70 md:text-lg">
-              Timetable, academics, community, and campus answers in one focused iPhone app.
+              课表、教务、社区与校园问答，集中在一款简洁的 iPhone App 中。
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <AppStoreBadge />
               <TapButton onClick={() => navigate("/features")} className={secondaryButtonClass + " px-5 text-[15px] font-semibold"}>
-                Explore features
+                查看功能
                 <ArrowRight size={17} weight="bold" aria-hidden />
               </TapButton>
             </div>
@@ -360,12 +361,12 @@ function HomePage({ navigate }: { navigate: (href: string) => void }) {
         <div className="absolute inset-0 -z-10 bg-forest/90" aria-hidden />
         <ScrollReveal className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-9 md:flex-row md:items-end">
           <div className="max-w-3xl">
-            <img className="h-16 w-16 rounded-[18px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy app icon" />
-            <h2 className="mt-8 text-4xl font-semibold leading-[0.98] tracking-[-0.045em] text-ivory md:text-6xl">
-              Your campus day,<br />within reach.
+            <img className="h-16 w-16 rounded-[18px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy 应用图标" />
+            <h2 className="mt-8 text-4xl font-semibold leading-[1.04] tracking-[-0.025em] text-ivory md:text-6xl">
+              校园日常，<br />触手可及。
             </h2>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
-              Open MyLeafy and start with the week in front of you.
+              打开 MyLeafy，从眼前这一周开始。
             </p>
           </div>
           <AppStoreBadge />
@@ -380,9 +381,9 @@ function AppStoreBadge({ compact = false }: { compact?: boolean }) {
     <a
       href={site.appStoreUrl}
       className="app-store-badge leafy-pressable inline-flex min-h-11 shrink-0 items-center"
-      aria-label="Download MyLeafy on the App Store"
+      aria-label="在 App Store 下载 MyLeafy"
     >
-      <img className={(compact ? "h-10" : "h-12") + " w-auto max-w-none"} src="/media/download-on-the-app-store.svg" alt="Download on the App Store" />
+      <img className={(compact ? "h-10" : "h-12") + " w-auto max-w-none"} src="/media/download-on-the-app-store.svg" alt="" />
     </a>
   );
 }
@@ -417,7 +418,7 @@ function PhoneFrame({
 
 function HeroPhones() {
   return (
-    <div className="relative mx-auto min-h-[500px] w-full max-w-[650px] sm:min-h-[590px] lg:min-h-[650px]" aria-label="MyLeafy app previews">
+    <div className="relative mx-auto min-h-[500px] w-full max-w-[650px] sm:min-h-[590px] lg:min-h-[650px]" aria-label="MyLeafy App 界面预览">
       <div className="hero-phone absolute bottom-0 left-[3%] z-10 w-[min(48vw,292px)]">
         <PhoneFrame image={appScreenshots[0].image} alt={appScreenshots[0].alt} />
       </div>
@@ -434,18 +435,18 @@ function CampusIdentitySection() {
       <div className="mx-auto max-w-7xl">
         <ScrollReveal className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
           <div>
-            <h2 className="max-w-xl text-4xl font-semibold leading-[1.06] tracking-[-0.03em] text-ivory md:text-5xl">
-              Made from the life already happening here.
+            <h2 className="max-w-xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-ivory md:text-5xl">
+              从正在发生的校园生活出发。
             </h2>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-ivory/60">
-              MyLeafy brings school systems and everyday campus routines into one calmer experience.
+              MyLeafy 将学校系统与校园日常汇在一起，让每次查看都更从容。
             </p>
           </div>
           <div className="overflow-hidden rounded-[28px] border border-white/10 bg-forest-elevated shadow-deep">
             <img
               className="aspect-[16/9] h-full w-full object-cover"
               src="/media/campus/classroom-at-dusk.jpg"
-              alt="A quiet BJFU classroom framed by evening windows"
+              alt="暮色窗景中的北京林业大学教室"
               loading="lazy"
               decoding="async"
             />
@@ -470,18 +471,18 @@ function CampusIdentitySection() {
 
 function AppExperienceSection() {
   const items = [
-    { icon: CalendarBlank, title: "Timetable first", body: "See the current week, classes, rooms, reminders, and exams at a glance." },
-    { icon: GraduationCap, title: "Academics together", body: "Grades, plans, credits, classrooms, and the academic calendar stay organized." },
-    { icon: ChatsCircle, title: "Community separate", body: "Campus posts and notices have their own space, away from school login data." }
+    { icon: CalendarBlank, title: "课表优先", body: "一眼查看当前周、课程、教室、提醒与考试。" },
+    { icon: GraduationCap, title: "教务集中", body: "成绩、学习计划、学分、教室与校历有序归纳。" },
+    { icon: ChatsCircle, title: "社区独立", body: "校园帖子与公告拥有独立空间，与学校登录数据分开。" }
   ];
 
   return (
     <section className="overflow-hidden border-y border-white/[0.07] bg-forest-low px-4 py-24 md:px-6 md:py-36">
       <div className="mx-auto max-w-7xl">
         <ScrollReveal className="max-w-3xl">
-          <p className="text-sm font-semibold text-accent">Inside MyLeafy</p>
-          <h2 className="mt-5 text-4xl font-semibold leading-[1] tracking-[-0.05em] text-ivory md:text-6xl">
-            The week comes first.<br />Everything else stays close.
+          <p className="text-sm font-semibold text-accent">MyLeafy 里面有什么</p>
+          <h2 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">
+            先看这一周，<br />其他事情也不远。
           </h2>
         </ScrollReveal>
 
@@ -529,11 +530,11 @@ function HomeDataTrust() {
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-muted text-accent">
             <LockKey size={24} weight="bold" aria-hidden />
           </span>
-          <h2 className="mt-8 max-w-lg text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ivory md:text-5xl">
-            Clear boundaries for every kind of data.
+          <h2 className="mt-8 max-w-lg text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-5xl">
+            每类数据，都有清晰边界。
           </h2>
           <p className="mt-5 max-w-md text-base leading-relaxed text-ivory/60">
-            School data, local storage, community services, and the public website remain understandable and separate.
+            学校数据、本地存储、社区服务与公共官网各自独立，来源和用途清楚可见。
           </p>
         </div>
         <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2">
@@ -568,12 +569,12 @@ function FeaturesPage({ navigate }: { navigate: (href: string) => void }) {
         <div className="hero-scrim absolute inset-0 -z-10" aria-hidden />
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_0.7fr] lg:items-end">
           <StaggerReveal className="max-w-3xl">
-            <p className="text-sm font-semibold text-accent">Features</p>
-            <h1 tabIndex={-1} className="mt-5 text-[clamp(3.15rem,7vw,6.4rem)] font-semibold leading-[0.94] tracking-[-0.045em] text-ivory">
-              Built around<br />campus rhythm.
+            <p className="text-sm font-semibold text-accent">功能</p>
+            <h1 tabIndex={-1} className="mt-5 text-[clamp(3.15rem,7vw,6.4rem)] font-semibold leading-[0.98] tracking-[-0.025em] text-ivory">
+              围绕校园节奏，<br />安排每一天。
             </h1>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-ivory/70 md:text-lg">
-              From the first class to the last campus notice, MyLeafy keeps the day clear.
+              从第一节课到当天最后一条校园通知，MyLeafy 让日程始终清楚。
             </p>
           </StaggerReveal>
           <div className="mx-auto w-[min(58vw,285px)] lg:mr-12">
@@ -584,20 +585,20 @@ function FeaturesPage({ navigate }: { navigate: (href: string) => void }) {
 
       <CapabilityRail />
 
-      <SectionShell id="product" title="Four spaces, one daily flow" body="Each part has a clear job, so the app stays easy to scan.">
+      <SectionShell id="product" title="四个入口，一条日常动线" body="每个入口各有职责，需要的信息一眼就能找到。">
         <FeatureBandList />
       </SectionShell>
 
       <FeatureImageShowcase />
 
       <section id="data" className="scroll-mt-24 border-y border-white/[0.07] bg-forest-low">
-        <SectionShell title="Where your data lives" body="The source and purpose of each data group remain visible.">
+        <SectionShell title="数据保存在哪里" body="每类数据的来源与用途都清楚可见。">
           <DataBoundaryTable />
         </SectionShell>
       </section>
 
       <section id="community" className="scroll-mt-24 bg-paper">
-        <SectionShell title="Designed for frequent checks">
+        <SectionShell title="为每天反复查看而设计">
           <WorkflowList />
         </SectionShell>
       </section>
@@ -649,12 +650,12 @@ function FeatureImageShowcase() {
     <section id="screens" className="scroll-mt-24 overflow-hidden border-y border-white/[0.07] bg-forest-low py-24 md:py-32">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <ScrollReveal className="max-w-3xl">
-          <p className="text-sm font-semibold text-accent">Inside the app</p>
-          <h2 className="mt-5 text-4xl font-semibold leading-[1] tracking-[-0.05em] text-ivory md:text-6xl">
-            A focused view for every routine.
+          <p className="text-sm font-semibold text-accent">App 实景</p>
+          <h2 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">
+            每个日常，都有专注的视图。
           </h2>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
-            Timetable, community, grades, study materials, campus information, and MyLeafy AI.
+            课表、社区、成绩、学习资料、校园信息与 MyLeafy AI。
           </p>
         </ScrollReveal>
       </div>
@@ -696,7 +697,7 @@ function WorkflowList() {
         <img
           className="h-full min-h-[430px] w-full object-cover"
           src="/media/campus/campus-entrance-bicycles.jpg"
-          alt="Bicycles parked beside a BJFU campus entrance"
+          alt="北京林业大学校门旁停放的自行车"
           loading="lazy"
           decoding="async"
         />
@@ -724,13 +725,13 @@ function WorkflowList() {
 function ResourcesSection({ navigate }: { navigate: (href: string) => void }) {
   return (
     <section className="border-t border-white/[0.07] bg-paper">
-      <SectionShell title="Support and public links">
+      <SectionShell title="支持与公共链接">
         <div className="grid gap-5 lg:grid-cols-[0.74fr_1.26fr]">
           <div className={featuredPanelClass}>
             <LockKey size={25} weight="bold" className="text-accent" aria-hidden />
-            <p className="mt-6 text-2xl font-semibold leading-tight text-ivory">Contact and policy links</p>
+            <p className="mt-6 text-2xl font-semibold leading-tight text-ivory">联系方式与政策链接</p>
             <p className="mt-4 text-sm leading-relaxed text-ivory/60">
-              Support: {site.supportEmail}. Privacy policy: {site.privacyUrl}.
+              支持邮箱：{site.supportEmail}。隐私政策：{site.privacyUrl}。
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -781,53 +782,53 @@ function ResourcesSection({ navigate }: { navigate: (href: string) => void }) {
 }
 
 function SupportPage() {
-  const mailto = "mailto:" + site.supportEmail + "?subject=MyLeafy Support";
+  const mailto = "mailto:" + site.supportEmail + "?subject=MyLeafy 技术支持";
 
   return (
     <>
       <PageHero
         icon={Headset}
-        label="Support"
-        title="Help when campus data gets complicated."
-        body="For login, sync, timetable parsing, community, sharing, or ratings, contact support by email or through in-app feedback."
+        label="技术支持"
+        title="校园数据遇到问题时，我们在这里。"
+        body="登录、同步、课表解析、社区、分享或评价出现问题时，可通过邮件或 App 内反馈联系我们。"
         image="/media/campus/snowy-campus-building.jpg"
-        imageAlt="A snow-covered BJFU campus building"
+        imageAlt="雪中的北京林业大学校园建筑"
       >
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <TapButton href={mailto} className={primaryButtonClass}>
             <EnvelopeSimple size={18} weight="bold" aria-hidden />
-            Send email
+            发送邮件
           </TapButton>
           <CopyEmailButton email={site.supportEmail} />
         </div>
       </PageHero>
 
-      <SectionShell title="Public contact" body="Email works for general support and privacy requests. In-app feedback is better when an issue needs device and sync context.">
+      <SectionShell title="公开联系方式" body="一般支持与隐私请求可通过邮件提交；需要设备与同步上下文时，建议使用 App 内反馈。">
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div className={panelClass}>
-            <p className="text-sm font-semibold text-ivory/50">Support email</p>
+            <p className="text-sm font-semibold text-ivory/50">支持邮箱</p>
             <a className="mt-3 block break-all text-3xl font-semibold leading-tight text-ivory hover:text-accent" href={mailto}>
               {site.supportEmail}
             </a>
             <p className="mt-4 max-w-[68ch] text-sm leading-relaxed text-ivory/60">
-              Use this address for App Store support, general feedback, feature requests, and privacy requests.
+              此邮箱用于 App Store 技术支持、一般反馈、功能建议与隐私请求。
             </p>
           </div>
           <div id="in-app" className={featuredPanelClass + " scroll-mt-24"}>
             <CheckCircle size={24} weight="bold" className="text-accent" aria-hidden />
-            <p className="mt-4 text-xl font-semibold text-ivory">In-app feedback includes useful context</p>
+            <p className="mt-4 text-xl font-semibold text-ivory">App 内反馈可附带必要上下文</p>
             <p className="mt-3 text-sm leading-relaxed text-ivory/60">
-              It can include device model, system version, app version, login state, and latest sync time.
+              可包含设备型号、系统版本、App 版本、登录状态与最近同步时间。
             </p>
           </div>
         </div>
       </SectionShell>
 
-      <SectionShell title="Information to include">
+      <SectionShell title="建议提供的信息">
         <NumberedList items={supportChecklist} />
       </SectionShell>
 
-      <SectionShell title="Common support topics">
+      <SectionShell title="常见支持主题">
         <AsymmetricIconGrid items={supportTopics} />
       </SectionShell>
     </>
@@ -839,25 +840,25 @@ function PrivacyPage() {
     <>
       <PageHero
         icon={ShieldCheck}
-        label="Privacy"
-        title="Clear data boundaries, written plainly."
-        body={"How MyLeafy handles school login, local cache, community, feedback, ratings, sharing, and website data. Updated " + site.updatedAt + "."}
+        label="隐私"
+        title="用清楚的话，说明数据边界。"
+        body={"了解 MyLeafy 如何处理学校登录、本地缓存、社区、反馈、评价、分享与官网数据。最后更新于 " + site.updatedAt + "。"}
         image="/media/campus/classroom-at-dusk.jpg"
-        imageAlt="A quiet BJFU classroom at dusk"
+        imageAlt="暮色中的北京林业大学教室"
       >
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <TapButton href="#privacy-rights" className={primaryButtonClass}>
             <LockKey size={18} weight="bold" aria-hidden />
-            View privacy choices
+            查看隐私选择
           </TapButton>
-          <TapButton href={"mailto:" + site.supportEmail + "?subject=MyLeafy Privacy Request"} className={secondaryButtonClass}>
+          <TapButton href={"mailto:" + site.supportEmail + "?subject=MyLeafy 隐私请求"} className={secondaryButtonClass}>
             <EnvelopeSimple size={18} weight="bold" aria-hidden />
-            Send privacy request
+            发送隐私请求
           </TapButton>
         </div>
       </PageHero>
 
-      <SectionShell title="Four things to know">
+      <SectionShell title="四件需要了解的事">
         <AsymmetricIconGrid items={privacySummaryCards} />
       </SectionShell>
 
@@ -892,36 +893,36 @@ function ShareTimetablePage({ code }: { code: string }) {
     <>
       <PageHero
         icon={CalendarBlank}
-        label="Shared timetable"
-        title={isValidCode ? "Open a shared week in MyLeafy." : "This timetable link is incomplete."}
-        body={isValidCode ? "Copy the invite code, then open Profile, Shared Timetable, and Add a classmate's timetable." : "Ask the sharer to send the complete link again. A valid invite code contains 12 characters."}
+        label="共享课表"
+        title={isValidCode ? "在 MyLeafy 中查看共享课表。" : "这条共享课表链接不完整。"}
+        body={isValidCode ? "复制邀请码，然后打开“我的 → 共享课表 → 添加同学课表”。" : "请让分享者重新发送完整链接。有效邀请码应包含 12 个字符。"}
         image="/media/campus/spring-blossoms-cat.jpg"
-        imageAlt="Spring blossoms and a campus cat at BJFU"
+        imageAlt="北京林业大学校园里的春花与猫"
       >
         <div className="mt-8 grid max-w-xl gap-4">
           <div className={featuredPanelClass} role={isValidCode ? undefined : "alert"}>
-            <p className="text-sm font-semibold text-ivory/50">Invite code</p>
-            <p className="mt-3 break-all text-4xl font-semibold tracking-[-0.02em] text-ivory sm:text-5xl">{isValidCode ? normalizedCode : "Invalid link"}</p>
+            <p className="text-sm font-semibold text-ivory/50">邀请码</p>
+            <p className="mt-3 break-all text-4xl font-semibold tracking-[-0.02em] text-ivory sm:text-5xl">{isValidCode ? normalizedCode : "链接无效"}</p>
             <p className="mt-4 text-sm leading-relaxed text-ivory/60">
               {isValidCode
-                ? "Invite codes are valid for seven days and can be accepted by one person. Access can be revoked later."
-                : "No timetable can be opened from this URL. Please return to the message where the link was shared."}
+                ? "邀请码 7 天内有效，仅可由一人接受；分享者之后仍可撤销访问。"
+                : "无法通过此链接打开课表。请返回收到分享链接的消息，确认链接是否完整。"}
             </p>
           </div>
           {isValidCode && (
             <button type="button" onClick={copyCode} className={primaryButtonClass + " leafy-pressable inline-flex min-h-11 w-fit items-center gap-2 rounded-full px-5 text-sm font-medium"}>
               {copyState === "error" ? <WarningCircle size={18} weight="bold" aria-hidden /> : <CheckCircle size={18} weight="bold" aria-hidden />}
-              {copyState === "copied" ? "Copied" : copyState === "error" ? "Copy failed — try again" : "Copy invite code"}
+              {copyState === "copied" ? "已复制" : copyState === "error" ? "复制失败，请重试" : "复制邀请码"}
             </button>
           )}
           <p className="min-h-6 text-sm text-ivory/60" role="status" aria-live="polite">
-            {copyState === "copied" ? "Invite code copied to the clipboard." : copyState === "error" ? "Clipboard access is unavailable. Select the code and copy it manually." : ""}
+            {copyState === "copied" ? "邀请码已复制到剪贴板。" : copyState === "error" ? "无法访问剪贴板，请选中邀请码并手动复制。" : ""}
           </p>
         </div>
       </PageHero>
 
-      <SectionShell title="Accept in the app">
-        <NumberedList items={["Open MyLeafy.", "Go to Profile -> Shared Timetable.", "Choose Add a classmate's timetable.", "Paste the invite code, then add and view the timetable."]} />
+      <SectionShell title="在 App 中接受邀请">
+        <NumberedList items={["打开 MyLeafy。", "进入“我的 → 共享课表”。", "选择“添加同学课表”。", "粘贴邀请码，然后添加并查看课表。"]} />
       </SectionShell>
     </>
   );
@@ -935,40 +936,40 @@ function ShareCommunityPostPage({ postID }: { postID: string }) {
     <>
       <PageHero
         icon={ChatsCircle}
-        label="Community post"
-        title={normalizedPostID ? "Continue the conversation in MyLeafy." : "This community post link is invalid."}
-        body={normalizedPostID ? "This share link opens the post detail in the latest version of the app." : "The post ID is missing or malformed. Ask the sharer to send the link again."}
+        label="社区帖子"
+        title={normalizedPostID ? "在 MyLeafy 中继续讨论。" : "这条社区帖子链接无效。"}
+        body={normalizedPostID ? "此分享链接会在最新版本的 MyLeafy 中打开帖子详情。" : "帖子 ID 缺失或格式不正确，请让分享者重新发送链接。"}
         image="/media/campus/campus-entrance-bicycles.jpg"
-        imageAlt="Bicycles parked at a BJFU campus entrance"
+        imageAlt="北京林业大学校门旁停放的自行车"
       >
         {normalizedPostID ? (
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <TapButton href={appURL} className={primaryButtonClass}>
               <DeviceMobile size={18} weight="bold" aria-hidden />
-              Open MyLeafy
+              打开 MyLeafy
             </TapButton>
             <TapButton href={site.appStoreUrl || site.supportUrl} className={secondaryButtonClass}>
               <ArrowRight size={18} weight="bold" aria-hidden />
-              Get MyLeafy
+              获取 MyLeafy
             </TapButton>
           </div>
         ) : (
           <div className={featuredPanelClass + " mt-8 max-w-xl"} role="alert">
-            <p className="font-semibold text-ivory">The post cannot be opened from this URL.</p>
+            <p className="font-semibold text-ivory">无法通过此链接打开帖子。</p>
             <a className="leafy-pressable mt-4 inline-flex min-h-11 items-center rounded-full text-sm font-semibold text-accent" href="/support">
-              Contact support
+              联系支持
             </a>
           </div>
         )}
       </PageHero>
 
-      <SectionShell title="Community content opens in the app">
+      <SectionShell title="在 App 中查看社区内容">
         <NumberedList
           items={[
-            "Share cards may show the post title and a short summary. Comments stay in the app.",
-            "After signing in to MyLeafy, the app opens the post detail.",
-            "If the app opens but does not show the post, update MyLeafy and try again.",
-            "If the post has been deleted or is no longer visible, the app will explain that it cannot be opened."
+            "分享卡片可能显示帖子标题与简短摘要，评论仍需在 App 中查看。",
+            "登录 MyLeafy 后，App 会打开帖子详情。",
+            "如果 App 已打开但没有显示帖子，请更新 MyLeafy 后重试。",
+            "如果帖子已删除或不可见，App 会说明无法打开的原因。"
           ]}
         />
       </SectionShell>
@@ -1001,7 +1002,7 @@ function PageHero({
             <Icon size={24} weight="regular" aria-hidden />
           </span>
           <p className="mt-7 text-sm font-semibold text-accent">{label}</p>
-          <h1 tabIndex={-1} className="mt-5 text-5xl font-semibold leading-[1] tracking-[-0.035em] text-ivory md:text-7xl">{title}</h1>
+          <h1 tabIndex={-1} className="mt-5 text-5xl font-semibold leading-[1.06] tracking-[-0.02em] text-ivory md:text-7xl">{title}</h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-ivory/60 md:text-lg">{body}</p>
           {children}
         </StaggerReveal>
@@ -1027,7 +1028,7 @@ function SectionShell({
   return (
     <section id={id} className="mx-auto max-w-7xl scroll-mt-24 px-4 py-20 md:px-6 md:py-28">
       <ScrollReveal className="mb-12 max-w-4xl">
-        <h2 className="text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-ivory md:text-6xl">{title}</h2>
+        <h2 className="text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ivory md:text-6xl">{title}</h2>
         {body && <p className="mt-5 max-w-2xl text-base leading-relaxed text-ivory/60">{body}</p>}
       </ScrollReveal>
       {children}
@@ -1104,14 +1105,14 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
       <div className="mx-auto grid max-w-7xl gap-12 px-4 py-14 md:px-6 lg:grid-cols-[1.05fr_1.95fr]">
         <div>
           <div className="flex items-center gap-3">
-            <img className="h-11 w-11 rounded-[13px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy app icon" />
+            <img className="h-11 w-11 rounded-[13px] border border-white/10 shadow-deep" src="/app-icon.png" alt="MyLeafy 应用图标" />
             <div>
               <p className="text-xl font-semibold leading-none text-ivory">MyLeafy</p>
-              <p className="mt-1 text-sm font-medium text-ivory/50">BJFU campus tool</p>
+              <p className="mt-1 text-sm font-medium text-ivory/50">北林校园工具</p>
             </div>
           </div>
           <p className="mt-6 max-w-sm text-sm leading-relaxed text-ivory/50">
-            Currently supports Beijing Forestry University.
+            目前支持北京林业大学。
           </p>
           <a
             href={"mailto:" + site.supportEmail}
@@ -1122,7 +1123,7 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
           </a>
         </div>
 
-        <nav aria-label="Footer navigation" className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <nav aria-label="页脚导航" className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {footerGroups.map((group) => (
             <div key={group.title}>
               <h2 className="text-sm font-semibold text-ivory">{group.title}</h2>
@@ -1151,8 +1152,8 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
       <div className="border-t border-white/[0.07] px-4 py-5 md:px-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 text-xs font-medium text-ivory/60 md:flex-row md:items-center md:justify-between">
           <div className="grid gap-1">
-            <span>Last updated: {site.updatedAt}</span>
-            <span>Apple, the Apple logo, App Store, and iPhone are trademarks of Apple Inc.</span>
+            <span>最后更新：{site.updatedAt}</span>
+            <span>Apple、Apple 标志、App Store 与 iPhone 是 Apple Inc. 的商标。</span>
           </div>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <a
@@ -1165,11 +1166,11 @@ function Footer({ navigate }: { navigate: (href: string) => void }) {
               }}
             >
               <House size={15} aria-hidden />
-              Home
+              首页
             </a>
             <a className="leafy-pressable inline-flex min-h-11 items-center gap-2 hover:text-accent" href={"mailto:" + site.supportEmail}>
               <EnvelopeSimple size={15} aria-hidden />
-              Contact
+              联系我们
             </a>
           </div>
         </div>

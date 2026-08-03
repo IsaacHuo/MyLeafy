@@ -27,7 +27,7 @@ export function CopyEmailButton({ email }: { email: string }) {
   }
 
   const Icon = state === "copied" ? CheckCircle : state === "error" ? WarningCircle : Copy;
-  const label = state === "copying" ? "Copying" : state === "copied" ? "Copied" : state === "error" ? "Copy failed — try again" : "Copy email";
+  const label = state === "copying" ? "正在复制" : state === "copied" ? "已复制" : state === "error" ? "复制失败，请重试" : "复制邮箱地址";
   const toneClass =
     state === "copied"
       ? "border border-success bg-success text-white hover:bg-success"
@@ -48,7 +48,7 @@ export function CopyEmailButton({ email }: { email: string }) {
         {label}
       </TapButton>
       <span className="min-h-5 text-sm text-ivory/60" role="status" aria-live="polite">
-        {state === "copied" ? "Email address copied to the clipboard." : state === "error" ? "Clipboard access is unavailable. Select the address and copy it manually." : ""}
+        {state === "copied" ? "邮箱地址已复制到剪贴板。" : state === "error" ? "无法访问剪贴板，请选中邮箱地址并手动复制。" : ""}
       </span>
     </div>
   );

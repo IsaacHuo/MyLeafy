@@ -21,7 +21,7 @@ describe("share page function", () => {
     const html = await response.text();
 
     expect(response.status).toBe(404);
-    expect(html).toContain("This timetable link is incomplete.");
+    expect(html).toContain("这条共享课表链接不完整。");
     expect(html).not.toContain("leafy://timetable");
     expect(html).toContain("https://myleafy.space/support");
   });

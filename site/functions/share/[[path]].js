@@ -1,7 +1,7 @@
 const siteOrigin = "https://myleafy.space";
 const appIconURL = `${siteOrigin}/app-icon.png`;
 const defaultPreview = {
-  title: "MyLeafy | 校园课表与校园工具",
+  title: "MyLeafy｜校园课表与校园工具",
   description: "MyLeafy 是校园课表、社区和共享课表工具。",
   imageURL: appIconURL,
 };
@@ -16,7 +16,7 @@ export async function onRequestGet(context) {
   if (communityPostMatch) {
     const postID = communityPostMatch[1];
     if (!uuidPattern.test(postID)) {
-      return invalidShareResponse("This community post link is invalid.", "Ask the sharer to send the complete link again.");
+      return invalidShareResponse("这条社区帖子链接无效。", "请让分享者重新发送完整链接。");
     }
     const preview = await fetchPreview(context, `kind=community-post&id=${encodeURIComponent(postID)}`);
     return htmlResponse(renderSharePage({
@@ -26,7 +26,7 @@ export async function onRequestGet(context) {
       canonicalURL: `${siteOrigin}/share/community/post/${postID}`,
       imageURL: preview.imageURL,
       appURL: `leafy://community-post?id=${encodeURIComponent(postID)}`,
-      eyebrow: "Community post",
+      eyebrow: "社区帖子",
       actionTitle: "打开 MyLeafy",
       fallbackTitle: "获取/更新 MyLeafy",
     }));
@@ -35,7 +35,7 @@ export async function onRequestGet(context) {
   if (timetableMatch) {
     const code = normalizeInviteCode(timetableMatch[1]);
     if (!inviteCodePattern.test(code)) {
-      return invalidShareResponse("This timetable link is incomplete.", "A valid invite code contains 12 characters. Ask the sharer to send the complete link again.");
+      return invalidShareResponse("这条共享课表链接不完整。", "有效邀请码应包含 12 个字符，请让分享者重新发送完整链接。");
     }
     const preview = await fetchPreview(context, `kind=timetable-invite&code=${encodeURIComponent(code)}`);
     return htmlResponse(renderSharePage({
@@ -45,13 +45,13 @@ export async function onRequestGet(context) {
       canonicalURL: `${siteOrigin}/share/timetable/${code}`,
       imageURL: preview.imageURL,
       appURL: `leafy://timetable-invite?code=${encodeURIComponent(code)}`,
-      eyebrow: "Shared timetable",
+      eyebrow: "共享课表",
       actionTitle: "在 App 中接受",
       fallbackTitle: "获取/更新 MyLeafy",
     }));
   }
 
-  return invalidShareResponse("This share link cannot be opened.", "Check that the complete URL was copied, or return to the MyLeafy website.");
+  return invalidShareResponse("无法打开这条分享链接。", "请确认已复制完整网址，或返回 MyLeafy 官网。");
 }
 
 function invalidShareResponse(title, description) {
@@ -63,7 +63,7 @@ function invalidShareResponse(title, description) {
     imageURL: defaultPreview.imageURL,
     appURL: `${siteOrigin}/`,
     fallbackURL: `${siteOrigin}/support`,
-    eyebrow: "Invalid share link",
+    eyebrow: "分享链接无效",
     actionTitle: "返回 MyLeafy 官网",
     fallbackTitle: "联系支持",
   }), 404);
@@ -142,7 +142,7 @@ function renderSharePage({
     <style>
       :root {
         color-scheme: dark;
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Helvetica Neue", Arial, sans-serif;
         color: #f0f4ef;
         background: #091611;
       }

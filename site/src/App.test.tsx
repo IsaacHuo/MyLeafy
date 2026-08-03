@@ -42,25 +42,34 @@ describe("public site shell", () => {
   it("marks the active route and restores focus after client navigation", async () => {
     render(<App />);
 
-    const primaryNavigation = screen.getByRole("navigation", { name: "Primary navigation" });
-    const supportLink = within(primaryNavigation).getByRole("link", { name: "Support" });
+    const primaryNavigation = screen.getByRole("navigation", { name: "主导航" });
+    const supportLink = within(primaryNavigation).getByRole("link", { name: "支持" });
     fireEvent.click(supportLink);
 
-    await waitFor(() => expect(document.title).toBe("MyLeafy Support"));
-    expect(within(primaryNavigation).getByRole("link", { name: "Support" })).toHaveAttribute("aria-current", "page");
+    await waitFor(() => expect(document.title).toBe("MyLeafy 技术支持"));
+    expect(document.documentElement).toHaveAttribute("lang", "zh-CN");
+    expect(within(primaryNavigation).getByRole("link", { name: "支持" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
   });
 
   it("closes the mobile navigation with Escape and restores button focus", async () => {
     render(<App />);
-    const menuButton = screen.getByRole("button", { name: "Open navigation menu" });
+    const menuButton = screen.getByRole("button", { name: "打开导航菜单" });
 
     fireEvent.click(menuButton);
-    expect(screen.getByRole("navigation", { name: "Mobile navigation" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "移动端导航" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
 
-    await waitFor(() => expect(screen.queryByRole("navigation", { name: "Mobile navigation" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("navigation", { name: "移动端导航" })).not.toBeInTheDocument());
     expect(menuButton).toHaveFocus();
+  });
+
+  it("keeps the AI and DeepSeek disclosures in the Chinese privacy policy", () => {
+    window.history.replaceState({}, "", "/privacy");
+    render(<App />);
+
+    expect(screen.getByText(/MyLeafy AI：当你使用免费或订阅请求时/)).toBeInTheDocument();
+    expect(screen.getByText(/DeepSeek 处理 MyLeafy AI 问题/)).toBeInTheDocument();
   });
 });
 
@@ -69,8 +78,8 @@ describe("share link states", () => {
     window.history.replaceState({}, "", "/share/timetable/ABCDE2");
     render(<App />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Invalid link");
-    expect(screen.queryByRole("button", { name: /copy invite code/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("链接无效");
+    expect(screen.queryByRole("button", { name: "复制邀请码" })).not.toBeInTheDocument();
   });
 
   it("reports clipboard success and failure without a false success state", async () => {
@@ -79,18 +88,18 @@ describe("share link states", () => {
     window.history.replaceState({}, "", "/share/timetable/ABCDEFGHJKL2");
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy invite code" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Invite code copied"));
+    fireEvent.click(screen.getByRole("button", { name: "复制邀请码" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("邀请码已复制"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Copied" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Clipboard access is unavailable"));
+    fireEvent.click(screen.getByRole("button", { name: "已复制" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("无法访问剪贴板"));
   });
 
   it("does not route an invalid community post back to the homepage as if it were valid", () => {
     window.history.replaceState({}, "", "/share/community/post/not-a-uuid");
     render(<App />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("cannot be opened");
-    expect(screen.queryByRole("link", { name: "Open MyLeafy" })).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("无法通过此链接打开帖子");
+    expect(screen.queryByRole("link", { name: "打开 MyLeafy" })).not.toBeInTheDocument();
   });
 });
