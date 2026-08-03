@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Swift-5.x-F05138?logo=swift&logoColor=white" alt="Swift 5.x">
   <img src="https://img.shields.io/badge/UI-SwiftUI-0A84FF" alt="SwiftUI">
   <img src="https://img.shields.io/badge/backend-Supabase-3FCF8E?logo=supabase&logoColor=white" alt="Supabase">
-  <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-555555" alt="CC BY-NC-SA 4.0">
+  <img src="https://img.shields.io/badge/license-Apache--2.0-555555" alt="Apache-2.0">
 </p>
 
 MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校园社区与共享课表整合在一个原生 iOS 客户端中。北京林业大学入口直接连接学校教务系统获取用户授权的数据；通用入口只提供本机导入能力。Supabase 承载社区、通知、评分、共享与运营数据。
@@ -172,7 +172,7 @@ supabase functions deploy community-bootstrap-user
 | [Supabase 接入](docs/engineering/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
 | [历史 AI 额度链路](docs/engineering/leafy-ai-quota-authentication.md) | 后端维护者 | 冻结 iOS 分支与现存后端兼容资产的历史鉴权设计 |
 | [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
-| [贡献规范](docs/operations/contributing.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
+| [贡献规范](CONTRIBUTING.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
 文档索引见 [`docs/README.md`](docs/README.md)。
 
@@ -191,11 +191,11 @@ supabase functions deploy community-bootstrap-user
 
 ## 参与贡献
 
-提交代码前请阅读[贡献规范](docs/operations/contributing.md)。涉及新功能或行为变化的 PR 应同时更新对应文档；涉及用户数据、认证、校园身份或管理权限的改动必须说明安全边界与验证方式。
+提交代码前请阅读[贡献规范](CONTRIBUTING.md)。涉及新功能或行为变化的 PR 应同时更新对应文档；涉及用户数据、认证、校园身份或管理权限的改动必须说明安全边界与验证方式。
 
 ## 许可
 
-本项目使用 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 许可。允许在署名、非商业和相同方式共享的前提下学习、修改与再分发。第三方依赖、学校系统内容、品牌资源和用户数据不因本仓库许可而获得额外授权。
+除另有说明外，本仓库中的原创源代码和项目文档使用 [Apache License 2.0](LICENSE) 许可。MyLeafy 名称、商标、Logo、校园照片、产品截图、第三方内容和用户数据不因该许可证获得额外授权；第三方材料继续遵循各自的许可与权利声明。
 
 ## 联系
 

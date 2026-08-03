@@ -8,7 +8,7 @@
 2. [App 产品设计](design/app-design.md)：信息架构、核心流程、页面职责与状态约定。
 3. [架构说明](engineering/architecture.md)：iOS 分层、教务链路、本地数据与系统边界。
 4. [Supabase 接入](engineering/supabase.md)：身份、数据域、RLS、Storage、Functions 与本地环境。
-5. [贡献规范](operations/contributing.md)：日常开发、验证和协作方式。
+5. [贡献规范](../CONTRIBUTING.md)：日常开发、验证和协作方式。
 
 ## Product
 
@@ -43,7 +43,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| [贡献规范](operations/contributing.md) | 分支、PR、日常 CI 和发布前验证 |
+| [贡献规范](../CONTRIBUTING.md) | 分支、PR、日常 CI 和发布前验证 |
 | [发布记录](operations/release-notes.md) | 正式版本、Git tag、发布源码和用户可见更新摘要 |
 | [App Store 记录](operations/app-store/) | 特定版本的审核、元数据和重新提交记录 |
 | [事故复盘](operations/incidents/) | 可复用的故障定位证据、根因和经验 |
