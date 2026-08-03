@@ -42,9 +42,9 @@ export function CopyEmailButton({ email }: { email: string }) {
       <TapButton
         onClick={copyEmail}
         disabled={state === "copying"}
-        className={toneClass}
+        className={toneClass + " min-h-12 px-5"}
       >
-        <Icon size={18} weight="bold" aria-hidden />
+        <Icon size={20} weight="bold" aria-hidden />
         {label}
       </TapButton>
       <span className="min-h-5 text-sm text-ivory/60" role="status" aria-live="polite">
