@@ -2,6 +2,20 @@ import SwiftData
 import SwiftSoup
 import SwiftUI
 import UniformTypeIdentifiers
+
+nonisolated enum TimetableCurrentTimeIndicatorPreference {
+    static let isEnabledKey = "timetableCurrentTimeIndicatorEnabled"
+    static let thicknessKey = "timetableCurrentTimeIndicatorThickness"
+    static let defaultIsEnabled = true
+    static let defaultThickness = 2.0
+    static let thicknessRange = 1.0...6.0
+    static let thicknessStep = 0.5
+
+    static func sanitizedThickness(_ value: Double) -> Double {
+        min(max(value, thicknessRange.lowerBound), thicknessRange.upperBound)
+    }
+}
+
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -110,6 +124,23 @@ final class TimetableLayoutMetricsCache {
         self.key = key
         cachedMetrics = metrics
         return metrics
+    }
+}
+
+struct TimetableCurrentTimeIndicatorGeometry {
+    static func width(visibleDayCount: Int, metrics: TimetableLayoutMetrics) -> CGFloat {
+        guard visibleDayCount > 0 else { return 0 }
+        return CGFloat(visibleDayCount) * metrics.dayColumnWidth
+            + CGFloat(visibleDayCount - 1) * metrics.daySpacing
+    }
+
+    static func centerX(
+        page: Int,
+        visibleDayCount: Int,
+        metrics: TimetableLayoutMetrics
+    ) -> CGFloat {
+        CGFloat(max(0, page - 1)) * metrics.weekStride
+            + width(visibleDayCount: visibleDayCount, metrics: metrics) * 0.5
     }
 }
 

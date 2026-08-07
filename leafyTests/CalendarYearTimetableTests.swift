@@ -138,13 +138,163 @@ final class CalendarYearTimetableTests: XCTestCase {
         XCTAssertEqual(withReference.phase(for: date("2026-01-03")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
     }
 
-    private func configuration(id: String, start: String) -> SemesterRuntimeConfig {
+    func testCalendarMenuGroupsOfficialWeeksByAcademicYearSemesterAndMonth() throws {
+        let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
+        let timetable = CalendarYearTimetable(year: 2026, configurations: [spring], calendar: calendar)
+        let menu = TimetableCalendarMenuModel(
+            timetable: timetable,
+            configurations: [spring],
+            referenceDate: date("2026-04-01"),
+            calendar: calendar
+        )
+
+        let academicYear = try XCTUnwrap(menu.academicYears.first)
+        XCTAssertEqual(academicYear.academicYear, "2025–2026")
+        guard case let .semester(semester) = try XCTUnwrap(academicYear.stages.first) else {
+            return XCTFail("Expected a teaching semester stage")
+        }
+        XCTAssertEqual(semester.title, "春季学期")
+        XCTAssertEqual(semester.months.first?.month, 3)
+        XCTAssertEqual(semester.months.first?.weeks.map(\.weekNumber), [1, 2, 3, 4])
+        XCTAssertNotEqual(semester.months.first?.weeks.first?.page, semester.months.first?.weeks.first?.weekNumber)
+    }
+
+    func testCalendarMenuPlacesVacationDirectlyUnderItsAcademicYear() throws {
+        let summer = event(
+            id: "summer-2026",
+            title: "暑期安排",
+            start: "2026-07-27",
+            end: "2026-09-06",
+            category: .summerBreak
+        )
+        let spring = configuration(
+            id: "2025-2026-2",
+            start: "2026-03-09",
+            calendarEvents: [summer]
+        )
+        let referenceDate = calendar.date(byAdding: .day, value: 7, to: try XCTUnwrap(summer.startDate))!
+        let timetable = CalendarYearTimetable(
+            year: 2026,
+            configurations: [spring],
+            semanticEvents: [summer],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        let menu = TimetableCalendarMenuModel(
+            timetable: timetable,
+            configurations: [spring],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let academicYear = try XCTUnwrap(menu.academicYears.first)
+        XCTAssertEqual(academicYear.academicYear, "2025–2026")
+        XCTAssertEqual(academicYear.stages.count, 2)
+        guard case let .vacation(vacation) = academicYear.stages[1] else {
+            return XCTFail("Expected vacation directly under the academic year")
+        }
+        XCTAssertEqual(vacation.title, "暑假")
+        XCTAssertEqual(vacation.page, timetable.pageIndex(containing: referenceDate))
+    }
+
+    func testVacationTargetUsesFirstIntersectingWeekEvenWhenTeachingPhaseWins() throws {
+        let summer = event(
+            id: "overlapping-summer-2026",
+            title: "暑假",
+            start: "2026-07-23",
+            end: "2026-08-02",
+            category: .summerBreak
+        )
+        let spring = configuration(
+            id: "2025-2026-2",
+            start: "2026-03-09",
+            calendarEvents: [summer]
+        )
+        let timetable = CalendarYearTimetable(
+            year: 2026,
+            configurations: [spring],
+            semanticEvents: [summer],
+            referenceDate: date("2026-01-01"),
+            calendar: calendar
+        )
+        let menu = TimetableCalendarMenuModel(
+            timetable: timetable,
+            configurations: [spring],
+            referenceDate: date("2026-01-01"),
+            calendar: calendar
+        )
+
+        let academicYear = try XCTUnwrap(menu.academicYears.first)
+        let vacations: [TimetableCalendarMenuVacation] = academicYear.stages.compactMap { stage in
+            guard case let .vacation(vacation) = stage else { return nil }
+            return vacation
+        }
+        let vacation = try XCTUnwrap(vacations.first)
+        let expectedPage = try XCTUnwrap(timetable.pageIndex(containing: try XCTUnwrap(summer.startDate)))
+        XCTAssertEqual(vacation.page, expectedPage)
+        guard case .teaching = try XCTUnwrap(timetable.week(atPageIndex: expectedPage)).phase else {
+            return XCTFail("Expected the overlapping first vacation week to retain its teaching phase")
+        }
+    }
+
+    func testCalendarMenuInfersUnknownSemesterSeasonFromStartMonth() {
+        XCTAssertEqual(
+            TimetableCalendarMenuModel.semesterSeasonTitle(
+                semesterID: "custom-term",
+                semesterStartDate: date("2026-09-01"),
+                calendar: calendar
+            ),
+            "秋季学期"
+        )
+        XCTAssertEqual(
+            TimetableCalendarMenuModel.semesterSeasonTitle(
+                semesterID: "custom-term",
+                semesterStartDate: date("2026-03-01"),
+                calendar: calendar
+            ),
+            "春季学期"
+        )
+    }
+
+    func testCurrentTimeIndicatorSpansAllVisibleDayColumns() {
+        let metrics = TimetableLayoutMetrics(
+            rowHeight: 100,
+            rowSpacing: 10,
+            cardInset: 0,
+            laneSpacing: 0,
+            dayColumnWidth: 100,
+            daySpacing: 5,
+            weekSpacing: 20,
+            gridHeight: 1_420,
+            allowsVerticalScroll: true,
+            weekStride: 750,
+            containerWidth: 730,
+            containerHeight: 1_420,
+            horizontalPadding: 0,
+            mode: .weekGrid
+        )
+
+        XCTAssertEqual(TimetableCurrentTimeIndicatorGeometry.width(visibleDayCount: 5, metrics: metrics), 520)
+        XCTAssertEqual(TimetableCurrentTimeIndicatorGeometry.width(visibleDayCount: 7, metrics: metrics), 730)
+        XCTAssertEqual(
+            TimetableCurrentTimeIndicatorGeometry.centerX(page: 3, visibleDayCount: 7, metrics: metrics),
+            1_865
+        )
+        XCTAssertEqual(TimetableCurrentTimeIndicatorPreference.sanitizedThickness(-1), 1)
+        XCTAssertEqual(TimetableCurrentTimeIndicatorPreference.sanitizedThickness(8), 6)
+    }
+
+    private func configuration(
+        id: String,
+        start: String,
+        calendarEvents: [SchoolCalendarEvent] = []
+    ) -> SemesterRuntimeConfig {
         SemesterRuntimeConfig(
             semesterID: id,
             semesterStartDateString: start,
             supportedWeeks: 20,
             graduateTimetableTermCode: "term-\(id)",
-            calendarEvents: [],
+            calendarEvents: calendarEvents,
             updatedAt: nil,
             isActive: true
         )

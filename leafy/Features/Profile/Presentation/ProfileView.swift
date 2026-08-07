@@ -709,6 +709,8 @@ private struct PersonalizationSettingsView: View {
     @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw = LeafyAppIconAppearancePreference.green.rawValue
     @AppStorage("appFontSizePreference") private var appDisplaySizePreferenceRaw = AppDisplaySizePreference.standard.rawValue
     @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.isEnabledKey) private var currentTimeIndicatorIsEnabled = TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey) private var currentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.defaultThickness
     @State private var showingCustomThemeColorPicker = false
 
     private var themeColorPreference: AppThemeColorPreference {
@@ -725,6 +727,17 @@ private struct PersonalizationSettingsView: View {
 
     private var appearancePreference: AppAppearancePreference {
         AppAppearancePreference.storedValue(appAppearancePreferenceRaw)
+    }
+
+    private var currentTimeIndicatorThicknessBinding: Binding<Double> {
+        Binding(
+            get: {
+                TimetableCurrentTimeIndicatorPreference.sanitizedThickness(currentTimeIndicatorThickness)
+            },
+            set: { newValue in
+                currentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.sanitizedThickness(newValue)
+            }
+        )
     }
 
     var body: some View {
@@ -811,6 +824,31 @@ private struct PersonalizationSettingsView: View {
                 Text("外观")
             } footer: {
                 Text("默认使用浅色外观，也可以跟随系统或固定深色。")
+            }
+            .listRowBackground(AppTheme.cardBackground)
+
+            Section {
+                Toggle("显示当前时间线", isOn: $currentTimeIndicatorIsEnabled)
+
+                VStack(alignment: .leading, spacing: AppSpacing.micro) {
+                    HStack {
+                        Text("粗细")
+                        Spacer()
+                        Text("\(TimetableCurrentTimeIndicatorPreference.sanitizedThickness(currentTimeIndicatorThickness), specifier: "%.1f") pt")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: currentTimeIndicatorThicknessBinding,
+                        in: TimetableCurrentTimeIndicatorPreference.thicknessRange,
+                        step: TimetableCurrentTimeIndicatorPreference.thicknessStep
+                    )
+                    .disabled(!currentTimeIndicatorIsEnabled)
+                }
+            } header: {
+                Text("课表当前时间线")
+            } footer: {
+                Text("仅显示在今天所在周，颜色跟随主题色。")
             }
             .listRowBackground(AppTheme.cardBackground)
         }

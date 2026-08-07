@@ -29,22 +29,6 @@ private enum TimetableQuickAccessAction: Equatable, Sendable {
     case exportTimetable
 }
 
-private struct CalendarYearTimetableSection: Identifiable {
-    enum Identity: Hashable {
-        case teaching(String)
-        case vacation(String, SchoolCalendarEvent.AcademicCategory)
-        case unconfigured(Int)
-    }
-
-    let identity: Identity
-    let title: String
-    let weeks: [(page: Int, week: CalendarYearWeek)]
-
-    var id: String {
-        "\(String(describing: identity))-\(weeks.first?.page ?? 0)"
-    }
-}
-
 struct TimetableView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyControlScale) private var leafyControlScale
@@ -104,6 +88,10 @@ struct TimetableView: View {
 
     @AppStorage("hasSeenTimetableOnboarding") private var hasSeenTimetableOnboarding = false
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.isEnabledKey)
+    private var timetableCurrentTimeIndicatorIsEnabled = TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey)
+    private var timetableCurrentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.defaultThickness
 
     private static let backgroundLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
@@ -181,40 +169,11 @@ struct TimetableView: View {
         selectedSemesterContext?.week ?? SemesterConfig.currentWeek()
     }
 
-    private var calendarYearSections: [CalendarYearTimetableSection] {
-        var sections: [CalendarYearTimetableSection] = []
-        for (index, week) in calendarYearTimetable.weeks.enumerated() {
-            let page = index + 1
-            let identity: CalendarYearTimetableSection.Identity
-            let title: String
-            switch week.phase {
-            case let .teaching(semesterID, _):
-                identity = .teaching(semesterID)
-                title = teachingSectionTitle(semesterID: semesterID)
-            case let .vacation(vacationTitle, category):
-                identity = .vacation(vacationTitle, category)
-                title = vacationTitle
-            case .unconfigured:
-                let month = Calendar.current.component(.month, from: week.referenceDate)
-                identity = .unconfigured(month)
-                title = "\(month)月"
-            }
-
-            if let last = sections.last, last.identity == identity {
-                sections[sections.count - 1] = CalendarYearTimetableSection(
-                    identity: last.identity,
-                    title: last.title,
-                    weeks: last.weeks + [(page, week)]
-                )
-            } else {
-                sections.append(CalendarYearTimetableSection(
-                    identity: identity,
-                    title: title,
-                    weeks: [(page, week)]
-                ))
-            }
-        }
-        return sections
+    private var calendarYearMenuModel: TimetableCalendarMenuModel {
+        TimetableCalendarMenuModel(
+            timetable: calendarYearTimetable,
+            configurations: calendarYearConfigurations
+        )
     }
 
     private var usesCustomTimetableBackground: Bool {
@@ -964,13 +923,26 @@ struct TimetableView: View {
 
     private var toolbarWeekMenu: some View {
         Menu {
-            ForEach(calendarYearSections) { section in
-                Menu(section.title) {
-                    ForEach(section.weeks, id: \.page) { item in
-                        Button(weekMenuTitle(item.page)) {
-                            currentWeek = item.page
-                            scrollToWeek = item.page
-                            syncReturnButtonVisibility(for: item.page)
+            ForEach(calendarYearMenuModel.academicYears) { academicYear in
+                Menu("\(academicYear.academicYear)学年") {
+                    ForEach(academicYear.stages) { stage in
+                        switch stage {
+                        case let .semester(semester):
+                            Menu(semester.title) {
+                                ForEach(semester.months) { month in
+                                    Menu("\(month.month)月") {
+                                        ForEach(month.weeks) { item in
+                                            Button(semesterWeekTitle(item.weekNumber)) {
+                                                selectTimetableWeek(item.page)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        case let .vacation(vacation):
+                            Button(vacation.title) {
+                                selectTimetableWeek(vacation.page)
+                            }
                         }
                     }
                 }
@@ -996,8 +968,8 @@ struct TimetableView: View {
         switch week.phase {
         case let .teaching(_, weekNumber):
             return L10n.text("第 %d 周", language: leafyLanguage, weekNumber)
-        case let .vacation(title, _):
-            return title
+        case let .vacation(_, category):
+            return TimetableCalendarMenuModel.vacationTitle(category: category)
         case .unconfigured:
             return shortWeekDateRange(week)
         }
@@ -1014,27 +986,19 @@ struct TimetableView: View {
         return teachingStageTitle(semesterID: semesterID)
     }
 
-    private func teachingSectionTitle(semesterID: String) -> String {
-        let stageTitle = teachingStageTitle(semesterID: semesterID)
-        let hasCachedCourses = courses.contains { $0.sourceSemesterID == semesterID }
-        return hasCachedCourses ? stageTitle : "\(stageTitle) · 暂无教务数据"
-    }
-
     private func teachingStageTitle(semesterID: String) -> String {
-        let academicYear = semesterID.split(separator: "-").prefix(2).joined(separator: "–")
-        guard let config = calendarYearTimetable.configuration(semesterID: semesterID) else {
-            return academicYear.isEmpty ? semesterID : academicYear
-        }
-        let month = Calendar.current.component(.month, from: config.semesterStartDate)
-        return "\(academicYear) · \(month)月开学"
+        let startDate = calendarYearTimetable.configuration(semesterID: semesterID)?.semesterStartDate
+        return "\(TimetableCalendarMenuModel.academicYearTitle(semesterID: semesterID)) · \(TimetableCalendarMenuModel.semesterSeasonTitle(semesterID: semesterID, semesterStartDate: startDate))"
     }
 
-    private func weekMenuTitle(_ page: Int) -> String {
-        guard let week = calendarYearTimetable.week(atPageIndex: page) else { return weekTitle(page) }
-        let currentMarker = page == currentCalendarPage
-            ? L10n.text(" (本周)", language: leafyLanguage)
-            : ""
-        return "\(weekTitle(page)) · \(shortWeekDateRange(week))\(currentMarker)"
+    private func semesterWeekTitle(_ weekNumber: Int) -> String {
+        L10n.text("第 %d 周", language: leafyLanguage, weekNumber)
+    }
+
+    private func selectTimetableWeek(_ page: Int) {
+        currentWeek = page
+        scrollToWeek = page
+        syncReturnButtonVisibility(for: page)
     }
 
     private func shortWeekDateRange(_ week: CalendarYearWeek) -> String {
@@ -1164,7 +1128,9 @@ struct TimetableView: View {
                                         .accessibilityHidden(week != currentWeek)
                                     }
 
-                                    currentTimeIndicator(metrics: metrics, visibleDays: gridSnapshot.visibleDays)
+                                    if timetableCurrentTimeIndicatorIsEnabled {
+                                        currentTimeIndicator(metrics: metrics, visibleDays: gridSnapshot.visibleDays)
+                                    }
                                 }
                                 .frame(
                                     width: timetableContentWidth(metrics: metrics),
@@ -1272,19 +1238,28 @@ struct TimetableView: View {
         visibleDays: [Int]
     ) -> some View {
         TimelineView(.periodic(from: Date(), by: 60)) { context in
-            let calendar = Calendar.current
-            let weekday = calendar.component(.weekday, from: context.date)
-            let day = ((weekday + 5) % 7) + 1
             if currentWeek == currentCalendarPage,
-               let dayIndex = visibleDays.firstIndex(of: day),
+               !visibleDays.isEmpty,
                let y = TimetableCurrentTimePosition.yPosition(for: context.date, metrics: metrics) {
                 Rectangle()
                     .fill(AppTheme.accentEmphasis(for: themeColorPreference))
-                    .frame(width: metrics.dayColumnWidth, height: max(1, 1 * leafyControlScale))
+                    .frame(
+                        width: TimetableCurrentTimeIndicatorGeometry.width(
+                            visibleDayCount: visibleDays.count,
+                            metrics: metrics
+                        ),
+                        height: CGFloat(
+                            TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
+                                timetableCurrentTimeIndicatorThickness
+                            )
+                        )
+                    )
                     .position(
-                        x: CGFloat(currentCalendarPage - 1) * metrics.weekStride
-                            + CGFloat(dayIndex) * (metrics.dayColumnWidth + metrics.daySpacing)
-                            + metrics.dayColumnWidth * 0.5,
+                        x: TimetableCurrentTimeIndicatorGeometry.centerX(
+                            page: currentCalendarPage,
+                            visibleDayCount: visibleDays.count,
+                            metrics: metrics
+                        ),
                         y: y
                     )
                     .zIndex(10)
