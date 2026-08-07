@@ -1920,12 +1920,12 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .customSchedule, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .customSchedule, .academics, .profile])
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .customSchedule, .academics, .profile])
     }
 
     func testAcademicRootTabUsesCampusProductName() {

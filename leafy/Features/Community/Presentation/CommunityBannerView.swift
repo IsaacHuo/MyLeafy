@@ -91,7 +91,7 @@ struct CommunityBannerSlot: View {
             case "schedule_reports":
                 appNavigation.openAcademicRoute(.scheduleReports)
             case "custom_schedules":
-                appNavigation.openAcademicDetailRoute(.customCountdowns)
+                appNavigation.openCustomSchedule()
             case "timetable_background":
                 appNavigation.openProfileRoute(.timetableBackground)
             case "profile":

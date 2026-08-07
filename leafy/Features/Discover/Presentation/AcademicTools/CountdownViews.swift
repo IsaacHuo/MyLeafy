@@ -154,6 +154,14 @@ struct CustomCountdownListView: View {
     }
 }
 
+struct CustomScheduleRootView: View {
+    var body: some View {
+        NavigationStack {
+            CustomScheduleListView()
+        }
+    }
+}
+
 private enum CustomScheduleListItem: Identifiable {
     case timetable(TimetableCellReminder)
     case importantDate(CustomScheduleEvent)
