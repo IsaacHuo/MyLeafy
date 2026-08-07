@@ -108,14 +108,6 @@ flowchart TB
 ```text
 Features/
 ├── Auth/
-├── LeafyAI/
-│   ├── Domain/
-│   ├── Application/
-│   ├── Data/
-│   │   ├── API/
-│   │   ├── Persistence/
-│   │   └── LocalContext/
-│   └── Presentation/
 ├── Timetable/
 │   ├── Domain/
 │   ├── Application/
@@ -333,16 +325,7 @@ Supabase 不接管学校登录。常规链路是：
 
 不得上传成绩、备注、提醒或其他不属于共享课表最小字段集的数据。
 
-## 10. MyLeafy AI
-
-MyLeafy 3.0 恢复对话、联网研究、本机上下文、Artifact、Markdown/KaTeX 渲染和本地历史。`CampusAIConversation`、`CampusAIMessage` 与 `CampusAIActionRecord` 继续属于 SwiftData schema，账户删除会一并清理这些模型、Artifact 缓存和 Keychain 密钥。
-
-- 模型访问只支持 BYOK：DeepSeek API Key 保存在 Keychain，请求从设备直接发送到 DeepSeek，可选择 Flash 或 Pro。
-- iOS 26 使用位于“我的”右侧的系统独立 AI Tab；iOS 17–25 使用标准第五 Tab。
-- 联网研究通过已认证的 `campus-ai-tools` 调用公开搜索与网页读取；Tool Gateway 不接收模型密钥或本机上下文。
-- 托管推理、免费额度、订阅购买和权益同步已经退役。历史设计仅保留为迁移与排查记录，见[已退役的 AI 额度鉴权](leafy-ai-quota-authentication.md)。
-
-## 11. 运营后台链路
+## 10. 运营后台链路
 
 管理后台与 iOS 共享 Supabase 项目，但不共享授权模型：
 
@@ -354,7 +337,7 @@ MyLeafy 3.0 恢复对话、联网研究、本机上下文、Artifact、Markdown/
 
 浏览器不得获得 `service_role`、代理密钥或可复制的管理 token。完整设计见[运营后台](admin-console.md)。
 
-## 12. 导航、深链与扩展
+## 11. 导航、深链与扩展
 
 `AppNavigationCoordinator` 统一处理：
 
@@ -368,7 +351,7 @@ MyLeafy 3.0 恢复对话、联网研究、本机上下文、Artifact、Markdown/
 
 Widget 和分享扩展消费显式共享的数据模型，不应直接复用主 App 的大型视图状态或内部单例。
 
-## 13. 可观测性与恢复
+## 12. 可观测性与恢复
 
 - 使用 `Logger` 和 performance signpost 记录可诊断事件。
 - 网络日志默认脱敏，不记录密码、Cookie、验证码和完整 token。
@@ -376,7 +359,7 @@ Widget 和分享扩展消费显式共享的数据模型，不应直接复用主 
 - 本地 store 损坏、教务会话过期、Supabase 配置缺失和网络不可达都有独立恢复路径。
 - 错误状态应保留最近成功数据，除非继续展示会误导用户。
 
-## 14. 测试策略
+## 13. 测试策略
 
 | 范围 | 主要测试 |
 |---|---|
@@ -389,7 +372,7 @@ Widget 和分享扩展消费显式共享的数据模型，不应直接复用主 
 
 外部服务集成测试要区分“代码回归”和“学校/云服务暂时不可用”，避免把真实网络波动误判为确定的实现缺陷。
 
-## 15. 架构约束
+## 14. 架构约束
 
 新增或重构代码应满足以下约束：
 

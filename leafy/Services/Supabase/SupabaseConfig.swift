@@ -20,7 +20,6 @@ nonisolated struct SupabaseConfig {
     let bootstrapFunctionName: String
     let feedFunctionName: String
     let weatherFunctionName: String
-    let campusAIToolsFunctionName: String
     let edgeRegion: String
     let communityAPIBaseURL: URL?
 
@@ -30,7 +29,6 @@ nonisolated struct SupabaseConfig {
         let bootstrapFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_BOOTSTRAP_FUNCTION"))
         let feedFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_FEED_FUNCTION"))
         let weatherFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_WEATHER_FUNCTION"))
-        let campusAIToolsFunctionName = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_CAMPUS_AI_TOOLS_FUNCTION"))
         let edgeRegion = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_EDGE_REGION"))
         let rawCommunityAPIBaseURL = sanitizedBuildSetting(bundle.object(forInfoDictionaryKey: "SUPABASE_COMMUNITY_API_BASE_URL"))
 
@@ -48,7 +46,6 @@ nonisolated struct SupabaseConfig {
             bootstrapFunctionName: bootstrapFunctionName.isEmpty ? "community-bootstrap-user" : bootstrapFunctionName,
             feedFunctionName: feedFunctionName.isEmpty ? "community-feed" : feedFunctionName,
             weatherFunctionName: weatherFunctionName.isEmpty ? "campus-weather" : weatherFunctionName,
-            campusAIToolsFunctionName: campusAIToolsFunctionName.isEmpty ? "campus-ai-tools" : campusAIToolsFunctionName,
             edgeRegion: edgeRegion.isEmpty ? "ap-northeast-1" : edgeRegion,
             communityAPIBaseURL: rawCommunityAPIBaseURL.isEmpty ? nil : URL(string: rawCommunityAPIBaseURL)
         )

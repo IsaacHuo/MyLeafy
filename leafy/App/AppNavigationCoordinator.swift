@@ -10,7 +10,6 @@ enum ProfileRoute: Hashable {
 enum RootTab: Hashable {
     case timetable
     case community
-    case leafy
     case academics
     case profile
 }
@@ -49,7 +48,7 @@ enum AppAccountDeletionOutcome: Equatable, Identifiable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.timetable, .community, .academics, .profile, .leafy]
+        [.timetable, .community, .academics, .profile]
     }
 
     static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {
@@ -64,8 +63,6 @@ extension RootTab: CaseIterable, Identifiable {
             return L10n.text("课表", language: language)
         case .community:
             return L10n.text("社区", language: language)
-        case .leafy:
-            return L10n.text("AI", language: language)
         case .academics:
             return L10n.text("校园", language: language)
         case .profile:
@@ -77,7 +74,6 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2"
-        case .leafy: return "sparkles"
         case .academics: return "book.closed"
         case .profile: return "person"
         }
@@ -87,7 +83,6 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2.fill"
-        case .leafy: return "sparkles"
         case .academics: return "book.closed.fill"
         case .profile: return "person.fill"
         }
@@ -96,14 +91,7 @@ extension RootTab: CaseIterable, Identifiable {
 
 @MainActor
 final class AppNavigationCoordinator: ObservableObject {
-    @Published var selectedRootTab: RootTab = .timetable {
-        didSet {
-            if selectedRootTab != .leafy {
-                lastNonLeafyRootTab = selectedRootTab
-            }
-        }
-    }
-    @Published private(set) var lastNonLeafyRootTab: RootTab = .timetable
+    @Published var selectedRootTab: RootTab = .timetable
     @Published var selectedAcademicTab: AcademicPrimaryTab = .cultivation
     @Published var requestedAcademicRoute: AcademicRoute?
     @Published var requestedAcademicDetailRoute: AcademicDetailRoute?
@@ -124,10 +112,6 @@ final class AppNavigationCoordinator: ObservableObject {
 
     func authenticationDidResume() {
         requiresLoginAfterAccountDeletion = false
-    }
-
-    func leaveLeafyWorkspace() {
-        selectedRootTab = lastNonLeafyRootTab == .leafy ? .timetable : lastNonLeafyRootTab
     }
 
     func sanitizePublicRootTab(isCommunityEnabled: Bool) {

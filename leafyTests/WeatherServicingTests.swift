@@ -93,7 +93,6 @@ final class WeatherServicingTests: XCTestCase {
             bootstrapFunctionName: "community-bootstrap-user",
             feedFunctionName: "community-feed",
             weatherFunctionName: "campus-weather",
-            campusAIToolsFunctionName: "campus-ai-tools",
             edgeRegion: "ap-northeast-1",
             communityAPIBaseURL: nil
         )

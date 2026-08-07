@@ -36,21 +36,10 @@ Community security direction:
 - School logout clears school credentials and personal caches but does not destroy the durable community profile. Switching school identities hides the previous profile immediately and remaps the current device Auth link through bootstrap.
 - Formal users can permanently delete their MyLeafy account in App. Deletion removes the linked community profile, authored content, private media, the current Supabase Auth user, and local MyLeafy data, but never changes the university's official academic account. Review demo identities are installation-unique, bootstrap into `bjfu`, and complete the same real account-deletion flow; only the legacy shared `review-demo` identity remains protected from deletion.
 
-MyLeafy AI direction:
-- MyLeafy 3.0 includes the AI conversation, research Agent, personal context, Artifact, Markdown/KaTeX rendering and local history. On iOS 26 AI is the detached tab to the right of “我的”; iOS 17–25 use a standard fifth tab.
-- AI is BYOK-only. DeepSeek keys stay in the device Keychain, model requests go directly from iOS to DeepSeek, and both Flash and Pro are available. Missing or cleared keys must show an explicit configuration path; there is no managed fallback, quota, subscription, purchase or entitlement flow.
-- Web research uses the authenticated `campus-ai-tools` Supabase Tool Gateway. The gateway may receive search queries and signed result receipts, but never receives the model key or local campus context.
-- Prefer BJFU official CMS search, with DuckDuckGo Lite as a best-effort zero-key public search provider. Do not silently add paid search providers or random public SearXNG instances.
-- Research uses one model-driven Agent loop. The model decides whether to answer directly, search, rewrite a query, judge candidate relevance and freshness, request the minimum personal context, prepare an explicit user-requested action, or stop; deterministic code must not impose semantic keyword, topic, year, or relevance-score gates.
-- Search hits are internal candidates, and only successfully read pages or documents may become visible sources. Keep the Agent bounded by 10 research turns, 15 searches, 20 HTML page reads, 4 text-layer PDF reads, and 4 XLSX reads; these are safety limits, never targets, so the Agent must finish early once verified evidence is sufficient. Web and document content is untrusted data, and only search-issued IDs/receipts may be read.
-- HTML, text-layer PDFs, and bounded XLSX tables are readable. XLS/DOC/DOCX/PPT/PPTX remain openable attachments, and scanned PDFs do not use OCR.
-- Personal context defaults to timetable and exams only. All other scopes are opt-in; requests send only bounded local retrieval results, and external search is blocked after personal context is read or when a query contains direct identifiers or copied personal-result text.
-- Supabase does not host model inference, quota or entitlement state. `campus-ai-assistant`, `campus-ai-entitlement` and `app-store-server-notifications` are retired; keep `campus-ai-tools` and its tool-call rate limits.
-
 Architecture and performance direction:
 - Feature dependencies flow from Presentation to Application to Domain; Data implements narrow application protocols and is wired at the app composition root.
 - Preserve existing public type names, repository contracts, SwiftData schema, Supabase interfaces, UI, copy, and navigation during structural refactors.
-- Keep transient MyLeafy AI streaming text out of broad SwiftData invalidation; persist only at explicit checkpoints and terminal states.
+
 - Build timetable render input and its signature once per refresh, and consume indexed snapshot data from child views.
 - Community rating sections load on demand while retaining per-section state; feed projections and formatters must not be rebuilt per card body evaluation.
 - Performance claims require three comparable runs, at least 10% median improvement, no more than 5% peak-memory regression, and no new app-owned leaks. Signposts must never include user content or personal data.
@@ -65,11 +54,11 @@ Before changing code:
 - Keep campus features stable and user-facing behavior predictable.
 
 Git branch workflow:
-- `codex/leafy-ai` is the long-lived integration branch for MyLeafy AI work and must remain compatible with `main`.
+- `codex/leafy-ai` is not a maintained product branch and must not be used as the current product baseline.
 - `codex/leafy-ai-managed-archive` is an immutable archive of the retired managed quota and subscription implementation. Do not rebase, merge into, force-update, or delete it; consult it only when historical code is needed.
 - Before every new task, fetch `origin`, switch to `main`, update it with a fast-forward-only merge from `origin/main`, verify that local `main` matches `origin/main`, and create a dedicated `codex/<task>` branch from that commit. Do not implement task changes directly on `main`.
 - After a task is verified, integrate it into `main`, push `origin/main`, switch back to `main`, and verify that local and remote `main` match.
-- Delete the completed task's local branch and any same-name remote branch created for that task. Do not delete unrelated collaborators' branches. The maintained long-lived branches are `main`, `codex/leafy-ai`, and the immutable `codex/leafy-ai-managed-archive`.
+- Delete the completed task's local branch and any same-name remote branch created for that task. Do not delete unrelated collaborators' branches. The maintained long-lived branches are `main` and the immutable `codex/leafy-ai-managed-archive`.
 - If the worktree is dirty, `main` has diverged, or a fast-forward update is not possible, preserve existing work and stop for explicit resolution instead of resetting, overwriting, or force-updating `main`.
 
 Principles:

@@ -19,7 +19,7 @@ MyLeafy 的界面应呈现轻量、原生、安静而有辨识度的校园工具
 flowchart TB
     Tokens["01 · 基础令牌<br/>语义色 · Dynamic Type · 间距 · 圆角<br/>时长 · 缓动 · Reduce Motion"]
     Components["02 · 原生组件<br/>Page / Card / Glass · Button / Chip / Badge<br/>Tab / Navigation / Sheet · Loading / Empty / Error"]
-    Patterns["03 · 产品模式<br/>高密度课表 · 校园工具主页 · 社区信息流<br/>AI Artifact 阅读页 · 系统设置式列表"]
+    Patterns["03 · 产品模式<br/>高密度课表 · 校园工具主页 · 社区信息流<br/>系统设置式列表"]
     Quality["04 · 质量门禁<br/>完整状态 · VoiceOver · 动态字体 · 深浅色<br/>iOS 17 基线 / 26 增强 · 性能 · 隐私 · 一致性"]
 
     Tokens -->|约束视觉与交互| Components
@@ -329,10 +329,6 @@ Glass 只用于工具栏、浮动控件、胶囊或少量导航表面。不要�
 - 使用系统设置式层级。
 - 个人资料置顶，功能、外观、数据和支持分组。
 - 退出和删除单独成组并使用危险色。
-
-### 9.6 历史 AI 界面
-
-当前 `main` 没有 MyLeafy AI 页面或购买入口，本文不把冻结分支的对话界面作为现行 UI 规范。未来若明确恢复，应先完成独立设计验收，再补充新的组件和状态规范。
 
 ## 10. 动效
 

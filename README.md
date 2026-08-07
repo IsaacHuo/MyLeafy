@@ -16,8 +16,6 @@ MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校
 
 > 仓库名、Xcode target 与部分内部类型仍使用 `leafy` / `Leafy`。对外产品名称统一为 **MyLeafy**。
 
-> 当前 `main` 不包含 MyLeafy AI 的 iOS 对话与购买实现，只保留旧本地数据清理和后端兼容资产。完整 iOS 实现位于默认冻结的 `codex/leafy-ai` 维护分支，不属于当前公开 App。
-
 ```mermaid
 flowchart LR
     Student["学生"]
@@ -170,7 +168,6 @@ supabase functions deploy community-bootstrap-user
 | [App 产品设计](docs/design/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
 | [UI 风格规范](docs/design/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
 | [Supabase 接入](docs/engineering/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
-| [历史 AI 额度链路](docs/engineering/leafy-ai-quota-authentication.md) | 后端维护者 | 冻结 iOS 分支与现存后端兼容资产的历史鉴权设计 |
 | [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
 | [贡献规范](CONTRIBUTING.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
@@ -181,7 +178,6 @@ supabase functions deploy community-bootstrap-user
 - 教务系统不是稳定 API。页面结构、登录流程或网络策略变化可能使解析暂时失效。
 - 当前教务身份绑定由 App 在登录成功后发起；它不等同于服务端对学校身份进行独立证明。
 - 社区、评价和共享能力依赖正确部署的 Supabase schema、RLS 与 Edge Functions。
-- 仓库仍保留 AI 相关 Edge Functions、迁移和旧 SwiftData schema，以支持历史数据清理和冻结分支兼容；这些资产不代表当前公开 App 提供 AI 服务或购买入口。
 - 教师与课程等目录型数据需要经过可信来源整理或后台审核，仓库不会自动保证数据完整性。
 - 这是持续演进中的校园产品，内部数据模型与未稳定接口可能变化。
 

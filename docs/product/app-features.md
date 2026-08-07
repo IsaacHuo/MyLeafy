@@ -63,19 +63,12 @@ MyLeafy 是当前主要面向北京林业大学学生的校园工具 App。公�
 根导航行为：
 
 - 全系统版本使用原生 `TabView`；iOS 26 自然采用系统 Liquid Glass 外观。
-- iOS 26 的 AI 使用“我的”右侧系统独立 Tab；iOS 17–25 使用标准第五 Tab。
 
 全局能力：
 
 - 根导航支持通知未读红点。
 - App 支持 URL deep link 打开课程详情、课表、缓存同步等目标页面。
 - App 进入前台或后台时会刷新小组件展示数据、学期配置和部分缓存状态。
-
-MyLeafy AI：
-
-- 支持本机对话历史、联网研究、本机上下文、Artifact、Markdown/KaTeX 和待确认动作。
-- 只使用用户自行配置并保存在 Keychain 的 DeepSeek API Key，支持 Flash 与 Pro。
-- `campus-ai-tools` 只执行受限的公开搜索和网页读取，不接收模型密钥或本机上下文。
 
 ## 4. 课表
 

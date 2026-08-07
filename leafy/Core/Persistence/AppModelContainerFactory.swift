@@ -20,7 +20,6 @@ enum AppModelContainerFactory {
             CareerResumeDocument.self, CareerTask.self, CareerOpportunity.self,
             FitnessTestRecord.self,
             ComprehensiveQualityRecord.self, ComprehensiveQualityComponentEntry.self, ComprehensiveQualityEvidenceDocument.self,
-            CampusAIConversation.self, CampusAIMessage.self, CampusAIActionRecord.self,
             MedicalLedgerEntry.self, MedicalLedgerPhoto.self,
         ])
         let modelConfiguration: ModelConfiguration

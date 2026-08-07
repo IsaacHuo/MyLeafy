@@ -143,16 +143,7 @@ MyLeafy 同时维护两个独立身份：
 
 本地 SwiftData 课表仍是个人数据的权威副本。不得把成绩、考试结果、课程备注、提醒或其他私密字段加入共享课表数据。
 
-### 3.5 MyLeafy AI Tool Gateway
-
-MyLeafy 3.0 只使用用户自行配置的 DeepSeek API Key。密钥保存在设备 Keychain，模型请求从设备直接发送到 DeepSeek，不进入 Supabase。
-
-- `campus-ai-tools` 为登录用户提供受限的公开搜索、网页和文档读取，并保留独立的工具调用限流与审计。
-- Tool Gateway 可以接收搜索词和已签名的读取凭据，但不接收 DeepSeek API Key 或本机上下文。
-- `campus-ai-assistant`、`campus-ai-entitlement`、`app-store-server-notifications` 以及托管额度/权益表和 RPC 已由前向 migration 退役。
-- 退役实现冻结在 `codex/leafy-ai-managed-archive`；历史鉴权说明见[已退役的 AI 额度鉴权](leafy-ai-quota-authentication.md)。
-
-### 3.6 运营与审计
+### 3.5 运营与审计
 
 - 管理员账号、角色、会话与登录尝试。
 - 管理动作审计、请求 ID、结果和持续时间。
@@ -216,12 +207,11 @@ MyLeafy 3.0 只使用用户自行配置的 DeepSeek API Key。密钥保存在设
 |---|---|
 | 社区初始化与 Feed | `community-bootstrap-user`、`community-feed` |
 | 校园服务 | `campus-request`、`campus-weather` |
-| AI 联网研究 | `campus-ai-tools` |
 | 分享 | `share-preview` |
 | 管理认证 | `admin-login`、`admin-me`、`admin-logout` |
 | 管理业务 | `admin-community`、`admin-export`、公告相关函数 |
 
-共享代码位于 `_shared/`，负责权限、CSV、安全响应和 AI 网页工具等跨函数逻辑。
+共享代码位于 `_shared/`，负责权限、CSV 和安全响应等跨函数逻辑。
 
 函数约定：
 
@@ -267,7 +257,6 @@ SUPABASE_PUBLISHABLE_KEY = sb_publishable_xxx
 SUPABASE_COMMUNITY_BOOTSTRAP_FUNCTION = community-bootstrap-user
 SUPABASE_COMMUNITY_FEED_FUNCTION = community-feed
 SUPABASE_WEATHER_FUNCTION = campus-weather
-SUPABASE_CAMPUS_AI_TOOLS_FUNCTION = campus-ai-tools
 SUPABASE_COMMUNITY_EDGE_REGION = ap-northeast-1
 SUPABASE_COMMUNITY_API_BASE_URL =
 ```
@@ -286,7 +275,6 @@ supabase db push
 supabase functions deploy community-bootstrap-user
 supabase functions deploy community-feed
 supabase functions deploy campus-weather
-supabase functions deploy campus-ai-tools
 ```
 
 只部署你实际配置和需要的函数。管理函数还依赖额外的服务端 secrets 和 Cloudflare 代理，见[运营后台](admin-console.md)。

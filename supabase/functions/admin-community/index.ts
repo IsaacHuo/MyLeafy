@@ -43,7 +43,6 @@ type AdminActionDomain =
   | "catalog-ratings"
   | "timetable-sharing"
   | "campus-runtime"
-  | "campus-ai"
   | "admin";
 type AuditTarget = { type?: string | null; id?: string | number | null };
 type AdminActionHandler = (

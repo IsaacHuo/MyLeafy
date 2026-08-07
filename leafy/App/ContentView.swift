@@ -121,15 +121,6 @@ struct ContentView: View {
             ) {
                 ProfileView()
             }
-
-            Tab(value: RootTab.leafy, role: .search) {
-                CampusAIAssistantView()
-            } label: {
-                Label(
-                    RootTab.leafy.title(language: leafyLanguage),
-                    systemImage: RootTab.leafy.systemImage
-                )
-            }
         }
     }
 
@@ -172,12 +163,6 @@ struct ContentView: View {
                     Label(RootTab.profile.title(language: leafyLanguage), systemImage: RootTab.profile.systemImage)
                 }
                 .tag(RootTab.profile)
-
-            CampusAIAssistantView()
-                .tabItem {
-                    Label(RootTab.leafy.title(language: leafyLanguage), systemImage: RootTab.leafy.systemImage)
-                }
-                .tag(RootTab.leafy)
         }
         .tint(AppTheme.accent(for: themeColorPreference))
     }

@@ -80,9 +80,6 @@ enum AppSessionResetter {
             try LocalCommunityPostDraftRepository.shared.deleteAllDraftData()
         }
         CommunityPostCardGenerator.cleanupStaleRenderedFiles()
-        attempt("MyLeafy AI Keychain") {
-            try CampusAIKeychainStore.deleteAll()
-        }
 
         SchoolDataCache.clearDiscoverCaches()
         TimetableCacheMetadata.clear()
@@ -131,9 +128,6 @@ enum AppSessionResetter {
         try modelContext.delete(model: ComprehensiveQualityRecord.self)
         try modelContext.delete(model: ComprehensiveQualityComponentEntry.self)
         try modelContext.delete(model: ComprehensiveQualityEvidenceDocument.self)
-        try modelContext.delete(model: CampusAIConversation.self)
-        try modelContext.delete(model: CampusAIMessage.self)
-        try modelContext.delete(model: CampusAIActionRecord.self)
         try modelContext.delete(model: MedicalLedgerEntry.self)
         try modelContext.delete(model: MedicalLedgerPhoto.self)
         try modelContext.save()
