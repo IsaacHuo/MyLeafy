@@ -13,8 +13,9 @@ enum LeafyWidgetSnapshotBuilder {
         isAuthenticated: Bool,
         date: Date = Date()
     ) {
+        let currentConfig = SemesterConfig.current
         let archive = makeArchive(
-            courses: courses,
+            courses: courses.filter { $0.sourceSemesterID == currentConfig.semesterID },
             notes: notes,
             occurrenceNotes: occurrenceNotes,
             reminders: reminders,
@@ -138,15 +139,22 @@ enum LeafyWidgetSnapshotBuilder {
         dayOffset: Int,
         language: AppLanguagePreference
     ) -> LeafyWidgetSnapshot {
-        let schedule = SemesterConfig.weekAndDay(for: date)
+        let currentConfig = SemesterConfig.current
+        let schedule = SemesterConfig.weekAndDay(for: date, config: currentConfig)
         let todayCourses = courses
+            .filter { $0.sourceSemesterID == currentConfig.semesterID }
             .filter { $0.dayOfWeek == schedule.day && $0.weeks.contains(schedule.week) }
             .sortedByStartPeriod()
         let notesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
         let remindersByKey = Dictionary(uniqueKeysWithValues: reminders.map { ($0.courseKey, $0.minutesBefore) })
         let todayCellReminders = cellReminders
-            .filter { $0.week == schedule.week && $0.dayOfWeek == schedule.day }
+            .filter { reminder in
+                if let startsAt = reminder.startsAt {
+                    return Calendar.current.isDate(startsAt, inSameDayAs: date)
+                }
+                return reminder.week == schedule.week && reminder.dayOfWeek == schedule.day
+            }
             .sorted { $0.period < $1.period }
 
         let widgetCourses = todayCourses.enumerated().map { index, course in

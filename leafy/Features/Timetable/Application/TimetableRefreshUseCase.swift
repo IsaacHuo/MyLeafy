@@ -6,6 +6,23 @@ struct TimetableRefreshResult {
     let sharedCourses: [SharedTimetableCourse]
 }
 
+@MainActor
+extension ParsedCourseRecord {
+    func makeCourse(semesterID: String) -> Course {
+        Course(
+            courseName: courseName,
+            teacher: teacher,
+            classInfo: classInfo,
+            room: room,
+            location: location,
+            dayOfWeek: dayOfWeek,
+            weeks: weeks,
+            duration: duration,
+            sourceSemesterID: semesterID
+        )
+    }
+}
+
 struct TimetableRefreshUseCase {
     let repository: any SchoolTimetableRepository
 
@@ -27,13 +44,14 @@ struct TimetableRefreshUseCase {
     func persist(
         records: [ParsedCourseRecord],
         existingCourses: [Course],
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        semesterID: String = SemesterConfig.currentSemesterID
     ) throws {
-        for course in existingCourses {
+        for course in existingCourses where course.sourceSemesterID == semesterID {
             modelContext.delete(course)
         }
 
-        for course in records.map({ $0.makeCourse() }) {
+        for course in records.map({ $0.makeCourse(semesterID: semesterID) }) {
             modelContext.insert(course)
         }
 

@@ -113,6 +113,41 @@ final class TimetableLayoutMetricsCache {
     }
 }
 
+struct TimetableCurrentTimePosition {
+    static func yPosition(
+        for date: Date,
+        metrics: TimetableLayoutMetrics,
+        calendar: Calendar = .current
+    ) -> CGFloat? {
+        let minutes = Double(calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date))
+            + Double(calendar.component(.second, from: date)) / 60
+        guard let first = TimetablePeriodSchedule.slots.first,
+              let last = TimetablePeriodSchedule.slots.last else { return nil }
+        let firstStart = Double(first.startHour * 60 + first.startMinute)
+        let lastEnd = Double(last.endHour * 60 + last.endMinute)
+        guard minutes >= firstStart, minutes <= lastEnd else { return nil }
+
+        for (index, slot) in TimetablePeriodSchedule.slots.enumerated() {
+            let start = Double(slot.startHour * 60 + slot.startMinute)
+            let end = Double(slot.endHour * 60 + slot.endMinute)
+            let rowStartY = CGFloat(index) * (metrics.rowHeight + metrics.rowSpacing)
+            if minutes <= end {
+                let fraction = max(0, min(1, (minutes - start) / max(end - start, 1)))
+                return rowStartY + CGFloat(fraction) * metrics.rowHeight
+            }
+
+            guard index + 1 < TimetablePeriodSchedule.slots.count else { continue }
+            let next = TimetablePeriodSchedule.slots[index + 1]
+            let nextStart = Double(next.startHour * 60 + next.startMinute)
+            if minutes < nextStart {
+                let fraction = max(0, min(1, (minutes - end) / max(nextStart - end, 1)))
+                return rowStartY + metrics.rowHeight + CGFloat(fraction) * metrics.rowSpacing
+            }
+        }
+        return metrics.gridHeight
+    }
+}
+
 struct TimetableLayoutMetricsCacheKey: Equatable {
     let width: CGFloat
     let height: CGFloat
@@ -159,7 +194,7 @@ final class TimetableDayMetadataCache {
     func metadata(
         day: Int,
         week: Int,
-        semesterStartDate: Date,
+        timelineStartDate: Date,
         calendarEvents: [SchoolCalendarEvent],
         scheduleSnapshot: TimetableScheduleProjectionSnapshot,
         language: AppLanguagePreference
@@ -167,7 +202,7 @@ final class TimetableDayMetadataCache {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let identity = TimetableDayMetadataCacheIdentity(
-            semesterStartDate: calendar.startOfDay(for: semesterStartDate),
+            timelineStartDate: calendar.startOfDay(for: timelineStartDate),
             calendarEvents: calendarEvents,
             scheduleSignature: scheduleSnapshot.signature,
             language: language,
@@ -185,7 +220,7 @@ final class TimetableDayMetadataCache {
 
         var components = DateComponents()
         components.day = (week - 1) * 7 + (day - 1)
-        let date = calendar.date(byAdding: components, to: semesterStartDate) ?? Date()
+        let date = calendar.date(byAdding: components, to: timelineStartDate) ?? Date()
         let numericComponents = calendar.dateComponents([.month, .day], from: date)
         let metadata = TimetableDayMetadata(
             week: week,
@@ -195,7 +230,7 @@ final class TimetableDayMetadataCache {
             dayTitle: language.weekdayTitle(for: day),
             numericDateText: String(format: "%02d-%02d", numericComponents.month ?? 1, numericComponents.day ?? 1),
             chineseDateText: DateFormatters.chineseDay.string(from: date),
-            event: AcademicCalendarEvents.event(on: date, calendar: calendar),
+            event: AcademicCalendarEvents.event(on: date, campusEvents: calendarEvents, calendar: calendar),
             countdowns: scheduleSnapshot.countdowns(week: week, day: day),
             exams: scheduleSnapshot.exams(week: week, day: day),
             projectionSignature: scheduleSnapshot.signature
@@ -206,7 +241,7 @@ final class TimetableDayMetadataCache {
 }
 
 struct TimetableDayMetadataCacheIdentity: Equatable {
-    let semesterStartDate: Date
+    let timelineStartDate: Date
     let calendarEvents: [SchoolCalendarEvent]
     let scheduleSignature: TimetableScheduleProjectionSignature
     let language: AppLanguagePreference
@@ -350,9 +385,17 @@ struct TimetableDaySelection: Identifiable {
     let week: Int
     let day: Int
     let date: Date
+    let semesterID: String?
+
+    init(week: Int, day: Int, date: Date, semesterID: String? = nil) {
+        self.week = week
+        self.day = day
+        self.date = date
+        self.semesterID = semesterID
+    }
 
     var id: String {
-        "\(week)-\(day)"
+        "\(semesterID ?? "calendar")-\(week)-\(day)"
     }
 }
 

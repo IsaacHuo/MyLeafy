@@ -556,6 +556,62 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     @MainActor
+    func testTimetableRefreshPersistsCoursesPerSemester() throws {
+        let schema = Schema([Course.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let useCase = TimetableRefreshUseCase()
+
+        let courseA = ParsedCourseRecord(
+            courseName: "学期 A 课程",
+            teacher: "教师 A",
+            classInfo: "",
+            room: "101",
+            location: "教学楼",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1]
+        )
+        let courseB = ParsedCourseRecord(
+            courseName: "学期 B 课程",
+            teacher: "教师 B",
+            classInfo: "",
+            room: "202",
+            location: "教学楼",
+            dayOfWeek: 2,
+            weeks: [2],
+            duration: [2]
+        )
+
+        try useCase.persist(records: [courseA], existingCourses: [], modelContext: context, semesterID: "A")
+        var courses = try context.fetch(FetchDescriptor<Course>())
+        XCTAssertEqual(courses.map(\.sourceSemesterID), ["A"])
+
+        try useCase.persist(records: [courseB], existingCourses: courses, modelContext: context, semesterID: "B")
+        courses = try context.fetch(FetchDescriptor<Course>())
+        XCTAssertEqual(Set(courses.map(\.sourceSemesterID)), ["A", "B"])
+        let courseBID = try XCTUnwrap(courses.first(where: { $0.sourceSemesterID == "B" })?.id)
+
+        let replacementA = ParsedCourseRecord(
+            courseName: "学期 A 新课程",
+            teacher: "教师 A2",
+            classInfo: "",
+            room: "303",
+            location: "教学楼",
+            dayOfWeek: 3,
+            weeks: [3],
+            duration: [3]
+        )
+        try useCase.persist(records: [replacementA], existingCourses: courses, modelContext: context, semesterID: "A")
+        courses = try context.fetch(FetchDescriptor<Course>())
+
+        XCTAssertEqual(courses.count, 2)
+        XCTAssertEqual(courses.filter { $0.sourceSemesterID == "A" }.map(\.courseName), ["学期 A 新课程"])
+        XCTAssertEqual(courses.first(where: { $0.sourceSemesterID == "B" })?.id, courseBID)
+    }
+
+    @MainActor
     func testSchoolNetworkRequestsBypassLocalCache() throws {
         let manager = SchoolNetworkManager.shared
         let url = try XCTUnwrap(URL(string: "http://newjwxt.bjfu.edu.cn/jsxsd/xskb/xskb_list.do"))

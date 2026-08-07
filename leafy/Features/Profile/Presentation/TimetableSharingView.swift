@@ -599,7 +599,9 @@ struct TimetableSharingView: View {
     @MainActor
     private func shareLatestTimetable() async {
         guard actionPhase == .idle, canStartSharing else { return }
-        let snapshotCourses = courses.map(SharedTimetableCourse.init(course:))
+        let snapshotCourses = courses
+            .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID }
+            .map(SharedTimetableCourse.init(course:))
         var didPublish = false
 
         do {
@@ -634,7 +636,9 @@ struct TimetableSharingView: View {
         guard actionPhase == .idle,
               canUseSharing,
               !courses.isEmpty else { return }
-        let snapshotCourses = courses.map(SharedTimetableCourse.init(course:))
+        let snapshotCourses = courses
+            .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID }
+            .map(SharedTimetableCourse.init(course:))
         actionPhase = .updating
         defer { actionPhase = .idle }
 

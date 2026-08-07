@@ -34,17 +34,58 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
         supportedWeeks: 20,
         graduateTimetableTermCode: "46",
         calendarEvents: [
-            SchoolCalendarEvent(id: "bjfu-sports-2026", title: "运动会停课", startDateString: "2026-04-24", endDateString: "2026-04-24", kind: .closure)
+            SchoolCalendarEvent(id: "bjfu-sports-2026", title: "运动会停课", startDateString: "2026-04-24", endDateString: "2026-04-24", kind: .closure),
+            SchoolCalendarEvent(id: "bjfu-semester-end-2026-spring", title: "学期结束", startDateString: "2026-07-26", endDateString: "2026-07-26", kind: .holiday, academicCategory: .semesterEnd),
+            SchoolCalendarEvent(id: "bjfu-summer-break-2026", title: "暑假", startDateString: "2026-07-27", endDateString: "2026-09-06", kind: .holiday, academicCategory: .summerBreak)
         ],
         updatedAt: nil,
         isActive: true
     )
+
+    static let builtInTimeline: [SemesterRuntimeConfig] = [
+        builtIn,
+        SemesterRuntimeConfig(
+            semesterID: "2026-2027-1",
+            semesterStartDateString: "2026-09-07",
+            supportedWeeks: 20,
+            graduateTimetableTermCode: "47",
+            calendarEvents: [],
+            updatedAt: nil,
+            isActive: false
+        )
+    ]
 
     private static func date(from string: String) -> Date? {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone.current
         return formatter.date(from: string)
+    }
+}
+
+nonisolated enum SemesterRuntimeConfigTimelineCache {
+    private static let key = "semester.runtimeTimeline.v1"
+
+    static func load(defaults: UserDefaults = .standard) -> [SemesterRuntimeConfig] {
+        guard let data = defaults.data(forKey: scopedKey(defaults: defaults)),
+              let configs = try? JSONDecoder().decode([SemesterRuntimeConfig].self, from: data) else {
+            return []
+        }
+        return configs.filter(\.isUsable)
+    }
+
+    static func save(_ configs: [SemesterRuntimeConfig], defaults: UserDefaults = .standard) {
+        let usable = configs.filter(\.isUsable)
+        guard !usable.isEmpty, let data = try? JSONEncoder().encode(usable) else { return }
+        defaults.set(data, forKey: scopedKey(defaults: defaults))
+    }
+
+    static func clear(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: scopedKey(defaults: defaults))
+    }
+
+    private static func scopedKey(defaults: UserDefaults) -> String {
+        CampusScopedDefaults.key(key, defaults: defaults)
     }
 }
 
@@ -92,7 +133,9 @@ actor SemesterRuntimeConfigService {
 
     private let minimumRefreshInterval: TimeInterval = 60 * 60
     private var activeRefreshTask: Task<SemesterRuntimeConfig, Never>?
+    private var activeTimelineRefreshTask: Task<[SemesterRuntimeConfig], Never>?
     private var lastAttemptAt: Date?
+    private var lastTimelineAttemptAt: Date?
 
     private init() {}
 
@@ -135,6 +178,39 @@ actor SemesterRuntimeConfigService {
         return result
     }
 
+    func refreshTimelineFromRemoteIfAvailable(force: Bool = false) async -> [SemesterRuntimeConfig] {
+        let cached = SemesterConfig.timelineConfigurations
+        if !force,
+           let lastTimelineAttemptAt,
+           Date().timeIntervalSince(lastTimelineAttemptAt) < minimumRefreshInterval {
+            return cached
+        }
+        if let activeTimelineRefreshTask {
+            return await activeTimelineRefreshTask.value
+        }
+
+        let task = Task<[SemesterRuntimeConfig], Never> {
+            do {
+                let remote = try await Self.fetchRemoteTimelineConfigs()
+                guard !remote.isEmpty else { return cached }
+                SemesterRuntimeConfigTimelineCache.save(remote)
+                return remote
+            } catch {
+                return cached
+            }
+        }
+        activeTimelineRefreshTask = task
+        lastTimelineAttemptAt = Date()
+        let result = await task.value
+        activeTimelineRefreshTask = nil
+        if result != cached {
+            await MainActor.run {
+                NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil)
+            }
+        }
+        return result
+    }
+
     private static func fetchRemoteActiveConfig() async throws -> SemesterRuntimeConfig {
         let client = try LeafySupabase.shared.requireClient()
         let records: [RemoteSemesterRuntimeConfigRecord] = try await client
@@ -152,6 +228,18 @@ actor SemesterRuntimeConfigService {
         }
 
         return record.runtimeConfig
+    }
+
+    private static func fetchRemoteTimelineConfigs() async throws -> [SemesterRuntimeConfig] {
+        let client = try LeafySupabase.shared.requireClient()
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await client
+            .from("semester_runtime_configs")
+            .select()
+            .eq("campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
+            .order("semester_start_date", ascending: true)
+            .execute()
+            .value
+        return records.map(\.runtimeConfig).filter(\.isUsable)
     }
 }
 
@@ -212,6 +300,39 @@ nonisolated struct SemesterConfig {
         SemesterRuntimeConfigCache.load() ?? .builtIn
     }
 
+    static var timelineConfigurations: [SemesterRuntimeConfig] {
+        let combined = SemesterRuntimeConfig.builtInTimeline
+            + SemesterRuntimeConfigTimelineCache.load()
+            + [current]
+        return Dictionary(grouping: combined, by: \.semesterID)
+            .compactMap { _, configs in
+                guard let preferred = configs.sorted(by: { lhs, rhs in
+                    let lhsUpdatedAt = lhs.updatedAt ?? ""
+                    let rhsUpdatedAt = rhs.updatedAt ?? ""
+                    if lhsUpdatedAt != rhsUpdatedAt { return lhsUpdatedAt > rhsUpdatedAt }
+                    if lhs.isActive != rhs.isActive { return lhs.isActive }
+                    return lhs.calendarEvents.count > rhs.calendarEvents.count
+                }).first else { return nil }
+                let events = Array(Set(configs.flatMap(\.calendarEvents)))
+                    .sorted { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }
+                return SemesterRuntimeConfig(
+                    semesterID: preferred.semesterID,
+                    semesterStartDateString: preferred.semesterStartDateString,
+                    supportedWeeks: preferred.supportedWeeks,
+                    graduateTimetableTermCode: preferred.graduateTimetableTermCode,
+                    calendarEvents: events,
+                    updatedAt: preferred.updatedAt,
+                    isActive: preferred.isActive
+                )
+            }
+            .sorted { $0.semesterStartDate < $1.semesterStartDate }
+    }
+
+    static var timelineCalendarEvents: [SchoolCalendarEvent] {
+        Array(Set(timelineConfigurations.flatMap(\.calendarEvents)))
+            .sorted { ($0.startDate ?? .distantFuture) < ($1.startDate ?? .distantFuture) }
+    }
+
     static var startOfSemesterString: String {
         current.semesterStartDateString
     }
@@ -230,7 +351,7 @@ nonisolated struct SemesterConfig {
 
     static func campusCalendarEvents(campusID: CampusID = ActiveCampusContext.descriptor.id) -> [SchoolCalendarEvent] {
         guard campusID == .bjfu else { return [] }
-        return current.calendarEvents
+        return timelineCalendarEvents
     }
 
     static var startOfSemesterDate: Date {
@@ -244,8 +365,10 @@ nonisolated struct SemesterConfig {
     @discardableResult
     static func refreshRemoteIfAvailable(force: Bool = false) async -> SemesterRuntimeConfig {
         async let nationalCalendarRefresh: NationalCalendarRuntimeConfig = NationalHolidayCalendar.refreshRemoteIfAvailable(force: force)
+        async let timelineRefresh: [SemesterRuntimeConfig] = SemesterRuntimeConfigService.shared.refreshTimelineFromRemoteIfAvailable(force: force)
         let semesterConfig = await SemesterRuntimeConfigService.shared.refreshFromRemoteIfAvailable(force: force)
         _ = await nationalCalendarRefresh
+        _ = await timelineRefresh
         return semesterConfig
     }
 

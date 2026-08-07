@@ -48,6 +48,10 @@ final class CourseOccurrenceNote {
     static func occurrenceKey(courseKey: String, week: Int) -> String {
         "\(courseKey)|week:\(week)"
     }
+
+    static func occurrenceKey(courseKey: String, semesterID: String, week: Int) -> String {
+        "\(courseKey)|semester:\(semesterID)|week:\(week)"
+    }
 }
 
 @Model
@@ -120,6 +124,17 @@ final class TimetableCellReminder {
 
     static func cellKey(week: Int, dayOfWeek: Int, period: Int) -> String {
         "\(week)-\(dayOfWeek)-\(period)"
+    }
+
+    static func cellKey(date: Date, period: Int, calendar: Calendar = .current) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d-%d",
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0,
+            period
+        )
     }
 
     static func normalizedOptionalText(_ text: String) -> String? {
@@ -1219,6 +1234,14 @@ extension Course {
     }
 
     func occurrenceKey(week: Int) -> String {
+        CourseOccurrenceNote.occurrenceKey(
+            courseKey: stableCourseKey,
+            semesterID: sourceSemesterID,
+            week: week
+        )
+    }
+
+    func legacyOccurrenceKey(week: Int) -> String {
         CourseOccurrenceNote.occurrenceKey(courseKey: stableCourseKey, week: week)
     }
 

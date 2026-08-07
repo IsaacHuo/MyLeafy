@@ -345,9 +345,9 @@ enum TimetableNoteResolver {
         courseNotes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote]
     ) -> String? {
-        let occurrenceKey = course.occurrenceKey(week: week)
+        let occurrenceKeys = [course.occurrenceKey(week: week), course.legacyOccurrenceKey(week: week)]
         if let occurrenceText = occurrenceNotes
-            .filter({ $0.occurrenceKey == occurrenceKey })
+            .filter({ occurrenceKeys.contains($0.occurrenceKey) })
             .sorted(by: latestFirst)
             .compactMap({ trimmed($0.text) })
             .first {
@@ -404,6 +404,7 @@ enum TimetableNoteResolver {
         occurrenceNotesByKey: [String: String]
     ) -> String? {
         occurrenceNotesByKey[course.occurrenceKey(week: week)]
+            ?? occurrenceNotesByKey[course.legacyOccurrenceKey(week: week)]
             ?? courseNotesByKey[course.stableCourseKey]
     }
 

@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class Course {
     var id: UUID
+    var sourceSemesterID: String = SemesterConfig.currentSemesterID
     var courseName: String
     var teacher: String
     var classInfo: String
@@ -13,8 +14,9 @@ final class Course {
     var weeks: [Int]
     var duration: [Int]
     
-    init(id: UUID = UUID(), courseName: String, teacher: String, classInfo: String = "", room: String, location: String = "", dayOfWeek: Int, weeks: [Int], duration: [Int]) {
+    init(id: UUID = UUID(), courseName: String, teacher: String, classInfo: String = "", room: String, location: String = "", dayOfWeek: Int, weeks: [Int], duration: [Int], sourceSemesterID: String = SemesterConfig.currentSemesterID) {
         self.id = id
+        self.sourceSemesterID = sourceSemesterID
         self.courseName = courseName
         self.teacher = teacher
         self.classInfo = classInfo

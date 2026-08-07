@@ -1,3 +1,4 @@
+// @ts-ignore The npm: specifier is resolved by the Supabase Deno runtime.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const siteOrigin = "https://myleafy.space";
@@ -8,6 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
+
+type DenoRuntime = {
+  serve(handler: (request: Request) => Response | Promise<Response>): void;
+  env: { get(name: string): string | undefined };
+};
+
+const denoRuntime = (globalThis as unknown as { Deno: DenoRuntime }).Deno;
 
 type SharePreviewStatus = "ok" | "not_found" | "expired" | "used" | "invalid";
 
@@ -22,7 +30,7 @@ type SharePreview = {
 // Share previews query several dynamic public tables without generated database types.
 type ServiceClient = any;
 
-Deno.serve(async (request) => {
+denoRuntime.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -230,8 +238,8 @@ function timetableInviteDescription(status: SharePreviewStatus, code: string, co
 }
 
 function requireServiceClient() {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = denoRuntime.env.get("SUPABASE_URL");
+  const serviceRoleKey = denoRuntime.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Missing Supabase environment variables.");
   }

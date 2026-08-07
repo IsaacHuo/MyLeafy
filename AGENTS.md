@@ -10,11 +10,11 @@ Core stack:
 - Swift Package Manager
 
 Timetable direction:
-- The BJFU timetable always renders a 20-week container, keeps all 20 weeks of indexed data and SwiftUI week views resident, and limits only off-screen accessibility exposure. Course occurrences come only from the school response; unused weeks remain empty.
+- The BJFU timetable renders the current natural year from January through December. Calendar weeks are identified by absolute dates, while each fetched school timetable remains a term-scoped 20-week data set. Previously fetched terms that intersect the current year remain cached; course occurrences still come only from the school response and unavailable future terms remain empty.
 - Semester end dates and winter/summer break ranges come from semantic runtime calendar events, never from the 20-week timetable container.
-- Runtime semester configuration selects the undergraduate semester ID, graduate term code, and first-week date without requiring an App Store release.
+- Runtime semester configuration selects the undergraduate semester ID, graduate term code, first-week date, and semantic teaching/vacation timeline without requiring an App Store release. The year view may read previous, active, and future configurations, but school refreshes still target only the active configuration.
 - Undergraduate and graduate timetable refreshes must use the same observable cache and error semantics.
-- User-created schedules use one editor and one user-facing concept: dates inside the current 20-week semester project into the timetable, while dates outside it appear as countdowns. School-provided exams remain a separate data source.
+- User-created schedules use one editor and one user-facing concept: dates inside the current natural year project directly into the timetable, while dates outside it remain countdowns. School-provided exams remain a separate data source.
 - Schedule-report toggles apply immediately. Exam reminders run daily from 7 through 1 days before; important-date reports run 5, 3, and 1 days before.
 - Timetable backgrounds support static photos and solid colors with one native SwiftUI root background layer. Disabling the background must preserve the selected photo and visual settings.
 - Personalized timetable backgrounds remain local and never appear in timetable share images or widgets.

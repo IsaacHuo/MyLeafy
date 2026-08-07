@@ -340,18 +340,8 @@ struct LeafyApp: App {
             return
         }
 
-        let context = sharedModelContainer.mainContext
-        do {
-            let courses = try context.fetch(FetchDescriptor<Course>())
-            for course in courses {
-                context.delete(course)
-            }
-            try context.save()
-            TimetableCacheMetadata.clear()
-            SchoolDataRefreshNotifier.post(.timetable)
-        } catch {
-            logger.error("Failed to reset timetable during semester rollover: \(error.localizedDescription, privacy: .public)")
-        }
+        TimetableCacheMetadata.clear()
+        SchoolDataRefreshNotifier.post(.timetable)
     }
 
     @MainActor

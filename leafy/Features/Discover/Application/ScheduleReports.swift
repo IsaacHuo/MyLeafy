@@ -978,9 +978,14 @@ enum ScheduleReportPlanner {
     }
 
     private static func courses(on date: Date, from courses: [Course]) -> [Course] {
-        let schedule = SemesterConfig.weekAndDay(for: date)
+        let config = SemesterConfig.current
+        let schedule = SemesterConfig.weekAndDay(for: date, config: config)
         return courses
-            .filter { $0.dayOfWeek == schedule.day && $0.weeks.contains(schedule.week) }
+            .filter {
+                $0.sourceSemesterID == config.semesterID
+                    && $0.dayOfWeek == schedule.day
+                    && $0.weeks.contains(schedule.week)
+            }
             .sortedByStartPeriod()
     }
 
@@ -1224,7 +1229,8 @@ enum ScheduleReportNotificationManager {
 enum ScheduleReportDataSource {
     static func input(modelContext: ModelContext) -> ScheduleReportInput {
         ScheduleReportInput(
-            courses: fetch(Course.self, in: modelContext),
+            courses: fetch(Course.self, in: modelContext)
+                .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID },
             exams: SchoolDataCache.loadExamSchedule(),
             countdowns: CustomScheduleStore.load(),
             cellReminders: fetch(TimetableCellReminder.self, in: modelContext)

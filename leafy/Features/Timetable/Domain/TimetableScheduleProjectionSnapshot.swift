@@ -32,11 +32,74 @@ struct TimetableScheduleProjectionSnapshot {
                 return lhs.startsAt < rhs.startsAt
             }
 
-        return TimetableScheduleProjectionSnapshot(
-            signature: TimetableScheduleProjectionSignature(
-                countdowns: countdowns,
-                exams: exams
-            ),
+        return snapshot(countdowns: countdowns, exams: exams)
+    }
+
+    static func make(
+        countdownEvents: [CustomScheduleEvent],
+        exams: [ExamArrangement],
+        calendarYear: CalendarYearTimetable,
+        calendar: Calendar = .current
+    ) -> TimetableScheduleProjectionSnapshot {
+        let countdowns = countdownEvents.compactMap { event -> TimetableCountdownProjection? in
+            guard let week = calendarYear.pageIndex(containing: event.startsAt) else { return nil }
+            let weekday = calendar.component(.weekday, from: event.startsAt)
+            let day = ((weekday + 5) % 7) + 1
+            let period = TimetablePeriodSchedule.period(containing: event.startsAt)?.period
+                ?? TimetablePeriodSchedule.periodForFocus(containing: event.startsAt)?.period
+                ?? 1
+            return TimetableCountdownProjection(
+                eventID: event.id,
+                title: event.title,
+                targetDate: event.startsAt,
+                week: week,
+                dayOfWeek: day,
+                period: period
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.week != rhs.week { return lhs.week < rhs.week }
+            if lhs.dayOfWeek != rhs.dayOfWeek { return lhs.dayOfWeek < rhs.dayOfWeek }
+            if lhs.period != rhs.period { return lhs.period < rhs.period }
+            return lhs.targetDate < rhs.targetDate
+        }
+
+        let examProjections = exams.compactMap { exam -> TimetableExamProjection? in
+            guard let startsAt = exam.startsAt,
+                  let week = calendarYear.pageIndex(containing: startsAt) else { return nil }
+            let weekday = calendar.component(.weekday, from: startsAt)
+            let day = ((weekday + 5) % 7) + 1
+            let period = TimetablePeriodSchedule.period(containing: startsAt)?.period
+                ?? TimetablePeriodSchedule.periodForFocus(containing: startsAt)?.period
+                ?? 1
+            return TimetableExamProjection(
+                examID: exam.id,
+                name: exam.name,
+                startsAt: startsAt,
+                endsAt: exam.endsAt ?? startsAt,
+                startText: exam.start,
+                location: exam.location,
+                week: week,
+                dayOfWeek: day,
+                period: period
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.week != rhs.week { return lhs.week < rhs.week }
+            if lhs.dayOfWeek != rhs.dayOfWeek { return lhs.dayOfWeek < rhs.dayOfWeek }
+            if lhs.period != rhs.period { return lhs.period < rhs.period }
+            return lhs.startsAt < rhs.startsAt
+        }
+
+        return snapshot(countdowns: countdowns, exams: examProjections)
+    }
+
+    private static func snapshot(
+        countdowns: [TimetableCountdownProjection],
+        exams: [TimetableExamProjection]
+    ) -> TimetableScheduleProjectionSnapshot {
+        TimetableScheduleProjectionSnapshot(
+            signature: TimetableScheduleProjectionSignature(countdowns: countdowns, exams: exams),
             countdownsByDay: Dictionary(grouping: countdowns) {
                 TimetableScheduleProjectionDayKey(week: $0.week, day: $0.dayOfWeek)
             },

@@ -2,11 +2,23 @@ import Foundation
 import os
 
 @MainActor
+struct TimetableCourseWeekProjection: Hashable {
+    let displayWeeks: [Int]
+    let semesterWeekByDisplayWeek: [Int: Int]
+}
+
+struct TimetableCellReminderProjection: Hashable {
+    let displayWeek: Int
+    let dayOfWeek: Int
+}
+
 struct TimetableRenderInput {
     let courses: [Course]
     let notes: [CourseNote]
     let occurrenceNotes: [CourseOccurrenceNote]
     let cellReminders: [TimetableCellReminder]
+    let courseWeekProjections: [UUID: TimetableCourseWeekProjection]
+    let cellReminderProjections: [UUID: TimetableCellReminderProjection]
     let signature: TimetableGridInputSignature
 
     init(
@@ -14,18 +26,24 @@ struct TimetableRenderInput {
         notes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote],
         cellReminders: [TimetableCellReminder],
-        hidesWeekends: Bool
+        hidesWeekends: Bool,
+        courseWeekProjections: [UUID: TimetableCourseWeekProjection] = [:],
+        cellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
     ) {
         self.courses = courses
         self.notes = notes
         self.occurrenceNotes = occurrenceNotes
         self.cellReminders = cellReminders
+        self.courseWeekProjections = courseWeekProjections
+        self.cellReminderProjections = cellReminderProjections
         signature = TimetableGridInputSignature(
             courses: courses,
             notes: notes,
             occurrenceNotes: occurrenceNotes,
             cellReminders: cellReminders,
-            hidesWeekends: hidesWeekends
+            hidesWeekends: hidesWeekends,
+            courseWeekProjections: courseWeekProjections,
+            cellReminderProjections: cellReminderProjections
         )
     }
 }
@@ -43,11 +61,13 @@ struct TimetableGridInputSignature: Equatable, Hashable {
         notes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote],
         cellReminders: [TimetableCellReminder],
-        hidesWeekends: Bool
+        hidesWeekends: Bool,
+        courseWeekProjections: [UUID: TimetableCourseWeekProjection] = [:],
+        cellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
     ) {
         self.hidesWeekends = hidesWeekends
         courseSignatures = courses
-            .map(CourseSignature.init(course:))
+            .map { CourseSignature(course: $0, projection: courseWeekProjections[$0.id]) }
             .sorted { $0.id.uuidString < $1.id.uuidString }
         noteSignatures = notes
             .map(NoteSignature.init(note:))
@@ -56,7 +76,7 @@ struct TimetableGridInputSignature: Equatable, Hashable {
             .map(OccurrenceNoteSignature.init(note:))
             .sorted { $0.id.uuidString < $1.id.uuidString }
         cellReminderSignatures = cellReminders
-            .map(CellReminderSignature.init(reminder:))
+            .map { CellReminderSignature(reminder: $0, projection: cellReminderProjections[$0.id]) }
             .sorted { $0.id.uuidString < $1.id.uuidString }
     }
 
@@ -66,18 +86,20 @@ struct TimetableGridInputSignature: Equatable, Hashable {
         let teacher: String
         let location: String
         let room: String
+        let sourceSemesterID: String
         let dayOfWeek: Int
         let weeks: [Int]
         let duration: [Int]
 
-        init(course: Course) {
+        init(course: Course, projection: TimetableCourseWeekProjection?) {
             id = course.id
             name = course.courseName
             teacher = course.teacher
             location = course.location
             room = course.room
+            sourceSemesterID = course.sourceSemesterID
             dayOfWeek = course.dayOfWeek
-            weeks = course.weeks.sorted()
+            weeks = (projection?.displayWeeks ?? course.weeks).sorted()
             duration = course.duration.sorted()
         }
     }
@@ -127,8 +149,10 @@ struct TimetableGridInputSignature: Equatable, Hashable {
         let endsAt: Date?
         let minutesBefore: Int
         let updatedAt: Date
+        let displayWeek: Int
+        let displayDay: Int
 
-        init(reminder: TimetableCellReminder) {
+        init(reminder: TimetableCellReminder, projection: TimetableCellReminderProjection?) {
             id = reminder.id
             cellKey = reminder.cellKey
             title = reminder.title
@@ -139,6 +163,8 @@ struct TimetableGridInputSignature: Equatable, Hashable {
             endsAt = reminder.endsAt
             minutesBefore = reminder.minutesBefore
             updatedAt = reminder.updatedAt
+            displayWeek = projection?.displayWeek ?? reminder.week
+            displayDay = projection?.dayOfWeek ?? reminder.dayOfWeek
         }
     }
 }
@@ -153,13 +179,15 @@ struct TimetableCourseRenderValue: Identifiable, Hashable {
     let location: String
     let locationText: String
     let timetableCardLocationText: String
+    let sourceSemesterID: String
     let dayOfWeek: Int
     let weeks: [Int]
     let duration: [Int]
     let stableCourseKey: String
+    let semesterWeekByDisplayWeek: [Int: Int]
 
     @MainActor
-    init(course: Course) {
+    init(course: Course, projection: TimetableCourseWeekProjection? = nil) {
         id = course.id
         courseName = course.courseName
         displayCourseName = course.displayCourseName
@@ -169,14 +197,32 @@ struct TimetableCourseRenderValue: Identifiable, Hashable {
         location = course.location
         locationText = course.locationText
         timetableCardLocationText = course.timetableCardLocationText
+        sourceSemesterID = course.sourceSemesterID
         dayOfWeek = course.dayOfWeek
-        weeks = course.weeks
+        weeks = projection?.displayWeeks ?? course.weeks
         duration = course.duration
         stableCourseKey = course.stableCourseKey
+        semesterWeekByDisplayWeek = projection?.semesterWeekByDisplayWeek ?? Dictionary(
+            uniqueKeysWithValues: course.weeks.map { ($0, $0) }
+        )
     }
 
-    func occurrenceKey(week: Int) -> String {
-        CourseOccurrenceNote.occurrenceKey(courseKey: stableCourseKey, week: week)
+    func semesterWeek(for displayWeek: Int) -> Int? {
+        semesterWeekByDisplayWeek[displayWeek]
+    }
+
+    func occurrenceKey(week displayWeek: Int) -> String {
+        let semesterWeek = semesterWeek(for: displayWeek) ?? displayWeek
+        return CourseOccurrenceNote.occurrenceKey(
+            courseKey: stableCourseKey,
+            semesterID: sourceSemesterID,
+            week: semesterWeek
+        )
+    }
+
+    func legacyOccurrenceKey(week displayWeek: Int) -> String {
+        let semesterWeek = semesterWeek(for: displayWeek) ?? displayWeek
+        return CourseOccurrenceNote.occurrenceKey(courseKey: stableCourseKey, week: semesterWeek)
     }
 }
 
@@ -203,11 +249,11 @@ struct TimetableCellReminderRenderValue: Identifiable, Hashable {
     }
 
     @MainActor
-    init(reminder: TimetableCellReminder) {
+    init(reminder: TimetableCellReminder, projection: TimetableCellReminderProjection? = nil) {
         id = reminder.id
         cellKey = reminder.cellKey
-        week = reminder.week
-        dayOfWeek = reminder.dayOfWeek
+        week = projection?.displayWeek ?? reminder.week
+        dayOfWeek = projection?.dayOfWeek ?? reminder.dayOfWeek
         period = reminder.period
         title = reminder.title
         locationText = reminder.locationText
@@ -318,6 +364,8 @@ struct TimetableGridSnapshot {
         cellReminders: [TimetableCellReminder],
         hidesWeekends: Bool,
         totalWeeks: Int,
+        courseWeekProjections: [UUID: TimetableCourseWeekProjection] = [:],
+        cellReminderProjections: [UUID: TimetableCellReminderProjection] = [:],
         signature providedSignature: TimetableGridInputSignature? = nil
     ) -> TimetableGridSnapshot {
         let state = LeafyPerformanceSignposter.timetable.beginInterval("grid-snapshot")
@@ -328,15 +376,21 @@ struct TimetableGridSnapshot {
             notes: notes,
             occurrenceNotes: occurrenceNotes,
             cellReminders: cellReminders,
-            hidesWeekends: hidesWeekends
+            hidesWeekends: hidesWeekends,
+            courseWeekProjections: courseWeekProjections,
+            cellReminderProjections: cellReminderProjections
         )
         let visibleDays = hidesWeekends ? Array(1...5) : Array(1...7)
         let courseNotesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
         let courseNoteKeys = Set(courseNotesByKey.keys)
         let occurrenceNoteKeys = Set(occurrenceNotesByKey.keys)
-        let courseValues = courses.map(TimetableCourseRenderValue.init(course:))
-        let reminderValues = cellReminders.map(TimetableCellReminderRenderValue.init(reminder:))
+        let courseValues = courses.map {
+            TimetableCourseRenderValue(course: $0, projection: courseWeekProjections[$0.id])
+        }
+        let reminderValues = cellReminders.map {
+            TimetableCellReminderRenderValue(reminder: $0, projection: cellReminderProjections[$0.id])
+        }
 
         let coursesByDay = Dictionary(grouping: courseValues) { course in
             TimetableGridDayKey(week: 0, day: course.dayOfWeek)
@@ -366,7 +420,16 @@ struct TimetableGridSnapshot {
         let latestCellReminderByKey = Dictionary(
             reminderValues
                 .sorted { $0.updatedAt > $1.updatedAt }
-                .map { ($0.cellKey, $0) },
+                .map {
+                    (
+                        TimetableCellReminder.cellKey(
+                            week: $0.week,
+                            dayOfWeek: $0.dayOfWeek,
+                            period: $0.period
+                        ),
+                        $0
+                    )
+                },
             uniquingKeysWith: { first, _ in first }
         )
         let cellRemindersByDay = Dictionary(
@@ -431,8 +494,10 @@ struct TimetableGridSnapshot {
     }
 
     func note(for course: TimetableCourseRenderValue, week: Int) -> String? {
-        let occurrenceText = occurrenceNotesByKey[course.occurrenceKey(week: week)]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let occurrenceText = (
+            occurrenceNotesByKey[course.occurrenceKey(week: week)]
+                ?? occurrenceNotesByKey[course.legacyOccurrenceKey(week: week)]
+        )?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let occurrenceText, !occurrenceText.isEmpty {
             return occurrenceText
         }
@@ -484,6 +549,8 @@ final class TimetableGridSnapshotCache {
             cellReminders: input.cellReminders,
             hidesWeekends: signature.hidesWeekends,
             totalWeeks: totalWeeks,
+            courseWeekProjections: input.courseWeekProjections,
+            cellReminderProjections: input.cellReminderProjections,
             signature: signature
         )
         cachedSnapshot = snapshot

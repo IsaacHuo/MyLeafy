@@ -21,6 +21,12 @@ type ExportRequest = {
   sort?: { field?: string; order?: string };
 };
 
+type DenoRuntime = {
+  serve(handler: (request: Request) => Response | Promise<Response>): void;
+};
+
+const denoRuntime = (globalThis as unknown as { Deno: DenoRuntime }).Deno;
+
 type ExportConfig = {
   table: string;
   columns: readonly string[];
@@ -50,7 +56,7 @@ const configs: Record<string, ExportConfig> = {
   "audit-logs": config("admin_audit_logs", ["id", "admin_id", "action", "target_type", "target_id", "outcome", "duration_ms", "error_code", "ip_address", "created_at"], undefined, "action"),
 };
 
-Deno.serve(async (request) => {
+denoRuntime.serve(async (request: Request) => {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   const methodResponse = requirePost(request);
   if (methodResponse) return methodResponse;

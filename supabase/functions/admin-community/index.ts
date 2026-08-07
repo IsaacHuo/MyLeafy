@@ -23,6 +23,12 @@ type ActionRequest = {
   params?: Record<string, unknown> | null;
 };
 
+type DenoRuntime = {
+  serve(handler: (request: Request) => Response | Promise<Response>): void;
+};
+
+const denoRuntime = (globalThis as unknown as { Deno: DenoRuntime }).Deno;
+
 const postgraduateSourceKinds = [
   "admission_notice",
   "major_catalog",
@@ -172,7 +178,7 @@ function authorizeAction(context: AdminContext, metadata: AdminActionMetadata) {
   }
 }
 
-Deno.serve(async (request) => {
+denoRuntime.serve(async (request: Request) => {
   const methodResponse = requirePost(request);
   if (methodResponse) {
     return methodResponse;
