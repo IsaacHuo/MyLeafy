@@ -22,6 +22,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
     let axis: Axis
     let gridBody: GridBody
     let onFirstInteractiveLayout: () -> Void
+    let currentWeekProvider: () -> Int
 
     init(
         axisWidth: CGFloat,
@@ -37,6 +38,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         isAwayFromCurrentWeek: Binding<Bool>,
         containerID: String,
         onFirstInteractiveLayout: @escaping () -> Void = {},
+        currentWeekProvider: @escaping () -> Int = { SemesterConfig.currentWeek() },
         @ViewBuilder corner: () -> Corner,
         @ViewBuilder header: () -> Header,
         @ViewBuilder axis: () -> Axis,
@@ -59,6 +61,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         self.axis = axis()
         self.gridBody = body()
         self.onFirstInteractiveLayout = onFirstInteractiveLayout
+        self.currentWeekProvider = currentWeekProvider
     }
 
     func makeCoordinator() -> Coordinator {
@@ -514,7 +517,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         private func updateAwayFromCurrentWeek() {
             guard !isAnimatingToTarget else { return }
             let visibleWeek = week(for: bodyScrollView.contentOffset.x)
-            reportAwayFromCurrentWeek(visibleWeek != SemesterConfig.currentWeek())
+            reportAwayFromCurrentWeek(visibleWeek != parent.currentWeekProvider())
         }
 
         private func reportAwayFromCurrentWeek(_ isAway: Bool) {

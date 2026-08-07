@@ -762,7 +762,6 @@ struct CustomScheduleEditorSheet: View {
     @State private var scheduleDate: Date
     @State private var startTime: Date
     @State private var endTime: Date
-    @State private var hasEndTime: Bool
     @State private var operationAlert: LeafyOperationAlert?
 
     init(presentation: CustomScheduleEditorPresentation) {
@@ -782,15 +781,23 @@ struct CustomScheduleEditorSheet: View {
         let minutes = initialMode == .importantDate
             ? event?.minutesBefore ?? 0
             : context.reminder?.minutesBefore ?? 0
+        let slot = TimetablePeriodSchedule.slot(for: context.period)
+        let calendar = Calendar.current
+        let tappedCellStartDate = slot.flatMap {
+            calendar.date(bySettingHour: $0.startHour, minute: $0.startMinute, second: 0, of: context.date)
+        }
+        let tappedCellEndDate = slot.flatMap {
+            calendar.date(bySettingHour: $0.endHour, minute: $0.endMinute, second: 0, of: context.date)
+        }
         let startDate = initialMode == .importantDate
             ? event?.startsAt ?? Date()
             : context.reminder?.resolvedStartDate
-                ?? TimetablePeriodSchedule.startDate(week: context.week, dayOfWeek: context.day, period: context.period)
+                ?? tappedCellStartDate
                 ?? context.date
         let endDate = initialMode == .importantDate
             ? event?.endsAt ?? startDate.addingTimeInterval(45 * 60)
             : context.reminder?.resolvedEndDate
-                ?? TimetablePeriodSchedule.endDate(week: context.week, dayOfWeek: context.day, period: context.period)
+                ?? tappedCellEndDate
                 ?? startDate.addingTimeInterval(45 * 60)
         _title = State(initialValue: initialTitle)
         _location = State(initialValue: initialLocation)
@@ -800,7 +807,6 @@ struct CustomScheduleEditorSheet: View {
         _scheduleDate = State(initialValue: startDate)
         _startTime = State(initialValue: startDate)
         _endTime = State(initialValue: endDate)
-        _hasEndTime = State(initialValue: initialMode == .timetable || event?.endsAt != nil)
     }
 
     var body: some View {
@@ -818,41 +824,6 @@ struct CustomScheduleEditorSheet: View {
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .leafyCardStyle()
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("日程时间")
-                            .leafyHeadline()
-
-                        if canSelectScheduleDate {
-                            DatePicker("日期", selection: $scheduleDate, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                        } else {
-                            scheduleInfoRow(title: "周次", value: weekText, icon: "calendar")
-                        }
-
-                        scheduleInfoRow(title: "日期", value: DateFormatters.header.string(from: scheduleDate), icon: "calendar.badge.clock")
-
-                        DatePicker("开始时间", selection: $startTime, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.compact)
-
-                        Toggle("设置结束时间", isOn: $hasEndTime)
-
-                        if hasEndTime {
-                            DatePicker("结束时间", selection: $endTime, displayedComponents: .hourAndMinute)
-                                .datePickerStyle(.compact)
-                        }
-
-                        scheduleInfoRow(title: "显示位置", value: placementText, icon: placementSystemImage)
-
-                        if let validationMessage {
-                            Text(validationMessage)
-                                .microCaption()
-                                .foregroundStyle(AppTheme.warning)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(18)
                     .leafyCardStyle()
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -882,6 +853,35 @@ struct CustomScheduleEditorSheet: View {
                         Text("日程只保存在本机。开启提醒后，会按所选开始时间创建本地通知。")
                             .microCaption()
                             .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .padding(18)
+                    .leafyCardStyle()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("日程时间")
+                            .leafyHeadline()
+
+                        if canSelectScheduleDate {
+                            DatePicker("日期", selection: $scheduleDate, displayedComponents: .date)
+                                .datePickerStyle(.compact)
+                        } else {
+                            scheduleInfoRow(title: "周次", value: weekText, icon: "calendar")
+                        }
+
+                        scheduleInfoRow(title: "日期", value: DateFormatters.header.string(from: scheduleDate), icon: "calendar.badge.clock")
+
+                        DatePicker("开始时间", selection: $startTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.compact)
+
+                        DatePicker("结束时间", selection: $endTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.compact)
+
+                        if let validationMessage {
+                            Text(validationMessage)
+                                .microCaption()
+                                .foregroundStyle(AppTheme.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(18)
                     .leafyCardStyle()
@@ -952,7 +952,7 @@ struct CustomScheduleEditorSheet: View {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return true
         }
-        return hasEndTime && scheduleEndDate <= scheduleStartDate
+        return scheduleEndDate <= scheduleStartDate
     }
 
     private var navigationTitle: String {
@@ -1007,23 +1007,14 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private var selectedPeriodRange: ClosedRange<Int>? {
-        let effectiveEndDate = hasEndTime ? scheduleEndDate : scheduleStartDate.addingTimeInterval(45 * 60)
-        return TimetablePeriodSchedule.periodRange(overlapping: scheduleStartDate, endDate: effectiveEndDate)
+        TimetablePeriodSchedule.periodRange(overlapping: scheduleStartDate, endDate: scheduleEndDate)
     }
 
     private var validationMessage: String? {
-        if hasEndTime && scheduleEndDate <= scheduleStartDate {
+        if scheduleEndDate <= scheduleStartDate {
             return L10n.text("结束时间需要晚于开始时间。", language: leafyLanguage)
         }
         return nil
-    }
-
-    private var placementText: String {
-        selectedWeekAndDay == nil ? "倒计时" : "课表显示"
-    }
-
-    private var placementSystemImage: String {
-        selectedWeekAndDay == nil ? "timer" : "calendar.badge.clock"
     }
 
     @MainActor
@@ -1041,7 +1032,7 @@ struct CustomScheduleEditorSheet: View {
         guard !trimmed.isEmpty,
               let weekAndDay = selectedWeekAndDay,
               let periodRange = selectedPeriodRange,
-              !hasEndTime || scheduleEndDate > scheduleStartDate
+              scheduleEndDate > scheduleStartDate
         else { return }
         let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1063,7 +1054,7 @@ struct CustomScheduleEditorSheet: View {
             existing.location = TimetableCellReminder.normalizedOptionalText(trimmedLocation)
             existing.note = TimetableCellReminder.normalizedOptionalText(trimmedNote)
             existing.startsAt = scheduleStartDate
-            existing.endsAt = hasEndTime ? scheduleEndDate : nil
+            existing.endsAt = scheduleEndDate
             existing.minutesBefore = reminderMinutes
             existing.updatedAt = Date()
             record = existing
@@ -1077,7 +1068,7 @@ struct CustomScheduleEditorSheet: View {
                 location: trimmedLocation,
                 note: trimmedNote,
                 startsAt: scheduleStartDate,
-                endsAt: hasEndTime ? scheduleEndDate : nil,
+                endsAt: scheduleEndDate,
                 minutesBefore: reminderMinutes
             )
             modelContext.insert(newRecord)
@@ -1110,7 +1101,7 @@ struct CustomScheduleEditorSheet: View {
     private func saveImportantDate() async {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
-              !hasEndTime || scheduleEndDate > scheduleStartDate
+              scheduleEndDate > scheduleStartDate
         else { return }
 
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
@@ -1119,7 +1110,7 @@ struct CustomScheduleEditorSheet: View {
             id: presentation.importantDateEvent?.id ?? UUID().uuidString,
             title: trimmed,
             startsAt: scheduleStartDate,
-            endsAt: hasEndTime ? scheduleEndDate : nil,
+            endsAt: scheduleEndDate,
             location: location,
             note: noteText,
             minutesBefore: reminderMinutes

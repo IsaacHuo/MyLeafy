@@ -1073,6 +1073,9 @@ struct TimetableView: View {
                             onFirstInteractiveLayout: {
                                 isTimetableInteractivelyLaidOut = true
                             },
+                            currentWeekProvider: {
+                                currentCalendarPage
+                            },
                             corner: {
                                 cornerHeader
                                     .frame(width: axisWidth, height: headerHeight)
