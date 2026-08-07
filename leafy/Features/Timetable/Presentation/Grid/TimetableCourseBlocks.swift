@@ -814,19 +814,6 @@ struct CustomScheduleEditorSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.card) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(navigationTitle)
-                            .title1()
-
-                        Text(sheetSubtitle)
-                            .leafySubheadline()
-                            .foregroundStyle(AppTheme.secondaryText)
-
-                    }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .leafyCardStyle()
-
-                    VStack(alignment: .leading, spacing: 12) {
                         Text("日程信息")
                             .leafyHeadline()
 
@@ -982,9 +969,6 @@ struct CustomScheduleEditorSheet: View {
         true
     }
 
-    private var sheetSubtitle: String {
-        "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学期内时，还会同时显示在课表。"
-    }
 
     private var canDelete: Bool {
         reminderRecord != nil || presentation.importantDateEvent != nil
