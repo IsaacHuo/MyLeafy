@@ -138,6 +138,8 @@ private struct ScheduleSidebar: View {
 
     @Binding var selection: ScheduleDestination?
     var presentation: Presentation = .sidebar
+    @Query private var memos: [ScheduleMemo]
+    @State private var selectedStatisticsDate: Date?
 
     private var destinations: [ScheduleDestination] {
         ScheduleDestination.allCases.filter {
@@ -157,11 +159,37 @@ private struct ScheduleSidebar: View {
                     .listStyle(.sidebar)
             }
         }
+        .leafySheet(isPresented: Binding(
+            get: { selectedStatisticsDate != nil },
+            set: { if !$0 { selectedStatisticsDate = nil } }
+        )) {
+            NavigationStack {
+                ScheduleMemoDayView(date: selectedStatisticsDate ?? Date())
+            }
+        }
     }
 
     private var sidebarList: some View {
         List(selection: $selection) {
-            row(.statistics)
+            if presentation == .modal {
+                Section {
+                    ScheduleMemoStatisticsSummary(
+                        statistics: .make(memos: memos),
+                        compact: true,
+                        onSelectDate: { selectedStatisticsDate = $0 }
+                    )
+                    .listRowInsets(EdgeInsets(
+                        top: AppSpacing.compact,
+                        leading: AppSpacing.page,
+                        bottom: AppSpacing.compact,
+                        trailing: AppSpacing.page
+                    ))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            } else {
+                row(.statistics)
+            }
 
             Section("记录") {
                 row(.memos)
@@ -262,7 +290,7 @@ struct ScheduleMemoFeedView: View {
                         ScheduleMemoCard(
                             memo: memo,
                             images: memoImages(for: memo),
-                            linkedTitle: linkedTitle(for: memo),
+                            linkedSchedule: linkedSchedule(for: memo),
                             onTag: { selectedTag = $0 },
                             onEdit: { editingMemo = memo },
                             onConvert: { convertingMemo = memo },
@@ -277,7 +305,11 @@ struct ScheduleMemoFeedView: View {
             .padding(.vertical, AppSpacing.card)
         }
         .background(LeafyPageBackground())
-        .searchable(text: $searchText, prompt: "搜索正文或标签")
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "搜索随记"
+        )
         .safeAreaInset(edge: .bottom) {
             ScheduleMemoComposer()
         }
@@ -343,13 +375,34 @@ struct ScheduleMemoFeedView: View {
         }
     }
 
-    private func linkedTitle(for memo: ScheduleMemo) -> String? {
-        ScheduleMemoLinkResolver.title(
-            kind: memo.linkedScheduleKind,
-            stableID: memo.linkedScheduleID,
-            timetableTitles: Dictionary(uniqueKeysWithValues: reminders.map { ($0.id.uuidString, $0.title) }),
-            importantDateTitles: Dictionary(uniqueKeysWithValues: importantDates.map { ($0.id, $0.title) })
-        )
+    private func linkedSchedule(for memo: ScheduleMemo) -> ScheduleMemoLinkedSchedule? {
+        guard let kind = memo.linkedScheduleKind,
+              let stableID = memo.linkedScheduleID else { return nil }
+
+        switch kind {
+        case .timetableReminder:
+            guard let reminder = reminders.first(where: { $0.id.uuidString == stableID }) else {
+                return .missing
+            }
+            return ScheduleMemoLinkedSchedule(
+                title: reminder.title,
+                startsAt: reminder.resolvedStartDate,
+                endsAt: reminder.resolvedEndDate,
+                location: reminder.locationText,
+                isMissing: false
+            )
+        case .importantDate:
+            guard let event = importantDates.first(where: { $0.id == stableID }) else {
+                return .missing
+            }
+            return ScheduleMemoLinkedSchedule(
+                title: event.title,
+                startsAt: event.startsAt,
+                endsAt: event.endsAt,
+                location: event.locationText,
+                isMissing: false
+            )
+        }
     }
 
     private func memoImages(for memo: ScheduleMemo) -> [ScheduleMemoImage] {
@@ -376,13 +429,42 @@ struct ScheduleMemoFeedView: View {
     }
 }
 
+private struct ScheduleMemoLinkedSchedule {
+    let title: String
+    let startsAt: Date?
+    let endsAt: Date?
+    let location: String
+    let isMissing: Bool
+
+    static let missing = ScheduleMemoLinkedSchedule(
+        title: "原日程已删除",
+        startsAt: nil,
+        endsAt: nil,
+        location: "",
+        isMissing: true
+    )
+
+    private var deadline: Date? { endsAt ?? startsAt }
+
+    var countdownText: String? {
+        guard !isMissing, let deadline else { return nil }
+        guard deadline > Date() else { return "已截止" }
+        return CountdownEventRow.countdownDescription(for: deadline)
+    }
+
+    var deadlineText: String? {
+        guard !isMissing, let deadline else { return nil }
+        return "截止 \(DateFormatters.headerWithTime.string(from: deadline))"
+    }
+}
+
 private struct ScheduleMemoCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
     let memo: ScheduleMemo
     let images: [ScheduleMemoImage]
-    let linkedTitle: String?
+    let linkedSchedule: ScheduleMemoLinkedSchedule?
     let onTag: (String) -> Void
     let onEdit: () -> Void
     let onConvert: () -> Void
@@ -393,18 +475,7 @@ private struct ScheduleMemoCard: View {
     private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                if memo.isPinned {
-                    Image(systemName: "pin.fill")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.accent)
-                        .accessibilityLabel("已置顶")
-                }
-                Spacer()
-            }
-            .frame(minHeight: 24)
-
+        VStack(alignment: .leading, spacing: 10) {
             if !memo.body.isEmpty {
                 Text(memo.body)
                     .leafyBody()
@@ -453,36 +524,83 @@ private struct ScheduleMemoCard: View {
                 }
             }
 
-            if let linkedTitle {
-                Label(linkedTitle, systemImage: linkedTitle == "原日程已删除" ? "link.badge.plus" : "link")
-                    .microCaption()
-                    .foregroundStyle(linkedTitle == "原日程已删除" ? AppTheme.warning : AppTheme.secondaryText)
+            if let linkedSchedule {
+                linkedScheduleSummary(linkedSchedule)
             }
 
-            HStack {
-                Spacer()
+            HStack(spacing: 8) {
+                if memo.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.accent)
+                        .accessibilityLabel("已置顶")
+                }
                 Text(memo.createdAt.formatted(date: .abbreviated, time: .shortened))
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
+                Spacer()
+                actionsMenu
             }
         }
-        .padding(18)
+        .padding(14)
         .leafyCardStyle()
-        .overlay(alignment: .topTrailing) {
-            Menu {
-                Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { onPin() }
-                Button("编辑", systemImage: "pencil") { onEdit() }
-                Button(linkedTitle == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus") { onConvert() }
-                Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled") { onShareCard() }
-                Button("移到回收站", systemImage: "trash", role: .destructive) { onTrash() }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .padding(4)
-            .accessibilityLabel("随记操作")
+    }
+
+    private var actionsMenu: some View {
+        Menu {
+            Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { onPin() }
+            Button("编辑", systemImage: "pencil") { onEdit() }
+            Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus") { onConvert() }
+            Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled") { onShareCard() }
+            Button("移到回收站", systemImage: "trash", role: .destructive) { onTrash() }
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel("随记操作")
+    }
+
+    private func linkedScheduleSummary(_ schedule: ScheduleMemoLinkedSchedule) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(
+                    schedule.title,
+                    systemImage: schedule.isMissing ? "link.badge.plus" : "calendar.badge.clock"
+                )
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .foregroundStyle(schedule.isMissing ? AppTheme.warning : AppTheme.primaryText)
+
+                Spacer(minLength: 8)
+
+                if let countdownText = schedule.countdownText {
+                    Text(countdownText)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.accentEmphasis)
+                }
+            }
+
+            if let deadlineText = schedule.deadlineText {
+                HStack(spacing: 10) {
+                    Label(deadlineText, systemImage: "clock")
+                    if !schedule.location.isEmpty {
+                        Label(schedule.location, systemImage: "mappin")
+                            .lineLimit(1)
+                    }
+                }
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            AppTheme.accent(for: themeColorPreference)
+                .opacity(colorScheme == .dark ? 0.12 : 0.07),
+            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+        )
     }
 }
 
@@ -501,6 +619,7 @@ private struct ScheduleMemoComposer: View {
     @State private var draftImages: [ScheduleMemoDraftImage] = []
     @State private var errorMessage: String?
     @State private var errorTitle = "无法保存随记"
+    @FocusState private var isTextFieldFocused: Bool
 
     private var canSave: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draftImages.isEmpty
@@ -534,7 +653,7 @@ private struct ScheduleMemoComposer: View {
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 PhotosPicker(
                     selection: $photoItems,
                     maxSelectionCount: ScheduleMemoImageStore.maximumImageCount,
@@ -545,9 +664,10 @@ private struct ScheduleMemoComposer: View {
                 }
                 .accessibilityLabel("添加图片，最多三张")
 
-                TextField("写点什么… 用 #标签 整理", text: $text, axis: .vertical)
+                TextField("记点什么...", text: $text, axis: .vertical)
                     .lineLimit(1...3)
                     .padding(.vertical, 6)
+                    .focused($isTextFieldFocused)
 
                 Button {
                     Task {
@@ -599,7 +719,9 @@ private struct ScheduleMemoComposer: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .onDisappear { speech.stop() }
+        .onDisappear {
+            Task { await speech.stop() }
+        }
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
@@ -630,6 +752,7 @@ private struct ScheduleMemoComposer: View {
             speechBase = ""
             photoItems = []
             draftImages = []
+            isTextFieldFocused = false
         } catch {
             try? ScheduleMemoImageStore.deleteFiles(named: filenames)
             modelContext.rollback()
@@ -711,7 +834,7 @@ private struct ScheduleMemoReviewView: View {
                         ScheduleMemoCard(
                             memo: memo,
                             images: images.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
-                            linkedTitle: nil,
+                            linkedSchedule: nil,
                             onTag: { _ in },
                             onEdit: {},
                             onConvert: {},
@@ -784,36 +907,13 @@ private struct ScheduleMemoStatisticsView: View {
     @State private var selectedDate: Date?
 
     private var statistics: ScheduleMemoStatistics { .make(memos: memos) }
-    private let rows = Array(repeating: GridItem(.fixed(18), spacing: 5), count: 7)
 
     var body: some View {
         ScrollView {
-            VStack(spacing: AppSpacing.card) {
-                HStack(spacing: 10) {
-                    metric("随记", statistics.memoCount)
-                    metric("标签", statistics.tagCount)
-                    metric("记录天数", statistics.recordingDayCount)
-                }
-                AcademicDetailCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("最近 12 周").leafyHeadline()
-                        LazyHGrid(rows: rows, spacing: 5) {
-                            ForEach(statistics.activityDays) { day in
-                                Button { selectedDate = day.date } label: {
-                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(activityColor(day.count))
-                                        .frame(width: 18, height: 18)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("\(day.date.formatted(date: .long, time: .omitted))，\(day.count) 条随记")
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Text("颜色越深，表示当天记录越多。点按日期查看当天随记。")
-                            .microCaption().foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-            }
+            ScheduleMemoStatisticsSummary(
+                statistics: statistics,
+                onSelectDate: { selectedDate = $0 }
+            )
             .leafyAdaptiveContentWidth(maxWidth: 760)
             .padding(.vertical, AppSpacing.card)
         }
@@ -825,6 +925,45 @@ private struct ScheduleMemoStatisticsView: View {
             }
         }
     }
+}
+
+private struct ScheduleMemoStatisticsSummary: View {
+    let statistics: ScheduleMemoStatistics
+    var compact = false
+    let onSelectDate: (Date) -> Void
+
+    private let rows = Array(repeating: GridItem(.fixed(18), spacing: 5), count: 7)
+
+    var body: some View {
+        VStack(spacing: compact ? AppSpacing.compact : AppSpacing.card) {
+            HStack(spacing: 10) {
+                metric("随记", statistics.memoCount)
+                metric("标签", statistics.tagCount)
+                metric("记录天数", statistics.recordingDayCount)
+            }
+
+            AcademicDetailCard {
+                VStack(alignment: .leading, spacing: compact ? 10 : 14) {
+                    Text("最近 12 周").leafyHeadline()
+                    LazyHGrid(rows: rows, spacing: 5) {
+                        ForEach(statistics.activityDays) { day in
+                            Button { onSelectDate(day.date) } label: {
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(activityColor(day.count))
+                                    .frame(width: 18, height: 18)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(day.date.formatted(date: .long, time: .omitted))，\(day.count) 条随记")
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("颜色越深，表示当天记录越多。点按日期查看当天随记。")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+    }
 
     private func metric(_ title: String, _ value: Int) -> some View {
         VStack(spacing: 5) {
@@ -832,7 +971,7 @@ private struct ScheduleMemoStatisticsView: View {
             Text(title).microCaption().foregroundStyle(AppTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, compact ? 10 : 16)
         .leafyCardStyle()
     }
 
