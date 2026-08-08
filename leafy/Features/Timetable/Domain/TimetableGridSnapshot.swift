@@ -392,29 +392,28 @@ struct TimetableGridSnapshot {
             TimetableCellReminderRenderValue(reminder: $0, projection: cellReminderProjections[$0.id])
         }
 
-        let coursesByDay = Dictionary(grouping: courseValues) { course in
-            TimetableGridDayKey(week: 0, day: course.dayOfWeek)
+        var coursesByDay: [TimetableGridDayKey: [TimetableCourseRenderValue]] = [:]
+        let visibleDaySet = Set(visibleDays)
+        for course in courseValues where visibleDaySet.contains(course.dayOfWeek) {
+            for week in course.weeks where (1...totalWeeks).contains(week) {
+                coursesByDay[TimetableGridDayKey(week: week, day: course.dayOfWeek), default: []].append(course)
+            }
         }
         var layoutsByDay: [TimetableGridDayKey: [TimetableGridCourseLayout]] = [:]
         var occupiedPeriodsByDay: [TimetableGridDayKey: Set<Int>] = [:]
 
-        for week in 1...totalWeeks {
-            for day in visibleDays {
-                let key = TimetableGridDayKey(week: week, day: day)
-                let dayCourses = (coursesByDay[TimetableGridDayKey(week: 0, day: day)] ?? [])
-                    .filter { $0.weeks.contains(week) }
-                    .sorted { lhs, rhs in
-                        let lhsStart = lhs.duration.min() ?? Int.max
-                        let rhsStart = rhs.duration.min() ?? Int.max
-                        if lhsStart != rhsStart {
-                            return lhsStart < rhsStart
-                        }
-                        return lhs.displayCourseName.localizedCompare(rhs.displayCourseName) == .orderedAscending
-                    }
-                let layouts = TimetableGridCourseLayoutBuilder.layouts(for: dayCourses)
-                layoutsByDay[key] = layouts
-                occupiedPeriodsByDay[key] = Set(layouts.flatMap(\.course.duration))
+        for (key, courses) in coursesByDay {
+            let sortedCourses = courses.sorted { lhs, rhs in
+                let lhsStart = lhs.duration.min() ?? Int.max
+                let rhsStart = rhs.duration.min() ?? Int.max
+                if lhsStart != rhsStart {
+                    return lhsStart < rhsStart
+                }
+                return lhs.displayCourseName.localizedCompare(rhs.displayCourseName) == .orderedAscending
             }
+            let layouts = TimetableGridCourseLayoutBuilder.layouts(for: sortedCourses)
+            layoutsByDay[key] = layouts
+            occupiedPeriodsByDay[key] = Set(layouts.flatMap(\.course.duration))
         }
 
         let latestCellReminderByKey = Dictionary(

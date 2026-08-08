@@ -45,16 +45,24 @@ struct TimetableScheduleProjectionSnapshot {
             guard let week = calendarYear.pageIndex(containing: event.startsAt) else { return nil }
             let weekday = calendar.component(.weekday, from: event.startsAt)
             let day = ((weekday + 5) % 7) + 1
+            let effectiveEnd = event.endsAt.flatMap { $0 > event.startsAt ? $0 : nil }
+                ?? event.startsAt.addingTimeInterval(45 * 60)
             let period = TimetablePeriodSchedule.period(containing: event.startsAt)?.period
                 ?? TimetablePeriodSchedule.periodForFocus(containing: event.startsAt)?.period
                 ?? 1
+            let periodRange = TimetablePeriodSchedule.periodRange(
+                overlapping: event.startsAt,
+                endDate: effectiveEnd
+            )
             return TimetableCountdownProjection(
                 eventID: event.id,
                 title: event.title,
-                targetDate: event.startsAt,
+                startsAt: event.startsAt,
+                endsAt: effectiveEnd,
                 week: week,
                 dayOfWeek: day,
-                period: period
+                startPeriod: periodRange?.lowerBound ?? period,
+                endPeriod: periodRange?.upperBound ?? period
             )
         }
         .sorted { lhs, rhs in

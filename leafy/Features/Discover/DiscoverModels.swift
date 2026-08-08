@@ -720,10 +720,15 @@ typealias CustomCountdownEvent = CustomScheduleEvent
 struct TimetableCountdownProjection: Identifiable, Hashable {
     let eventID: String
     let title: String
-    let targetDate: Date
+    let startsAt: Date
+    let endsAt: Date
     let week: Int
     let dayOfWeek: Int
-    let period: Int
+    let startPeriod: Int
+    let endPeriod: Int
+
+    var targetDate: Date { startsAt }
+    var period: Int { startPeriod }
 
     var id: String {
         "\(eventID)-\(week)-\(dayOfWeek)-\(period)"
@@ -799,14 +804,19 @@ extension CustomScheduleEvent {
         let period = TimetablePeriodSchedule.period(containing: startsAt)?.period
             ?? TimetablePeriodSchedule.periodForFocus(containing: startsAt)?.period
             ?? 1
+        let effectiveEnd = endsAt.flatMap { $0 > startsAt ? $0 : nil }
+            ?? startsAt.addingTimeInterval(45 * 60)
+        let periodRange = TimetablePeriodSchedule.periodRange(overlapping: startsAt, endDate: effectiveEnd)
 
         return TimetableCountdownProjection(
             eventID: id,
             title: title,
-            targetDate: startsAt,
+            startsAt: startsAt,
+            endsAt: effectiveEnd,
             week: schedule.week,
             dayOfWeek: schedule.day,
-            period: period
+            startPeriod: periodRange?.lowerBound ?? period,
+            endPeriod: periodRange?.upperBound ?? period
         )
     }
 }

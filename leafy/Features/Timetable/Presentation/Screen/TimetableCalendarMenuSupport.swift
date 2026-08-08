@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated struct TimetableCalendarMenuModel {
     let academicYears: [TimetableCalendarMenuAcademicYear]
+    let currentSemesterID: String?
 
     init(
         timetable: CalendarYearTimetable,
@@ -14,8 +15,17 @@ nonisolated struct TimetableCalendarMenuModel {
             let academicYear: String
             let title: String
             let startDate: Date
-            var weeksByMonth: [Int: [TimetableCalendarMenuWeek]]
+            var weeks: [TimetableCalendarMenuWeek]
         }
+
+        let referencePhase = timetable.phase(for: referenceDate)
+        let resolvedCurrentSemesterID: String?
+        if case let .teaching(semesterID, _) = referencePhase {
+            resolvedCurrentSemesterID = semesterID
+        } else {
+            resolvedCurrentSemesterID = configurations.first(where: \.isActive)?.semesterID
+        }
+        currentSemesterID = resolvedCurrentSemesterID
 
         var semesterOrder: [String] = []
         var semesterAccumulators: [String: SemesterAccumulator] = [:]
@@ -23,7 +33,6 @@ nonisolated struct TimetableCalendarMenuModel {
         for (index, week) in timetable.weeks.enumerated() {
             guard case let .teaching(semesterID, weekNumber) = week.phase else { continue }
             let configuration = timetable.configuration(semesterID: semesterID)
-            let month = calendar.component(.month, from: week.referenceDate)
 
             if semesterAccumulators[semesterID] == nil {
                 semesterOrder.append(semesterID)
@@ -36,10 +45,10 @@ nonisolated struct TimetableCalendarMenuModel {
                         calendar: calendar
                     ),
                     startDate: week.referenceDate,
-                    weeksByMonth: [:]
+                    weeks: []
                 )
             }
-            semesterAccumulators[semesterID]?.weeksByMonth[month, default: []].append(
+            semesterAccumulators[semesterID]?.weeks.append(
                 TimetableCalendarMenuWeek(page: index + 1, weekNumber: weekNumber)
             )
         }
@@ -47,16 +56,10 @@ nonisolated struct TimetableCalendarMenuModel {
         var stagesByAcademicYear: [String: [TimetableCalendarMenuStage]] = [:]
         for semesterID in semesterOrder {
             guard let accumulator = semesterAccumulators[semesterID] else { continue }
-            let months = accumulator.weeksByMonth.keys.sorted().map { month in
-                TimetableCalendarMenuMonth(
-                    month: month,
-                    weeks: accumulator.weeksByMonth[month] ?? []
-                )
-            }
             let semester = TimetableCalendarMenuSemester(
                 semesterID: accumulator.semesterID,
                 title: accumulator.title,
-                months: months,
+                weeks: accumulator.weeks,
                 startDate: accumulator.startDate
             )
             stagesByAcademicYear[accumulator.academicYear, default: []].append(.semester(semester))
@@ -93,10 +96,18 @@ nonisolated struct TimetableCalendarMenuModel {
         academicYears = stagesByAcademicYear.map { academicYear, stages in
             TimetableCalendarMenuAcademicYear(
                 academicYear: academicYear,
-                stages: stages.sorted { $0.startDate < $1.startDate }
+                stages: stages.sorted { lhs, rhs in
+                    let lhsIsCurrent = lhs.semesterID == resolvedCurrentSemesterID
+                    let rhsIsCurrent = rhs.semesterID == resolvedCurrentSemesterID
+                    if lhsIsCurrent != rhsIsCurrent { return lhsIsCurrent }
+                    return lhs.startDate < rhs.startDate
+                }
             )
         }
         .sorted { lhs, rhs in
+            let lhsContainsCurrent = lhs.stages.contains { $0.semesterID == resolvedCurrentSemesterID }
+            let rhsContainsCurrent = rhs.stages.contains { $0.semesterID == resolvedCurrentSemesterID }
+            if lhsContainsCurrent != rhsContainsCurrent { return lhsContainsCurrent }
             let lhsStart = lhs.stages.first?.startDate ?? .distantFuture
             let rhsStart = rhs.stages.first?.startDate ?? .distantFuture
             if lhsStart != rhsStart { return lhsStart < rhsStart }
@@ -189,22 +200,20 @@ nonisolated enum TimetableCalendarMenuStage: Identifiable {
             return vacation.startDate
         }
     }
+
+    var semesterID: String? {
+        guard case let .semester(semester) = self else { return nil }
+        return semester.semesterID
+    }
 }
 
 nonisolated struct TimetableCalendarMenuSemester: Identifiable {
     let semesterID: String
     let title: String
-    let months: [TimetableCalendarMenuMonth]
+    let weeks: [TimetableCalendarMenuWeek]
     let startDate: Date
 
     var id: String { semesterID }
-}
-
-nonisolated struct TimetableCalendarMenuMonth: Identifiable {
-    let month: Int
-    let weeks: [TimetableCalendarMenuWeek]
-
-    var id: Int { month }
 }
 
 nonisolated struct TimetableCalendarMenuWeek: Identifiable {

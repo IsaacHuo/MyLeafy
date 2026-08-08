@@ -179,6 +179,104 @@ struct TimetableCurrentTimePosition {
     }
 }
 
+nonisolated enum TimetableRenderedWeekWindow {
+    static func pages(currentWeek: Int, pendingWeek: Int?, totalWeeks: Int) -> [Int] {
+        guard totalWeeks > 0 else { return [] }
+
+        var pages = Set<Int>()
+        appendNeighbors(of: currentWeek, totalWeeks: totalWeeks, to: &pages)
+        if let pendingWeek {
+            appendNeighbors(of: pendingWeek, totalWeeks: totalWeeks, to: &pages)
+        }
+        return pages.sorted()
+    }
+
+    private static func appendNeighbors(of page: Int, totalWeeks: Int, to pages: inout Set<Int>) {
+        let clampedPage = min(max(page, 1), totalWeeks)
+        for candidate in (clampedPage - 1)...(clampedPage + 1) where (1...totalWeeks).contains(candidate) {
+            pages.insert(candidate)
+        }
+    }
+}
+
+nonisolated struct TimetableScheduleBlockGeometry: Equatable {
+    let centerY: CGFloat
+    let height: CGFloat
+
+    static func make(
+        startDate: Date?,
+        endDate: Date?,
+        fallbackStartPeriod: Int,
+        fallbackEndPeriod: Int,
+        metrics: TimetableLayoutMetrics,
+        minimumHeight: CGFloat,
+        calendar: Calendar = .current
+    ) -> TimetableScheduleBlockGeometry {
+        let fallbackStart = yPosition(forPeriod: fallbackStartPeriod, metrics: metrics)
+        let fallbackEnd = yPosition(forPeriod: fallbackEndPeriod, metrics: metrics) + metrics.rowHeight
+
+        let rawStart: CGFloat
+        let rawEnd: CGFloat
+        if let startDate,
+           let endDate,
+           endDate > startDate,
+           let exactRange = exactRange(
+               startDate: startDate,
+               endDate: endDate,
+               metrics: metrics,
+               calendar: calendar
+           ) {
+            rawStart = exactRange.lowerBound
+            rawEnd = exactRange.upperBound
+        } else {
+            rawStart = fallbackStart
+            rawEnd = fallbackEnd
+        }
+
+        let inset = metrics.cardInset
+        let top = min(max(rawStart + inset, 0), metrics.gridHeight)
+        let availableHeight = max(rawEnd - rawStart - inset * 2, 1)
+        let resolvedHeight = min(max(availableHeight, minimumHeight), metrics.gridHeight)
+        let maxTop = max(metrics.gridHeight - resolvedHeight, 0)
+        let resolvedTop = min(top, maxTop)
+        return TimetableScheduleBlockGeometry(
+            centerY: resolvedTop + resolvedHeight * 0.5,
+            height: resolvedHeight
+        )
+    }
+
+    private static func exactRange(
+        startDate: Date,
+        endDate: Date,
+        metrics: TimetableLayoutMetrics,
+        calendar: Calendar
+    ) -> ClosedRange<CGFloat>? {
+        let start = TimetableCurrentTimePosition.yPosition(for: startDate, metrics: metrics, calendar: calendar)
+        let end = TimetableCurrentTimePosition.yPosition(for: endDate, metrics: metrics, calendar: calendar)
+        guard start != nil || end != nil else { return nil }
+
+        let resolvedStart = start ?? edgePosition(for: startDate, metrics: metrics, calendar: calendar)
+        let resolvedEnd = end ?? edgePosition(for: endDate, metrics: metrics, calendar: calendar)
+        guard resolvedEnd > resolvedStart else { return nil }
+        return resolvedStart...resolvedEnd
+    }
+
+    private static func edgePosition(
+        for date: Date,
+        metrics: TimetableLayoutMetrics,
+        calendar: Calendar
+    ) -> CGFloat {
+        guard let firstSlot = TimetablePeriodSchedule.slots.first else { return 0 }
+        let minutes = calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
+        let firstStart = firstSlot.startHour * 60 + firstSlot.startMinute
+        return minutes < firstStart ? 0 : metrics.gridHeight
+    }
+
+    private static func yPosition(forPeriod period: Int, metrics: TimetableLayoutMetrics) -> CGFloat {
+        CGFloat(max(period - 1, 0)) * (metrics.rowHeight + metrics.rowSpacing)
+    }
+}
+
 struct TimetableLayoutMetricsCacheKey: Equatable {
     let width: CGFloat
     let height: CGFloat

@@ -442,71 +442,80 @@ struct TimetableCellReminderBlockView: View {
 struct TimetableCountdownBlockView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
 
     let projection: TimetableCountdownProjection
     let height: CGFloat
     let width: CGFloat
 
     var body: some View {
-        HStack(alignment: .center, spacing: 3 * leafyControlScale) {
-            Image(systemName: "timer")
-                .font(.system(size: 6.8 * leafyControlScale, weight: .bold))
-                .foregroundStyle(AppTheme.warning)
+        VStack(alignment: .leading, spacing: 2.5 * leafyControlScale) {
+            HStack(alignment: .firstTextBaseline, spacing: 4 * leafyControlScale) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: iconFontSize, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentEmphasis)
 
-            VStack(alignment: .leading, spacing: 0.5 * leafyControlScale) {
                 Text(projection.title)
                     .font(.system(size: titleFontSize, weight: .semibold))
                     .foregroundStyle(AppTheme.primaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.64)
+                    .lineLimit(titleLineLimit)
+                    .minimumScaleFactor(0.72)
                     .allowsTightening(true)
-
-                if height > 22 * leafyControlScale {
-                    Text(countdownText)
-                        .font(.system(size: 5.8 * leafyControlScale, weight: .medium))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.62)
-                        .allowsTightening(true)
-                }
             }
 
-            Spacer(minLength: 0)
+            if height > 34 * leafyControlScale {
+                Text(timeRangeText)
+                    .font(.system(size: captionFontSize, weight: .medium))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .allowsTightening(true)
+            }
         }
-        .padding(.horizontal, 3.5 * leafyControlScale)
-        .frame(width: width, height: height, alignment: .leading)
+        .padding(.horizontal, 4.5 * leafyControlScale)
+        .padding(.vertical, 4 * leafyControlScale)
+        .frame(width: width, height: height, alignment: .topLeading)
         .background(countdownBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.small * 0.68, style: .continuous)
-                .stroke(AppTheme.warning.opacity(colorScheme == .dark ? 0.34 : 0.24), lineWidth: 1)
+            RoundedRectangle(cornerRadius: AppRadius.small * 0.72, style: .continuous)
+                .stroke(AppTheme.accent.opacity(colorScheme == .dark ? 0.28 : 0.18), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.small * 0.68, style: .continuous))
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0 : 0.04), radius: 2, y: 1)
-        .accessibilityLabel(L10n.text("重要日期 %@", language: AppLanguagePreference.current, projection.title))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.small * 0.72, style: .continuous))
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0 : 0.025), radius: 1, y: 0)
+        .accessibilityLabel("\(projection.title)，\(timeRangeText)")
     }
 
     private var titleFontSize: CGFloat {
-        (height < 24 * leafyControlScale ? 6.8 : 7.6) * leafyControlScale
+        (height < 36 * leafyControlScale ? 9.2 : 10.4) * leafyControlScale
+    }
+
+    private var iconFontSize: CGFloat {
+        (height < 36 * leafyControlScale ? 8.2 : 9.2) * leafyControlScale
+    }
+
+    private var captionFontSize: CGFloat {
+        (height < 42 * leafyControlScale ? 7.4 : 8.2) * leafyControlScale
+    }
+
+    private var titleLineLimit: Int {
+        height < 40 * leafyControlScale ? 1 : 2
     }
 
     private var countdownBackground: Color {
-        colorScheme == .dark ? AppTheme.warning.opacity(0.24) : AppTheme.warning.opacity(0.16)
+        if colorScheme == .dark {
+            return AppTheme.accent(for: themeColorPreference).opacity(0.3)
+        }
+
+        return AppTheme.courseCardColor(
+            for: projection.eventID + projection.title,
+            themeColorPreferenceRaw: appThemeColorPreferenceRaw
+        )
+        .opacity(0.9)
     }
 
-    private var countdownText: String {
-        let now = Date()
-        let calendar = Calendar.current
-        let targetDay = calendar.startOfDay(for: projection.targetDate)
-        let today = calendar.startOfDay(for: now)
-        let days = calendar.dateComponents([.day], from: today, to: targetDay).day ?? 0
-
-        if projection.targetDate < now {
-            return "已到期"
-        }
-        if days == 0 {
-            return "今天 \(DateFormatters.timeOnly.string(from: projection.targetDate))"
-        }
-        return "还有 \(days) 天"
+    private var timeRangeText: String {
+        "\(DateFormatters.timeOnly.string(from: projection.startsAt))–\(DateFormatters.timeOnly.string(from: projection.endsAt))"
     }
 }
 
@@ -747,6 +756,18 @@ struct TimetableCellReminderSheet: View {
 }
 
 struct CustomScheduleEditorSheet: View {
+    private enum FocusedField: Hashable {
+        case title
+        case location
+        case note
+    }
+
+    private enum SaveOutcome {
+        case saved
+        case savedWithWarning(String)
+        case failed(String)
+    }
+
     let presentation: CustomScheduleEditorPresentation
 
     @Environment(\.dismiss) private var dismiss
@@ -763,6 +784,8 @@ struct CustomScheduleEditorSheet: View {
     @State private var startTime: Date
     @State private var endTime: Date
     @State private var operationAlert: LeafyOperationAlert?
+    @State private var isSaving = false
+    @FocusState private var focusedField: FocusedField?
 
     init(presentation: CustomScheduleEditorPresentation) {
         self.presentation = presentation
@@ -819,16 +842,23 @@ struct CustomScheduleEditorSheet: View {
 
                         TextField(titlePlaceholder, text: $title)
                             .leafyDisableAutocapitalization()
+                            .submitLabel(.next)
+                            .focused($focusedField, equals: .title)
+                            .onSubmit { focusedField = .location }
                             .padding(14)
                             .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
 
                         TextField("地点（可选）", text: $location)
                             .leafyDisableAutocapitalization()
+                            .submitLabel(.next)
+                            .focused($focusedField, equals: .location)
+                            .onSubmit { focusedField = .note }
                             .padding(14)
                             .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
 
                         TextField("备注（可选）", text: $noteText, axis: .vertical)
                             .lineLimit(3, reservesSpace: true)
+                            .focused($focusedField, equals: .note)
                             .padding(14)
                             .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
 
@@ -888,6 +918,7 @@ struct CustomScheduleEditorSheet: View {
                 }
                 .padding(AppSpacing.page)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(LeafyPageBackground())
             .navigationTitle(navigationTitle)
             .leafyInlineNavigationTitle()
@@ -899,10 +930,16 @@ struct CustomScheduleEditorSheet: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button {
                         Task { await saveCurrentItem() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("保存")
+                        }
                     }
-                    .disabled(isSaveDisabled)
+                    .disabled(isSaveDisabled || isSaving)
                 }
             }
             .leafyOperationAlert($operationAlert)
@@ -918,11 +955,8 @@ struct CustomScheduleEditorSheet: View {
               let periodRange = selectedPeriodRange else {
             return TimetableCellReminder.cellKey(week: context.week, dayOfWeek: context.day, period: context.period)
         }
-        return TimetableCellReminder.cellKey(
-            week: weekAndDay.week,
-            dayOfWeek: weekAndDay.day,
-            period: periodRange.lowerBound
-        )
+        _ = weekAndDay
+        return TimetableCellReminder.cellKey(date: scheduleDate, period: periodRange.lowerBound)
     }
 
     private var reminderRecord: TimetableCellReminder? {
@@ -1003,21 +1037,36 @@ struct CustomScheduleEditorSheet: View {
 
     @MainActor
     private func saveCurrentItem() async {
+        guard !isSaving else { return }
+        focusedField = nil
+        isSaving = true
+
+        let outcome: SaveOutcome
         if selectedWeekAndDay != nil, selectedPeriodRange != nil {
-            await saveReminder()
+            outcome = await saveReminder()
         } else {
-            await saveImportantDate()
+            outcome = await saveImportantDate()
+        }
+        isSaving = false
+
+        switch outcome {
+        case .saved:
+            dismiss()
+        case let .savedWithWarning(message):
+            operationAlert = .success(message, buttonTitle: "完成", action: { dismiss() })
+        case let .failed(message):
+            operationAlert = .failure(message)
         }
     }
 
     @MainActor
-    private func saveReminder() async {
+    private func saveReminder() async -> SaveOutcome {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let weekAndDay = selectedWeekAndDay,
               let periodRange = selectedPeriodRange,
               scheduleEndDate > scheduleStartDate
-        else { return }
+        else { return .failed(L10n.text("请检查日程标题和时间。", language: leafyLanguage)) }
         let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
@@ -1029,11 +1078,7 @@ struct CustomScheduleEditorSheet: View {
             existing.dayOfWeek = weekAndDay.day
             existing.period = periodRange.lowerBound
             existing.endPeriod = periodRange.upperBound
-            existing.cellKey = TimetableCellReminder.cellKey(
-                week: weekAndDay.week,
-                dayOfWeek: weekAndDay.day,
-                period: periodRange.lowerBound
-            )
+            existing.cellKey = TimetableCellReminder.cellKey(date: scheduleDate, period: periodRange.lowerBound)
             existing.title = trimmed
             existing.location = TimetableCellReminder.normalizedOptionalText(trimmedLocation)
             existing.note = TimetableCellReminder.normalizedOptionalText(trimmedNote)
@@ -1055,6 +1100,10 @@ struct CustomScheduleEditorSheet: View {
                 endsAt: scheduleEndDate,
                 minutesBefore: reminderMinutes
             )
+            newRecord.cellKey = TimetableCellReminder.cellKey(
+                date: scheduleDate,
+                period: periodRange.lowerBound
+            )
             modelContext.insert(newRecord)
             record = newRecord
         }
@@ -1068,25 +1117,23 @@ struct CustomScheduleEditorSheet: View {
             do {
                 scheduledCount = try await TimetableNotificationManager.applyReminder(for: record) ? 1 : 0
             } catch {
-                operationAlert = .success(
+                return .savedWithWarning(
                     L10n.text("日程已保存，但提醒未创建：%@", language: leafyLanguage, error.localizedDescription)
                 )
-                return
             }
-            operationAlert = .success(
-                saveSuccessMessage(reminderMinutes: reminderMinutes, scheduledCount: scheduledCount)
-            )
+            _ = scheduledCount
+            return .saved
         } catch {
-            operationAlert = .failure(error.localizedDescription)
+            return .failed(error.localizedDescription)
         }
     }
 
     @MainActor
-    private func saveImportantDate() async {
+    private func saveImportantDate() async -> SaveOutcome {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               scheduleEndDate > scheduleStartDate
-        else { return }
+        else { return .failed(L10n.text("请检查日程标题和时间。", language: leafyLanguage)) }
 
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
         var events = CustomScheduleStore.load()
@@ -1118,8 +1165,7 @@ struct CustomScheduleEditorSheet: View {
             do {
                 try modelContext.save()
             } catch {
-                operationAlert = .failure(error.localizedDescription)
-                return
+                return .failed(error.localizedDescription)
             }
         }
 
@@ -1127,15 +1173,12 @@ struct CustomScheduleEditorSheet: View {
         do {
             scheduledCount = try await TimetableNotificationManager.applyReminder(for: event) ? 1 : 0
         } catch {
-            operationAlert = .success(
+            return .savedWithWarning(
                 L10n.text("日程已保存，但提醒未创建：%@", language: leafyLanguage, error.localizedDescription)
             )
-            return
         }
-
-        operationAlert = .success(
-            saveImportantDateSuccessMessage(reminderMinutes: reminderMinutes, scheduledCount: scheduledCount)
-        )
+        _ = scheduledCount
+        return .saved
     }
 
     @MainActor
@@ -1183,26 +1226,6 @@ struct CustomScheduleEditorSheet: View {
         }
     }
 
-    private func saveSuccessMessage(reminderMinutes: Int, scheduledCount: Int) -> String {
-        if reminderMinutes <= 0 {
-            return L10n.text("日程已保存。", language: leafyLanguage)
-        }
-
-        return scheduledCount > 0
-            ? L10n.text("日程和提醒已保存。", language: leafyLanguage)
-            : L10n.text("日程已保存，但提醒时间已过，不会发送通知。", language: leafyLanguage)
-    }
-
-    private func saveImportantDateSuccessMessage(reminderMinutes: Int, scheduledCount: Int) -> String {
-        if reminderMinutes <= 0 {
-            return L10n.text("日程已保存。", language: leafyLanguage)
-        }
-
-        return scheduledCount > 0
-            ? L10n.text("日程和提醒已保存。", language: leafyLanguage)
-            : L10n.text("日程已保存，但提醒时间已过，不会发送通知。", language: leafyLanguage)
-    }
-
     private func removeSourceImportantDateIfNeeded() {
         guard let sourceEvent = presentation.importantDateEvent else { return }
         var events = CustomScheduleStore.load()
@@ -1248,12 +1271,21 @@ struct CustomScheduleEditorSheet: View {
 
     private func semesterWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
         let calendar = Calendar.current
-        let start = calendar.startOfDay(for: SemesterConfig.startOfSemesterDate)
         let current = calendar.startOfDay(for: date)
-        let days = calendar.dateComponents([.day], from: start, to: current).day ?? 0
-        guard days >= 0, days < SemesterConfig.supportedWeeks * 7 else { return nil }
+        guard calendar.component(.year, from: current) == calendar.component(.year, from: Date()) else {
+            return nil
+        }
+        let configurations = SemesterConfig.timelineConfigurations
+        let timetable = CalendarYearTimetable(
+            year: calendar.component(.year, from: current),
+            configurations: configurations,
+            semanticEvents: configurations.flatMap(\.calendarEvents),
+            referenceDate: current,
+            calendar: calendar
+        )
+        guard let week = timetable.pageIndex(containing: current) else { return nil }
         let weekday = calendar.component(.weekday, from: current)
-        return (days / 7 + 1, ((weekday + 5) % 7) + 1)
+        return (week, ((weekday + 5) % 7) + 1)
     }
 }
 

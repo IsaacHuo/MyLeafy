@@ -56,18 +56,23 @@ struct TimetableView: View {
     @State private var isExportSheetPresented = false
     @State private var isTimetableProcessingPresented = false
     @State private var isQuickAccessPresented = false
+    @State private var isWeekPickerPresented = false
     @State private var pendingQuickAccessAction: TimetableQuickAccessAction?
-    @State private var calendarYearConfigurations = SemesterConfig.timelineConfigurations
-    @State private var calendarYearTimetable = TimetableView.makeCalendarYearTimetable()
+    @State private var calendarYearConfigurations: [SemesterRuntimeConfig]
+    @State private var calendarYearTimetable: CalendarYearTimetable
+    @State private var calendarYearMenuModel: TimetableCalendarMenuModel
     @State private var timetableCourseWeekProjections: [UUID: TimetableCourseWeekProjection] = [:]
     @State private var timetableCellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
-    @State private var currentWeek: Int = TimetableView.makeCalendarYearTimetable().pageIndex(containing: Date()) ?? 1
-    @State private var scrollToWeek: Int? = TimetableView.makeCalendarYearTimetable().pageIndex(containing: Date()) ?? 1
+    @State private var currentWeek: Int
+    @State private var scrollToWeek: Int?
     @State private var isAwayFromCurrentSchedule = false
     @State private var selectedDaySummary: TimetableDaySelection?
     @State private var lastSyncAt = TimetableCacheMetadata.lastSyncAt
     @State private var lastFailureMessage = TimetableCacheMetadata.lastFailureMessage
     @State private var isTimetableInteractivelyLaidOut = false
+    @State private var hasInitializedTimetable = false
+    @State private var hasPerformedInitialAppearance = false
+    @State private var hasRunDeferredInitialWork = false
     @State private var timetableGridSnapshot: TimetableGridSnapshot?
     @State private var timetableGridSnapshotCache = TimetableGridSnapshotCache()
     @State private var timetableLayoutMetricsCache = TimetableLayoutMetricsCache()
@@ -75,13 +80,10 @@ struct TimetableView: View {
     @State private var timetableAgendaItemCache = TimetableAgendaItemCache()
     @State private var isWeatherAdvicePresented = false
     @State private var cachedTimetableWeather: TimetableWeatherSnapshot?
-    @State private var customCountdownEvents = CustomScheduleStore.load()
-    @State private var cachedExamArrangements = SchoolDataCache.loadExamSchedule()
+    @State private var customCountdownEvents: [CustomScheduleEvent]
+    @State private var cachedExamArrangements: [ExamArrangement]
     @State private var calendarEventSignature = AcademicCalendarEvents.displayEvents()
-    @State private var timetableScheduleProjectionSnapshot = TimetableScheduleProjectionSnapshot.make(
-        countdownEvents: CustomScheduleStore.load(),
-        exams: SchoolDataCache.loadExamSchedule()
-    )
+    @State private var timetableScheduleProjectionSnapshot: TimetableScheduleProjectionSnapshot
     @State private var timetableBackgroundImage: UIImage?
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
     @State private var timetableBackgroundConfiguration = TimetableBackgroundConfiguration.load()
@@ -138,6 +140,34 @@ struct TimetableView: View {
         )
     }
 
+    init() {
+        let configurations = SemesterConfig.timelineConfigurations
+        let timetable = Self.makeCalendarYearTimetable(configurations: configurations)
+        let currentPage = timetable.pageIndex(containing: Date()) ?? 1
+        let countdownEvents = CustomScheduleStore.load()
+        let exams = SchoolDataCache.loadExamSchedule()
+
+        _calendarYearConfigurations = State(initialValue: configurations)
+        _calendarYearTimetable = State(initialValue: timetable)
+        _calendarYearMenuModel = State(
+            initialValue: TimetableCalendarMenuModel(
+                timetable: timetable,
+                configurations: configurations
+            )
+        )
+        _currentWeek = State(initialValue: currentPage)
+        _scrollToWeek = State(initialValue: currentPage)
+        _customCountdownEvents = State(initialValue: countdownEvents)
+        _cachedExamArrangements = State(initialValue: exams)
+        _timetableScheduleProjectionSnapshot = State(
+            initialValue: TimetableScheduleProjectionSnapshot.make(
+                countdownEvents: countdownEvents,
+                exams: exams,
+                calendarYear: timetable
+            )
+        )
+    }
+
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
     }
@@ -167,13 +197,6 @@ struct TimetableView: View {
 
     private var selectedSemesterWeek: Int {
         selectedSemesterContext?.week ?? SemesterConfig.currentWeek()
-    }
-
-    private var calendarYearMenuModel: TimetableCalendarMenuModel {
-        TimetableCalendarMenuModel(
-            timetable: calendarYearTimetable,
-            configurations: calendarYearConfigurations
-        )
     }
 
     private var usesCustomTimetableBackground: Bool {
@@ -277,7 +300,7 @@ struct TimetableView: View {
     private var rootPresentationLifecycle: some View {
         rootNavigation
         .task {
-            await handleInitialTask()
+            await initializeTimetableIfNeeded()
             await maintainTimetableWeatherPreview()
         }
         .onAppear(perform: handleAppear)
@@ -387,6 +410,17 @@ struct TimetableView: View {
             )
             .presentationDetents([.medium, .large])
         }
+        .popover(isPresented: $isWeekPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            TimetableWeekPickerPanel(
+                model: calendarYearMenuModel,
+                selectedPage: currentWeek,
+                currentPage: currentCalendarPage,
+                onSelect: selectTimetableWeek
+            )
+            .frame(idealWidth: 420, idealHeight: 520)
+            .presentationDetents([.medium, .large])
+            .presentationCompactAdaptation(.sheet)
+        }
     }
 
     private var rootAlerts: some View {
@@ -432,25 +466,39 @@ struct TimetableView: View {
         return "课表、成绩和考试安排来自学校教务系统；课表和成绩缓存保存在本机，离线时仍可查看。社区资料和你主动发布的内容会保存到 \(AppBrand.displayName) 的社区服务。"
     }
 
-    private func handleInitialTask() async {
-        let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable()
-        await MainActor.run {
-            applySemesterRuntimeConfig(semesterConfig)
-        }
-        await refreshTimetableWeatherPreview()
+    @MainActor
+    private func initializeTimetableIfNeeded() async {
+        guard !hasInitializedTimetable else { return }
+        hasInitializedTimetable = true
+        syncCalendarYearDataProjections()
+        syncTimetableScheduleProjectionSnapshot()
         syncTimetableGridSnapshot()
         syncReturnButtonVisibility()
+
+        let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable()
+        applySemesterRuntimeConfig(semesterConfig)
+        await refreshTimetableWeatherPreview()
     }
 
     private func handleAppear() {
-        rebuildCalendarYearTimeline(positionsToToday: false)
-        syncTimetableGridSnapshot()
+        guard !hasPerformedInitialAppearance else {
+            syncReturnButtonVisibility()
+            return
+        }
+        hasPerformedInitialAppearance = true
         reloadTimetableBackground()
-        reloadCustomCountdownEvents()
-        reloadExamArrangements()
         syncReturnButtonVisibility()
-        publishWidgetSnapshot()
-        refreshScheduleReportNotifications()
+    }
+
+    private func handleFirstInteractiveLayout() {
+        isTimetableInteractivelyLaidOut = true
+        guard !hasRunDeferredInitialWork else { return }
+        hasRunDeferredInitialWork = true
+        Task { @MainActor in
+            await Task.yield()
+            publishWidgetSnapshot()
+            refreshScheduleReportNotifications()
+        }
     }
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
@@ -585,6 +633,7 @@ struct TimetableView: View {
     @MainActor
     private func applySemesterRuntimeConfig(_ config: SemesterRuntimeConfig) {
         _ = config
+        guard calendarYearConfigurations != SemesterConfig.timelineConfigurations else { return }
         rebuildCalendarYearTimeline(positionsToToday: true)
         publishWidgetSnapshot()
     }
@@ -593,6 +642,10 @@ struct TimetableView: View {
     private func rebuildCalendarYearTimeline(positionsToToday: Bool) {
         calendarYearConfigurations = SemesterConfig.timelineConfigurations
         calendarYearTimetable = Self.makeCalendarYearTimetable(
+            configurations: calendarYearConfigurations
+        )
+        calendarYearMenuModel = TimetableCalendarMenuModel(
+            timetable: calendarYearTimetable,
             configurations: calendarYearConfigurations
         )
         calendarEventSignature = AcademicCalendarEvents.displayEvents()
@@ -918,49 +971,24 @@ struct TimetableView: View {
         Button("回到") {
             returnToCurrentWeek()
         }
+        .frame(minWidth: 44, minHeight: 44)
         .tint(AppTheme.accentEmphasis(for: themeColorPreference))
+        .accessibilityLabel("回到本周")
+        .accessibilityHint("返回当前日期所在周")
     }
 
     private var toolbarWeekMenu: some View {
-        Menu {
-            ForEach(calendarYearMenuModel.academicYears) { academicYear in
-                Menu("\(academicYear.academicYear)学年") {
-                    ForEach(academicYear.stages) { stage in
-                        switch stage {
-                        case let .semester(semester):
-                            Menu(semester.title) {
-                                ForEach(semester.months) { month in
-                                    Menu("\(month.month)月") {
-                                        ForEach(month.weeks) { item in
-                                            Button(semesterWeekTitle(item.weekNumber)) {
-                                                selectTimetableWeek(item.page)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        case let .vacation(vacation):
-                            Button(vacation.title) {
-                                selectTimetableWeek(vacation.page)
-                            }
-                        }
-                    }
-                }
-            }
+        Button {
+            isWeekPickerPresented = true
         } label: {
-            HStack(spacing: 4) {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(weekTitle(currentWeek))
-                    if let context = weekContextTitle(currentWeek) {
-                        Text(context)
-                            .font(.caption2)
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-                Image(systemName: "chevron.down")
-            }
+            Text(weekTitle(currentWeek))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minHeight: 44)
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
         }
+        .accessibilityLabel(weekPickerAccessibilityLabel)
+        .accessibilityHint("选择要查看的教学周或假期")
     }
 
     private func weekTitle(_ page: Int) -> String {
@@ -975,29 +1003,28 @@ struct TimetableView: View {
         }
     }
 
-    private func weekContextTitle(_ page: Int) -> String? {
-        guard let week = calendarYearTimetable.week(atPageIndex: page),
-              case let .teaching(semesterID, _) = week.phase else { return nil }
-        let currentPhase = calendarYearTimetable.phase(for: Date())
-        if case let .teaching(currentSemesterID, _) = currentPhase,
-           currentSemesterID == semesterID {
-            return nil
+    private var weekPickerAccessibilityLabel: String {
+        guard let week = currentTimelineWeek else { return weekTitle(currentWeek) }
+        switch week.phase {
+        case let .teaching(semesterID, weekNumber):
+            let startDate = calendarYearTimetable.configuration(semesterID: semesterID)?.semesterStartDate
+            let academicYear = TimetableCalendarMenuModel.academicYearTitle(semesterID: semesterID)
+            let semester = TimetableCalendarMenuModel.semesterSeasonTitle(
+                semesterID: semesterID,
+                semesterStartDate: startDate
+            )
+            return "\(academicYear)学年，\(semester)，第 \(weekNumber) 周"
+        case let .vacation(_, category):
+            return TimetableCalendarMenuModel.vacationTitle(category: category)
+        case .unconfigured:
+            return shortWeekDateRange(week)
         }
-        return teachingStageTitle(semesterID: semesterID)
-    }
-
-    private func teachingStageTitle(semesterID: String) -> String {
-        let startDate = calendarYearTimetable.configuration(semesterID: semesterID)?.semesterStartDate
-        return "\(TimetableCalendarMenuModel.academicYearTitle(semesterID: semesterID)) · \(TimetableCalendarMenuModel.semesterSeasonTitle(semesterID: semesterID, semesterStartDate: startDate))"
-    }
-
-    private func semesterWeekTitle(_ weekNumber: Int) -> String {
-        L10n.text("第 %d 周", language: leafyLanguage, weekNumber)
     }
 
     private func selectTimetableWeek(_ page: Int) {
         currentWeek = page
         scrollToWeek = page
+        isWeekPickerPresented = false
         syncReturnButtonVisibility(for: page)
     }
 
@@ -1071,7 +1098,7 @@ struct TimetableView: View {
                             isAwayFromCurrentWeek: $isAwayFromCurrentSchedule,
                             containerID: "continuous-timetable",
                             onFirstInteractiveLayout: {
-                                isTimetableInteractivelyLaidOut = true
+                                handleFirstInteractiveLayout()
                             },
                             currentWeekProvider: {
                                 currentCalendarPage
@@ -1151,7 +1178,7 @@ struct TimetableView: View {
                     case .agendaList:
                         timetableAgendaList(gridSnapshot: gridSnapshot)
                             .onAppear {
-                                isTimetableInteractivelyLaidOut = true
+                                handleFirstInteractiveLayout()
                                 scrollToWeek = nil
                                 syncReturnButtonVisibility(for: currentWeek)
                             }
@@ -1290,6 +1317,7 @@ struct TimetableView: View {
         let reminders = gridSnapshot.cellReminders(week: week, day: day)
         let reminderPeriods = Set(reminders.flatMap { Array($0.displayPeriodRange) })
         let countdowns = metadata.countdowns
+        let countdownPeriods = Set(countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) })
         let exams = metadata.exams
 
         return ZStack(alignment: .topLeading) {
@@ -1304,7 +1332,8 @@ struct TimetableView: View {
                             return value.location.y >= minY && value.location.y <= minY + metrics.rowHeight
                         }),
                         !occupiedPeriods.contains(period),
-                        !reminderPeriods.contains(period) else { return }
+                        !reminderPeriods.contains(period),
+                        !countdownPeriods.contains(period) else { return }
 
                         selectedCellReminderContext = TimetableCellReminderContext(
                             week: week,
@@ -1320,7 +1349,9 @@ struct TimetableView: View {
                 .accessibilityHidden(true)
 
             if let accessiblePeriod = (1...totalClasses).first(where: {
-                !occupiedPeriods.contains($0) && !reminderPeriods.contains($0)
+                !occupiedPeriods.contains($0)
+                    && !reminderPeriods.contains($0)
+                    && !countdownPeriods.contains($0)
             }) {
                 Color.clear
                     .frame(width: 1, height: 1)
@@ -1341,17 +1372,22 @@ struct TimetableView: View {
             }
 
             ForEach(reminders) { reminder in
-                let blockHeight = cellReminderHeight(for: reminder, metrics: metrics)
+                let geometry = scheduleBlockGeometry(
+                    startDate: reminder.resolvedStartDate,
+                    endDate: reminder.resolvedEndDate,
+                    fallbackStartPeriod: reminder.displayStartPeriod,
+                    fallbackEndPeriod: reminder.displayEndPeriod,
+                    metrics: metrics
+                )
                 let blockWidth = max(width - metrics.cardInset * 2, 1)
-                let spanHeight = cellReminderSpanHeight(for: reminder, metrics: metrics)
                 TimetableCellReminderBlockView(
                     renderValue: reminder,
-                    height: blockHeight,
+                    height: geometry.height,
                     width: blockWidth
                 )
                 .position(
                     x: width * 0.5,
-                    y: yPosition(forClass: reminder.displayStartPeriod, metrics: metrics) + spanHeight * 0.5
+                    y: geometry.centerY
                 )
                 .zIndex(2)
                 .onTapGesture {
@@ -1412,15 +1448,21 @@ struct TimetableView: View {
                 }
             }
 
-            ForEach(Array(countdowns.enumerated()), id: \.element.id) { index, countdown in
-                let blockHeight = countdownBlockHeight(metrics: metrics)
+            ForEach(countdowns) { countdown in
+                let geometry = scheduleBlockGeometry(
+                    startDate: countdown.startsAt,
+                    endDate: countdown.endsAt,
+                    fallbackStartPeriod: countdown.startPeriod,
+                    fallbackEndPeriod: countdown.endPeriod,
+                    metrics: metrics
+                )
                 let blockWidth = max(width - metrics.cardInset * 2, 1)
                 Button {
                     presentCustomScheduleEditor(for: countdown)
                 } label: {
                     TimetableCountdownBlockView(
                         projection: countdown,
-                        height: blockHeight,
+                        height: geometry.height,
                         width: blockWidth
                     )
                     .contentShape(
@@ -1430,7 +1472,7 @@ struct TimetableView: View {
                 .buttonStyle(.plain)
                 .position(
                     x: width * 0.5,
-                    y: countdownYPosition(for: countdown.period, index: index, height: blockHeight, metrics: metrics)
+                    y: geometry.centerY
                 )
                 .zIndex(3)
             }
@@ -1751,40 +1793,28 @@ struct TimetableView: View {
         syncReturnButtonVisibility(for: nextWeek)
     }
 
-    private func cellReminderHeight(metrics: TimetableLayoutMetrics) -> CGFloat {
-        max(metrics.rowHeight - metrics.cardInset * 2, metrics.rowHeight * 0.72)
-    }
-
-    private func cellReminderHeight(
-        for reminder: TimetableCellReminderRenderValue,
+    private func scheduleBlockGeometry(
+        startDate: Date?,
+        endDate: Date?,
+        fallbackStartPeriod: Int,
+        fallbackEndPeriod: Int,
         metrics: TimetableLayoutMetrics
-    ) -> CGFloat {
-        max(
-            cellReminderSpanHeight(for: reminder, metrics: metrics) - metrics.cardInset * 2,
-            metrics.rowHeight * 0.72
+    ) -> TimetableScheduleBlockGeometry {
+        TimetableScheduleBlockGeometry.make(
+            startDate: startDate,
+            endDate: endDate,
+            fallbackStartPeriod: fallbackStartPeriod,
+            fallbackEndPeriod: fallbackEndPeriod,
+            metrics: metrics,
+            minimumHeight: min(
+                18 * leafyControlScale,
+                max(metrics.rowHeight - metrics.cardInset * 2, 1)
+            )
         )
-    }
-
-    private func cellReminderSpanHeight(
-        for reminder: TimetableCellReminderRenderValue,
-        metrics: TimetableLayoutMetrics
-    ) -> CGFloat {
-        let periodCount = max(reminder.displayEndPeriod - reminder.displayStartPeriod + 1, 1)
-        return CGFloat(periodCount) * metrics.rowHeight + CGFloat(max(periodCount - 1, 0)) * metrics.rowSpacing
-    }
-
-    private func countdownBlockHeight(metrics: TimetableLayoutMetrics) -> CGFloat {
-        min(max(metrics.rowHeight * 0.46, 18 * leafyControlScale), metrics.rowHeight - metrics.cardInset * 2)
     }
 
     private func examBlockHeight(metrics: TimetableLayoutMetrics) -> CGFloat {
         min(max(metrics.rowHeight * 0.52, 20 * leafyControlScale), metrics.rowHeight - metrics.cardInset * 2)
-    }
-
-    private func countdownYPosition(for period: Int, index: Int, height: CGFloat, metrics: TimetableLayoutMetrics) -> CGFloat {
-        let base = yPosition(forClass: period, metrics: metrics) + metrics.rowHeight - metrics.cardInset - height * 0.5
-        let stackedOffset = CGFloat(index % 2) * min(height * 0.36, 8 * leafyControlScale)
-        return base - stackedOffset
     }
 
     private func examYPosition(for period: Int, index: Int, height: CGFloat, metrics: TimetableLayoutMetrics) -> CGFloat {
@@ -1940,8 +1970,12 @@ struct TimetableView: View {
         .accessibilityHidden(true)
     }
 
-    private var renderedTimetableWeeks: ClosedRange<Int> {
-        1...totalWeeks
+    private var renderedTimetableWeeks: [Int] {
+        TimetableRenderedWeekWindow.pages(
+            currentWeek: currentWeek,
+            pendingWeek: scrollToWeek,
+            totalWeeks: totalWeeks
+        )
     }
 
     private func timetableContentWidth(metrics: TimetableLayoutMetrics) -> CGFloat {
@@ -2328,4 +2362,154 @@ struct TimetableView: View {
         )
     }
 
+}
+
+private struct TimetableWeekPickerPanel: View {
+    let model: TimetableCalendarMenuModel
+    let selectedPage: Int
+    let currentPage: Int
+    let onSelect: (Int) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
+    private let columns = Array(
+        repeating: GridItem(.flexible(minimum: 64), spacing: AppSpacing.compact),
+        count: 4
+    )
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                    ForEach(model.academicYears) { academicYear in
+                        academicYearSection(academicYear)
+                    }
+                }
+                .padding(AppSpacing.page)
+            }
+            .background(LeafyPageBackground())
+            .navigationTitle("选择周次")
+            .leafyInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+            }
+        }
+    }
+
+    private func academicYearSection(_ academicYear: TimetableCalendarMenuAcademicYear) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.compact) {
+            Text("\(academicYear.academicYear)学年")
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+
+            ForEach(academicYear.stages) { stage in
+                switch stage {
+                case let .semester(semester):
+                    semesterSection(semester)
+                case let .vacation(vacation):
+                    vacationButton(vacation)
+                }
+            }
+        }
+    }
+
+    private func semesterSection(_ semester: TimetableCalendarMenuSemester) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.compact) {
+            HStack(spacing: AppSpacing.compact) {
+                Text(semester.title)
+                    .leafyHeadline()
+                if semester.semesterID == model.currentSemesterID {
+                    Text("当前学期")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                }
+            }
+
+            LazyVGrid(columns: columns, spacing: AppSpacing.compact) {
+                ForEach(semester.weeks) { week in
+                    weekButton(week, semester: semester)
+                }
+            }
+        }
+        .padding(16)
+        .leafyCardStyle()
+    }
+
+    private func weekButton(
+        _ week: TimetableCalendarMenuWeek,
+        semester: TimetableCalendarMenuSemester
+    ) -> some View {
+        let isSelected = week.page == selectedPage
+        let isCurrent = week.page == currentPage
+        let tint = AppTheme.accent(for: themeColorPreference)
+
+        return Button {
+            onSelect(week.page)
+        } label: {
+            VStack(spacing: 2) {
+                Text("第 \(week.weekNumber) 周")
+                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                Text(isCurrent ? "本周" : " ")
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : AppTheme.secondaryText)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
+            .background(
+                isSelected ? tint : AppTheme.fill,
+                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+            )
+            .overlay {
+                if isCurrent && !isSelected {
+                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        .stroke(tint, lineWidth: 1.5)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            "\(semester.title)，第 \(week.weekNumber) 周\(isCurrent ? "，本周" : "")\(isSelected ? "，已选择" : "")"
+        )
+        .accessibilityHint("跳转到这一周")
+    }
+
+    private func vacationButton(_ vacation: TimetableCalendarMenuVacation) -> some View {
+        let isSelected = vacation.page == selectedPage
+        let isCurrent = vacation.page == currentPage
+        let tint = AppTheme.accent(for: themeColorPreference)
+
+        return Button {
+            onSelect(vacation.page)
+        } label: {
+            HStack {
+                Label(vacation.title, systemImage: "sun.max")
+                    .leafyBody()
+                Spacer()
+                if isCurrent {
+                    Text("本周")
+                        .microCaption()
+                }
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.body.weight(.semibold))
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, 14)
+            .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
+            .background(
+                isSelected ? tint : AppTheme.fill,
+                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(vacation.title)\(isCurrent ? "，本周" : "")\(isSelected ? "，已选择" : "")")
+        .accessibilityHint("跳转到\(vacation.title)")
+    }
 }

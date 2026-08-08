@@ -108,6 +108,11 @@ final class CalendarYearTimetableTests: XCTestCase {
         XCTAssertEqual(page, 37)
         XCTAssertEqual(day, 2)
         XCTAssertEqual(snapshot.countdowns(week: page, day: day).map(\.title), ["Future event"])
+        let projection = try XCTUnwrap(snapshot.countdowns(week: page, day: day).first)
+        XCTAssertEqual(projection.startsAt, examStart)
+        XCTAssertEqual(projection.endsAt, examStart.addingTimeInterval(45 * 60))
+        XCTAssertEqual(projection.startPeriod, 1)
+        XCTAssertEqual(projection.endPeriod, 1)
         XCTAssertEqual(snapshot.exams(week: page, day: day).map(\.name), ["Future exam"])
     }
 
@@ -138,7 +143,7 @@ final class CalendarYearTimetableTests: XCTestCase {
         XCTAssertEqual(withReference.phase(for: date("2026-01-03")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
     }
 
-    func testCalendarMenuGroupsOfficialWeeksByAcademicYearSemesterAndMonth() throws {
+    func testCalendarMenuListsOfficialWeeksDirectlyUnderSemester() throws {
         let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
         let timetable = CalendarYearTimetable(year: 2026, configurations: [spring], calendar: calendar)
         let menu = TimetableCalendarMenuModel(
@@ -154,9 +159,98 @@ final class CalendarYearTimetableTests: XCTestCase {
             return XCTFail("Expected a teaching semester stage")
         }
         XCTAssertEqual(semester.title, "春季学期")
-        XCTAssertEqual(semester.months.first?.month, 3)
-        XCTAssertEqual(semester.months.first?.weeks.map(\.weekNumber), [1, 2, 3, 4])
-        XCTAssertNotEqual(semester.months.first?.weeks.first?.page, semester.months.first?.weeks.first?.weekNumber)
+        XCTAssertEqual(semester.weeks.prefix(4).map(\.weekNumber), [1, 2, 3, 4])
+        XCTAssertNotEqual(semester.weeks.first?.page, semester.weeks.first?.weekNumber)
+    }
+
+    func testCalendarMenuPlacesCurrentSemesterFirst() throws {
+        let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
+        let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
+        let referenceDate = date("2026-09-14")
+        let timetable = CalendarYearTimetable(
+            year: 2026,
+            configurations: [spring, fall],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+        let menu = TimetableCalendarMenuModel(
+            timetable: timetable,
+            configurations: [spring, fall],
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(menu.currentSemesterID, fall.semesterID)
+        let firstAcademicYear = try XCTUnwrap(menu.academicYears.first)
+        guard case let .semester(firstSemester) = try XCTUnwrap(firstAcademicYear.stages.first) else {
+            return XCTFail("Expected the current semester first")
+        }
+        XCTAssertEqual(firstSemester.semesterID, fall.semesterID)
+    }
+
+    func testRenderedWeekWindowIncludesNeighborsAndPendingJumpTarget() {
+        XCTAssertEqual(
+            TimetableRenderedWeekWindow.pages(currentWeek: 1, pendingWeek: nil, totalWeeks: 53),
+            [1, 2]
+        )
+        XCTAssertEqual(
+            TimetableRenderedWeekWindow.pages(currentWeek: 53, pendingWeek: nil, totalWeeks: 53),
+            [52, 53]
+        )
+        XCTAssertEqual(
+            TimetableRenderedWeekWindow.pages(currentWeek: 10, pendingWeek: 40, totalWeeks: 53),
+            [9, 10, 11, 39, 40, 41]
+        )
+    }
+
+    func testScheduleGeometryUsesExactTimeAcrossRowsAndBreaks() {
+        let metrics = scheduleGeometryMetrics()
+
+        let fullPeriod = TimetableScheduleBlockGeometry.make(
+            startDate: time("08:00"),
+            endDate: time("08:45"),
+            fallbackStartPeriod: 1,
+            fallbackEndPeriod: 1,
+            metrics: metrics,
+            minimumHeight: 18,
+            calendar: calendar
+        )
+        XCTAssertEqual(fullPeriod.height, 96, accuracy: 0.001)
+        XCTAssertEqual(fullPeriod.centerY, 50, accuracy: 0.001)
+
+        let intoSecondPeriod = TimetableScheduleBlockGeometry.make(
+            startDate: time("08:00"),
+            endDate: time("09:00"),
+            fallbackStartPeriod: 1,
+            fallbackEndPeriod: 2,
+            metrics: metrics,
+            minimumHeight: 18,
+            calendar: calendar
+        )
+        XCTAssertEqual(intoSecondPeriod.height, 128.222, accuracy: 0.01)
+
+        let acrossBreak = TimetableScheduleBlockGeometry.make(
+            startDate: time("08:40"),
+            endDate: time("08:55"),
+            fallbackStartPeriod: 1,
+            fallbackEndPeriod: 2,
+            metrics: metrics,
+            minimumHeight: 18,
+            calendar: calendar
+        )
+        XCTAssertEqual(acrossBreak.centerY, 105, accuracy: 0.01)
+
+        let legacy = TimetableScheduleBlockGeometry.make(
+            startDate: nil,
+            endDate: nil,
+            fallbackStartPeriod: 1,
+            fallbackEndPeriod: 1,
+            metrics: metrics,
+            minimumHeight: 18,
+            calendar: calendar
+        )
+        XCTAssertEqual(legacy.height, 96, accuracy: 0.001)
+        XCTAssertEqual(legacy.centerY, 50, accuracy: 0.001)
     }
 
     func testCalendarMenuPlacesVacationDirectlyUnderItsAcademicYear() throws {
@@ -341,6 +435,38 @@ final class CalendarYearTimetableTests: XCTestCase {
             second: components.count > 2 ? components[2] : 0
         ))!
         return TimetableCurrentTimePosition.yPosition(for: date, metrics: metrics, calendar: calendar)
+    }
+
+    private func time(_ value: String) -> Date {
+        let components = value.split(separator: ":").map { Int($0)! }
+        return calendar.date(from: DateComponents(
+            calendar: calendar,
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 1,
+            day: 1,
+            hour: components[0],
+            minute: components[1]
+        ))!
+    }
+
+    private func scheduleGeometryMetrics() -> TimetableLayoutMetrics {
+        TimetableLayoutMetrics(
+            rowHeight: 100,
+            rowSpacing: 10,
+            cardInset: 2,
+            laneSpacing: 0,
+            dayColumnWidth: 100,
+            daySpacing: 0,
+            weekSpacing: 0,
+            gridHeight: 1_420,
+            allowsVerticalScroll: true,
+            weekStride: 0,
+            containerWidth: 100,
+            containerHeight: 1_420,
+            horizontalPadding: 0,
+            mode: .weekGrid
+        )
     }
 
     private func dateString(_ date: Date) -> String {
