@@ -41,6 +41,16 @@ struct LoginView: View {
     @State private var isSendingCustomSignUpCode = false
     @State private var customSignUpCodeCooldownRemaining = 0
     @State private var customSignUpCodeCooldownTask: Task<Void, Never>?
+    @State private var prefilledSchoolAccount: String?
+
+    init() {
+        if let credential = SchoolLoginCredentialStore.loadMostRecent(campusID: .bjfu) {
+            _username = State(initialValue: credential.account)
+            _password = State(initialValue: credential.password)
+            _selectedPortal = State(initialValue: credential.portal)
+            _prefilledSchoolAccount = State(initialValue: credential.account)
+        }
+    }
 
     private var scaledButtonHeight: CGFloat { buttonHeight * leafyControlScale }
     private var scaledFieldHeight: CGFloat { fieldHeight * leafyControlScale }
@@ -133,6 +143,7 @@ struct LoginView: View {
             .onChange(of: selectedPortal) { _, newValue in
                 guard !isCustomCampusSelected else { return }
                 schoolNetworkManager.currentPortal = newValue
+                restoreSchoolCredential(for: newValue)
                 Task { await fetchCaptcha() }
             }
             .onChange(of: scenePhase) { _, newPhase in
@@ -565,25 +576,53 @@ struct LoginView: View {
         customSignUpCode = ""
 
         if isCustomCampusSelected {
+            prefilledSchoolAccount = nil
+            username = ""
+            password = ""
             isCaptchaLoading = false
             captchaImage = nil
             sessionKey = ""
         } else {
             customSignUpCodeEmail = nil
             customSignUpCodePassword = nil
+            restoreSchoolCredential(for: selectedPortal)
             Task { await fetchCaptcha() }
         }
     }
 
     @MainActor
     private func handleUsernameChange(_ newValue: String) {
-        guard isCustomCampusSelected, let customSignUpCodeEmail else { return }
-        let normalizedEmail = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if normalizedEmail != customSignUpCodeEmail {
-            self.customSignUpCodeEmail = nil
-            self.customSignUpCodePassword = nil
-            self.customSignUpCode = ""
+        if isCustomCampusSelected {
+            guard let customSignUpCodeEmail else { return }
+            let normalizedEmail = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if normalizedEmail != customSignUpCodeEmail {
+                self.customSignUpCodeEmail = nil
+                self.customSignUpCodePassword = nil
+                self.customSignUpCode = ""
+            }
+            return
         }
+
+        guard let prefilledSchoolAccount else { return }
+        let normalizedAccount = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedAccount != prefilledSchoolAccount {
+            self.prefilledSchoolAccount = nil
+            password = ""
+        }
+    }
+
+    @MainActor
+    private func restoreSchoolCredential(for portal: SchoolPortal) {
+        guard let credential = SchoolLoginCredentialStore.load(campusID: .bjfu, portal: portal) else {
+            prefilledSchoolAccount = nil
+            username = ""
+            password = ""
+            return
+        }
+
+        prefilledSchoolAccount = credential.account
+        username = credential.account
+        password = credential.password
     }
 
     @MainActor

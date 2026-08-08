@@ -160,6 +160,7 @@ private struct SchoolReauthenticationSheet: View {
     @State private var isCaptchaLoading = false
     @State private var isLoggingIn = false
     @State private var errorMessage: String?
+    @State private var prefilledAccount: String?
 
     private var canSubmit: Bool {
         !isLoggingIn &&
@@ -174,7 +175,15 @@ private struct SchoolReauthenticationSheet: View {
         onAuthenticated: @escaping () -> Void
     ) {
         _networkManager = ObservedObject(wrappedValue: networkManager)
-        _account = State(initialValue: networkManager.authenticatedEduID ?? "")
+        let authenticatedAccount = networkManager.authenticatedEduID ?? ""
+        let credential = SchoolLoginCredentialStore.load(
+            campusID: networkManager.campusDescriptor.id,
+            portal: context.portal
+        )
+        let matchingCredential = credential?.account == authenticatedAccount ? credential : nil
+        _account = State(initialValue: authenticatedAccount)
+        _password = State(initialValue: matchingCredential?.password ?? "")
+        _prefilledAccount = State(initialValue: matchingCredential?.account)
         self.context = context
         self.onAuthenticated = onAuthenticated
     }
@@ -315,6 +324,18 @@ private struct SchoolReauthenticationSheet: View {
             .task {
                 await fetchCaptcha(resetError: true)
             }
+            .onChange(of: account) { _, newValue in
+                handleAccountChange(newValue)
+            }
+        }
+    }
+
+    private func handleAccountChange(_ newValue: String) {
+        guard let prefilledAccount else { return }
+        let normalizedAccount = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedAccount != prefilledAccount {
+            self.prefilledAccount = nil
+            password = ""
         }
     }
 

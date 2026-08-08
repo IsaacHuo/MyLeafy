@@ -126,12 +126,23 @@ extension SchoolNetworkManager {
             throw SchoolNetworkError.featureUnavailable("请先退出演示模式，再连接校园网登录教务系统。")
         }
 
+        let didLogin: Bool
         switch portal {
         case .undergraduate:
-            return try await performUndergraduateLogin(account: account, password: password, captcha: captcha)
+            didLogin = try await performUndergraduateLogin(account: account, password: password, captcha: captcha)
         case .graduate:
-            return try await performGraduateLogin(account: account, password: password, captcha: captcha, publicKey: key)
+            didLogin = try await performGraduateLogin(account: account, password: password, captcha: captcha, publicKey: key)
         }
+
+        if didLogin {
+            _ = SchoolLoginCredentialStore.save(
+                account: account,
+                password: password,
+                campusID: campusDescriptor.id,
+                portal: portal
+            )
+        }
+        return didLogin
     }
 
     private func performUndergraduateLogin(account: String, password: String, captcha: String) async throws -> Bool {

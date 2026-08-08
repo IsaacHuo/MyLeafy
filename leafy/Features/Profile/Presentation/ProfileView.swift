@@ -2060,6 +2060,14 @@ private struct CacheAndSyncView: View {
             return
         }
 
+        do {
+            try SchoolLoginCredentialStore.deleteAll()
+        } catch {
+            isClearing = false
+            operationAlert = .failure("教务登录凭据清除失败：\(error.localizedDescription)")
+            return
+        }
+
         TimetableNotificationManager.cancelAllCourseReminders(courses: courses)
         TimetableNotificationManager.cancelAllCellReminders(cellReminders)
         ScheduleReportNotificationManager.clearScheduledNotifications()

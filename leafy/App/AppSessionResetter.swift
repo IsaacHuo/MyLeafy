@@ -82,6 +82,9 @@ enum AppSessionResetter {
         attempt("社区草稿") {
             try LocalCommunityPostDraftRepository.shared.deleteAllDraftData()
         }
+        attempt("教务登录凭据") {
+            try SchoolLoginCredentialStore.deleteAll()
+        }
         CommunityPostCardGenerator.cleanupStaleRenderedFiles()
 
         SchoolDataCache.clearDiscoverCaches()
