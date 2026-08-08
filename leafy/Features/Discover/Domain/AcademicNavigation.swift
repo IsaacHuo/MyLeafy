@@ -119,12 +119,12 @@ nonisolated struct AcademicNavigationItem: Hashable, Sendable {
 
 nonisolated enum ScheduleDestination: String, CaseIterable, Identifiable, Hashable, Sendable {
     case memos
+    case scheduleHub
     case customSchedules
     case dailyReview
     case tags
     case statistics
     case scheduleReports
-    case yearOverview
     case trash
     case timetableProcessing
 

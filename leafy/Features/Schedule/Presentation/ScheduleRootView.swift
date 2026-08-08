@@ -8,12 +8,12 @@ extension ScheduleDestination {
     var title: String {
         switch self {
         case .memos: return "全部随记"
+        case .scheduleHub: return "日程"
         case .customSchedules: return "我的日程"
         case .dailyReview: return "每日回顾"
         case .tags: return "标签"
         case .statistics: return "记录统计"
         case .scheduleReports: return "日程推送"
-        case .yearOverview: return "年度视图"
         case .trash: return "回收站"
         case .timetableProcessing: return "课表处理"
         }
@@ -22,12 +22,12 @@ extension ScheduleDestination {
     var systemImage: String {
         switch self {
         case .memos: return "square.grid.2x2"
+        case .scheduleHub: return "calendar.day.timeline.left"
         case .customSchedules: return "calendar.badge.plus"
         case .dailyReview: return "sparkles"
         case .tags: return "number"
         case .statistics: return "chart.bar.xaxis"
         case .scheduleReports: return "bell.badge"
-        case .yearOverview: return "calendar"
         case .trash: return "trash"
         case .timetableProcessing: return "slider.horizontal.3"
         }
@@ -46,25 +46,40 @@ struct ScheduleRootView: View {
             if horizontalSizeClass == .regular {
                 NavigationSplitView {
                     ScheduleSidebar(selection: $regularSelection)
-                        .navigationTitle("日程")
+                        .navigationTitle("日迹")
                 } detail: {
                     NavigationStack {
                         destinationView(regularSelection ?? .memos)
+                            .toolbar {
+                                if regularSelection != .scheduleHub {
+                                    ToolbarItem(placement: .topBarLeading) {
+                                        Button("日程") { regularSelection = .scheduleHub }
+                                            .frame(minHeight: 44)
+                                            .accessibilityHint("打开个人日程选项")
+                                    }
+                                }
+                            }
                     }
                 }
             } else {
                 NavigationStack(path: $compactPath) {
                     ScheduleMemoFeedView()
-                        .navigationTitle("日程")
+                        .navigationTitle("日迹")
                         .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
+                            ToolbarItemGroup(placement: .topBarLeading) {
+                                Button("日程") {
+                                    compactPath.append(.scheduleHub)
+                                }
+                                .frame(minHeight: 44)
+                                .accessibilityHint("打开个人日程选项")
+
                                 Button {
                                     showsMenu = true
                                 } label: {
                                     Image(systemName: "line.3.horizontal")
                                         .frame(width: 44, height: 44)
                                 }
-                                .accessibilityLabel("打开日程菜单")
+                                .accessibilityLabel("打开日迹记录菜单")
                             }
                         }
                         .navigationDestination(for: ScheduleDestination.self) { destination in
@@ -97,9 +112,11 @@ struct ScheduleRootView: View {
         switch destination {
         case .memos:
             ScheduleMemoFeedView()
-                .navigationTitle("日程")
+                .navigationTitle("日迹")
+        case .scheduleHub:
+            ScheduleHubView(onSelect: openDestination)
         case .customSchedules:
-            CustomScheduleListView()
+            PersonalScheduleWeekView()
         case .dailyReview:
             ScheduleMemoReviewView()
         case .tags:
@@ -108,12 +125,18 @@ struct ScheduleRootView: View {
             ScheduleMemoStatisticsView()
         case .scheduleReports:
             ScheduleReportsView()
-        case .yearOverview:
-            ScheduleYearOverviewView()
         case .trash:
             ScheduleMemoTrashView()
         case .timetableProcessing:
             TimetableProcessingView()
+        }
+    }
+
+    private func openDestination(_ destination: ScheduleDestination) {
+        if horizontalSizeClass == .regular {
+            regularSelection = destination
+        } else {
+            compactPath.append(destination)
         }
     }
 
@@ -140,12 +163,6 @@ private struct ScheduleSidebar: View {
     var presentation: Presentation = .sidebar
     @Query private var memos: [ScheduleMemo]
     @State private var selectedStatisticsDate: Date?
-
-    private var destinations: [ScheduleDestination] {
-        ScheduleDestination.allCases.filter {
-            $0 != .timetableProcessing || ActiveCampusContext.identity?.isCustom == true
-        }
-    }
 
     var body: some View {
         Group {
@@ -197,12 +214,6 @@ private struct ScheduleSidebar: View {
                 row(.tags)
                 row(.trash)
             }
-            Section("日程") {
-                row(.customSchedules)
-                row(.scheduleReports)
-                row(.yearOverview)
-                if destinations.contains(.timetableProcessing) { row(.timetableProcessing) }
-            }
         }
     }
 
@@ -212,6 +223,54 @@ private struct ScheduleSidebar: View {
             .contentShape(Rectangle())
             .onTapGesture { selection = destination }
             .accessibilityAddTraits(selection == destination ? .isSelected : [])
+    }
+}
+
+private struct ScheduleHubView: View {
+    let onSelect: (ScheduleDestination) -> Void
+
+    var body: some View {
+        List {
+            Section {
+                destinationRow(
+                    .customSchedules,
+                    subtitle: "在独立周视图中安排和查看个人日程"
+                )
+                destinationRow(
+                    .scheduleReports,
+                    subtitle: "设置课程、考试和个人日程的本地推送"
+                )
+            }
+        }
+        .navigationTitle("日程")
+    }
+
+    private func destinationRow(
+        _ destination: ScheduleDestination,
+        subtitle: String
+    ) -> some View {
+        Button {
+            onSelect(destination)
+        } label: {
+            HStack(spacing: AppSpacing.compact) {
+                LeafyIconBadge(systemName: destination.systemImage)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(destination.title)
+                        .foregroundStyle(AppTheme.primaryText)
+                    Text(subtitle)
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 52)
+        .accessibilityHint("打开\(destination.title)")
     }
 }
 
@@ -1071,20 +1130,6 @@ private struct ScheduleMemoTrashView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-private struct ScheduleYearOverviewView: View {
-    @Environment(\.leafyLanguage) private var leafyLanguage
-
-    var body: some View {
-        TimetableTimeScopeView(
-            snapshot: TimetableTimeScopeSnapshot.make(
-                currentWeek: SemesterConfig.currentWeek(),
-                referenceDate: Date(),
-                language: leafyLanguage
-            )
-        )
     }
 }
 

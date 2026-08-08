@@ -178,7 +178,7 @@ final class GenericCampusLifecycleTests: XCTestCase {
         )
         XCTAssertEqual(
             ScheduleDestination.allCases,
-            [.memos, .customSchedules, .dailyReview, .tags, .statistics, .scheduleReports, .yearOverview, .trash, .timetableProcessing]
+            [.memos, .scheduleHub, .customSchedules, .dailyReview, .tags, .statistics, .scheduleReports, .trash, .timetableProcessing]
         )
     }
 

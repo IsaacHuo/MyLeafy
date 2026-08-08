@@ -364,7 +364,7 @@ struct TimetableView: View {
                 .presentationDetents([.medium, .large])
         }
         .leafySheet(item: $selectedCellReminderContext) { context in
-            TimetableCellReminderSheet(context: context)
+            CustomScheduleEditorSheet(presentation: .timetable(context))
                 .presentationDetents([.medium, .large])
         }
         .leafySheet(item: $selectedCustomScheduleEditor, onDismiss: reloadCustomCountdownEvents) { presentation in
@@ -1372,8 +1372,8 @@ struct TimetableView: View {
                     metrics: metrics
                 )
                 let blockWidth = max(width - metrics.cardInset * 2, 1)
-                TimetableCellReminderBlockView(
-                    renderValue: reminder,
+                PersonalScheduleBlockView(
+                    value: PersonalScheduleBlockValue(reminder: reminder),
                     height: geometry.height,
                     width: blockWidth
                 )
@@ -1452,8 +1452,8 @@ struct TimetableView: View {
                 Button {
                     presentCustomScheduleEditor(for: countdown)
                 } label: {
-                    TimetableCountdownBlockView(
-                        projection: countdown,
+                    PersonalScheduleBlockView(
+                        value: PersonalScheduleBlockValue(countdown: countdown),
                         height: geometry.height,
                         width: blockWidth
                     )
@@ -2362,6 +2362,7 @@ private struct TimetableWeekPickerPanel: View {
     let currentPage: Int
     let onSelect: (Int) -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.leafyLanguage) private var leafyLanguage
 
@@ -2395,31 +2396,29 @@ private struct TimetableWeekPickerPanel: View {
                 .padding(AppSpacing.page)
             }
             .background(LeafyPageBackground())
-            .navigationTitle("选择周次")
+            .navigationTitle("时间视图")
             .leafyInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+            }
         }
     }
 
-    @ViewBuilder
     private func academicYearSection(_ academicYear: TimetableCalendarMenuAcademicYear) -> some View {
-        let visibleStages = academicYear.stages.filter { stage in
-            guard case let .semester(semester) = stage else { return true }
-            return semester.title != "春季学期"
-        }
+        VStack(alignment: .leading, spacing: AppSpacing.compact) {
+            Text("\(academicYear.academicYear)学年")
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
 
-        if !visibleStages.isEmpty {
-            VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                Text("\(academicYear.academicYear)学年")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-
-                ForEach(visibleStages) { stage in
-                    switch stage {
-                    case let .semester(semester):
-                        semesterSection(semester)
-                    case let .vacation(vacation):
-                        vacationButton(vacation)
-                    }
+            ForEach(academicYear.stages) { stage in
+                switch stage {
+                case let .semester(semester):
+                    semesterSection(semester)
+                case let .vacation(vacation):
+                    vacationButton(vacation)
                 }
             }
         }

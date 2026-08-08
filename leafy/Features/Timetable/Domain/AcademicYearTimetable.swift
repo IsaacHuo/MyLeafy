@@ -16,7 +16,10 @@ nonisolated struct AcademicYearTimetable: Sendable {
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) {
-        let sortedConfigurations = configurations.sorted { $0.semesterStartDate < $1.semesterStartDate }
+        let sortedConfigurations = configurations.sorted {
+            Self.semesterStartDate(for: $0, calendar: calendar)
+                < Self.semesterStartDate(for: $1, calendar: calendar)
+        }
         let academicYear = Self.resolveAcademicYear(
             for: referenceDate,
             configurations: sortedConfigurations,
@@ -120,7 +123,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
             guard let occurrenceDate = calendar.date(
                 byAdding: .day,
                 value: (semesterWeek - 1) * 7 + (course.dayOfWeek - 1),
-                to: configuration.semesterStartDate
+                to: Self.semesterStartDate(for: configuration, calendar: calendar)
             ) else { return false }
             return contains(occurrenceDate)
         }
@@ -137,7 +140,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
         calendar: Calendar
     ) -> AcademicYearWeekPhase {
         if let configuration = configurations.reversed().first(where: { configuration in
-            let start = calendar.startOfDay(for: configuration.semesterStartDate)
+            let start = Self.semesterStartDate(for: configuration, calendar: calendar)
             let end = calendar.date(
                 byAdding: .day,
                 value: 7 * SemesterConfig.timetableWeekCapacity,
@@ -145,7 +148,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
             )!
             return date >= start && date < end
         }) {
-            let start = calendar.startOfDay(for: configuration.semesterStartDate)
+            let start = Self.semesterStartDate(for: configuration, calendar: calendar)
             let days = calendar.dateComponents([.day], from: start, to: date).day ?? 0
             return .teaching(
                 semesterID: configuration.semesterID,
@@ -168,7 +171,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
         let referenceDay = calendar.startOfDay(for: referenceDate)
 
         if let configuration = configurations.reversed().first(where: { configuration in
-            let start = calendar.startOfDay(for: configuration.semesterStartDate)
+            let start = Self.semesterStartDate(for: configuration, calendar: calendar)
             let end = calendar.date(
                 byAdding: .day,
                 value: 7 * SemesterConfig.timetableWeekCapacity,
@@ -192,7 +195,9 @@ nonisolated struct AcademicYearTimetable: Sendable {
             return academicYear
         }
 
-        if let configuration = configurations.last(where: { $0.semesterStartDate <= referenceDay }),
+        if let configuration = configurations.last(where: {
+            Self.semesterStartDate(for: $0, calendar: calendar) <= referenceDay
+        }),
            let academicYear = academicYear(from: configuration.semesterID) {
             return academicYear
         }
@@ -216,7 +221,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
         let fallStart = configurations.first { configuration in
             Self.academicYear(from: configuration.semesterID)?.id == academicYear.id
                 && configuration.semesterID.split(separator: "-").last == "1"
-        }?.semesterStartDate
+        }.map { Self.semesterStartDate(for: $0, calendar: calendar) }
 
         let nextAcademicYear = AcademicYearIdentity(
             startYear: academicYear.endYear,
@@ -225,7 +230,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
         let nextFallStart = configurations.first { configuration in
             Self.academicYear(from: configuration.semesterID)?.id == nextAcademicYear.id
                 && configuration.semesterID.split(separator: "-").last == "1"
-        }?.semesterStartDate
+        }.map { Self.semesterStartDate(for: $0, calendar: calendar) }
 
         let resolvedStart: Date
         if let fallStart {
@@ -276,6 +281,27 @@ nonisolated struct AcademicYearTimetable: Sendable {
               let endYear = Int(parts[1]),
               endYear > startYear else { return nil }
         return AcademicYearIdentity(startYear: startYear, endYear: endYear)
+    }
+
+    private static func semesterStartDate(
+        for configuration: SemesterRuntimeConfig,
+        calendar: Calendar
+    ) -> Date {
+        let parts = configuration.semesterStartDateString.split(separator: "-")
+        if parts.count == 3,
+           let year = Int(parts[0]),
+           let month = Int(parts[1]),
+           let day = Int(parts[2]),
+           let date = calendar.date(from: DateComponents(
+               calendar: calendar,
+               timeZone: calendar.timeZone,
+               year: year,
+               month: month,
+               day: day
+           )) {
+            return date
+        }
+        return calendar.startOfDay(for: configuration.semesterStartDate)
     }
 
     private static func referenceDate(

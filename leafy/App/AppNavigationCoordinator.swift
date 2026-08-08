@@ -65,7 +65,7 @@ extension RootTab: CaseIterable, Identifiable {
         case .community:
             return L10n.text("社区", language: language)
         case .schedule:
-            return L10n.text("日程", language: language)
+            return L10n.text("日迹", language: language)
         case .academics:
             return L10n.text("校园", language: language)
         case .profile:
@@ -77,7 +77,7 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2"
-        case .schedule: return "calendar.badge.plus"
+        case .schedule: return "calendar.day.timeline.left"
         case .academics: return "book.closed"
         case .profile: return "person"
         }
@@ -87,7 +87,7 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2.fill"
-        case .schedule: return "calendar.badge.plus"
+        case .schedule: return "calendar.day.timeline.left"
         case .academics: return "book.closed.fill"
         case .profile: return "person.fill"
         }

@@ -1932,6 +1932,11 @@ final class PerformanceRefactorTests: XCTestCase {
         XCTAssertEqual(RootTab.academics.title(language: .zhHans), "校园")
     }
 
+    func testScheduleRootTabUsesDayTraceProductNameAndIcon() {
+        XCTAssertEqual(RootTab.schedule.title(language: .zhHans), "日迹")
+        XCTAssertEqual(RootTab.schedule.systemImage, "calendar.day.timeline.left")
+    }
+
     func testCampusIdentityScopeKeySeparatesSchoolPortalAndCustomSupabase() {
         let undergraduate = CampusIdentity(
             campusID: .bjfu,
