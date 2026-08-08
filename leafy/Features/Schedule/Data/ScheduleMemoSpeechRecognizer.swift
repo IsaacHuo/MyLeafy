@@ -1,6 +1,19 @@
 import AVFoundation
 import Combine
+import OSLog
 import Speech
+
+private actor ScheduleMemoAudioSessionController {
+    func activate() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try session.setActive(true)
+    }
+
+    func deactivate() throws {
+        try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+}
 
 @MainActor
 final class ScheduleMemoSpeechRecognizer: ObservableObject {
@@ -16,18 +29,24 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
     private let audioEngine = AVAudioEngine()
+    private let audioSessionController = ScheduleMemoAudioSessionController()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var activeSessionID: UUID?
 
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
+        category: "ScheduleMemoSpeech"
+    )
+
     var isListening: Bool { state == .listening }
 
     func toggle() async {
-        if isListening { stop() } else { await start() }
+        if isListening { await stop() } else { await start() }
     }
 
     func start() async {
-        stop(resetState: false)
+        await stop(resetState: false)
         guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             state = .unavailable("当前设备不支持离线语音转写，请继续使用文字或图片记录。")
             return
@@ -44,9 +63,7 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
         }
 
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            try await audioSessionController.activate()
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
@@ -71,21 +88,21 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
                     guard self.activeSessionID == sessionID else { return }
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
-                        if result.isFinal { self.stop() }
+                        if result.isFinal { await self.stop() }
                     } else if error != nil {
-                        self.stop(resetState: false)
+                        await self.stop(resetState: false)
                         self.state = .unavailable("语音转写中断，请稍后重试。")
                     }
                 }
             }
             state = .listening
         } catch {
-            stop(resetState: false)
+            await stop(resetState: false)
             state = .unavailable("无法启动麦克风，请检查设备音频状态后重试。")
         }
     }
 
-    func stop(resetState: Bool = true) {
+    func stop(resetState: Bool = true) async {
         activeSessionID = nil
         if audioEngine.isRunning { audioEngine.stop() }
         audioEngine.inputNode.removeTap(onBus: 0)
@@ -93,8 +110,14 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
         task?.cancel()
         request = nil
         task = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         if resetState { state = .idle }
+        do {
+            try await audioSessionController.deactivate()
+        } catch {
+            Self.logger.error(
+                "Audio session deactivation failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     func clearMessage() {

@@ -2362,7 +2362,6 @@ private struct TimetableWeekPickerPanel: View {
     let currentPage: Int
     let onSelect: (Int) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.leafyLanguage) private var leafyLanguage
 
@@ -2398,27 +2397,29 @@ private struct TimetableWeekPickerPanel: View {
             .background(LeafyPageBackground())
             .navigationTitle("选择周次")
             .leafyInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
         }
     }
 
+    @ViewBuilder
     private func academicYearSection(_ academicYear: TimetableCalendarMenuAcademicYear) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.compact) {
-            Text("\(academicYear.academicYear)学年")
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
+        let visibleStages = academicYear.stages.filter { stage in
+            guard case let .semester(semester) = stage else { return true }
+            return semester.title != "春季学期"
+        }
 
-            ForEach(academicYear.stages) { stage in
-                switch stage {
-                case let .semester(semester):
-                    semesterSection(semester)
-                case let .vacation(vacation):
-                    vacationButton(vacation)
+        if !visibleStages.isEmpty {
+            VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                Text("\(academicYear.academicYear)学年")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                ForEach(visibleStages) { stage in
+                    switch stage {
+                    case let .semester(semester):
+                        semesterSection(semester)
+                    case let .vacation(vacation):
+                        vacationButton(vacation)
+                    }
                 }
             }
         }
