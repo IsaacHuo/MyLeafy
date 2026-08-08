@@ -10,8 +10,23 @@ struct CustomScheduleListView: View {
     @State private var editorPresentation: CustomScheduleEditorPresentation?
     @State private var operationAlert: LeafyOperationAlert?
 
+    private var academicYearTimetable: AcademicYearTimetable {
+        let configurations = SemesterConfig.timelineConfigurations
+        return AcademicYearTimetable(
+            configurations: configurations,
+            semanticEvents: configurations.flatMap(\.calendarEvents)
+        )
+    }
+
     private var sortedItems: [CustomScheduleListItem] {
-        (timetableEvents.map(CustomScheduleListItem.timetable) + importantDateEvents.map(CustomScheduleListItem.importantDate))
+        let timetable = academicYearTimetable
+        let importantDates = importantDateEvents.map { event in
+            CustomScheduleListItem.importantDate(
+                event,
+                projectsIntoTimetable: timetable.contains(event.startsAt)
+            )
+        }
+        return (timetableEvents.map(CustomScheduleListItem.timetable) + importantDates)
             .sorted { lhs, rhs in
                 if lhs.startDate != rhs.startDate { return lhs.startDate < rhs.startDate }
                 return lhs.title.localizedCompare(rhs.title) == .orderedAscending
@@ -37,7 +52,7 @@ struct CustomScheduleListView: View {
             }
 
             AcademicDetailFooterText(
-                text: "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学期内时，还会同时显示在课表。"
+                text: "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。"
             )
         }
         .navigationTitle("自定日程")
@@ -71,7 +86,7 @@ struct CustomScheduleListView: View {
         switch item {
         case .timetable(let reminder):
             editorPresentation = .timetable(context(for: reminder), allowsModeSelection: false)
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             editorPresentation = .importantDate(event, defaultContext: defaultTimetableContext(for: event.startsAt), allowsModeSelection: false)
         }
     }
@@ -88,7 +103,7 @@ struct CustomScheduleListView: View {
             } catch {
                 operationAlert = .failure(error.localizedDescription)
             }
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             var events = CustomScheduleStore.load()
             events.removeAll { $0.id == event.id }
             TimetableNotificationManager.cancelReminder(for: event)
@@ -112,8 +127,8 @@ struct CustomScheduleListView: View {
     }
 
     private func defaultTimetableContext(for date: Date = Date()) -> TimetableCellReminderContext {
-        let weekAndDay = semesterWeekAndDayIfSupported(for: date)
-            ?? (week: SemesterConfig.currentWeek(), day: defaultScheduleDay)
+        let weekAndDay = academicYearWeekAndDayIfSupported(for: date)
+            ?? (week: academicYearTimetable.pageIndex(containing: Date()) ?? 1, day: defaultScheduleDay)
         let period = min(max(TimetablePeriodSchedule.defaultStudyPeriod(for: date), 1), TimetablePeriodSchedule.slots.count)
         return TimetableCellReminderContext(
             week: weekAndDay.week,
@@ -128,8 +143,20 @@ struct CustomScheduleListView: View {
     }
 
     private func defaultDate(week: Int, day: Int, period: Int) -> Date {
-        TimetablePeriodSchedule.startDate(week: week, dayOfWeek: day, period: period)
-            ?? Date()
+        let calendar = Calendar.current
+        guard let timelineWeek = academicYearTimetable.week(atPageIndex: week),
+              let slot = TimetablePeriodSchedule.slot(for: period),
+              let date = calendar.date(
+                  byAdding: .day,
+                  value: day - 1,
+                  to: timelineWeek.weekStartDate
+              ) else { return Date() }
+        return calendar.date(
+            bySettingHour: slot.startHour,
+            minute: slot.startMinute,
+            second: 0,
+            of: date
+        ) ?? date
     }
 
     private var defaultScheduleDay: Int {
@@ -137,14 +164,12 @@ struct CustomScheduleListView: View {
         return weekday == 1 ? 7 : weekday - 1
     }
 
-    private func semesterWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
+    private func academicYearWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
         let calendar = Calendar.current
-        let start = calendar.startOfDay(for: SemesterConfig.startOfSemesterDate)
         let current = calendar.startOfDay(for: date)
-        let days = calendar.dateComponents([.day], from: start, to: current).day ?? 0
-        guard days >= 0, days < SemesterConfig.supportedWeeks * 7 else { return nil }
+        guard let week = academicYearTimetable.pageIndex(containing: current) else { return nil }
         let weekday = calendar.component(.weekday, from: current)
-        return (days / 7 + 1, ((weekday + 5) % 7) + 1)
+        return (week, ((weekday + 5) % 7) + 1)
     }
 }
 
@@ -164,13 +189,13 @@ struct CustomScheduleRootView: View {
 
 private enum CustomScheduleListItem: Identifiable {
     case timetable(TimetableCellReminder)
-    case importantDate(CustomScheduleEvent)
+    case importantDate(CustomScheduleEvent, projectsIntoTimetable: Bool)
 
     var id: String {
         switch self {
         case .timetable(let reminder):
             return "timetable-\(reminder.id.uuidString)"
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return "important-\(event.id)"
         }
     }
@@ -179,7 +204,7 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable(let reminder):
             return reminder.title
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return event.title
         }
     }
@@ -188,8 +213,8 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable:
             return "课表 · 倒计时"
-        case .importantDate(let event):
-            return event.timetableProjection == nil ? "倒计时" : "课表 · 倒计时"
+        case .importantDate(_, let projectsIntoTimetable):
+            return projectsIntoTimetable ? "课表 · 倒计时" : "倒计时"
         }
     }
 
@@ -197,7 +222,7 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable(let reminder):
             return reminder.resolvedStartDate ?? .distantFuture
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return event.startsAt
         }
     }
@@ -206,7 +231,7 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable(let reminder):
             return reminder.resolvedEndDate
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return event.endsAt
         }
     }
@@ -215,7 +240,7 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable(let reminder):
             return reminder.locationText
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return event.locationText
         }
     }
@@ -224,7 +249,7 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable(let reminder):
             return reminder.noteText
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return event.noteText
         }
     }
@@ -233,7 +258,7 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable(let reminder):
             return reminder.minutesBefore
-        case .importantDate(let event):
+        case .importantDate(let event, _):
             return event.minutesBefore
         }
     }
@@ -242,8 +267,8 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable:
             return "calendar.badge.clock"
-        case .importantDate(let event):
-            return event.timetableProjection == nil ? "timer" : "calendar.badge.clock"
+        case .importantDate(_, let projectsIntoTimetable):
+            return projectsIntoTimetable ? "calendar.badge.clock" : "timer"
         }
     }
 
@@ -251,8 +276,8 @@ private enum CustomScheduleListItem: Identifiable {
         switch self {
         case .timetable:
             return AppTheme.accent
-        case .importantDate(let event):
-            return event.timetableProjection == nil ? AppTheme.warning : AppTheme.accent
+        case .importantDate(_, let projectsIntoTimetable):
+            return projectsIntoTimetable ? AppTheme.accent : AppTheme.warning
         }
     }
 }

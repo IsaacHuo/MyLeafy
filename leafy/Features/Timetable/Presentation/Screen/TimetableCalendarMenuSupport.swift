@@ -5,7 +5,7 @@ nonisolated struct TimetableCalendarMenuModel {
     let currentSemesterID: String?
 
     init(
-        timetable: CalendarYearTimetable,
+        timetable: AcademicYearTimetable,
         configurations: [SemesterRuntimeConfig],
         referenceDate: Date = Date(),
         calendar: Calendar = .current
@@ -23,7 +23,11 @@ nonisolated struct TimetableCalendarMenuModel {
         if case let .teaching(semesterID, _) = referencePhase {
             resolvedCurrentSemesterID = semesterID
         } else {
-            resolvedCurrentSemesterID = configurations.first(where: \.isActive)?.semesterID
+            resolvedCurrentSemesterID = configurations.first { configuration in
+                configuration.isActive
+                    && AcademicYearTimetable.academicYearID(semesterID: configuration.semesterID)
+                        == timetable.academicYearID
+            }?.semesterID
         }
         currentSemesterID = resolvedCurrentSemesterID
 
@@ -93,25 +97,12 @@ nonisolated struct TimetableCalendarMenuModel {
             }
         }
 
-        academicYears = stagesByAcademicYear.map { academicYear, stages in
-            TimetableCalendarMenuAcademicYear(
+        academicYears = stagesByAcademicYear.compactMap { academicYear, stages in
+            guard academicYear == timetable.academicYearTitle else { return nil }
+            return TimetableCalendarMenuAcademicYear(
                 academicYear: academicYear,
-                stages: stages.sorted { lhs, rhs in
-                    let lhsIsCurrent = lhs.semesterID == resolvedCurrentSemesterID
-                    let rhsIsCurrent = rhs.semesterID == resolvedCurrentSemesterID
-                    if lhsIsCurrent != rhsIsCurrent { return lhsIsCurrent }
-                    return lhs.startDate < rhs.startDate
-                }
+                stages: stages.sorted { $0.startDate < $1.startDate }
             )
-        }
-        .sorted { lhs, rhs in
-            let lhsContainsCurrent = lhs.stages.contains { $0.semesterID == resolvedCurrentSemesterID }
-            let rhsContainsCurrent = rhs.stages.contains { $0.semesterID == resolvedCurrentSemesterID }
-            if lhsContainsCurrent != rhsContainsCurrent { return lhsContainsCurrent }
-            let lhsStart = lhs.stages.first?.startDate ?? .distantFuture
-            let rhsStart = rhs.stages.first?.startDate ?? .distantFuture
-            if lhsStart != rhsStart { return lhsStart < rhsStart }
-            return lhs.academicYear < rhs.academicYear
         }
     }
 
@@ -150,7 +141,7 @@ nonisolated struct TimetableCalendarMenuModel {
 
     private static func vacationTargetPage(
         for event: SchoolCalendarEvent,
-        timetable: CalendarYearTimetable,
+        timetable: AcademicYearTimetable,
         referenceDate: Date,
         calendar: Calendar
     ) -> Int? {
@@ -165,10 +156,8 @@ nonisolated struct TimetableCalendarMenuModel {
         let start = calendar.startOfDay(for: eventStart)
         let end = calendar.startOfDay(for: eventEnd)
 
-        return timetable.weeks.enumerated().first { _, week in
-            let weekEnd = week.weekEndDate(calendar: calendar)
-            return week.weekStartDate <= end && weekEnd >= start
-        }.map { $0.offset + 1 }
+        guard start < timetable.endDate, end >= timetable.startDate else { return nil }
+        return timetable.pageIndex(containing: max(start, timetable.startDate))
     }
 }
 

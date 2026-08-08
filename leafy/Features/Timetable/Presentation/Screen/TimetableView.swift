@@ -58,9 +58,9 @@ struct TimetableView: View {
     @State private var isQuickAccessPresented = false
     @State private var isWeekPickerPresented = false
     @State private var pendingQuickAccessAction: TimetableQuickAccessAction?
-    @State private var calendarYearConfigurations: [SemesterRuntimeConfig]
-    @State private var calendarYearTimetable: CalendarYearTimetable
-    @State private var calendarYearMenuModel: TimetableCalendarMenuModel
+    @State private var academicYearConfigurations: [SemesterRuntimeConfig]
+    @State private var academicYearTimetable: AcademicYearTimetable
+    @State private var academicYearMenuModel: TimetableCalendarMenuModel
     @State private var timetableCourseWeekProjections: [UUID: TimetableCourseWeekProjection] = [:]
     @State private var timetableCellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
     @State private var currentWeek: Int
@@ -99,9 +99,9 @@ struct TimetableView: View {
         subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
         category: "TimetableBackground"
     )
-    private var totalWeeks: Int { calendarYearTimetable.weeks.count }
+    private var totalWeeks: Int { academicYearTimetable.weeks.count }
     private var timelineStartDate: Date {
-        calendarYearTimetable.weeks.first?.weekStartDate ?? Calendar.current.startOfDay(for: Date())
+        academicYearTimetable.weeks.first?.weekStartDate ?? Calendar.current.startOfDay(for: Date())
     }
     private let totalClasses = 13
     private var overviewRowSpacing: CGFloat { 1.5 * leafyControlScale }
@@ -128,12 +128,11 @@ struct TimetableView: View {
 #endif
     }
 
-    private static func makeCalendarYearTimetable(
+    private static func makeAcademicYearTimetable(
         configurations: [SemesterRuntimeConfig] = SemesterConfig.timelineConfigurations,
         referenceDate: Date = Date()
-    ) -> CalendarYearTimetable {
-        CalendarYearTimetable(
-            year: Calendar.current.component(.year, from: referenceDate),
+    ) -> AcademicYearTimetable {
+        AcademicYearTimetable(
             configurations: configurations,
             semanticEvents: configurations.flatMap(\.calendarEvents),
             referenceDate: referenceDate
@@ -142,14 +141,14 @@ struct TimetableView: View {
 
     init() {
         let configurations = SemesterConfig.timelineConfigurations
-        let timetable = Self.makeCalendarYearTimetable(configurations: configurations)
+        let timetable = Self.makeAcademicYearTimetable(configurations: configurations)
         let currentPage = timetable.pageIndex(containing: Date()) ?? 1
         let countdownEvents = CustomScheduleStore.load()
         let exams = SchoolDataCache.loadExamSchedule()
 
-        _calendarYearConfigurations = State(initialValue: configurations)
-        _calendarYearTimetable = State(initialValue: timetable)
-        _calendarYearMenuModel = State(
+        _academicYearConfigurations = State(initialValue: configurations)
+        _academicYearTimetable = State(initialValue: timetable)
+        _academicYearMenuModel = State(
             initialValue: TimetableCalendarMenuModel(
                 timetable: timetable,
                 configurations: configurations
@@ -163,7 +162,7 @@ struct TimetableView: View {
             initialValue: TimetableScheduleProjectionSnapshot.make(
                 countdownEvents: countdownEvents,
                 exams: exams,
-                calendarYear: timetable
+                academicYear: timetable
             )
         )
     }
@@ -176,12 +175,12 @@ struct TimetableView: View {
         timetableGridSnapshot?.visibleDays ?? (timetableHidesWeekends ? Array(1...5) : Array(1...7))
     }
 
-    private var currentCalendarPage: Int {
-        calendarYearTimetable.pageIndex(containing: Date()) ?? 1
+    private var currentAcademicYearPage: Int {
+        academicYearTimetable.pageIndex(containing: Date()) ?? 1
     }
 
-    private var currentTimelineWeek: CalendarYearWeek? {
-        calendarYearTimetable.week(atPageIndex: currentWeek)
+    private var currentTimelineWeek: AcademicYearWeek? {
+        academicYearTimetable.week(atPageIndex: currentWeek)
     }
 
     private var selectedSemesterContext: (semesterID: String, week: Int)? {
@@ -412,9 +411,9 @@ struct TimetableView: View {
         }
         .popover(isPresented: $isWeekPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             TimetableWeekPickerPanel(
-                model: calendarYearMenuModel,
+                model: academicYearMenuModel,
                 selectedPage: currentWeek,
-                currentPage: currentCalendarPage,
+                currentPage: currentAcademicYearPage,
                 onSelect: selectTimetableWeek
             )
             .frame(idealWidth: 420, idealHeight: 520)
@@ -471,7 +470,7 @@ struct TimetableView: View {
     private func initializeTimetableIfNeeded() async {
         guard !hasInitializedTimetable else { return }
         hasInitializedTimetable = true
-        syncCalendarYearDataProjections()
+        syncAcademicYearDataProjections()
         syncTimetableScheduleProjectionSnapshot()
         syncTimetableGridSnapshot()
         syncReturnButtonVisibility()
@@ -522,7 +521,7 @@ struct TimetableView: View {
     }
 
     private func handleCoursesCountChange() {
-        syncCalendarYearDataProjections()
+        syncAcademicYearDataProjections()
         syncTimetableGridSnapshot()
         if courses.isEmpty {
             isTimetableInteractivelyLaidOut = false
@@ -542,7 +541,7 @@ struct TimetableView: View {
     }
 
     private func handleCellRemindersCountChange() {
-        syncCalendarYearDataProjections()
+        syncAcademicYearDataProjections()
         syncTimetableGridSnapshot()
         publishWidgetSnapshot()
         refreshScheduleReportNotifications()
@@ -634,29 +633,29 @@ struct TimetableView: View {
     @MainActor
     private func applySemesterRuntimeConfig(_ config: SemesterRuntimeConfig) {
         _ = config
-        guard calendarYearConfigurations != SemesterConfig.timelineConfigurations else { return }
-        rebuildCalendarYearTimeline(positionsToToday: true)
+        guard academicYearConfigurations != SemesterConfig.timelineConfigurations else { return }
+        rebuildAcademicYearTimeline(positionsToToday: true)
         publishWidgetSnapshot()
     }
 
     @MainActor
-    private func rebuildCalendarYearTimeline(positionsToToday: Bool) {
-        calendarYearConfigurations = SemesterConfig.timelineConfigurations
-        calendarYearTimetable = Self.makeCalendarYearTimetable(
-            configurations: calendarYearConfigurations
+    private func rebuildAcademicYearTimeline(positionsToToday: Bool) {
+        academicYearConfigurations = SemesterConfig.timelineConfigurations
+        academicYearTimetable = Self.makeAcademicYearTimetable(
+            configurations: academicYearConfigurations
         )
-        calendarYearMenuModel = TimetableCalendarMenuModel(
-            timetable: calendarYearTimetable,
-            configurations: calendarYearConfigurations
+        academicYearMenuModel = TimetableCalendarMenuModel(
+            timetable: academicYearTimetable,
+            configurations: academicYearConfigurations
         )
         calendarEventSignature = AcademicCalendarEvents.displayEvents()
-        syncCalendarYearDataProjections()
+        syncAcademicYearDataProjections()
         syncTimetableScheduleProjectionSnapshot()
         timetableGridSnapshotCache.invalidate()
         timetableGridSnapshot = nil
         syncTimetableGridSnapshot()
 
-        let todayPage = currentCalendarPage
+        let todayPage = currentAcademicYearPage
         if positionsToToday {
             currentWeek = todayPage
             scrollToWeek = todayPage
@@ -666,25 +665,15 @@ struct TimetableView: View {
         syncReturnButtonVisibility(for: currentWeek)
     }
 
-    private func courseIntersectsCurrentCalendarYear(_ course: Course) -> Bool {
-        guard let config = calendarYearTimetable.configuration(semesterID: course.sourceSemesterID) else {
-            return true
-        }
-        return course.weeks.contains { semesterWeek in
-            guard let date = Calendar.current.date(
-                byAdding: .day,
-                value: (semesterWeek - 1) * 7 + (course.dayOfWeek - 1),
-                to: config.semesterStartDate
-            ) else { return false }
-            return Calendar.current.component(.year, from: date) == calendarYearTimetable.year
-        }
+    private func courseIntersectsCurrentAcademicYear(_ course: Course) -> Bool {
+        academicYearTimetable.courseIntersectsTimeline(course)
     }
 
     @MainActor
-    private func syncCalendarYearDataProjections() {
+    private func syncAcademicYearDataProjections() {
         var courseProjections: [UUID: TimetableCourseWeekProjection] = [:]
         for course in courses {
-            guard let config = calendarYearTimetable.configuration(semesterID: course.sourceSemesterID) else {
+            guard let config = academicYearTimetable.configuration(semesterID: course.sourceSemesterID) else {
                 continue
             }
             var displayWeeks: [Int] = []
@@ -694,8 +683,8 @@ struct TimetableView: View {
                     byAdding: .day,
                     value: (semesterWeek - 1) * 7 + (course.dayOfWeek - 1),
                     to: config.semesterStartDate
-                ), isDateInDisplayedCalendarYear(occurrenceDate),
-                   let displayWeek = calendarYearTimetable.pageIndex(containing: occurrenceDate) else {
+                ), isDateInDisplayedAcademicYear(occurrenceDate),
+                   let displayWeek = academicYearTimetable.pageIndex(containing: occurrenceDate) else {
                     continue
                 }
                 displayWeeks.append(displayWeek)
@@ -711,7 +700,7 @@ struct TimetableView: View {
         var reminderProjections: [UUID: TimetableCellReminderProjection] = [:]
         for reminder in cellReminders {
             guard let date = reminder.startsAt ?? reminder.resolvedStartDate,
-                  let displayWeek = calendarYearTimetable.pageIndex(containing: date) else { continue }
+                  let displayWeek = academicYearTimetable.pageIndex(containing: date) else { continue }
             let weekday = Calendar.current.component(.weekday, from: date)
             reminderProjections[reminder.id] = TimetableCellReminderProjection(
                 displayWeek: displayWeek,
@@ -994,7 +983,7 @@ struct TimetableView: View {
     }
 
     private func weekTitle(_ page: Int) -> String {
-        guard let week = calendarYearTimetable.week(atPageIndex: page) else { return "本周" }
+        guard let week = academicYearTimetable.week(atPageIndex: page) else { return "本周" }
         switch week.phase {
         case let .teaching(_, weekNumber):
             return L10n.text("第 %d 周", language: leafyLanguage, weekNumber)
@@ -1009,7 +998,7 @@ struct TimetableView: View {
         guard let week = currentTimelineWeek else { return weekTitle(currentWeek) }
         switch week.phase {
         case let .teaching(semesterID, weekNumber):
-            let startDate = calendarYearTimetable.configuration(semesterID: semesterID)?.semesterStartDate
+            let startDate = academicYearTimetable.configuration(semesterID: semesterID)?.semesterStartDate
             let academicYear = TimetableCalendarMenuModel.academicYearTitle(semesterID: semesterID)
             let semester = TimetableCalendarMenuModel.semesterSeasonTitle(
                 semesterID: semesterID,
@@ -1030,20 +1019,21 @@ struct TimetableView: View {
         syncReturnButtonVisibility(for: page)
     }
 
-    private func shortWeekDateRange(_ week: CalendarYearWeek) -> String {
+    private func shortWeekDateRange(_ week: AcademicYearWeek) -> String {
         let start = DateFormatters.chineseDay.string(from: max(
             week.weekStartDate,
-            Calendar.current.date(from: DateComponents(year: calendarYearTimetable.year, month: 1, day: 1)) ?? week.weekStartDate
+            academicYearTimetable.startDate
         ))
         let end = DateFormatters.chineseDay.string(from: min(
             week.weekEndDate(),
-            Calendar.current.date(from: DateComponents(year: calendarYearTimetable.year, month: 12, day: 31)) ?? week.weekEndDate()
+            Calendar.current.date(byAdding: .day, value: -1, to: academicYearTimetable.endDate)
+                ?? week.weekEndDate()
         ))
         return "\(start)－\(end)"
     }
 
     private func returnToCurrentWeek() {
-        let week = currentCalendarPage
+        let week = currentAcademicYearPage
         currentWeek = week
         isAwayFromCurrentSchedule = false
         scrollToWeek = week
@@ -1103,7 +1093,7 @@ struct TimetableView: View {
                                 handleFirstInteractiveLayout()
                             },
                             currentWeekProvider: {
-                                currentCalendarPage
+                                currentAcademicYearPage
                             },
                             corner: {
                                 cornerHeader
@@ -1115,7 +1105,7 @@ struct TimetableView: View {
                                         HStack(alignment: .top, spacing: metrics.daySpacing) {
                                             ForEach(gridSnapshot.visibleDays, id: \.self) { day in
                                                 let metadata = dayMetadata(day: day, week: week)
-                                                if isDateInDisplayedCalendarYear(metadata.date) {
+                                                if isDateInDisplayedAcademicYear(metadata.date) {
                                                     dayHeader(metadata: metadata)
                                                         .frame(width: metrics.dayColumnWidth, height: headerHeight)
                                                 } else {
@@ -1140,7 +1130,7 @@ struct TimetableView: View {
                                         HStack(alignment: .top, spacing: metrics.daySpacing) {
                                             ForEach(gridSnapshot.visibleDays, id: \.self) { day in
                                                 let metadata = dayMetadata(day: day, week: week)
-                                                if isDateInDisplayedCalendarYear(metadata.date) {
+                                                if isDateInDisplayedAcademicYear(metadata.date) {
                                                     dayColumnBody(
                                                         day: day,
                                                         week: week,
@@ -1270,7 +1260,7 @@ struct TimetableView: View {
         visibleDays: [Int]
     ) -> some View {
         TimelineView(.periodic(from: Date(), by: 60)) { context in
-            if currentWeek == currentCalendarPage,
+            if currentWeek == currentAcademicYearPage,
                !visibleDays.isEmpty,
                let y = TimetableCurrentTimePosition.yPosition(for: context.date, metrics: metrics) {
                 Rectangle()
@@ -1288,7 +1278,7 @@ struct TimetableView: View {
                     )
                     .position(
                         x: TimetableCurrentTimeIndicatorGeometry.centerX(
-                            page: currentCalendarPage,
+                            page: currentAcademicYearPage,
                             visibleDayCount: visibleDays.count,
                             metrics: metrics
                         ),
@@ -2082,21 +2072,21 @@ struct TimetableView: View {
 
     private func syncReturnButtonVisibility(for visibleWeek: Int? = nil) {
         let week = visibleWeek ?? currentWeek
-        isAwayFromCurrentSchedule = week != currentCalendarPage
+        isAwayFromCurrentSchedule = week != currentAcademicYearPage
     }
 
-    private func isDateInDisplayedCalendarYear(_ date: Date) -> Bool {
-        Calendar.current.component(.year, from: date) == calendarYearTimetable.year
+    private func isDateInDisplayedAcademicYear(_ date: Date) -> Bool {
+        academicYearTimetable.contains(date)
     }
 
     private func teachingContext(for page: Int) -> (semesterID: String, week: Int)? {
-        guard let timelineWeek = calendarYearTimetable.week(atPageIndex: page),
+        guard let timelineWeek = academicYearTimetable.week(atPageIndex: page),
               case let .teaching(semesterID, weekNumber) = timelineWeek.phase else { return nil }
         return (semesterID, weekNumber)
     }
 
     private func dateFor(dayOfWeek: Int, in week: Int) -> Date {
-        guard let timelineWeek = calendarYearTimetable.week(atPageIndex: week) else { return Date() }
+        guard let timelineWeek = academicYearTimetable.week(atPageIndex: week) else { return Date() }
         return Calendar.current.date(
             byAdding: .day,
             value: dayOfWeek - 1,
@@ -2162,7 +2152,7 @@ struct TimetableView: View {
         timetableScheduleProjectionSnapshot = TimetableScheduleProjectionSnapshot.make(
             countdownEvents: customCountdownEvents,
             exams: cachedExamArrangements,
-            calendarYear: calendarYearTimetable
+            academicYear: academicYearTimetable
         )
     }
 
@@ -2274,7 +2264,7 @@ struct TimetableView: View {
 
                 for course in courses where
                     course.sourceSemesterID == semesterConfig.semesterID
-                    || !courseIntersectsCurrentCalendarYear(course) {
+                    || !courseIntersectsCurrentAcademicYear(course) {
                     modelContext.delete(course)
                 }
                 for course in newCourses {
@@ -2340,7 +2330,7 @@ struct TimetableView: View {
             return
         }
 
-        guard let config = calendarYearTimetable.configuration(semesterID: course.sourceSemesterID) else { return }
+        guard let config = academicYearTimetable.configuration(semesterID: course.sourceSemesterID) else { return }
         let preferredSemesterWeek = SemesterConfig.currentWeek(config: config)
         let semesterWeek = course.weeks.contains(preferredSemesterWeek)
             ? preferredSemesterWeek
@@ -2349,7 +2339,7 @@ struct TimetableView: View {
             byAdding: .day,
             value: (semesterWeek - 1) * 7,
             to: config.semesterStartDate
-        ), let targetPage = calendarYearTimetable.pageIndex(containing: weekStart) else { return }
+        ), let targetPage = academicYearTimetable.pageIndex(containing: weekStart) else { return }
         currentWeek = targetPage
         scrollToWeek = targetPage
         selectedCourseContext = SelectedCourseContext(

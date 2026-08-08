@@ -237,7 +237,14 @@ enum SchoolDataSyncService {
         semesterID: String,
         modelContext: ModelContext
     ) throws {
-        for course in fetch(Course.self, from: modelContext) {
+        let configurations = SemesterConfig.timelineConfigurations
+        let academicYearTimetable = AcademicYearTimetable(
+            configurations: configurations,
+            semanticEvents: configurations.flatMap(\.calendarEvents)
+        )
+        for course in fetch(Course.self, from: modelContext) where
+            course.sourceSemesterID == semesterID
+            || !academicYearTimetable.courseIntersectsTimeline(course) {
             modelContext.delete(course)
         }
         for course in courses {

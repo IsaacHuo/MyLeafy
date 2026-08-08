@@ -1042,7 +1042,7 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private var selectedWeekAndDay: (week: Int, day: Int)? {
-        semesterWeekAndDayIfSupported(for: scheduleDate)
+        academicYearWeekAndDayIfSupported(for: scheduleDate)
     }
 
     private var selectedPeriodRange: ClosedRange<Int>? {
@@ -1293,18 +1293,14 @@ struct CustomScheduleEditorSheet: View {
         ) ?? date
     }
 
-    private func semesterWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
+    private func academicYearWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
         let calendar = Calendar.current
         let current = calendar.startOfDay(for: date)
-        guard calendar.component(.year, from: current) == calendar.component(.year, from: Date()) else {
-            return nil
-        }
         let configurations = SemesterConfig.timelineConfigurations
-        let timetable = CalendarYearTimetable(
-            year: calendar.component(.year, from: current),
+        let timetable = AcademicYearTimetable(
             configurations: configurations,
             semanticEvents: configurations.flatMap(\.calendarEvents),
-            referenceDate: current,
+            referenceDate: Date(),
             calendar: calendar
         )
         guard let week = timetable.pageIndex(containing: current) else { return nil }

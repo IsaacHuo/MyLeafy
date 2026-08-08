@@ -38,11 +38,11 @@ struct TimetableScheduleProjectionSnapshot {
     static func make(
         countdownEvents: [CustomScheduleEvent],
         exams: [ExamArrangement],
-        calendarYear: CalendarYearTimetable,
+        academicYear: AcademicYearTimetable,
         calendar: Calendar = .current
     ) -> TimetableScheduleProjectionSnapshot {
         let countdowns = countdownEvents.compactMap { event -> TimetableCountdownProjection? in
-            guard let week = calendarYear.pageIndex(containing: event.startsAt) else { return nil }
+            guard let week = academicYear.pageIndex(containing: event.startsAt) else { return nil }
             let weekday = calendar.component(.weekday, from: event.startsAt)
             let day = ((weekday + 5) % 7) + 1
             let effectiveEnd = event.endsAt.flatMap { $0 > event.startsAt ? $0 : nil }
@@ -74,7 +74,7 @@ struct TimetableScheduleProjectionSnapshot {
 
         let examProjections = exams.compactMap { exam -> TimetableExamProjection? in
             guard let startsAt = exam.startsAt,
-                  let week = calendarYear.pageIndex(containing: startsAt) else { return nil }
+                  let week = academicYear.pageIndex(containing: startsAt) else { return nil }
             let weekday = calendar.component(.weekday, from: startsAt)
             let day = ((weekday + 5) % 7) + 1
             let period = TimetablePeriodSchedule.period(containing: startsAt)?.period

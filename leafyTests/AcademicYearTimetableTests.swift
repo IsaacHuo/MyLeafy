@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import Leafy
 
-final class CalendarYearTimetableTests: XCTestCase {
+final class AcademicYearTimetableTests: XCTestCase {
     private let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "en_US_POSIX")
@@ -10,22 +10,33 @@ final class CalendarYearTimetableTests: XCTestCase {
         return calendar
     }()
 
-    func testYearContainsOnlyWeeksIntersectingYearAndStartsOnMonday() throws {
-        let timetable = CalendarYearTimetable(year: 2026, configurations: [], calendar: calendar)
+    func testAcademicYearUsesFallBoundariesAndStartsWeeksOnMonday() throws {
+        let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
+        let nextFall = configuration(id: "2027-2028-1", start: "2027-09-06")
+        let timetable = AcademicYearTimetable(
+            configurations: [fall, nextFall],
+            referenceDate: date("2026-09-07"),
+            calendar: calendar
+        )
         let first = try XCTUnwrap(timetable.weeks.first)
         let last = try XCTUnwrap(timetable.weeks.last)
 
-        XCTAssertEqual(timetable.weeks.count, 53)
+        XCTAssertEqual(timetable.academicYearID, "2026-2027")
+        XCTAssertEqual(timetable.weeks.count, 52)
         XCTAssertEqual(day(first.id), 2) // Monday in Calendar.current's Gregorian calendar.
-        XCTAssertEqual(dateString(first.id), "2025-12-29")
-        XCTAssertEqual(dateString(last.id), "2026-12-28")
-        XCTAssertTrue(first.id < date("2026-01-01"))
-        XCTAssertLessThan(date("2026-12-31"), calendar.date(byAdding: .day, value: 7, to: last.id)!)
+        XCTAssertEqual(dateString(first.id), "2026-09-07")
+        XCTAssertEqual(dateString(last.id), "2027-08-30")
+        XCTAssertTrue(timetable.contains(date("2027-01-18")))
+        XCTAssertFalse(timetable.contains(date("2027-09-06")))
     }
 
     func testCrossYearSemesterContinuesTeachingWeekNumberIntoTargetYear() {
         let semester = configuration(id: "2025-2026-1", start: "2025-09-01")
-        let timetable = CalendarYearTimetable(year: 2026, configurations: [semester], calendar: calendar)
+        let timetable = AcademicYearTimetable(
+            configurations: [semester],
+            referenceDate: date("2026-01-01"),
+            calendar: calendar
+        )
 
         XCTAssertEqual(timetable.phase(for: date("2026-01-01")), .teaching(semesterID: "2025-2026-1", weekNumber: 18))
     }
@@ -38,10 +49,10 @@ final class CalendarYearTimetableTests: XCTestCase {
             end: "2026-08-30",
             category: .summerBreak
         )
-        let timetable = CalendarYearTimetable(
-            year: 2026,
+        let timetable = AcademicYearTimetable(
             configurations: [],
             semanticEvents: [summer],
+            referenceDate: date("2026-07-20"),
             calendar: calendar
         )
 
@@ -50,7 +61,11 @@ final class CalendarYearTimetableTests: XCTestCase {
 
     func testFutureSemesterWithoutCoursesStillStartsAtWeekOne() {
         let future = configuration(id: "2026-2027-1", start: "2026-09-07")
-        let timetable = CalendarYearTimetable(year: 2026, configurations: [future], calendar: calendar)
+        let timetable = AcademicYearTimetable(
+            configurations: [future],
+            referenceDate: date("2026-09-07"),
+            calendar: calendar
+        )
 
         XCTAssertEqual(timetable.phase(for: date("2026-09-07")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
     }
@@ -81,9 +96,13 @@ final class CalendarYearTimetableTests: XCTestCase {
         XCTAssertNil(position("21:46", metrics: metrics))
     }
 
-    func testScheduleAndExamProjectByAbsoluteDateIntoFutureCalendarYearPageWithoutCourses() throws {
+    func testScheduleAndExamProjectByAbsoluteDateIntoAcademicYearPageWithoutCourses() throws {
         let future = configuration(id: "2026-2027-1", start: "2026-09-07")
-        let calendarYear = CalendarYearTimetable(year: 2026, configurations: [future], calendar: calendar)
+        let academicYear = AcademicYearTimetable(
+            configurations: [future],
+            referenceDate: date("2026-09-08"),
+            calendar: calendar
+        )
         let exam = ExamArrangement(
             id: 7,
             courseID: "future-course",
@@ -99,13 +118,13 @@ final class CalendarYearTimetableTests: XCTestCase {
         let snapshot = TimetableScheduleProjectionSnapshot.make(
             countdownEvents: [schedule],
             exams: [exam],
-            calendarYear: calendarYear,
+            academicYear: academicYear,
             calendar: calendar
         )
-        let page = try XCTUnwrap(calendarYear.pageIndex(containing: examStart))
+        let page = try XCTUnwrap(academicYear.pageIndex(containing: examStart))
         let day = ((calendar.component(.weekday, from: examStart) + 5) % 7) + 1
 
-        XCTAssertEqual(page, 37)
+        XCTAssertEqual(page, 1)
         XCTAssertEqual(day, 2)
         XCTAssertEqual(snapshot.countdowns(week: page, day: day).map(\.title), ["Future event"])
         let projection = try XCTUnwrap(snapshot.countdowns(week: page, day: day).first)
@@ -119,33 +138,37 @@ final class CalendarYearTimetableTests: XCTestCase {
     func testTwoSemesterWeekOnesAreIdentifiedBySemesterIdentity() {
         let previous = configuration(id: "2025-2026-2", start: "2026-03-09")
         let future = configuration(id: "2026-2027-1", start: "2026-09-07")
-        let timetable = CalendarYearTimetable(year: 2026, configurations: [previous, future], calendar: calendar)
+        let timetable = AcademicYearTimetable(
+            configurations: [previous, future],
+            referenceDate: date("2026-09-07"),
+            calendar: calendar
+        )
 
         XCTAssertEqual(timetable.phase(for: date("2026-03-09")), .teaching(semesterID: "2025-2026-2", weekNumber: 1))
         XCTAssertEqual(timetable.phase(for: date("2026-09-07")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
     }
 
-    func testSpecifiedReferenceDateWinsForWeekCrossingPhaseBoundary() throws {
+    func testAcademicYearBoundaryWeekUsesSemesterStartAsReferenceDate() throws {
         let semester = configuration(id: "2026-2027-1", start: "2026-01-03")
-        let withoutReference = CalendarYearTimetable(year: 2026, configurations: [semester], calendar: calendar)
-        let withReference = CalendarYearTimetable(
-            year: 2026,
+        let timetable = AcademicYearTimetable(
             configurations: [semester],
             referenceDate: date("2026-01-03"),
             calendar: calendar
         )
 
-        let weekWithoutReference = try XCTUnwrap(withoutReference.week(containing: date("2026-01-03")))
-        let weekWithReference = try XCTUnwrap(withReference.week(containing: date("2026-01-03")))
-        XCTAssertEqual(weekWithoutReference.id, date("2025-12-29"))
-        XCTAssertEqual(weekWithoutReference.phase, .unconfigured)
-        XCTAssertEqual(weekWithReference.phase, .teaching(semesterID: "2026-2027-1", weekNumber: 1))
-        XCTAssertEqual(withReference.phase(for: date("2026-01-03")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
+        let boundaryWeek = try XCTUnwrap(timetable.week(containing: date("2026-01-03")))
+        XCTAssertEqual(boundaryWeek.id, date("2025-12-29"))
+        XCTAssertEqual(boundaryWeek.phase, .teaching(semesterID: "2026-2027-1", weekNumber: 1))
+        XCTAssertEqual(timetable.phase(for: date("2026-01-03")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
     }
 
     func testCalendarMenuListsOfficialWeeksDirectlyUnderSemester() throws {
         let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
-        let timetable = CalendarYearTimetable(year: 2026, configurations: [spring], calendar: calendar)
+        let timetable = AcademicYearTimetable(
+            configurations: [spring],
+            referenceDate: date("2026-04-01"),
+            calendar: calendar
+        )
         let menu = TimetableCalendarMenuModel(
             timetable: timetable,
             configurations: [spring],
@@ -167,8 +190,7 @@ final class CalendarYearTimetableTests: XCTestCase {
         let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
         let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
         let referenceDate = date("2026-09-14")
-        let timetable = CalendarYearTimetable(
-            year: 2026,
+        let timetable = AcademicYearTimetable(
             configurations: [spring, fall],
             referenceDate: referenceDate,
             calendar: calendar
@@ -267,8 +289,7 @@ final class CalendarYearTimetableTests: XCTestCase {
             calendarEvents: [summer]
         )
         let referenceDate = calendar.date(byAdding: .day, value: 7, to: try XCTUnwrap(summer.startDate))!
-        let timetable = CalendarYearTimetable(
-            year: 2026,
+        let timetable = AcademicYearTimetable(
             configurations: [spring],
             semanticEvents: [summer],
             referenceDate: referenceDate,
@@ -304,8 +325,7 @@ final class CalendarYearTimetableTests: XCTestCase {
             start: "2026-03-09",
             calendarEvents: [summer]
         )
-        let timetable = CalendarYearTimetable(
-            year: 2026,
+        let timetable = AcademicYearTimetable(
             configurations: [spring],
             semanticEvents: [summer],
             referenceDate: date("2026-01-01"),
