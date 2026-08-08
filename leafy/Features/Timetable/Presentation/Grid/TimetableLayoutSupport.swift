@@ -144,7 +144,7 @@ struct TimetableCurrentTimeIndicatorGeometry {
     }
 }
 
-struct TimetableCurrentTimePosition {
+nonisolated struct TimetableCurrentTimePosition {
     static func yPosition(
         for date: Date,
         metrics: TimetableLayoutMetrics,
