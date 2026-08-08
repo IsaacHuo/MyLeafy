@@ -304,13 +304,13 @@ struct TimetableProcessingView: View {
         .background(LeafyPageBackground())
         .navigationTitle("课表处理")
         .leafyInlineNavigationTitle()
-        .sheet(item: $editingManualCourse) { item in
+        .leafySheet(item: $editingManualCourse) { item in
             ManualCourseEditorSheet(item: item) { course in
                 saveManualCourse(course)
             }
             .presentationDetents([.large])
         }
-        .sheet(isPresented: $isTimetableImportGuidePresented) {
+        .leafySheet(isPresented: $isTimetableImportGuidePresented) {
             TimetableCSVImportGuideSheet {
                 isTimetableImportGuidePresented = false
                 isTimetableImportPresented = true

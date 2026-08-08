@@ -87,7 +87,7 @@ struct CommunityUserProfileView: View {
             guard allowsEditing, notification.object as? UUID == sessionManager.currentUserID else { return }
             loadDraftCount()
         }
-        .sheet(item: $selectedPost) { post in
+        .leafySheet(item: $selectedPost) { post in
             RealCommunityPostDetailSheet(post: post) { updatedPost in
                 applyPostChange(updatedPost)
             } onPostRemoved: {

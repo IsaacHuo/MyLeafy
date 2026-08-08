@@ -52,7 +52,7 @@ struct CustomScheduleListView: View {
                 .accessibilityLabel("添加自定日程")
             }
         }
-        .sheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
+        .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
             CustomScheduleEditorSheet(presentation: presentation)
                 .presentationDetents([.medium, .large])
         }

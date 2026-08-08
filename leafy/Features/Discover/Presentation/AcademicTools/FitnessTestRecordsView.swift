@@ -136,17 +136,17 @@ struct FitnessTestRecordsView: View {
                 .accessibilityLabel(L10n.text("分享全部体测记录", language: leafyLanguage))
             }
         }
-        .sheet(isPresented: $showingEditor) {
+        .leafySheet(isPresented: $showingEditor) {
             FitnessTestRecordEditorView(record: nil) { draft in
                 insert(draft)
             }
         }
-        .sheet(item: $editingRecord) { record in
+        .leafySheet(item: $editingRecord) { record in
             FitnessTestRecordEditorView(record: record) { draft in
                 update(record, with: draft)
             }
         }
-        .sheet(isPresented: Binding(
+        .leafySheet(isPresented: Binding(
             get: { sharePreviewImage != nil },
             set: { if !$0 { sharePreviewImage = nil } }
         )) {

@@ -71,7 +71,7 @@ struct ScheduleRootView: View {
                             destinationView(destination)
                         }
                 }
-                .sheet(isPresented: $showsMenu) {
+                .leafySheet(isPresented: $showsMenu) {
                     NavigationStack {
                         ScheduleSidebar(selection: Binding(
                             get: { nil },
@@ -80,13 +80,7 @@ struct ScheduleRootView: View {
                                 showsMenu = false
                                 if destination != .memos { compactPath.append(destination) }
                             }
-                        ))
-                        .navigationTitle("日程")
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") { showsMenu = false }
-                            }
-                        }
+                        ), presentation: .modal)
                     }
                     .presentationDetents([.medium, .large])
                 }
@@ -137,7 +131,13 @@ struct ScheduleRootView: View {
 }
 
 private struct ScheduleSidebar: View {
+    enum Presentation: Equatable {
+        case sidebar
+        case modal
+    }
+
     @Binding var selection: ScheduleDestination?
+    var presentation: Presentation = .sidebar
 
     private var destinations: [ScheduleDestination] {
         ScheduleDestination.allCases.filter {
@@ -146,12 +146,27 @@ private struct ScheduleSidebar: View {
     }
 
     var body: some View {
+        Group {
+            if presentation == .modal {
+                sidebarList
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(AppTheme.modalBackground)
+            } else {
+                sidebarList
+                    .listStyle(.sidebar)
+            }
+        }
+    }
+
+    private var sidebarList: some View {
         List(selection: $selection) {
+            row(.statistics)
+
             Section("记录") {
                 row(.memos)
                 row(.dailyReview)
                 row(.tags)
-                row(.statistics)
                 row(.trash)
             }
             Section("日程") {
@@ -161,7 +176,6 @@ private struct ScheduleSidebar: View {
                 if destinations.contains(.timetableProcessing) { row(.timetableProcessing) }
             }
         }
-        .listStyle(.sidebar)
     }
 
     private func row(_ destination: ScheduleDestination) -> some View {
@@ -199,6 +213,7 @@ struct ScheduleMemoFeedView: View {
     @State private var sort: ScheduleMemoSort = .newest
     @State private var editingMemo: ScheduleMemo?
     @State private var convertingMemo: ScheduleMemo?
+    @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var importantDates = CustomScheduleStore.load()
     @State private var operationAlert: LeafyOperationAlert?
 
@@ -246,11 +261,12 @@ struct ScheduleMemoFeedView: View {
                     ForEach(visibleMemos) { memo in
                         ScheduleMemoCard(
                             memo: memo,
-                            images: images.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
+                            images: memoImages(for: memo),
                             linkedTitle: linkedTitle(for: memo),
                             onTag: { selectedTag = $0 },
                             onEdit: { editingMemo = memo },
                             onConvert: { convertingMemo = memo },
+                            onShareCard: { makeShareCard(for: memo) },
                             onPin: { togglePin(memo) },
                             onTrash: { moveToTrash(memo) }
                         )
@@ -281,10 +297,10 @@ struct ScheduleMemoFeedView: View {
                 .accessibilityLabel("筛选与排序")
             }
         }
-        .sheet(item: $editingMemo) { memo in
+        .leafySheet(item: $editingMemo) { memo in
             ScheduleMemoEditorView(memo: memo)
         }
-        .sheet(item: $convertingMemo) { memo in
+        .leafySheet(item: $convertingMemo) { memo in
             CustomScheduleEditorSheet(
                 presentation: .importantDate(
                     nil,
@@ -300,6 +316,9 @@ struct ScheduleMemoFeedView: View {
                     importantDates = CustomScheduleStore.load()
                 }
             )
+        }
+        .leafySheet(item: $shareCardSource) { source in
+            CommunityPostCardPreviewSheet(source: source)
         }
         .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
             importantDates = CustomScheduleStore.load()
@@ -333,6 +352,18 @@ struct ScheduleMemoFeedView: View {
         )
     }
 
+    private func memoImages(for memo: ScheduleMemo) -> [ScheduleMemoImage] {
+        images.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func makeShareCard(for memo: ScheduleMemo) {
+        do {
+            shareCardSource = try scheduleMemoShareCardSource(memo: memo, images: memoImages(for: memo))
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
+        }
+    }
+
     private func togglePin(_ memo: ScheduleMemo) {
         memo.pinnedAt = memo.pinnedAt == nil ? Date() : nil
         memo.updatedAt = Date()
@@ -346,12 +377,16 @@ struct ScheduleMemoFeedView: View {
 }
 
 private struct ScheduleMemoCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
     let memo: ScheduleMemo
     let images: [ScheduleMemoImage]
     let linkedTitle: String?
     let onTag: (String) -> Void
     let onEdit: () -> Void
     let onConvert: () -> Void
+    let onShareCard: () -> Void
     let onPin: () -> Void
     let onTrash: () -> Void
 
@@ -360,9 +395,6 @@ private struct ScheduleMemoCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(memo.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.tertiaryText)
                 if memo.isPinned {
                     Image(systemName: "pin.fill")
                         .font(.caption)
@@ -370,24 +402,21 @@ private struct ScheduleMemoCard: View {
                         .accessibilityLabel("已置顶")
                 }
                 Spacer()
-                Menu {
-                    Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { onPin() }
-                    Button("编辑", systemImage: "pencil") { onEdit() }
-                    Button(linkedTitle == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus") { onConvert() }
-                    Button("移到回收站", systemImage: "trash", role: .destructive) { onTrash() }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("随记操作")
             }
+            .frame(minHeight: 24)
 
             if !memo.body.isEmpty {
                 Text(memo.body)
                     .leafyBody()
                     .foregroundStyle(AppTheme.primaryText)
                     .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(
+                        AppTheme.accent(for: themeColorPreference)
+                            .opacity(colorScheme == .dark ? 0.16 : 0.10),
+                        in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    )
             }
 
             if !images.isEmpty {
@@ -429,9 +458,31 @@ private struct ScheduleMemoCard: View {
                     .microCaption()
                     .foregroundStyle(linkedTitle == "原日程已删除" ? AppTheme.warning : AppTheme.secondaryText)
             }
+
+            HStack {
+                Spacer()
+                Text(memo.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .microCaption()
+                    .foregroundStyle(AppTheme.tertiaryText)
+            }
         }
         .padding(18)
         .leafyCardStyle()
+        .overlay(alignment: .topTrailing) {
+            Menu {
+                Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { onPin() }
+                Button("编辑", systemImage: "pencil") { onEdit() }
+                Button(linkedTitle == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus") { onConvert() }
+                Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled") { onShareCard() }
+                Button("移到回收站", systemImage: "trash", role: .destructive) { onTrash() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .padding(4)
+            .accessibilityLabel("随记操作")
+        }
     }
 }
 
@@ -495,8 +546,8 @@ private struct ScheduleMemoComposer: View {
                 .accessibilityLabel("添加图片，最多三张")
 
                 TextField("写点什么… 用 #标签 整理", text: $text, axis: .vertical)
-                    .lineLimit(1...5)
-                    .padding(.vertical, 11)
+                    .lineLimit(1...3)
+                    .padding(.vertical, 6)
 
                 Button {
                     Task {
@@ -522,13 +573,12 @@ private struct ScheduleMemoComposer: View {
                 .accessibilityLabel("保存随记")
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.vertical, 2)
             .leafyGlassSurface(in: Capsule(), fallbackFill: AppTheme.cardBackground, isInteractive: true)
         }
         .padding(.horizontal, AppSpacing.page)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .background(.bar)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
         .onChange(of: photoItems) { _, items in
             Task { await load(items) }
         }
@@ -631,6 +681,8 @@ private struct ScheduleMemoReviewView: View {
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @State private var page = 0
+    @State private var shareCardSource: CommunityPostCardPreviewSource?
+    @State private var operationAlert: LeafyOperationAlert?
 
     private var selection: [ScheduleMemo] {
         ScheduleMemoReviewEngine.selection(from: memos, page: page)
@@ -660,7 +712,21 @@ private struct ScheduleMemoReviewView: View {
                             memo: memo,
                             images: images.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
                             linkedTitle: nil,
-                            onTag: { _ in }, onEdit: {}, onConvert: {}, onPin: {}, onTrash: {}
+                            onTag: { _ in },
+                            onEdit: {},
+                            onConvert: {},
+                            onShareCard: {
+                                do {
+                                    let memoImages = images
+                                        .filter { $0.memoID == memo.id }
+                                        .sorted { $0.sortOrder < $1.sortOrder }
+                                    shareCardSource = try scheduleMemoShareCardSource(memo: memo, images: memoImages)
+                                } catch {
+                                    operationAlert = .failure(error.localizedDescription)
+                                }
+                            },
+                            onPin: {},
+                            onTrash: {}
                         )
                     }
                 }
@@ -670,6 +736,10 @@ private struct ScheduleMemoReviewView: View {
         }
         .background(LeafyPageBackground())
         .navigationTitle("每日回顾")
+        .leafySheet(item: $shareCardSource) { source in
+            CommunityPostCardPreviewSheet(source: source)
+        }
+        .leafyOperationAlert($operationAlert)
     }
 }
 
@@ -749,7 +819,7 @@ private struct ScheduleMemoStatisticsView: View {
         }
         .background(LeafyPageBackground())
         .navigationTitle("记录统计")
-        .sheet(isPresented: Binding(get: { selectedDate != nil }, set: { if !$0 { selectedDate = nil } })) {
+        .leafySheet(isPresented: Binding(get: { selectedDate != nil }, set: { if !$0 { selectedDate = nil } })) {
             NavigationStack {
                 ScheduleMemoDayView(date: selectedDate ?? Date())
             }
@@ -877,6 +947,35 @@ private struct ScheduleYearOverviewView: View {
             )
         )
     }
+}
+
+private func scheduleMemoShareCardSource(
+    memo: ScheduleMemo,
+    images: [ScheduleMemoImage]
+) throws -> CommunityPostCardPreviewSource {
+    var photoData: [Data] = []
+    for (index, imageRecord) in images.enumerated() {
+        guard let data = ScheduleMemoImageStore.data(named: imageRecord.localFilename) else {
+            throw CommunityPostCardGenerationError.invalidImage(index + 1)
+        }
+        photoData.append(data)
+    }
+
+    let lines = memo.body
+        .split(whereSeparator: \.isNewline)
+        .map(String.init)
+    let snapshot = CommunityPostCardSnapshot(
+        authorName: AppBrand.displayName,
+        avatarData: nil,
+        dateText: DateFormatters.headerWithTime.string(from: memo.createdAt),
+        category: "日程随记",
+        title: lines.first.map { String($0.prefix(80)) } ?? "图片随记",
+        body: lines.dropFirst().joined(separator: "\n"),
+        attachmentNames: [],
+        photoData: photoData,
+        isAnonymous: false
+    )
+    return CommunityPostCardPreviewSource(content: .snapshot(snapshot))
 }
 
 private func memoTitle(_ body: String) -> String {

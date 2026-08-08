@@ -92,7 +92,7 @@ struct SunshineRunView: View {
         }
         .navigationTitle("阳光长跑")
         .leafyInlineNavigationTitle()
-        .sheet(isPresented: $showingBackfillSheet) {
+        .leafySheet(isPresented: $showingBackfillSheet) {
             SunshineRunBackfillSheet { date in
                 addRecord(on: date, successMessage: "已补记阳光长跑。")
             }

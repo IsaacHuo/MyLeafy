@@ -124,7 +124,7 @@ struct ComprehensiveQualityView: View {
         .sheet(item: $csvShareItem) { item in
             ShareSheet(activityItems: [item.url])
         }
-        .sheet(isPresented: Binding(
+        .leafySheet(isPresented: Binding(
             get: { sharePreviewImage != nil },
             set: { if !$0 { sharePreviewImage = nil } }
         )) {

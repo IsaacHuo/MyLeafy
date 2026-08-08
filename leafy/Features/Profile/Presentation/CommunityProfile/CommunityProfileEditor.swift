@@ -323,12 +323,12 @@ struct CommunityProfileEditorView: View {
             selection: $selectedAvatarItem,
             matching: .images
         )
-        .sheet(item: $avatarCropDraft) { draft in
+        .leafySheet(item: $avatarCropDraft) { draft in
             CommunityAvatarCropSheet(image: draft.image) { croppedImage in
                 applyCroppedAvatar(croppedImage)
             }
         }
-        .sheet(isPresented: $showingCampusChangeSheet) {
+        .leafySheet(isPresented: $showingCampusChangeSheet) {
             CommunityCampusChangeSheet(
                 profile: sessionManager.profile,
                 pendingRequest: $pendingCampusRequest
@@ -773,7 +773,7 @@ private struct CommunityProfileCoverEditorView: View {
                 await loadSelectedCover(from: newItem)
             }
         }
-        .sheet(item: $coverCropDraft) { draft in
+        .leafySheet(item: $coverCropDraft) { draft in
             CommunityCoverCropSheet(image: draft.image) { croppedImage in
                 applyCroppedCover(croppedImage)
             }

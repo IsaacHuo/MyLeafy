@@ -101,7 +101,7 @@ struct LeafyApp: App {
 
                 appNavigation.handle(url: url)
             }
-            .sheet(item: $externalImportCoordinator.activeBatch) { batch in
+            .leafySheet(item: $externalImportCoordinator.activeBatch) { batch in
                 ExternalLearningMaterialImportSheet(
                     batch: batch,
                     coordinator: externalImportCoordinator,

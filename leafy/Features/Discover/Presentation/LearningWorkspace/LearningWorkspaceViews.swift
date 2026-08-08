@@ -164,12 +164,12 @@ struct LearningWorkspaceView: View {
         .onChange(of: LearningWorkspaceIndexSignature(materials: materials, tasks: tasks, records: records)) { _, _ in
             refreshWorkspaceIndexIfNeeded()
         }
-        .sheet(isPresented: $isProjectEditorPresented) {
+        .leafySheet(isPresented: $isProjectEditorPresented) {
             LearningProjectEditorSheet(project: nil) { draft in
                 insertProject(draft)
             }
         }
-        .sheet(item: $editingProject) { project in
+        .leafySheet(item: $editingProject) { project in
             LearningProjectEditorSheet(project: project) { draft in
                 update(project, with: draft)
             }
@@ -983,7 +983,7 @@ struct LearningWorkspaceDetailView: View {
             allowsMultipleSelection: true,
             onCompletion: handleImport
         )
-        .sheet(item: $editingMaterial) { material in
+        .leafySheet(item: $editingMaterial) { material in
             LearningMaterialEditorSheet(material: material, lockedCategory: lockedCategory)
                 .presentationDetents([.medium, .large])
         }
@@ -993,22 +993,22 @@ struct LearningWorkspaceDetailView: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(activityItems: [item.url])
         }
-        .sheet(isPresented: $isTaskEditorPresented) {
+        .leafySheet(isPresented: $isTaskEditorPresented) {
             LearningProjectTaskEditorSheet(task: nil) { draft in
                 insertTask(draft)
             }
         }
-        .sheet(item: $editingTask) { task in
+        .leafySheet(item: $editingTask) { task in
             LearningProjectTaskEditorSheet(task: task) { draft in
                 update(task, with: draft)
             }
         }
-        .sheet(isPresented: $showingRecordEditor) {
+        .leafySheet(isPresented: $showingRecordEditor) {
             StudyTimeRecordEditorView(record: nil, topicOptions: topicOptions, initialTopic: focusTopic, lockedTopic: focusTopic) { draft in
                 insertRecord(draft)
             }
         }
-        .sheet(item: $editingRecord) { record in
+        .leafySheet(item: $editingRecord) { record in
             StudyTimeRecordEditorView(record: record, topicOptions: topicOptions, initialTopic: focusTopic, lockedTopic: focusTopic) { draft in
                 update(record, with: draft)
             }
@@ -1016,7 +1016,7 @@ struct LearningWorkspaceDetailView: View {
         .sheet(item: $studyTimeShareItem) { item in
             ShareSheet(activityItems: [item.image])
         }
-        .sheet(item: $editingProject) { project in
+        .leafySheet(item: $editingProject) { project in
             LearningProjectEditorSheet(project: project) { draft in
                 update(project, with: draft)
             }
@@ -2186,12 +2186,12 @@ struct StudyTimeRecordsView: View {
                 .accessibilityLabel(L10n.text("添加记录", language: leafyLanguage))
             }
         }
-        .sheet(isPresented: $showingEditor) {
+        .leafySheet(isPresented: $showingEditor) {
             StudyTimeRecordEditorView(record: nil, topicOptions: topicOptions, initialTopic: selectedTopic) { draft in
                 insert(draft)
             }
         }
-        .sheet(item: $editingRecord) { record in
+        .leafySheet(item: $editingRecord) { record in
             StudyTimeRecordEditorView(record: record, topicOptions: topicOptions, initialTopic: StudyFocusTopicOption.option(for: record, projects: projects)) { draft in
                 update(record, with: draft)
             }

@@ -18,6 +18,7 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    private var activeSessionID: UUID?
 
     var isListening: Bool { state == .listening }
 
@@ -62,9 +63,12 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
 
+            let sessionID = UUID()
+            activeSessionID = sessionID
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }
+                    guard self.activeSessionID == sessionID else { return }
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
                         if result.isFinal { self.stop() }
@@ -82,6 +86,7 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
     }
 
     func stop(resetState: Bool = true) {
+        activeSessionID = nil
         if audioEngine.isRunning { audioEngine.stop() }
         audioEngine.inputNode.removeTap(onBus: 0)
         request?.endAudio()

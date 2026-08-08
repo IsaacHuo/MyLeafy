@@ -65,7 +65,7 @@ struct CareerPlanningSectionView: View {
             allowsMultipleSelection: false,
             onCompletion: handleResumeImport
         )
-        .sheet(item: $editingResume) { resume in
+        .leafySheet(item: $editingResume) { resume in
             CareerResumeEditorSheet(resume: resume)
         }
         .sheet(item: $previewURL) { item in
@@ -74,23 +74,23 @@ struct CareerPlanningSectionView: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(activityItems: [item.url])
         }
-        .sheet(isPresented: $isTaskEditorPresented) {
+        .leafySheet(isPresented: $isTaskEditorPresented) {
             CareerTaskEditorSheet(task: nil) { task in
                 insertTask(task)
             }
         }
-        .sheet(item: $editingTask) { task in
+        .leafySheet(item: $editingTask) { task in
             CareerTaskEditorSheet(task: task) { _ in
                 saveContext()
                 operationAlert = .success(L10n.text("任务已保存。", language: leafyLanguage))
             }
         }
-        .sheet(isPresented: $isOpportunityEditorPresented) {
+        .leafySheet(isPresented: $isOpportunityEditorPresented) {
             CareerOpportunityEditorSheet(opportunity: nil) { opportunity in
                 insertOpportunity(opportunity)
             }
         }
-        .sheet(item: $editingOpportunity) { opportunity in
+        .leafySheet(item: $editingOpportunity) { opportunity in
             CareerOpportunityEditorSheet(opportunity: opportunity) { _ in
                 saveContext()
                 operationAlert = .success(L10n.text("岗位已保存。", language: leafyLanguage))

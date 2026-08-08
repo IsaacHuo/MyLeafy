@@ -213,14 +213,14 @@ struct GradesView: View {
         ) { result in
             handleGradeImport(result)
         }
-        .sheet(isPresented: $isGradeImportGuidePresented) {
+        .leafySheet(isPresented: $isGradeImportGuidePresented) {
             GradeCSVImportGuideSheet {
                 isGradeImportGuidePresented = false
                 isGradeImportPresented = true
             }
             .presentationDetents([.medium, .large])
         }
-        .sheet(item: $gradeEditorPresentation) { presentation in
+        .leafySheet(item: $gradeEditorPresentation) { presentation in
             ManualGradeEditorSheet(presentation: presentation)
                 .presentationDetents([.large])
         }
@@ -964,7 +964,7 @@ struct GradeAnalyticsDetailView: View {
                 .disabled(grades.isEmpty)
             }
         }
-        .sheet(isPresented: Binding(
+        .leafySheet(isPresented: Binding(
             get: { sharePreviewImage != nil },
             set: { if !$0 { sharePreviewImage = nil } }
         )) {

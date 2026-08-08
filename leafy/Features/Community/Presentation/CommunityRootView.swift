@@ -263,29 +263,29 @@ struct CommunityRootView: View {
             .background(LeafyPageBackground())
             .tint(AppTheme.accent(for: themeColorPreference))
             .leafyNavigationBarHidden()
-            .sheet(isPresented: $showingComposer) {
+            .leafySheet(isPresented: $showingComposer) {
                 CommunityComposerSheet { message in
                     communityRefreshID = UUID()
                     operationAlert = .success(message)
                 }
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingCommunityProfileEditor) {
+            .leafySheet(isPresented: $showingCommunityProfileEditor) {
                 CommunityProfileEditorSheet()
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingCommunityTerms) {
+            .leafySheet(isPresented: $showingCommunityTerms) {
                 CommunityTermsAgreementSheet {
                     hasAcceptedCommunityTerms = true
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
                     .presentationDetents([.large])
             }
-            .sheet(isPresented: $showingCommunitySearch) {
+            .leafySheet(isPresented: $showingCommunitySearch) {
                 CommunitySearchSheet()
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingNotifications) {
+            .leafySheet(isPresented: $showingNotifications) {
                 CommunityNotificationsSheet(
                     onOpenPost: { post in
                         showingNotifications = false
@@ -303,7 +303,7 @@ struct CommunityRootView: View {
                 )
                 .presentationDetents([.medium, .large])
             }
-            .sheet(item: $selectedPost) { post in
+            .leafySheet(item: $selectedPost) { post in
                 RealCommunityPostDetailSheet(post: post) { _ in
                     communityRefreshID = UUID()
                 } onPostRemoved: {
@@ -838,7 +838,7 @@ struct CommunityCampusSelectionPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isSubmitting)
-                .sheet(isPresented: $isNewSchoolRequestPresented) {
+                .leafySheet(isPresented: $isNewSchoolRequestPresented) {
                     CommunityNewSchoolRequestSheet(onSubmit: onSubmitNewSchool)
                         .presentationDetents([.medium, .large])
                 }
@@ -1437,11 +1437,11 @@ private struct CommunityNotificationsSheet: View {
             .refreshable {
                 await viewModel.load()
             }
-            .sheet(item: $selectedAnnouncement) { announcement in
+            .leafySheet(item: $selectedAnnouncement) { announcement in
                 SiteAnnouncementDetailSheet(announcement: announcement)
                     .presentationDetents([.medium, .large])
             }
-            .sheet(item: $selectedPublishTask) { task in
+            .leafySheet(item: $selectedPublishTask) { task in
                 CommunityPublishTaskDetailSheet(taskID: task.id)
                     .presentationDetents([.medium, .large])
             }

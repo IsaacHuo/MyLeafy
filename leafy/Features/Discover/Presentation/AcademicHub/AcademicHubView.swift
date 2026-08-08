@@ -79,21 +79,21 @@ struct AcademicHubView: View {
             .navigationTitle("")
             .leafyInlineNavigationTitle()
             .leafyNavigationBarVisible()
-            .sheet(item: $selectedTeacher) { teacher in
+            .leafySheet(item: $selectedTeacher) { teacher in
                 TeacherDetailSheet(summary: teacher) { updatedSummary in
                     selectedTeacher = updatedSummary
                     teacherRefreshID = UUID()
                 }
                 .presentationDetents([.medium, .large])
             }
-            .sheet(item: $selectedCourse) { course in
+            .leafySheet(item: $selectedCourse) { course in
                 CourseRatingDetailSheet(summary: course) { updatedSummary in
                     selectedCourse = updatedSummary
                     courseRefreshID = UUID()
                 }
                 .presentationDetents([.medium, .large])
             }
-            .sheet(item: $selectedDish) { dish in
+            .leafySheet(item: $selectedDish) { dish in
                 DishDetailSheet(summary: dish) { updatedSummary in
                     selectedDish = updatedSummary
                     dishRefreshID = UUID()

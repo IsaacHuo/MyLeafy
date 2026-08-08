@@ -100,7 +100,7 @@ struct ProfileView: View {
             .onChange(of: appNavigation.requestedProfileRoute) { _, route in
                 handleProfileRouteRequest(route)
             }
-            .sheet(isPresented: $showingFeedbackSheet) {
+            .leafySheet(isPresented: $showingFeedbackSheet) {
                 FeedbackSheetView(
                     initialIssueType: feedbackInitialIssueType,
                     initialBody: feedbackInitialBody
@@ -857,7 +857,7 @@ private struct PersonalizationSettingsView: View {
         .background(LeafyPageBackground())
         .navigationTitle("个性化")
         .leafyInlineNavigationTitle()
-        .sheet(isPresented: $showingCustomThemeColorPicker) {
+        .leafySheet(isPresented: $showingCustomThemeColorPicker) {
             CustomThemeColorPickerSheet(color: customThemeColorBinding)
                 .presentationDetents([.medium])
         }
@@ -1093,7 +1093,7 @@ private struct FeedbackSheetView: View {
                 }
             }
             .leafyOperationAlert($operationAlert)
-            .sheet(isPresented: $showingContactSheet) {
+            .leafySheet(isPresented: $showingContactSheet) {
                 ContactUsSheetView()
                     .presentationDetents([.medium, .large])
             }
@@ -1567,7 +1567,7 @@ private struct LeafyGuideAndDataSecurityView: View {
         .background(LeafyPageBackground())
         .navigationTitle("说明与安全")
         .leafyInlineNavigationTitle()
-        .sheet(isPresented: $showingCommunityTermsSheet) {
+        .leafySheet(isPresented: $showingCommunityTermsSheet) {
             CommunityTermsPreferenceSheet()
                 .presentationDetents([.large])
         }

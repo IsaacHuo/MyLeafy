@@ -104,7 +104,7 @@ struct ScheduleReportsView: View {
             ScheduleReportSettingsStore.save(settings)
         }
         .onDisappear { applyTask?.cancel() }
-        .sheet(isPresented: $isEditorPresented) {
+        .leafySheet(isPresented: $isEditorPresented) {
             ScheduleReminderEditor(input: input) { savedReminder in
                 var updated = settings
                 updated.reminders.append(savedReminder)

@@ -128,7 +128,7 @@ extension View {
         networkManager: SchoolNetworkManager,
         onAuthenticated: @escaping (SchoolReauthenticationContext) -> Void
     ) -> some View {
-        sheet(item: request) { item in
+        leafySheet(item: request) { item in
             SchoolReauthenticationSheet(
                 networkManager: networkManager,
                 context: item.context

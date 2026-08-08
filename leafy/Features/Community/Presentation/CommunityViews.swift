@@ -654,14 +654,14 @@ struct RealCommunitySectionView: View {
                 await viewModel.load(mode: .refresh, query: feedQuery)
             }
         }
-        .sheet(isPresented: $showingTermsSheet) {
+        .leafySheet(isPresented: $showingTermsSheet) {
             CommunityTermsAgreementSheet {
                 hasAcceptedTerms = true
                 operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
             }
             .presentationDetents([.large])
         }
-        .sheet(item: $selectedPoll) { poll in
+        .leafySheet(item: $selectedPoll) { poll in
             CommunityPollDetailSheet(
                 poll: poll,
                 isLoading: viewModel.activePollIDs.contains(poll.id),
@@ -673,7 +673,7 @@ struct RealCommunitySectionView: View {
             )
             .presentationDetents([.medium, .large])
         }
-        .sheet(item: $shareCardSource) { source in
+        .leafySheet(item: $shareCardSource) { source in
             CommunityPostCardPreviewSheet(source: source)
         }
         .leafyOperationAlert($operationAlert)
@@ -1218,7 +1218,7 @@ struct CommunitySearchSheet: View {
             .task(id: searchTaskID) {
                 await loadSearchResults()
             }
-            .sheet(item: $selectedPost) { post in
+            .leafySheet(item: $selectedPost) { post in
                 RealCommunityPostDetailSheet(post: post) { _ in
                     searchRefreshID = UUID()
                 } onPostRemoved: {
@@ -1348,17 +1348,17 @@ struct CommunityPollsSheet: View {
             .task {
                 await viewModel.load()
             }
-            .sheet(isPresented: $showingComposer) {
+            .leafySheet(isPresented: $showingComposer) {
                 CommunityPollComposerSheet(viewModel: viewModel) {
                     operationAlert = .success(L10n.text("投票已提交审核。", language: leafyLanguage))
                 }
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingProfileEditor) {
+            .leafySheet(isPresented: $showingProfileEditor) {
                 CommunityProfileEditorSheet()
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingTermsSheet) {
+            .leafySheet(isPresented: $showingTermsSheet) {
                 CommunityTermsAgreementSheet {
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
@@ -2465,11 +2465,11 @@ struct CommunityComposerSheet: View {
             ) { result in
                 handleAttachmentSelection(result)
             }
-            .sheet(isPresented: $showingProfileEditor) {
+            .leafySheet(isPresented: $showingProfileEditor) {
                 CommunityProfileEditorSheet()
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingTermsSheet) {
+            .leafySheet(isPresented: $showingTermsSheet) {
                 CommunityTermsAgreementSheet {
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
@@ -3313,11 +3313,11 @@ struct RealCommunityPostDetailSheet: View {
             .task {
                 await viewModel.load()
             }
-            .sheet(isPresented: $showingProfileEditor) {
+            .leafySheet(isPresented: $showingProfileEditor) {
                 CommunityProfileEditorSheet()
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingTermsSheet) {
+            .leafySheet(isPresented: $showingTermsSheet) {
                 CommunityTermsAgreementSheet {
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
@@ -3722,7 +3722,7 @@ struct RealCommunityPostCard: View {
                 )
             }
         }
-        .sheet(item: $shareCardSource) { source in
+        .leafySheet(item: $shareCardSource) { source in
             CommunityPostCardPreviewSheet(source: source)
         }
     }

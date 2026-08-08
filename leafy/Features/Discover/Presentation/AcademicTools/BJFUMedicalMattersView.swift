@@ -429,7 +429,7 @@ struct MedicalLedgerView: View {
                 .accessibilityLabel("医疗台账操作")
             }
         }
-        .sheet(item: $editorState) { state in
+        .leafySheet(item: $editorState) { state in
             MedicalLedgerEditorSheet(
                 entry: state.entry,
                 existingPhotos: state.entry.map { photos(for: $0) } ?? [],

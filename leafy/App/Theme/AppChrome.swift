@@ -12,15 +12,48 @@ enum LeafyRootChromeMetrics {
     static let horizontalInset: CGFloat = AppSpacing.page
 }
 
+private enum LeafySurfaceContext {
+    case page
+    case modal
+}
+
+private struct LeafySurfaceContextKey: EnvironmentKey {
+    static let defaultValue: LeafySurfaceContext = .page
+}
+
+private extension EnvironmentValues {
+    var leafySurfaceContext: LeafySurfaceContext {
+        get { self[LeafySurfaceContextKey.self] }
+        set { self[LeafySurfaceContextKey.self] = newValue }
+    }
+}
+
 struct LeafyPageBackground: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @Environment(\.leafySurfaceContext) private var surfaceContext
 
+    @ViewBuilder
     var body: some View {
-        ZStack {
-            AppTheme.background
-            AppTheme.pageGradient(for: themeColorPreference).opacity(0.92)
+        if surfaceContext == .modal {
+            AppTheme.modalBackground
+                .ignoresSafeArea()
+        } else {
+            ZStack {
+                AppTheme.background
+                AppTheme.pageGradient(for: themeColorPreference).opacity(0.92)
+            }
+            .ignoresSafeArea()
         }
-        .ignoresSafeArea()
+    }
+}
+
+private struct LeafyModalSurfaceModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .environment(\.leafySurfaceContext, .modal)
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.modalBackground.ignoresSafeArea())
+            .presentationBackground(AppTheme.modalBackground)
     }
 }
 
@@ -185,6 +218,32 @@ struct LeafyOperationAlert: Identifiable {
 }
 
 extension View {
+    func leafyModalSurface() -> some View {
+        modifier(LeafyModalSurfaceModifier())
+    }
+
+    func leafySheet<SheetContent: View>(
+        isPresented: Binding<Bool>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> SheetContent
+    ) -> some View {
+        sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            content()
+                .leafyModalSurface()
+        }
+    }
+
+    func leafySheet<Item: Identifiable, SheetContent: View>(
+        item: Binding<Item?>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> SheetContent
+    ) -> some View {
+        sheet(item: item, onDismiss: onDismiss) { item in
+            content(item)
+                .leafyModalSurface()
+        }
+    }
+
     func leafyAdaptiveContentWidth(maxWidth: CGFloat = 760, horizontalPadding: CGFloat = AppSpacing.page) -> some View {
         modifier(LeafyAdaptiveContentWidthModifier(maxWidth: maxWidth, horizontalPadding: horizontalPadding))
     }

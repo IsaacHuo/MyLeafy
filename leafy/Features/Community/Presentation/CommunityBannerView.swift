@@ -66,7 +66,7 @@ struct CommunityBannerSlot: View {
         .task(id: CommunityBannerLoadID(refreshID: refreshID, campusID: campusID)) {
             await viewModel.load(campusID: campusID)
         }
-        .sheet(item: $browserItem) { item in
+        .leafySheet(item: $browserItem) { item in
             LeafyExternalBrowserView(url: item.url)
         }
     }

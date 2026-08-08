@@ -75,7 +75,7 @@ struct TimetableExportSheet: View {
                     }
                 }
             }
-            .sheet(item: $selectedDaySummary) { selection in
+            .leafySheet(item: $selectedDaySummary) { selection in
                 DayScheduleSummarySheet(
                     selection: selection,
                     courses: courses,
@@ -85,7 +85,7 @@ struct TimetableExportSheet: View {
                 )
                 .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showingWeekSchedule) {
+            .leafySheet(isPresented: $showingWeekSchedule) {
                 WeekScheduleSheet(
                     selection: currentWeekSelection,
                     courses: courses,
@@ -422,7 +422,7 @@ struct DayScheduleSummarySheet: View {
                 await sessionManager.restoreProfileIfPossible()
                 await loadWeather()
             }
-            .sheet(isPresented: Binding(
+            .leafySheet(isPresented: Binding(
                 get: { sharePreviewImage != nil },
                 set: { if !$0 { sharePreviewImage = nil } }
             )) {
@@ -563,7 +563,7 @@ struct WeekScheduleSheet: View {
             .task {
                 await sessionManager.restoreProfileIfPossible()
             }
-            .sheet(isPresented: Binding(
+            .leafySheet(isPresented: Binding(
                 get: { sharePreviewImage != nil },
                 set: { if !$0 { sharePreviewImage = nil } }
             )) {

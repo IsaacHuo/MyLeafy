@@ -248,46 +248,40 @@ struct TimetableTimeScopeMonthMark: Identifiable, Equatable {
     var id: Int { month }
 }
 
+enum TimetableTimeScopePresentation: Equatable {
+    case standalone
+    case embedded
+}
+
 struct TimetableTimeScopeView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.leafyLanguage) private var leafyLanguage
 
     let snapshot: TimetableTimeScopeSnapshot
+    let presentation: TimetableTimeScopePresentation
 
     @State private var hasAppeared = false
     @State private var isGatherOverlayVisible = true
     @State private var displayedSnapshot: TimetableTimeScopeSnapshot
     @State private var monthTransitionDirection = 1
 
-    init(snapshot: TimetableTimeScopeSnapshot) {
+    init(
+        snapshot: TimetableTimeScopeSnapshot,
+        presentation: TimetableTimeScopePresentation = .standalone
+    ) {
         self.snapshot = snapshot
+        self.presentation = presentation
         _displayedSnapshot = State(initialValue: snapshot)
     }
 
     var body: some View {
-        ZStack {
-            LeafyPageBackground()
-                .ignoresSafeArea()
-
-            AppTheme.background.opacity(0.82)
-                .ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: AppSpacing.card) {
-                    header
-                    monthCalendar
-                    yearStrip
-                    summaryCards
-                }
-                .padding(.horizontal, AppSpacing.page)
-                .padding(.top, 28 * leafyControlScale)
-                .padding(.bottom, 48 * leafyControlScale)
-            }
-
-            if isGatherOverlayVisible {
-                TimetableTimeScopeCornerGatherOverlay(isGathered: hasAppeared)
-                    .transition(.opacity)
+        Group {
+            switch presentation {
+            case .standalone:
+                standaloneContent
+            case .embedded:
+                embeddedContent
             }
         }
         .onChange(of: leafyLanguage) { _, newLanguage in
@@ -307,6 +301,10 @@ struct TimetableTimeScopeView: View {
             withAnimation(.easeInOut(duration: 0.42)) {
                 hasAppeared = true
             }
+            guard presentation == .standalone else {
+                isGatherOverlayVisible = false
+                return
+            }
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(520))
                 withAnimation(.easeOut(duration: 0.16)) {
@@ -314,8 +312,43 @@ struct TimetableTimeScopeView: View {
                 }
             }
         }
+    }
+
+    private var standaloneContent: some View {
+        ZStack {
+            LeafyPageBackground()
+                .ignoresSafeArea()
+
+            AppTheme.background.opacity(0.82)
+                .ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                timeScopeContent
+                .padding(.horizontal, AppSpacing.page)
+                .padding(.top, 28 * leafyControlScale)
+                .padding(.bottom, 48 * leafyControlScale)
+            }
+
+            if isGatherOverlayVisible {
+                TimetableTimeScopeCornerGatherOverlay(isGathered: hasAppeared)
+                    .transition(.opacity)
+            }
+        }
         .navigationTitle("年度视图")
         .leafyInlineNavigationTitle()
+    }
+
+    private var embeddedContent: some View {
+        timeScopeContent
+    }
+
+    private var timeScopeContent: some View {
+        VStack(spacing: AppSpacing.card) {
+            header
+            monthCalendar
+            yearStrip
+            summaryCards
+        }
     }
 
     private var header: some View {

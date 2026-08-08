@@ -292,7 +292,7 @@ private struct TeacherSectionView: View {
         .onDisappear {
             searchTask?.cancel()
         }
-        .sheet(item: $suggestionSheet) { context in
+        .leafySheet(item: $suggestionSheet) { context in
             CatalogSuggestionSheet(context: context)
                 .presentationDetents([.medium, .large])
         }
@@ -581,7 +581,7 @@ private struct CourseSectionView: View {
         .onDisappear {
             searchTask?.cancel()
         }
-        .sheet(item: $suggestionSheet) { context in
+        .leafySheet(item: $suggestionSheet) { context in
             CatalogSuggestionSheet(context: context)
                 .presentationDetents([.medium, .large])
         }
@@ -865,7 +865,7 @@ private struct DishSectionView: View {
         .onDisappear {
             searchTask?.cancel()
         }
-        .sheet(item: $suggestionSheet) { context in
+        .leafySheet(item: $suggestionSheet) { context in
             CatalogSuggestionSheet(context: context)
                 .presentationDetents([.medium, .large])
         }

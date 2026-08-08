@@ -109,7 +109,7 @@ struct ExamScheduleView: View {
                 }
             }
         }
-        .sheet(item: $editingExam) { item in
+        .leafySheet(item: $editingExam) { item in
             ExamEditorSheet(item: item) { exam in
                 upsertExam(exam)
             } onDelete: { exam in

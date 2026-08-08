@@ -83,10 +83,10 @@ struct HonorRecordsView: View {
             allowsMultipleSelection: true,
             onCompletion: handleImport
         )
-        .sheet(item: $editorRecord) { record in
+        .leafySheet(item: $editorRecord) { record in
             HonorRecordEditorSheet(record: record)
         }
-        .sheet(item: $previewRecord) { record in
+        .leafySheet(item: $previewRecord) { record in
             HonorRecordPreviewSheet(record: record)
         }
         .sheet(item: $shareItem) { item in

@@ -422,6 +422,7 @@ enum AppTheme {
     static let groupedBackgroundSecondary = Color(uiColor: .tertiarySystemGroupedBackground)
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
     static let cardElevated = Color(uiColor: .systemBackground)
+    static let modalBackground = Color(uiColor: .systemBackground)
     static let fill = Color(uiColor: .tertiarySystemGroupedBackground)
     static let separator = Color(uiColor: .separator).opacity(0.12)
 

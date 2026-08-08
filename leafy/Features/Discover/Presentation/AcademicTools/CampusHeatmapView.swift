@@ -110,7 +110,7 @@ struct CampusHeatmapView: View {
         .onChange(of: endPeriod) { _, _ in
             normalizePeriods()
         }
-        .sheet(item: $selectedBuilding) { building in
+        .leafySheet(item: $selectedBuilding) { building in
             CampusFloorCongestionSheet(building: building)
         }
         .schoolReauthenticationSheet(

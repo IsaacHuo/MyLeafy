@@ -360,19 +360,19 @@ struct TimetableView: View {
 
     private var rootSheets: some View {
         rootLifecycle
-        .sheet(item: $selectedCourseContext) { context in
+        .leafySheet(item: $selectedCourseContext) { context in
                 CourseDetailSheet(context: context)
                 .presentationDetents([.medium, .large])
         }
-        .sheet(item: $selectedCellReminderContext) { context in
+        .leafySheet(item: $selectedCellReminderContext) { context in
             TimetableCellReminderSheet(context: context)
                 .presentationDetents([.medium, .large])
         }
-        .sheet(item: $selectedCustomScheduleEditor, onDismiss: reloadCustomCountdownEvents) { presentation in
+        .leafySheet(item: $selectedCustomScheduleEditor, onDismiss: reloadCustomCountdownEvents) { presentation in
             CustomScheduleEditorSheet(presentation: presentation)
                 .presentationDetents([.medium, .large])
         }
-        .sheet(item: $selectedDaySummary) { selection in
+        .leafySheet(item: $selectedDaySummary) { selection in
             DayScheduleSummarySheet(
                 selection: selection,
                 courses: selection.semesterID.map { semesterID in
@@ -384,7 +384,7 @@ struct TimetableView: View {
             )
             .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $isExportSheetPresented) {
+        .leafySheet(isPresented: $isExportSheetPresented) {
             TimetableExportSheet(
                 currentWeek: selectedSemesterWeek,
                 courses: selectedSemesterCourses,
@@ -398,7 +398,7 @@ struct TimetableView: View {
             )
             .presentationDetents([.large])
         }
-        .sheet(isPresented: $isWeatherAdvicePresented, onDismiss: {
+        .leafySheet(isPresented: $isWeatherAdvicePresented, onDismiss: {
             Task { await refreshTimetableWeatherPreview() }
         }) {
             TimetableWeatherAdviceSheet(
@@ -418,6 +418,7 @@ struct TimetableView: View {
                 onSelect: selectTimetableWeek
             )
             .frame(idealWidth: 420, idealHeight: 520)
+            .leafyModalSurface()
             .presentationDetents([.medium, .large])
             .presentationCompactAdaptation(.sheet)
         }
@@ -806,6 +807,7 @@ struct TimetableView: View {
             arrowEdge: .top
         ) {
             quickAccessPopoverContent
+                .leafyModalSurface()
                 .presentationCompactAdaptation(.popover)
         }
         .accessibilityLabel("首页快捷入口")
@@ -2372,6 +2374,7 @@ private struct TimetableWeekPickerPanel: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @Environment(\.leafyLanguage) private var leafyLanguage
 
     private let columns = Array(
         repeating: GridItem(.flexible(minimum: 64), spacing: AppSpacing.compact),
@@ -2384,6 +2387,20 @@ private struct TimetableWeekPickerPanel: View {
                 LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
                     ForEach(model.academicYears) { academicYear in
                         academicYearSection(academicYear)
+                    }
+
+                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                        Text("年度视图")
+                            .leafyHeadline()
+
+                        TimetableTimeScopeView(
+                            snapshot: TimetableTimeScopeSnapshot.make(
+                                currentWeek: SemesterConfig.currentWeek(),
+                                referenceDate: Date(),
+                                language: leafyLanguage
+                            ),
+                            presentation: .embedded
+                        )
                     }
                 }
                 .padding(AppSpacing.page)
@@ -2450,15 +2467,10 @@ private struct TimetableWeekPickerPanel: View {
         return Button {
             onSelect(week.page)
         } label: {
-            VStack(spacing: 2) {
-                Text("第 \(week.weekNumber) 周")
-                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                Text(isCurrent ? "本周" : " ")
-                    .font(.caption2)
-                    .foregroundStyle(isSelected ? Color.white.opacity(0.9) : AppTheme.secondaryText)
-            }
+            Text("第 \(week.weekNumber) 周")
+                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
             .frame(maxWidth: .infinity, minHeight: 44)
             .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
             .background(

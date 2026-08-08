@@ -146,7 +146,7 @@ struct ProfileCommunityPostListView: View {
         .refreshable {
             await load()
         }
-        .sheet(item: $selectedPost) { post in
+        .leafySheet(item: $selectedPost) { post in
             RealCommunityPostDetailSheet(post: post) { updatedPost in
                 applyPostChange(updatedPost)
             } onPostRemoved: {
@@ -485,7 +485,7 @@ struct ProfileCommunityPollListView: View {
         .refreshable {
             await load()
         }
-        .sheet(item: $selectedPoll) { poll in
+        .leafySheet(item: $selectedPoll) { poll in
             CommunityPollDetailSheet(
                 poll: poll,
                 isLoading: activePollIDs.contains(poll.id),

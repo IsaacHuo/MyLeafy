@@ -323,6 +323,7 @@ struct CommunityPostCardPreviewSource: Identifiable {
     enum Content {
         case post(CommunityPost)
         case draft(CommunityPostDraftEditorPayload, CommunityProfile)
+        case snapshot(CommunityPostCardSnapshot)
     }
 
     let id = UUID()
@@ -442,6 +443,8 @@ struct CommunityPostCardPreviewSheet: View {
                 snapshot = try await CommunityPostCardGenerator.snapshot(from: post)
             case .draft(let payload, let profile):
                 snapshot = try await CommunityPostCardGenerator.snapshot(from: payload, profile: profile)
+            case .snapshot(let suppliedSnapshot):
+                snapshot = suppliedSnapshot
             }
             cardURL = try CommunityPostCardGenerator.render(snapshot)
         } catch {

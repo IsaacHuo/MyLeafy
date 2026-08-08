@@ -77,7 +77,7 @@ struct PostgraduateInfoSectionView: View {
         .sheet(item: $browserItem) { item in
             PostgraduateSafariView(url: item.url)
         }
-        .sheet(item: $targetSheetItem) { item in
+        .leafySheet(item: $targetSheetItem) { item in
             PostgraduateTargetEditorSheet(item: item) { draft in
                 saveTarget(draft, for: item.target)
             }

@@ -35,7 +35,7 @@ struct CommunityPostDraftsView: View {
             guard notification.object as? UUID == sessionManager.currentUserID else { return }
             Task { await load() }
         }
-        .sheet(item: $selectedDraft) { selection in
+        .leafySheet(item: $selectedDraft) { selection in
             CommunityComposerSheet(
                 draftID: selection.id,
                 onDraftChanged: {
@@ -47,7 +47,7 @@ struct CommunityPostDraftsView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .sheet(item: $cardSource) { source in
+        .leafySheet(item: $cardSource) { source in
             CommunityPostCardPreviewSheet(source: source)
         }
         .confirmationDialog(

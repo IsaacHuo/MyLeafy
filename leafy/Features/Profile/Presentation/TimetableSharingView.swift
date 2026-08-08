@@ -140,13 +140,13 @@ struct TimetableSharingView: View {
         .refreshable {
             await bootstrapAndLoad()
         }
-        .sheet(isPresented: $showingAcceptSheet, onDismiss: openAcceptedSnapshotIfNeeded) {
+        .leafySheet(isPresented: $showingAcceptSheet, onDismiss: openAcceptedSnapshotIfNeeded) {
             AcceptTimetableInviteSheet(initialCode: pendingInviteCode ?? "") { snapshot in
                 pendingAcceptedSnapshot = snapshot
             }
             .presentationDetents([.medium])
         }
-        .sheet(item: $generatedInvite) { invite in
+        .leafySheet(item: $generatedInvite) { invite in
             TimetableInviteShareSheet(invite: invite, ownerName: sessionManager.profile?.limitedResolvedDisplayName ?? L10n.text(ActiveCampusContext.descriptor.defaultStudentDisplayName, language: leafyLanguage))
                 .presentationDetents([.medium])
         }
@@ -1087,7 +1087,7 @@ private struct SharedTimetableGridDetailView: View {
         .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
             currentWeek = SemesterConfig.currentWeek()
         }
-        .sheet(item: $selectedCourseContext) { context in
+        .leafySheet(item: $selectedCourseContext) { context in
             SharedTimetableGridCourseDetailSheet(context: context)
                 .presentationDetents([.medium])
         }
