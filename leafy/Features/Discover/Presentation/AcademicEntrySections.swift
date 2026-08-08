@@ -10,10 +10,20 @@ struct TeachingCultivationSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
-            LeafySectionTitle("教学培养", subtitle: sectionSubtitle)
+            LeafySectionTitle("学校教学", subtitle: sectionSubtitle)
 
             ToolEntryCard(title: "成绩查询", subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看课程成绩、绩点在各学期记录", icon: "chart.bar.doc.horizontal") {
                 openRoute(.grades)
+            }
+
+            ToolEntryCard(title: "考试安排", subtitle: isCustomCampus ? "手动添加或导入考试时间和地点" : "查看教务拉取的考试时间和地点", icon: "calendar.badge.clock") {
+                openRoute(.examSchedule)
+            }
+
+            if !isCustomCampus {
+                ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {
+                    openRoute(.schoolCalendar)
+                }
             }
 
             ToolEntryCard(title: "荣誉记录", subtitle: "保存奖状证书等相关文档和图片", icon: "rosette") {
@@ -38,47 +48,9 @@ struct TeachingCultivationSectionView: View {
 
     private var sectionSubtitle: String {
         if isCustomCampus {
-            return "通用学校以本地维护为主：成绩可按模板导入，荣誉记录可手动维护。"
+            return "通用学校以本地维护为主：成绩和考试可按模板导入，培养信息可手动维护。"
         }
-        return "集中显示成绩、荣誉、教学计划和培养方案；个人教务数据仅保存在本机。"
-    }
-}
-
-struct ScheduleSectionView: View {
-    let openRoute: (AcademicDetailRoute) -> Void
-
-    private var isCustomCampus: Bool {
-        ActiveCampusContext.identity?.isCustom == true
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.card) {
-            LeafySectionTitle("时间日程", subtitle: isCustomCampus ? "考试安排、日程推送和年度视图分开管理。" : "考试、校历与作息分开管理。")
-
-            if isCustomCampus {
-                ToolEntryCard(title: "课表处理", subtitle: "集中处理手动添加、CSV 导入和示例清理", icon: "slider.horizontal.3") {
-                    openRoute(.timetableProcessing)
-                }
-            }
-
-            ToolEntryCard(title: "考试安排", subtitle: isCustomCampus ? "手动添加或导入考试时间和地点" : "查看教务拉取的考试时间和地点", icon: "calendar.badge.clock") {
-                openRoute(.examSchedule)
-            }
-
-            ToolEntryCard(title: "日程推送", subtitle: "按时发送课程、考试、重要日期和校历报告", icon: "bell.badge") {
-                openRoute(.scheduleReports)
-            }
-
-            ToolEntryCard(title: "年度视图", subtitle: "查看全年月份、学期周次和假期分布", icon: "calendar") {
-                openRoute(.yearOverview)
-            }
-
-            if !isCustomCampus {
-                ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {
-                    openRoute(.schoolCalendar)
-                }
-            }
-        }
+        return "集中显示成绩、考试、校历和培养信息；个人教务数据仅保存在本机。"
     }
 }
 

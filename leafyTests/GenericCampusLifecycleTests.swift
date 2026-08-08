@@ -2,10 +2,25 @@ import XCTest
 @testable import Leafy
 
 final class GenericCampusLifecycleTests: XCTestCase {
+    @MainActor
+    func testScheduleDestinationRequestsSelectNewRootTab() async throws {
+        let coordinator = AppNavigationCoordinator()
+        coordinator.openScheduleDestination(.customSchedules)
+
+        XCTAssertEqual(coordinator.selectedRootTab, .schedule)
+        try await Task.sleep(for: .milliseconds(220))
+        XCTAssertEqual(coordinator.requestedScheduleDestination, .customSchedules)
+
+        coordinator.handle(url: try XCTUnwrap(URL(string: "leafy://schedule-reports")))
+        try await Task.sleep(for: .milliseconds(220))
+        XCTAssertEqual(coordinator.selectedRootTab, .schedule)
+        XCTAssertEqual(coordinator.requestedScheduleDestination, .scheduleReports)
+    }
+
     func testCustomCampusAcademicTabsHideBJFUSpecificSurfaces() {
         let tabs = AcademicPrimaryTab.visibleCases(isCustomCampus: true, isCommunityEnabled: false)
 
-        XCTAssertEqual(tabs, [.cultivation, .schedule, .learning, .sports, .career, .postgraduate])
+        XCTAssertEqual(tabs, [.cultivation, .learning, .sports, .career, .postgraduate])
         XCTAssertFalse(tabs.contains(.classrooms))
         XCTAssertFalse(tabs.contains(.ratings))
         XCTAssertFalse(tabs.contains(.medical))
@@ -24,19 +39,15 @@ final class GenericCampusLifecycleTests: XCTestCase {
             isMedicalEnabled: true
         )
 
-        XCTAssertEqual(bjfuWithoutCommunityTabs.count, 9)
+        XCTAssertEqual(bjfuWithoutCommunityTabs.count, 8)
 
-        XCTAssertEqual(bjfuWithCommunityTabs.count, 10)
+        XCTAssertEqual(bjfuWithCommunityTabs.count, 9)
         XCTAssertEqual(bjfuWithCommunityTabs.suffix(3), [.medical, .weekendTravel, .ratings])
     }
 
     func testCustomCampusRoutesHideBJFUSpecificToolsButKeepLocalLifecycleTools() {
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.grades, isCustomCampus: true, isCommunityEnabled: false))
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.examSchedule, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.scheduleReports, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.yearOverview, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.timetableProcessing, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.countdowns, isCustomCampus: true, isCommunityEnabled: false))
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.sunshineRun, isCustomCampus: true, isCommunityEnabled: false))
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.fitnessTestRecords, isCustomCampus: true, isCommunityEnabled: false))
 
@@ -53,13 +64,11 @@ final class GenericCampusLifecycleTests: XCTestCase {
         let tabs = AcademicPrimaryTab.visibleCases(isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true)
 
         XCTAssertTrue(tabs.contains(.cultivation))
-        XCTAssertTrue(tabs.contains(.schedule))
         XCTAssertTrue(tabs.contains(.classrooms))
         XCTAssertTrue(tabs.contains(.sports))
         XCTAssertTrue(tabs.contains(.medical))
         XCTAssertTrue(tabs.contains(.weekendTravel))
         XCTAssertFalse(tabs.contains(.ratings))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.timetableProcessing, isCustomCampus: false, isCommunityEnabled: false))
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.medicalPolicy, isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true))
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.medicalLedger, isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true))
     }
@@ -154,23 +163,22 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertEqual(longDestination.highlightRail.count, 4)
     }
 
-    func testAcademicRoutesMatchCultivationAndScheduleInformationArchitecture() {
+    func testAcademicRoutesMatchSchoolTeachingInformationArchitecture() {
         XCTAssertEqual(AcademicDetailRoute.grades.tab, .cultivation)
         XCTAssertEqual(AcademicDetailRoute.comprehensiveQuality.tab, .cultivation)
         XCTAssertEqual(AcademicDetailRoute.teachingPlan.tab, .cultivation)
         XCTAssertEqual(AcademicDetailRoute.trainingProgram.tab, .cultivation)
-        XCTAssertEqual(AcademicDetailRoute.examSchedule.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.scheduleReports.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.yearOverview.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.timetableProcessing.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.countdowns.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.customCountdowns.tab, .schedule)
-        XCTAssertEqual(AcademicDetailRoute.schoolCalendar.tab, .schedule)
+        XCTAssertEqual(AcademicDetailRoute.examSchedule.tab, .cultivation)
+        XCTAssertEqual(AcademicDetailRoute.schoolCalendar.tab, .cultivation)
         XCTAssertEqual(AcademicDetailRoute.medicalPolicy.tab, .medical)
         XCTAssertEqual(AcademicDetailRoute.medicalLedger.tab, .medical)
         XCTAssertEqual(
             AcademicPrimaryTab.allCases,
-            [.cultivation, .schedule, .classrooms, .learning, .sports, .career, .postgraduate, .medical, .weekendTravel, .ratings]
+            [.cultivation, .classrooms, .learning, .sports, .career, .postgraduate, .medical, .weekendTravel, .ratings]
+        )
+        XCTAssertEqual(
+            ScheduleDestination.allCases,
+            [.memos, .customSchedules, .dailyReview, .tags, .statistics, .scheduleReports, .yearOverview, .trash, .timetableProcessing]
         )
     }
 

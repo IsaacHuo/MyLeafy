@@ -143,8 +143,6 @@ struct AcademicHubView: View {
             switch selectedTab {
             case .cultivation:
                 TeachingCultivationSectionView(openRoute: openRoute)
-            case .schedule:
-                ScheduleSectionView(openRoute: openRoute)
             case .classrooms:
                 ClassroomsSectionView(openRoute: openRoute)
             case .learning:

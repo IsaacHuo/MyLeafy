@@ -711,12 +711,15 @@ struct CustomScheduleEditorPresentation: Identifiable {
     let importantDateEvent: CustomScheduleEvent?
     let initialMode: CustomScheduleEditorMode
     let allowsModeSelection: Bool
+    let prefillTitle: String
+    let prefillNote: String
 
     var id: String {
         [
             initialMode.rawValue,
             timetableContext.id,
             importantDateEvent?.id ?? "new",
+            prefillTitle,
             allowsModeSelection ? "switchable" : "locked"
         ].joined(separator: "-")
     }
@@ -729,22 +732,33 @@ struct CustomScheduleEditorPresentation: Identifiable {
             timetableContext: context,
             importantDateEvent: nil,
             initialMode: .timetable,
-            allowsModeSelection: allowsModeSelection ?? (context.allowsDateSelection && context.reminder == nil)
+            allowsModeSelection: allowsModeSelection ?? (context.allowsDateSelection && context.reminder == nil),
+            prefillTitle: "",
+            prefillNote: ""
         )
     }
 
     static func importantDate(
         _ event: CustomScheduleEvent?,
         defaultContext: TimetableCellReminderContext,
-        allowsModeSelection: Bool? = nil
+        allowsModeSelection: Bool? = nil,
+        prefillTitle: String = "",
+        prefillNote: String = ""
     ) -> CustomScheduleEditorPresentation {
         CustomScheduleEditorPresentation(
             timetableContext: defaultContext,
             importantDateEvent: event,
             initialMode: .importantDate,
-            allowsModeSelection: allowsModeSelection ?? (event == nil && defaultContext.reminder == nil)
+            allowsModeSelection: allowsModeSelection ?? (event == nil && defaultContext.reminder == nil),
+            prefillTitle: prefillTitle,
+            prefillNote: prefillNote
         )
     }
+}
+
+struct CustomScheduleSaveReference: Equatable {
+    let kind: ScheduleMemoLinkKind
+    let stableID: String
 }
 
 struct TimetableCellReminderSheet: View {
@@ -769,6 +783,7 @@ struct CustomScheduleEditorSheet: View {
     }
 
     let presentation: CustomScheduleEditorPresentation
+    let onSaved: ((CustomScheduleSaveReference) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -786,20 +801,25 @@ struct CustomScheduleEditorSheet: View {
     @State private var operationAlert: LeafyOperationAlert?
     @State private var isSaving = false
     @FocusState private var focusedField: FocusedField?
+    @State private var importantDateID: String
 
-    init(presentation: CustomScheduleEditorPresentation) {
+    init(
+        presentation: CustomScheduleEditorPresentation,
+        onSaved: ((CustomScheduleSaveReference) -> Void)? = nil
+    ) {
         self.presentation = presentation
+        self.onSaved = onSaved
         let context = presentation.timetableContext
         let event = presentation.importantDateEvent
         let initialMode = presentation.initialMode
         let initialTitle = initialMode == .importantDate
-            ? event?.title ?? ""
+            ? event?.title ?? presentation.prefillTitle
             : context.reminder?.title ?? ""
         let initialLocation = initialMode == .importantDate
             ? event?.locationText ?? ""
             : context.reminder?.locationText ?? ""
         let initialNote = initialMode == .importantDate
-            ? event?.noteText ?? ""
+            ? event?.noteText ?? presentation.prefillNote
             : context.reminder?.noteText ?? ""
         let minutes = initialMode == .importantDate
             ? event?.minutesBefore ?? 0
@@ -830,6 +850,7 @@ struct CustomScheduleEditorSheet: View {
         _scheduleDate = State(initialValue: startDate)
         _startTime = State(initialValue: startDate)
         _endTime = State(initialValue: endDate)
+        _importantDateID = State(initialValue: event?.id ?? UUID().uuidString)
     }
 
     var body: some View {
@@ -1113,6 +1134,7 @@ struct CustomScheduleEditorSheet: View {
         do {
             try modelContext.save()
             removeSourceImportantDateIfNeeded()
+            onSaved?(.init(kind: .timetableReminder, stableID: record.id.uuidString))
             let scheduledCount: Int
             do {
                 scheduledCount = try await TimetableNotificationManager.applyReminder(for: record) ? 1 : 0
@@ -1138,7 +1160,7 @@ struct CustomScheduleEditorSheet: View {
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
         var events = CustomScheduleStore.load()
         let event = CustomScheduleEvent(
-            id: presentation.importantDateEvent?.id ?? UUID().uuidString,
+            id: importantDateID,
             title: trimmed,
             startsAt: scheduleStartDate,
             endsAt: scheduleEndDate,
@@ -1168,6 +1190,8 @@ struct CustomScheduleEditorSheet: View {
                 return .failed(error.localizedDescription)
             }
         }
+
+        onSaved?(.init(kind: .importantDate, stableID: event.id))
 
         let scheduledCount: Int
         do {

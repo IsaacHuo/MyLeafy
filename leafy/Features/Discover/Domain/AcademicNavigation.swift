@@ -1,8 +1,7 @@
 import Foundation
 
 nonisolated enum AcademicPrimaryTab: String, CaseIterable, Identifiable, Equatable, Sendable {
-    case cultivation = "教学培养"
-    case schedule = "时间日程"
+    case cultivation = "学校教学"
     case classrooms = "空闲教室"
     case learning = "学习空间"
     case sports = "体育相关"
@@ -21,7 +20,6 @@ nonisolated enum AcademicPrimaryTab: String, CaseIterable, Identifiable, Equatab
     var icon: String {
         switch self {
         case .cultivation: return "graduationcap.fill"
-        case .schedule: return "calendar.badge.clock"
         case .classrooms: return "building.2.crop.circle"
         case .learning: return "folder.fill"
         case .sports: return "figure.run"
@@ -57,7 +55,7 @@ nonisolated enum AcademicPrimaryTab: String, CaseIterable, Identifiable, Equatab
     ) -> Bool {
         if isCustomCampus {
             switch self {
-            case .cultivation, .schedule, .learning, .sports, .career, .postgraduate:
+            case .cultivation, .learning, .sports, .career, .postgraduate:
                 return true
             case .classrooms, .ratings, .medical, .weekendTravel:
                 return false
@@ -81,9 +79,6 @@ nonisolated enum CampusAcademicVisibility {
         isMedicalEnabled: Bool = false
     ) -> Bool {
         if !isCustomCampus {
-            if route == .timetableProcessing {
-                return false
-            }
             return route.tab.isVisible(
                 isCustomCampus: isCustomCampus,
                 isCommunityEnabled: isCommunityEnabled,
@@ -94,17 +89,12 @@ nonisolated enum CampusAcademicVisibility {
         switch route {
         case .grades,
              .examSchedule,
-             .scheduleReports,
-             .yearOverview,
              .honorRecords,
              .gradeAnalytics,
-             .timetableProcessing,
              .studyTimeRecords,
              .learningWorkspace,
              .sunshineRun,
-             .fitnessTestRecords,
-             .countdowns,
-             .customCountdowns:
+             .fitnessTestRecords:
             return true
         case .comprehensiveQuality,
              .medicalPolicy,
@@ -127,10 +117,23 @@ nonisolated struct AcademicNavigationItem: Hashable, Sendable {
     let route: AcademicDetailRoute
 }
 
+nonisolated enum ScheduleDestination: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case memos
+    case customSchedules
+    case dailyReview
+    case tags
+    case statistics
+    case scheduleReports
+    case yearOverview
+    case trash
+    case timetableProcessing
+
+    var id: String { rawValue }
+}
+
 nonisolated enum AcademicRoute: Hashable, Sendable {
     case grades
     case emptyClassroom
-    case scheduleReports
 }
 
 nonisolated enum LearningWorkspaceInitialTab: String, Hashable, Sendable {
@@ -144,9 +147,6 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
     case grades
     case gradeAnalytics
     case examSchedule
-    case scheduleReports
-    case yearOverview
-    case timetableProcessing
     case honorRecords
     case comprehensiveQuality
     case teachingPlan
@@ -160,8 +160,6 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
     case fitnessTestRecords
     case sportsVenues
     case schoolCalendar
-    case countdowns
-    case customCountdowns
     case medicalPolicy
     case medicalScenarioAssistant
     case medicalLedger
@@ -170,19 +168,13 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
         switch self {
         case .grades,
              .gradeAnalytics,
+             .examSchedule,
              .honorRecords,
              .comprehensiveQuality,
              .teachingPlan,
-             .trainingProgram:
+             .trainingProgram,
+             .schoolCalendar:
             return .cultivation
-        case .examSchedule,
-             .scheduleReports,
-             .yearOverview,
-             .timetableProcessing,
-             .schoolCalendar,
-             .countdowns,
-             .customCountdowns:
-            return .schedule
         case .emptyClassroom,
              .classroomLookup,
              .campusHeatmap,
@@ -209,8 +201,6 @@ nonisolated enum AcademicRouteResolver {
             return (.cultivation, .grades)
         case .emptyClassroom:
             return (.classrooms, .emptyClassroom)
-        case .scheduleReports:
-            return (.schedule, .scheduleReports)
         }
     }
 }

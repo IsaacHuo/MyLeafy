@@ -18,7 +18,8 @@ struct ProfileCacheSummary: Equatable {
         learningProjectCount: Int,
         learningTaskCount: Int,
         studyTimeRecordCount: Int,
-        fitnessTestRecordCount: Int
+        fitnessTestRecordCount: Int,
+        scheduleMemoCount: Int
     ) -> ProfileCacheSummary {
         make(
             language: language,
@@ -42,7 +43,8 @@ struct ProfileCacheSummary: Equatable {
             learningProjectCount: learningProjectCount,
             learningTaskCount: learningTaskCount,
             studyTimeRecordCount: studyTimeRecordCount,
-            fitnessTestRecordCount: fitnessTestRecordCount
+            fitnessTestRecordCount: fitnessTestRecordCount,
+            scheduleMemoCount: scheduleMemoCount
         )
     }
 
@@ -68,7 +70,8 @@ struct ProfileCacheSummary: Equatable {
         learningProjectCount: Int,
         learningTaskCount: Int,
         studyTimeRecordCount: Int,
-        fitnessTestRecordCount: Int
+        fitnessTestRecordCount: Int,
+        scheduleMemoCount: Int = 0
     ) -> ProfileCacheSummary {
         ProfileCacheSummary(rows: [
             ProfileCacheSummaryRow(
@@ -120,6 +123,11 @@ struct ProfileCacheSummary: Equatable {
                 title: "体测记录",
                 value: L10n.text("%d 条记录", language: language, fitnessTestRecordCount),
                 detail: L10n.text("保存在本机", language: language)
+            ),
+            ProfileCacheSummaryRow(
+                title: "日程随记",
+                value: L10n.text("%d 条随记", language: language, scheduleMemoCount),
+                detail: L10n.text("保存在当前校园身份的本机空间", language: language)
             )
         ])
     }

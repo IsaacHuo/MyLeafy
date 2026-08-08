@@ -104,11 +104,11 @@ struct ContentView: View {
             }
 
             Tab(
-                RootTab.customSchedule.title(language: leafyLanguage),
-                systemImage: RootTab.customSchedule.systemImage,
-                value: RootTab.customSchedule
+                RootTab.schedule.title(language: leafyLanguage),
+                systemImage: RootTab.schedule.systemImage,
+                value: RootTab.schedule
             ) {
-                CustomScheduleRootView()
+                ScheduleRootView()
             }
 
             Tab(
@@ -160,11 +160,11 @@ struct ContentView: View {
                     .tag(RootTab.community)
             }
 
-            CustomScheduleRootView()
+            ScheduleRootView()
                 .tabItem {
-                    Label(RootTab.customSchedule.title(language: leafyLanguage), systemImage: RootTab.customSchedule.systemImage)
+                    Label(RootTab.schedule.title(language: leafyLanguage), systemImage: RootTab.schedule.systemImage)
                 }
-                .tag(RootTab.customSchedule)
+                .tag(RootTab.schedule)
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
                 .tabItem {

@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct AcademicRouteDestinationView: View {
-    @Environment(\.leafyLanguage) private var leafyLanguage
-
     let route: AcademicDetailRoute
     let openRoute: (AcademicDetailRoute) -> Void
 
@@ -16,18 +14,6 @@ struct AcademicRouteDestinationView: View {
             GradeAnalyticsDetailView()
         case .examSchedule:
             ExamScheduleView()
-        case .scheduleReports:
-            ScheduleReportsView()
-        case .yearOverview:
-            TimetableTimeScopeView(
-                snapshot: TimetableTimeScopeSnapshot.make(
-                    currentWeek: SemesterConfig.currentWeek(),
-                    referenceDate: Date(),
-                    language: leafyLanguage
-                )
-            )
-        case .timetableProcessing:
-            TimetableProcessingView()
         case .honorRecords:
             HonorRecordsView()
         case .comprehensiveQuality:
@@ -59,10 +45,6 @@ struct AcademicRouteDestinationView: View {
             SportsVenuesView()
         case .schoolCalendar:
             SchoolCalendarView()
-        case .countdowns:
-            ExamScheduleView()
-        case .customCountdowns:
-            CustomScheduleListView()
         case .medicalPolicy:
             MedicalPolicyView()
         case .medicalScenarioAssistant:

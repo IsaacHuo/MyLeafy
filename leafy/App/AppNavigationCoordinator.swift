@@ -10,7 +10,7 @@ enum ProfileRoute: Hashable {
 enum RootTab: Hashable {
     case timetable
     case community
-    case customSchedule
+    case schedule
     case academics
     case profile
 }
@@ -49,7 +49,7 @@ enum AppAccountDeletionOutcome: Equatable, Identifiable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.timetable, .community, .customSchedule, .academics, .profile]
+        [.timetable, .community, .schedule, .academics, .profile]
     }
 
     static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {
@@ -64,8 +64,8 @@ extension RootTab: CaseIterable, Identifiable {
             return L10n.text("课表", language: language)
         case .community:
             return L10n.text("社区", language: language)
-        case .customSchedule:
-            return L10n.text("自定日程", language: language)
+        case .schedule:
+            return L10n.text("日程", language: language)
         case .academics:
             return L10n.text("校园", language: language)
         case .profile:
@@ -77,7 +77,7 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2"
-        case .customSchedule: return "calendar.badge.plus"
+        case .schedule: return "calendar.badge.plus"
         case .academics: return "book.closed"
         case .profile: return "person"
         }
@@ -87,7 +87,7 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable: return "calendar"
         case .community: return "person.2.fill"
-        case .customSchedule: return "calendar.badge.plus"
+        case .schedule: return "calendar.badge.plus"
         case .academics: return "book.closed.fill"
         case .profile: return "person.fill"
         }
@@ -100,6 +100,7 @@ final class AppNavigationCoordinator: ObservableObject {
     @Published var selectedAcademicTab: AcademicPrimaryTab = .cultivation
     @Published var requestedAcademicRoute: AcademicRoute?
     @Published var requestedAcademicDetailRoute: AcademicDetailRoute?
+    @Published var requestedScheduleDestination: ScheduleDestination?
     @Published var requestedClassroomLookup: ClassroomLookupRequest?
     @Published var requestedProfileRoute: ProfileRoute?
     @Published var requestedTimetableInviteCode: String?
@@ -136,8 +137,6 @@ final class AppNavigationCoordinator: ObservableObject {
             selectedAcademicTab = .cultivation
         case .emptyClassroom:
             selectedAcademicTab = .classrooms
-        case .scheduleReports:
-            selectedAcademicTab = .schedule
         }
         selectedRootTab = .academics
         deferRouteRequest {
@@ -157,8 +156,14 @@ final class AppNavigationCoordinator: ObservableObject {
         selectedRootTab = .timetable
     }
 
-    func openCustomSchedule() {
-        selectedRootTab = .customSchedule
+    func openScheduleDestination(_ destination: ScheduleDestination) {
+        deferredRouteRequestTask?.cancel()
+        requestedAcademicRoute = nil
+        requestedAcademicDetailRoute = nil
+        requestedClassroomLookup = nil
+        requestedProfileRoute = nil
+        requestedScheduleDestination = destination
+        selectedRootTab = .schedule
     }
 
     func openProfileRoute(_ route: ProfileRoute) {
@@ -211,13 +216,14 @@ final class AppNavigationCoordinator: ObservableObject {
         case .cacheSync:
             openProfileRoute(.cacheSync)
         case .scheduleReports:
-            openAcademicRoute(.scheduleReports)
+            openScheduleDestination(.scheduleReports)
         }
     }
 
     private func deferRouteRequest(_ request: @escaping @MainActor () -> Void) {
         requestedAcademicRoute = nil
         requestedAcademicDetailRoute = nil
+        requestedScheduleDestination = nil
         requestedClassroomLookup = nil
         requestedProfileRoute = nil
         deferredRouteRequestTask?.cancel()

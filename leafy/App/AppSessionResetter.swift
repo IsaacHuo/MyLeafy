@@ -73,6 +73,9 @@ enum AppSessionResetter {
             try ComprehensiveQualityEvidenceFileStore.deleteAllFiles()
         }
         MedicalLedgerPhotoStore.deleteAllFiles()
+        attempt("随记图片") {
+            try ScheduleMemoImageStore.deleteAllFiles()
+        }
         attempt("课表背景") {
             try TimetableBackgroundStore.deleteAllBackgroundFiles()
         }
@@ -106,7 +109,7 @@ enum AppSessionResetter {
         }
     }
 
-    private static func deleteAllModels(in modelContext: ModelContext) throws {
+    static func deleteAllModels(in modelContext: ModelContext) throws {
         try modelContext.delete(model: Course.self)
         try modelContext.delete(model: Grade.self)
         try modelContext.delete(model: CourseNote.self)
@@ -130,6 +133,8 @@ enum AppSessionResetter {
         try modelContext.delete(model: ComprehensiveQualityEvidenceDocument.self)
         try modelContext.delete(model: MedicalLedgerEntry.self)
         try modelContext.delete(model: MedicalLedgerPhoto.self)
+        try modelContext.delete(model: ScheduleMemo.self)
+        try modelContext.delete(model: ScheduleMemoImage.self)
         try modelContext.save()
     }
 }

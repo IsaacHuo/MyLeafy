@@ -21,6 +21,7 @@ enum AppModelContainerFactory {
             FitnessTestRecord.self,
             ComprehensiveQualityRecord.self, ComprehensiveQualityComponentEntry.self, ComprehensiveQualityEvidenceDocument.self,
             MedicalLedgerEntry.self, MedicalLedgerPhoto.self,
+            ScheduleMemo.self, ScheduleMemoImage.self,
         ])
         let modelConfiguration: ModelConfiguration
         if AppRuntimeEnvironment.isRunningUnitTests {

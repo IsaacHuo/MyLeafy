@@ -1820,6 +1820,8 @@ private struct CacheAndSyncView: View {
     @Query private var fitnessTestRecords: [FitnessTestRecord]
     @Query private var medicalLedgerEntries: [MedicalLedgerEntry]
     @Query private var medicalLedgerPhotos: [MedicalLedgerPhoto]
+    @Query private var scheduleMemos: [ScheduleMemo]
+    @Query private var scheduleMemoImages: [ScheduleMemoImage]
 
     @State private var isSyncing = false
     @State private var isClearing = false
@@ -1978,7 +1980,8 @@ private struct CacheAndSyncView: View {
             learningProjectCount: learningProjects.count,
             learningTaskCount: learningTasks.count,
             studyTimeRecordCount: studyTimeRecords.count,
-            fitnessTestRecordCount: fitnessTestRecords.count
+            fitnessTestRecordCount: fitnessTestRecords.count,
+            scheduleMemoCount: scheduleMemos.count
         )
     }
 
@@ -2087,6 +2090,15 @@ private struct CacheAndSyncView: View {
         }
         for entry in medicalLedgerEntries { modelContext.delete(entry) }
         MedicalLedgerPhotoStore.deleteAllFiles()
+        do {
+            try ScheduleMemoImageStore.deleteAllFiles()
+        } catch {
+            isClearing = false
+            operationAlert = .failure("随记图片清除失败：\(error.localizedDescription)")
+            return
+        }
+        for image in scheduleMemoImages { modelContext.delete(image) }
+        for memo in scheduleMemos { modelContext.delete(memo) }
 
         SchoolDataCache.clearDiscoverCaches()
         TimetableCacheMetadata.clear()

@@ -1920,12 +1920,12 @@ final class PerformanceRefactorTests: XCTestCase {
     }
 
     func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .customSchedule, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .customSchedule, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .schedule, .academics, .profile])
+        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .schedule, .academics, .profile])
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .customSchedule, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .schedule, .academics, .profile])
     }
 
     func testAcademicRootTabUsesCampusProductName() {
@@ -2492,7 +2492,7 @@ final class PerformanceRefactorTests: XCTestCase {
             fitnessTestRecordCount: 0
         )
 
-        XCTAssertEqual(summary.rows.count, 10)
+        XCTAssertEqual(summary.rows.count, 11)
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "所得学分" }).value, "未缓存")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "课表" }).detail, "暂无同步记录")
         XCTAssertEqual(try XCTUnwrap(summary.rows.first { $0.title == "本地数据" }).value, "0 条备注 / 0 个收藏")
