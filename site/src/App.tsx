@@ -655,7 +655,7 @@ function FeatureImageShowcase() {
             <span className="whitespace-nowrap">每个日常，</span><br /><span className="whitespace-nowrap">都有专注的视图。</span>
           </h2>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-ivory/60">
-            课表、社区、成绩、学习资料、校园信息与 MyLeafy AI。
+            课表、社区、成绩、学习资料与校园信息。
           </p>
         </ScrollReveal>
       </div>

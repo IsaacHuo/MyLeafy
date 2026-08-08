@@ -63,14 +63,6 @@ describe("public site shell", () => {
     await waitFor(() => expect(screen.queryByRole("navigation", { name: "移动端导航" })).not.toBeInTheDocument());
     expect(menuButton).toHaveFocus();
   });
-
-  it("keeps the AI and DeepSeek disclosures in the Chinese privacy policy", () => {
-    window.history.replaceState({}, "", "/privacy");
-    render(<App />);
-
-    expect(screen.getByText(/MyLeafy AI：当你使用免费或订阅请求时/)).toBeInTheDocument();
-    expect(screen.getByText(/DeepSeek 处理 MyLeafy AI 问题/)).toBeInTheDocument();
-  });
 });
 
 describe("share link states", () => {

@@ -384,7 +384,7 @@ deno test --allow-env --allow-read --allow-sys supabase/functions
 6. 完成学校登录后进入社区，确认 profile 和 auth link 建立。
 7. 测试资料、发帖、图片、评论、互动、通知和退出恢复。
 8. 测试跨用户不可写、跨校园不可见和软删除状态。
-9. 再按需验证评价、共享课表、AI 与管理能力。
+9. 再按需验证评价、共享课表与管理能力。
 
 ## 13. 常见故障
 

@@ -30,7 +30,7 @@ export const site = {
   supportEmail: "support@myleafy.space",
   operatorName: "MyLeafy Developer",
   operatorNote: "公开开发者名称与 App Store 产品页显示一致。",
-  updatedAt: "2026 年 7 月 15 日"
+  updatedAt: "2026 年 8 月 9 日"
 };
 
 export const navItems = [
@@ -141,13 +141,6 @@ export const appScreenshots = [
     body: "成绩、考试、教室、校历、学习计划与评价集中管理。",
     image: "/media/app-academics.webp",
     alt: "iPhone 17 Pro 上的 MyLeafy 教务工具"
-  },
-  {
-    label: "MyLeafy AI",
-    title: "MyLeafy AI",
-    body: "以结构化信息和来源上下文回答校园问题。",
-    image: "/media/app-ai-policy.webp",
-    alt: "iPhone 17 Pro 上的 MyLeafy AI 政策回答"
   }
 ];
 
@@ -221,13 +214,6 @@ export const featureShowcases = [
     body: "通过清晰筛选与简明摘要，浏览轻量的教师与课程评价。",
     image: "/media/app-ratings.webp",
     alt: "iPhone 17 Pro 上的 MyLeafy 教师评价"
-  },
-  {
-    label: "MyLeafy AI",
-    title: "校园问答",
-    body: "提出校园问题，获得包含相关政策上下文的结构化回答。",
-    image: "/media/app-ai-policy.webp",
-    alt: "iPhone 17 Pro 上的 MyLeafy AI 校园回答"
   }
 ];
 
@@ -442,8 +428,7 @@ export const privacySections: Array<{
       "共享课表：分享由你在 App 中主动创建。发布的课表数据包括课程名称、教师、地点、周次、节次、学期与发布时间。",
       "反馈：你提交的反馈、可选联系方式、设备类型、系统版本、App 版本、登录状态与最近课表同步时间用于技术支持。",
       "照片与文件：MyLeafy 只读取你主动选择的内容。帖子图片与附件在上传前会复制到受保护的 App 存储空间，用于后台发布。",
-      "位置与日历：位置仅用于天气与通勤建议；日历权限仅在你导出课表或提醒时使用。",
-      "MyLeafy AI：你需要自行配置 DeepSeek API Key。密钥只保存在设备的系统安全存储中，模型请求从设备直接发送给 DeepSeek。联网研究服务只处理公开搜索词和网页读取请求，不会收到你的 DeepSeek API Key 或设备内信息。"
+      "位置与日历：位置仅用于天气与通勤建议；日历权限仅在你导出课表或提醒时使用。"
     ]
   },
   {
@@ -466,8 +451,7 @@ export const privacySections: Array<{
       "北京林业大学教务系统用于学校登录与教务数据查询。",
       "Supabase 为 MyLeafy 社区服务提供账号、数据和文件存储，以及通知、反馈、评价、共享课表等功能。",
       "Cloudflare 为 myleafy.space 提供官网访问和 support@myleafy.space 邮件转发。",
-      "Apple 系统能力用于 App 分发、照片与文件选择、位置、日历、系统分享、通知与本地存储。",
-      "DeepSeek 处理 MyLeafy AI 问题与经你批准的必要信息，用于生成回答。请求直接从设备发送，API Key 只保存在系统安全存储中。"
+      "Apple 系统能力用于 App 分发、照片与文件选择、位置、日历、系统分享、通知与本地存储。"
     ]
   },
   {
@@ -491,8 +475,7 @@ export const privacySections: Array<{
       "是否完善社区资料由你决定，但发帖、评论与点赞需要设置社区昵称。",
       "共享课表由你主动发布，你可以随时停止分享或撤销查看者。",
       "照片、文件、位置与日历权限由你控制；无需这些权限的课表、成绩、教务工具与社区功能仍可独立使用。",
-      "提交请求时，请说明需要访问、更正或删除的数据。我们可能通过 App 内登录状态或其他合理方式确认你的身份。",
-      "MyLeafy AI 仅在你自行配置 DeepSeek API Key 后可用。你可以随时在 App 中清除密钥；清除后 AI 会停止使用，直到再次配置。"
+      "提交请求时，请说明需要访问、更正或删除的数据。我们可能通过 App 内登录状态或其他合理方式确认你的身份。"
     ]
   },
   {

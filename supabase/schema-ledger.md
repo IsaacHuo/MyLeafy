@@ -160,8 +160,6 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 The retired migrations remain in history so an empty database can reproduce the
 old schema before forward-only retirement migrations remove its quota,
 entitlement, StoreKit, research-tool RPC, event-table, and capability objects.
-The retired managed implementation is frozen on
-`codex/leafy-ai-managed-archive`.
 
 ## Community Post Upload Invariants
 
