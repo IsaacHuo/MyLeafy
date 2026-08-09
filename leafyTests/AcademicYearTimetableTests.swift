@@ -70,6 +70,73 @@ final class AcademicYearTimetableTests: XCTestCase {
         XCTAssertEqual(timetable.phase(for: date("2026-09-07")), .teaching(semesterID: "2026-2027-1", weekNumber: 1))
     }
 
+    func testSummerBoundaryTransitionsIntoNextSemesterWeekOneAndBack() throws {
+        let summer = event(
+            id: "summer-2026",
+            title: "暑假",
+            start: "2026-07-27",
+            end: "2026-09-06",
+            category: .summerBreak
+        )
+        let spring = configuration(
+            id: "2025-2026-2",
+            start: "2026-03-09",
+            calendarEvents: [summer]
+        )
+        let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
+        let summerTimetable = AcademicYearTimetable(
+            configurations: [spring, fall],
+            semanticEvents: [summer],
+            referenceDate: date("2026-08-31"),
+            calendar: calendar
+        )
+
+        let next = try XCTUnwrap(summerTimetable.adjacentAcademicYear(toward: .next))
+        XCTAssertEqual(dateString(next.referenceDate), "2026-09-07")
+        XCTAssertEqual(next.timetable.academicYearID, "2026-2027")
+        XCTAssertEqual(
+            next.timetable.week(containing: next.referenceDate)?.phase,
+            .teaching(semesterID: "2026-2027-1", weekNumber: 1)
+        )
+
+        let previous = try XCTUnwrap(next.timetable.adjacentAcademicYear(toward: .previous))
+        XCTAssertEqual(dateString(previous.referenceDate), "2026-09-06")
+        XCTAssertEqual(previous.timetable.academicYearID, "2025-2026")
+        XCTAssertEqual(
+            previous.timetable.week(containing: previous.referenceDate)?.phase,
+            .vacation(title: "暑假", category: .summerBreak)
+        )
+    }
+
+    func testBoundarySwipeResolverOnlyTriggersForOutwardBoundaryDrags() {
+        XCTAssertEqual(
+            TimetableBoundarySwipeResolver.direction(
+                dragStartWeek: 53,
+                totalWeeks: 53,
+                velocityX: 0.3,
+                translationX: -12
+            ),
+            .next
+        )
+        XCTAssertEqual(
+            TimetableBoundarySwipeResolver.direction(
+                dragStartWeek: 1,
+                totalWeeks: 53,
+                velocityX: -0.3,
+                translationX: 12
+            ),
+            .previous
+        )
+        XCTAssertNil(
+            TimetableBoundarySwipeResolver.direction(
+                dragStartWeek: 20,
+                totalWeeks: 53,
+                velocityX: 0.3,
+                translationX: -40
+            )
+        )
+    }
+
     func testCurrentTimePositionUsesRowsAndBreakSpacingAtBoundaries() throws {
         let metrics = TimetableLayoutMetrics(
             rowHeight: 100,
