@@ -713,12 +713,40 @@ struct ScheduleMemoFeedView: View {
         if showsSelectedTag || filter != .all {
             HStack(spacing: 8) {
                 if let selectedTag, showsSelectedTag {
-                    Button("#\(selectedTag)  ×") { self.selectedTag = nil }
-                        .leafyCapsuleChipSurface(isSelected: true)
+                    Text("#\(selectedTag)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: 34)
+                        .background(
+                            AppTheme.accent(for: themeColorPreference),
+                            in: Capsule()
+                        )
+
+                    Button {
+                        self.selectedTag = nil
+                    } label: {
+                        Label("全部随记", systemImage: "arrow.uturn.backward")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                            .padding(.horizontal, 12)
+                            .frame(height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .leafyCapsuleChipSurface(isSelected: false)
                 }
                 if filter != .all {
-                    Button("\(filter.title)  ×") { filter = .all }
-                        .leafyCapsuleChipSurface(isSelected: true)
+                    Button {
+                        filter = .all
+                    } label: {
+                        Text("\(filter.title)  ×")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .frame(height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .leafyCapsuleChipSurface(isSelected: true)
                 }
                 Spacer()
             }
@@ -962,17 +990,15 @@ private struct ScheduleMemoCard: View {
                             } label: {
                                 Text("#\(tag)")
                                     .font(.subheadline)
-                                    .foregroundStyle(AppTheme.textOnAccent(for: themeColorPreference))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 4)
-                                    .contentShape(
-                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    )
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .contentShape(Capsule())
                             }
                             .buttonStyle(.plain)
                             .background(
                                 AppTheme.accent(for: themeColorPreference),
-                                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                in: Capsule()
                             )
                         }
                     }

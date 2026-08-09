@@ -115,35 +115,6 @@ nonisolated struct AcademicYearTimetable: Sendable {
         configurations.first { $0.semesterID == semesterID }
     }
 
-    func adjacentAcademicYear(
-        toward direction: AcademicYearBoundaryDirection
-    ) -> (timetable: AcademicYearTimetable, referenceDate: Date)? {
-        let referenceDate: Date
-        switch direction {
-        case .previous:
-            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: startDate) else {
-                return nil
-            }
-            referenceDate = previousDay
-        case .next:
-            referenceDate = endDate
-        }
-
-        let timetable = AcademicYearTimetable(
-            configurations: configurations,
-            semanticEvents: vacations,
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-        guard timetable.academicYearID != academicYearID,
-              configurations.contains(where: {
-                  Self.academicYearID(semesterID: $0.semesterID) == timetable.academicYearID
-              }) else {
-            return nil
-        }
-        return (timetable, referenceDate)
-    }
-
     func courseIntersectsTimeline(_ course: Course) -> Bool {
         guard let configuration = configuration(semesterID: course.sourceSemesterID) else {
             return false
@@ -381,9 +352,4 @@ nonisolated enum AcademicYearWeekPhase: Equatable, Sendable {
     case teaching(semesterID: String, weekNumber: Int)
     case vacation(title: String, category: SchoolCalendarEvent.AcademicCategory)
     case unconfigured
-}
-
-nonisolated enum AcademicYearBoundaryDirection: Equatable, Sendable {
-    case previous
-    case next
 }
