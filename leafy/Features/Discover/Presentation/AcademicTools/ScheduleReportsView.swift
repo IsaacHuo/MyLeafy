@@ -115,7 +115,7 @@ struct ScheduleReportsView: View {
                 }
             } header: {
                 HStack(spacing: AppSpacing.compact) {
-                    AcademicDetailSectionHeader(title: "自定义提醒")
+                    Spacer(minLength: 0)
                     if presentation == .daytraceRoot {
                         Button {
                             isEditorPresented = true

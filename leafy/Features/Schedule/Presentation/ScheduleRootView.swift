@@ -52,12 +52,13 @@ struct ScheduleRootView: View {
 
     var body: some View {
         NavigationStack(path: $compactPath) {
-            VStack(spacing: 0) {
-                rootTopBar
-                primaryView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            primaryView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(LeafyPageBackground())
                 .leafyNavigationBarHidden()
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    rootTopBar
+                }
                 .navigationDestination(for: ScheduleDestination.self) { destination in
                     destinationView(destination)
                         .leafyNavigationBarVisible()
@@ -152,27 +153,29 @@ struct ScheduleRootView: View {
     }
 
     private var rootSectionPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(SchedulePrimarySection.allCases) { section in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.32)) {
-                        primarySection = section
+        Group {
+            if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
+                ZStack {
+                    GlassEffectContainer(spacing: 0) {
+                        GeometryReader { geometry in
+                            let segmentWidth = geometry.size.width / CGFloat(SchedulePrimarySection.allCases.count)
+
+                            Capsule()
+                                .fill(.clear)
+                                .frame(width: segmentWidth, height: geometry.size.height)
+                                .glassEffect(.clear.interactive(), in: .capsule)
+                                .offset(x: segmentWidth * CGFloat(primarySectionIndex))
+                                .animation(
+                                    .spring(response: 0.42, dampingFraction: 0.78),
+                                    value: primarySection
+                                )
+                        }
                     }
-                } label: {
-                    Text(section.title)
-                        .font(.body)
-                        .foregroundStyle(AppTheme.primaryText)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
+
+                    primarySectionButtons(showsFallbackSelection: false)
                 }
-                .buttonStyle(.plain)
-                .background {
-                    if primarySection == section {
-                        Capsule()
-                            .fill(AppTheme.cardBackground)
-                    }
-                }
-                .accessibilityAddTraits(primarySection == section ? .isSelected : [])
+            } else {
+                primarySectionButtons(showsFallbackSelection: true)
             }
         }
         .padding(4)
@@ -184,6 +187,37 @@ struct ScheduleRootView: View {
             isInteractive: true
         )
         .layoutPriority(1)
+    }
+
+    private var primarySectionIndex: Int {
+        SchedulePrimarySection.allCases.firstIndex(of: primarySection) ?? 0
+    }
+
+    private func primarySectionButtons(showsFallbackSelection: Bool) -> some View {
+        HStack(spacing: 0) {
+            ForEach(SchedulePrimarySection.allCases) { section in
+                Button {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
+                        primarySection = section
+                    }
+                } label: {
+                    Text(section.title)
+                        .font(.body)
+                        .foregroundStyle(primarySection == section ? Color.black : AppTheme.primaryText)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background {
+                    if showsFallbackSelection, primarySection == section {
+                        Capsule()
+                            .fill(AppTheme.cardBackground)
+                    }
+                }
+                .zIndex(1)
+                .accessibilityAddTraits(primarySection == section ? .isSelected : [])
+            }
+        }
     }
 
     @ViewBuilder
@@ -361,6 +395,8 @@ struct ScheduleMemoFeedView: View {
     @State private var composerHeight: CGFloat = 0
     @State private var presentedAlert: ScheduleMemoFeedAlert?
     @State private var searchRevealHeight: CGFloat = 1
+    @State private var searchRevealProgress: CGFloat = 0
+    @State private var daytraceScrollPosition: ScheduleMemoFeedAnchor?
     @State private var hasPositionedDaytraceFeed = false
     @State private var isPositioningDaytraceFeed = false
     @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
@@ -375,6 +411,9 @@ struct ScheduleMemoFeedView: View {
         self.initialTag = initialTag
         self.presentation = presentation
         _selectedTag = State(initialValue: initialTag)
+        _daytraceScrollPosition = State(
+            initialValue: presentation == .daytraceRoot ? .cardsStart : nil
+        )
     }
 
     private var visibleMemos: [ScheduleMemo] {
@@ -512,24 +551,40 @@ struct ScheduleMemoFeedView: View {
         GeometryReader { viewport in
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
                         if presentation == .daytraceRoot {
                             searchFilterBar
                                 .padding(.top, AppSpacing.compact)
-                                .padding(.bottom, -AppSpacing.micro)
+                                .opacity(hasPositionedDaytraceFeed ? searchRevealProgress : 0)
+                                .allowsHitTesting(
+                                    hasPositionedDaytraceFeed && searchRevealProgress >= 0.99
+                                )
+                                .accessibilityHidden(
+                                    !hasPositionedDaytraceFeed || searchRevealProgress < 0.99
+                                )
                                 .background {
                                     GeometryReader { geometry in
+                                        let frame = geometry.frame(
+                                            in: .named(ScheduleMemoFeedCoordinateSpace.scroll)
+                                        )
                                         Color.clear.preference(
-                                            key: ScheduleMemoSearchRevealHeightPreferenceKey.self,
-                                            value: geometry.size.height
+                                            key: ScheduleMemoSearchRevealGeometryPreferenceKey.self,
+                                            value: ScheduleMemoSearchRevealGeometry(
+                                                height: geometry.size.height,
+                                                minY: frame.minY
+                                            )
                                         )
                                     }
                                 }
+                                .id(ScheduleMemoFeedAnchor.search)
+
+                            Color.clear
+                                .frame(height: AppSpacing.card)
+                                .id(ScheduleMemoFeedAnchor.cardsStart)
                         }
 
                         memoCards
                             .leafyAdaptiveContentWidth(maxWidth: 760)
-                            .id(ScheduleMemoFeedAnchor.cardsStart)
                     }
                     .scrollTargetLayout()
                     .frame(
@@ -539,18 +594,39 @@ struct ScheduleMemoFeedView: View {
                     )
                     .padding(.bottom, AppSpacing.card)
                 }
+                .coordinateSpace(name: ScheduleMemoFeedCoordinateSpace.scroll)
+                .scrollPosition(id: $daytraceScrollPosition, anchor: .top)
+                .scrollTargetBehavior(ScheduleMemoSearchRevealTargetBehavior(
+                    isEnabled: presentation == .daytraceRoot,
+                    revealHeight: searchRevealHeight
+                ))
                 .scrollBounceBehavior(.always, axes: .vertical)
-                .opacity(presentation == .daytraceRoot && !hasPositionedDaytraceFeed ? 0 : 1)
-                .onPreferenceChange(ScheduleMemoSearchRevealHeightPreferenceKey.self) { height in
-                    guard presentation == .daytraceRoot, height > 0 else { return }
-                    if abs(searchRevealHeight - height) > 0.5 {
-                        searchRevealHeight = height
+                .onPreferenceChange(ScheduleMemoSearchRevealGeometryPreferenceKey.self) { geometry in
+                    guard presentation == .daytraceRoot, geometry.height > 0 else { return }
+
+                    if abs(searchRevealHeight - geometry.height) > 0.5 {
+                        searchRevealHeight = geometry.height
                     }
+
+                    let progress = min(
+                        max((geometry.minY + geometry.height) / geometry.height, 0),
+                        1
+                    )
+                    if abs(searchRevealProgress - progress) > 0.001 {
+                        searchRevealProgress = progress
+                    }
+
                     guard !hasPositionedDaytraceFeed, !isPositioningDaytraceFeed else { return }
                     isPositioningDaytraceFeed = true
                     Task { @MainActor in
                         await Task.yield()
-                        proxy.scrollTo(ScheduleMemoFeedAnchor.cardsStart, anchor: .top)
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            searchRevealProgress = 0
+                            daytraceScrollPosition = .cardsStart
+                            proxy.scrollTo(ScheduleMemoFeedAnchor.cardsStart, anchor: .top)
+                        }
                         await Task.yield()
                         hasPositionedDaytraceFeed = true
                         isPositioningDaytraceFeed = false
@@ -597,7 +673,6 @@ struct ScheduleMemoFeedView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.top, AppSpacing.card)
     }
 
     private var searchFilterBar: some View {
@@ -765,14 +840,46 @@ struct ScheduleMemoFeedView: View {
 }
 
 private enum ScheduleMemoFeedAnchor: Hashable {
+    case search
     case cardsStart
 }
 
-private struct ScheduleMemoSearchRevealHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+private enum ScheduleMemoFeedCoordinateSpace: Hashable {
+    case scroll
+}
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+private struct ScheduleMemoSearchRevealGeometry: Equatable {
+    var height: CGFloat = 0
+    var minY: CGFloat = 0
+}
+
+private struct ScheduleMemoSearchRevealGeometryPreferenceKey: PreferenceKey {
+    static var defaultValue = ScheduleMemoSearchRevealGeometry()
+
+    static func reduce(
+        value: inout ScheduleMemoSearchRevealGeometry,
+        nextValue: () -> ScheduleMemoSearchRevealGeometry
+    ) {
+        let next = nextValue()
+        if next.height > 0 {
+            value = next
+        }
+    }
+}
+
+private struct ScheduleMemoSearchRevealTargetBehavior: ScrollTargetBehavior {
+    let isEnabled: Bool
+    let revealHeight: CGFloat
+
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        guard isEnabled, revealHeight > 1 else { return }
+
+        let proposedY = target.rect.minY
+        guard proposedY < revealHeight else { return }
+
+        let clampedY = min(max(proposedY, 0), revealHeight)
+        target.rect.origin.y = clampedY < revealHeight / 2 ? 0 : revealHeight
+        target.anchor = .top
     }
 }
 
@@ -1629,7 +1736,7 @@ private struct ScheduleMemoComposer: View {
                 selectAddDestination(.fileImporter)
             }
 
-            addMenuButton("笔记", systemImage: "square.and.pencil") {
+            addMenuButton("文章", systemImage: "square.and.pencil") {
                 selectAddDestination(.writer)
             }
         }
@@ -1647,13 +1754,13 @@ private struct ScheduleMemoComposer: View {
     private func addMenuLabel(_ title: String, systemImage: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
-                .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(AppTheme.primaryText)
                 .frame(width: 32, height: 32)
             Text(title)
                 .foregroundStyle(AppTheme.primaryText)
             Spacer()
         }
+        .font(.system(size: 20, weight: .regular))
         .padding(.horizontal, 16)
         .frame(height: 56)
         .contentShape(Rectangle())

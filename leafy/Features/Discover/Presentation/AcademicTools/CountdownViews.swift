@@ -376,9 +376,12 @@ private struct CustomScheduleListRow: View {
                 }
 
                 HStack(alignment: .center, spacing: AppSpacing.micro) {
-                    Text(timeText)
-                        .font(.subheadline)
-                        .foregroundStyle(AppTheme.secondaryText)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(dateText)
+                        Text(timeText)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
 
                     Spacer(minLength: AppSpacing.micro)
 
@@ -419,11 +422,15 @@ private struct CustomScheduleListRow: View {
         }
     }
 
+    private var dateText: String {
+        DateFormatters.header.string(from: item.startDate)
+    }
+
     private var timeText: String {
         if let endDate = item.endDate, endDate > item.startDate {
-            return "\(DateFormatters.headerWithTime.string(from: item.startDate)) - \(DateFormatters.timeOnly.string(from: endDate))"
+            return "\(DateFormatters.timeOnly.string(from: item.startDate))–\(DateFormatters.timeOnly.string(from: endDate))"
         }
-        return DateFormatters.headerWithTime.string(from: item.startDate)
+        return DateFormatters.timeOnly.string(from: item.startDate)
     }
 
     private var detailText: String {
