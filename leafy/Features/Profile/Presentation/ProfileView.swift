@@ -1822,6 +1822,7 @@ private struct CacheAndSyncView: View {
     @Query private var medicalLedgerPhotos: [MedicalLedgerPhoto]
     @Query private var scheduleMemos: [ScheduleMemo]
     @Query private var scheduleMemoImages: [ScheduleMemoImage]
+    @Query private var scheduleMemoAttachments: [ScheduleMemoAttachment]
 
     @State private var isSyncing = false
     @State private var isClearing = false
@@ -2105,7 +2106,15 @@ private struct CacheAndSyncView: View {
             operationAlert = .failure("随记图片清除失败：\(error.localizedDescription)")
             return
         }
+        do {
+            try ScheduleMemoAttachmentStore.deleteAllFiles()
+        } catch {
+            isClearing = false
+            operationAlert = .failure("随记附件清除失败：\(error.localizedDescription)")
+            return
+        }
         for image in scheduleMemoImages { modelContext.delete(image) }
+        for attachment in scheduleMemoAttachments { modelContext.delete(attachment) }
         for memo in scheduleMemos { modelContext.delete(memo) }
 
         SchoolDataCache.clearDiscoverCaches()

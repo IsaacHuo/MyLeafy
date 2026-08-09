@@ -3,6 +3,9 @@ import Foundation
 nonisolated struct TimetableCalendarMenuModel {
     let academicYears: [TimetableCalendarMenuAcademicYear]
     let currentSemesterID: String?
+    let currentVacationID: String?
+    let defaultExpandedSemesterIDs: Set<String>
+    let unavailableFutureConfigurationMessage: String?
 
     init(
         timetable: AcademicYearTimetable,
@@ -10,99 +13,127 @@ nonisolated struct TimetableCalendarMenuModel {
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) {
-        struct SemesterAccumulator {
-            let semesterID: String
-            let academicYear: String
-            let title: String
-            let startDate: Date
-            var weeks: [TimetableCalendarMenuWeek]
-        }
-
         let referencePhase = timetable.phase(for: referenceDate)
+        let referenceDay = calendar.startOfDay(for: referenceDate)
+        let sortedConfigurations = configurations.sorted { $0.semesterStartDate < $1.semesterStartDate }
         let resolvedCurrentSemesterID: String?
         if case let .teaching(semesterID, _) = referencePhase {
             resolvedCurrentSemesterID = semesterID
         } else {
-            resolvedCurrentSemesterID = configurations.first { configuration in
-                configuration.isActive
-                    && AcademicYearTimetable.academicYearID(semesterID: configuration.semesterID)
-                        == timetable.academicYearID
-            }?.semesterID
+            resolvedCurrentSemesterID = nil
         }
         currentSemesterID = resolvedCurrentSemesterID
 
-        var semesterOrder: [String] = []
-        var semesterAccumulators: [String: SemesterAccumulator] = [:]
-
-        for (index, week) in timetable.weeks.enumerated() {
-            guard case let .teaching(semesterID, weekNumber) = week.phase else { continue }
-            let configuration = timetable.configuration(semesterID: semesterID)
-
-            if semesterAccumulators[semesterID] == nil {
-                semesterOrder.append(semesterID)
-                semesterAccumulators[semesterID] = SemesterAccumulator(
-                    semesterID: semesterID,
-                    academicYear: Self.academicYearTitle(semesterID: semesterID),
-                    title: Self.semesterSeasonTitle(
-                        semesterID: semesterID,
-                        semesterStartDate: configuration?.semesterStartDate,
+        var stagesByAcademicYear: [String: [TimetableCalendarMenuStage]] = [:]
+        for configuration in sortedConfigurations {
+            let academicYear = Self.academicYearTitle(semesterID: configuration.semesterID)
+            let weeks: [TimetableCalendarMenuWeek] = (1...SemesterConfig.timetableWeekCapacity).compactMap { weekNumber -> TimetableCalendarMenuWeek? in
+                guard let targetDate = calendar.date(
+                    byAdding: .day,
+                    value: (weekNumber - 1) * 7,
+                    to: configuration.semesterStartDate
+                ) else { return nil }
+                let targetTimetable = timetable.contains(targetDate)
+                    ? timetable
+                    : AcademicYearTimetable(
+                        configurations: sortedConfigurations,
+                        semanticEvents: sortedConfigurations.flatMap(\.calendarEvents),
+                        referenceDate: targetDate,
                         calendar: calendar
-                    ),
-                    startDate: week.referenceDate,
-                    weeks: []
+                    )
+                guard let page = targetTimetable.pageIndex(containing: targetDate) else { return nil }
+                return TimetableCalendarMenuWeek(
+                    page: page,
+                    weekNumber: weekNumber,
+                    targetDate: targetDate
                 )
             }
-            semesterAccumulators[semesterID]?.weeks.append(
-                TimetableCalendarMenuWeek(page: index + 1, weekNumber: weekNumber)
-            )
-        }
-
-        var stagesByAcademicYear: [String: [TimetableCalendarMenuStage]] = [:]
-        for semesterID in semesterOrder {
-            guard let accumulator = semesterAccumulators[semesterID] else { continue }
             let semester = TimetableCalendarMenuSemester(
-                semesterID: accumulator.semesterID,
-                title: accumulator.title,
-                weeks: accumulator.weeks,
-                startDate: accumulator.startDate
+                semesterID: configuration.semesterID,
+                title: Self.semesterSeasonTitle(
+                    semesterID: configuration.semesterID,
+                    semesterStartDate: configuration.semesterStartDate,
+                    calendar: calendar
+                ),
+                weeks: weeks,
+                startDate: configuration.semesterStartDate
             )
-            stagesByAcademicYear[accumulator.academicYear, default: []].append(.semester(semester))
+            stagesByAcademicYear[academicYear, default: []].append(.semester(semester))
         }
 
         var seenVacations = Set<String>()
-        for configuration in configurations.sorted(by: { $0.semesterStartDate < $1.semesterStartDate }) {
+        var resolvedCurrentVacationID: String?
+        var currentVacationEndDate: Date?
+        for configuration in sortedConfigurations {
             let academicYear = Self.academicYearTitle(semesterID: configuration.semesterID)
             for event in configuration.calendarEvents where event.isVacation {
                 guard let category = event.academicCategory,
                       let startDate = event.startDate,
-                      let targetPage = Self.vacationTargetPage(
+                      let target = Self.vacationTarget(
                         for: event,
                         timetable: timetable,
+                        configurations: sortedConfigurations,
                         referenceDate: referenceDate,
                         calendar: calendar
                       ) else { continue }
                 let identity = "\(academicYear)-\(category.rawValue)"
                 guard seenVacations.insert(identity).inserted else { continue }
 
+                if event.contains(referenceDay, calendar: calendar) {
+                    resolvedCurrentVacationID = identity
+                    currentVacationEndDate = event.endDate
+                }
+
                 stagesByAcademicYear[academicYear, default: []].append(
                     .vacation(
                         TimetableCalendarMenuVacation(
                             id: identity,
                             title: Self.vacationTitle(category: category),
-                            page: targetPage,
+                            page: target.page,
+                            targetDate: target.date,
                             startDate: startDate
                         )
                     )
                 )
             }
         }
+        currentVacationID = resolvedCurrentVacationID
 
-        academicYears = stagesByAcademicYear.compactMap { academicYear, stages in
-            guard academicYear == timetable.academicYearTitle else { return nil }
-            return TimetableCalendarMenuAcademicYear(
+        if resolvedCurrentSemesterID != nil {
+            defaultExpandedSemesterIDs = Set([resolvedCurrentSemesterID].compactMap { $0 })
+            unavailableFutureConfigurationMessage = nil
+        } else if resolvedCurrentVacationID != nil {
+            let nextConfiguration = sortedConfigurations.first { configuration in
+                configuration.semesterStartDate > (currentVacationEndDate ?? referenceDay)
+            }
+            defaultExpandedSemesterIDs = Set([nextConfiguration?.semesterID].compactMap { $0 })
+            unavailableFutureConfigurationMessage = nextConfiguration == nil ? "暂无下学期配置" : nil
+        } else {
+            let nearestConfiguration = sortedConfigurations.first { $0.semesterStartDate >= referenceDay }
+                ?? sortedConfigurations.last
+            defaultExpandedSemesterIDs = Set([nearestConfiguration?.semesterID].compactMap { $0 })
+            unavailableFutureConfigurationMessage = nil
+        }
+
+        let preferredAcademicYear = resolvedCurrentSemesterID.map(Self.academicYearTitle)
+            ?? resolvedCurrentVacationID.flatMap { vacationID in
+                stagesByAcademicYear.first { _, stages in
+                    stages.contains { stage in
+                        guard case let .vacation(vacation) = stage else { return false }
+                        return vacation.id == vacationID
+                    }
+                }?.key
+            }
+            ?? timetable.academicYearTitle
+        academicYears = stagesByAcademicYear.map { academicYear, stages in
+            TimetableCalendarMenuAcademicYear(
                 academicYear: academicYear,
                 stages: stages.sorted { $0.startDate < $1.startDate }
             )
+        }.sorted { lhs, rhs in
+            if lhs.academicYear == preferredAcademicYear { return true }
+            if rhs.academicYear == preferredAcademicYear { return false }
+            return lhs.academicYear < rhs.academicYear
         }
     }
 
@@ -139,16 +170,17 @@ nonisolated struct TimetableCalendarMenuModel {
         }
     }
 
-    private static func vacationTargetPage(
+    private static func vacationTarget(
         for event: SchoolCalendarEvent,
         timetable: AcademicYearTimetable,
+        configurations: [SemesterRuntimeConfig],
         referenceDate: Date,
         calendar: Calendar
-    ) -> Int? {
+    ) -> (page: Int, date: Date)? {
         let referenceDay = calendar.startOfDay(for: referenceDate)
         if event.contains(referenceDay, calendar: calendar),
            let page = timetable.pageIndex(containing: referenceDay) {
-            return page
+            return (page, referenceDay)
         }
 
         guard let eventStart = event.startDate,
@@ -156,8 +188,22 @@ nonisolated struct TimetableCalendarMenuModel {
         let start = calendar.startOfDay(for: eventStart)
         let end = calendar.startOfDay(for: eventEnd)
 
-        guard start < timetable.endDate, end >= timetable.startDate else { return nil }
-        return timetable.pageIndex(containing: max(start, timetable.startDate))
+        let targetDate: Date
+        let targetTimetable: AcademicYearTimetable
+        if start < timetable.endDate, end >= timetable.startDate {
+            targetDate = max(start, timetable.startDate)
+            targetTimetable = timetable
+        } else {
+            targetDate = start
+            targetTimetable = AcademicYearTimetable(
+                configurations: configurations,
+                semanticEvents: configurations.flatMap(\.calendarEvents),
+                referenceDate: targetDate,
+                calendar: calendar
+            )
+        }
+        guard let page = targetTimetable.pageIndex(containing: targetDate) else { return nil }
+        return (page, targetDate)
     }
 }
 
@@ -208,13 +254,15 @@ nonisolated struct TimetableCalendarMenuSemester: Identifiable {
 nonisolated struct TimetableCalendarMenuWeek: Identifiable {
     let page: Int
     let weekNumber: Int
+    let targetDate: Date
 
-    var id: Int { page }
+    var id: String { "\(weekNumber)-\(targetDate.timeIntervalSinceReferenceDate)" }
 }
 
 nonisolated struct TimetableCalendarMenuVacation: Identifiable {
     let id: String
     let title: String
     let page: Int
+    let targetDate: Date
     let startDate: Date
 }

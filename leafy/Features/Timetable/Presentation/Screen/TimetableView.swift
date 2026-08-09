@@ -27,6 +27,7 @@ private enum TimetableQuickAccessAction: Equatable, Sendable {
     case emptyClassroom
     case addSchedule
     case exportTimetable
+    case resyncTimetable
 }
 
 struct TimetableView: View {
@@ -176,11 +177,37 @@ struct TimetableView: View {
     }
 
     private var currentAcademicYearPage: Int {
-        academicYearTimetable.pageIndex(containing: Date()) ?? 1
+        academicYearTimetable.pageIndex(containing: Date()) ?? 0
     }
 
     private var currentTimelineWeek: AcademicYearWeek? {
         academicYearTimetable.week(atPageIndex: currentWeek)
+    }
+
+    private var selectedTimelineDate: Date {
+        currentTimelineWeek?.referenceDate ?? Date()
+    }
+
+    private var selectedTimeScopeSnapshot: TimetableTimeScopeSnapshot {
+        let selectedDate = selectedTimelineDate
+        let config = selectedSemesterContext.flatMap { context in
+            academicYearConfigurations.first { $0.semesterID == context.semesterID }
+        } ?? academicYearConfigurations
+            .filter { $0.semesterStartDate <= selectedDate }
+            .max(by: { $0.semesterStartDate < $1.semesterStartDate })
+            ?? SemesterConfig.current
+        let days = Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: config.semesterStartDate),
+            to: Calendar.current.startOfDay(for: selectedDate)
+        ).day ?? 0
+        return TimetableTimeScopeSnapshot.make(
+            currentWeek: max(1, days / 7 + 1),
+            referenceDate: selectedDate,
+            displayedMonthDate: selectedDate,
+            language: leafyLanguage,
+            semesterConfig: config
+        )
     }
 
     private var selectedSemesterContext: (semesterID: String, week: Int)? {
@@ -412,8 +439,9 @@ struct TimetableView: View {
         .popover(isPresented: $isWeekPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
             TimetableWeekPickerPanel(
                 model: academicYearMenuModel,
-                selectedPage: currentWeek,
-                currentPage: currentAcademicYearPage,
+                selectedDate: selectedTimelineDate,
+                referenceDate: Date(),
+                overviewSnapshot: selectedTimeScopeSnapshot,
                 onSelect: selectTimetableWeek
             )
             .frame(idealWidth: 420, idealHeight: 520)
@@ -634,19 +662,24 @@ struct TimetableView: View {
     private func applySemesterRuntimeConfig(_ config: SemesterRuntimeConfig) {
         _ = config
         guard academicYearConfigurations != SemesterConfig.timelineConfigurations else { return }
-        rebuildAcademicYearTimeline(positionsToToday: true)
+        rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: true)
         publishWidgetSnapshot()
     }
 
     @MainActor
-    private func rebuildAcademicYearTimeline(positionsToToday: Bool) {
+    private func rebuildAcademicYearTimeline(
+        referenceDate: Date,
+        positionsToReferenceDate: Bool
+    ) {
         academicYearConfigurations = SemesterConfig.timelineConfigurations
         academicYearTimetable = Self.makeAcademicYearTimetable(
-            configurations: academicYearConfigurations
+            configurations: academicYearConfigurations,
+            referenceDate: referenceDate
         )
         academicYearMenuModel = TimetableCalendarMenuModel(
             timetable: academicYearTimetable,
-            configurations: academicYearConfigurations
+            configurations: academicYearConfigurations,
+            referenceDate: Date()
         )
         calendarEventSignature = AcademicCalendarEvents.displayEvents()
         syncAcademicYearDataProjections()
@@ -655,10 +688,10 @@ struct TimetableView: View {
         timetableGridSnapshot = nil
         syncTimetableGridSnapshot()
 
-        let todayPage = currentAcademicYearPage
-        if positionsToToday {
-            currentWeek = todayPage
-            scrollToWeek = todayPage
+        let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? 1
+        if positionsToReferenceDate {
+            currentWeek = referencePage
+            scrollToWeek = referencePage
         } else {
             currentWeek = min(max(currentWeek, 1), totalWeeks)
         }
@@ -837,8 +870,44 @@ struct TimetableView: View {
                 systemImage: "square.and.arrow.up",
                 action: .exportTimetable
             )
+
+            if !isCustomCampus {
+                quickAccessResyncButton
+            }
         }
+        .frame(minWidth: 240, alignment: .leading)
         .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private var quickAccessResyncButton: some View {
+        Button {
+            scheduleQuickAccessAction(.resyncTimetable)
+        } label: {
+            HStack(spacing: 10 * leafyControlScale) {
+                if isFetching {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 22 * leafyControlScale)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 12 * leafyControlScale, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                        .frame(width: 22 * leafyControlScale)
+                }
+
+                Text(isFetching ? "正在同步" : "重新同步")
+                    .font(.body)
+                    .foregroundStyle(isFetching ? AppTheme.secondaryText : AppTheme.primaryText)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 18 * leafyControlScale)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isFetching)
+        .accessibilityHint("同步教务系统中的最新课表")
     }
 
     private func quickAccessPopoverButton(
@@ -858,9 +927,11 @@ struct TimetableView: View {
                 Text(title)
                     .font(.body)
                     .foregroundStyle(AppTheme.primaryText)
+
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .padding(.horizontal, 18 * leafyControlScale)
-            .padding(.vertical, 12 * leafyControlScale)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -891,6 +962,8 @@ struct TimetableView: View {
             presentFreeScheduleSheet()
         case .exportTimetable:
             isExportSheetPresented = true
+        case .resyncTimetable:
+            Task { await fetchAndParseTimetable(userInitiated: true) }
         }
     }
 
@@ -1012,7 +1085,12 @@ struct TimetableView: View {
         }
     }
 
-    private func selectTimetableWeek(_ page: Int) {
+    @MainActor
+    private func selectTimetableWeek(_ date: Date) {
+        if !academicYearTimetable.contains(date) {
+            rebuildAcademicYearTimeline(referenceDate: date, positionsToReferenceDate: false)
+        }
+        guard let page = academicYearTimetable.pageIndex(containing: date) else { return }
         currentWeek = page
         scrollToWeek = page
         isWeekPickerPresented = false
@@ -1033,6 +1111,10 @@ struct TimetableView: View {
     }
 
     private func returnToCurrentWeek() {
+        if !academicYearTimetable.contains(Date()) {
+            rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: true)
+            return
+        }
         let week = currentAcademicYearPage
         currentWeek = week
         isAwayFromCurrentSchedule = false
@@ -2072,7 +2154,8 @@ struct TimetableView: View {
 
     private func syncReturnButtonVisibility(for visibleWeek: Int? = nil) {
         let week = visibleWeek ?? currentWeek
-        isAwayFromCurrentSchedule = week != currentAcademicYearPage
+        isAwayFromCurrentSchedule = !academicYearTimetable.contains(Date())
+            || week != currentAcademicYearPage
     }
 
     private func isDateInDisplayedAcademicYear(_ date: Date) -> Bool {
@@ -2358,18 +2441,33 @@ struct TimetableView: View {
 
 private struct TimetableWeekPickerPanel: View {
     let model: TimetableCalendarMenuModel
-    let selectedPage: Int
-    let currentPage: Int
-    let onSelect: (Int) -> Void
+    let selectedDate: Date
+    let referenceDate: Date
+    let overviewSnapshot: TimetableTimeScopeSnapshot
+    let onSelect: (Date) -> Void
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @Environment(\.leafyLanguage) private var leafyLanguage
+    @State private var expandedSemesterIDs: Set<String>
 
     private let columns = Array(
         repeating: GridItem(.flexible(minimum: 64), spacing: AppSpacing.compact),
         count: 4
     )
+
+    init(
+        model: TimetableCalendarMenuModel,
+        selectedDate: Date,
+        referenceDate: Date,
+        overviewSnapshot: TimetableTimeScopeSnapshot,
+        onSelect: @escaping (Date) -> Void
+    ) {
+        self.model = model
+        self.selectedDate = selectedDate
+        self.referenceDate = referenceDate
+        self.overviewSnapshot = overviewSnapshot
+        self.onSelect = onSelect
+        _expandedSemesterIDs = State(initialValue: model.defaultExpandedSemesterIDs)
+    }
 
     var body: some View {
         NavigationStack {
@@ -2379,16 +2477,21 @@ private struct TimetableWeekPickerPanel: View {
                         academicYearSection(academicYear)
                     }
 
+                    if let message = model.unavailableFutureConfigurationMessage {
+                        Label(message, systemImage: "calendar.badge.exclamationmark")
+                            .leafyBody()
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .leafyCardStyle()
+                    }
+
                     VStack(alignment: .leading, spacing: AppSpacing.compact) {
                         Text("年度视图")
                             .leafyHeadline()
 
                         TimetableTimeScopeView(
-                            snapshot: TimetableTimeScopeSnapshot.make(
-                                currentWeek: SemesterConfig.currentWeek(),
-                                referenceDate: Date(),
-                                language: leafyLanguage
-                            ),
+                            snapshot: overviewSnapshot,
                             presentation: .embedded
                         )
                     }
@@ -2398,12 +2501,6 @@ private struct TimetableWeekPickerPanel: View {
             .background(LeafyPageBackground())
             .navigationTitle("时间视图")
             .leafyInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            }
         }
     }
 
@@ -2425,7 +2522,25 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private func semesterSection(_ semester: TimetableCalendarMenuSemester) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.compact) {
+        DisclosureGroup(
+            isExpanded: Binding(
+                get: { expandedSemesterIDs.contains(semester.semesterID) },
+                set: { isExpanded in
+                    if isExpanded {
+                        expandedSemesterIDs.insert(semester.semesterID)
+                    } else {
+                        expandedSemesterIDs.remove(semester.semesterID)
+                    }
+                }
+            )
+        ) {
+            LazyVGrid(columns: columns, spacing: AppSpacing.compact) {
+                ForEach(semester.weeks) { week in
+                    weekButton(week, semester: semester)
+                }
+            }
+            .padding(.top, AppSpacing.compact)
+        } label: {
             HStack(spacing: AppSpacing.compact) {
                 Text(semester.title)
                     .leafyHeadline()
@@ -2435,12 +2550,7 @@ private struct TimetableWeekPickerPanel: View {
                         .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
                 }
             }
-
-            LazyVGrid(columns: columns, spacing: AppSpacing.compact) {
-                ForEach(semester.weeks) { week in
-                    weekButton(week, semester: semester)
-                }
-            }
+            .frame(minHeight: 44)
         }
         .padding(16)
         .leafyCardStyle()
@@ -2450,12 +2560,12 @@ private struct TimetableWeekPickerPanel: View {
         _ week: TimetableCalendarMenuWeek,
         semester: TimetableCalendarMenuSemester
     ) -> some View {
-        let isSelected = week.page == selectedPage
-        let isCurrent = week.page == currentPage
+        let isSelected = isSameWeek(week.targetDate, selectedDate)
+        let isCurrent = isSameWeek(week.targetDate, referenceDate)
         let tint = AppTheme.accent(for: themeColorPreference)
 
         return Button {
-            onSelect(week.page)
+            onSelect(week.targetDate)
         } label: {
             Text("第 \(week.weekNumber) 周")
                 .font(.subheadline.weight(isSelected ? .semibold : .regular))
@@ -2482,12 +2592,12 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private func vacationButton(_ vacation: TimetableCalendarMenuVacation) -> some View {
-        let isSelected = vacation.page == selectedPage
-        let isCurrent = vacation.page == currentPage
+        let isSelected = isSameWeek(vacation.targetDate, selectedDate)
+        let isCurrent = vacation.id == model.currentVacationID
         let tint = AppTheme.accent(for: themeColorPreference)
 
         return Button {
-            onSelect(vacation.page)
+            onSelect(vacation.targetDate)
         } label: {
             HStack {
                 Label(vacation.title, systemImage: "sun.max")
@@ -2513,5 +2623,13 @@ private struct TimetableWeekPickerPanel: View {
         .buttonStyle(.plain)
         .accessibilityLabel("\(vacation.title)\(isCurrent ? "，本周" : "")\(isSelected ? "，已选择" : "")")
         .accessibilityHint("跳转到\(vacation.title)")
+    }
+
+    private func isSameWeek(_ lhs: Date, _ rhs: Date) -> Bool {
+        guard let lhsInterval = Calendar.current.dateInterval(of: .weekOfYear, for: lhs),
+              let rhsInterval = Calendar.current.dateInterval(of: .weekOfYear, for: rhs) else {
+            return Calendar.current.isDate(lhs, inSameDayAs: rhs)
+        }
+        return lhsInterval.start == rhsInterval.start
     }
 }

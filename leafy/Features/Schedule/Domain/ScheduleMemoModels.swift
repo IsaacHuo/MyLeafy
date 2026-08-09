@@ -1,10 +1,35 @@
 import Foundation
 import SwiftData
 
+nonisolated enum ScheduleMemoKind: String, CaseIterable, Identifiable, Sendable {
+    case quickMemo
+    case article
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .quickMemo:
+            return "快速随记"
+        case .article:
+            return "写文"
+        }
+    }
+
+    static func normalized(_ rawValue: String?) -> ScheduleMemoKind {
+        guard let rawValue else { return .quickMemo }
+        return ScheduleMemoKind(rawValue: rawValue) ?? .quickMemo
+    }
+}
+
 @Model
 final class ScheduleMemo {
     var id: UUID
     var body: String
+    // These fields were added after the original memo store shipped. Keep them
+    // optional so existing rows migrate without a destructive backfill.
+    var kindRawValue: String?
+    var title: String?
     var tagsRawValue: String
     var createdAt: Date
     var updatedAt: Date
@@ -22,10 +47,14 @@ final class ScheduleMemo {
         pinnedAt: Date? = nil,
         trashedAt: Date? = nil,
         linkedScheduleKindRawValue: String? = nil,
-        linkedScheduleID: String? = nil
+        linkedScheduleID: String? = nil,
+        kindRawValue: String? = nil,
+        title: String? = nil
     ) {
         self.id = id
         self.body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.kindRawValue = kindRawValue
+        self.title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.tagsRawValue = ScheduleMemoTagParser.encoded(tags ?? ScheduleMemoTagParser.tags(in: body))
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -35,8 +64,46 @@ final class ScheduleMemo {
         self.linkedScheduleID = linkedScheduleID
     }
 
+    convenience init(
+        id: UUID = UUID(),
+        body: String,
+        kind: ScheduleMemoKind,
+        title: String? = nil,
+        tags: [String]? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        pinnedAt: Date? = nil,
+        trashedAt: Date? = nil,
+        linkedScheduleKindRawValue: String? = nil,
+        linkedScheduleID: String? = nil
+    ) {
+        self.init(
+            id: id,
+            body: body,
+            tags: tags,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            pinnedAt: pinnedAt,
+            trashedAt: trashedAt,
+            linkedScheduleKindRawValue: linkedScheduleKindRawValue,
+            linkedScheduleID: linkedScheduleID,
+            kindRawValue: kind.rawValue,
+            title: title
+        )
+    }
+
     var tags: [String] {
         ScheduleMemoTagParser.decoded(tagsRawValue)
+    }
+
+    var kind: ScheduleMemoKind {
+        get { ScheduleMemoKind.normalized(kindRawValue) }
+        set { kindRawValue = newValue.rawValue }
+    }
+
+    var displayTitle: String {
+        let storedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return storedTitle.flatMap { $0.isEmpty ? nil : $0 } ?? kind.title
     }
 
     var linkedScheduleKind: ScheduleMemoLinkKind? {
@@ -77,6 +144,35 @@ final class ScheduleMemoImage {
     }
 }
 
+@Model
+final class ScheduleMemoAttachment {
+    var id: UUID
+    var memoID: UUID
+    var sortOrder: Int
+    var originalFilename: String
+    var localFilename: String
+    var contentTypeIdentifier: String
+    var importedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        memoID: UUID,
+        sortOrder: Int,
+        originalFilename: String,
+        localFilename: String,
+        contentTypeIdentifier: String,
+        importedAt: Date = Date()
+    ) {
+        self.id = id
+        self.memoID = memoID
+        self.sortOrder = sortOrder
+        self.originalFilename = originalFilename
+        self.localFilename = localFilename
+        self.contentTypeIdentifier = contentTypeIdentifier
+        self.importedAt = importedAt
+    }
+}
+
 nonisolated enum ScheduleMemoLinkKind: String, Sendable {
     case timetableReminder
     case importantDate
@@ -100,14 +196,42 @@ nonisolated enum ScheduleMemoSort: String, CaseIterable, Identifiable, Sendable 
 
 nonisolated struct ScheduleMemoSearchRecord: Equatable, Sendable {
     let id: UUID
+    let title: String
     let body: String
     let tags: [String]
+    let attachmentNames: [String]
     let createdAt: Date
     let updatedAt: Date
     let pinnedAt: Date?
     let isTrashed: Bool
     let imageCount: Int
     let isLinked: Bool
+
+    init(
+        id: UUID,
+        title: String = "",
+        body: String,
+        tags: [String],
+        attachmentNames: [String] = [],
+        createdAt: Date,
+        updatedAt: Date,
+        pinnedAt: Date?,
+        isTrashed: Bool,
+        imageCount: Int,
+        isLinked: Bool
+    ) {
+        self.id = id
+        self.title = title
+        self.body = body
+        self.tags = tags
+        self.attachmentNames = attachmentNames
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.pinnedAt = pinnedAt
+        self.isTrashed = isTrashed
+        self.imageCount = imageCount
+        self.isLinked = isLinked
+    }
 }
 
 nonisolated enum ScheduleMemoSearchEngine {
@@ -129,8 +253,10 @@ nonisolated enum ScheduleMemoSearchEngine {
             if requiresImages && record.imageCount == 0 { return false }
             if requiresLink && !record.isLinked { return false }
             return normalizedQuery.isEmpty
+                || record.title.localizedCaseInsensitiveContains(normalizedQuery)
                 || record.body.localizedCaseInsensitiveContains(normalizedQuery)
                 || record.tags.contains(where: { $0.localizedCaseInsensitiveContains(normalizedQuery) })
+                || record.attachmentNames.contains(where: { $0.localizedCaseInsensitiveContains(normalizedQuery) })
         }
         .sorted { lhs, rhs in
             if (lhs.pinnedAt != nil) != (rhs.pinnedAt != nil) { return lhs.pinnedAt != nil }

@@ -19,13 +19,33 @@ enum ScheduleMemoDeletionService {
     static func permanentlyDelete(
         _ memo: ScheduleMemo,
         images: [ScheduleMemoImage],
+        attachments: [ScheduleMemoAttachment] = [],
         in context: ModelContext,
         imageDirectory: URL? = nil,
+        attachmentDirectory: URL? = nil,
         saves: Bool = true
     ) throws {
-        let ownedImages = images.filter { $0.memoID == memo.id }
+        let imageRecords: [ScheduleMemoImage]
+        if images.isEmpty {
+            imageRecords = try context.fetch(FetchDescriptor<ScheduleMemoImage>())
+        } else {
+            imageRecords = images
+        }
+        let attachmentRecords: [ScheduleMemoAttachment]
+        if attachments.isEmpty {
+            attachmentRecords = try context.fetch(FetchDescriptor<ScheduleMemoAttachment>())
+        } else {
+            attachmentRecords = attachments
+        }
+        let ownedImages = imageRecords.filter { $0.memoID == memo.id }
+        let ownedAttachments = attachmentRecords.filter { $0.memoID == memo.id }
         try ScheduleMemoImageStore.deleteFiles(named: ownedImages.map(\.localFilename), in: imageDirectory)
+        try ScheduleMemoAttachmentStore.deleteFiles(
+            named: ownedAttachments.map(\.localFilename),
+            in: attachmentDirectory
+        )
         ownedImages.forEach(context.delete)
+        ownedAttachments.forEach(context.delete)
         context.delete(memo)
         if saves { try context.save() }
     }

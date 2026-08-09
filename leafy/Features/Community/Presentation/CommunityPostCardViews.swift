@@ -7,9 +7,78 @@ import UIKit
 import AppKit
 #endif
 
+nonisolated struct CommunityPostCardTheme: Sendable, Equatable {
+    let preferenceRawValue: String
+    let accentHex: String
+    let backgroundHex: String
+
+    init(
+        preferenceRawValue: String,
+        customColorHex: String = AppThemeColorPreference.defaultCustomColorHex
+    ) {
+        let preference = AppThemeColorPreference.storedValue(preferenceRawValue)
+        self.preferenceRawValue = preference.rawValue
+
+        switch preference {
+        case .tiffanyBlue:
+            accentHex = "#81D8D0"
+            backgroundHex = "#E8F9F7"
+        case .candyPink:
+            accentHex = "#FB6095"
+            backgroundHex = "#FFEDF4"
+        case .custom:
+            let resolvedHex = Self.normalizedHex(customColorHex)
+            accentHex = resolvedHex
+            backgroundHex = Self.softenedHex(resolvedHex)
+        case .green:
+            accentHex = "#9DC183"
+            backgroundHex = "#ECF4E7"
+        }
+    }
+
+    static var current: CommunityPostCardTheme {
+        let defaults = UserDefaults.standard
+        return CommunityPostCardTheme(
+            preferenceRawValue: defaults.string(forKey: AppThemeColorPreference.storageKey)
+                ?? AppThemeColorPreference.green.rawValue,
+            customColorHex: defaults.string(forKey: AppThemeColorPreference.customColorHexKey)
+                ?? AppThemeColorPreference.defaultCustomColorHex
+        )
+    }
+
+    private static func normalizedHex(_ hex: String) -> String {
+        guard let components = AppThemeColorPreference.rgbComponents(fromHex: hex) else {
+            return AppThemeColorPreference.defaultCustomColorHex
+        }
+        return String(
+            format: "#%02X%02X%02X",
+            Int(components.red.rounded()),
+            Int(components.green.rounded()),
+            Int(components.blue.rounded())
+        )
+    }
+
+    private static func softenedHex(_ accentHex: String) -> String {
+        guard let components = AppThemeColorPreference.rgbComponents(fromHex: accentHex) else {
+            return "#ECF4E7"
+        }
+        let whiteRatio = 0.84
+        let red = components.red + (255 - components.red) * whiteRatio
+        let green = components.green + (255 - components.green) * whiteRatio
+        let blue = components.blue + (255 - components.blue) * whiteRatio
+        return String(
+            format: "#%02X%02X%02X",
+            Int(red.rounded()),
+            Int(green.rounded()),
+            Int(blue.rounded())
+        )
+    }
+}
+
 nonisolated struct CommunityPostCardSnapshot: Sendable {
     let authorName: String
     let avatarData: Data?
+    let avatarFallbackText: String?
     let dateText: String
     let category: String
     let title: String
@@ -17,6 +86,45 @@ nonisolated struct CommunityPostCardSnapshot: Sendable {
     let attachmentNames: [String]
     let photoData: [Data]
     let isAnonymous: Bool
+    let theme: CommunityPostCardTheme
+
+    init(
+        authorName: String,
+        avatarData: Data?,
+        avatarFallbackText: String? = nil,
+        dateText: String,
+        category: String,
+        title: String,
+        body: String,
+        attachmentNames: [String],
+        photoData: [Data],
+        isAnonymous: Bool,
+        theme: CommunityPostCardTheme = .current
+    ) {
+        self.authorName = authorName
+        self.avatarData = avatarData
+        self.avatarFallbackText = avatarFallbackText
+        self.dateText = dateText
+        self.category = category
+        self.title = title
+        self.body = body
+        self.attachmentNames = attachmentNames
+        self.photoData = photoData
+        self.isAnonymous = isAnonymous
+        self.theme = theme
+    }
+
+    var resolvedAvatarFallbackText: String {
+        if isAnonymous {
+            return "匿"
+        }
+        let supplied = avatarFallbackText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let first = supplied.first {
+            return String(first)
+        }
+        let author = authorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return author.first.map(String.init) ?? "我"
+    }
 }
 
 nonisolated enum CommunityPostCardGenerationError: LocalizedError, Sendable {
@@ -57,10 +165,10 @@ enum CommunityPostCardLayout {
         photos: [UIImage]
     ) -> CGFloat {
         var sectionHeights: [CGFloat] = [42]
-        sectionHeights.append(measuredHeight(snapshot.title, fontSize: 25, weight: .bold))
+        sectionHeights.append(measuredHeight(snapshot.title, fontSize: 22, weight: .bold))
         if !snapshot.body.isEmpty {
             sectionHeights.append(
-                measuredHeight(snapshot.body, fontSize: 17, weight: .regular, lineSpacing: 5)
+                measuredHeight(snapshot.body, fontSize: 15, weight: .regular, lineSpacing: 4)
             )
         }
 
@@ -474,11 +582,17 @@ private struct CommunityPostLongCardView: View {
     let snapshot: CommunityPostCardSnapshot
     let photos: [UIImage]
 
-    private let background = Color(red: 0.965, green: 0.958, blue: 0.935)
     private let card = Color.white
     private let ink = Color(red: 0.10, green: 0.12, blue: 0.11)
     private let secondary = Color(red: 0.42, green: 0.45, blue: 0.43)
-    private let accent = Color(red: 0.12, green: 0.48, blue: 0.32)
+
+    private var background: Color {
+        AppThemeColorPreference.color(fromHex: snapshot.theme.backgroundHex)
+    }
+
+    private var accent: Color {
+        AppThemeColorPreference.color(fromHex: snapshot.theme.accentHex)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -525,12 +639,11 @@ private struct CommunityPostLongCardView: View {
                         .resizable()
                         .scaledToFill()
                 } else {
-                    Image(systemName: snapshot.isAnonymous ? "person.crop.circle.fill" : "leaf.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .padding(8)
+                    Text(snapshot.resolvedAvatarFallbackText)
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(accent)
-                        .background(accent.opacity(0.10))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(background)
                 }
             }
             .frame(width: 42, height: 42)
@@ -551,16 +664,16 @@ private struct CommunityPostLongCardView: View {
 
     private var title: some View {
         Text(snapshot.title)
-            .font(.system(size: 25, weight: .bold))
+            .font(.system(size: 22, weight: .bold))
             .foregroundStyle(ink)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private var bodyText: some View {
         Text(snapshot.body)
-            .font(.system(size: 17, weight: .regular))
+            .font(.system(size: 15, weight: .regular))
             .foregroundStyle(ink)
-            .lineSpacing(5)
+            .lineSpacing(4)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -586,14 +699,8 @@ private struct CommunityPostLongCardView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Label(AppBrand.displayName, systemImage: "leaf.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(accent)
-            Spacer()
-            Text("图文长图")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(secondary)
-        }
+        Text(AppBrand.displayName)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(accent)
     }
 }
