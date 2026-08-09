@@ -159,6 +159,9 @@ enum CommunityPostCardLayout {
     static let renderScale: CGFloat = 3
     static let maxPixelHeight = 16_384
     static let contentWidth: CGFloat = 284
+    static let photoSpacing: CGFloat = 8
+    static let textOnlyMinimumCanvasHeight: CGFloat = 240
+    static let photoMinimumCanvasHeight: CGFloat = 360
 
     static func estimatedHeight(
         snapshot: CommunityPostCardSnapshot,
@@ -180,18 +183,21 @@ enum CommunityPostCardLayout {
             sectionHeights.append(38 + CGFloat(attachmentCount * 22))
         }
 
-        sectionHeights.append(contentsOf: photos.map { photoHeight(for: $0) })
+        if !photos.isEmpty {
+            sectionHeights.append(photoRowHeight(photoCount: photos.count))
+        }
         sectionHeights.append(16)
 
         let sectionSpacing = CGFloat(max(0, sectionHeights.count - 1)) * 16
         let outerAndCardPadding: CGFloat = 76
         let measurementSafetyMargin: CGFloat = 24
-        return ceil(
+        let measuredHeight = ceil(
             sectionHeights.reduce(0, +) +
             sectionSpacing +
             outerAndCardPadding +
             measurementSafetyMargin
         )
+        return max(measuredHeight, minimumCanvasHeight(hasPhotos: !photos.isEmpty))
     }
 
     static func exceedsSafeHeight(
@@ -202,10 +208,14 @@ enum CommunityPostCardLayout {
             CGFloat(maxPixelHeight)
     }
 
-    private static func photoHeight(for image: UIImage) -> CGFloat {
-        let size = image.size
-        guard size.width > 0, size.height > 0 else { return 0 }
-        return ceil(contentWidth * size.height / size.width)
+    static func minimumCanvasHeight(hasPhotos: Bool) -> CGFloat {
+        hasPhotos ? photoMinimumCanvasHeight : textOnlyMinimumCanvasHeight
+    }
+
+    private static func photoRowHeight(photoCount: Int) -> CGFloat {
+        let count = max(photoCount, 1)
+        let totalSpacing = CGFloat(count - 1) * photoSpacing
+        return floor(max(contentWidth - totalSpacing, 0) / CGFloat(count))
     }
 
     private static func measuredHeight(
@@ -594,6 +604,14 @@ private struct CommunityPostLongCardView: View {
         AppThemeColorPreference.color(fromHex: snapshot.theme.accentHex)
     }
 
+    private var minimumCanvasHeight: CGFloat {
+        CommunityPostCardLayout.minimumCanvasHeight(hasPhotos: !photos.isEmpty)
+    }
+
+    private var minimumContentHeight: CGFloat {
+        max(minimumCanvasHeight - 76, 0)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
@@ -608,23 +626,31 @@ private struct CommunityPostLongCardView: View {
                     attachments
                 }
 
-                ForEach(Array(photos.enumerated()), id: \.offset) { _, image in
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                if !photos.isEmpty {
+                    HStack(spacing: CommunityPostCardLayout.photoSpacing) {
+                        ForEach(Array(photos.enumerated()), id: \.offset) { _, image in
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(1, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .clipped()
+                        }
+                    }
                 }
 
                 footer
             }
+            .frame(maxWidth: .infinity, minHeight: minimumContentHeight, alignment: .topLeading)
             .padding(20)
             .background(card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .shadow(color: .black.opacity(0.08), radius: 18, y: 9)
             .padding(18)
         }
-        .background(background)
         .frame(width: CommunityPostCardLayout.canvasWidth)
+        .frame(minHeight: minimumCanvasHeight, alignment: .top)
+        .background(background)
         .fixedSize(horizontal: false, vertical: true)
         .environment(\.colorScheme, .light)
     }

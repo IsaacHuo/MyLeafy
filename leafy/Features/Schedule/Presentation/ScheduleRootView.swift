@@ -266,7 +266,6 @@ struct ScheduleMemoFeedView: View {
     @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var importantDates = CustomScheduleStore.load()
     @State private var operationAlert: LeafyOperationAlert?
-    @State private var isSearchPresented = false
     @State private var detailMemo: ScheduleMemo?
 
     init(initialTag: String? = nil) {
@@ -337,7 +336,6 @@ struct ScheduleMemoFeedView: View {
         .background(LeafyPageBackground())
         .searchable(
             text: $searchText,
-            isPresented: $isSearchPresented,
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: "搜索随记"
         )
@@ -345,16 +343,7 @@ struct ScheduleMemoFeedView: View {
             ScheduleMemoComposer()
         }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    isSearchPresented = true
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .frame(width: 44, height: 44)
-                        .background(AppTheme.cardBackground, in: Circle())
-                }
-                .accessibilityLabel("搜索随记")
-
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Picker("筛选", selection: $filter) {
                         ForEach(ScheduleMemoFilter.allCases) { Text($0.title).tag($0) }
@@ -1072,7 +1061,6 @@ private struct ScheduleMemoComposer: View {
         }
         .padding(.vertical, 8)
         .frame(width: 260)
-        .background(AppTheme.modalBackground)
     }
 
     private func addMenuButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
@@ -1086,8 +1074,8 @@ private struct ScheduleMemoComposer: View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
                 .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(AppTheme.primaryText)
                 .frame(width: 32, height: 32)
-                .background(AppTheme.softFill, in: Circle())
             Text(title)
                 .foregroundStyle(AppTheme.primaryText)
             Spacer()
@@ -1415,7 +1403,7 @@ private struct ScheduleMemoStatisticsSummary: View {
                             .accessibilityLabel("\(day.date.formatted(date: .long, time: .omitted))，\(day.count) 条随记")
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     Text("颜色越深，表示当天记录越多。点按日期查看当天随记。")
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
