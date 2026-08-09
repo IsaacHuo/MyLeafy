@@ -292,23 +292,18 @@ struct ScheduleMemoCameraView: View {
     let onCapture: (UIImage) -> Void
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            cameraContent
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                .padding(12)
-        }
-        .onAppear(perform: camera.start)
-        .onDisappear(perform: camera.stop)
-        .alert("无法拍照", isPresented: Binding(
-            get: { camera.captureErrorMessage != nil },
-            set: { if !$0 { camera.captureErrorMessage = nil } }
-        )) {
-            Button("好") { camera.captureErrorMessage = nil }
-        } message: {
-            Text(camera.captureErrorMessage ?? "")
-        }
+        cameraContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear(perform: camera.start)
+            .onDisappear(perform: camera.stop)
+            .alert("无法拍照", isPresented: Binding(
+                get: { camera.captureErrorMessage != nil },
+                set: { if !$0 { camera.captureErrorMessage = nil } }
+            )) {
+                Button("好") { camera.captureErrorMessage = nil }
+            } message: {
+                Text(camera.captureErrorMessage ?? "")
+            }
     }
 
     @ViewBuilder
@@ -324,14 +319,17 @@ struct ScheduleMemoCameraView: View {
             unavailableContent(title: "无法使用相机", message: message, showsSettingsButton: false)
         case .loading, .ready:
             ZStack {
+                Color.black
+                    .ignoresSafeArea()
+
                 ScheduleMemoCameraPreview(session: camera.session)
                     .ignoresSafeArea()
 
-                if camera.state == .loading {
-                    ProgressView()
-                        .tint(.white)
-                        .controlSize(.large)
-                }
+                ProgressView()
+                    .tint(.white)
+                    .controlSize(.large)
+                    .opacity(camera.state == .loading ? 1 : 0)
+                    .animation(.easeOut(duration: 0.15), value: camera.state)
 
                 cameraControls
             }
@@ -448,6 +446,7 @@ struct ScheduleMemoCameraView: View {
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.ignoresSafeArea())
         .padding(28)
         .background(.black)
     }

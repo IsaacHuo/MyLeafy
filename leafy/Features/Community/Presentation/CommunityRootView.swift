@@ -438,6 +438,7 @@ struct CommunityRootView: View {
                         }
                     }
                 }
+                .frame(height: LeafyRootChromeMetrics.controlDiameter)
 
                 if isTopicFilterPresented {
                     CommunityTopicFilterBar(
@@ -1003,7 +1004,10 @@ private struct DiscoverLiquidGlassIconButton: View {
                         .controlSize(.small)
                 } else {
                     Image(systemName: systemName)
-                        .font(.system(size: 18 * leafyControlScale, weight: .semibold))
+                        .font(.system(
+                            size: LeafyRootChromeMetrics.iconPointSize * leafyControlScale,
+                            weight: .semibold
+                        ))
                 }
             }
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))

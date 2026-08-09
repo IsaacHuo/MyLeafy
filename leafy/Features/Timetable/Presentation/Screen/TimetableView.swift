@@ -889,35 +889,30 @@ struct TimetableView: View {
                 quickAccessResyncButton
             }
         }
-        .frame(width: 216)
-        .fixedSize(horizontal: false, vertical: true)
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private var quickAccessResyncButton: some View {
         Button {
             scheduleQuickAccessAction(.resyncTimetable)
         } label: {
-            ZStack {
+            HStack(spacing: 8 * leafyControlScale) {
+                if isFetching {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 22 * leafyControlScale)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 12 * leafyControlScale, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                        .frame(width: 22 * leafyControlScale)
+                }
+
                 Text(isFetching ? "正在同步" : "重新同步")
                     .font(.body)
                     .foregroundStyle(isFetching ? AppTheme.secondaryText : AppTheme.primaryText)
-                    .frame(maxWidth: .infinity)
-
-                HStack {
-                    if isFetching {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 22 * leafyControlScale)
-                    } else {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 12 * leafyControlScale, weight: .semibold))
-                            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                            .frame(width: 22 * leafyControlScale)
-                    }
-                    Spacer(minLength: 0)
-                }
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .frame(minHeight: 44, alignment: .leading)
             .padding(.horizontal, 12 * leafyControlScale)
             .contentShape(Rectangle())
         }
@@ -935,21 +930,17 @@ struct TimetableView: View {
         Button {
             scheduleQuickAccessAction(action)
         } label: {
-            ZStack {
+            HStack(spacing: 8 * leafyControlScale) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12 * leafyControlScale, weight: .semibold))
+                    .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                    .frame(width: 22 * leafyControlScale)
+
                 Text(title)
                     .font(.body)
                     .foregroundStyle(AppTheme.primaryText)
-                    .frame(maxWidth: .infinity)
-
-                HStack {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 12 * leafyControlScale, weight: .semibold))
-                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                        .frame(width: 22 * leafyControlScale)
-                    Spacer(minLength: 0)
-                }
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .frame(minHeight: 44, alignment: .leading)
             .padding(.horizontal, 12 * leafyControlScale)
             .contentShape(Rectangle())
         }
@@ -1008,7 +999,10 @@ struct TimetableView: View {
 
     private func toolbarIconLabel(systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 17 * leafyControlScale, weight: .semibold))
+            .font(.system(
+                size: LeafyRootChromeMetrics.iconPointSize * leafyControlScale,
+                weight: .semibold
+            ))
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
     }
 
@@ -2489,11 +2483,15 @@ private struct TimetableWeekPickerPanel: View {
         _expandedSemesterIDs = State(initialValue: model.defaultExpandedSemesterIDs)
     }
 
+    private var visibleAcademicYears: [TimetableCalendarMenuAcademicYear] {
+        model.academicYears.filter { !$0.semesters.isEmpty }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
-                    ForEach(model.academicYears) { academicYear in
+                    ForEach(visibleAcademicYears) { academicYear in
                         academicYearSection(academicYear)
                     }
 
@@ -2530,13 +2528,8 @@ private struct TimetableWeekPickerPanel: View {
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
 
-            ForEach(academicYear.stages) { stage in
-                switch stage {
-                case let .semester(semester):
-                    semesterSection(semester)
-                case let .vacation(vacation):
-                    vacationButton(vacation)
-                }
+            ForEach(academicYear.semesters) { semester in
+                semesterSection(semester)
             }
         }
     }
@@ -2569,6 +2562,12 @@ private struct TimetableWeekPickerPanel: View {
                         .microCaption()
                         .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
                 }
+                Spacer(minLength: AppSpacing.compact)
+                Text(semesterRangeText(semester))
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .frame(minHeight: 44)
         }
@@ -2576,6 +2575,20 @@ private struct TimetableWeekPickerPanel: View {
         .padding(.vertical, 8)
         .leafyCardStyle()
     }
+
+    private func semesterRangeText(_ semester: TimetableCalendarMenuSemester) -> String {
+        let start = Self.semesterMonthFormatter.string(from: semester.startDate)
+        guard let endDate = semester.endDate else { return "\(start)起" }
+        return "\(start)到\(Self.semesterMonthFormatter.string(from: endDate))"
+    }
+
+    private static let semesterMonthFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy年M月"
+        return formatter
+    }()
 
     private func weekButton(
         _ week: TimetableCalendarMenuWeek,

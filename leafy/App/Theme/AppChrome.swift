@@ -7,6 +7,7 @@ import AppKit
 
 enum LeafyRootChromeMetrics {
     static let controlDiameter: CGFloat = 44
+    static let iconPointSize: CGFloat = 17
     static let contentSpacing: CGFloat = AppSpacing.micro
     static let reservedHeight: CGFloat = controlDiameter + contentSpacing
     static let horizontalInset: CGFloat = AppSpacing.page
@@ -159,7 +160,40 @@ struct LeafyGlassIconButton: View {
                     )
                     .offset(x: -3 * leafyControlScale, y: 3 * leafyControlScale)
             }
+        }
     }
+}
+
+struct LeafyRootCircularToolbarButton: View {
+    @Environment(\.leafyControlScale) private var leafyControlScale
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
+    let systemName: String
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .leafyGlassSurface(in: Circle(), isInteractive: true)
+        }
+        .buttonStyle(.plain)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var label: some View {
+        Image(systemName: systemName)
+            .font(.system(
+                size: LeafyRootChromeMetrics.iconPointSize * leafyControlScale,
+                weight: .semibold
+            ))
+            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+            .frame(
+                width: LeafyRootChromeMetrics.controlDiameter,
+                height: LeafyRootChromeMetrics.controlDiameter
+            )
+            .contentShape(Circle())
     }
 }
 

@@ -184,7 +184,7 @@ enum CommunityPostCardLayout {
         }
 
         if !photos.isEmpty {
-            sectionHeights.append(photoRowHeight(photoCount: photos.count))
+            sectionHeights.append(photoRowHeight(photos: photos))
         }
         sectionHeights.append(16)
 
@@ -212,8 +212,15 @@ enum CommunityPostCardLayout {
         hasPhotos ? photoMinimumCanvasHeight : textOnlyMinimumCanvasHeight
     }
 
-    private static func photoRowHeight(photoCount: Int) -> CGFloat {
-        let count = max(photoCount, 1)
+    private static func photoRowHeight(photos: [UIImage]) -> CGFloat {
+        if photos.count == 1,
+           let photo = photos.first,
+           photo.size.width > photo.size.height,
+           photo.size.width > 0 {
+            return floor(contentWidth * photo.size.height / photo.size.width)
+        }
+
+        let count = max(photos.count, 1)
         let totalSpacing = CGFloat(count - 1) * photoSpacing
         return floor(max(contentWidth - totalSpacing, 0) / CGFloat(count))
     }
@@ -477,21 +484,27 @@ struct CommunityPostCardPreviewSheet: View {
                         .buttonStyle(.borderedProminent)
                     }
                 } else if let cardURL {
-                    ScrollView {
-                        if let image = UIImage(contentsOfFile: cardURL.path) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
-                                .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+                    GeometryReader { geometry in
+                        ScrollView {
+                            if let image = UIImage(contentsOfFile: cardURL.path) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: max(
+                                        geometry.size.width - AppSpacing.page * 2,
+                                        1
+                                    ))
+                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                                    .shadow(color: .black.opacity(0.12), radius: 16, y: 8)
+                                    .padding(AppSpacing.page)
+                            } else {
+                                ContentUnavailableView(
+                                    "长图无法读取",
+                                    systemImage: "photo.badge.exclamationmark"
+                                )
+                                .frame(maxWidth: .infinity, minHeight: 320)
                                 .padding(AppSpacing.page)
-                        } else {
-                            ContentUnavailableView(
-                                "长图无法读取",
-                                systemImage: "photo.badge.exclamationmark"
-                            )
-                            .frame(maxWidth: .infinity, minHeight: 320)
-                            .padding(AppSpacing.page)
+                            }
                         }
                     }
                 } else {
@@ -627,17 +640,7 @@ private struct CommunityPostLongCardView: View {
                 }
 
                 if !photos.isEmpty {
-                    HStack(spacing: CommunityPostCardLayout.photoSpacing) {
-                        ForEach(Array(photos.enumerated()), id: \.offset) { _, image in
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity)
-                                .aspectRatio(1, contentMode: .fit)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .clipped()
-                        }
-                    }
+                    photosSection
                 }
 
                 footer
@@ -705,6 +708,31 @@ private struct CommunityPostLongCardView: View {
 
     private var attachmentNames: [String] {
         Array(snapshot.attachmentNames.prefix(CommunityPostAttachment.postAttachmentLimit))
+    }
+
+    @ViewBuilder
+    private var photosSection: some View {
+        if photos.count == 1,
+           let photo = photos.first,
+           photo.size.width > photo.size.height {
+            Image(uiImage: photo)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            HStack(spacing: CommunityPostCardLayout.photoSpacing) {
+                ForEach(Array(photos.enumerated()), id: \.offset) { _, image in
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipped()
+                }
+            }
+        }
     }
 
     private var attachments: some View {

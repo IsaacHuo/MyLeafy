@@ -1,6 +1,72 @@
 import SwiftData
 import SwiftUI
 
+enum CustomScheduleDefaultContext {
+    static func make(for date: Date = Date()) -> TimetableCellReminderContext {
+        let timetable = AcademicYearTimetable(
+            configurations: SemesterConfig.timelineConfigurations,
+            semanticEvents: SemesterConfig.timelineConfigurations.flatMap(\.calendarEvents)
+        )
+        let calendar = Calendar.current
+        let current = calendar.startOfDay(for: date)
+        let weekAndDay: (week: Int, day: Int)
+        if let week = timetable.pageIndex(containing: current) {
+            let weekday = calendar.component(.weekday, from: current)
+            weekAndDay = (week, ((weekday + 5) % 7) + 1)
+        } else {
+            let today = calendar.startOfDay(for: Date())
+            let weekday = calendar.component(.weekday, from: today)
+            weekAndDay = (
+                timetable.pageIndex(containing: today) ?? 1,
+                weekday == 1 ? 7 : weekday - 1
+            )
+        }
+        let period = min(
+            max(TimetablePeriodSchedule.defaultStudyPeriod(for: date), 1),
+            TimetablePeriodSchedule.slots.count
+        )
+        let resolvedDate = defaultDate(
+            week: weekAndDay.week,
+            day: weekAndDay.day,
+            period: period,
+            timetable: timetable,
+            calendar: calendar
+        )
+        return TimetableCellReminderContext(
+            week: weekAndDay.week,
+            day: weekAndDay.day,
+            period: period,
+            date: resolvedDate,
+            occupiedPeriods: [],
+            totalPeriods: TimetablePeriodSchedule.slots.count,
+            reminder: nil,
+            allowsDateSelection: true
+        )
+    }
+
+    private static func defaultDate(
+        week: Int,
+        day: Int,
+        period: Int,
+        timetable: AcademicYearTimetable,
+        calendar: Calendar
+    ) -> Date {
+        guard let timelineWeek = timetable.week(atPageIndex: week),
+              let slot = TimetablePeriodSchedule.slot(for: period),
+              let date = calendar.date(
+                  byAdding: .day,
+                  value: day - 1,
+                  to: timelineWeek.weekStartDate
+              ) else { return Date() }
+        return calendar.date(
+            bySettingHour: slot.startHour,
+            minute: slot.startMinute,
+            second: 0,
+            of: date
+        ) ?? date
+    }
+}
+
 struct CustomScheduleListView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
@@ -9,6 +75,12 @@ struct CustomScheduleListView: View {
     @State private var importantDateEvents: [CustomScheduleEvent] = []
     @State private var editorPresentation: CustomScheduleEditorPresentation?
     @State private var operationAlert: LeafyOperationAlert?
+
+    private let presentation: SchedulePrimaryContentPresentation
+
+    init(presentation: SchedulePrimaryContentPresentation = .standalone) {
+        self.presentation = presentation
+    }
 
     private var academicYearTimetable: AcademicYearTimetable {
         let configurations = SemesterConfig.timelineConfigurations
@@ -34,7 +106,47 @@ struct CustomScheduleListView: View {
     }
 
     var body: some View {
-        AcademicDetailScrollContainer {
+        configuredContent
+        .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
+            CustomScheduleEditorSheet(presentation: presentation)
+                .presentationDetents([.medium, .large])
+        }
+        .onAppear(perform: reloadImportantDates)
+        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
+            reloadImportantDates()
+        }
+        .leafyOperationAlert($operationAlert)
+    }
+
+    @ViewBuilder
+    private var configuredContent: some View {
+        if presentation == .daytraceRoot {
+            scheduleList
+        } else {
+            scheduleList
+                .navigationTitle("自定日程")
+                .leafyInlineNavigationTitle()
+                .toolbar {
+                    ToolbarItem(placement: .leafyTrailing) {
+                        Button {
+                            editorPresentation = .importantDate(
+                                nil,
+                                defaultContext: defaultTimetableContext(),
+                                allowsModeSelection: true
+                            )
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("添加自定日程")
+                    }
+                }
+        }
+    }
+
+    private var scheduleList: some View {
+        AcademicDetailScrollContainer(
+            performsInitialLayoutRefresh: presentation != .daytraceRoot
+        ) {
             if sortedItems.isEmpty {
                 AcademicDetailCard {
                     ContentUnavailableView("暂无自定日程", systemImage: "calendar.badge.plus")
@@ -55,27 +167,6 @@ struct CustomScheduleListView: View {
                 text: "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。"
             )
         }
-        .navigationTitle("自定日程")
-        .leafyInlineNavigationTitle()
-        .toolbar {
-            ToolbarItem(placement: .leafyTrailing) {
-                Button {
-                    editorPresentation = .importantDate(nil, defaultContext: defaultTimetableContext(), allowsModeSelection: true)
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("添加自定日程")
-            }
-        }
-        .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
-            CustomScheduleEditorSheet(presentation: presentation)
-                .presentationDetents([.medium, .large])
-        }
-        .onAppear(perform: reloadImportantDates)
-        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
-            reloadImportantDates()
-        }
-        .leafyOperationAlert($operationAlert)
     }
 
     private func reloadImportantDates() {
@@ -127,19 +218,7 @@ struct CustomScheduleListView: View {
     }
 
     private func defaultTimetableContext(for date: Date = Date()) -> TimetableCellReminderContext {
-        let weekAndDay = academicYearWeekAndDayIfSupported(for: date)
-            ?? (week: academicYearTimetable.pageIndex(containing: Date()) ?? 1, day: defaultScheduleDay)
-        let period = min(max(TimetablePeriodSchedule.defaultStudyPeriod(for: date), 1), TimetablePeriodSchedule.slots.count)
-        return TimetableCellReminderContext(
-            week: weekAndDay.week,
-            day: weekAndDay.day,
-            period: period,
-            date: defaultDate(week: weekAndDay.week, day: weekAndDay.day, period: period),
-            occupiedPeriods: [],
-            totalPeriods: TimetablePeriodSchedule.slots.count,
-            reminder: nil,
-            allowsDateSelection: true
-        )
+        CustomScheduleDefaultContext.make(for: date)
     }
 
     private func defaultDate(week: Int, day: Int, period: Int) -> Date {
@@ -159,18 +238,6 @@ struct CustomScheduleListView: View {
         ) ?? date
     }
 
-    private var defaultScheduleDay: Int {
-        let weekday = Calendar.current.component(.weekday, from: Date())
-        return weekday == 1 ? 7 : weekday - 1
-    }
-
-    private func academicYearWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
-        let calendar = Calendar.current
-        let current = calendar.startOfDay(for: date)
-        guard let week = academicYearTimetable.pageIndex(containing: current) else { return nil }
-        let weekday = calendar.component(.weekday, from: current)
-        return (week, ((weekday + 5) % 7) + 1)
-    }
 }
 
 struct CustomCountdownListView: View {

@@ -11,11 +11,59 @@ struct ScheduleReportsView: View {
     @State private var applyTask: Task<Void, Never>?
     @State private var isEditorPresented = false
 
+    private let presentation: SchedulePrimaryContentPresentation
+
+    init(presentation: SchedulePrimaryContentPresentation = .standalone) {
+        self.presentation = presentation
+    }
+
     private var input: ScheduleReportInput {
         ScheduleReportDataSource.input(modelContext: modelContext)
     }
 
     var body: some View {
+        configuredReports
+        .onAppear {
+            let loaded = ScheduleReportSettingsStore.load()
+            settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: input)
+            settings.deriveEnabledState()
+            lastAppliedSettings = settings
+            ScheduleReportSettingsStore.save(settings)
+        }
+        .onDisappear { applyTask?.cancel() }
+        .leafySheet(isPresented: $isEditorPresented) {
+            ScheduleReminderEditor(input: input) { savedReminder in
+                var updated = settings
+                updated.reminders.append(savedReminder)
+                updated.deriveEnabledState()
+                apply(updated, debounce: false)
+            }
+        }
+        .leafyOperationAlert($operationAlert)
+    }
+
+    @ViewBuilder
+    private var configuredReports: some View {
+        if presentation == .daytraceRoot {
+            reportsList
+        } else {
+            reportsList
+                .navigationTitle("推送")
+                .leafyInlineNavigationTitle()
+                .toolbar {
+                    ToolbarItem(placement: .leafyTrailing) {
+                        Button {
+                            isEditorPresented = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("添加提醒")
+                    }
+                }
+        }
+    }
+
+    private var reportsList: some View {
         List {
             Section {
                 AcademicDetailCard {
@@ -70,7 +118,21 @@ struct ScheduleReportsView: View {
                     }
                 }
             } header: {
-                AcademicDetailSectionHeader(title: "自定义提醒")
+                HStack(spacing: AppSpacing.compact) {
+                    AcademicDetailSectionHeader(title: "自定义提醒")
+                    if presentation == .daytraceRoot {
+                        Button {
+                            isEditorPresented = true
+                        } label: {
+                            Label("添加提醒", systemImage: "plus")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AppTheme.accent)
+                        .accessibilityHint("创建一条自定义推送提醒")
+                    }
+                }
             }
 
             Section {
@@ -82,37 +144,10 @@ struct ScheduleReportsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(LeafyPageBackground())
+        .background {
+            LeafyPageBackground()
+        }
         .environment(\.defaultMinListRowHeight, 1)
-        .navigationTitle("推送")
-        .leafyInlineNavigationTitle()
-        .toolbar {
-            ToolbarItem(placement: .leafyTrailing) {
-                Button {
-                    isEditorPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("添加提醒")
-            }
-        }
-        .onAppear {
-            let loaded = ScheduleReportSettingsStore.load()
-            settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: input)
-            settings.deriveEnabledState()
-            lastAppliedSettings = settings
-            ScheduleReportSettingsStore.save(settings)
-        }
-        .onDisappear { applyTask?.cancel() }
-        .leafySheet(isPresented: $isEditorPresented) {
-            ScheduleReminderEditor(input: input) { savedReminder in
-                var updated = settings
-                updated.reminders.append(savedReminder)
-                updated.deriveEnabledState()
-                apply(updated, debounce: false)
-            }
-        }
-        .leafyOperationAlert($operationAlert)
     }
 
     private func toggleReminder(_ id: UUID, isEnabled: Bool) {

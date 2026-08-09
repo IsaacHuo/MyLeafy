@@ -56,7 +56,10 @@ nonisolated struct TimetableCalendarMenuModel {
                     calendar: calendar
                 ),
                 weeks: weeks,
-                startDate: configuration.semesterStartDate
+                startDate: configuration.semesterStartDate,
+                endDate: configuration.calendarEvents.first {
+                    $0.academicCategory == .semesterEnd
+                }?.endDate
             )
             stagesByAcademicYear[academicYear, default: []].append(.semester(semester))
         }
@@ -115,25 +118,18 @@ nonisolated struct TimetableCalendarMenuModel {
             unavailableFutureConfigurationMessage = nil
         }
 
-        let preferredAcademicYear = resolvedCurrentSemesterID.map(Self.academicYearTitle)
-            ?? resolvedCurrentVacationID.flatMap { vacationID in
-                stagesByAcademicYear.first { _, stages in
-                    stages.contains { stage in
-                        guard case let .vacation(vacation) = stage else { return false }
-                        return vacation.id == vacationID
-                    }
-                }?.key
-            }
-            ?? timetable.academicYearTitle
         academicYears = stagesByAcademicYear.map { academicYear, stages in
             TimetableCalendarMenuAcademicYear(
                 academicYear: academicYear,
-                stages: stages.sorted { $0.startDate < $1.startDate }
+                stages: stages.sorted { $0.startDate > $1.startDate }
             )
         }.sorted { lhs, rhs in
-            if lhs.academicYear == preferredAcademicYear { return true }
-            if rhs.academicYear == preferredAcademicYear { return false }
-            return lhs.academicYear < rhs.academicYear
+            let lhsStartDate = lhs.stages.first?.startDate ?? .distantPast
+            let rhsStartDate = rhs.stages.first?.startDate ?? .distantPast
+            if lhsStartDate != rhsStartDate {
+                return lhsStartDate > rhsStartDate
+            }
+            return lhs.academicYear > rhs.academicYear
         }
     }
 
@@ -212,6 +208,13 @@ nonisolated struct TimetableCalendarMenuAcademicYear: Identifiable {
     let stages: [TimetableCalendarMenuStage]
 
     var id: String { academicYear }
+
+    var semesters: [TimetableCalendarMenuSemester] {
+        stages.compactMap { stage in
+            guard case let .semester(semester) = stage else { return nil }
+            return semester
+        }
+    }
 }
 
 nonisolated enum TimetableCalendarMenuStage: Identifiable {
@@ -247,6 +250,7 @@ nonisolated struct TimetableCalendarMenuSemester: Identifiable {
     let title: String
     let weeks: [TimetableCalendarMenuWeek]
     let startDate: Date
+    let endDate: Date?
 
     var id: String { semesterID }
 }

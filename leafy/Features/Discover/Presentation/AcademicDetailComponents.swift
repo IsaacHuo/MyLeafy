@@ -5,13 +5,19 @@ struct AcademicDetailScrollContainer<Content: View>: View {
     @State private var didScheduleInitialLayoutRefresh = false
 
     private let spacing: CGFloat
+    private let usesSystemBackground: Bool
+    private let performsInitialLayoutRefresh: Bool
     @ViewBuilder private let content: () -> Content
 
     init(
         spacing: CGFloat = AppSpacing.card,
+        usesSystemBackground: Bool = false,
+        performsInitialLayoutRefresh: Bool = true,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.spacing = spacing
+        self.usesSystemBackground = usesSystemBackground
+        self.performsInitialLayoutRefresh = performsInitialLayoutRefresh
         self.content = content
     }
 
@@ -26,9 +32,15 @@ struct AcademicDetailScrollContainer<Content: View>: View {
         }
         .id(initialLayoutRefreshID)
         .background {
-            LeafyPageBackground()
+            if usesSystemBackground {
+                Color(uiColor: .systemBackground)
+                    .ignoresSafeArea()
+            } else {
+                LeafyPageBackground()
+            }
         }
         .task {
+            guard performsInitialLayoutRefresh else { return }
             guard !didScheduleInitialLayoutRefresh else { return }
             didScheduleInitialLayoutRefresh = true
 
