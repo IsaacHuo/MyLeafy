@@ -157,7 +157,9 @@ struct ScheduleRootView: View {
             }
         }
         .pickerStyle(.segmented)
-        .frame(maxWidth: 236, minHeight: LeafyRootChromeMetrics.controlDiameter)
+        .controlSize(.large)
+        .frame(maxWidth: 236)
+        .frame(height: LeafyRootChromeMetrics.controlDiameter)
         .layoutPriority(1)
     }
 
@@ -1183,11 +1185,33 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
         .photosPickerDisabledCapabilities(.selectionActions)
         .photosPickerAccessoryVisibility(.hidden, edges: .all)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topTrailing) {
+            doneButton
+                .padding(.top, AppSpacing.card)
+                .padding(.trailing, AppSpacing.page)
+        }
         .overlay(alignment: .bottom) {
             footerControls
-            .padding(.horizontal, AppSpacing.page)
-            .padding(.bottom, AppSpacing.card)
+                .padding(.horizontal, AppSpacing.page)
+                .padding(.bottom, AppSpacing.card)
         }
+    }
+
+    private var doneButton: some View {
+        Button("完成") {
+            dismiss()
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(AppTheme.primaryText)
+        .padding(.horizontal, 16)
+        .frame(height: LeafyRootChromeMetrics.controlDiameter)
+        .buttonStyle(.plain)
+        .leafyGlassSurface(
+            in: Capsule(),
+            fallbackFill: Color(uiColor: .secondarySystemBackground),
+            isInteractive: true
+        )
+        .accessibilityHint("完成当前照片选择并返回随记")
     }
 
     private var footerControls: some View {
@@ -1242,7 +1266,7 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
         Button(action: showAllPhotos) {
             Label("全部照片", systemImage: "photo.on.rectangle.angled")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.primaryText)
                 .padding(.horizontal, 13)
                 .frame(height: LeafyRootChromeMetrics.controlDiameter)
         }
@@ -1587,9 +1611,6 @@ private struct ScheduleMemoComposer: View {
             loaded.append(.init(data: data, image: image))
         }
         draftImages = loaded
-        if !loaded.isEmpty {
-            isTextFieldFocused = true
-        }
     }
 
     @MainActor
