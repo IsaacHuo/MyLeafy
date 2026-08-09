@@ -1823,6 +1823,7 @@ private struct CacheAndSyncView: View {
     @Query private var scheduleMemos: [ScheduleMemo]
     @Query private var scheduleMemoImages: [ScheduleMemoImage]
     @Query private var scheduleMemoAttachments: [ScheduleMemoAttachment]
+    @Query private var scheduleMemoAudioRecords: [ScheduleMemoAudio]
 
     @State private var isSyncing = false
     @State private var isClearing = false
@@ -2113,8 +2114,16 @@ private struct CacheAndSyncView: View {
             operationAlert = .failure("随记附件清除失败：\(error.localizedDescription)")
             return
         }
+        do {
+            try ScheduleMemoAudioStore.deleteAllFiles()
+        } catch {
+            isClearing = false
+            operationAlert = .failure("随记录音清除失败：\(error.localizedDescription)")
+            return
+        }
         for image in scheduleMemoImages { modelContext.delete(image) }
         for attachment in scheduleMemoAttachments { modelContext.delete(attachment) }
+        for audio in scheduleMemoAudioRecords { modelContext.delete(audio) }
         for memo in scheduleMemos { modelContext.delete(memo) }
 
         SchoolDataCache.clearDiscoverCaches()

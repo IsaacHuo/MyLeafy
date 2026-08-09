@@ -20,9 +20,11 @@ enum ScheduleMemoDeletionService {
         _ memo: ScheduleMemo,
         images: [ScheduleMemoImage],
         attachments: [ScheduleMemoAttachment] = [],
+        audioRecords: [ScheduleMemoAudio] = [],
         in context: ModelContext,
         imageDirectory: URL? = nil,
         attachmentDirectory: URL? = nil,
+        audioDirectory: URL? = nil,
         saves: Bool = true
     ) throws {
         let imageRecords: [ScheduleMemoImage]
@@ -39,13 +41,25 @@ enum ScheduleMemoDeletionService {
         }
         let ownedImages = imageRecords.filter { $0.memoID == memo.id }
         let ownedAttachments = attachmentRecords.filter { $0.memoID == memo.id }
+        let resolvedAudioRecords: [ScheduleMemoAudio]
+        if audioRecords.isEmpty {
+            resolvedAudioRecords = try context.fetch(FetchDescriptor<ScheduleMemoAudio>())
+        } else {
+            resolvedAudioRecords = audioRecords
+        }
+        let ownedAudioRecords = resolvedAudioRecords.filter { $0.memoID == memo.id }
         try ScheduleMemoImageStore.deleteFiles(named: ownedImages.map(\.localFilename), in: imageDirectory)
         try ScheduleMemoAttachmentStore.deleteFiles(
             named: ownedAttachments.map(\.localFilename),
             in: attachmentDirectory
         )
+        try ScheduleMemoAudioStore.deleteFiles(
+            named: ownedAudioRecords.map(\.localFilename),
+            in: audioDirectory
+        )
         ownedImages.forEach(context.delete)
         ownedAttachments.forEach(context.delete)
+        ownedAudioRecords.forEach(context.delete)
         context.delete(memo)
         if saves { try context.save() }
     }

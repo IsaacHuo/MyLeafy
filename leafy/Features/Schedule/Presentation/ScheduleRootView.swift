@@ -153,7 +153,9 @@ struct ScheduleRootView: View {
     private var rootSectionPicker: some View {
         Picker("日迹页面", selection: $primarySection) {
             ForEach(SchedulePrimarySection.allCases) { section in
-                Text(section.title).tag(section)
+                Text(section.title)
+                    .font(.body)
+                    .tag(section)
             }
         }
         .pickerStyle(.segmented)
@@ -320,9 +322,11 @@ private enum ScheduleMemoFilter: String, CaseIterable, Identifiable {
 
 struct ScheduleMemoFeedView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @Query private var attachments: [ScheduleMemoAttachment]
+    @Query private var audioRecords: [ScheduleMemoAudio]
     @Query private var reminders: [TimetableCellReminder]
     @State private var searchText = ""
     @State private var selectedTag: String?
@@ -335,6 +339,8 @@ struct ScheduleMemoFeedView: View {
     @State private var detailMemo: ScheduleMemo?
     @State private var composerHeight: CGFloat = 0
     @State private var presentedAlert: ScheduleMemoFeedAlert?
+    @State private var hasPositionedDaytraceFeed = false
+    @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
 
     private let initialTag: String?
     private let presentation: SchedulePrimaryContentPresentation
@@ -411,6 +417,8 @@ struct ScheduleMemoFeedView: View {
                     memo: detailMemo,
                     images: memoImages(for: detailMemo),
                     attachments: memoAttachments(for: detailMemo),
+                    audio: memoAudio(for: detailMemo),
+                    audioPlayback: audioPlayback,
                     linkedSchedule: linkedSchedule(for: detailMemo),
                     onEdit: { editingMemo = detailMemo },
                     onConvert: { convertingMemo = detailMemo },
@@ -472,60 +480,82 @@ struct ScheduleMemoFeedView: View {
 
     @ViewBuilder
     private var daytraceRootFeed: some View {
-        if #available(iOS 26.0, *) {
-            memoScrollView
-                .background(LeafyPageBackground())
-                .safeAreaBar(edge: .top) {
-                    searchFilterBar
-                }
-                .scheduleMemoComposerOverlay(height: $composerHeight)
-        } else {
-            memoScrollView
-                .background(LeafyPageBackground())
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    searchFilterBar
-                }
-                .scheduleMemoComposerOverlay(height: $composerHeight)
-        }
+        memoScrollView
+            .background(LeafyPageBackground())
+            .scheduleMemoComposerOverlay(height: $composerHeight)
     }
 
     private var memoScrollView: some View {
-        ScrollView {
-            LazyVStack(spacing: AppSpacing.card) {
-                filterSummary
-                if visibleMemos.isEmpty {
-                    ContentUnavailableView(
-                        searchText.isEmpty ? "还没有随记" : "没有找到随记",
-                        systemImage: searchText.isEmpty ? "square.and.pencil" : "magnifyingglass",
-                        description: Text(searchText.isEmpty ? "在下方快速记下一句话、一个想法或一张图片。" : "试试清除筛选或换一个关键词。")
+        GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if presentation == .daytraceRoot {
+                            VStack(spacing: 0) {
+                                searchFilterBar
+                                    .padding(.top, AppSpacing.compact)
+                                    .padding(.bottom, -AppSpacing.micro)
+                                Color.clear
+                                    .frame(height: 0)
+                                    .id(ScheduleMemoFeedAnchor.cardsStart)
+                            }
+                        }
+
+                        LazyVStack(spacing: AppSpacing.card) {
+                            filterSummary
+                            if visibleMemos.isEmpty {
+                                ContentUnavailableView(
+                                    searchText.isEmpty ? "还没有随记" : "没有找到随记",
+                                    systemImage: searchText.isEmpty ? "square.and.pencil" : "magnifyingglass",
+                                    description: Text(searchText.isEmpty ? "在下方快速记下一句话、一个想法或一张图片。" : "试试清除筛选或换一个关键词。")
+                                )
+                                .padding(.top, 72)
+                            } else {
+                                ForEach(visibleMemos) { memo in
+                                    ScheduleMemoCard(
+                                        memo: memo,
+                                        images: memoImages(for: memo),
+                                        attachments: memoAttachments(for: memo),
+                                        audio: memoAudio(for: memo),
+                                        audioPlayback: audioPlayback,
+                                        linkedSchedule: linkedSchedule(for: memo),
+                                        onOpen: { detailMemo = memo },
+                                        onTag: { selectedTag = $0 },
+                                        onEdit: { editingMemo = memo },
+                                        onConvert: { convertingMemo = memo },
+                                        onShareCard: { makeShareCard(for: memo) },
+                                        onPin: { togglePin(memo) },
+                                        onTrash: { requestTrash(memo) }
+                                    )
+                                }
+                            }
+
+                            if presentation == .daytraceRoot {
+                                Color.clear
+                                    .frame(height: composerHeight + AppSpacing.card)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .padding(.top, AppSpacing.card)
+                    }
+                    .leafyAdaptiveContentWidth(maxWidth: 760)
+                    .frame(
+                        minHeight: viewport.size.height + (presentation == .daytraceRoot ? 56 : 0),
+                        alignment: .top
                     )
-                    .padding(.top, 72)
-                } else {
-                    ForEach(visibleMemos) { memo in
-                        ScheduleMemoCard(
-                            memo: memo,
-                            images: memoImages(for: memo),
-                            attachments: memoAttachments(for: memo),
-                            linkedSchedule: linkedSchedule(for: memo),
-                            onOpen: { detailMemo = memo },
-                            onTag: { selectedTag = $0 },
-                            onEdit: { editingMemo = memo },
-                            onConvert: { convertingMemo = memo },
-                            onShareCard: { makeShareCard(for: memo) },
-                            onPin: { togglePin(memo) },
-                            onTrash: { requestTrash(memo) }
-                        )
+                    .padding(.bottom, AppSpacing.card)
+                }
+                .scrollBounceBehavior(.always, axes: .vertical)
+                .opacity(presentation == .daytraceRoot && !hasPositionedDaytraceFeed ? 0 : 1)
+                .onAppear {
+                    guard presentation == .daytraceRoot, !hasPositionedDaytraceFeed else { return }
+                    Task { @MainActor in
+                        await Task.yield()
+                        proxy.scrollTo(ScheduleMemoFeedAnchor.cardsStart, anchor: .top)
+                        hasPositionedDaytraceFeed = true
                     }
                 }
-
-                if presentation == .daytraceRoot {
-                    Color.clear
-                        .frame(height: composerHeight + AppSpacing.card)
-                        .accessibilityHidden(true)
-                }
             }
-            .leafyAdaptiveContentWidth(maxWidth: 760)
-            .padding(.vertical, AppSpacing.card)
         }
         .scrollDismissesKeyboard(.interactively)
     }
@@ -571,7 +601,6 @@ struct ScheduleMemoFeedView: View {
             }
         }
         .padding(.horizontal, AppSpacing.page)
-        .padding(.vertical, AppSpacing.micro)
     }
 
     private var filterMenu: some View {
@@ -584,7 +613,7 @@ struct ScheduleMemoFeedView: View {
             }
         } label: {
             Image(systemName: filter == .all ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
-                .foregroundStyle(AppTheme.accent)
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
         }
@@ -648,6 +677,10 @@ struct ScheduleMemoFeedView: View {
         attachments.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    private func memoAudio(for memo: ScheduleMemo) -> ScheduleMemoAudio? {
+        audioRecords.first { $0.memoID == memo.id }
+    }
+
     private func makeShareCard(for memo: ScheduleMemo) {
         do {
             shareCardSource = try scheduleMemoShareCardSource(
@@ -675,6 +708,9 @@ struct ScheduleMemoFeedView: View {
 
     private func confirmTrash(_ request: ScheduleMemoTrashRequest) {
         do {
+            if let audio = memoAudio(for: request.memo), audioPlayback.currentAudioID == audio.id {
+                audioPlayback.stop()
+            }
             try ScheduleMemoDeletionService.moveToTrash(request.memo, in: modelContext)
             if request.closesDetail, detailMemo?.id == request.memo.id {
                 detailMemo = nil
@@ -686,6 +722,10 @@ struct ScheduleMemoFeedView: View {
             }
         }
     }
+}
+
+private enum ScheduleMemoFeedAnchor: Hashable {
+    case cardsStart
 }
 
 private enum ScheduleMemoFeedAlert: Identifiable {
@@ -745,6 +785,8 @@ private struct ScheduleMemoCard: View {
     let memo: ScheduleMemo
     let images: [ScheduleMemoImage]
     let attachments: [ScheduleMemoAttachment]
+    let audio: ScheduleMemoAudio?
+    let audioPlayback: ScheduleMemoAudioPlaybackController
     let linkedSchedule: ScheduleMemoLinkedSchedule?
     let onOpen: () -> Void
     let onTag: (String) -> Void
@@ -772,6 +814,10 @@ private struct ScheduleMemoCard: View {
             }
 
             ScheduleMemoPhotoStrip(images: images, layout: .feed)
+
+            if let audio {
+                ScheduleMemoAudioPlayerBar(audio: audio, controller: audioPlayback)
+            }
 
             if !attachments.isEmpty {
                 VStack(spacing: 6) {
@@ -846,7 +892,9 @@ private struct ScheduleMemoCard: View {
             Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { onPin() }
             Button("编辑", systemImage: "pencil") { onEdit() }
             Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus") { onConvert() }
-            Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled") { onShareCard() }
+            if memo.kind != .audio {
+                Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled") { onShareCard() }
+            }
             Button("移到回收站", systemImage: "trash", role: .destructive) { onTrash() }
         } label: {
             Image(systemName: "ellipsis")
@@ -911,31 +959,20 @@ private struct ScheduleMemoPhotoStrip: View {
     @ViewBuilder
     var body: some View {
         if !images.isEmpty {
-            switch layout {
-            case .feed:
-                LazyVGrid(
-                    columns: Array(
-                        repeating: GridItem(.flexible(), spacing: 8),
-                        count: ScheduleMemoImageStore.maximumImageCount
-                    ),
-                    alignment: .leading,
-                    spacing: 8
-                ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: AppSpacing.micro) {
                     ForEach(Array(images.prefix(ScheduleMemoImageStore.maximumImageCount))) { imageRecord in
                         photoCell(imageRecord)
                     }
                 }
-            case .detail:
-                detailStrip
             }
         }
     }
 
-    private var detailStrip: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(images.prefix(ScheduleMemoImageStore.maximumImageCount))) { imageRecord in
-                photoCell(imageRecord)
-            }
+    private var cellLength: CGFloat {
+        switch layout {
+        case .feed: 104
+        case .detail: 140
         }
     }
 
@@ -950,8 +987,7 @@ private struct ScheduleMemoPhotoStrip: View {
                     .foregroundStyle(AppTheme.secondaryText)
             }
         }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
+        .frame(width: cellLength, height: cellLength)
         .background(AppTheme.softFill)
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         .clipped()
@@ -996,6 +1032,8 @@ private struct ScheduleMemoDetailView: View {
     let memo: ScheduleMemo
     let images: [ScheduleMemoImage]
     let attachments: [ScheduleMemoAttachment]
+    let audio: ScheduleMemoAudio?
+    let audioPlayback: ScheduleMemoAudioPlaybackController
     let linkedSchedule: ScheduleMemoLinkedSchedule?
     let onEdit: () -> Void
     let onConvert: () -> Void
@@ -1023,6 +1061,10 @@ private struct ScheduleMemoDetailView: View {
                 }
 
                 ScheduleMemoPhotoStrip(images: images, layout: .detail)
+
+                if let audio {
+                    ScheduleMemoAudioPlayerBar(audio: audio, controller: audioPlayback)
+                }
 
                 if !attachments.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -1080,7 +1122,9 @@ private struct ScheduleMemoDetailView: View {
                 Menu {
                     Button("编辑", systemImage: "pencil", action: onEdit)
                     Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus", action: onConvert)
-                    Button("生成图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
+                    if memo.kind != .audio {
+                        Button("生成图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
+                    }
                     Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin", action: onPin)
                     Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
                 } label: {
@@ -1104,6 +1148,13 @@ private struct ScheduleMemoDraftImage: Identifiable {
     let id = UUID()
     let data: Data
     let image: UIImage
+    let pickerItem: PhotosPickerItem?
+
+    init(data: Data, image: UIImage, pickerItem: PhotosPickerItem? = nil) {
+        self.data = data
+        self.image = image
+        self.pickerItem = pickerItem
+    }
 }
 
 private struct ScheduleMemoDraftAttachment: Identifiable {
@@ -1161,29 +1212,46 @@ private enum ScheduleMemoComposerError: LocalizedError {
 private enum ScheduleMemoComposerAddDestination {
     case camera
     case photoLibrary
+    case audioRecording
     case fileImporter
     case writer
 }
 
 private struct ScheduleMemoInlinePhotoPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var selection: [PhotosPickerItem]
+    @State private var selection: [PhotosPickerItem]
 
     let maxSelectionCount: Int
-    let onShowAllPhotos: () -> Void
+    let onCommit: ([PhotosPickerItem]) -> Void
+    let onShowAllPhotos: ([PhotosPickerItem]) -> Void
+
+    init(
+        selection: [PhotosPickerItem],
+        maxSelectionCount: Int,
+        onCommit: @escaping ([PhotosPickerItem]) -> Void,
+        onShowAllPhotos: @escaping ([PhotosPickerItem]) -> Void
+    ) {
+        _selection = State(initialValue: selection)
+        self.maxSelectionCount = maxSelectionCount
+        self.onCommit = onCommit
+        self.onShowAllPhotos = onShowAllPhotos
+    }
 
     var body: some View {
-        PhotosPicker(
-            selection: $selection,
-            maxSelectionCount: maxSelectionCount,
-            selectionBehavior: .continuousAndOrdered,
-            matching: .images
-        ) {
-            Text("选择照片")
+        ZStack {
+            PhotosPicker(
+                selection: $selection,
+                maxSelectionCount: maxSelectionCount,
+                selectionBehavior: .continuousAndOrdered,
+                matching: .images
+            ) {
+                Text("选择照片")
+            }
+            .photosPickerStyle(.inline)
+            .photosPickerDisabledCapabilities(.selectionActions)
+            .photosPickerAccessoryVisibility(.hidden, edges: .all)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .photosPickerStyle(.inline)
-        .photosPickerDisabledCapabilities(.selectionActions)
-        .photosPickerAccessoryVisibility(.hidden, edges: .all)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topTrailing) {
             doneButton
@@ -1199,6 +1267,7 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
 
     private var doneButton: some View {
         Button("完成") {
+            onCommit(selection)
             dismiss()
         }
         .font(.subheadline.weight(.semibold))
@@ -1215,14 +1284,10 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
     }
 
     private var footerControls: some View {
-        ZStack {
-            HStack {
-                closeButton
-                Spacer(minLength: AppSpacing.card)
-                allPhotosButton
-            }
-
-            selectPhotosButton
+        HStack {
+            closeButton
+            Spacer(minLength: AppSpacing.card)
+            allPhotosButton
         }
         .frame(height: LeafyRootChromeMetrics.controlDiameter)
     }
@@ -1246,22 +1311,6 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
         .accessibilityLabel("关闭照片选择")
     }
 
-    private var selectPhotosButton: some View {
-        Button("选择照片") {
-            dismiss()
-        }
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(AppTheme.primaryText)
-        .padding(.horizontal, 16)
-        .frame(height: LeafyRootChromeMetrics.controlDiameter)
-        .buttonStyle(.plain)
-        .leafyGlassSurface(
-            in: Capsule(),
-            fallbackFill: Color(uiColor: .secondarySystemBackground),
-            isInteractive: true
-        )
-    }
-
     private var allPhotosButton: some View {
         Button(action: showAllPhotos) {
             Label("全部照片", systemImage: "photo.on.rectangle.angled")
@@ -1279,7 +1328,7 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
     }
 
     private func showAllPhotos() {
-        onShowAllPhotos()
+        onShowAllPhotos(selection)
         dismiss()
     }
 }
@@ -1298,6 +1347,7 @@ private struct ScheduleMemoComposer: View {
     @State private var showsInlinePhotoLibrary = false
     @State private var showsFullPhotoLibrary = false
     @State private var presentsFullPhotoLibraryAfterInlineDismissal = false
+    @State private var showsAudioRecorder = false
     @State private var showsFileImporter = false
     @State private var showsWriter = false
     @State private var focusesTextFieldAfterCamera = false
@@ -1351,7 +1401,10 @@ private struct ScheduleMemoComposer: View {
                     .accessibilityLabel(speech.isListening ? "停止语音转写" : "开始语音转写")
 
                     Button {
-                        save()
+                        Task {
+                            await speech.stop()
+                            save()
+                        }
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 28, weight: .regular))
@@ -1379,7 +1432,7 @@ private struct ScheduleMemoComposer: View {
         .photosPicker(
             isPresented: $showsFullPhotoLibrary,
             selection: $photoItems,
-            maxSelectionCount: ScheduleMemoImageStore.maximumImageCount,
+            maxSelectionCount: photoLibrarySelectionLimit,
             matching: .images
         )
         .sheet(
@@ -1387,9 +1440,13 @@ private struct ScheduleMemoComposer: View {
             onDismiss: presentFullPhotoLibraryIfNeeded
         ) {
             ScheduleMemoInlinePhotoPickerSheet(
-                selection: $photoItems,
-                maxSelectionCount: ScheduleMemoImageStore.maximumImageCount,
-                onShowAllPhotos: {
+                selection: photoItems,
+                maxSelectionCount: photoLibrarySelectionLimit,
+                onCommit: { selection in
+                    photoItems = selection
+                },
+                onShowAllPhotos: { selection in
+                    photoItems = selection
                     presentsFullPhotoLibraryAfterInlineDismissal = true
                 }
             )
@@ -1413,6 +1470,11 @@ private struct ScheduleMemoComposer: View {
             .presentationDragIndicator(.hidden)
             .presentationCornerRadius(36)
             .presentationBackground(.black)
+        }
+        .sheet(isPresented: $showsAudioRecorder) {
+            ScheduleMemoAudioRecorderSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .fileImporter(
             isPresented: $showsFileImporter,
@@ -1462,7 +1524,9 @@ private struct ScheduleMemoComposer: View {
                                 .clipped()
                             removeButton(label: "移除图片") {
                                 draftImages.removeAll { $0.id == draft.id }
-                                photoItems = []
+                                if let pickerItem = draft.pickerItem {
+                                    photoItems = ScheduleMemoPhotoSelection.removing(pickerItem, from: photoItems)
+                                }
                             }
                         }
                     }
@@ -1504,6 +1568,10 @@ private struct ScheduleMemoComposer: View {
 
             addMenuButton("相册", systemImage: "photo") {
                 selectAddDestination(.photoLibrary)
+            }
+
+            addMenuButton("录音", systemImage: "waveform") {
+                selectAddDestination(.audioRecording)
             }
 
             addMenuButton("上传附件", systemImage: "paperclip") {
@@ -1554,7 +1622,15 @@ private struct ScheduleMemoComposer: View {
             case .camera:
                 showsCamera = true
             case .photoLibrary:
+                guard remainingPhotoSelectionCount > 0 else {
+                    errorTitle = "无法添加图片"
+                    errorMessage = "每条随记最多添加 \(ScheduleMemoImageStore.maximumImageCount) 张图片。"
+                    return
+                }
                 showsInlinePhotoLibrary = true
+            case .audioRecording:
+                await speech.stop()
+                showsAudioRecorder = true
             case .fileImporter:
                 showsFileImporter = true
             case .writer:
@@ -1570,6 +1646,18 @@ private struct ScheduleMemoComposer: View {
             await Task.yield()
             showsFullPhotoLibrary = true
         }
+    }
+
+    private var photoLibrarySelectionLimit: Int {
+        max(remainingPhotoSelectionCount, 1)
+    }
+
+    private var remainingPhotoSelectionCount: Int {
+        max(
+            ScheduleMemoImageStore.maximumImageCount
+                - draftImages.lazy.filter { $0.pickerItem == nil }.count,
+            0
+        )
     }
 
     private static let allowedAttachmentTypes: [UTType] = {
@@ -1608,9 +1696,14 @@ private struct ScheduleMemoComposer: View {
         for item in items.prefix(ScheduleMemoImageStore.maximumImageCount) {
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = ImageDataDecoder.decodedImage(from: data) else { continue }
-            loaded.append(.init(data: data, image: image))
+            loaded.append(.init(data: data, image: image, pickerItem: item))
         }
-        draftImages = loaded
+        let capturedImages = draftImages.filter { $0.pickerItem == nil }
+        draftImages = ScheduleMemoPhotoSelection.merging(
+            pickerItems: loaded,
+            capturedItems: capturedImages,
+            maximumCount: ScheduleMemoImageStore.maximumImageCount
+        )
     }
 
     @MainActor
@@ -1699,7 +1792,7 @@ private struct ScheduleMemoEditorView: View {
                 NavigationStack {
                     Form {
                         Section("随记内容") {
-                            TextField("写点什么…", text: $bodyText, axis: .vertical)
+                            TextField(memo.kind == .audio ? "添加一句备注（可选）" : "写点什么…", text: $bodyText, axis: .vertical)
                                 .lineLimit(5...14)
                         }
                         Section {
@@ -1707,7 +1800,7 @@ private struct ScheduleMemoEditorView: View {
                                 .foregroundStyle(AppTheme.secondaryText)
                         }
                     }
-                    .navigationTitle("编辑随记")
+                    .navigationTitle(memo.kind == .audio ? "编辑录音备注" : "编辑随记")
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                         ToolbarItem(placement: .confirmationAction) {
@@ -1728,9 +1821,11 @@ private struct ScheduleMemoReviewView: View {
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @Query private var attachments: [ScheduleMemoAttachment]
+    @Query private var audioRecords: [ScheduleMemoAudio]
     @State private var page = 0
     @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var operationAlert: LeafyOperationAlert?
+    @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
 
     private var selection: [ScheduleMemo] {
         ScheduleMemoReviewEngine.selection(from: memos, page: page)
@@ -1760,6 +1855,8 @@ private struct ScheduleMemoReviewView: View {
                             memo: memo,
                             images: images.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
                             attachments: attachments.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
+                            audio: audioRecords.first { $0.memoID == memo.id },
+                            audioPlayback: audioPlayback,
                             linkedSchedule: nil,
                             onOpen: {},
                             onTag: { _ in },
@@ -2024,7 +2121,7 @@ private struct ScheduleMemoDayView: View {
         List(dayMemos) { memo in
             VStack(alignment: .leading, spacing: 7) {
                 Text(memo.createdAt.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                Text(memo.body.isEmpty ? "图片随记" : memo.body)
+                Text(memo.body.isEmpty ? (memo.kind == .audio ? "录音随记" : "图片随记") : memo.body)
             }
         }
         .navigationTitle(date.formatted(date: .abbreviated, time: .omitted))
@@ -2036,6 +2133,7 @@ private struct ScheduleMemoTrashView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
+    @Query private var audioRecords: [ScheduleMemoAudio]
     @State private var confirmsEmpty = false
     @State private var errorMessage: String?
 
@@ -2050,7 +2148,7 @@ private struct ScheduleMemoTrashView: View {
             } else {
                 ForEach(trashed) { memo in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(memo.body.isEmpty ? "图片随记" : memo.body).lineLimit(4)
+                        Text(memo.body.isEmpty ? (memo.kind == .audio ? "录音随记" : "图片随记") : memo.body).lineLimit(4)
                         HStack {
                             Button("恢复") { restore(memo) }.buttonStyle(.bordered)
                             Button("永久删除", role: .destructive) { permanentlyDelete(memo) }.buttonStyle(.bordered)
@@ -2089,6 +2187,7 @@ private struct ScheduleMemoTrashView: View {
             try ScheduleMemoDeletionService.permanentlyDelete(
                 memo,
                 images: images,
+                audioRecords: audioRecords,
                 in: modelContext,
                 saves: saves
             )

@@ -79,6 +79,9 @@ enum AppSessionResetter {
         attempt("随记附件") {
             try ScheduleMemoAttachmentStore.deleteAllFiles()
         }
+        attempt("随记录音") {
+            try ScheduleMemoAudioStore.deleteAllFiles()
+        }
         attempt("课表背景") {
             try TimetableBackgroundStore.deleteAllBackgroundFiles()
         }
@@ -142,6 +145,7 @@ enum AppSessionResetter {
         try modelContext.delete(model: ScheduleMemo.self)
         try modelContext.delete(model: ScheduleMemoImage.self)
         try modelContext.delete(model: ScheduleMemoAttachment.self)
+        try modelContext.delete(model: ScheduleMemoAudio.self)
         try modelContext.save()
     }
 }
