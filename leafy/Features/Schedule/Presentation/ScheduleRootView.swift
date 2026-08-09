@@ -14,6 +14,7 @@ extension ScheduleDestination {
         case .customSchedules: return "我的日程"
         case .dailyReview: return "每日回顾"
         case .tags: return "标签"
+        case .export: return "导出随记"
         case .statistics: return "记录统计"
         case .scheduleReports: return "日程推送"
         case .trash: return "回收站"
@@ -28,6 +29,7 @@ extension ScheduleDestination {
         case .customSchedules: return "calendar.badge.plus"
         case .dailyReview: return "sparkles"
         case .tags: return "number"
+        case .export: return "square.and.arrow.up"
         case .statistics: return "chart.bar.xaxis"
         case .scheduleReports: return "bell.badge"
         case .trash: return "trash"
@@ -123,7 +125,7 @@ struct ScheduleRootView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
-        .padding(.vertical, AppSpacing.micro)
+        .frame(height: LeafyRootChromeMetrics.controlDiameter)
     }
 
     private var rootMenuButton: some View {
@@ -173,6 +175,8 @@ struct ScheduleRootView: View {
             ScheduleMemoReviewView()
         case .tags:
             ScheduleMemoTagsView()
+        case .export:
+            ScheduleMemoExportView()
         case .statistics:
             ScheduleMemoStatisticsView()
         case .scheduleReports:
@@ -277,9 +281,12 @@ private struct ScheduleSidebar: View {
             }
 
             Section("记录") {
-                row(.memos)
+                if presentation != .modal {
+                    row(.memos)
+                }
                 row(.dailyReview)
                 row(.tags)
+                row(.export)
                 row(.trash)
             }
         }
@@ -323,17 +330,18 @@ struct ScheduleMemoFeedView: View {
     @State private var convertingMemo: ScheduleMemo?
     @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var importantDates = CustomScheduleStore.load()
-    @State private var operationAlert: LeafyOperationAlert?
     @State private var detailMemo: ScheduleMemo?
     @State private var composerHeight: CGFloat = 0
-    @State private var pendingTrashRequest: ScheduleMemoTrashRequest?
+    @State private var presentedAlert: ScheduleMemoFeedAlert?
 
+    private let initialTag: String?
     private let presentation: SchedulePrimaryContentPresentation
 
     init(
         initialTag: String? = nil,
         presentation: SchedulePrimaryContentPresentation = .standalone
     ) {
+        self.initialTag = initialTag
         self.presentation = presentation
         _selectedTag = State(initialValue: initialTag)
     }
@@ -416,17 +424,25 @@ struct ScheduleMemoFeedView: View {
         .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
             importantDates = CustomScheduleStore.load()
         }
-        .alert(item: $pendingTrashRequest) { request in
-            Alert(
-                title: Text("移到回收站？"),
-                message: Text("这条随记会移到回收站，你可以稍后恢复。"),
-                primaryButton: .destructive(Text("移到回收站")) {
-                    confirmTrash(request)
-                },
-                secondaryButton: .cancel(Text("取消"))
-            )
+        .alert(item: $presentedAlert) { alert in
+            switch alert {
+            case .trash(let request):
+                Alert(
+                    title: Text("移到回收站？"),
+                    message: Text("这条随记会移到回收站，你可以稍后恢复。"),
+                    primaryButton: .destructive(Text("移到回收站")) {
+                        confirmTrash(request)
+                    },
+                    secondaryButton: .cancel(Text("取消"))
+                )
+            case .failure(_, let message):
+                Alert(
+                    title: Text("操作失败"),
+                    message: Text(message),
+                    dismissButton: .default(Text("知道了"))
+                )
+            }
         }
-        .leafyOperationAlert($operationAlert)
     }
 
     @ViewBuilder
@@ -576,9 +592,10 @@ struct ScheduleMemoFeedView: View {
 
     @ViewBuilder
     private var filterSummary: some View {
-        if selectedTag != nil || filter != .all {
+        let showsSelectedTag = selectedTag != nil && selectedTag != initialTag
+        if showsSelectedTag || filter != .all {
             HStack(spacing: 8) {
-                if let selectedTag {
+                if let selectedTag, showsSelectedTag {
                     Button("#\(selectedTag)  ×") { self.selectedTag = nil }
                         .leafyCapsuleChipSurface(isSelected: true)
                 }
@@ -637,7 +654,7 @@ struct ScheduleMemoFeedView: View {
                 attachments: memoAttachments(for: memo)
             )
         } catch {
-            operationAlert = .failure(error.localizedDescription)
+            presentedAlert = .failure(id: UUID(), message: error.localizedDescription)
         }
     }
 
@@ -648,7 +665,10 @@ struct ScheduleMemoFeedView: View {
     }
 
     private func requestTrash(_ memo: ScheduleMemo, closesDetail: Bool = false) {
-        pendingTrashRequest = ScheduleMemoTrashRequest(memo: memo, closesDetail: closesDetail)
+        Task { @MainActor in
+            await Task.yield()
+            presentedAlert = .trash(.init(memo: memo, closesDetail: closesDetail))
+        }
     }
 
     private func confirmTrash(_ request: ScheduleMemoTrashRequest) {
@@ -658,7 +678,24 @@ struct ScheduleMemoFeedView: View {
                 detailMemo = nil
             }
         } catch {
-            operationAlert = .failure(error.localizedDescription)
+            Task { @MainActor in
+                await Task.yield()
+                presentedAlert = .failure(id: UUID(), message: error.localizedDescription)
+            }
+        }
+    }
+}
+
+private enum ScheduleMemoFeedAlert: Identifiable {
+    case trash(ScheduleMemoTrashRequest)
+    case failure(id: UUID, message: String)
+
+    var id: String {
+        switch self {
+        case .trash(let request):
+            return "trash-\(request.id.uuidString)"
+        case .failure(let id, _):
+            return "failure-\(id.uuidString)"
         }
     }
 }
@@ -757,7 +794,11 @@ private struct ScheduleMemoCard: View {
                                     .contentShape(Capsule())
                             }
                             .buttonStyle(.plain)
-                            .leafyCapsuleChipSurface(isSelected: false)
+                            .background(AppTheme.cardBackground, in: Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(AppTheme.separator, lineWidth: 1)
+                            )
                         }
                     }
                 }
@@ -1140,17 +1181,26 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
         }
         .photosPickerStyle(.inline)
         .photosPickerDisabledCapabilities(.selectionActions)
-        .photosPickerAccessoryVisibility(.hidden, edges: .top)
+        .photosPickerAccessoryVisibility(.hidden, edges: .all)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
-            HStack(alignment: .bottom) {
+            footerControls
+            .padding(.horizontal, AppSpacing.page)
+            .padding(.bottom, AppSpacing.card)
+        }
+    }
+
+    private var footerControls: some View {
+        ZStack {
+            HStack {
                 closeButton
                 Spacer(minLength: AppSpacing.card)
                 allPhotosButton
             }
-            .padding(.horizontal, AppSpacing.page)
-            .padding(.bottom, AppSpacing.card)
+
+            selectPhotosButton
         }
+        .frame(height: LeafyRootChromeMetrics.controlDiameter)
     }
 
     private var closeButton: some View {
@@ -1172,23 +1222,36 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
         .accessibilityLabel("关闭照片选择")
     }
 
-    @ViewBuilder
-    private var allPhotosButton: some View {
-        if #available(iOS 26.0, *) {
-            Button(action: showAllPhotos) {
-                Label("全部照片", systemImage: "photo.on.rectangle.angled")
-                    .frame(minWidth: 132, minHeight: 44)
-            }
-            .buttonStyle(.glassProminent)
-            .buttonBorderShape(.capsule)
-        } else {
-            Button(action: showAllPhotos) {
-                Label("全部照片", systemImage: "photo.on.rectangle.angled")
-                    .frame(minWidth: 132, minHeight: 44)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
+    private var selectPhotosButton: some View {
+        Button("选择照片") {
+            dismiss()
         }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(AppTheme.primaryText)
+        .padding(.horizontal, 16)
+        .frame(height: LeafyRootChromeMetrics.controlDiameter)
+        .buttonStyle(.plain)
+        .leafyGlassSurface(
+            in: Capsule(),
+            fallbackFill: Color(uiColor: .secondarySystemBackground),
+            isInteractive: true
+        )
+    }
+
+    private var allPhotosButton: some View {
+        Button(action: showAllPhotos) {
+            Label("全部照片", systemImage: "photo.on.rectangle.angled")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.accent)
+                .padding(.horizontal, 13)
+                .frame(height: LeafyRootChromeMetrics.controlDiameter)
+        }
+        .buttonStyle(.plain)
+        .leafyGlassSurface(
+            in: Capsule(),
+            fallbackFill: Color(uiColor: .secondarySystemBackground),
+            isInteractive: true
+        )
     }
 
     private func showAllPhotos() {
@@ -1749,6 +1812,96 @@ private struct ScheduleMemoTagsView: View {
             }
         }
         .navigationTitle("标签")
+    }
+}
+
+private struct ScheduleMemoExportArtifact: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ScheduleMemoExportView: View {
+    @Query private var memos: [ScheduleMemo]
+    @Query private var images: [ScheduleMemoImage]
+    @State private var artifact: ScheduleMemoExportArtifact?
+    @State private var operationAlert: LeafyOperationAlert?
+
+    private var activeMemos: [ScheduleMemo] {
+        memos.filter { !$0.isTrashed }
+    }
+
+    private var activeImageCount: Int {
+        let memoIDs = Set(activeMemos.map(\.id))
+        return images.lazy.filter { memoIDs.contains($0.memoID) }.count
+    }
+
+    var body: some View {
+        List {
+            Section {
+                exportButton(
+                    title: "导出为 TXT",
+                    subtitle: "按时间整理随记正文、标题和标签",
+                    systemImage: "doc.plaintext",
+                    action: exportText
+                )
+
+                exportButton(
+                    title: "导出图片压缩包",
+                    subtitle: "将随记中的 \(activeImageCount) 张图片打包为 ZIP",
+                    systemImage: "photo.stack",
+                    action: exportImages
+                )
+            } footer: {
+                Text("仅导出当前身份下未移入回收站的本地随记；导出不会上传或删除原始内容。")
+            }
+        }
+        .navigationTitle("导出随记")
+        .leafySheet(item: $artifact) { artifact in
+            LeafySystemShare(activityItems: [artifact.url])
+        }
+        .leafyOperationAlert($operationAlert)
+    }
+
+    private func exportButton(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .foregroundStyle(AppTheme.primaryText)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } icon: {
+                Image(systemName: systemImage)
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 28)
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func exportText() {
+        do {
+            artifact = .init(url: try ScheduleMemoExporter.exportText(memos: memos))
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
+        }
+    }
+
+    private func exportImages() {
+        do {
+            artifact = .init(url: try ScheduleMemoExporter.exportImageArchive(memos: memos, images: images))
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
+        }
     }
 }
 

@@ -123,6 +123,7 @@ nonisolated enum ScheduleDestination: String, CaseIterable, Identifiable, Hashab
     case customSchedules
     case dailyReview
     case tags
+    case export
     case statistics
     case scheduleReports
     case trash
