@@ -16,7 +16,6 @@ struct ContentView: View {
     @ObservedObject var appNavigation: AppNavigationCoordinator
     @ObservedObject var communityNotificationBadgeViewModel: CommunityNotificationBadgeViewModel
     @ObservedObject private var communitySessionManager = CommunitySessionManager.shared
-    @State private var initialRootTab: RootTab
 
     init(
         appNavigation: AppNavigationCoordinator,
@@ -24,7 +23,6 @@ struct ContentView: View {
     ) {
         self.appNavigation = appNavigation
         self.communityNotificationBadgeViewModel = communityNotificationBadgeViewModel
-        _initialRootTab = State(initialValue: appNavigation.selectedRootTab)
     }
 
     private var isCommunityEnabled: Bool {
@@ -90,8 +88,8 @@ struct ContentView: View {
                 value: RootTab.timetable
             ) {
                 TimetableView()
-                    .rootTabContentReveal(
-                        skipsInitialReveal: initialRootTab == .timetable
+                    .rootTabContentFade(
+                        isSelected: appNavigation.selectedRootTab == .timetable
                     )
             }
 
@@ -104,8 +102,8 @@ struct ContentView: View {
                     CommunityRootView(
                         notificationBadgeViewModel: communityNotificationBadgeViewModel
                     )
-                    .rootTabContentReveal(
-                        skipsInitialReveal: initialRootTab == .community
+                    .rootTabContentFade(
+                        isSelected: appNavigation.selectedRootTab == .community
                     )
                 }
                 .badge(communityNotificationBadgeViewModel.unreadCount)
@@ -117,8 +115,8 @@ struct ContentView: View {
                 value: RootTab.schedule
             ) {
                 ScheduleRootView()
-                    .rootTabContentReveal(
-                        skipsInitialReveal: initialRootTab == .schedule
+                    .rootTabContentFade(
+                        isSelected: appNavigation.selectedRootTab == .schedule
                     )
             }
 
@@ -131,8 +129,8 @@ struct ContentView: View {
                     .onAppear {
                         appNavigation.selectedRootTab = .academics
                     }
-                    .rootTabContentReveal(
-                        skipsInitialReveal: initialRootTab == .academics
+                    .rootTabContentFade(
+                        isSelected: appNavigation.selectedRootTab == .academics
                     )
             }
 
@@ -142,8 +140,8 @@ struct ContentView: View {
                 value: RootTab.profile
             ) {
                 ProfileView()
-                    .rootTabContentReveal(
-                        skipsInitialReveal: initialRootTab == .profile
+                    .rootTabContentFade(
+                        isSelected: appNavigation.selectedRootTab == .profile
                     )
             }
         }
@@ -161,8 +159,8 @@ struct ContentView: View {
     private var legacyNativeTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
             TimetableView()
-                .rootTabContentReveal(
-                    skipsInitialReveal: initialRootTab == .timetable
+                .rootTabContentFade(
+                    isSelected: appNavigation.selectedRootTab == .timetable
                 )
                 .tabItem {
                     Label(RootTab.timetable.title(language: leafyLanguage), systemImage: RootTab.timetable.systemImage)
@@ -173,8 +171,8 @@ struct ContentView: View {
                 CommunityRootView(
                     notificationBadgeViewModel: communityNotificationBadgeViewModel
                     )
-                    .rootTabContentReveal(
-                        skipsInitialReveal: initialRootTab == .community
+                    .rootTabContentFade(
+                        isSelected: appNavigation.selectedRootTab == .community
                     )
                     .tabItem {
                         Label(RootTab.community.title(language: leafyLanguage), systemImage: RootTab.community.systemImage)
@@ -184,8 +182,8 @@ struct ContentView: View {
             }
 
             ScheduleRootView()
-                .rootTabContentReveal(
-                    skipsInitialReveal: initialRootTab == .schedule
+                .rootTabContentFade(
+                    isSelected: appNavigation.selectedRootTab == .schedule
                 )
                 .tabItem {
                     Label(RootTab.schedule.title(language: leafyLanguage), systemImage: RootTab.schedule.systemImage)
@@ -193,8 +191,8 @@ struct ContentView: View {
                 .tag(RootTab.schedule)
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
-                .rootTabContentReveal(
-                    skipsInitialReveal: initialRootTab == .academics
+                .rootTabContentFade(
+                    isSelected: appNavigation.selectedRootTab == .academics
                 )
                 .tabItem {
                     Label(RootTab.academics.title(language: leafyLanguage), systemImage: RootTab.academics.systemImage)
@@ -202,8 +200,8 @@ struct ContentView: View {
                 .tag(RootTab.academics)
 
             ProfileView()
-                .rootTabContentReveal(
-                    skipsInitialReveal: initialRootTab == .profile
+                .rootTabContentFade(
+                    isSelected: appNavigation.selectedRootTab == .profile
                 )
                 .tabItem {
                     Label(RootTab.profile.title(language: leafyLanguage), systemImage: RootTab.profile.systemImage)
@@ -269,8 +267,8 @@ struct ContentView: View {
 }
 
 private extension View {
-    func rootTabContentReveal(skipsInitialReveal: Bool) -> some View {
-        modifier(RootTabContentRevealModifier(skipsInitialReveal: skipsInitialReveal))
+    func rootTabContentFade(isSelected: Bool) -> some View {
+        modifier(RootTabContentFadeModifier(isSelected: isSelected))
     }
 
     @ViewBuilder
@@ -283,50 +281,17 @@ private extension View {
     }
 }
 
-private struct RootTabContentRevealModifier: ViewModifier {
+private struct RootTabContentFadeModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    let skipsInitialReveal: Bool
-    @State private var hasAppeared = false
-    @State private var isRevealed = false
+    let isSelected: Bool
 
     func body(content: Content) -> some View {
         content
-            .opacity(isRevealed ? 1 : 0)
-            .onAppear {
-                let shouldRevealImmediately =
-                    accessibilityReduceMotion || (!hasAppeared && skipsInitialReveal)
-                hasAppeared = true
-                if shouldRevealImmediately {
-                    reset(to: true)
-                } else {
-                    reveal()
-                }
-            }
-            .onDisappear {
-                reset()
-            }
-            .onChange(of: accessibilityReduceMotion) { _, newValue in
-                guard newValue else { return }
-                reset(to: true)
-            }
-    }
-
-    private func reveal() {
-        guard !accessibilityReduceMotion else {
-            reset(to: true)
-            return
-        }
-        withAnimation(.easeInOut(duration: 0.22)) {
-            isRevealed = true
-        }
-    }
-
-    private func reset(to value: Bool = false) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            isRevealed = value
-        }
+            .opacity(isSelected ? 1 : 0)
+            .animation(
+                accessibilityReduceMotion ? nil : .easeInOut(duration: 0.22),
+                value: isSelected
+            )
     }
 }
 
