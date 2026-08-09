@@ -1,6 +1,6 @@
 # MyLeafy 文档中心
 
-本目录是 MyLeafy 唯一的集中式文档入口。根目录 `README.md` 负责快速介绍项目，这里按用途保存与当前代码同步的产品、设计、工程和运维资料。
+本目录是 MyLeafy 唯一的集中式文档入口。根目录 `README.md` 负责快速介绍项目，这里按用途保存与当前代码同步的产品、设计、工程和运维资料。当前根导航为课表、社区、日迹、校园、我的；日迹顶部提供随记、日程、推送，随记和个人日程按校园身份保存在本地。
 
 ## 推荐阅读
 
@@ -15,7 +15,7 @@
 | 文档 | 内容 |
 |---|---|
 | [项目总览](product/overview.md) | 项目定位、系统组成、能力、所有权和发展方向 |
-| [App 功能总结](product/app-features.md) | iOS App 与小组件的完整功能清单 |
+| [App 功能总结](product/app-features.md) | iOS App 与小组件的功能清单；包含课表学年范围和日迹入口 |
 | [发展方向](product/roadmap.md) | 非承诺式工程和产品优先级 |
 | [未来功能展望](product/future-features.md) | 用户侧候选能力、边界与验证标准 |
 
@@ -23,8 +23,8 @@
 
 | 文档 | 内容 |
 |---|---|
-| [App 产品设计](design/app-design.md) | 产品目标、导航、核心页面和全局状态 |
-| [UI 风格规范](design/ui-style-guide.md) | 主题、字体、间距、组件、动效和可访问性 |
+| [App 产品设计](design/app-design.md) | 产品目标、五项根导航、日迹入口、核心页面和全局状态 |
+| [UI 风格规范](design/ui-style-guide.md) | 主题、字体、间距、白色日迹卡片、Tag 胶囊、评分星级、组件、动效和可访问性 |
 | [UI 实现总结](design/ui-implementation.md) | 当前 iOS 页面与组件的设计实现 |
 
 ## Engineering
