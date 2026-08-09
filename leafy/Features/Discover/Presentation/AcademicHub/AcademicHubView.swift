@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AcademicHubView: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
@@ -53,11 +54,15 @@ struct AcademicHubView: View {
                             .frame(height: 0)
                             .id("academic-content-top")
 
-                        selectedAcademicContent
-                            .leafyAdaptiveContentWidth(
-                                maxWidth: 760, horizontalPadding: AppSpacing.page
-                            )
-                            .padding(.bottom, AppSpacing.card)
+                        ZStack(alignment: .topLeading) {
+                            selectedAcademicContent
+                                .id(selectedTab)
+                                .transition(.opacity)
+                        }
+                        .leafyAdaptiveContentWidth(
+                            maxWidth: 760, horizontalPadding: AppSpacing.page
+                        )
+                        .padding(.bottom, AppSpacing.card)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, -AppSpacing.micro)
@@ -68,8 +73,12 @@ struct AcademicHubView: View {
                         return
                     }
                     navigationPath.removeAll()
-                    withAnimation(.easeInOut(duration: 0.22)) {
+                    if accessibilityReduceMotion {
                         proxy.scrollTo("academic-content-top", anchor: .top)
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            proxy.scrollTo("academic-content-top", anchor: .top)
+                        }
                     }
                 }
             }
@@ -244,7 +253,13 @@ struct AcademicHubView: View {
         }
 
         navigationPath.removeAll()
-        selectedTab = tab
+        if accessibilityReduceMotion {
+            selectedTab = tab
+        } else {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                selectedTab = tab
+            }
+        }
     }
 
     @MainActor

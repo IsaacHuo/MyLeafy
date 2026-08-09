@@ -16,6 +16,7 @@ struct ContentView: View {
     @ObservedObject var appNavigation: AppNavigationCoordinator
     @ObservedObject var communityNotificationBadgeViewModel: CommunityNotificationBadgeViewModel
     @ObservedObject private var communitySessionManager = CommunitySessionManager.shared
+    @State private var initialRootTab: RootTab
 
     init(
         appNavigation: AppNavigationCoordinator,
@@ -23,6 +24,7 @@ struct ContentView: View {
     ) {
         self.appNavigation = appNavigation
         self.communityNotificationBadgeViewModel = communityNotificationBadgeViewModel
+        _initialRootTab = State(initialValue: appNavigation.selectedRootTab)
     }
 
     private var isCommunityEnabled: Bool {
@@ -88,6 +90,9 @@ struct ContentView: View {
                 value: RootTab.timetable
             ) {
                 TimetableView()
+                    .rootTabContentReveal(
+                        skipsInitialReveal: initialRootTab == .timetable
+                    )
             }
 
             if isCommunityEnabled {
@@ -99,6 +104,9 @@ struct ContentView: View {
                     CommunityRootView(
                         notificationBadgeViewModel: communityNotificationBadgeViewModel
                     )
+                    .rootTabContentReveal(
+                        skipsInitialReveal: initialRootTab == .community
+                    )
                 }
                 .badge(communityNotificationBadgeViewModel.unreadCount)
             }
@@ -109,6 +117,9 @@ struct ContentView: View {
                 value: RootTab.schedule
             ) {
                 ScheduleRootView()
+                    .rootTabContentReveal(
+                        skipsInitialReveal: initialRootTab == .schedule
+                    )
             }
 
             Tab(
@@ -120,6 +131,9 @@ struct ContentView: View {
                     .onAppear {
                         appNavigation.selectedRootTab = .academics
                     }
+                    .rootTabContentReveal(
+                        skipsInitialReveal: initialRootTab == .academics
+                    )
             }
 
             Tab(
@@ -128,6 +142,9 @@ struct ContentView: View {
                 value: RootTab.profile
             ) {
                 ProfileView()
+                    .rootTabContentReveal(
+                        skipsInitialReveal: initialRootTab == .profile
+                    )
             }
         }
     }
@@ -144,6 +161,9 @@ struct ContentView: View {
     private var legacyNativeTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
             TimetableView()
+                .rootTabContentReveal(
+                    skipsInitialReveal: initialRootTab == .timetable
+                )
                 .tabItem {
                     Label(RootTab.timetable.title(language: leafyLanguage), systemImage: RootTab.timetable.systemImage)
                 }
@@ -152,7 +172,10 @@ struct ContentView: View {
             if isCommunityEnabled {
                 CommunityRootView(
                     notificationBadgeViewModel: communityNotificationBadgeViewModel
-                )
+                    )
+                    .rootTabContentReveal(
+                        skipsInitialReveal: initialRootTab == .community
+                    )
                     .tabItem {
                         Label(RootTab.community.title(language: leafyLanguage), systemImage: RootTab.community.systemImage)
                     }
@@ -161,18 +184,27 @@ struct ContentView: View {
             }
 
             ScheduleRootView()
+                .rootTabContentReveal(
+                    skipsInitialReveal: initialRootTab == .schedule
+                )
                 .tabItem {
                     Label(RootTab.schedule.title(language: leafyLanguage), systemImage: RootTab.schedule.systemImage)
                 }
                 .tag(RootTab.schedule)
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
+                .rootTabContentReveal(
+                    skipsInitialReveal: initialRootTab == .academics
+                )
                 .tabItem {
                     Label(RootTab.academics.title(language: leafyLanguage), systemImage: RootTab.academics.systemImage)
                 }
                 .tag(RootTab.academics)
 
             ProfileView()
+                .rootTabContentReveal(
+                    skipsInitialReveal: initialRootTab == .profile
+                )
                 .tabItem {
                     Label(RootTab.profile.title(language: leafyLanguage), systemImage: RootTab.profile.systemImage)
                 }
@@ -237,12 +269,63 @@ struct ContentView: View {
 }
 
 private extension View {
+    func rootTabContentReveal(skipsInitialReveal: Bool) -> some View {
+        modifier(RootTabContentRevealModifier(skipsInitialReveal: skipsInitialReveal))
+    }
+
     @ViewBuilder
     func nativeRootTabBarBehavior() -> some View {
         if #available(iOS 26.0, *) {
             self.tabBarMinimizeBehavior(.never)
         } else {
             self
+        }
+    }
+}
+
+private struct RootTabContentRevealModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    let skipsInitialReveal: Bool
+    @State private var hasAppeared = false
+    @State private var isRevealed = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isRevealed ? 1 : 0)
+            .onAppear {
+                let shouldRevealImmediately =
+                    accessibilityReduceMotion || (!hasAppeared && skipsInitialReveal)
+                hasAppeared = true
+                if shouldRevealImmediately {
+                    reset(to: true)
+                } else {
+                    reveal()
+                }
+            }
+            .onDisappear {
+                reset()
+            }
+            .onChange(of: accessibilityReduceMotion) { _, newValue in
+                guard newValue else { return }
+                reset(to: true)
+            }
+    }
+
+    private func reveal() {
+        guard !accessibilityReduceMotion else {
+            reset(to: true)
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.22)) {
+            isRevealed = true
+        }
+    }
+
+    private func reset(to value: Bool = false) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            isRevealed = value
         }
     }
 }
