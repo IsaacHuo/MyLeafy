@@ -344,6 +344,7 @@ struct ScheduleMemoFeedView: View {
             .leafyAdaptiveContentWidth(maxWidth: 760)
             .padding(.vertical, AppSpacing.card)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(LeafyPageBackground())
         .searchable(
             text: $searchText,
@@ -560,7 +561,7 @@ private struct ScheduleMemoCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            ScheduleMemoPhotoStrip(images: images)
+            ScheduleMemoPhotoStrip(images: images, layout: .feed)
 
             if !attachments.isEmpty {
                 VStack(spacing: 6) {
@@ -675,31 +676,62 @@ private struct ScheduleMemoCard: View {
 }
 
 private struct ScheduleMemoPhotoStrip: View {
-    let images: [ScheduleMemoImage]
+    enum Layout {
+        case feed
+        case detail
+    }
 
+    let images: [ScheduleMemoImage]
+    let layout: Layout
+
+    @ViewBuilder
     var body: some View {
         if !images.isEmpty {
-            HStack(spacing: 8) {
-                ForEach(Array(images.prefix(3))) { imageRecord in
-                    Group {
-                        if let image = ScheduleMemoImageStore.image(named: imageRecord.localFilename) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            Image(systemName: "photo")
-                                .foregroundStyle(AppTheme.secondaryText)
-                        }
+            switch layout {
+            case .feed:
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: 8),
+                        count: ScheduleMemoImageStore.maximumImageCount
+                    ),
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(Array(images.prefix(ScheduleMemoImageStore.maximumImageCount))) { imageRecord in
+                        photoCell(imageRecord)
                     }
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
-                    .background(AppTheme.softFill)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-                    .clipped()
-                    .accessibilityLabel("随记图片")
                 }
+            case .detail:
+                detailStrip
             }
         }
+    }
+
+    private var detailStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(images.prefix(ScheduleMemoImageStore.maximumImageCount))) { imageRecord in
+                photoCell(imageRecord)
+            }
+        }
+    }
+
+    private func photoCell(_ imageRecord: ScheduleMemoImage) -> some View {
+        Group {
+            if let image = ScheduleMemoImageStore.image(named: imageRecord.localFilename) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "photo")
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .background(AppTheme.softFill)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .clipped()
+        .accessibilityLabel("随记图片")
     }
 }
 
@@ -766,7 +798,7 @@ private struct ScheduleMemoDetailView: View {
                         .textSelection(.enabled)
                 }
 
-                ScheduleMemoPhotoStrip(images: images)
+                ScheduleMemoPhotoStrip(images: images, layout: .detail)
 
                 if !attachments.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
@@ -865,6 +897,13 @@ private enum ScheduleMemoComposerError: LocalizedError {
     }
 }
 
+private enum ScheduleMemoComposerAddDestination {
+    case camera
+    case photoLibrary
+    case fileImporter
+    case writer
+}
+
 private struct ScheduleMemoComposer: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var speech = ScheduleMemoSpeechRecognizer()
@@ -874,9 +913,12 @@ private struct ScheduleMemoComposer: View {
     @State private var draftImages: [ScheduleMemoDraftImage] = []
     @State private var draftAttachments: [ScheduleMemoDraftAttachment] = []
     @State private var showsAddMenu = false
+    @State private var pendingAddDestination: ScheduleMemoComposerAddDestination?
     @State private var showsCamera = false
+    @State private var showsPhotoLibrary = false
     @State private var showsFileImporter = false
     @State private var showsWriter = false
+    @State private var focusesTextFieldAfterCamera = false
     @State private var errorMessage: String?
     @State private var errorTitle = "无法保存随记"
     @FocusState private var isTextFieldFocused: Bool
@@ -902,10 +944,12 @@ private struct ScheduleMemoComposer: View {
                 .accessibilityLabel("添加内容")
                 .popover(isPresented: $showsAddMenu, attachmentAnchor: .point(.top), arrowEdge: .bottom) {
                     addMenu
+                        .onDisappear(perform: presentPendingAddDestination)
                         .presentationCompactAdaptation(.popover)
                 }
 
                 TextField("记点什么...", text: $text, axis: .vertical)
+                    .font(.system(size: 20, weight: .regular))
                     .lineLimit(1...3)
                     .padding(.vertical, 6)
                     .focused($isTextFieldFocused)
@@ -936,26 +980,41 @@ private struct ScheduleMemoComposer: View {
                     .accessibilityLabel("保存随记")
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 2)
-            .leafyGlassSurface(in: Capsule(), fallbackFill: AppTheme.cardBackground, isInteractive: true)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, draftImages.isEmpty && draftAttachments.isEmpty ? 2 : 10)
+        .leafyGlassSurface(
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous),
+            fallbackFill: AppTheme.cardBackground,
+            isInteractive: true
+        )
         .padding(.horizontal, AppSpacing.page)
         .padding(.top, 4)
         .padding(.bottom, 12)
         .onChange(of: photoItems) { _, items in
             Task { await load(items) }
         }
-        .fullScreenCover(isPresented: $showsCamera) {
-            ScheduleMemoCameraPicker { image in
-                showsCamera = false
+        .photosPicker(
+            isPresented: $showsPhotoLibrary,
+            selection: $photoItems,
+            maxSelectionCount: ScheduleMemoImageStore.maximumImageCount,
+            matching: .images
+        )
+        .sheet(isPresented: $showsCamera, onDismiss: {
+            if focusesTextFieldAfterCamera {
+                focusesTextFieldAfterCamera = false
+                isTextFieldFocused = true
+            }
+        }) {
+            ScheduleMemoCameraView { image in
                 guard draftImages.count < ScheduleMemoImageStore.maximumImageCount,
                       let data = image.jpegData(compressionQuality: 0.9) else { return }
                 draftImages.append(.init(data: data, image: image))
-            } onCancel: {
-                showsCamera = false
+                focusesTextFieldAfterCamera = true
             }
-            .ignoresSafeArea()
+            .presentationDetents([.fraction(0.62)])
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(36)
         }
         .fileImporter(
             isPresented: $showsFileImporter,
@@ -1000,8 +1059,8 @@ private struct ScheduleMemoComposer: View {
                             Image(uiImage: draft.image)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 64, height: 64)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .frame(width: 104, height: 104)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .clipped()
                             removeButton(label: "移除图片") {
                                 draftImages.removeAll { $0.id == draft.id }
@@ -1042,32 +1101,19 @@ private struct ScheduleMemoComposer: View {
     private var addMenu: some View {
         VStack(spacing: 0) {
             addMenuButton("拍照", systemImage: "camera") {
-                showsAddMenu = false
-                guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-                    errorTitle = "无法使用相机"
-                    errorMessage = "当前设备没有可用的相机。"
-                    return
-                }
-                showsCamera = true
+                selectAddDestination(.camera)
             }
 
-            PhotosPicker(
-                selection: $photoItems,
-                maxSelectionCount: ScheduleMemoImageStore.maximumImageCount,
-                matching: .images
-            ) {
-                addMenuLabel("相册", systemImage: "photo")
+            addMenuButton("相册", systemImage: "photo") {
+                selectAddDestination(.photoLibrary)
             }
-            .simultaneousGesture(TapGesture().onEnded { showsAddMenu = false })
 
             addMenuButton("上传附件", systemImage: "paperclip") {
-                showsAddMenu = false
-                showsFileImporter = true
+                selectAddDestination(.fileImporter)
             }
 
             addMenuButton("写文", systemImage: "square.and.pencil") {
-                showsAddMenu = false
-                showsWriter = true
+                selectAddDestination(.writer)
             }
         }
         .padding(.vertical, 8)
@@ -1094,6 +1140,29 @@ private struct ScheduleMemoComposer: View {
         .padding(.horizontal, 16)
         .frame(height: 56)
         .contentShape(Rectangle())
+    }
+
+    private func selectAddDestination(_ destination: ScheduleMemoComposerAddDestination) {
+        pendingAddDestination = destination
+        showsAddMenu = false
+    }
+
+    private func presentPendingAddDestination() {
+        guard let destination = pendingAddDestination else { return }
+        pendingAddDestination = nil
+        Task { @MainActor in
+            await Task.yield()
+            switch destination {
+            case .camera:
+                showsCamera = true
+            case .photoLibrary:
+                showsPhotoLibrary = true
+            case .fileImporter:
+                showsFileImporter = true
+            case .writer:
+                showsWriter = true
+            }
+        }
     }
 
     private static let allowedAttachmentTypes: [UTType] = {
@@ -1135,6 +1204,9 @@ private struct ScheduleMemoComposer: View {
             loaded.append(.init(data: data, image: image))
         }
         draftImages = loaded
+        if !loaded.isEmpty {
+            isTextFieldFocused = true
+        }
     }
 
     @MainActor
