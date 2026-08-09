@@ -151,17 +151,35 @@ struct ScheduleRootView: View {
     }
 
     private var rootSectionPicker: some View {
-        Picker("日迹页面", selection: $primarySection) {
+        HStack(spacing: 0) {
             ForEach(SchedulePrimarySection.allCases) { section in
-                Text(section.title)
-                    .font(.body)
-                    .tag(section)
+                Button {
+                    primarySection = section
+                } label: {
+                    Text(section.title)
+                        .font(.body)
+                        .foregroundStyle(AppTheme.primaryText)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background {
+                    if primarySection == section {
+                        Capsule()
+                            .fill(AppTheme.cardBackground)
+                    }
+                }
+                .accessibilityAddTraits(primarySection == section ? .isSelected : [])
             }
         }
-        .pickerStyle(.segmented)
-        .controlSize(.large)
+        .padding(4)
         .frame(maxWidth: 236)
         .frame(height: LeafyRootChromeMetrics.controlDiameter)
+        .leafyGlassSurface(
+            in: Capsule(),
+            fallbackFill: Color(uiColor: .secondarySystemBackground),
+            isInteractive: true
+        )
         .layoutPriority(1)
     }
 
@@ -339,7 +357,8 @@ struct ScheduleMemoFeedView: View {
     @State private var detailMemo: ScheduleMemo?
     @State private var composerHeight: CGFloat = 0
     @State private var presentedAlert: ScheduleMemoFeedAlert?
-    @State private var hasPositionedDaytraceFeed = false
+    @State private var daytraceScrollPosition: ScheduleMemoFeedAnchor?
+    @State private var searchRevealHeight: CGFloat = 1
     @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
 
     private let initialTag: String?
@@ -352,6 +371,9 @@ struct ScheduleMemoFeedView: View {
         self.initialTag = initialTag
         self.presentation = presentation
         _selectedTag = State(initialValue: initialTag)
+        _daytraceScrollPosition = State(
+            initialValue: presentation == .daytraceRoot ? .cardsStart : nil
+        )
     }
 
     private var visibleMemos: [ScheduleMemo] {
@@ -487,77 +509,84 @@ struct ScheduleMemoFeedView: View {
 
     private var memoScrollView: some View {
         GeometryReader { viewport in
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        if presentation == .daytraceRoot {
-                            VStack(spacing: 0) {
-                                searchFilterBar
-                                    .padding(.top, AppSpacing.compact)
-                                    .padding(.bottom, -AppSpacing.micro)
-                                Color.clear
-                                    .frame(height: 0)
-                                    .id(ScheduleMemoFeedAnchor.cardsStart)
-                            }
-                        }
-
-                        LazyVStack(spacing: AppSpacing.card) {
-                            filterSummary
-                            if visibleMemos.isEmpty {
-                                ContentUnavailableView(
-                                    searchText.isEmpty ? "还没有随记" : "没有找到随记",
-                                    systemImage: searchText.isEmpty ? "square.and.pencil" : "magnifyingglass",
-                                    description: Text(searchText.isEmpty ? "在下方快速记下一句话、一个想法或一张图片。" : "试试清除筛选或换一个关键词。")
-                                )
-                                .padding(.top, 72)
-                            } else {
-                                ForEach(visibleMemos) { memo in
-                                    ScheduleMemoCard(
-                                        memo: memo,
-                                        images: memoImages(for: memo),
-                                        attachments: memoAttachments(for: memo),
-                                        audio: memoAudio(for: memo),
-                                        audioPlayback: audioPlayback,
-                                        linkedSchedule: linkedSchedule(for: memo),
-                                        onOpen: { detailMemo = memo },
-                                        onTag: { selectedTag = $0 },
-                                        onEdit: { editingMemo = memo },
-                                        onConvert: { convertingMemo = memo },
-                                        onShareCard: { makeShareCard(for: memo) },
-                                        onPin: { togglePin(memo) },
-                                        onTrash: { requestTrash(memo) }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if presentation == .daytraceRoot {
+                        searchFilterBar
+                            .padding(.top, AppSpacing.compact)
+                            .padding(.bottom, -AppSpacing.micro)
+                            .background {
+                                GeometryReader { geometry in
+                                    Color.clear.preference(
+                                        key: ScheduleMemoSearchRevealHeightPreferenceKey.self,
+                                        value: geometry.size.height
                                     )
                                 }
                             }
+                            .id(ScheduleMemoFeedAnchor.search)
+                    }
 
-                            if presentation == .daytraceRoot {
-                                Color.clear
-                                    .frame(height: composerHeight + AppSpacing.card)
-                                    .accessibilityHidden(true)
-                            }
-                        }
-                        .padding(.top, AppSpacing.card)
-                    }
-                    .leafyAdaptiveContentWidth(maxWidth: 760)
-                    .frame(
-                        minHeight: viewport.size.height + (presentation == .daytraceRoot ? 56 : 0),
-                        alignment: .top
-                    )
-                    .padding(.bottom, AppSpacing.card)
+                    memoCards
+                        .leafyAdaptiveContentWidth(maxWidth: 760)
+                        .id(ScheduleMemoFeedAnchor.cardsStart)
                 }
-                .scrollBounceBehavior(.always, axes: .vertical)
-                .opacity(presentation == .daytraceRoot && !hasPositionedDaytraceFeed ? 0 : 1)
-                .onAppear {
-                    guard presentation == .daytraceRoot, !hasPositionedDaytraceFeed else { return }
-                    Task { @MainActor in
-                        await Task.yield()
-                        proxy.scrollTo(ScheduleMemoFeedAnchor.cardsStart, anchor: .top)
-                        hasPositionedDaytraceFeed = true
-                    }
-                }
+                .scrollTargetLayout()
+                .frame(
+                    minHeight: viewport.size.height
+                        + (presentation == .daytraceRoot ? searchRevealHeight : 0),
+                    alignment: .top
+                )
+                .padding(.bottom, AppSpacing.card)
+            }
+            .scrollPosition(id: $daytraceScrollPosition, anchor: .top)
+            .scrollBounceBehavior(.always, axes: .vertical)
+            .onPreferenceChange(ScheduleMemoSearchRevealHeightPreferenceKey.self) { height in
+                guard presentation == .daytraceRoot,
+                      height > 0,
+                      abs(searchRevealHeight - height) > 0.5 else { return }
+                searchRevealHeight = height
             }
         }
         .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var memoCards: some View {
+        LazyVStack(spacing: AppSpacing.card) {
+            filterSummary
+            if visibleMemos.isEmpty {
+                ContentUnavailableView(
+                    searchText.isEmpty ? "还没有随记" : "没有找到随记",
+                    systemImage: searchText.isEmpty ? "square.and.pencil" : "magnifyingglass",
+                    description: Text(searchText.isEmpty ? "在下方快速记下一句话、一个想法或一张图片。" : "试试清除筛选或换一个关键词。")
+                )
+                .padding(.top, 72)
+            } else {
+                ForEach(visibleMemos) { memo in
+                    ScheduleMemoCard(
+                        memo: memo,
+                        images: memoImages(for: memo),
+                        attachments: memoAttachments(for: memo),
+                        audio: memoAudio(for: memo),
+                        audioPlayback: audioPlayback,
+                        linkedSchedule: linkedSchedule(for: memo),
+                        onOpen: { detailMemo = memo },
+                        onTag: { selectedTag = $0 },
+                        onEdit: { editingMemo = memo },
+                        onConvert: { convertingMemo = memo },
+                        onShareCard: { makeShareCard(for: memo) },
+                        onPin: { togglePin(memo) },
+                        onTrash: { requestTrash(memo) }
+                    )
+                }
+            }
+
+            if presentation == .daytraceRoot {
+                Color.clear
+                    .frame(height: composerHeight + AppSpacing.card)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.top, AppSpacing.card)
     }
 
     private var searchFilterBar: some View {
@@ -725,7 +754,16 @@ struct ScheduleMemoFeedView: View {
 }
 
 private enum ScheduleMemoFeedAnchor: Hashable {
+    case search
     case cardsStart
+}
+
+private struct ScheduleMemoSearchRevealHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
 }
 
 private enum ScheduleMemoFeedAlert: Identifiable {
@@ -1219,7 +1257,7 @@ private enum ScheduleMemoComposerAddDestination {
 
 private struct ScheduleMemoInlinePhotoPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selection: [PhotosPickerItem]
+    @State private var transaction: ScheduleMemoPhotoSelectionTransaction<PhotosPickerItem>
 
     let maxSelectionCount: Int
     let onCommit: ([PhotosPickerItem]) -> Void
@@ -1231,16 +1269,24 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
         onCommit: @escaping ([PhotosPickerItem]) -> Void,
         onShowAllPhotos: @escaping ([PhotosPickerItem]) -> Void
     ) {
-        _selection = State(initialValue: selection)
+        _transaction = State(initialValue: .init(committed: selection))
         self.maxSelectionCount = maxSelectionCount
         self.onCommit = onCommit
         self.onShowAllPhotos = onShowAllPhotos
     }
 
     var body: some View {
-        ZStack {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer(minLength: 0)
+                doneButton
+            }
+            .padding(.horizontal, AppSpacing.page)
+            .padding(.top, AppSpacing.micro)
+            .padding(.bottom, 4)
+
             PhotosPicker(
-                selection: $selection,
+                selection: $transaction.pending,
                 maxSelectionCount: maxSelectionCount,
                 selectionBehavior: .continuousAndOrdered,
                 matching: .images
@@ -1251,23 +1297,18 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
             .photosPickerDisabledCapabilities(.selectionActions)
             .photosPickerAccessoryVisibility(.hidden, edges: .all)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .topTrailing) {
-            doneButton
-                .padding(.top, AppSpacing.card)
-                .padding(.trailing, AppSpacing.page)
-        }
-        .overlay(alignment: .bottom) {
+
             footerControls
                 .padding(.horizontal, AppSpacing.page)
+                .padding(.top, 4)
                 .padding(.bottom, AppSpacing.card)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var doneButton: some View {
         Button("完成") {
-            onCommit(selection)
+            onCommit(transaction.commit())
             dismiss()
         }
         .font(.subheadline.weight(.semibold))
@@ -1294,6 +1335,7 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
 
     private var closeButton: some View {
         Button {
+            _ = transaction.cancel()
             dismiss()
         } label: {
             Image(systemName: "chevron.left")
@@ -1328,7 +1370,7 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
     }
 
     private func showAllPhotos() {
-        onShowAllPhotos(selection)
+        onShowAllPhotos(transaction.fullPickerSelection)
         dismiss()
     }
 }
@@ -1339,6 +1381,7 @@ private struct ScheduleMemoComposer: View {
     @State private var text = ""
     @State private var speechBase = ""
     @State private var photoItems: [PhotosPickerItem] = []
+    @State private var fullPhotoItems: [PhotosPickerItem] = []
     @State private var draftImages: [ScheduleMemoDraftImage] = []
     @State private var draftAttachments: [ScheduleMemoDraftAttachment] = []
     @State private var showsAddMenu = false
@@ -1347,6 +1390,7 @@ private struct ScheduleMemoComposer: View {
     @State private var showsInlinePhotoLibrary = false
     @State private var showsFullPhotoLibrary = false
     @State private var presentsFullPhotoLibraryAfterInlineDismissal = false
+    @State private var isPreparingFullPhotoLibrarySelection = false
     @State private var showsAudioRecorder = false
     @State private var showsFileImporter = false
     @State private var showsWriter = false
@@ -1426,15 +1470,16 @@ private struct ScheduleMemoComposer: View {
         .padding(.horizontal, AppSpacing.page)
         .padding(.top, 4)
         .padding(.bottom, 12)
-        .onChange(of: photoItems) { _, items in
-            Task { await load(items) }
-        }
         .photosPicker(
             isPresented: $showsFullPhotoLibrary,
-            selection: $photoItems,
+            selection: $fullPhotoItems,
             maxSelectionCount: photoLibrarySelectionLimit,
             matching: .images
         )
+        .onChange(of: fullPhotoItems) { _, items in
+            guard !isPreparingFullPhotoLibrarySelection else { return }
+            Task { await commitPhotoSelection(items) }
+        }
         .sheet(
             isPresented: $showsInlinePhotoLibrary,
             onDismiss: presentFullPhotoLibraryIfNeeded
@@ -1443,10 +1488,11 @@ private struct ScheduleMemoComposer: View {
                 selection: photoItems,
                 maxSelectionCount: photoLibrarySelectionLimit,
                 onCommit: { selection in
-                    photoItems = selection
+                    Task { await commitPhotoSelection(selection) }
                 },
                 onShowAllPhotos: { selection in
-                    photoItems = selection
+                    isPreparingFullPhotoLibrarySelection = true
+                    fullPhotoItems = selection
                     presentsFullPhotoLibraryAfterInlineDismissal = true
                 }
             )
@@ -1526,6 +1572,7 @@ private struct ScheduleMemoComposer: View {
                                 draftImages.removeAll { $0.id == draft.id }
                                 if let pickerItem = draft.pickerItem {
                                     photoItems = ScheduleMemoPhotoSelection.removing(pickerItem, from: photoItems)
+                                    fullPhotoItems = ScheduleMemoPhotoSelection.removing(pickerItem, from: fullPhotoItems)
                                 }
                             }
                         }
@@ -1574,11 +1621,11 @@ private struct ScheduleMemoComposer: View {
                 selectAddDestination(.audioRecording)
             }
 
-            addMenuButton("上传附件", systemImage: "paperclip") {
+            addMenuButton("附件", systemImage: "paperclip") {
                 selectAddDestination(.fileImporter)
             }
 
-            addMenuButton("写文", systemImage: "square.and.pencil") {
+            addMenuButton("笔记", systemImage: "square.and.pencil") {
                 selectAddDestination(.writer)
             }
         }
@@ -1645,6 +1692,8 @@ private struct ScheduleMemoComposer: View {
         Task { @MainActor in
             await Task.yield()
             showsFullPhotoLibrary = true
+            await Task.yield()
+            isPreparingFullPhotoLibrarySelection = false
         }
     }
 
@@ -1707,6 +1756,12 @@ private struct ScheduleMemoComposer: View {
     }
 
     @MainActor
+    private func commitPhotoSelection(_ items: [PhotosPickerItem]) async {
+        photoItems = items
+        await load(items)
+    }
+
+    @MainActor
     private func save() {
         guard canSave else { return }
         persistMemo(kind: .quickMemo, title: nil, body: text)
@@ -1751,6 +1806,7 @@ private struct ScheduleMemoComposer: View {
             text = ""
             speechBase = ""
             photoItems = []
+            fullPhotoItems = []
             draftImages = []
             draftAttachments = []
             isTextFieldFocused = false

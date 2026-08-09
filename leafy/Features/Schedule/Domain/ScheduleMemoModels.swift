@@ -234,6 +234,30 @@ nonisolated enum ScheduleMemoPhotoSelection {
     }
 }
 
+nonisolated struct ScheduleMemoPhotoSelectionTransaction<Item> {
+    private(set) var committed: [Item]
+    var pending: [Item]
+
+    init(committed: [Item]) {
+        self.committed = committed
+        self.pending = committed
+    }
+
+    mutating func commit() -> [Item] {
+        committed = pending
+        return committed
+    }
+
+    mutating func cancel() -> [Item] {
+        pending = committed
+        return committed
+    }
+
+    var fullPickerSelection: [Item] {
+        pending
+    }
+}
+
 nonisolated struct ScheduleMemoSearchRecord: Equatable, Sendable {
     let id: UUID
     let title: String

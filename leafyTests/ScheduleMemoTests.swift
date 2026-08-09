@@ -94,6 +94,37 @@ final class ScheduleMemoTests: XCTestCase {
         )
     }
 
+    func testPhotoSelectionTransactionCommitsCancelsAndCarriesPendingSelectionToFullPicker() {
+        var transaction = ScheduleMemoPhotoSelectionTransaction(committed: [1, 2])
+        transaction.pending = [1, 2, 3]
+        XCTAssertEqual(transaction.fullPickerSelection, [1, 2, 3])
+        XCTAssertEqual(transaction.cancel(), [1, 2])
+
+        transaction.pending = [1, 2, 4]
+        XCTAssertEqual(transaction.commit(), [1, 2, 4])
+        transaction.pending = [1, 2, 4, 5]
+        XCTAssertEqual(transaction.cancel(), [1, 2, 4])
+    }
+
+    func testFinalAudioDurationPreservesTimeCapturedBeforeRecorderStops() {
+        XCTAssertEqual(
+            ScheduleMemoAudioDuration.finalElapsed(
+                recorderTime: 2.4,
+                observedElapsed: 2.3
+            ),
+            2.4,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ScheduleMemoAudioDuration.finalElapsed(
+                recorderTime: 0,
+                observedElapsed: 1.8
+            ),
+            1.8,
+            accuracy: 0.001
+        )
+    }
+
     func testTrashRestoreAndPermanentDeleteRemoveOwnedMediaFiles() throws {
         let schema = Schema([
             ScheduleMemo.self,

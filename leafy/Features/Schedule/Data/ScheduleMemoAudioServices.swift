@@ -2,6 +2,18 @@ import AVFoundation
 import Combine
 import Foundation
 
+enum ScheduleMemoAudioDuration {
+    static func finalElapsed(
+        recorderTime: TimeInterval,
+        observedElapsed: TimeInterval
+    ) -> TimeInterval {
+        min(
+            max(recorderTime, observedElapsed),
+            ScheduleMemoAudioStore.maximumDuration
+        )
+    }
+}
+
 @MainActor
 final class ScheduleMemoAudioRecorder: NSObject, ObservableObject {
     enum State: Equatable {
@@ -69,10 +81,14 @@ final class ScheduleMemoAudioRecorder: NSObject, ObservableObject {
 
     func stop() {
         guard isRecording else { return }
+        let finalElapsed = ScheduleMemoAudioDuration.finalElapsed(
+            recorderTime: recorder?.currentTime ?? 0,
+            observedElapsed: elapsed
+        )
         recorder?.stop()
-        updateMeter()
         timer?.invalidate()
         timer = nil
+        elapsed = finalElapsed
         state = elapsed > 0 ? .ready : .failed("没有录到有效音频，请重新录制。")
         deactivateAudioSession()
     }

@@ -14,10 +14,10 @@ struct ScheduleMemoAudioRecorderSheet: View {
                 Spacer(minLength: AppSpacing.card)
 
                 Image(systemName: recorder.isRecording ? "waveform" : "mic.fill")
-                    .font(.system(size: 42, weight: .semibold))
+                    .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(recorder.isRecording ? AppTheme.danger : AppTheme.accentEmphasis)
                     .symbolEffect(.variableColor.iterative, isActive: recorder.isRecording)
-                    .frame(width: 92, height: 92)
+                    .frame(width: 64, height: 64)
                     .background(AppTheme.softFill, in: Circle())
 
                 Text(ScheduleMemoAudioTimeFormatter.string(recorder.elapsed))
@@ -76,19 +76,21 @@ struct ScheduleMemoAudioRecorderSheet: View {
                 Task { await recorder.start() }
             } label: {
                 Label("开始录音", systemImage: "record.circle")
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.danger)
+            .tint(AppTheme.accent)
         case .requestingPermission:
             ProgressView("正在准备麦克风…")
-                .frame(minHeight: 48)
+                .frame(minHeight: 44)
         case .recording:
             Button {
                 recorder.stop()
             } label: {
                 Label("停止录音", systemImage: "stop.circle.fill")
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.danger)
@@ -97,7 +99,8 @@ struct ScheduleMemoAudioRecorderSheet: View {
                 Task { await recorder.start() }
             } label: {
                 Label("重新录制", systemImage: "arrow.counterclockwise")
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
             }
             .buttonStyle(.bordered)
         }
