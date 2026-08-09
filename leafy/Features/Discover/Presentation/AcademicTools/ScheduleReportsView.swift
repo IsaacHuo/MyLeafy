@@ -4,6 +4,7 @@ import SwiftUI
 struct ScheduleReportsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyDependencies) private var dependencies
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
     @State private var settings = ScheduleReportSettingsStore.load()
     @State private var lastAppliedSettings = ScheduleReportSettingsStore.load()
@@ -63,21 +64,18 @@ struct ScheduleReportsView: View {
         }
     }
 
+    @ViewBuilder
     private var reportsList: some View {
-        List {
-            Section {
-                AcademicDetailCard {
-                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                        Label("日程推送", systemImage: "bell.badge")
-                            .leafyHeadline()
-                        Text("报告和提醒仅在本机规划，不上传课表、考试、校历或自定日程。")
-                            .leafyBody()
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-                .scheduleReportListRow()
-            }
+        if presentation == .daytraceRoot {
+            reportsListContent
+                .contentMargins(.top, AppSpacing.card, for: .scrollContent)
+        } else {
+            reportsListContent
+        }
+    }
 
+    private var reportsListContent: some View {
+        List {
             Section {
                 ForEach(ScheduleReportMode.builtInCases) { mode in
                     ScheduleReportModeCard(
@@ -87,8 +85,6 @@ struct ScheduleReportsView: View {
                     )
                     .scheduleReportListRow()
                 }
-            } header: {
-                AcademicDetailSectionHeader(title: "报告")
             }
 
             Section {
@@ -126,10 +122,17 @@ struct ScheduleReportsView: View {
                         } label: {
                             Label("添加提醒", systemImage: "plus")
                                 .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, AppSpacing.compact)
                                 .frame(minHeight: 44)
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(AppTheme.accent)
+                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                        .leafyGlassSurface(
+                            in: Capsule(),
+                            tint: AppTheme.accentSoft(for: themeColorPreference),
+                            fallbackFill: AppTheme.accentSoft(for: themeColorPreference),
+                            isInteractive: true
+                        )
                         .accessibilityHint("创建一条自定义推送提醒")
                     }
                 }

@@ -40,6 +40,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
                 Spacer(minLength: AppSpacing.card)
             }
             .padding(.horizontal, AppSpacing.page)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(LeafyPageBackground())
             .navigationTitle("录音随记")
             .navigationBarTitleDisplayMode(.inline)
