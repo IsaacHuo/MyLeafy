@@ -21,26 +21,20 @@ struct TeachingCultivationSectionView: View {
             }
 
             if !isCustomCampus {
-                ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {
-                    openRoute(.schoolCalendar)
-                }
-            }
-
-            ToolEntryCard(title: "荣誉记录", subtitle: "保存奖状证书等相关文档和图片", icon: "rosette") {
-                openRoute(.honorRecords)
-            }
-
-            if !isCustomCampus {
-                ToolEntryCard(title: "综素测算", subtitle: "本地估算综素贡献分，整理相关材料", icon: "function") {
-                    openRoute(.comprehensiveQuality)
-                }
-
                 ToolEntryCard(title: "教学计划", subtitle: "按学期查看课程清单、学分和考核方式", icon: "list.clipboard") {
                     openRoute(.teachingPlan)
                 }
 
                 ToolEntryCard(title: "培养方案", subtitle: "查看培养目标、课程体系等", icon: "graduationcap.fill") {
                     openRoute(.trainingProgram)
+                }
+
+                ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {
+                    openRoute(.schoolCalendar)
+                }
+
+                ToolEntryCard(title: "综素测算", subtitle: "本地估算综素贡献分，整理相关材料", icon: "function") {
+                    openRoute(.comprehensiveQuality)
                 }
             }
         }

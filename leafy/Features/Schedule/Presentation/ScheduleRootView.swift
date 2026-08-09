@@ -48,16 +48,15 @@ struct ScheduleRootView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button {
+                        LeafyGlassIconButton(
+                            systemName: "line.3.horizontal",
+                            accessibilityLabel: "打开日迹记录菜单"
+                        ) {
                             showsMenu = true
-                        } label: {
-                            Image(systemName: "line.3.horizontal")
-                                .frame(width: 44, height: 44)
                         }
-                        .accessibilityLabel("打开日迹记录菜单")
                     }
                     ToolbarItem(placement: .principal) {
-                        Picker("日迹页面", selection: $primarySection) {
+                        Picker("日迹页面", selection: primarySectionBinding) {
                             ForEach(SchedulePrimarySection.allCases) { section in
                                 Text(section.title).tag(section)
                             }
@@ -89,15 +88,27 @@ struct ScheduleRootView: View {
         }
     }
 
-    @ViewBuilder
     private var primaryView: some View {
-        switch primarySection {
-        case .memos:
+        TabView(selection: $primarySection) {
             ScheduleMemoFeedView()
-        case .schedules:
+                .tag(SchedulePrimarySection.memos)
+
             CustomScheduleListView()
-        case .reports:
+                .tag(SchedulePrimarySection.schedules)
+
             ScheduleReportsView()
+                .tag(SchedulePrimarySection.reports)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    private var primarySectionBinding: Binding<SchedulePrimarySection> {
+        Binding {
+            primarySection
+        } set: { section in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                primarySection = section
+            }
         }
     }
 

@@ -169,7 +169,6 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
         case .grades,
              .gradeAnalytics,
              .examSchedule,
-             .honorRecords,
              .comprehensiveQuality,
              .teachingPlan,
              .trainingProgram,
@@ -180,7 +179,8 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
              .campusHeatmap,
              .studyTimeRecords:
             return .classrooms
-        case .learningWorkspace:
+        case .honorRecords,
+             .learningWorkspace:
             return .learning
         case .sunshineRun,
              .fitnessTestRecords,

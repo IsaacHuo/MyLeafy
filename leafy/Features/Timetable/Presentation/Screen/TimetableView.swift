@@ -828,11 +828,25 @@ struct TimetableView: View {
             attachmentAnchor: .point(.bottomLeading),
             arrowEdge: .top
         ) {
-            quickAccessPopoverContent
-                .leafyModalSurface()
+            quickAccessPopoverPresentation
                 .presentationCompactAdaptation(.popover)
         }
         .accessibilityLabel("首页快捷入口")
+    }
+
+    @ViewBuilder
+    private var quickAccessPopoverPresentation: some View {
+#if os(iOS)
+        if #available(iOS 26.0, *) {
+            quickAccessPopoverContent
+        } else {
+            quickAccessPopoverContent
+                .presentationBackground(AppTheme.topBarMaterial)
+        }
+#else
+        quickAccessPopoverContent
+            .presentationBackground(AppTheme.topBarMaterial)
+#endif
     }
 
     private var quickAccessPopoverContent: some View {
@@ -875,38 +889,41 @@ struct TimetableView: View {
                 quickAccessResyncButton
             }
         }
-        .frame(minWidth: 240, alignment: .leading)
-        .fixedSize(horizontal: true, vertical: true)
+        .frame(width: 216)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var quickAccessResyncButton: some View {
         Button {
             scheduleQuickAccessAction(.resyncTimetable)
         } label: {
-            HStack(spacing: 10 * leafyControlScale) {
-                if isFetching {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: 22 * leafyControlScale)
-                } else {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 12 * leafyControlScale, weight: .semibold))
-                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                        .frame(width: 22 * leafyControlScale)
-                }
-
+            ZStack {
                 Text(isFetching ? "正在同步" : "重新同步")
                     .font(.body)
                     .foregroundStyle(isFetching ? AppTheme.secondaryText : AppTheme.primaryText)
+                    .frame(maxWidth: .infinity)
 
-                Spacer(minLength: 0)
+                HStack {
+                    if isFetching {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 22 * leafyControlScale)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 12 * leafyControlScale, weight: .semibold))
+                            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                            .frame(width: 22 * leafyControlScale)
+                    }
+                    Spacer(minLength: 0)
+                }
             }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .padding(.horizontal, 18 * leafyControlScale)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, 12 * leafyControlScale)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(isFetching)
+        .accessibilityLabel(isFetching ? "正在同步" : "重新同步")
         .accessibilityHint("同步教务系统中的最新课表")
     }
 
@@ -918,23 +935,26 @@ struct TimetableView: View {
         Button {
             scheduleQuickAccessAction(action)
         } label: {
-            HStack(spacing: 10 * leafyControlScale) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12 * leafyControlScale, weight: .semibold))
-                    .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                    .frame(width: 22 * leafyControlScale)
-
+            ZStack {
                 Text(title)
                     .font(.body)
                     .foregroundStyle(AppTheme.primaryText)
+                    .frame(maxWidth: .infinity)
 
-                Spacer(minLength: 0)
+                HStack {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 12 * leafyControlScale, weight: .semibold))
+                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                        .frame(width: 22 * leafyControlScale)
+                    Spacer(minLength: 0)
+                }
             }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .padding(.horizontal, 18 * leafyControlScale)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, 12 * leafyControlScale)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 
     private func scheduleQuickAccessAction(_ action: TimetableQuickAccessAction) {
@@ -2552,7 +2572,8 @@ private struct TimetableWeekPickerPanel: View {
             }
             .frame(minHeight: 44)
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
         .leafyCardStyle()
     }
 
