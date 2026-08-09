@@ -115,7 +115,6 @@ struct ScheduleReportsView: View {
                 }
             } header: {
                 HStack(spacing: AppSpacing.compact) {
-                    Spacer(minLength: 0)
                     if presentation == .daytraceRoot {
                         Button {
                             isEditorPresented = true
@@ -135,6 +134,7 @@ struct ScheduleReportsView: View {
                         )
                         .accessibilityHint("创建一条自定义推送提醒")
                     }
+                    Spacer(minLength: 0)
                 }
             }
 
