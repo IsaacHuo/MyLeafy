@@ -2508,6 +2508,7 @@ struct TeacherDetailSheet: View {
                             .foregroundStyle(AppTheme.primaryText)
 
                         TeacherStarPicker(selection: $selectedStars)
+                            .frame(maxWidth: .infinity, alignment: .center)
 
                         if let myRating = summary.myRating {
                             Text("当前已评 \(myRating.stars) 星，可直接修改。")
@@ -2655,6 +2656,7 @@ struct CourseRatingDetailSheet: View {
                             .foregroundStyle(AppTheme.primaryText)
 
                         CourseStarPicker(selection: $selectedStars)
+                            .frame(maxWidth: .infinity, alignment: .center)
 
                         if let myRating = summary.myRating {
                             Text("当前已评 \(myRating.stars) 星，可直接修改。")
@@ -2802,6 +2804,7 @@ struct DishDetailSheet: View {
                             .foregroundStyle(AppTheme.primaryText)
 
                         DishStarPicker(selection: $selectedStars)
+                            .frame(maxWidth: .infinity, alignment: .center)
 
                         if let myRating = summary.myRating {
                             Text("当前已评 \(myRating.stars) 星，可直接修改。")
