@@ -15,6 +15,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
     let allowsVerticalScroll: Bool
     @Binding var currentWeek: Int
     @Binding var scrollToWeek: Int?
+    @Binding var animatesNextWeekScroll: Bool
     @Binding var isAwayFromCurrentWeek: Bool
     let containerID: String
     let corner: Corner
@@ -35,6 +36,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         allowsVerticalScroll: Bool,
         currentWeek: Binding<Int>,
         scrollToWeek: Binding<Int?>,
+        animatesNextWeekScroll: Binding<Bool> = .constant(false),
         isAwayFromCurrentWeek: Binding<Bool>,
         containerID: String,
         onFirstInteractiveLayout: @escaping () -> Void = {},
@@ -54,6 +56,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         self.allowsVerticalScroll = allowsVerticalScroll
         _currentWeek = currentWeek
         _scrollToWeek = scrollToWeek
+        _animatesNextWeekScroll = animatesNextWeekScroll
         _isAwayFromCurrentWeek = isAwayFromCurrentWeek
         self.containerID = containerID
         self.corner = corner()
@@ -301,7 +304,8 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                     y: clampedYOffset(bodyScrollView.contentOffset.y)
                 )
                 let visibleWeek = week(for: bodyScrollView.contentOffset.x)
-                let shouldAnimateScroll = hasAppliedInitialScrollRequest && abs(targetWeek - visibleWeek) <= 1
+                let shouldAnimateScroll = hasAppliedInitialScrollRequest
+                    && (parent.animatesNextWeekScroll || abs(targetWeek - visibleWeek) <= 1)
 
                 if bodyScrollView.contentOffset == targetOffset {
                     isAnimatingToTarget = false
@@ -316,6 +320,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                     guard let self = self, !self.isDismantled else { return }
                     self.parent.currentWeek = targetWeek
                     self.parent.scrollToWeek = nil
+                    self.parent.animatesNextWeekScroll = false
                 }
             } else {
                 applyPendingLayoutRealignmentIfNeeded()

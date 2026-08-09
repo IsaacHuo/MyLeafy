@@ -468,7 +468,7 @@ struct CommunityRootView: View {
     }
 
     private var communitySearchButton: some View {
-        let shape = RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+        let shape = Capsule()
 
         return Button {
             showingCommunitySearch = true

@@ -66,6 +66,7 @@ struct TimetableView: View {
     @State private var timetableCellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
     @State private var currentWeek: Int
     @State private var scrollToWeek: Int?
+    @State private var animatesNextWeekScroll = false
     @State private var isAwayFromCurrentSchedule = false
     @State private var selectedDaySummary: TimetableDaySelection?
     @State private var lastSyncAt = TimetableCacheMetadata.lastSyncAt
@@ -1132,6 +1133,7 @@ struct TimetableView: View {
         let week = currentAcademicYearPage
         currentWeek = week
         isAwayFromCurrentSchedule = false
+        animatesNextWeekScroll = true
         scrollToWeek = week
     }
 
@@ -1183,6 +1185,7 @@ struct TimetableView: View {
                             allowsVerticalScroll: metrics.allowsVerticalScroll,
                             currentWeek: $currentWeek,
                             scrollToWeek: $scrollToWeek,
+                            animatesNextWeekScroll: $animatesNextWeekScroll,
                             isAwayFromCurrentWeek: $isAwayFromCurrentSchedule,
                             containerID: "continuous-timetable",
                             onFirstInteractiveLayout: {
