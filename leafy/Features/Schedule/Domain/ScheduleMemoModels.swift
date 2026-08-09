@@ -4,6 +4,7 @@ import SwiftData
 nonisolated enum ScheduleMemoKind: String, CaseIterable, Identifiable, Sendable {
     case quickMemo
     case article
+    case audio
 
     var id: String { rawValue }
 
@@ -13,6 +14,8 @@ nonisolated enum ScheduleMemoKind: String, CaseIterable, Identifiable, Sendable 
             return "快速随记"
         case .article:
             return "写文"
+        case .audio:
+            return "录音随记"
         }
     }
 
@@ -173,6 +176,29 @@ final class ScheduleMemoAttachment {
     }
 }
 
+@Model
+final class ScheduleMemoAudio {
+    var id: UUID
+    var memoID: UUID
+    var localFilename: String
+    var duration: TimeInterval
+    var recordedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        memoID: UUID,
+        localFilename: String,
+        duration: TimeInterval,
+        recordedAt: Date = Date()
+    ) {
+        self.id = id
+        self.memoID = memoID
+        self.localFilename = localFilename
+        self.duration = duration
+        self.recordedAt = recordedAt
+    }
+}
+
 nonisolated enum ScheduleMemoLinkKind: String, Sendable {
     case timetableReminder
     case importantDate
@@ -191,6 +217,20 @@ nonisolated enum ScheduleMemoSort: String, CaseIterable, Identifiable, Sendable 
         case .oldest: return "创建时间（从旧到新）"
         case .recentlyUpdated: return "最近更新"
         }
+    }
+}
+
+nonisolated enum ScheduleMemoPhotoSelection {
+    static func removing<Item: Equatable>(_ item: Item, from items: [Item]) -> [Item] {
+        items.filter { $0 != item }
+    }
+
+    static func merging<Item>(
+        pickerItems: [Item],
+        capturedItems: [Item],
+        maximumCount: Int
+    ) -> [Item] {
+        Array((pickerItems + capturedItems).prefix(max(maximumCount, 0)))
     }
 }
 

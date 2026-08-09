@@ -40,7 +40,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>MyLeafy 需要使用相机，以便你拍摄并保存本机随记图片。</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>用于将你的语音实时转写为本机随记文字，不保存录音。</string>
+	<string>用于在设备端转写语音，并保存你主动创建的本机录音随记。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>用于在设备端将语音转写为本机随记文字。</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>

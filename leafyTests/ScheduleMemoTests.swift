@@ -78,8 +78,29 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(statistics.activityDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: now) })?.count, 2)
     }
 
-    func testTrashRestoreAndPermanentDeleteRemoveOwnedImageFile() throws {
-        let schema = Schema([ScheduleMemo.self, ScheduleMemoImage.self])
+    func testPhotoSelectionAllowsSixAndRemovingOneKeepsTheOthers() {
+        XCTAssertEqual(ScheduleMemoImageStore.maximumImageCount, 6)
+        XCTAssertEqual(
+            ScheduleMemoPhotoSelection.removing(3, from: [1, 2, 3, 4, 5, 6]),
+            [1, 2, 4, 5, 6]
+        )
+        XCTAssertEqual(
+            ScheduleMemoPhotoSelection.merging(
+                pickerItems: [1, 2, 3, 4],
+                capturedItems: [5, 6],
+                maximumCount: 6
+            ),
+            [1, 2, 3, 4, 5, 6]
+        )
+    }
+
+    func testTrashRestoreAndPermanentDeleteRemoveOwnedMediaFiles() throws {
+        let schema = Schema([
+            ScheduleMemo.self,
+            ScheduleMemoImage.self,
+            ScheduleMemoAttachment.self,
+            ScheduleMemoAudio.self
+        ])
         let container = try ModelContainer(
             for: schema,
             configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
@@ -87,8 +108,10 @@ final class ScheduleMemoTests: XCTestCase {
         let context = container.mainContext
         let memo = ScheduleMemo(body: "待删除")
         let image = ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "image.jpg")
+        let audio = ScheduleMemoAudio(memoID: memo.id, localFilename: "audio.m4a", duration: 12)
         context.insert(memo)
         context.insert(image)
+        context.insert(audio)
         try context.save()
 
         try ScheduleMemoDeletionService.moveToTrash(memo, in: context)
@@ -102,17 +125,23 @@ final class ScheduleMemoTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         let fileURL = directory.appendingPathComponent(image.localFilename)
+        let audioURL = directory.appendingPathComponent(audio.localFilename)
         try Data([1, 2, 3]).write(to: fileURL)
+        try Data([4, 5, 6]).write(to: audioURL)
 
         try ScheduleMemoDeletionService.permanentlyDelete(
             memo,
             images: [image],
+            audioRecords: [audio],
             in: context,
-            imageDirectory: directory
+            imageDirectory: directory,
+            audioDirectory: directory
         )
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: audioURL.path))
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemo>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoImage>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoAudio>()), 0)
     }
 
     func testScheduleLinkResolverHandlesBothStoresAndStaleLinks() {
@@ -142,12 +171,14 @@ final class ScheduleMemoTests: XCTestCase {
         let memo = ScheduleMemo(body: "清理我")
         context.insert(memo)
         context.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "unused.jpg"))
+        context.insert(ScheduleMemoAudio(memoID: memo.id, localFilename: "unused.m4a", duration: 1))
         try context.save()
 
         try AppSessionResetter.deleteAllModels(in: context)
 
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemo>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoImage>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoAudio>()), 0)
     }
 
     func testAddingMemoModelsPreservesExistingCourseAndGradeStore() throws {
@@ -173,7 +204,7 @@ final class ScheduleMemoTests: XCTestCase {
             try container.mainContext.save()
         }
 
-        let expandedSchema = Schema([Course.self, Grade.self, ScheduleMemo.self, ScheduleMemoImage.self])
+        let expandedSchema = Schema([Course.self, Grade.self, ScheduleMemo.self, ScheduleMemoImage.self, ScheduleMemoAudio.self])
         let configuration = ModelConfiguration("ScheduleMemoMigration", schema: expandedSchema, url: storeURL, cloudKitDatabase: .none)
         let container = try ModelContainer(for: expandedSchema, configurations: [configuration])
 

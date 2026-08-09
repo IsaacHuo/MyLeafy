@@ -16,7 +16,7 @@ enum ScheduleMemoImageStoreError: LocalizedError {
 }
 
 enum ScheduleMemoImageStore {
-    static let maximumImageCount = 3
+    static let maximumImageCount = 6
     static let maximumPixelDimension: CGFloat = 1_600
     static let targetMaximumBytes = 1_024 * 1_024
 
