@@ -52,11 +52,12 @@ struct ScheduleRootView: View {
 
     var body: some View {
         NavigationStack(path: $compactPath) {
-            primaryView
+            VStack(spacing: 0) {
+                rootTopBar
+                primaryView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
                 .leafyNavigationBarHidden()
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    rootTopBar
-                }
                 .navigationDestination(for: ScheduleDestination.self) { destination in
                     destinationView(destination)
                         .leafyNavigationBarVisible()
@@ -112,7 +113,7 @@ struct ScheduleRootView: View {
             .allowsHitTesting(isSelected)
             .accessibilityHidden(!isSelected)
             .zIndex(isSelected ? 1 : 0)
-            .animation(.easeOut(duration: 0.12), value: isSelected)
+            .animation(.easeInOut(duration: 0.32), value: isSelected)
     }
 
     private var rootTopBar: some View {
@@ -126,7 +127,6 @@ struct ScheduleRootView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
         .frame(height: LeafyRootChromeMetrics.controlDiameter)
-        .background(LeafyPageBackground())
     }
 
     private var rootMenuButton: some View {
@@ -155,7 +155,9 @@ struct ScheduleRootView: View {
         HStack(spacing: 0) {
             ForEach(SchedulePrimarySection.allCases) { section in
                 Button {
-                    primarySection = section
+                    withAnimation(.easeInOut(duration: 0.32)) {
+                        primarySection = section
+                    }
                 } label: {
                     Text(section.title)
                         .font(.body)
