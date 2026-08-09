@@ -24,7 +24,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
     let gridBody: GridBody
     let onFirstInteractiveLayout: () -> Void
     let currentWeekProvider: () -> Int
-    let onBoundarySwipe: (AcademicYearBoundaryDirection) -> Void
 
     init(
         axisWidth: CGFloat,
@@ -42,7 +41,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         containerID: String,
         onFirstInteractiveLayout: @escaping () -> Void = {},
         currentWeekProvider: @escaping () -> Int = { SemesterConfig.currentWeek() },
-        onBoundarySwipe: @escaping (AcademicYearBoundaryDirection) -> Void = { _ in },
         @ViewBuilder corner: () -> Corner,
         @ViewBuilder header: () -> Header,
         @ViewBuilder axis: () -> Axis,
@@ -67,7 +65,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         self.gridBody = body()
         self.onFirstInteractiveLayout = onFirstInteractiveLayout
         self.currentWeekProvider = currentWeekProvider
-        self.onBoundarySwipe = onBoundarySwipe
     }
 
     func makeCoordinator() -> Coordinator {
@@ -120,7 +117,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         private var pendingLayoutRealignmentWeek: Int?
         private var pendingLayoutRealignmentPasses = 0
         private var dragStartWeek = 1
-        private var requestedBoundaryTransitionForCurrentDrag = false
 
         init(_ parent: TimetableScrollContainer) {
             self.parent = parent
@@ -167,9 +163,9 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
 
             bodyScrollView.showsHorizontalScrollIndicator = false
             bodyScrollView.showsVerticalScrollIndicator = false
-            bodyScrollView.alwaysBounceHorizontal = true
+            bodyScrollView.alwaysBounceHorizontal = false
             bodyScrollView.alwaysBounceVertical = false
-            bodyScrollView.bounces = true
+            bodyScrollView.bounces = false
             bodyScrollView.decelerationRate = .fast
             bodyScrollView.isDirectionalLockEnabled = true
             bodyScrollView.contentInsetAdjustmentBehavior = .never
@@ -279,7 +275,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 hasReportedInteractiveLayout = false
                 pendingLayoutRealignmentWeek = nil
                 pendingLayoutRealignmentPasses = 0
-                requestedBoundaryTransitionForCurrentDrag = false
                 headerScrollView.setContentOffset(.zero, animated: false)
                 axisScrollView.setContentOffset(.zero, animated: false)
                 bodyScrollView.setContentOffset(.zero, animated: false)
@@ -348,7 +343,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             guard scrollView === bodyScrollView else { return }
             isAnimatingToTarget = false
             dragStartWeek = week(for: scrollView.contentOffset.x)
-            requestedBoundaryTransitionForCurrentDrag = false
         }
 
         func scrollViewWillEndDragging(
@@ -359,17 +353,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             guard !isDismantled else { return }
             guard scrollView === bodyScrollView else { return }
             guard parent.weekStride > 0 else { return }
-
-            let translationX = scrollView.panGestureRecognizer.translation(in: scrollView).x
-            if let direction = TimetableBoundarySwipeResolver.direction(
-                dragStartWeek: dragStartWeek,
-                totalWeeks: parent.totalWeeks,
-                velocityX: velocity.x,
-                translationX: translationX
-            ) {
-                requestBoundaryTransition(direction)
-                return
-            }
 
             let targetWeek: Int
             if abs(velocity.x) > 0.18 {
@@ -416,15 +399,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                     guard let self = self, !self.isDismantled else { return }
                     self.parent.currentWeek = visibleWeek
                 }
-            }
-        }
-
-        private func requestBoundaryTransition(_ direction: AcademicYearBoundaryDirection) {
-            guard !requestedBoundaryTransitionForCurrentDrag else { return }
-            requestedBoundaryTransitionForCurrentDrag = true
-            DispatchQueue.main.async { [weak self] in
-                guard let self, !self.isDismantled else { return }
-                self.parent.onBoundarySwipe(direction)
             }
         }
 
@@ -610,29 +584,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 allowsVerticalScroll = parent.allowsVerticalScroll
             }
         }
-    }
-}
-
-nonisolated enum TimetableBoundarySwipeResolver {
-    private static let velocityThreshold: CGFloat = 0.18
-    private static let translationThreshold: CGFloat = 32
-
-    static func direction(
-        dragStartWeek: Int,
-        totalWeeks: Int,
-        velocityX: CGFloat,
-        translationX: CGFloat
-    ) -> AcademicYearBoundaryDirection? {
-        guard totalWeeks > 0 else { return nil }
-        if dragStartWeek <= 1,
-           velocityX < -velocityThreshold || translationX > translationThreshold {
-            return .previous
-        }
-        if dragStartWeek >= totalWeeks,
-           velocityX > velocityThreshold || translationX < -translationThreshold {
-            return .next
-        }
-        return nil
     }
 }
 

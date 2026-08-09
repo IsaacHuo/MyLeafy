@@ -1187,14 +1187,13 @@ struct TimetableView: View {
                             scrollToWeek: $scrollToWeek,
                             animatesNextWeekScroll: $animatesNextWeekScroll,
                             isAwayFromCurrentWeek: $isAwayFromCurrentSchedule,
-                            containerID: "continuous-timetable-\(academicYearTimetable.academicYearID)",
+                            containerID: "continuous-timetable",
                             onFirstInteractiveLayout: {
                                 handleFirstInteractiveLayout()
                             },
                             currentWeekProvider: {
                                 currentAcademicYearPage
                             },
-                            onBoundarySwipe: navigateAcrossAcademicYearBoundary,
                             corner: {
                                 cornerHeader
                                     .frame(width: axisWidth, height: headerHeight)
@@ -2174,17 +2173,6 @@ struct TimetableView: View {
         let week = visibleWeek ?? currentWeek
         isAwayFromCurrentSchedule = !academicYearTimetable.contains(Date())
             || week != currentAcademicYearPage
-    }
-
-    @MainActor
-    private func navigateAcrossAcademicYearBoundary(_ direction: AcademicYearBoundaryDirection) {
-        guard let transition = academicYearTimetable.adjacentAcademicYear(toward: direction) else {
-            return
-        }
-        rebuildAcademicYearTimeline(
-            referenceDate: transition.referenceDate,
-            positionsToReferenceDate: true
-        )
     }
 
     private func isDateInDisplayedAcademicYear(_ date: Date) -> Bool {
