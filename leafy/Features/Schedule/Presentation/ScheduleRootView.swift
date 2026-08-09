@@ -44,6 +44,7 @@ enum SchedulePrimaryContentPresentation: Equatable {
 }
 
 struct ScheduleRootView: View {
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @State private var compactPath: [ScheduleDestination] = []
     @State private var primarySection: SchedulePrimarySection = .memos
