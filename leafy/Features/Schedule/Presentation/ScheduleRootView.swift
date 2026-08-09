@@ -44,6 +44,7 @@ enum SchedulePrimaryContentPresentation: Equatable {
 }
 
 struct ScheduleRootView: View {
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @State private var compactPath: [ScheduleDestination] = []
     @State private var primarySection: SchedulePrimarySection = .memos
@@ -153,47 +154,19 @@ struct ScheduleRootView: View {
     }
 
     private var rootSectionPicker: some View {
-        Group {
-            if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
-                ZStack {
-                    GlassEffectContainer(spacing: 0) {
-                        GeometryReader { geometry in
-                            let segmentWidth = geometry.size.width / CGFloat(SchedulePrimarySection.allCases.count)
-
-                            Capsule()
-                                .fill(.clear)
-                                .frame(width: segmentWidth, height: geometry.size.height)
-                                .glassEffect(.clear.interactive(), in: .capsule)
-                                .offset(x: segmentWidth * CGFloat(primarySectionIndex))
-                                .animation(
-                                    .spring(response: 0.42, dampingFraction: 0.78),
-                                    value: primarySection
-                                )
-                        }
-                    }
-
-                    primarySectionButtons(showsFallbackSelection: false)
-                }
-            } else {
-                primarySectionButtons(showsFallbackSelection: true)
-            }
-        }
-        .padding(4)
-        .frame(maxWidth: 236)
-        .frame(height: LeafyRootChromeMetrics.controlDiameter)
-        .leafyGlassSurface(
-            in: Capsule(),
-            fallbackFill: Color(uiColor: .secondarySystemBackground),
-            isInteractive: true
-        )
-        .layoutPriority(1)
+        primarySectionButtons
+            .padding(4)
+            .frame(maxWidth: 236)
+            .frame(height: LeafyRootChromeMetrics.controlDiameter)
+            .leafyGlassSurface(
+                in: Capsule(),
+                fallbackFill: Color(uiColor: .secondarySystemBackground),
+                isInteractive: true
+            )
+            .layoutPriority(1)
     }
 
-    private var primarySectionIndex: Int {
-        SchedulePrimarySection.allCases.firstIndex(of: primarySection) ?? 0
-    }
-
-    private func primarySectionButtons(showsFallbackSelection: Bool) -> some View {
+    private var primarySectionButtons: some View {
         HStack(spacing: 0) {
             ForEach(SchedulePrimarySection.allCases) { section in
                 Button {
@@ -202,18 +175,16 @@ struct ScheduleRootView: View {
                     }
                 } label: {
                     Text(section.title)
-                        .font(.body)
-                        .foregroundStyle(primarySection == section ? Color.black : AppTheme.primaryText)
+                        .font(.body.weight(primarySection == section ? .semibold : .regular))
+                        .foregroundStyle(
+                            primarySection == section
+                                ? AppTheme.accentEmphasis(for: themeColorPreference)
+                                : AppTheme.primaryText
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .background {
-                    if showsFallbackSelection, primarySection == section {
-                        Capsule()
-                            .fill(AppTheme.cardBackground)
-                    }
-                }
                 .zIndex(1)
                 .accessibilityAddTraits(primarySection == section ? .isSelected : [])
             }
@@ -991,16 +962,17 @@ private struct ScheduleMemoCard: View {
                             } label: {
                                 Text("#\(tag)")
                                     .font(.subheadline)
-                                    .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .contentShape(Capsule())
+                                    .foregroundStyle(AppTheme.textOnAccent(for: themeColorPreference))
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 4)
+                                    .contentShape(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    )
                             }
                             .buttonStyle(.plain)
-                            .background(AppTheme.cardBackground, in: Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(AppTheme.separator, lineWidth: 1)
+                            .background(
+                                AppTheme.accent(for: themeColorPreference),
+                                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
                             )
                         }
                     }
@@ -1029,13 +1001,12 @@ private struct ScheduleMemoCard: View {
         .padding(.horizontal, 14)
         .padding(.bottom, 7)
         .background(
-            AppTheme.accent(for: themeColorPreference)
-                .opacity(colorScheme == .dark ? 0.22 : 0.12),
+            AppTheme.cardElevated,
             in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                .stroke(AppTheme.accent(for: themeColorPreference).opacity(0.10), lineWidth: 1)
+                .stroke(AppTheme.separator, lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
         .onTapGesture(perform: onOpen)
@@ -1704,6 +1675,7 @@ private struct ScheduleMemoComposer: View {
                         .background(AppTheme.cardBackground, in: Capsule())
                     }
                 }
+                .padding(.leading, AppSpacing.micro)
             }
         }
     }

@@ -167,9 +167,9 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
 
             bodyScrollView.showsHorizontalScrollIndicator = false
             bodyScrollView.showsVerticalScrollIndicator = false
-            bodyScrollView.alwaysBounceHorizontal = false
+            bodyScrollView.alwaysBounceHorizontal = true
             bodyScrollView.alwaysBounceVertical = false
-            bodyScrollView.bounces = false
+            bodyScrollView.bounces = true
             bodyScrollView.decelerationRate = .fast
             bodyScrollView.isDirectionalLockEnabled = true
             bodyScrollView.contentInsetAdjustmentBehavior = .never
@@ -367,10 +367,6 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 velocityX: velocity.x,
                 translationX: translationX
             ) {
-                targetContentOffset.pointee = CGPoint(
-                    x: xOffset(for: dragStartWeek),
-                    y: clampedYOffset(targetContentOffset.pointee.y)
-                )
                 requestBoundaryTransition(direction)
                 return
             }
