@@ -88,9 +88,6 @@ struct ContentView: View {
                 value: RootTab.timetable
             ) {
                 TimetableView()
-                    .rootTabContentFade(
-                        isSelected: appNavigation.selectedRootTab == .timetable
-                    )
             }
 
             if isCommunityEnabled {
@@ -102,9 +99,6 @@ struct ContentView: View {
                     CommunityRootView(
                         notificationBadgeViewModel: communityNotificationBadgeViewModel
                     )
-                    .rootTabContentFade(
-                        isSelected: appNavigation.selectedRootTab == .community
-                    )
                 }
                 .badge(communityNotificationBadgeViewModel.unreadCount)
             }
@@ -115,9 +109,6 @@ struct ContentView: View {
                 value: RootTab.schedule
             ) {
                 ScheduleRootView()
-                    .rootTabContentFade(
-                        isSelected: appNavigation.selectedRootTab == .schedule
-                    )
             }
 
             Tab(
@@ -129,9 +120,6 @@ struct ContentView: View {
                     .onAppear {
                         appNavigation.selectedRootTab = .academics
                     }
-                    .rootTabContentFade(
-                        isSelected: appNavigation.selectedRootTab == .academics
-                    )
             }
 
             Tab(
@@ -140,9 +128,6 @@ struct ContentView: View {
                 value: RootTab.profile
             ) {
                 ProfileView()
-                    .rootTabContentFade(
-                        isSelected: appNavigation.selectedRootTab == .profile
-                    )
             }
         }
     }
@@ -159,9 +144,6 @@ struct ContentView: View {
     private var legacyNativeTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
             TimetableView()
-                .rootTabContentFade(
-                    isSelected: appNavigation.selectedRootTab == .timetable
-                )
                 .tabItem {
                     Label(RootTab.timetable.title(language: leafyLanguage), systemImage: RootTab.timetable.systemImage)
                 }
@@ -170,10 +152,7 @@ struct ContentView: View {
             if isCommunityEnabled {
                 CommunityRootView(
                     notificationBadgeViewModel: communityNotificationBadgeViewModel
-                    )
-                    .rootTabContentFade(
-                        isSelected: appNavigation.selectedRootTab == .community
-                    )
+                )
                     .tabItem {
                         Label(RootTab.community.title(language: leafyLanguage), systemImage: RootTab.community.systemImage)
                     }
@@ -182,27 +161,18 @@ struct ContentView: View {
             }
 
             ScheduleRootView()
-                .rootTabContentFade(
-                    isSelected: appNavigation.selectedRootTab == .schedule
-                )
                 .tabItem {
                     Label(RootTab.schedule.title(language: leafyLanguage), systemImage: RootTab.schedule.systemImage)
                 }
                 .tag(RootTab.schedule)
 
             AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
-                .rootTabContentFade(
-                    isSelected: appNavigation.selectedRootTab == .academics
-                )
                 .tabItem {
                     Label(RootTab.academics.title(language: leafyLanguage), systemImage: RootTab.academics.systemImage)
                 }
                 .tag(RootTab.academics)
 
             ProfileView()
-                .rootTabContentFade(
-                    isSelected: appNavigation.selectedRootTab == .profile
-                )
                 .tabItem {
                     Label(RootTab.profile.title(language: leafyLanguage), systemImage: RootTab.profile.systemImage)
                 }
@@ -267,10 +237,6 @@ struct ContentView: View {
 }
 
 private extension View {
-    func rootTabContentFade(isSelected: Bool) -> some View {
-        modifier(RootTabContentFadeModifier(isSelected: isSelected))
-    }
-
     @ViewBuilder
     func nativeRootTabBarBehavior() -> some View {
         if #available(iOS 26.0, *) {
@@ -281,19 +247,6 @@ private extension View {
     }
 }
 
-private struct RootTabContentFadeModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    let isSelected: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isSelected ? 1 : 0)
-            .animation(
-                accessibilityReduceMotion ? nil : .easeInOut(duration: 0.22),
-                value: isSelected
-            )
-    }
-}
 
 #Preview {
     PreviewRoot()
