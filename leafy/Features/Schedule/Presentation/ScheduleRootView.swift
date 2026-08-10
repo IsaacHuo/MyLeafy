@@ -1822,6 +1822,10 @@ private struct ScheduleMemoComposer: View {
         presentation == .compact ? 0 : 9
     }
 
+    private var focusedEditorVerticalOffset: CGFloat {
+        isEditorFocused ? 6 : 0
+    }
+
     private var editor: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
@@ -1830,7 +1834,8 @@ private struct ScheduleMemoComposer: View {
                     .foregroundStyle(AppTheme.tertiaryText)
                     .padding(.leading, 5 + editorLeadingOffset)
                     .padding(.trailing, 5)
-                    .padding(.vertical, 8)
+                    .padding(.top, 8 + focusedEditorVerticalOffset)
+                    .padding(.bottom, 8)
                     .allowsHitTesting(false)
             }
 
@@ -1840,6 +1845,7 @@ private struct ScheduleMemoComposer: View {
                 .scrollIndicators(.hidden)
                 .padding(.leading, editorLeadingOffset)
                 .padding(.trailing, showsExpansionControl ? 42 : 0)
+                .padding(.top, focusedEditorVerticalOffset)
                 .focused($isEditorFocused)
 
             if showsExpansionControl {
@@ -1861,6 +1867,7 @@ private struct ScheduleMemoComposer: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: showsExpansionControl)
+        .animation(.easeOut(duration: 0.2), value: isEditorFocused)
         .background {
             GeometryReader { proxy in
                 let textWidth = max(

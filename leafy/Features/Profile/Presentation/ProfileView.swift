@@ -3,6 +3,7 @@ import OSLog
 import PhotosUI
 import Photos
 import SafariServices
+import StoreKit
 import SwiftData
 import SwiftUI
 #if canImport(UIKit)
@@ -41,7 +42,7 @@ struct ProfileView: View {
     @State private var reviewPageMessage: String?
     @State private var navigationPath = NavigationPath()
     @State private var pendingTimetableInviteCode: String?
-    @State private var browserItem: ProfileBrowserItem?
+    @State private var showingPoemeryOverlay = false
 
     private let profileRowIconSize: CGFloat = 34
 
@@ -107,8 +108,11 @@ struct ProfileView: View {
                 )
                     .presentationDetents([.medium, .large])
             }
-            .sheet(item: $browserItem) { item in
-                ProfileSafariView(url: item.url)
+            .appStoreOverlay(isPresented: $showingPoemeryOverlay) {
+                SKOverlay.AppConfiguration(
+                    appIdentifier: "6773236818",
+                    position: .bottom
+                )
             }
             .alert(logoutConfirmationTitle, isPresented: $showingLogoutAlert) {
                 Button(logoutButtonTitle, role: .destructive) {
@@ -190,20 +194,26 @@ struct ProfileView: View {
             Section {
                 settingsRows
             } header: {
-                Text("功能")
+                Text("课表与偏好")
             }
 
-            Section("支持") {
-                supportRows
+            Section("帮助与资源") {
+                helpAndResourcesRows
+            }
+            .listRowBackground(AppTheme.cardBackground)
+
+            Section("关于 MyLeafy") {
+                aboutRows
+            }
+            .listRowBackground(AppTheme.cardBackground)
+
+            Section("我的更多作品") {
+                moreWorksRows
             }
             .listRowBackground(AppTheme.cardBackground)
 
             Section {
-                logoutButton
-
-                if canDeleteAccount {
-                    deleteAccountButton
-                }
+                accountRows
             } header: {
                 Text("账户")
             } footer: {
@@ -271,19 +281,15 @@ struct ProfileView: View {
     }
 
     @ViewBuilder
-    private var supportRows: some View {
+    private var helpAndResourcesRows: some View {
         NavigationLink {
             LeafyGuideAndDataSecurityView()
         } label: {
-            profileRow(icon: "book.closed.fill", title: "说明与安全", detail: "使用手册")
-        }
-
-        if isCommunityEnabled, !isCustomCampus, ActiveCampusContext.descriptor.id == .bjfu {
-            NavigationLink {
-                ProfileEmailBindingView()
-            } label: {
-                profileRow(icon: "envelope.badge.fill", title: "绑定邮箱", detail: "接收服务通知")
-            }
+            profileRow(
+                icon: "questionmark.circle.fill",
+                title: "帮助中心",
+                detail: "使用指南、常见问题与数据安全"
+            )
         }
 
         Button {
@@ -293,11 +299,34 @@ struct ProfileView: View {
         } label: {
             profileRow(
                 icon: "bubble.left.and.bubble.right.fill",
-                title: "举报与反馈",
-                detail: "建议和问题反馈",
+                title: "反馈与举报",
+                detail: "功能建议、问题反馈与内容举报",
                 showsDisclosure: true
             )
         }
+
+        if !isCustomCampus {
+            NavigationLink {
+                CampusLinksView()
+            } label: {
+                profileRow(icon: "building.columns.fill", title: "常用链接", detail: "教务系统等常用网站")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var aboutRows: some View {
+        Button {
+            Task { await checkForUpdate() }
+        } label: {
+            profileRow(
+                icon: "arrow.down.circle.fill",
+                title: "检查更新",
+                detail: isCheckingForUpdate ? "检查中" : "跳转到 App Store",
+                showsDisclosure: true
+            )
+        }
+        .disabled(isCheckingForUpdate)
 
         Button {
             Task { await openReviewPage() }
@@ -311,35 +340,33 @@ struct ProfileView: View {
         }
         .disabled(isOpeningReviewPage)
 
-        Button {
-            Task { await checkForUpdate() }
+        NavigationLink {
+            AboutMyLeafyView()
         } label: {
-            profileRow(
-                icon: "arrow.down.circle.fill",
-                title: "检查更新",
-                detail: isCheckingForUpdate ? "检查中" : "跳转到 App Store",
-                showsDisclosure: true
-            )
+            profileRow(icon: "info.circle.fill", title: "了解 MyLeafy", detail: "简介与设计理念")
         }
-        .disabled(isCheckingForUpdate)
+    }
 
-        if !isCustomCampus {
-            NavigationLink {
-                CampusLinksView()
-            } label: {
-                profileRow(icon: "link", title: "常用链接", detail: "教务系统等网站")
+    private var moreWorksRows: some View {
+        Button {
+            showingPoemeryOverlay = true
+        } label: {
+            poemeryPromotionRow
+        }
+    }
+
+    @ViewBuilder
+    private var accountRows: some View {
+        if isCommunityEnabled, !isCustomCampus, ActiveCampusContext.descriptor.id == .bjfu {
+            NavigationLink("绑定邮箱") {
+                ProfileEmailBindingView()
             }
         }
 
-        Button {
-            browserItem = ProfileBrowserItem(url: LeafyExternalLinks.authorBlog)
-        } label: {
-            profileRow(
-                icon: "safari.fill",
-                title: "项目介绍",
-                detail: "此项目的开源页面",
-                showsDisclosure: true
-            )
+        logoutButton
+
+        if canDeleteAccount {
+            deleteAccountButton
         }
     }
 
@@ -562,6 +589,44 @@ struct ProfileView: View {
         .padding(.vertical, 1)
     }
 
+    private var poemeryPromotionRow: some View {
+        HStack(alignment: .center, spacing: 11) {
+            Image("PoemeryAppIcon")
+                .resizable()
+                .scaledToFill()
+                .frame(width: profileRowIconSize, height: profileRowIconSize)
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: profileRowIconSize * 0.22,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: profileRowIconSize * 0.22,
+                        style: .continuous
+                    )
+                    .stroke(AppTheme.separator, lineWidth: 1)
+                }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("诗境 Poemery")
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(1)
+
+                Text("离线阅读中文古典诗词")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            LeafyDisclosureIndicator()
+        }
+        .padding(.vertical, 1)
+    }
+
     @MainActor
     private func checkForUpdate() async {
         guard !isCheckingForUpdate else { return }
@@ -606,6 +671,89 @@ struct ProfileView: View {
         } catch {
             reviewPageMessage = L10n.text("暂未找到 App Store 评分页面，请稍后再试。", language: leafyLanguage)
         }
+    }
+}
+
+private struct AboutMyLeafyView: View {
+    @State private var browserItem: ProfileBrowserItem?
+
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+
+    private var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+    }
+
+    var body: some View {
+        List {
+            Section("项目") {
+                Button {
+                    browserItem = ProfileBrowserItem(url: LeafyExternalLinks.authorBlog)
+                } label: {
+                    externalLinkRow(
+                        icon: "doc.text.fill",
+                        title: "项目介绍",
+                        detail: "了解产品定位与设计"
+                    )
+                }
+
+                Button {
+                    browserItem = ProfileBrowserItem(url: LeafyExternalLinks.githubRepository)
+                } label: {
+                    externalLinkRow(
+                        icon: "chevron.left.forwardslash.chevron.right",
+                        title: "GitHub",
+                        detail: "查看开源项目"
+                    )
+                }
+            }
+            .listRowBackground(AppTheme.cardBackground)
+
+            Section("版本") {
+                LabeledContent("当前版本", value: "Version \(version)")
+            }
+            .listRowBackground(AppTheme.cardBackground)
+        }
+        .leafyInsetGroupedListStyle()
+        .scrollContentBackground(.hidden)
+        .background(LeafyPageBackground())
+        .navigationTitle("关于 MyLeafy")
+        .leafyInlineNavigationTitle()
+        .sheet(item: $browserItem) { item in
+            ProfileSafariView(url: item.url)
+        }
+    }
+
+    private func aboutTextRow(title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .leafyBody()
+                .foregroundStyle(AppTheme.primaryText)
+            Text(detail)
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func externalLinkRow(icon: String, title: String, detail: String) -> some View {
+        HStack(spacing: 11) {
+            LeafyCompactProfileIconBadge(systemName: icon, size: 34)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.primaryText)
+                Text(detail)
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            LeafyDisclosureIndicator()
+        }
+        .padding(.vertical, 1)
     }
 }
 
@@ -699,6 +847,10 @@ private struct IconAppearanceSwatch: View {
             return AppTheme.accent(for: .tiffanyBlue)
         case .candyPink:
             return AppTheme.accent(for: .candyPink)
+        case .sunsetApricot:
+            return AppTheme.accent(for: .sunsetApricot)
+        case .irisPurple:
+            return AppTheme.accent(for: .irisPurple)
         }
     }
 }
@@ -1606,7 +1758,7 @@ private struct LeafyGuideAndDataSecurityView: View {
         .contentMargins(.top, 0, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(LeafyPageBackground())
-        .navigationTitle("说明与安全")
+        .navigationTitle("帮助中心")
         .leafyInlineNavigationTitle()
         .leafySheet(isPresented: $showingCommunityTermsSheet) {
             CommunityTermsPreferenceSheet()
@@ -1647,11 +1799,11 @@ private struct ManualIntroBlock: View {
                     .frame(width: 20, height: 20)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(AppBrand.displayName) 使用说明与安全手册")
+                    Text("\(AppBrand.displayName) 帮助中心")
                         .leafyHeadline()
                         .foregroundStyle(AppTheme.primaryText)
 
-                    Text("课表 / 日迹 / 教务同步 / 数据边界")
+                    Text("使用指南 / 常见问题 / 同步与数据安全")
                         .microCaption()
                         .foregroundStyle(AppTheme.tertiaryText)
                 }

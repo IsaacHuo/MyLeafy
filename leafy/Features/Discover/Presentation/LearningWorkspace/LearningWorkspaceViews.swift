@@ -157,11 +157,11 @@ struct LearningWorkspaceView: View {
                 subtitle: "在微信或 QQ 中打开文件，选择“用其他应用打开”并选取 MyLeafy。已导入的资料支持导出。"
             )
 
-            ToolEntryCard(title: "专注记录", subtitle: "记录每段学习时间、地点和备注", icon: "clock.badge.checkmark") {
+            ToolEntryCard(title: "专注记录", subtitle: "记录学习时间与地点", icon: "clock.badge.checkmark") {
                 openRoute(.studyTimeRecords)
             }
 
-            ToolEntryCard(title: "荣誉记录", subtitle: "保存奖状证书等相关文档和图片", icon: "rosette") {
+            ToolEntryCard(title: "荣誉记录", subtitle: "保存奖状证书等相关文件", icon: "rosette") {
                 openRoute(.honorRecords)
             }
 

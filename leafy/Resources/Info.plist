@@ -68,6 +68,20 @@
 					<string>AppIconCandyPink</string>
 				</array>
 			</dict>
+			<key>AppIconIrisPurple</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AppIconIrisPurple</string>
+				</array>
+			</dict>
+			<key>AppIconSunsetApricot</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AppIconSunsetApricot</string>
+				</array>
+			</dict>
 			<key>AppIconTiffanyBlue</key>
 			<dict>
 				<key>CFBundleIconFiles</key>

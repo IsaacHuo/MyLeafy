@@ -12,16 +12,16 @@ struct TeachingCultivationSectionView: View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle("学校教学", subtitle: sectionSubtitle)
 
-            ToolEntryCard(title: "成绩查询", subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看课程成绩、绩点在各学期记录", icon: "chart.bar.doc.horizontal") {
+            ToolEntryCard(title: "成绩查询", subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看课程成绩、绩点等", icon: "chart.bar.doc.horizontal") {
                 openRoute(.grades)
             }
 
-            ToolEntryCard(title: "考试安排", subtitle: isCustomCampus ? "手动添加或导入考试时间和地点" : "查看教务拉取的考试时间和地点", icon: "calendar.badge.clock") {
+            ToolEntryCard(title: "考试安排", subtitle: isCustomCampus ? "手动添加或导入考试时间和地点" : "查看考试时间和地点", icon: "calendar.badge.clock") {
                 openRoute(.examSchedule)
             }
 
             if !isCustomCampus {
-                ToolEntryCard(title: "教学计划", subtitle: "按学期查看课程清单、学分和考核方式", icon: "list.clipboard") {
+                ToolEntryCard(title: "教学计划", subtitle: "查看课程、学分和考核方式", icon: "list.clipboard") {
                     openRoute(.teachingPlan)
                 }
 
@@ -33,7 +33,7 @@ struct TeachingCultivationSectionView: View {
                     openRoute(.schoolCalendar)
                 }
 
-                ToolEntryCard(title: "综素测算", subtitle: "本地估算综素贡献分，整理相关材料", icon: "function") {
+                ToolEntryCard(title: "综素测算", subtitle: "估算综素分，整理材料", icon: "function") {
                     openRoute(.comprehensiveQuality)
                 }
             }
@@ -57,7 +57,7 @@ struct ClassroomsSectionView: View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle("自习安排", subtitle: "空闲教室查询、图书馆座位预约和校园热力图集中在这里。")
 
-            ToolEntryCard(title: "空闲教室", subtitle: "按楼宇、日期和节次快速筛教室", icon: "building.2.crop.circle") {
+            ToolEntryCard(title: "空闲教室", subtitle: "筛选选定时段空教室", icon: "building.2.crop.circle") {
                 openRoute(.emptyClassroom)
             }
 
@@ -65,7 +65,7 @@ struct ClassroomsSectionView: View {
                 browserItem = LibrarySeatReservationBrowserItem(url: LeafyExternalLinks.librarySeat)
             }
 
-            ToolEntryCard(title: "校园热力图", subtitle: "查看当前或自定义时段的教学楼拥挤度", icon: "map.fill") {
+            ToolEntryCard(title: "校园热力图", subtitle: "查看当前教学楼拥挤度", icon: "map.fill") {
                 openRoute(.campusHeatmap)
             }
 
@@ -91,12 +91,12 @@ struct SportsSectionView: View {
                 openRoute(.sunshineRun)
             }
 
-            ToolEntryCard(title: "体测记录", subtitle: "记录体测项目、成绩和最近趋势", icon: "figure.strengthtraining.traditional") {
+            ToolEntryCard(title: "体测记录", subtitle: "记录体测项目、成绩和趋势", icon: "figure.strengthtraining.traditional") {
                 openRoute(.fitnessTestRecords)
             }
 
             if !isCustomCampus {
-                ToolEntryCard(title: "场馆开放", subtitle: "操场、球场、体育馆开放时间与预约方式", icon: "sportscourt") {
+                ToolEntryCard(title: "场馆开放", subtitle: "场馆开放时间与预约方式", icon: "sportscourt") {
                     openRoute(.sportsVenues)
                 }
             }
