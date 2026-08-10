@@ -159,6 +159,8 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
     case green = "green"
     case tiffanyBlue = "tiffanyBlue"
     case candyPink = "candyPink"
+    case sunsetApricot = "sunsetApricot"
+    case irisPurple = "irisPurple"
     case custom = "custom"
 
     nonisolated static let storageKey = "appThemeColorPreference"
@@ -172,6 +174,8 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
         case .green: return "鼠尾草绿"
         case .tiffanyBlue: return "蒂芙尼蓝"
         case .candyPink: return "糖果莓粉"
+        case .sunsetApricot: return "落日杏橙"
+        case .irisPurple: return "鸢尾花紫"
         case .custom: return "自定义"
         }
     }
@@ -188,6 +192,10 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
             return .tiffanyBlue
         case candyPink.rawValue:
             return .candyPink
+        case sunsetApricot.rawValue:
+            return .sunsetApricot
+        case irisPurple.rawValue:
+            return .irisPurple
         case custom.rawValue:
             return .custom
         case .some:
@@ -203,7 +211,14 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
 
     nonisolated static func migrateStoredThemeIfNeeded(userDefaults: UserDefaults = .standard) {
         guard let rawValue = userDefaults.string(forKey: storageKey),
-              ![green.rawValue, tiffanyBlue.rawValue, candyPink.rawValue, custom.rawValue].contains(rawValue)
+              ![
+                  green.rawValue,
+                  tiffanyBlue.rawValue,
+                  candyPink.rawValue,
+                  sunsetApricot.rawValue,
+                  irisPurple.rawValue,
+                  custom.rawValue
+              ].contains(rawValue)
         else {
             return
         }
@@ -399,6 +414,20 @@ enum AppTheme {
                 emphasis: (184, 50, 104),
                 soft: (255, 237, 244),
                 textOnAccent: color(58, 14, 34)
+            )
+        case .sunsetApricot:
+            return makePalette(
+                base: (255, 138, 61),
+                emphasis: (148, 80, 35),
+                soft: (255, 236, 224),
+                textOnAccent: color(65, 29, 8)
+            )
+        case .irisPurple:
+            return makePalette(
+                base: (139, 108, 246),
+                emphasis: (81, 63, 143),
+                soft: (236, 231, 254),
+                textOnAccent: .white
             )
         case .custom:
             return customPalette()

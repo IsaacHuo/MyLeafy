@@ -13,6 +13,9 @@ nonisolated enum LeafyExternalLinks {
     /// Project introduction page (open source).
     static let authorBlog = make("https://huoweifang.cn/zh/projects/leafy.html")
 
+    /// Public source repository.
+    static let githubRepository = make("https://github.com/IsaacHuo/MyLeafy")
+
     private static func make(_ string: String) -> URL {
         guard let url = URL(string: string) else {
             preconditionFailure("Invalid LeafyExternalLinks URL literal: \(string)")

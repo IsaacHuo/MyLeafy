@@ -557,7 +557,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C0DEC0DE0000000000000002 /* Leafy.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconTiffanyBlue AppIconCandyPink";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconTiffanyBlue AppIconCandyPink AppIconSunsetApricot AppIconIrisPurple";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = leafy/leafy.entitlements;
@@ -598,7 +598,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C0DEC0DE0000000000000002 /* Leafy.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconTiffanyBlue AppIconCandyPink";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconTiffanyBlue AppIconCandyPink AppIconSunsetApricot AppIconIrisPurple";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = leafy/leafy.entitlements;

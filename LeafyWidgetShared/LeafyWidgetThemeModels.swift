@@ -4,6 +4,8 @@ nonisolated enum LeafyThemeColorPreferenceRaw: String, CaseIterable, Sendable {
     case green
     case tiffanyBlue
     case candyPink
+    case sunsetApricot
+    case irisPurple
     case custom
 
     static let defaultCustomColorHex = "#9DC183"
@@ -16,6 +18,10 @@ nonisolated enum LeafyThemeColorPreferenceRaw: String, CaseIterable, Sendable {
             return .tiffanyBlue
         case candyPink.rawValue:
             return .candyPink
+        case sunsetApricot.rawValue:
+            return .sunsetApricot
+        case irisPurple.rawValue:
+            return .irisPurple
         case custom.rawValue:
             return .custom
         case .some:
@@ -30,6 +36,8 @@ nonisolated enum LeafyAppIconAppearancePreference: String, CaseIterable, Identif
     case green
     case tiffanyBlue
     case candyPink
+    case sunsetApricot
+    case irisPurple
 
     static let storageKey = "appIconAppearancePreference"
 
@@ -43,6 +51,10 @@ nonisolated enum LeafyAppIconAppearancePreference: String, CaseIterable, Identif
             return "蒂芙尼蓝"
         case .candyPink:
             return "糖果莓粉"
+        case .sunsetApricot:
+            return "落日杏橙"
+        case .irisPurple:
+            return "鸢尾花紫"
         }
     }
 
@@ -54,6 +66,10 @@ nonisolated enum LeafyAppIconAppearancePreference: String, CaseIterable, Identif
             return .tiffanyBlue
         case .candyPink:
             return .candyPink
+        case .sunsetApricot:
+            return .sunsetApricot
+        case .irisPurple:
+            return .irisPurple
         }
     }
 
@@ -65,6 +81,10 @@ nonisolated enum LeafyAppIconAppearancePreference: String, CaseIterable, Identif
             return .tiffanyBlue
         case candyPink.rawValue:
             return .candyPink
+        case sunsetApricot.rawValue:
+            return .sunsetApricot
+        case irisPurple.rawValue:
+            return .irisPurple
         case "followTheme":
             return .green
         default:
@@ -116,6 +136,10 @@ nonisolated enum LeafyWidgetThemePalette: Hashable, Sendable {
             return color(ColorComponents(129, 216, 208))
         case .candyPink:
             return color(ColorComponents(251, 96, 149))
+        case .sunsetApricot:
+            return color(ColorComponents(255, 138, 61))
+        case .irisPurple:
+            return color(ColorComponents(139, 108, 246))
         case .custom:
             return color(rgbComponents(fromHex: snapshot.customColorHex) ?? ColorComponents(157, 193, 131))
         }
@@ -129,6 +153,10 @@ nonisolated enum LeafyWidgetThemePalette: Hashable, Sendable {
             return color(ColorComponents(43, 127, 122))
         case .candyPink:
             return color(ColorComponents(184, 50, 104))
+        case .sunsetApricot:
+            return color(ColorComponents(148, 80, 35))
+        case .irisPurple:
+            return color(ColorComponents(81, 63, 143))
         case .custom:
             let base = rgbComponents(fromHex: snapshot.customColorHex) ?? ColorComponents(157, 193, 131)
             return color(mix(base, with: ColorComponents(0, 0, 0), amount: 0.42))
@@ -143,6 +171,10 @@ nonisolated enum LeafyWidgetThemePalette: Hashable, Sendable {
             return color(ColorComponents(232, 249, 247))
         case .candyPink:
             return color(ColorComponents(255, 237, 244))
+        case .sunsetApricot:
+            return color(ColorComponents(255, 236, 224))
+        case .irisPurple:
+            return color(ColorComponents(236, 231, 254))
         case .custom:
             let base = rgbComponents(fromHex: snapshot.customColorHex) ?? ColorComponents(157, 193, 131)
             return color(mix(base, with: ColorComponents(255, 255, 255), amount: 0.84))

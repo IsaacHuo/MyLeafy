@@ -985,7 +985,10 @@ final class PerformanceRefactorTests: XCTestCase {
 
     @MainActor
     func testLegacyFollowThemeIconPreferenceMigratesToConcretePreset() {
-        XCTAssertEqual(LeafyAppIconAppearancePreference.allCases, [.green, .tiffanyBlue, .candyPink])
+        XCTAssertEqual(
+            LeafyAppIconAppearancePreference.allCases,
+            [.green, .tiffanyBlue, .candyPink, .sunsetApricot, .irisPurple]
+        )
         XCTAssertEqual(
             LeafyAppIconManager.migratedIconPreference(
                 rawValue: "followTheme",
@@ -1000,12 +1003,78 @@ final class PerformanceRefactorTests: XCTestCase {
             LeafyAppIconManager.migratedIconPreference(
                 rawValue: "followTheme",
                 themeSnapshot: LeafyWidgetThemeSnapshot(
+                    preferenceRaw: LeafyThemeColorPreferenceRaw.sunsetApricot.rawValue,
+                    customColorHex: LeafyThemeColorPreferenceRaw.defaultCustomColorHex
+                )
+            ),
+            .sunsetApricot
+        )
+        XCTAssertEqual(
+            LeafyAppIconManager.migratedIconPreference(
+                rawValue: "followTheme",
+                themeSnapshot: LeafyWidgetThemeSnapshot(
+                    preferenceRaw: LeafyThemeColorPreferenceRaw.irisPurple.rawValue,
+                    customColorHex: LeafyThemeColorPreferenceRaw.defaultCustomColorHex
+                )
+            ),
+            .irisPurple
+        )
+        XCTAssertEqual(
+            LeafyAppIconManager.migratedIconPreference(
+                rawValue: "followTheme",
+                themeSnapshot: LeafyWidgetThemeSnapshot(
                     preferenceRaw: LeafyThemeColorPreferenceRaw.custom.rawValue,
                     customColorHex: "#123456"
                 )
             ),
             .green
         )
+    }
+
+    func testNewThemePresetsPreserveExactColorsAcrossSurfaces() {
+        let sunsetSnapshot = LeafyWidgetThemeSnapshot(
+            preferenceRaw: LeafyThemeColorPreferenceRaw.sunsetApricot.rawValue,
+            customColorHex: LeafyThemeColorPreferenceRaw.defaultCustomColorHex
+        )
+        XCTAssertEqual(AppThemeColorPreference.storedValue("sunsetApricot"), .sunsetApricot)
+        XCTAssertEqual(AppThemeColorPreference.sunsetApricot.title, "落日杏橙")
+        XCTAssertEqual(
+            LeafyWidgetThemePalette.baseColor(for: sunsetSnapshot),
+            .init(255, 138, 61)
+        )
+        XCTAssertEqual(
+            LeafyWidgetThemePalette.emphasisColor(for: sunsetSnapshot),
+            .init(148, 80, 35)
+        )
+        XCTAssertEqual(
+            LeafyWidgetThemePalette.softColor(for: sunsetSnapshot),
+            .init(255, 236, 224)
+        )
+        let sunsetCommunityTheme = CommunityPostCardTheme(preferenceRawValue: "sunsetApricot")
+        XCTAssertEqual(sunsetCommunityTheme.accentHex, "#FF8A3D")
+        XCTAssertEqual(sunsetCommunityTheme.backgroundHex, "#FFECE0")
+
+        let irisSnapshot = LeafyWidgetThemeSnapshot(
+            preferenceRaw: LeafyThemeColorPreferenceRaw.irisPurple.rawValue,
+            customColorHex: LeafyThemeColorPreferenceRaw.defaultCustomColorHex
+        )
+        XCTAssertEqual(AppThemeColorPreference.storedValue("irisPurple"), .irisPurple)
+        XCTAssertEqual(AppThemeColorPreference.irisPurple.title, "鸢尾花紫")
+        XCTAssertEqual(
+            LeafyWidgetThemePalette.baseColor(for: irisSnapshot),
+            .init(139, 108, 246)
+        )
+        XCTAssertEqual(
+            LeafyWidgetThemePalette.emphasisColor(for: irisSnapshot),
+            .init(81, 63, 143)
+        )
+        XCTAssertEqual(
+            LeafyWidgetThemePalette.softColor(for: irisSnapshot),
+            .init(236, 231, 254)
+        )
+        let irisCommunityTheme = CommunityPostCardTheme(preferenceRawValue: "irisPurple")
+        XCTAssertEqual(irisCommunityTheme.accentHex, "#8B6CF6")
+        XCTAssertEqual(irisCommunityTheme.backgroundHex, "#ECE7FE")
     }
 
     @MainActor

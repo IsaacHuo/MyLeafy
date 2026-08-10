@@ -26,6 +26,12 @@ nonisolated struct CommunityPostCardTheme: Sendable, Equatable {
         case .candyPink:
             accentHex = "#FB6095"
             backgroundHex = "#FFEDF4"
+        case .sunsetApricot:
+            accentHex = "#FF8A3D"
+            backgroundHex = "#FFECE0"
+        case .irisPurple:
+            accentHex = "#8B6CF6"
+            backgroundHex = "#ECE7FE"
         case .custom:
             let resolvedHex = Self.normalizedHex(customColorHex)
             accentHex = resolvedHex

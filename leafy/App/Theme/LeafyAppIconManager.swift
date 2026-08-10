@@ -65,6 +65,10 @@ enum LeafyAppIconManager {
             return "AppIconTiffanyBlue"
         case .candyPink:
             return "AppIconCandyPink"
+        case .sunsetApricot:
+            return "AppIconSunsetApricot"
+        case .irisPurple:
+            return "AppIconIrisPurple"
         case .custom:
             return nil
         }
@@ -85,6 +89,10 @@ enum LeafyAppIconManager {
             return .tiffanyBlue
         case .candyPink:
             return .candyPink
+        case .sunsetApricot:
+            return .sunsetApricot
+        case .irisPurple:
+            return .irisPurple
         case .custom:
             return .green
         }
