@@ -367,12 +367,12 @@ struct ScheduleMemoStatisticsView: View {
                     .leafyHeadline()
 
                 if let firstDate = statistics.firstRecordingDate {
-                    milestoneRow("第一次记录", detail: firstDate.formatted(date: .long, time: .omitted), systemImage: "flag")
+                    milestoneRow("第一次记录", detail: milestoneDateText(firstDate), systemImage: "flag")
                 }
                 if let peakDate = statistics.peakDate {
                     milestoneRow(
                         "记录最多的一天",
-                        detail: "\(peakDate.formatted(date: .abbreviated, time: .omitted)) · \(statistics.peakMemoCount) 条",
+                        detail: "\(milestoneDateText(peakDate)) · \(statistics.peakMemoCount) 条",
                         systemImage: "sparkles"
                     )
                 }
@@ -380,6 +380,14 @@ struct ScheduleMemoStatisticsView: View {
                 milestoneRow("有记录的月份", detail: "\(statistics.recordingMonthCount) 个月", systemImage: "calendar.badge.checkmark")
             }
         }
+    }
+
+    private func milestoneDateText(_ date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        guard let year = components.year,
+              let month = components.month,
+              let day = components.day else { return "" }
+        return "\(year)/\(month)/\(day)"
     }
 
     private func milestoneRow(_ title: String, detail: String, systemImage: String) -> some View {

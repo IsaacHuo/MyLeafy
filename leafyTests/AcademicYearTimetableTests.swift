@@ -305,9 +305,11 @@ final class AcademicYearTimetableTests: XCTestCase {
         let academicYear = try XCTUnwrap(menu.academicYears.first)
         XCTAssertEqual(academicYear.academicYear, "2025–2026")
         XCTAssertEqual(academicYear.stages.count, 2)
-        guard case let .vacation(vacation) = academicYear.stages[1] else {
-            return XCTFail("Expected vacation directly under the academic year")
+        let vacations: [TimetableCalendarMenuVacation] = academicYear.stages.compactMap { stage in
+            guard case let .vacation(vacation) = stage else { return nil }
+            return vacation
         }
+        let vacation = try XCTUnwrap(vacations.first)
         XCTAssertEqual(vacation.title, "暑假")
         XCTAssertEqual(vacation.page, timetable.pageIndex(containing: referenceDate))
     }
