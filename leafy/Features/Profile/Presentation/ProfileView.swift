@@ -215,6 +215,7 @@ struct ProfileView: View {
         }
         .leafyInsetGroupedListStyle()
         .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
         .safeAreaPadding(.bottom, AppSpacing.compact)
         .frame(maxWidth: 760, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .top)
@@ -1420,13 +1421,13 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "产品用途", body: "北林的教务和校园服务分布在多个系统。\(AppBrand.displayName) 集中提供常用入口，并保留最近一次成功同步的数据供离线查看。"),
                 ManualInfo(title: "与学校系统的关系", body: "\(AppBrand.displayName) 是第三方校园应用，不属于北京林业大学官方教务系统。登录、验证码、校园网、VPN 和访问权限均受学校系统限制。成绩、培养方案和考试安排等正式结果以学校系统为准。"),
-                ManualInfo(title: "主要入口", body: "“课表”显示当前学年的课程与个人日程；“社区”用于同学交流和通知；“日迹”包含随记、日程和推送；“校园”提供成绩、考试、教学培养、空闲教室、校历和评分；“我的”用于管理资料、同步、个性化和安全设置。"),
+                ManualInfo(title: "主要入口", body: "“课表”显示当前学年的课程与个人日程；“社区”用于同学交流和通知；“日迹”包含随记、日程和推送；“校园”提供成绩、考试、教学培养、自习安排、学习空间、校历和评分；“我的”用于管理资料、同步、个性化和安全设置。"),
                 ManualInfo(title: "需要同步的情况", body: "选课、调课、成绩发布或考试安排更新后，可连接能够访问北林教务的网络重新同步。同步失败不会删除最近一次成功缓存。")
             ],
             steps: [
                 ManualStep(title: "查看课表", body: "确认当前周和当天课程，按需刷新数据或调整显示设置。"),
                 ManualStep(title: "记录日迹", body: "在“日迹”中写随记、维护个人日程或调整推送。"),
-                ManualStep(title: "查看校园数据", body: "成绩、考试、培养方案、空闲教室、校历、评分、学习资料和体育记录位于“校园”。"),
+                ManualStep(title: "查看校园数据", body: "成绩、考试、培养方案、自习安排、学习空间、校历、评分、学习资料和体育记录位于“校园”。"),
                 ManualStep(title: "管理账号与数据", body: "登录状态、同步缓存、共享课表、反馈和本手册位于“我的”。")
             ]
         ),
@@ -1454,14 +1455,17 @@ private struct LeafyGuideAndDataSecurityView: View {
             detail: "随记、日程与推送",
             intro: "日迹顶部提供随记、日程和推送，内容按当前校园身份保存在本机。",
             rows: [
-                ManualInfo(title: "随记", body: "随记支持文字、Markdown 文章、图片、最多 3 个常用文档附件、录音、Tag、回顾和统计。卡片可置顶、编辑、转为个人日程或移到回收站。"),
+                ManualInfo(title: "随记", body: "随记支持文字、图片、最多 3 个常用文档附件、录音、Tag、回顾和统计。已有 Markdown 文章仍可查看和编辑。卡片可置顶、编辑、转为个人日程或移到回收站。"),
+                ManualInfo(title: "输入器", body: "点按输入区后会展开编辑；内容达到 4 个视觉行时，可使用右上角按钮放大或缩小编辑区。"),
                 ManualInfo(title: "Tag 筛选", body: "点击卡片上的 Tag 后，列表顶部会显示当前 Tag。点“全部随记”即可清除 Tag 筛选并回到完整列表。"),
+                ManualInfo(title: "记录日迹", body: "在日迹侧栏“记录”分组中打开“记录日迹”。页面按自然年查看每月随记数和记录天数，也会显示近 30 天热力、连续记录、星期与时段习惯、常用标签和里程碑。点按近 30 天的日期可查看当天随记。"),
+                ManualInfo(title: "统计分享", body: "点右上角分享按钮可在本机生成统计图片，再使用系统分享。图片只含聚合统计，不含随记正文或标签名；统计和图片都不会上传。"),
                 ManualInfo(title: "个人日程", body: "日程页浏览用户创建的计划和倒计时。当前学年内的日期会投射到课表；学年外日期保留在个人日程列表。学校课程、考试和校历不会写入随记或个人日程。"),
                 ManualInfo(title: "推送", body: "推送页管理考试提醒和重要日期报告。开关保存后立即生效，系统通知仍受设备通知权限控制。"),
                 ManualInfo(title: "本地文件", body: "随记图片、附件和录音保存在当前校园身份的 App 目录。删除随记或清除本地数据时，对应文件会一起删除。")
             ],
             steps: [
-                ManualStep(title: "创建随记", body: "在随记页底部输入文字，或使用加号添加图片、附件、录音和文章。"),
+                ManualStep(title: "创建随记", body: "在随记页底部输入文字，或使用加号添加图片、附件和录音。加号不再提供新建文章入口。"),
                 ManualStep(title: "查看某个 Tag", body: "点卡片上的 Tag 查看筛选结果；点“全部随记”返回完整列表。"),
                 ManualStep(title: "维护个人日程", body: "切换到“日程”创建或编辑计划，日期在当前学年内时可在课表中查看。")
             ]

@@ -10,7 +10,7 @@ Core stack:
 - Swift Package Manager
 
 Timetable direction:
-- The root navigation order is `课表 / 社区 / 日迹 / 校园 / 我的`. The 日迹 tab exposes `随记 / 日程 / 推送` directly at the top; its 日程 section uses the personal schedule list rather than a separate natural-year week view. School exams, courses, and calendar data never enter the memo feed or personal schedule list.
+- The root navigation order is `课表 / 社区 / 日迹 / 校园 / 我的`. The 日迹 tab exposes `随记 / 日程 / 推送` directly at the top; its 日程 section uses the personal schedule list rather than a separate natural-year week view. The memo inputer supports focus expansion and zoomed editing when the text reaches four visual lines. The plus menu does not create new articles; existing articles can still be viewed and edited. School exams, courses, and calendar data never enter the memo feed or personal schedule list.
 - Schedule memos, Markdown writing source, memo images, up to three common-document attachments, user-created audio memos, tags, review, and statistics are campus-identity-scoped local data. Attachment source URLs are copied through their security-scoped access into the active identity directory; deleting a memo or resetting local data deletes its attachment or audio rows and files. These records and files are never uploaded, shared, exported, or published to widgets. Share cards may contain rendered text, local photos, and attachment names only. Voice transcription remains on-device and never persists its raw input; only the explicit audio-memo flow may save a local recording.
 - The BJFU timetable is browsed one academic year at a time, from the fall-semester start through the day before the next academic year begins. The final week of summer vacation stops at that academic-year boundary; the next academic year is entered through the academic-year/date selector. Calendar weeks are identified by absolute dates, while each fetched school timetable remains a term-scoped 20-week data set. Previously fetched terms that intersect the current academic year remain cached; course occurrences still come only from the school response and unavailable future terms remain empty.
 - Semester end dates and winter/summer break ranges come from semantic runtime calendar events, never from the 20-week timetable container.
@@ -21,7 +21,10 @@ Timetable direction:
 - Timetable backgrounds support static photos and solid colors with one native SwiftUI root background layer. Disabling the background must preserve the selected photo and visual settings.
 - Personalized timetable backgrounds remain local and never appear in timetable share images or widgets.
 - The native system `TabView` is the root navigation surface. Do not layer page transparency over it to imitate a fade-in transition.
-- 日迹 cards use a white system surface. Tags use white text in a theme-colored capsule; tag filtering shows the active tag and offers “全部随记”. Rating detail stars are centered.
+- 日迹 cards use a white system surface. Tags use white text in a theme-colored capsule; tag filtering shows the active tag and offers “全部随记”. The 日迹 inputer supports focus expansion and zoomed editing when the text reaches four visual lines; the plus menu no longer offers new-article creation, while existing articles remain viewable and editable. The “记录” sidebar group places “记录日迹” above “每日回顾”; it shows natural-year monthly memo counts and recording days, a recent-30-day heatmap, streaks, weekday/time habits, common tags, and milestones. Dates in the heatmap open that day’s memos. Statistics images are rendered locally, contain aggregate numbers only without memo text or tag names, use the system share sheet, and are never uploaded. Rating detail stars are centered.
+
+Campus information architecture:
+- The first-level domains include `自习安排` and `学习空间`. `空闲教室` remains an internal tool under `自习安排`; library seat reservations and the campus heatmap also belong there. Focus records belong to `学习空间`.
 
 Campus heatmap direction:
 - Do not bundle semester-wide classroom occupancy data. The user explicitly logs in and updates the selected date and periods on demand.

@@ -15,7 +15,7 @@ extension ScheduleDestination {
         case .dailyReview: return "每日回顾"
         case .tags: return "标签"
         case .export: return "导出随记"
-        case .statistics: return "记录统计"
+        case .statistics: return "记录日迹"
         case .scheduleReports: return "日程推送"
         case .trash: return "回收站"
         case .timetableProcessing: return "课表处理"
@@ -306,14 +306,13 @@ private struct ScheduleSidebar: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 }
-            } else {
-                row(.statistics)
             }
 
             Section("记录") {
                 if presentation != .modal {
                     row(.memos)
                 }
+                row(.statistics)
                 row(.dailyReview)
                 row(.tags)
                 row(.export)
@@ -1270,20 +1269,15 @@ private struct ScheduleMemoDetailView: View {
         .navigationTitle("随记详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("编辑", systemImage: "pencil", action: onEdit)
-                    Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus", action: onConvert)
-                    if memo.kind != .audio {
-                        Button("生成图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
-                    }
-                    Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin", action: onPin)
-                    Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .frame(width: 44, height: 44)
+            if #available(iOS 26.0, *) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    detailActionsMenu
                 }
-                .accessibilityLabel("随记详情操作")
+                .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    detailActionsMenu
+                }
             }
         }
         .leafySheet(item: $previewFile) { file in
@@ -1293,6 +1287,26 @@ private struct ScheduleMemoDetailView: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         }
+    }
+
+    private var detailActionsMenu: some View {
+        Menu {
+            Button("编辑", systemImage: "pencil", action: onEdit)
+            Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus", action: onConvert)
+            if memo.kind != .audio {
+                Button("生成图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
+            }
+            Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin", action: onPin)
+            Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+                .leafyGlassSurface(in: Circle(), isInteractive: true)
+        }
+        .buttonStyle(.plain)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("随记详情操作")
     }
 }
 
@@ -1329,16 +1343,19 @@ private struct ScheduleMemoComposerOverlayModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .bottom) {
-                ScheduleMemoComposer()
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: ScheduleMemoComposerHeightPreferenceKey.self,
-                                value: proxy.size.height
-                            )
+            .overlay {
+                GeometryReader { viewport in
+                    ScheduleMemoComposer(availableHeight: viewport.size.height)
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: ScheduleMemoComposerHeightPreferenceKey.self,
+                                    value: proxy.size.height
+                                )
+                            }
                         }
-                    }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
             }
             .onPreferenceChange(ScheduleMemoComposerHeightPreferenceKey.self) { newHeight in
                 guard abs(height - newHeight) > 0.5 else { return }
@@ -1361,12 +1378,122 @@ private enum ScheduleMemoComposerError: LocalizedError {
     }
 }
 
-private enum ScheduleMemoComposerAddDestination {
+private enum ScheduleMemoComposerAddDestination: Equatable {
     case camera
     case photoLibrary
     case audioRecording
     case fileImporter
-    case writer
+}
+
+private nonisolated enum ScheduleMemoComposerPresentation: Equatable {
+    case compact
+    case expanded
+    case fullscreen
+}
+
+private struct ScheduleMemoComposerTextHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ScheduleMemoComposerControlLayout: Layout {
+    let presentation: ScheduleMemoComposerPresentation
+    let expandedEditorHeight: CGFloat
+
+    private let compactSpacing: CGFloat = 4
+    private let toolbarSpacing: CGFloat = 8
+    private let controlSize: CGFloat = 44
+    private let trailingControlSpacing: CGFloat = 2
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let fallback = CGSize(width: 320, height: desiredHeight)
+        let proposedSize = proposal.replacingUnspecifiedDimensions(by: fallback)
+        return CGSize(width: proposedSize.width, height: presentation == .fullscreen ? proposedSize.height : desiredHeight)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        guard subviews.count == 4 else { return }
+
+        if presentation == .compact {
+            placeCompactSubviews(in: bounds, subviews: subviews)
+        } else {
+            placeExpandedSubviews(in: bounds, subviews: subviews)
+        }
+    }
+
+    private var desiredHeight: CGFloat {
+        presentation == .compact ? controlSize : expandedEditorHeight + toolbarSpacing + controlSize
+    }
+
+    private func placeCompactSubviews(in bounds: CGRect, subviews: Subviews) {
+        let addButtonX = bounds.minX
+        let editorX = addButtonX + controlSize + compactSpacing
+        let sendButtonX = bounds.maxX - controlSize
+        let microphoneX = sendButtonX - trailingControlSpacing - controlSize
+        let editorWidth = max(microphoneX - compactSpacing - editorX, 1)
+        let y = bounds.minY + max((bounds.height - controlSize) / 2, 0)
+
+        subviews[0].place(
+            at: CGPoint(x: addButtonX, y: y),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: controlSize, height: controlSize)
+        )
+        subviews[1].place(
+            at: CGPoint(x: editorX, y: y),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: editorWidth, height: controlSize)
+        )
+        subviews[2].place(
+            at: CGPoint(x: microphoneX, y: y),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: controlSize, height: controlSize)
+        )
+        subviews[3].place(
+            at: CGPoint(x: sendButtonX, y: y),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: controlSize, height: controlSize)
+        )
+    }
+
+    private func placeExpandedSubviews(in bounds: CGRect, subviews: Subviews) {
+        let toolbarY = bounds.maxY - controlSize
+        let editorHeight = max(toolbarY - toolbarSpacing - bounds.minY, 1)
+        let sendButtonX = bounds.maxX - controlSize
+        let microphoneX = sendButtonX - trailingControlSpacing - controlSize
+
+        subviews[0].place(
+            at: CGPoint(x: bounds.minX, y: toolbarY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: controlSize, height: controlSize)
+        )
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: editorHeight)
+        )
+        subviews[2].place(
+            at: CGPoint(x: microphoneX, y: toolbarY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: controlSize, height: controlSize)
+        )
+        subviews[3].place(
+            at: CGPoint(x: sendButtonX, y: toolbarY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: controlSize, height: controlSize)
+        )
+    }
 }
 
 private struct ScheduleMemoInlinePhotoPickerSheet: View {
@@ -1492,6 +1619,8 @@ private struct ScheduleMemoComposer: View {
     @State private var fullPhotoItems: [PhotosPickerItem] = []
     @State private var draftImages: [ScheduleMemoDraftImage] = []
     @State private var draftAttachments: [ScheduleMemoDraftAttachment] = []
+    @State private var presentation: ScheduleMemoComposerPresentation = .compact
+    @State private var measuredTextHeight: CGFloat = 0
     @State private var showsAddMenu = false
     @State private var pendingAddDestination: ScheduleMemoComposerAddDestination?
     @State private var showsCamera = false
@@ -1501,11 +1630,19 @@ private struct ScheduleMemoComposer: View {
     @State private var isPreparingFullPhotoLibrarySelection = false
     @State private var showsAudioRecorder = false
     @State private var showsFileImporter = false
-    @State private var showsWriter = false
     @State private var focusesTextFieldAfterCamera = false
     @State private var errorMessage: String?
     @State private var errorTitle = "无法保存随记"
-    @FocusState private var isTextFieldFocused: Bool
+    @FocusState private var isEditorFocused: Bool
+
+    let availableHeight: CGFloat
+
+    init(availableHeight: CGFloat = UIScreen.main.bounds.height) {
+        self.availableHeight = availableHeight
+    }
+
+    private static let editorFontSize: CGFloat = 20
+    private static let editorLineHeight = UIFont.systemFont(ofSize: editorFontSize).lineHeight
 
     private var canSave: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1516,60 +1653,14 @@ private struct ScheduleMemoComposer: View {
     var body: some View {
         VStack(spacing: 8) {
             draftPreview
-
-            HStack(alignment: .center, spacing: 4) {
-                Button {
-                    showsAddMenu.toggle()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .regular))
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("添加内容")
-                .popover(isPresented: $showsAddMenu, attachmentAnchor: .point(.top), arrowEdge: .bottom) {
-                    addMenu
-                        .onDisappear(perform: presentPendingAddDestination)
-                        .presentationCompactAdaptation(.popover)
-                }
-
-                TextField("记点什么...", text: $text, axis: .vertical)
-                    .font(.system(size: 20, weight: .regular))
-                    .lineLimit(1...3)
-                    .padding(.vertical, 6)
-                    .focused($isTextFieldFocused)
-
-                HStack(spacing: 2) {
-                    Button {
-                        Task {
-                            if !speech.isListening { speechBase = text.isEmpty ? "" : text + " " }
-                            await speech.toggle()
-                        }
-                    } label: {
-                        Image(systemName: speech.isListening ? "stop.circle.fill" : "mic")
-                            .font(.system(size: 23, weight: .regular))
-                            .foregroundStyle(speech.isListening ? AppTheme.danger : AppTheme.primaryText)
-                            .frame(width: 44, height: 44)
-                    }
-                    .accessibilityLabel(speech.isListening ? "停止语音转写" : "开始语音转写")
-
-                    Button {
-                        Task {
-                            await speech.stop()
-                            save()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28, weight: .regular))
-                            .foregroundStyle(canSave ? AppTheme.accent : AppTheme.tertiaryText)
-                            .frame(width: 44, height: 44)
-                    }
-                    .disabled(!canSave)
-                    .accessibilityLabel("保存随记")
-                }
-            }
+            composerControls
+                .frame(height: presentation == .fullscreen ? nil : composerControlsHeight)
+                .frame(maxHeight: presentation == .fullscreen ? .infinity : nil)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, draftImages.isEmpty && draftAttachments.isEmpty ? 2 : 10)
+        .padding(.horizontal, 8)
+        .padding(.top, hasDraftContent ? 10 : 4)
+        .padding(.bottom, 4)
+        .frame(height: presentation == .fullscreen ? fullscreenHeight : nil, alignment: .bottom)
         .leafyGlassSurface(
             in: RoundedRectangle(cornerRadius: 28, style: .continuous),
             fallbackFill: AppTheme.cardBackground,
@@ -1611,7 +1702,7 @@ private struct ScheduleMemoComposer: View {
         .sheet(isPresented: $showsCamera, onDismiss: {
             if focusesTextFieldAfterCamera {
                 focusesTextFieldAfterCamera = false
-                isTextFieldFocused = true
+                isEditorFocused = true
             }
         }) {
             ScheduleMemoCameraView { image in
@@ -1636,11 +1727,6 @@ private struct ScheduleMemoComposer: View {
             allowsMultipleSelection: true,
             onCompletion: importAttachments
         )
-        .leafySheet(isPresented: $showsWriter) {
-            ScheduleMemoWritingEditor { title, source in
-                saveArticle(title: title, source: source)
-            }
-        }
         .onChange(of: speech.transcript) { _, transcript in
             text = speechBase + transcript
         }
@@ -1649,6 +1735,14 @@ private struct ScheduleMemoComposer: View {
                 errorTitle = "无法使用语音转写"
                 errorMessage = message
             }
+        }
+        .onChange(of: isEditorFocused) { _, isFocused in
+            updatePresentationForFocus(isFocused)
+        }
+        .onPreferenceChange(ScheduleMemoComposerTextHeightPreferenceKey.self) { newHeight in
+            guard abs(measuredTextHeight - newHeight) > 0.5 else { return }
+            measuredTextHeight = newHeight
+            updatePresentationForMeasuredTextHeight(newHeight)
         }
         .alert(errorTitle, isPresented: Binding(
             get: { errorMessage != nil },
@@ -1661,6 +1755,184 @@ private struct ScheduleMemoComposer: View {
         .onDisappear {
             Task { await speech.stop() }
         }
+    }
+
+    private var hasDraftContent: Bool {
+        !draftImages.isEmpty || !draftAttachments.isEmpty
+    }
+
+    private var explicitTextHeight: CGFloat {
+        let lineCount = max(text.components(separatedBy: "\n").count, 1)
+        return CGFloat(lineCount) * Self.editorLineHeight
+    }
+
+    private var effectiveTextHeight: CGFloat {
+        max(measuredTextHeight, explicitTextHeight)
+    }
+
+    private var isLongText: Bool {
+        effectiveTextHeight >= Self.editorLineHeight * 4 - 0.5
+    }
+
+    private var showsExpansionControl: Bool {
+        presentation == .fullscreen || isLongText
+    }
+
+    private var fullscreenHeight: CGFloat {
+        min(max(availableHeight * 0.8, 240), availableHeight)
+    }
+
+    private var compactEditorHeight: CGFloat {
+        44
+    }
+
+    private var expandedEditorHeight: CGFloat {
+        min(max(effectiveTextHeight + 18, compactEditorHeight), Self.editorLineHeight * 4 + 20)
+    }
+
+    private var composerControlsHeight: CGFloat {
+        switch presentation {
+        case .compact:
+            compactEditorHeight
+        case .expanded, .fullscreen:
+            expandedEditorHeight + 8 + 44
+        }
+    }
+
+    private var composerControls: some View {
+        ScheduleMemoComposerControlLayout(
+            presentation: presentation,
+            expandedEditorHeight: expandedEditorHeight
+        ) {
+            addButton
+            editor
+            microphoneButton
+            sendButton
+        }
+    }
+
+    private var measurementText: String {
+        if text.isEmpty {
+            return " "
+        }
+        return text.hasSuffix("\n") ? text + " " : text
+    }
+
+    private var editorLeadingOffset: CGFloat {
+        presentation == .compact ? 0 : 9
+    }
+
+    private var editor: some View {
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text("记点什么...")
+                    .font(.system(size: Self.editorFontSize, weight: .regular))
+                    .foregroundStyle(AppTheme.tertiaryText)
+                    .padding(.leading, 5 + editorLeadingOffset)
+                    .padding(.trailing, 5)
+                    .padding(.vertical, 8)
+                    .allowsHitTesting(false)
+            }
+
+            TextEditor(text: $text)
+                .font(.system(size: Self.editorFontSize, weight: .regular))
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
+                .padding(.leading, editorLeadingOffset)
+                .padding(.trailing, showsExpansionControl ? 42 : 0)
+                .focused($isEditorFocused)
+
+            if showsExpansionControl {
+                HStack {
+                    Spacer()
+                    Button(action: toggleFullscreen) {
+                        Image(systemName: presentation == .fullscreen
+                              ? "arrow.down.right.and.arrow.up.left"
+                              : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(presentation == .fullscreen ? "缩小编辑器" : "放大编辑器")
+                }
+                .transition(.scale(scale: 0.84, anchor: .topTrailing).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: showsExpansionControl)
+        .background {
+            GeometryReader { proxy in
+                let textWidth = max(
+                    proxy.size.width - editorLeadingOffset - (showsExpansionControl ? 54 : 12),
+                    1
+                )
+                Color.clear.preference(
+                    key: ScheduleMemoComposerTextHeightPreferenceKey.self,
+                    value: measuredEditorTextHeight(for: textWidth)
+                )
+            }
+        }
+    }
+
+    private func measuredEditorTextHeight(for width: CGFloat) -> CGFloat {
+        let font = UIFont.systemFont(ofSize: Self.editorFontSize, weight: .regular)
+        let bounds = (measurementText as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font],
+            context: nil
+        )
+        let explicitLineCount = max(text.components(separatedBy: "\n").count, 1)
+        return max(ceil(bounds.height), CGFloat(explicitLineCount) * Self.editorLineHeight)
+    }
+
+    private var addButton: some View {
+        Button {
+            showsAddMenu.toggle()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .regular))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .accessibilityLabel("添加内容")
+        .popover(isPresented: $showsAddMenu, attachmentAnchor: .point(.top), arrowEdge: .bottom) {
+            addMenu
+                .onDisappear(perform: presentPendingAddDestination)
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private var microphoneButton: some View {
+        Button {
+            Task {
+                if !speech.isListening { speechBase = text.isEmpty ? "" : text + " " }
+                await speech.toggle()
+            }
+        } label: {
+            Image(systemName: speech.isListening ? "stop.circle.fill" : "mic")
+                .font(.system(size: 23, weight: .regular))
+                .foregroundStyle(speech.isListening ? AppTheme.danger : AppTheme.primaryText)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel(speech.isListening ? "停止语音转写" : "开始语音转写")
+    }
+
+    private var sendButton: some View {
+        Button {
+            Task {
+                await speech.stop()
+                save()
+            }
+        } label: {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 28, weight: .regular))
+                .foregroundStyle(canSave ? AppTheme.accent : AppTheme.tertiaryText)
+                .frame(width: 44, height: 44)
+        }
+        .disabled(!canSave)
+        .accessibilityLabel("保存随记")
     }
 
     @ViewBuilder
@@ -1733,10 +2005,6 @@ private struct ScheduleMemoComposer: View {
             addMenuButton("附件", systemImage: "paperclip") {
                 selectAddDestination(.fileImporter)
             }
-
-            addMenuButton("文章", systemImage: "square.and.pencil") {
-                selectAddDestination(.writer)
-            }
         }
         .padding(.vertical, 8)
         .frame(width: 260)
@@ -1764,6 +2032,54 @@ private struct ScheduleMemoComposer: View {
         .contentShape(Rectangle())
     }
 
+    private func toggleFullscreen() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            presentation = presentation == .fullscreen ? .expanded : .fullscreen
+        }
+        Task { @MainActor in
+            await Task.yield()
+            isEditorFocused = true
+        }
+    }
+
+    private func updatePresentationForFocus(_ isFocused: Bool) {
+        if isFocused {
+            guard presentation == .compact else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                presentation = .expanded
+            }
+            return
+        }
+
+        guard presentation == .expanded,
+              !isLongText,
+              !hasDraftContent,
+              !speech.isListening,
+              !showsAddMenu,
+              pendingAddDestination == nil,
+              !showsCamera,
+              !showsInlinePhotoLibrary,
+              !showsFullPhotoLibrary,
+              !showsAudioRecorder,
+              !showsFileImporter else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            presentation = .compact
+        }
+    }
+
+    private func updatePresentationForMeasuredTextHeight(_ height: CGFloat) {
+        let exceedsFourLines = height >= Self.editorLineHeight * 4 - 0.5
+        if exceedsFourLines, presentation == .compact {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                presentation = .expanded
+            }
+        } else if !exceedsFourLines, !isEditorFocused, presentation == .expanded, !hasDraftContent {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                presentation = .compact
+            }
+        }
+    }
+
     private func selectAddDestination(_ destination: ScheduleMemoComposerAddDestination) {
         pendingAddDestination = destination
         showsAddMenu = false
@@ -1789,8 +2105,6 @@ private struct ScheduleMemoComposer: View {
                 showsAudioRecorder = true
             case .fileImporter:
                 showsFileImporter = true
-            case .writer:
-                showsWriter = true
             }
         }
     }
@@ -1877,11 +2191,6 @@ private struct ScheduleMemoComposer: View {
     }
 
     @MainActor
-    private func saveArticle(title: String, source: String) {
-        persistMemo(kind: .article, title: title, body: source)
-    }
-
-    @MainActor
     private func persistMemo(kind: ScheduleMemoKind, title: String?, body: String) {
         var filenames: [String] = []
         var storedAttachments: [ScheduleMemoAttachmentStore.StoredFile] = []
@@ -1918,7 +2227,8 @@ private struct ScheduleMemoComposer: View {
             fullPhotoItems = []
             draftImages = []
             draftAttachments = []
-            isTextFieldFocused = false
+            presentation = .compact
+            isEditorFocused = false
         } catch {
             try? ScheduleMemoImageStore.deleteFiles(named: filenames)
             try? ScheduleMemoAttachmentStore.deleteFiles(named: storedAttachments.map(\.localFilename))
@@ -2188,30 +2498,6 @@ private struct ScheduleMemoExportView: View {
     }
 }
 
-private struct ScheduleMemoStatisticsView: View {
-    @Query private var memos: [ScheduleMemo]
-    @State private var selectedDate: Date?
-
-    private var statistics: ScheduleMemoStatistics { .make(memos: memos) }
-
-    var body: some View {
-        ScrollView {
-            ScheduleMemoStatisticsSummary(
-                statistics: statistics,
-                onSelectDate: { selectedDate = $0 }
-            )
-            .leafyAdaptiveContentWidth(maxWidth: 760)
-            .padding(.vertical, AppSpacing.card)
-        }
-        .background(LeafyPageBackground())
-        .navigationTitle("记录统计")
-        .leafySheet(isPresented: Binding(get: { selectedDate != nil }, set: { if !$0 { selectedDate = nil } })) {
-            NavigationStack {
-                ScheduleMemoDayView(date: selectedDate ?? Date())
-            }
-        }
-    }
-}
 
 private struct ScheduleMemoStatisticsSummary: View {
     let statistics: ScheduleMemoStatistics
@@ -2272,7 +2558,7 @@ private struct ScheduleMemoStatisticsSummary: View {
     }
 }
 
-private struct ScheduleMemoDayView: View {
+struct ScheduleMemoDayView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var memos: [ScheduleMemo]
     let date: Date
