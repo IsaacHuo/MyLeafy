@@ -78,6 +78,112 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(statistics.activityDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: now) })?.count, 2)
     }
 
+    func testStatisticsSnapshotExcludesTrashAndCountsNaturalYearMonthsAndLeapDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = try date(2024, 3, 1, 12, calendar: calendar)
+        let memos = [
+            ScheduleMemo(body: "一月", createdAt: try date(2024, 1, 31, 23, calendar: calendar)),
+            ScheduleMemo(body: "闰日 #学习", createdAt: try date(2024, 2, 29, 9, calendar: calendar)),
+            ScheduleMemo(body: "闰日 #学习", createdAt: try date(2024, 2, 29, 10, calendar: calendar)),
+            ScheduleMemo(body: "回收站", createdAt: try date(2024, 2, 29, 11, calendar: calendar), trashedAt: now)
+        ]
+
+        let statistics = ScheduleMemoStatistics.snapshot(memos: memos, selectedYear: 2024, now: now, calendar: calendar)
+
+        XCTAssertEqual(statistics.memoCount, 3)
+        XCTAssertEqual(statistics.recordingDayCount, 2)
+        XCTAssertEqual(statistics.selectedYearMonths.map(\.memoCount), [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        XCTAssertEqual(statistics.selectedYearMonths.map(\.recordingDayCount), [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        XCTAssertEqual(statistics.firstRecordingDate, try date(2024, 1, 31, calendar: calendar))
+        XCTAssertEqual(statistics.peakDate, try date(2024, 2, 29, calendar: calendar))
+        XCTAssertEqual(statistics.peakMemoCount, 2)
+        XCTAssertEqual(statistics.recordingMonthCount, 2)
+    }
+
+    func testStatisticsSnapshotCountsStreaksAndThirtyDayBoundary() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = try date(2026, 8, 30, 12, calendar: calendar)
+        let dates = try [
+            date(2026, 8, 30, 1, calendar: calendar), date(2026, 8, 29, 22, calendar: calendar),
+            date(2026, 8, 28, 8, calendar: calendar), date(2026, 8, 26, 12, calendar: calendar),
+            date(2026, 8, 25, 12, calendar: calendar), date(2026, 8, 24, 12, calendar: calendar),
+            date(2026, 7, 31, 12, calendar: calendar), date(2026, 7, 30, 12, calendar: calendar)
+        ]
+        let memos = dates.enumerated().map { index, createdAt in
+            ScheduleMemo(body: "记录 \(index)", createdAt: createdAt)
+        }
+
+        let statistics = ScheduleMemoStatistics.snapshot(memos: memos, selectedYear: 2026, now: now, calendar: calendar)
+
+        XCTAssertEqual(statistics.currentStreak, 3) // 今天、昨天、前天
+        XCTAssertEqual(statistics.longestStreak, 3)
+        XCTAssertEqual(statistics.recent30Days.count, 30)
+        XCTAssertEqual(statistics.recent30Days.first?.date, try date(2026, 8, 1, calendar: calendar))
+        XCTAssertEqual(statistics.recent30Days.last?.date, try date(2026, 8, 30, calendar: calendar))
+        XCTAssertEqual(statistics.recent30DayMemoCount, 6)
+        XCTAssertEqual(statistics.previous30DayMemoCount, 2)
+        XCTAssertEqual(statistics.recent30DayRecordingDayCount, 6)
+        XCTAssertEqual(statistics.previous30DayRecordingDayCount, 2)
+    }
+
+    func testStatisticsSnapshotCountsWeekdaysPeriodsAndTopTagsDeterministically() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = try date(2026, 8, 10, 12, calendar: calendar) // Monday
+        let memos = [
+            ScheduleMemo(body: "#Beta #alpha", createdAt: try date(2026, 8, 10, 5, calendar: calendar)),
+            ScheduleMemo(body: "#alpha", createdAt: try date(2026, 8, 11, 9, calendar: calendar)),
+            ScheduleMemo(body: "#BETA", createdAt: try date(2026, 8, 12, 12, calendar: calendar)),
+            ScheduleMemo(body: "#alpha", createdAt: try date(2026, 8, 13, 18, calendar: calendar)),
+            ScheduleMemo(body: "#gamma", createdAt: try date(2026, 8, 14, 0, calendar: calendar)),
+            ScheduleMemo(body: "#alpha", createdAt: try date(2026, 8, 15, 23, calendar: calendar)),
+            ScheduleMemo(body: "#delta", createdAt: try date(2026, 8, 16, 4, calendar: calendar))
+        ]
+
+        let statistics = ScheduleMemoStatistics.snapshot(memos: memos, selectedYear: 2026, now: now, calendar: calendar)
+
+        XCTAssertEqual(statistics.weekdayDistribution, [1, 1, 1, 1, 1, 1, 1])
+        XCTAssertEqual(statistics.timePeriodDistribution.map(\.count), [1, 1, 1, 2, 2])
+        XCTAssertEqual(statistics.topTags, [
+            ScheduleMemoFrequency(name: "alpha", count: 4),
+            ScheduleMemoFrequency(name: "Beta", count: 2),
+            ScheduleMemoFrequency(name: "delta", count: 1),
+            ScheduleMemoFrequency(name: "gamma", count: 1)
+        ])
+    }
+
+    func testStatisticsSnapshotHandlesEmptyDataAndKeepsYesterdayStreakCurrent() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = try date(2026, 8, 10, 12, calendar: calendar)
+
+        let empty = ScheduleMemoStatistics.snapshot(
+            memos: [],
+            selectedYear: 2026,
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertEqual(empty.memoCount, 0)
+        XCTAssertEqual(empty.currentStreak, 0)
+        XCTAssertEqual(empty.longestStreak, 0)
+        XCTAssertEqual(empty.recent30Days.count, 30)
+        XCTAssertEqual(empty.selectedYearMonths.count, 12)
+
+        let yesterdayStreak = ScheduleMemoStatistics.snapshot(
+            memos: [
+                ScheduleMemo(body: "昨天", createdAt: try date(2026, 8, 9, 8, calendar: calendar)),
+                ScheduleMemo(body: "前天", createdAt: try date(2026, 8, 8, 8, calendar: calendar))
+            ],
+            selectedYear: 2026,
+            now: now,
+            calendar: calendar
+        )
+        XCTAssertEqual(yesterdayStreak.currentStreak, 2)
+        XCTAssertEqual(yesterdayStreak.longestStreak, 2)
+    }
+
     func testPhotoSelectionAllowsSixAndRemovingOneKeepsTheOthers() {
         XCTAssertEqual(ScheduleMemoImageStore.maximumImageCount, 6)
         XCTAssertEqual(
@@ -244,7 +350,7 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<ScheduleMemo>()), 0)
     }
 
-    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0) throws -> Date {
-        try XCTUnwrap(Calendar.current.date(from: DateComponents(year: year, month: month, day: day, hour: hour)))
+    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, calendar: Calendar = .current) throws -> Date {
+        try XCTUnwrap(calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)))
     }
 }

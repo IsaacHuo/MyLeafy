@@ -55,7 +55,7 @@ struct ClassroomsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
-            LeafySectionTitle("空闲教室", subtitle: "按楼宇、日期和节次查询可用教室")
+            LeafySectionTitle("自习安排", subtitle: "空闲教室查询、图书馆座位预约和校园热力图集中在这里。")
 
             ToolEntryCard(title: "空闲教室", subtitle: "按楼宇、日期和节次快速筛教室", icon: "building.2.crop.circle") {
                 openRoute(.emptyClassroom)
@@ -69,9 +69,6 @@ struct ClassroomsSectionView: View {
                 openRoute(.campusHeatmap)
             }
 
-            ToolEntryCard(title: "专注记录", subtitle: "记录每段学习时间、地点和备注", icon: "clock.badge.checkmark") {
-                openRoute(.studyTimeRecords)
-            }
         }
         .sheet(item: $browserItem) { item in
             LeafySafariView(url: item.url)

@@ -138,7 +138,7 @@ struct CommunityProfileEditorView: View {
     var showsCancelButton = false
 
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppSpacing.card) {
 
                 if let errorMessage {

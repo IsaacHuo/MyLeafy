@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated enum AcademicPrimaryTab: String, CaseIterable, Identifiable, Equatable, Sendable {
     case cultivation = "学校教学"
-    case classrooms = "空闲教室"
+    case classrooms = "自习安排"
     case learning = "学习空间"
     case sports = "体育相关"
     case career = "职业规划"
@@ -177,10 +177,10 @@ nonisolated enum AcademicDetailRoute: Hashable, Sendable {
             return .cultivation
         case .emptyClassroom,
              .classroomLookup,
-             .campusHeatmap,
-             .studyTimeRecords:
+             .campusHeatmap:
             return .classrooms
         case .honorRecords,
+             .studyTimeRecords,
              .learningWorkspace:
             return .learning
         case .sunshineRun,

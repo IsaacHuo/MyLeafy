@@ -170,6 +170,9 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertEqual(AcademicDetailRoute.trainingProgram.tab, .cultivation)
         XCTAssertEqual(AcademicDetailRoute.examSchedule.tab, .cultivation)
         XCTAssertEqual(AcademicDetailRoute.schoolCalendar.tab, .cultivation)
+        XCTAssertEqual(AcademicDetailRoute.emptyClassroom.tab, .classrooms)
+        XCTAssertEqual(AcademicDetailRoute.campusHeatmap.tab, .classrooms)
+        XCTAssertEqual(AcademicDetailRoute.studyTimeRecords.tab, .learning)
         XCTAssertEqual(AcademicDetailRoute.medicalPolicy.tab, .medical)
         XCTAssertEqual(AcademicDetailRoute.medicalLedger.tab, .medical)
         XCTAssertEqual(
@@ -178,7 +181,7 @@ final class GenericCampusLifecycleTests: XCTestCase {
         )
         XCTAssertEqual(
             ScheduleDestination.allCases,
-            [.memos, .scheduleHub, .customSchedules, .dailyReview, .tags, .statistics, .scheduleReports, .trash, .timetableProcessing]
+            [.memos, .scheduleHub, .customSchedules, .dailyReview, .tags, .export, .statistics, .scheduleReports, .trash, .timetableProcessing]
         )
     }
 
