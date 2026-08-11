@@ -27,11 +27,7 @@ enum AppModelContainerFactory {
         if AppRuntimeEnvironment.isRunningUnitTests {
             modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         } else {
-            let legacyConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-            modelConfiguration = CampusStoreScope.configuration(
-                schema: schema,
-                legacyConfiguration: legacyConfiguration
-            )
+            modelConfiguration = CampusStoreScope.configuration(schema: schema)
         }
 
         do {

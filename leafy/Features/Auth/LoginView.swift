@@ -396,7 +396,6 @@ struct LoginView: View {
 
     @ViewBuilder
     private var demoModeButton: some View {
-        #if os(iOS)
         if #available(iOS 26.0, *) {
             Button {
                 enterDemoMode()
@@ -436,26 +435,6 @@ struct LoginView: View {
             .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
             .accessibilityIdentifier("login.demo-mode")
         }
-        #else
-        Button {
-            enterDemoMode()
-        } label: {
-            HStack(spacing: 10) {
-                if isEnteringDemo {
-                    ProgressView()
-                }
-
-                Text(L10n.text("Demo Mode", language: leafyLanguage))
-                    .frame(maxWidth: .infinity)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(AppTheme.accent)
-        .disabled(isEnteringDemo)
-        .accessibilityLabel(L10n.text("Demo Mode", language: leafyLanguage))
-        .accessibilityIdentifier("login.demo-mode")
-        #endif
     }
 
     @ViewBuilder
@@ -495,7 +474,6 @@ struct LoginView: View {
 
     @ViewBuilder
     private var loginButton: some View {
-        #if os(iOS)
         if #available(iOS 26.0, *) {
             Button {
                 Task { await performLogin() }
@@ -531,23 +509,6 @@ struct LoginView: View {
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.accent)
         }
-        #else
-        Button {
-            Task { await performLogin() }
-        } label: {
-            HStack(spacing: 10) {
-                if isLoggingIn {
-                    ProgressView()
-                }
-                Text(loginButtonTitle)
-                    .frame(maxWidth: .infinity)
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .disabled(isLoginDisabled)
-        .buttonStyle(.borderedProminent)
-        .tint(AppTheme.accent)
-        #endif
     }
 
     private var loginButtonTitle: String {
@@ -850,46 +811,30 @@ struct LoginView: View {
 private extension View {
     @ViewBuilder
     func leafyLoginNavigationChrome() -> some View {
-        #if os(iOS)
         toolbar(.hidden, for: .navigationBar)
-        #else
-        self
-        #endif
     }
 
     @ViewBuilder
     func leafyUsernameInput(isEmail: Bool) -> some View {
-        #if os(iOS)
         textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .textContentType(isEmail ? .emailAddress : .username)
             .keyboardType(isEmail ? .emailAddress : .default)
-        #else
-        self
-        #endif
     }
 
     @ViewBuilder
     func leafyPasswordInput(isNewPassword: Bool) -> some View {
-        #if os(iOS)
         textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .textContentType(isNewPassword ? .newPassword : .password)
-        #else
-        self
-        #endif
     }
 
     @ViewBuilder
     func leafyOneTimeCodeInput(isNumeric: Bool) -> some View {
-        #if os(iOS)
         textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .leafyOneTimeCodeContentType()
             .keyboardType(isNumeric ? .numberPad : .default)
-        #else
-        self
-        #endif
     }
 }
 

@@ -69,7 +69,7 @@ struct ContentView: View {
         if #available(iOS 26.0, *) {
             nativeTabShell
         } else {
-            legacyNativeTabShell
+            preIOS26NativeTabShell
         }
     }
 
@@ -141,7 +141,7 @@ struct ContentView: View {
         )
     }
 
-    private var legacyNativeTabShell: some View {
+    private var preIOS26NativeTabShell: some View {
         TabView(selection: $appNavigation.selectedRootTab) {
             TimetableView()
                 .tabItem {

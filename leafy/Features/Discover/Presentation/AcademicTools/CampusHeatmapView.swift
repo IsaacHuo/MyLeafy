@@ -4,7 +4,7 @@ import SwiftUI
 struct CampusHeatmapView: View {
     @Environment(\.leafyDependencies) private var dependencies
 
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var usesCustomFilter = false
     @State private var selectedDate = Date()
     @State private var startPeriod = min(max(TimetablePeriodSchedule.defaultStudyPeriod(), 1), 12)

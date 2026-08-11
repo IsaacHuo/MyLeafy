@@ -1,11 +1,7 @@
 import Foundation
 import ImageIO
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 import UniformTypeIdentifiers
 
 enum TimetableBackgroundDisplayMode: String, CaseIterable, Identifiable {
@@ -48,9 +44,6 @@ enum TimetableBackgroundKind: String, CaseIterable, Identifiable {
         }
     }
 
-    static func resolved(rawValue: String?) -> TimetableBackgroundKind {
-        TimetableBackgroundKind(rawValue: rawValue ?? "") ?? .photo
-    }
 }
 
 struct TimetableBackgroundPalette: Equatable {
@@ -90,10 +83,11 @@ struct TimetableBackgroundConfiguration: Equatable {
 
     static func load(defaults: UserDefaults = .standard) -> TimetableBackgroundConfiguration {
         let filename = defaults.string(forKey: TimetableBackgroundStore.filenameKey) ?? ""
-        let kind = TimetableBackgroundKind.resolved(
-            rawValue: defaults.string(forKey: TimetableBackgroundStore.kindKey)
-        )
-        let isEnabled = defaults.bool(forKey: TimetableBackgroundStore.isEnabledKey)
+        let storedKind = defaults.string(forKey: TimetableBackgroundStore.kindKey)
+            .flatMap(TimetableBackgroundKind.init(rawValue:))
+        let kind = storedKind ?? .photo
+        let isEnabled = storedKind != nil
+            && defaults.bool(forKey: TimetableBackgroundStore.isEnabledKey)
             && (kind == .solid || !filename.isEmpty)
 
         return TimetableBackgroundConfiguration(
@@ -241,11 +235,7 @@ enum TimetableBackgroundStore {
         guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, imageOptions) else {
             return nil
         }
-        #if canImport(UIKit)
         return UIImage(cgImage: cgImage)
-        #else
-        return UIImage(cgImage: cgImage, size: .zero)
-        #endif
     }
 
     static func removeBackground(filename: String) throws {

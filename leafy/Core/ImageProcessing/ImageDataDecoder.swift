@@ -1,16 +1,12 @@
 import Foundation
 import ImageIO
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 enum ImageDataDecoder {
     static func decodedImage(
         from data: Data,
         targetSize: CGSize? = nil,
-        scale: CGFloat = LeafyImageCodec.displayScale
+        scale: CGFloat = UIScreen.main.scale
     ) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
 
@@ -41,14 +37,7 @@ enum ImageDataDecoder {
     }
 
     private static func platformImage(from image: CGImage, scale: CGFloat) -> UIImage {
-        #if canImport(UIKit)
         UIImage(cgImage: image, scale: scale, orientation: .up)
-        #else
-        UIImage(
-            cgImage: image,
-            size: CGSize(width: CGFloat(image.width) / scale, height: CGFloat(image.height) / scale)
-        )
-        #endif
     }
 
     private static func maxPixelDimension(for source: CGImageSource) -> Int {

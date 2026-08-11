@@ -6,12 +6,7 @@ import SafariServices
 import StoreKit
 import SwiftData
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-import UniformTypeIdentifiers
-#endif
 
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
@@ -455,10 +450,10 @@ struct ProfileView: View {
     }
 
     private var timetableBackgroundDetail: String {
-        guard timetableBackgroundIsEnabled else {
+        guard timetableBackgroundIsEnabled,
+              let kind = TimetableBackgroundKind(rawValue: timetableBackgroundKindRaw) else {
             return L10n.text("已关闭", language: leafyLanguage)
         }
-        let kind = TimetableBackgroundKind.resolved(rawValue: timetableBackgroundKindRaw)
         switch kind {
         case .photo:
             guard !timetableBackgroundFilename.isEmpty else {
@@ -757,7 +752,6 @@ private struct AboutMyLeafyView: View {
     }
 }
 
-#if canImport(UIKit)
 private struct ProfileSafariView: UIViewControllerRepresentable {
     let url: URL
 
@@ -767,9 +761,6 @@ private struct ProfileSafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-#else
-private typealias ProfileSafariView = LeafyExternalBrowserView
-#endif
 
 private struct ProfileBrowserItem: Identifiable {
     let id = UUID()
@@ -1532,11 +1523,7 @@ private struct ContactUsSheetView: View {
 
         do {
             try await LeafyPhotoLibrarySaver.save(image)
-#if os(macOS)
-            saveResultMessage = L10n.text("已保存到所选文件。", language: leafyLanguage)
-#else
             saveResultMessage = L10n.text("已保存到系统相册。", language: leafyLanguage)
-#endif
         } catch {
             saveResultMessage = error.localizedDescription
         }
@@ -2024,7 +2011,7 @@ private struct CacheAndSyncView: View {
     @State private var cacheSummary = ProfileCacheSummary.empty
     @State private var showingAcademicCacheClearConfirmation = false
     @State private var showingClearConfirmation = false
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var operationAlert: LeafyOperationAlert?
 

@@ -61,15 +61,6 @@ enum SchoolNetworkError: LocalizedError {
 @MainActor
 final class SchoolNetworkManager: ObservableObject {
     static let shared = SchoolNetworkManager()
-    private static let scopedStorageKeys = [
-        "isLoggedIn",
-        "schoolSessionCookies",
-        "schoolPortal",
-        "lastLandingURL",
-        "authenticatedEduID",
-        "authenticatedDisplayName"
-    ]
-
     @Published var isLoggedIn: Bool {
         didSet {
             UserDefaults.standard.set(isLoggedIn, forKey: storageKey("isLoggedIn"))
@@ -146,19 +137,10 @@ final class SchoolNetworkManager: ObservableObject {
     }()
 
     init() {
-        CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-            keys: Self.scopedStorageKeys,
-            migrationID: "schoolSession"
-        )
         let currentIdentity = CampusIdentityStore.currentIdentity()
         let portal = SchoolPortal(rawValue: UserDefaults.standard.string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
         self.isLoggedIn = UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
-        self.persistedCookieValues = SchoolSessionCredentialStore.migrateLegacyCookiesIfNeeded(
-            defaults: .standard,
-            defaultsKey: CampusScopedDefaults.key("schoolSessionCookies"),
-            identity: currentIdentity,
-            portal: portal
-        )
+        self.persistedCookieValues = SchoolSessionCredentialStore.load(identity: currentIdentity, portal: portal)
         self.currentPortal = portal
         self.lastLandingURLString = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("lastLandingURL"))
         self.authenticatedEduID = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedEduID"))

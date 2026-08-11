@@ -2,7 +2,7 @@ import SafariServices
 import SwiftUI
 
 struct SchoolCalendarView: View {
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var selectedAsset: CalendarAsset?
 
     var body: some View {
@@ -54,7 +54,6 @@ struct SchoolCalendarView: View {
     }
 }
 
-#if canImport(UIKit)
 private struct SchoolCalendarSafariView: UIViewControllerRepresentable {
     let url: URL
 
@@ -64,6 +63,3 @@ private struct SchoolCalendarSafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-#else
-private typealias SchoolCalendarSafariView = LeafyExternalBrowserView
-#endif

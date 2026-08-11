@@ -65,11 +65,11 @@ nonisolated enum LeafyFirstValueMap {
 actor CommunityService {
     static let shared = CommunityService()
 
-    private nonisolated static let storageBucket = "community-images"
-    private nonisolated static let publicImageCacheControl = "31536000"
-    private var activeEnsureSessionTask: Task<Void, Error>?
+    nonisolated static let storageBucket = "community-images"
+    nonisolated static let publicImageCacheControl = "31536000"
+    var activeEnsureSessionTask: Task<Void, Error>?
 
-    private init() {}
+    init() {}
 
     func cancelInFlightWork() {
         activeEnsureSessionTask?.cancel()
@@ -102,7 +102,7 @@ actor CommunityService {
         }
     }
 
-    private static func performEnsureAnonymousSession() async throws {
+    static func performEnsureAnonymousSession() async throws {
         try Task.checkCancellation()
         let client = try LeafySupabase.shared.requireClient()
 
@@ -121,2477 +121,10 @@ actor CommunityService {
     }
 }
 
-// MARK: - Identity and Profile
-
-extension CommunityService {
-    func deleteCurrentAccount() async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        let config = try LeafySupabase.shared.requireConfig()
-        let session = try await client.auth.session
-        client.functions.setAuth(token: session.accessToken)
-
-        do {
-            let response: CommunityAccountDeletionResponse = try await client.functions.invoke(
-                "community-delete-account",
-                options: FunctionInvokeOptions(
-                    method: .post,
-                    headers: [
-                        "Authorization": "Bearer \(session.accessToken)"
-                    ],
-                    region: config.edgeRegion
-                )
-            )
-            guard response.deleted else {
-                throw CommunityServiceError.accountDeletionFailed
-            }
-        } catch let error as CommunityServiceError {
-            throw error
-        } catch {
-            CommunityDiagnostics.log.error(
-                "Community account deletion failed: \(error.localizedDescription, privacy: .public)"
-            )
-            throw CommunityServiceError.accountDeletionFailed
-        }
-    }
-
-    func bootstrapCommunityUser(
-        eduID: String,
-        displayName: String?,
-        campusID: String = ActiveCampusContext.descriptor.id.rawValue
-    ) async throws -> CommunityProfile {
-        let trimmedEduID = eduID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedEduID.isEmpty else {
-            throw CommunityServiceError.schoolSessionMissing
-        }
-        let trimmedDisplayName = trimmedText(displayName) ?? trimmedEduID
-        let normalizedCampusID = campusID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        let client = try LeafySupabase.shared.requireClient()
-        let config = try LeafySupabase.shared.requireConfig()
-        let session = try await client.auth.session
-        client.functions.setAuth(token: session.accessToken)
-
-        do {
-            let response: CommunityBootstrapResponse = try await client.functions.invoke(
-                config.bootstrapFunctionName,
-                options: FunctionInvokeOptions(
-                    headers: [
-                        "Authorization": "Bearer \(session.accessToken)"
-                    ],
-                    body: CommunityBootstrapRequest(
-                        eduID: trimmedEduID,
-                        displayName: trimmedDisplayName,
-                        campusID: normalizedCampusID.isEmpty ? CampusID.bjfu.rawValue : normalizedCampusID
-                    )
-                )
-            )
-
-            return response.profile
-        } catch let error as FunctionsError {
-            throw mapFunctionsError(error)
-        }
-    }
-
-    func fetchCurrentProfile() async throws -> CommunityProfile? {
-        let client = try LeafySupabase.shared.requireClient()
-        guard let profileID = try await fetchCurrentProfileID(client: client) else {
-            return nil
-        }
-
-        return try await fetchProfile(id: profileID, client: client)
-    }
-
-    func fetchCurrentProfile(userID: UUID) async throws -> CommunityProfile? {
-        try await fetchProfile(id: userID)
-    }
-
-    func fetchPublicProfile(userID: UUID) async throws -> CommunityProfile? {
-        try await fetchProfile(id: userID)
-    }
-
-    func searchCommunityCampuses(query: String, limit: Int = 20) async throws -> [CommunityCampusOption] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        return try await client
-            .rpc(
-                "community_campuses_v1",
-                params: CommunityCampusSearchParams(search: query, limit: limit)
-            )
-            .execute()
-            .value
-    }
-
-    func fetchCurrentCampusMembershipRequest() async throws -> CommunityCampusMembershipRequest? {
-        let response = try await invokeCampusRequest(
-            CommunityCampusRequestSubmitRequest(action: .current)
-        )
-        return response.request
-    }
-
-    func selectCommunityCampus(campusID: String) async throws -> CommunityProfile {
-        let trimmedCampusID = campusID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmedCampusID.isEmpty else {
-            throw CommunityServiceError.edgeFunctionRejected("请选择学校。")
-        }
-
-        let response = try await invokeCampusRequest(
-            CommunityCampusRequestSubmitRequest(action: .selectExisting, campusID: trimmedCampusID)
-        )
-        if let profile = response.profile {
-            return profile
-        }
-        if let profile = try await fetchCurrentProfile() {
-            return profile
-        }
-        throw CommunityServiceError.missingAuthenticatedUser
-    }
-
-    func submitCommunitySchoolChangeRequest(campusID: String) async throws -> CommunityCampusMembershipRequest {
-        let trimmedCampusID = campusID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmedCampusID.isEmpty else {
-            throw CommunityServiceError.edgeFunctionRejected("请选择新的学校。")
-        }
-
-        let response = try await invokeCampusRequest(
-            CommunityCampusRequestSubmitRequest(action: .requestChange, campusID: trimmedCampusID)
-        )
-        guard let request = response.request else {
-            throw CommunityServiceError.edgeFunctionRejected("学校更换申请未创建，请稍后重试。")
-        }
-        return request
-    }
-
-    func submitCampusMembershipRequest(schoolName: String) async throws -> CommunityProfile {
-        let trimmedSchoolName = schoolName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedSchoolName.isEmpty else {
-            throw CommunityServiceError.edgeFunctionRejected("请填写学校名称。")
-        }
-
-        let response = try await invokeCampusRequest(
-            CommunityCampusRequestSubmitRequest(action: .submitNewSchool, schoolName: trimmedSchoolName)
-        )
-        if let profile = response.profile {
-            return profile
-        }
-        if let profile = try await fetchCurrentProfile() {
-            return profile
-        }
-        throw CommunityServiceError.missingAuthenticatedUser
-    }
-
-    private func invokeCampusRequest(_ body: CommunityCampusRequestSubmitRequest) async throws -> CommunityCampusRequestResponse {
-        let client = try LeafySupabase.shared.requireClient()
-        let config = try LeafySupabase.shared.requireConfig()
-        let session = try await client.auth.session
-        client.functions.setAuth(token: session.accessToken)
-
-        do {
-            return try await client.functions.invoke(
-                "campus-request",
-                options: FunctionInvokeOptions(
-                    headers: [
-                        "Authorization": "Bearer \(session.accessToken)"
-                    ],
-                    region: config.edgeRegion,
-                    body: body
-                )
-            )
-        } catch let error as FunctionsError {
-            throw mapFunctionsError(error)
-        }
-    }
-
-    func fetchProfileStats(profileIDs: [UUID]) async throws -> [CommunityProfileStats] {
-        let uniqueProfileIDs = Array(Set(profileIDs))
-        guard !uniqueProfileIDs.isEmpty else { return [] }
-
-        let client = try LeafySupabase.shared.requireClient()
-        let response: CommunityProfileStatsResponse = try await client
-            .rpc(
-                "community_profile_stats_v1",
-                params: CommunityProfileStatsRPCParams(profileIDs: uniqueProfileIDs)
-            )
-            .execute()
-            .value
-
-        return response.profiles
-    }
-
-    func updateProfile(
-        input: CommunityProfileUpdateInput,
-        avatar: CommunityImageUpload?,
-        cover: CommunityImageUpload? = nil,
-        resetCoverToDefault: Bool = false
-    ) async throws -> CommunityProfile {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let existingProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let trimmedNickname = CommunityNickname.normalized(input.nickname)
-        guard !trimmedNickname.isEmpty else {
-            throw CommunityServiceError.profileCompletionRequired
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        let avatarPath = try await uploadProfileAvatarIfNeeded(avatar, userID: existingProfile.id) ?? existingProfile.avatarPath
-        let coverPath: String?
-        if resetCoverToDefault {
-            coverPath = nil
-        } else {
-            coverPath = try await uploadProfileCoverIfNeeded(cover, userID: existingProfile.id) ?? existingProfile.coverPath
-        }
-        let update = CommunityProfileUpdate(
-            nickname: trimmedNickname,
-            avatarPath: avatarPath,
-            coverPath: coverPath,
-            bio: CommunityProfileBio.normalized(input.bio),
-            major: trimmedText(input.major),
-            grade: trimmedText(input.grade),
-            profileEditedAt: now,
-            isProfileComplete: true,
-            showsEduVerificationBadge: input.showsEduVerificationBadge,
-            updatedAt: now
-        )
-
-        do {
-            _ = try await client
-                .from("profiles")
-                .update(update)
-                .eq("id", value: existingProfile.id.uuidString)
-                .execute()
-        } catch where isMissingSchemaColumn(error, column: "profile_edited_at") ||
-            isMissingSchemaColumn(error, column: "shows_edu_verification_badge") ||
-            isMissingSchemaColumn(error, column: "cover_path") {
-            let legacyUpdate = CommunityProfileLegacyUpdate(
-                nickname: trimmedNickname,
-                avatarPath: avatarPath,
-                bio: CommunityProfileBio.normalized(input.bio),
-                major: trimmedText(input.major),
-                grade: trimmedText(input.grade),
-                isProfileComplete: true,
-                updatedAt: now
-            )
-
-            _ = try await client
-                .from("profiles")
-                .update(legacyUpdate)
-                .eq("id", value: existingProfile.id.uuidString)
-                .execute()
-        }
-
-        guard let profile = try await fetchProfile(id: existingProfile.id, client: client) else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        return profile
-    }
-
-    func requestEmailVerification(input: CommunityEmailBindingInput) async throws -> CommunityProfile {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let email = CommunityEmailBinding.normalizedEmail(input.email)
-        guard CommunityEmailBinding.isValidEmail(email) else {
-            throw CommunityServiceError.invalidEmail
-        }
-        if CommunityEmailBinding.isAlreadyBound(
-            boundEmail: currentProfile.boundEmail,
-            requestedEmail: email
-        ) {
-            return currentProfile
-        }
-
-        do {
-            if CommunityEmailBinding.shouldResendVerification(
-                pendingEmail: currentProfile.pendingBoundEmail,
-                requestedEmail: email
-            ) {
-                try await client.auth.resend(
-                    email: email,
-                    type: .emailChange,
-                    emailRedirectTo: LeafySupabase.authCallbackURL
-                )
-            } else {
-                _ = try await client.auth.update(
-                    user: UserAttributes(email: email),
-                    redirectTo: LeafySupabase.authCallbackURL
-                )
-            }
-        } catch {
-            throw mapEmailAuthError(error)
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        let update = CommunityPendingEmailUpdate(
-            pendingBoundEmail: email,
-            emailVerificationSentAt: now,
-            updatedAt: now
-        )
-
-        _ = try await client
-            .from("profiles")
-            .update(update)
-            .eq("id", value: currentProfile.id.uuidString)
-            .execute()
-
-        guard let profile = try await fetchProfile(id: currentProfile.id, client: client) else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        return profile
-    }
-
-    func verifyEmailBinding(input: CommunityEmailVerificationInput) async throws -> CommunityProfile {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let email = CommunityEmailBinding.normalizedEmail(input.email)
-        guard CommunityEmailBinding.isValidEmail(email) else {
-            throw CommunityServiceError.invalidEmail
-        }
-        guard CommunityEmailBinding.isCompleteVerificationCode(input.code) else {
-            throw CommunityServiceError.edgeFunctionRejected("请输入邮件中的 8 位验证码。")
-        }
-
-        do {
-            _ = try await client.auth.verifyOTP(
-                email: email,
-                token: input.code,
-                type: .emailChange,
-                redirectTo: LeafySupabase.authCallbackURL
-            )
-        } catch {
-            throw mapEmailAuthError(error)
-        }
-
-        let update = CommunityVerifiedEmailUpdate(
-            boundEmail: email,
-            pendingBoundEmail: nil,
-            emailVerificationSentAt: nil,
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-
-        do {
-            _ = try await client
-                .from("profiles")
-                .update(update)
-                .eq("id", value: currentProfile.id.uuidString)
-                .execute()
-        } catch {
-            throw mapEmailAuthError(error)
-        }
-
-        guard let profile = try await fetchProfile(id: currentProfile.id, client: client) else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        return profile
-    }
-
-    func hasAcceptedCurrentTerms() async throws -> Bool {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let records: [CommunityTermsAcceptanceRecord] = try await client
-            .from("community_terms_acceptances")
-            .select()
-            .eq("user_id", value: currentProfile.id.uuidString)
-            .eq("terms_version", value: CommunityTerms.currentVersion)
-            .limit(1)
-            .execute()
-            .value
-
-        return !records.isEmpty
-    }
-
-    func acceptCurrentTerms() async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        _ = try await client
-            .rpc(
-                "accept_community_terms",
-                params: CommunityTermsAcceptanceRPCParams(termsVersion: CommunityTerms.currentVersion)
-            )
-            .execute()
-    }
-
-    func revokeCurrentTerms() async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        _ = try await client
-            .rpc(
-                "revoke_community_terms",
-                params: CommunityTermsAcceptanceRPCParams(termsVersion: CommunityTerms.currentVersion)
-            )
-            .execute()
-    }
-}
-
-// MARK: - Feed and Posts
-
-extension CommunityService {
-    nonisolated func fetchPosts(query: CommunityFeedQuery = .default) async throws -> [CommunityPost] {
-        let client = try LeafySupabase.shared.requireClient()
-        let config = try LeafySupabase.shared.requireConfig()
-        let session = try await client.auth.session
-        let feedCapability = await backendFeatureSupport(.communityFeed)
-
-        if feedCapability == false {
-            CommunityDiagnostics.log.info("Community feed capability unavailable, using legacy PostgREST feed")
-            return try await fetchPostsLegacy(query: query)
-        }
-
-        if let apiBaseURL = config.communityAPIBaseURL {
-            do {
-                let response = try await fetchPostsFromCommunityAPI(
-                    baseURL: apiBaseURL,
-                    functionName: config.feedFunctionName,
-                    query: query,
-                    accessToken: session.accessToken
-                )
-                return response.posts.map { postWithPublicStorageURLs($0, config: config) }
-            } catch {
-                if feedCapability == nil && shouldFallbackToLegacyCommunityFeed(error) {
-                    CommunityDiagnostics.log.info("Community feed API unavailable, falling back to legacy PostgREST feed")
-                    return try await fetchPostsLegacy(query: query)
-                }
-                throw error
-            }
-        }
-
-        client.functions.setAuth(token: session.accessToken)
-
-        do {
-            let response: CommunityFeedResponse = try await client.functions.invoke(
-                config.feedFunctionName,
-                options: FunctionInvokeOptions(
-                    method: .get,
-                    query: communityFeedQueryItems(query),
-                    headers: [
-                        "Authorization": "Bearer \(session.accessToken)"
-                    ],
-                    region: config.edgeRegion
-                )
-            )
-
-            return response.posts.map { postWithPublicStorageURLs($0, config: config) }
-        } catch let error as FunctionsError {
-            if feedCapability == nil && shouldFallbackToLegacyCommunityFeed(error) {
-                CommunityDiagnostics.log.info("Community feed function unavailable, falling back to legacy PostgREST feed")
-                return try await fetchPostsLegacy(query: query)
-            }
-            throw mapFunctionsError(error)
-        }
-    }
-
-    nonisolated func fetchPostsLegacy(query: CommunityFeedQuery = .default) async throws -> [CommunityPost] {
-        CommunityDiagnostics.log.info("CommunityService.fetchPosts legacy begin")
-        let client = try LeafySupabase.shared.requireClient()
-        if query.mode.isHot {
-            return try await fetchHotPostsLegacy(query: query, client: client)
-        }
-
-        let activePins = try await fetchActivePostPins(query: query, client: client)
-        let pinnedPostIDs = activePins.map(\.postID)
-        let campusID = ActiveCampusContext.descriptor.id.rawValue
-        let pinnedRecords: [CommunityPostRecord]
-        if pinnedPostIDs.isEmpty {
-            pinnedRecords = []
-        } else {
-            pinnedRecords = try await client
-                .from("posts")
-                .select()
-                .in("id", values: pinnedPostIDs.map(\.uuidString))
-                .eq("campus_id", value: campusID)
-                .eq("status", value: "published")
-                .execute()
-                .value
-        }
-
-        let fetchLimit = query.hasSearch ? min(query.limit * 4, 100) : query.limit
-        var latestQuery = client
-            .from("posts")
-            .select()
-            .eq("campus_id", value: campusID)
-            .eq("status", value: "published")
-
-        if let category = query.category {
-            latestQuery = latestQuery.eq("category", value: category)
-        }
-
-        let latestRecords: [CommunityPostRecord] = try await latestQuery
-            .order("created_at", ascending: false)
-            .limit(fetchLimit)
-            .execute()
-            .value
-        let records = uniquePostRecords(pinnedRecords + latestRecords)
-
-        CommunityDiagnostics.log.info("CommunityService.fetchPosts received \(records.count) records")
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID,
-            pins: activePins
-        )
-        let visiblePosts = try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-        let sortedPosts = CommunityFeedOrdering.ordered(visiblePosts, matching: query)
-        CommunityDiagnostics.log.info("CommunityService.fetchPosts hydrated \(sortedPosts.count) posts")
-        return Array(sortedPosts.prefix(query.limit))
-    }
-
-    private nonisolated func fetchHotPostsLegacy(
-        query: CommunityFeedQuery,
-        client: SupabaseClient
-    ) async throws -> [CommunityPost] {
-        let cutoff = Calendar(identifier: .gregorian)
-            .date(byAdding: .day, value: -query.hotDays, to: Date()) ?? Date()
-        let cutoffText = ISO8601DateFormatter().string(from: cutoff)
-        let fetchLimit = max(query.limit * 8, 80)
-        let records: [CommunityPostRecord] = try await client
-            .from("posts")
-            .select()
-            .eq("campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
-            .eq("status", value: "published")
-            .gte("created_at", value: cutoffText)
-            .order("created_at", ascending: false)
-            .limit(fetchLimit)
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID
-        )
-        let visiblePosts = try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-        let sortedPosts = CommunityFeedOrdering.ordered(visiblePosts, matching: query)
-        return Array(sortedPosts.prefix(query.limit))
-    }
-
-    func fetchPosts(authoredBy userID: UUID, limit: Int = 20) async throws -> [CommunityPost] {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [CommunityPostRecord] = try await client
-            .from("posts")
-            .select()
-            .eq("author_id", value: userID.uuidString)
-            .in("status", values: ["published", "pending_review", "hidden"])
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID
-        )
-        return try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-    }
-
-    func fetchPublicPosts(authoredBy userID: UUID, limit: Int = 20) async throws -> [CommunityPost] {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [CommunityPostRecord] = try await client
-            .from("posts")
-            .select()
-            .eq("campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
-            .eq("author_id", value: userID.uuidString)
-            .eq("status", value: "published")
-            .eq("is_anonymous", value: false)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID
-        )
-        return try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-    }
-
-    func fetchLikedPosts(by userID: UUID, limit: Int = 20) async throws -> [CommunityPost] {
-        let client = try LeafySupabase.shared.requireClient()
-        let likes: [CommunityPostLikeRecord] = try await client
-            .from("post_likes")
-            .select()
-            .eq("user_id", value: userID.uuidString)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let postIDs = likes.map(\.postID)
-        guard !postIDs.isEmpty else { return [] }
-
-        let records: [CommunityPostRecord] = try await client
-            .from("posts")
-            .select()
-            .in("id", values: postIDs.map(\.uuidString))
-            .eq("status", value: "published")
-            .execute()
-            .value
-
-        let orderMap = LeafyFirstValueMap.build(postIDs.enumerated().map { ($0.element, $0.offset) })
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID
-        )
-            .sorted { (orderMap[$0.id] ?? Int.max) < (orderMap[$1.id] ?? Int.max) }
-        return try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-    }
-
-    func fetchFavoritedPosts(by userID: UUID, limit: Int = 20) async throws -> [CommunityPost] {
-        let client = try LeafySupabase.shared.requireClient()
-        let favorites: [CommunityPostFavoriteRecord] = try await client
-            .from("post_favorites")
-            .select()
-            .eq("user_id", value: userID.uuidString)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let postIDs = favorites.map(\.postID)
-        guard !postIDs.isEmpty else { return [] }
-
-        let records: [CommunityPostRecord] = try await client
-            .from("posts")
-            .select()
-            .in("id", values: postIDs.map(\.uuidString))
-            .eq("status", value: "published")
-            .execute()
-            .value
-
-        let orderMap = LeafyFirstValueMap.build(postIDs.enumerated().map { ($0.element, $0.offset) })
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID
-        )
-            .sorted { (orderMap[$0.id] ?? Int.max) < (orderMap[$1.id] ?? Int.max) }
-        return try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-    }
-
-    func createPost(input: CreatePostInput, images: [CommunityImageUpload]) async throws -> CommunityPost {
-        guard images.count <= CommunityImageUpload.postImageLimit else {
-            throw CommunityServiceError.imageLimitExceeded
-        }
-        let title = input.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = input.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, title.count <= 80 else {
-            throw CommunityServiceError.edgeFunctionRejected("标题需为 1–80 个字符。")
-        }
-        guard !body.isEmpty, body.count <= 10_000 else {
-            throw CommunityServiceError.edgeFunctionRejected("正文需为 1–10,000 个字符。")
-        }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let actorProfile = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-        try await enforcePostRateLimit(authorID: actorProfile.id, client: client)
-
-        let postID = UUID()
-        let category = CommunityPostCategory.normalized(input.category)
-
-        let createdRecord: CommunityPostRecord
-        do {
-            createdRecord = try await client
-                .rpc(
-                    "create_community_post_v3",
-                    params: CommunityCreatePostRPCParams(
-                        id: postID,
-                        title: title,
-                        body: body,
-                        category: category,
-                        isAnonymous: input.isAnonymous,
-                        imageCount: images.count
-                    )
-                )
-                .execute()
-                .value
-        } catch {
-            throw mapCreatePostError(error)
-        }
-
-        if !images.isEmpty {
-            do {
-                try await uploadPostImages(images, authorID: actorProfile.id, postID: postID)
-            } catch {
-                CommunityDiagnostics.log.error(
-                    "Image post upload failed imageCount=\(images.count, privacy: .public) error=\(error.localizedDescription, privacy: .private)"
-                )
-                do {
-                    try await markPostDeleted(postID: postID)
-                } catch {
-                    CommunityDiagnostics.log.fault(
-                        "Image post cleanup failed error=\(error.localizedDescription, privacy: .private)"
-                    )
-                }
-                throw CommunityServiceError.edgeFunctionRejected("图片发布失败：\(error.localizedDescription)")
-            }
-        }
-
-        let fallbackStatus = images.isEmpty ? createdRecord.status : "published"
-        let hydratedPost = try await fetchPost(postID: postID)
-        if !images.isEmpty, hydratedPost?.status == "pending_review" {
-            CommunityDiagnostics.log.error(
-                "Image post remained pending after all validated images were attached imageCount=\(images.count, privacy: .public)"
-            )
-            throw CommunityServiceError.edgeFunctionRejected("图片已上传，但自动发布未完成。请稍后刷新；如仍未发布，管理员可在后台重新发布。")
-        }
-        return hydratedPost ?? CommunityPost(
-            id: createdRecord.id,
-            authorID: createdRecord.authorID,
-            title: createdRecord.title,
-            body: createdRecord.body,
-            category: createdRecord.category,
-            isAnonymous: createdRecord.isAnonymous,
-            commentCount: createdRecord.commentCount,
-            likeCount: 0,
-            status: fallbackStatus,
-            createdAt: createdRecord.createdAt,
-            updatedAt: createdRecord.updatedAt,
-            viewerHasLiked: false,
-            viewerHasFavorited: false,
-            author: actorProfile,
-            images: []
-        )
-    }
-
-    func createPendingPost(
-        id: UUID,
-        input: CreatePostInput,
-        imageCount: Int,
-        attachmentCount: Int
-    ) async throws -> UUID {
-        guard imageCount >= 0, imageCount <= CommunityImageUpload.postImageLimit,
-              attachmentCount >= 0, attachmentCount <= CommunityPostAttachment.postAttachmentLimit else {
-            throw CommunityServiceError.edgeFunctionRejected("帖子媒体数量无效。")
-        }
-        let title = input.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = input.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, title.count <= 80 else {
-            throw CommunityServiceError.edgeFunctionRejected("标题需为 1–80 个字符。")
-        }
-        guard !body.isEmpty, body.count <= 10_000 else {
-            throw CommunityServiceError.edgeFunctionRejected("正文需为 1–10,000 个字符。")
-        }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let actorProfile = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-        try await enforcePostRateLimit(authorID: actorProfile.id, client: client)
-
-        let _: CommunityPostRecord = try await client
-            .rpc(
-                "create_community_post_v4",
-                params: CommunityCreatePostV4RPCParams(
-                    id: id,
-                    title: title,
-                    body: body,
-                    category: CommunityPostCategory.normalized(input.category),
-                    isAnonymous: input.isAnonymous,
-                    imageCount: imageCount,
-                    attachmentCount: attachmentCount
-                )
-            )
-            .execute()
-            .value
-        return id
-    }
-
-    func pendingPostContext(postID: UUID) async throws -> CommunityPendingPostContext? {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [CommunityPendingPostContextRecord] = try await client
-            .from("posts")
-            .select("id,author_id,status")
-            .eq("id", value: postID.uuidString)
-            .limit(1)
-            .execute()
-            .value
-        return records.first.map {
-            CommunityPendingPostContext(postID: $0.id, authorID: $0.authorID, status: $0.status)
-        }
-    }
-
-    func validateAndAttachPostImage(
-        postID: UUID,
-        imageID: UUID,
-        fullPath: String,
-        thumbnailPath: String,
-        sortOrder: Int
-    ) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        let session = try await client.auth.session
-        client.functions.setAuth(token: session.accessToken)
-        let validation: CommunityUploadValidationResponse = try await client.functions.invoke(
-            "community-validate-upload",
-            options: FunctionInvokeOptions(
-                headers: ["Authorization": "Bearer \(session.accessToken)"],
-                body: CommunityUploadValidationRequest(
-                    postID: postID.uuidString.lowercased(),
-                    fullPath: fullPath,
-                    thumbnailPath: thumbnailPath
-                )
-            )
-        )
-        _ = try await client
-            .rpc(
-                "attach_community_post_image_v1",
-                params: CommunityAttachPostImageRPCParams(
-                    receiptID: validation.receiptID,
-                    imageID: imageID,
-                    sortOrder: sortOrder
-                )
-            )
-            .execute()
-    }
-
-    func validateAndAttachPostAttachment(
-        postID: UUID,
-        attachmentID: UUID,
-        objectPath: String,
-        displayName: String,
-        sortOrder: Int
-    ) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        let session = try await client.auth.session
-        client.functions.setAuth(token: session.accessToken)
-        let validation: CommunityAttachmentValidationResponse = try await client.functions.invoke(
-            "community-validate-attachment",
-            options: FunctionInvokeOptions(
-                headers: ["Authorization": "Bearer \(session.accessToken)"],
-                body: CommunityAttachmentValidationRequest(
-                    postID: postID.uuidString.lowercased(),
-                    objectPath: objectPath,
-                    displayName: displayName
-                )
-            )
-        )
-        _ = try await client
-            .rpc(
-                "attach_community_post_attachment_v1",
-                params: CommunityAttachPostAttachmentRPCParams(
-                    receiptID: validation.receiptID,
-                    attachmentID: attachmentID,
-                    sortOrder: sortOrder
-                )
-            )
-            .execute()
-    }
-
-    func abortPendingPost(postID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        _ = try await client
-            .rpc(
-                "abort_community_post_upload_v1",
-                params: CommunityPostIDRPCParams(postID: postID)
-            )
-            .execute()
-    }
-
-    func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload {
-        try await requireBackendEdgeFunction(
-            "community-attachment-download",
-            unavailableMessage: "社区服务需要更新后才能下载附件，请稍后重试。"
-        )
-        let client = try LeafySupabase.shared.requireClient()
-        let session = try await client.auth.session
-        client.functions.setAuth(token: session.accessToken)
-        let response: CommunityAttachmentDownloadResponse = try await client.functions.invoke(
-            "community-attachment-download",
-            options: FunctionInvokeOptions(
-                headers: ["Authorization": "Bearer \(session.accessToken)"],
-                body: CommunityAttachmentDownloadRequest(attachmentID: attachmentID)
-            )
-        )
-        return CommunityAttachmentDownload(
-            url: response.url,
-            displayName: response.displayName,
-            contentType: response.contentType,
-            byteSize: response.byteSize
-        )
-    }
-}
-
-// MARK: - Polls
-
-extension CommunityService {
-    func fetchPolls(limit: Int = 30) async throws -> [CommunityPoll] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let safeLimit = max(1, min(limit, 50))
-        let records: [CommunityPollRecord] = try await client
-            .from("community_polls")
-            .select()
-            .eq("campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
-            .neq("status", value: "deleted")
-            .order("created_at", ascending: false)
-            .limit(safeLimit)
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        return try await hydratePolls(from: records, client: client, viewerID: viewerID)
-    }
-
-    func fetchMyAuthoredPolls(limit: Int = 30) async throws -> [CommunityPoll] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        do {
-            let records: [CommunityPoll] = try await client
-                .rpc("my_authored_community_polls_v1", params: CommunityPollListRPCParams(limit: limit))
-                .execute()
-                .value
-            return try records.map { try pollWithPublicAvatarURL($0) }
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "我的投票加载失败")
-        }
-    }
-
-    func fetchMyVotedPolls(limit: Int = 30) async throws -> [CommunityPoll] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        do {
-            let records: [CommunityPoll] = try await client
-                .rpc("my_voted_community_polls_v1", params: CommunityPollListRPCParams(limit: limit))
-                .execute()
-                .value
-            return try records.map { try pollWithPublicAvatarURL($0) }
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "我的投票加载失败")
-        }
-    }
-
-    func createPoll(input: CreatePollInput) async throws -> CommunityPoll {
-        if input.validationError != nil {
-            throw CommunityServiceError.invalidPoll
-        }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        _ = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-
-        let record: CommunityPoll
-        do {
-            record = try await client
-                .rpc(
-                    "create_community_poll_v1",
-                    params: CommunityCreatePollRPCParams(input: input)
-                )
-                .execute()
-                .value
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "投票发布失败")
-        }
-
-        return try pollWithPublicAvatarURL(record)
-    }
-
-    func votePoll(pollID: UUID, optionID: UUID) async throws -> CommunityPoll {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let record: CommunityPoll
-        do {
-            record = try await client
-                .rpc(
-                    "vote_community_poll_v1",
-                    params: CommunityVotePollRPCParams(pollID: pollID, optionID: optionID)
-                )
-                .execute()
-                .value
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "投票失败")
-        }
-
-        return try pollWithPublicAvatarURL(record)
-    }
-
-    func requestPollDeletion(pollID: UUID, reason: String?) async throws -> CommunityPoll {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        do {
-            let record: CommunityPoll = try await client
-                .rpc(
-                    "request_delete_community_poll_v1",
-                    params: CommunityRequestPollDeletionRPCParams(pollID: pollID, reason: reason)
-                )
-                .execute()
-                .value
-            return try pollWithPublicAvatarURL(record)
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "删除申请提交失败")
-        }
-    }
-
-    func deleteOwnPoll(pollID: UUID) async throws {
-        _ = try await requestPollDeletion(pollID: pollID, reason: nil)
-    }
-}
-
-// MARK: - Post Detail and Moderation
-
-extension CommunityService {
-    nonisolated func fetchPost(postID: UUID) async throws -> CommunityPost? {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [CommunityPostRecord] = try await client
-            .from("posts")
-            .select()
-            .eq("id", value: postID.uuidString)
-            .eq("status", value: "published")
-            .limit(1)
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let pins = try await fetchActivePostPins(postIDs: records.map(\.id), client: client)
-        let posts = try await hydratePosts(
-            from: records,
-            client: client,
-            viewerID: viewerID,
-            pins: pins
-        )
-        let config = try LeafySupabase.shared.requireConfig()
-        return try await filterBlockedPosts(posts, viewerID: viewerID, client: client)
-            .first
-            .map { postWithPublicStorageURLs($0, config: config) }
-    }
-
-    nonisolated func fetchComments(postID: UUID) async throws -> [CommunityComment] {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [CommunityCommentRecord] = try await client
-            .from("comments")
-            .select()
-            .eq("post_id", value: postID.uuidString)
-            .eq("status", value: "published")
-            .order("created_at", ascending: true)
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let comments = try await hydrateComments(from: records, client: client)
-        return try await filterBlockedComments(comments, viewerID: viewerID, client: client)
-    }
-
-    nonisolated func fetchCommentThreads(
-        postID: UUID,
-        cursor: CommunityCommentCursor?,
-        limit: Int = 20
-    ) async throws -> CommunityCommentPage {
-        let client = try LeafySupabase.shared.requireClient()
-        try await requireBackendRPC(
-            "list_community_comment_threads_v1",
-            unavailableMessage: "社区服务需要更新后才能加载两级评论，请稍后重试。"
-        )
-        let response: CommunityCommentThreadPageRecord = try await client
-            .rpc(
-                "list_community_comment_threads_v1",
-                params: CommunityCommentThreadPageRPCParams(
-                    postID: postID,
-                    afterCreatedAt: cursor?.createdAt,
-                    afterID: cursor?.id,
-                    limit: max(1, min(limit, 50))
-                )
-            )
-            .execute()
-            .value
-
-        let profileIDs = Set(
-            response.comments.map(\.authorID)
-                + response.comments.compactMap(\.replyToAuthorID)
-        )
-        let profiles = try await fetchProfiles(ids: Array(profileIDs), client: client)
-        let profileMap = LeafyFirstValueMap.build(profiles.map { ($0.id, $0) })
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let blockedIDs = if let viewerID {
-            try await fetchBlockedUserIDs(viewerID: viewerID, client: client)
-        } else {
-            Set<UUID>()
-        }
-
-        let hydrated = response.comments.map { record in
-            CommunityComment(
-                id: record.id,
-                postID: record.postID,
-                authorID: record.authorID,
-                body: record.body,
-                isAnonymous: record.isAnonymous,
-                status: record.status,
-                createdAt: record.createdAt,
-                updatedAt: record.updatedAt,
-                threadRootID: record.threadRootID,
-                parentCommentID: record.parentCommentID,
-                replyToCommentID: record.replyToCommentID,
-                replyToAuthorID: record.replyToAuthorID,
-                replyTargetIsVisible: record.replyTargetIsVisible,
-                likeCount: record.likeCount,
-                viewerHasLiked: record.viewerHasLiked,
-                isDeletedPlaceholder: record.isDeletedPlaceholder,
-                author: (record.isDeletedPlaceholder || record.isAnonymous)
-                    ? nil
-                    : profileMap[record.authorID],
-                replyToAuthor: record.replyToAuthorID.flatMap { profileMap[$0] }
-            )
-        }
-
-        let grouped = Dictionary(grouping: hydrated, by: \.threadRootID)
-        let orderedRootIDs = hydrated
-            .filter { !$0.isReply }
-            .map(\.id)
-        let threads = orderedRootIDs.compactMap { rootID -> CommunityCommentThread? in
-            guard let values = grouped[rootID],
-                  var root = values.first(where: { !$0.isReply }) else {
-                return nil
-            }
-            let replies = values
-                .filter(\.isReply)
-                .filter { !blockedIDs.contains($0.authorID) }
-            if blockedIDs.contains(root.authorID) {
-                guard !replies.isEmpty else { return nil }
-                root = CommunityComment(
-                    id: root.id,
-                    postID: root.postID,
-                    authorID: root.authorID,
-                    body: "",
-                    isAnonymous: true,
-                    status: root.status,
-                    createdAt: root.createdAt,
-                    updatedAt: root.updatedAt,
-                    threadRootID: root.threadRootID,
-                    likeCount: 0,
-                    isDeletedPlaceholder: true,
-                    author: nil
-                )
-            }
-            return CommunityCommentThread(root: root, replies: replies)
-        }
-
-        let nextCursor: CommunityCommentCursor? = if response.hasMore,
-                                                    let createdAt = response.nextCursorCreatedAt,
-                                                    let id = response.nextCursorID {
-            CommunityCommentCursor(createdAt: createdAt, id: id)
-        } else {
-            nil
-        }
-        return CommunityCommentPage(threads: threads, nextCursor: nextCursor)
-    }
-
-    func fetchMyComments(limit: Int = 80) async throws -> [CommunityComment] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let records: [CommunityCommentRecord] = try await client
-            .from("comments")
-            .select()
-            .eq("author_id", value: currentProfile.id.uuidString)
-            .eq("status", value: "published")
-            .order("created_at", ascending: false)
-            .limit(max(1, min(limit, 100)))
-            .execute()
-            .value
-
-        let viewerID = try? await fetchCurrentProfileID(client: client)
-        let comments = try await hydrateComments(from: records, client: client)
-        return try await filterBlockedComments(comments, viewerID: viewerID, client: client)
-    }
-
-    func createComment(postID: UUID, body: String) async throws -> CommunityComment {
-        let normalizedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedBody.isEmpty, normalizedBody.count <= 2_000 else {
-            throw CommunityServiceError.edgeFunctionRejected("评论需为 1–2,000 个字符。")
-        }
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let actorProfile = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-
-        let createdRecord: CommunityCommentRecord
-        do {
-            createdRecord = try await client
-                .rpc(
-                    "create_community_comment_v1",
-                    params: CommunityCreateCommentRPCParams(
-                        id: UUID(),
-                        postID: postID,
-                        body: normalizedBody,
-                        isAnonymous: false
-                    )
-                )
-                .execute()
-                .value
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "评论发布失败")
-        }
-
-        if let post = try await fetchPost(postID: postID), post.authorID != actorProfile.id {
-            do {
-                try await createNotification(
-                    recipientID: post.authorID,
-                    actorID: actorProfile.id,
-                    postID: postID,
-                    commentID: createdRecord.id,
-                    type: .comment,
-                    title: "\(actorProfile.limitedResolvedDisplayName) 回复了你的帖子",
-                    body: String((trimmedText(body) ?? "").prefix(120))
-                )
-            } catch {
-                CommunityDiagnostics.log.error("Create comment notification failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        return CommunityComment(
-            id: createdRecord.id,
-            postID: createdRecord.postID,
-            authorID: createdRecord.authorID,
-            body: createdRecord.body,
-            isAnonymous: createdRecord.isAnonymous,
-            status: createdRecord.status,
-            createdAt: createdRecord.createdAt,
-            updatedAt: createdRecord.updatedAt,
-            author: actorProfile
-        )
-    }
-
-    func createComment(
-        postID: UUID,
-        body: String,
-        parentCommentID: UUID?,
-        replyToCommentID: UUID?
-    ) async throws -> CommunityComment {
-        let normalizedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedBody.isEmpty, normalizedBody.count <= 2_000 else {
-            throw CommunityServiceError.edgeFunctionRejected("评论需为 1–2,000 个字符。")
-        }
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        try await requireBackendRPC(
-            "create_community_comment_v2",
-            unavailableMessage: "社区服务需要更新后才能发布回复，请稍后重试。"
-        )
-        let actorProfile = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-
-        let createdRecord: CommunityCommentRecord
-        do {
-            createdRecord = try await client
-                .rpc(
-                    "create_community_comment_v2",
-                    params: CommunityCreateCommentV2RPCParams(
-                        id: UUID(),
-                        postID: postID,
-                        body: normalizedBody,
-                        parentCommentID: parentCommentID,
-                        replyToCommentID: replyToCommentID,
-                        isAnonymous: false
-                    )
-                )
-                .execute()
-                .value
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "评论发布失败")
-        }
-
-        return CommunityComment(
-            id: createdRecord.id,
-            postID: createdRecord.postID,
-            authorID: createdRecord.authorID,
-            body: createdRecord.body,
-            isAnonymous: createdRecord.isAnonymous,
-            status: createdRecord.status,
-            createdAt: createdRecord.createdAt,
-            updatedAt: createdRecord.updatedAt,
-            threadRootID: createdRecord.parentCommentID ?? createdRecord.id,
-            parentCommentID: createdRecord.parentCommentID,
-            replyToCommentID: createdRecord.replyToCommentID,
-            author: actorProfile
-        )
-    }
-
-    func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        try await requireBackendRPC(
-            "toggle_community_comment_like_v1",
-            unavailableMessage: "社区服务需要更新后才能点赞评论，请稍后重试。"
-        )
-        let records: [CommunityCommentLikeStateRecord]
-        do {
-            records = try await client
-                .rpc(
-                    "toggle_community_comment_like_v1",
-                    params: CommunityCommentIDRPCParams(
-                        commentID: commentID,
-                        requestID: UUID()
-                    )
-                )
-                .execute()
-                .value
-        } catch {
-            throw mapCommunityMutationError(error, fallback: "评论点赞失败")
-        }
-        return try CommunityCommentLikeResponseValidator.state(from: records)
-    }
-
-    func togglePostLike(postID: UUID) async throws -> CommunityPost {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let rpcCapability = await backendRPCSupport("toggle_post_like_v1")
-
-        if rpcCapability == false {
-            CommunityDiagnostics.log.info("toggle_post_like_v1 capability unavailable, using legacy like mutation")
-            return try await togglePostLikeLegacy(postID: postID)
-        }
-
-        let record: CommunityPost
-        do {
-            record = try await client
-                .rpc(
-                    "toggle_post_like_v1",
-                    params: CommunityPostIDRPCParams(postID: postID)
-                )
-                .execute()
-                .value
-        } catch {
-            if rpcCapability == nil && shouldFallbackToLegacyCommunityMutation(error) {
-                CommunityDiagnostics.log.info("toggle_post_like_v1 unavailable, falling back to legacy like mutation")
-                return try await togglePostLikeLegacy(postID: postID)
-            }
-            throw mapCommunityMutationError(error, fallback: "点赞失败")
-        }
-
-        let config = try LeafySupabase.shared.requireConfig()
-        return postWithPublicStorageURLs(record, config: config)
-    }
-
-    func togglePostFavorite(postID: UUID) async throws -> CommunityPost {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let rpcCapability = await backendRPCSupport("toggle_post_favorite_v1")
-
-        if rpcCapability == false {
-            CommunityDiagnostics.log.info("toggle_post_favorite_v1 capability unavailable, using legacy favorite mutation")
-            return try await togglePostFavoriteLegacy(postID: postID)
-        }
-
-        let record: CommunityPost
-        do {
-            record = try await client
-                .rpc(
-                    "toggle_post_favorite_v1",
-                    params: CommunityPostIDRPCParams(postID: postID)
-                )
-                .execute()
-                .value
-        } catch {
-            if rpcCapability == nil && shouldFallbackToLegacyCommunityMutation(error) {
-                CommunityDiagnostics.log.info("toggle_post_favorite_v1 unavailable, falling back to legacy favorite mutation")
-                return try await togglePostFavoriteLegacy(postID: postID)
-            }
-            throw mapCommunityMutationError(error, fallback: "收藏失败")
-        }
-
-        let config = try LeafySupabase.shared.requireConfig()
-        return postWithPublicStorageURLs(record, config: config)
-    }
-
-    private func togglePostLikeLegacy(postID: UUID) async throws -> CommunityPost {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let actorProfile = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-
-        guard let targetPost = try await fetchPost(postID: postID) else {
-            throw CommunityServiceError.edgeFunctionRejected("帖子已不存在。")
-        }
-
-        guard targetPost.authorID != actorProfile.id else {
-            throw CommunityServiceError.cannotLikeOwnPost
-        }
-
-        let existingLikes: [CommunityPostLikeRecord] = try await client
-            .from("post_likes")
-            .select()
-            .eq("post_id", value: postID.uuidString)
-            .eq("user_id", value: actorProfile.id.uuidString)
-            .limit(1)
-            .execute()
-            .value
-
-        let didCreateLike = existingLikes.isEmpty
-
-        if didCreateLike {
-            let insert = CommunityPostLikeInsert(
-                postID: postID,
-                userID: actorProfile.id,
-                createdAt: ISO8601DateFormatter().string(from: Date())
-            )
-            _ = try await client
-                .from("post_likes")
-                .insert(insert)
-                .execute()
-        } else {
-            _ = try await client
-                .from("post_likes")
-                .delete()
-                .eq("post_id", value: postID.uuidString)
-                .eq("user_id", value: actorProfile.id.uuidString)
-                .execute()
-        }
-
-        guard let updatedPost = try await fetchPost(postID: postID) else {
-            throw CommunityServiceError.edgeFunctionRejected("帖子已不存在。")
-        }
-
-        if didCreateLike {
-            do {
-                try await createNotification(
-                    recipientID: updatedPost.authorID,
-                    actorID: actorProfile.id,
-                    postID: postID,
-                    commentID: nil,
-                    type: .like,
-                    title: "\(actorProfile.limitedResolvedDisplayName) 点赞了你的帖子",
-                    body: updatedPost.title
-                )
-            } catch {
-                CommunityDiagnostics.log.error("Create legacy like notification failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        return updatedPost
-    }
-
-    private func togglePostFavoriteLegacy(postID: UUID) async throws -> CommunityPost {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let actorProfile = try await requireCompletedCurrentProfile()
-        try await requireAcceptedCurrentTerms()
-
-        guard let targetPost = try await fetchPost(postID: postID) else {
-            throw CommunityServiceError.edgeFunctionRejected("帖子已不存在。")
-        }
-
-        let existingFavorites: [CommunityPostFavoriteRecord] = try await client
-            .from("post_favorites")
-            .select()
-            .eq("post_id", value: postID.uuidString)
-            .eq("user_id", value: actorProfile.id.uuidString)
-            .limit(1)
-            .execute()
-            .value
-
-        if existingFavorites.isEmpty {
-            let insert = CommunityPostFavoriteInsert(
-                postID: postID,
-                userID: actorProfile.id,
-                createdAt: ISO8601DateFormatter().string(from: Date())
-            )
-            _ = try await client
-                .from("post_favorites")
-                .insert(insert)
-                .execute()
-        } else {
-            _ = try await client
-                .from("post_favorites")
-                .delete()
-                .eq("post_id", value: postID.uuidString)
-                .eq("user_id", value: actorProfile.id.uuidString)
-                .execute()
-        }
-
-        return try await fetchPost(postID: postID) ?? targetPost
-    }
-
-    func deleteComment(commentID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        _ = try await client
-            .rpc(
-                "soft_delete_own_comment",
-                params: CommunityCommentSoftDeleteRPCParams(targetCommentID: commentID)
-            )
-            .execute()
-    }
-
-    func deletePost(postID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        try await markPostDeleted(postID: postID)
-    }
-
-    func reportPost(postID: UUID, reason: String, detail: String? = nil) async throws {
-        try await reportCommunityContent(
-            targetType: .post,
-            postID: postID,
-            commentID: nil,
-            reportedUserID: nil,
-            reason: reason,
-            detail: detail
-        )
-    }
-
-    func reportComment(commentID: UUID, reason: String, detail: String? = nil) async throws {
-        try await reportCommunityContent(
-            targetType: .comment,
-            postID: nil,
-            commentID: commentID,
-            reportedUserID: nil,
-            reason: reason,
-            detail: detail
-        )
-    }
-
-    func reportUser(userID: UUID, reason: String, detail: String? = nil) async throws {
-        try await reportCommunityContent(
-            targetType: .user,
-            postID: nil,
-            commentID: nil,
-            reportedUserID: userID,
-            reason: reason,
-            detail: detail
-        )
-    }
-
-    func blockUser(userID: UUID, reason: String? = nil) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        _ = try await client
-            .rpc(
-                "block_community_user",
-                params: CommunityBlockUserRPCParams(blockedID: userID, reason: reason)
-            )
-            .execute()
-    }
-
-    func unblockUser(userID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        _ = try await client
-            .rpc("unblock_community_user", params: CommunityUnblockUserRPCParams(blockedID: userID))
-            .execute()
-    }
-}
-
-// MARK: - Notifications
-
-extension CommunityService {
-    func fetchNotifications(limit: Int = 50) async throws -> [CommunityNotification] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let records: [CommunityNotificationRecord] = try await client
-            .from("community_notifications")
-            .select()
-            .eq("recipient_id", value: currentProfile.id.uuidString)
-            .order("created_at", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let visibleRecords = records.filter { $0.dismissedAt == nil }
-        let blockedIDs = try await fetchBlockedUserIDs(viewerID: currentProfile.id, client: client)
-        return try await hydrateNotifications(from: visibleRecords.filter { record in
-            guard let actorID = record.actorID else { return true }
-            return !blockedIDs.contains(actorID)
-        })
-    }
-
-    func fetchNotificationFeed(limit: Int = 50) async throws -> [NotificationFeedItem] {
-        let settings = try await fetchNotificationSettings()
-        guard !settings.mutedAll else { return [] }
-
-        let communityNotifications = try await fetchNotifications(limit: limit)
-        let siteAnnouncements = try await fetchSiteAnnouncements(limit: limit)
-
-        return Array(
-            (communityNotifications.map(NotificationFeedItem.community) + siteAnnouncements.map(NotificationFeedItem.announcement))
-                .sorted { $0.sortDate > $1.sortDate }
-                .prefix(limit)
-        )
-    }
-
-    func fetchSiteAnnouncements(limit: Int = 50) async throws -> [SiteAnnouncement] {
-        let client = try LeafySupabase.shared.requireClient()
-        guard let currentUser = client.auth.currentUser else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let records: [SiteAnnouncementRecord] = try await client
-            .from("site_announcements")
-            .select()
-            .eq("status", value: "published")
-            .order("published_at", ascending: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let activeRecords = records.filter(isSiteAnnouncementActive)
-        let reads = try await fetchSiteAnnouncementReads(
-            announcementIDs: activeRecords.map(\.id),
-            userID: currentUser.id
-        )
-        let visibleReads = reads.filter { $0.dismissedAt == nil }
-        let dismissedIDs = Set(reads.filter { $0.dismissedAt != nil }.map(\.announcementID))
-        let readMap = LeafyFirstValueMap.build(visibleReads.map { ($0.announcementID, $0.readAt) })
-
-        return activeRecords.filter { !dismissedIDs.contains($0.id) }.map { record in
-            SiteAnnouncement(
-                id: record.id,
-                title: record.title,
-                body: record.body,
-                level: record.level,
-                status: record.status,
-                publishedAt: record.publishedAt,
-                expiresAt: record.expiresAt,
-                createdBy: record.createdBy,
-                createdAt: record.createdAt,
-                readAt: readMap[record.id]
-            )
-        }
-    }
-
-    func fetchUnreadNotificationCount(limit: Int = 100) async throws -> Int {
-        let settings = try await fetchNotificationSettings()
-        guard !settings.mutedAll else { return 0 }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let records: [CommunityNotificationRecord] = try await client
-            .from("community_notifications")
-            .select()
-            .eq("recipient_id", value: currentProfile.id.uuidString)
-            .eq("is_read", value: false)
-            .limit(limit)
-            .execute()
-            .value
-
-        let unreadAnnouncementCount = try await fetchSiteAnnouncements(limit: limit)
-            .filter { !$0.isRead }
-            .count
-
-        let blockedIDs = try await fetchBlockedUserIDs(viewerID: currentProfile.id, client: client)
-        let visibleUnreadCount = records.filter { record in
-            guard record.dismissedAt == nil else { return false }
-            guard let actorID = record.actorID else { return true }
-            return !blockedIDs.contains(actorID)
-        }.count
-
-        return visibleUnreadCount + unreadAnnouncementCount
-    }
-
-    func fetchNotificationSettings() async throws -> CommunityNotificationSettings {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let records: [CommunityNotificationSettingsRecord] = try await client
-            .from("community_notification_settings")
-            .select()
-            .eq("user_id", value: currentProfile.id.uuidString)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let record = records.first else {
-            return CommunityNotificationSettings(userID: currentProfile.id, mutedAll: false, updatedAt: nil)
-        }
-
-        return CommunityNotificationSettings(
-            userID: record.userID,
-            mutedAll: record.mutedAll,
-            updatedAt: record.updatedAt
-        )
-    }
-
-    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let update = CommunityNotificationSettingsUpsert(
-            userID: currentProfile.id,
-            mutedAll: mutedAll,
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-
-        let record: CommunityNotificationSettingsRecord = try await client
-            .from("community_notification_settings")
-            .upsert(update, onConflict: "user_id")
-            .select()
-            .single()
-            .execute()
-            .value
-
-        return CommunityNotificationSettings(
-            userID: record.userID,
-            mutedAll: record.mutedAll,
-            updatedAt: record.updatedAt
-        )
-    }
-
-    func markNotificationRead(notificationID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        let update = CommunityNotificationReadUpdate(isRead: true)
-
-        _ = try await client
-            .from("community_notifications")
-            .update(update)
-            .eq("id", value: notificationID.uuidString)
-            .execute()
-    }
-
-    func markNotificationFeedRead(announcementLimit: Int = 500) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        let communityUpdate = CommunityNotificationReadUpdate(isRead: true)
-
-        _ = try await client
-            .from("community_notifications")
-            .update(communityUpdate)
-            .eq("recipient_id", value: currentProfile.id.uuidString)
-            .eq("is_read", value: false)
-            .is("dismissed_at", value: nil)
-            .execute()
-
-        let unreadAnnouncements = try await fetchSiteAnnouncements(limit: announcementLimit)
-            .filter { !$0.isRead }
-        guard !unreadAnnouncements.isEmpty else { return }
-
-        guard let currentUser = client.auth.currentUser else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-        let inserts = unreadAnnouncements.map { announcement in
-            SiteAnnouncementReadInsert(
-                announcementID: announcement.id,
-                userID: currentUser.id,
-                readAt: now,
-                dismissedAt: nil
-            )
-        }
-
-        _ = try await client
-            .from("site_announcement_reads")
-            .upsert(
-                inserts,
-                onConflict: "announcement_id,user_id",
-                ignoreDuplicates: true
-            )
-            .execute()
-    }
-
-    func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {
-        switch item {
-        case .community(let notification):
-            try await dismissCommunityNotification(notificationID: notification.id)
-        case .announcement(let announcement):
-            try await dismissSiteAnnouncement(announcementID: announcement.id)
-        case .publication:
-            return
-        }
-    }
-
-    func dismissCommunityNotification(notificationID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        let update = CommunityNotificationDismissUpdate(
-            isRead: true,
-            dismissedAt: ISO8601DateFormatter().string(from: Date())
-        )
-
-        _ = try await client
-            .from("community_notifications")
-            .update(update)
-            .eq("id", value: notificationID.uuidString)
-            .execute()
-    }
-
-    func markSiteAnnouncementRead(announcementID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard let currentUser = client.auth.currentUser else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let insert = SiteAnnouncementReadInsert(
-            announcementID: announcementID,
-            userID: currentUser.id,
-            readAt: ISO8601DateFormatter().string(from: Date()),
-            dismissedAt: nil
-        )
-
-        _ = try await client
-            .from("site_announcement_reads")
-            .upsert(
-                insert,
-                onConflict: "announcement_id,user_id",
-                ignoreDuplicates: true
-            )
-            .execute()
-    }
-
-    func dismissSiteAnnouncement(announcementID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        guard let currentUser = client.auth.currentUser else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let now = ISO8601DateFormatter().string(from: Date())
-        let insert = SiteAnnouncementReadInsert(
-            announcementID: announcementID,
-            userID: currentUser.id,
-            readAt: now,
-            dismissedAt: now
-        )
-
-        _ = try await client
-            .from("site_announcement_reads")
-            .upsert(insert, onConflict: "announcement_id,user_id")
-            .execute()
-    }
-}
-
-// MARK: - Feedback and Catalog
-
-extension CommunityService {
-    func submitFeedback(issueType: String, body: String, contact: String?, deviceInfo: [String: String]) async throws {
-        try await ensureAnonymousSession()
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let trimmedBody = trimmedText(body) ?? ""
-        guard !trimmedBody.isEmpty else {
-            throw CommunityServiceError.edgeFunctionRejected("请先填写反馈内容。")
-        }
-
-        let currentProfile = try? await fetchCurrentProfile()
-        let insert = FeedbackSubmissionInsert(
-            userID: currentProfile?.id,
-            issueType: trimmedText(issueType) ?? "问题反馈",
-            body: trimmedBody,
-            contact: trimmedText(contact),
-            deviceInfo: deviceInfo
-        )
-
-        _ = try await client
-            .from("feedback_submissions")
-            .insert(insert)
-            .execute()
-    }
-
-    func submitCatalogSuggestion(input: CatalogSuggestionInput) async throws {
-        try await ensureAnonymousSession()
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let name = trimmedText(input.name) ?? ""
-        let unit = trimmedText(input.unit) ?? ""
-        guard !name.isEmpty, !unit.isEmpty else {
-            throw CommunityServiceError.edgeFunctionRejected("请填写名称和学院/单位。")
-        }
-
-        let teacherName: String?
-        let category: String?
-        let credit: Double?
-        switch input.type {
-        case .teacher:
-            teacherName = nil
-            category = nil
-            credit = nil
-        case .course:
-            teacherName = trimmedText(input.teacherName)
-            guard teacherName != nil else {
-                throw CommunityServiceError.edgeFunctionRejected("请填写授课老师。")
-            }
-            category = trimmedText(input.category) ?? "公选课"
-            credit = input.credit
-            if let credit, credit < 0 {
-                throw CommunityServiceError.edgeFunctionRejected("学分不能小于 0。")
-            }
-        case .dish:
-            teacherName = nil
-            category = nil
-            credit = nil
-        }
-
-        if let initialStars = input.initialStars, !(1...5).contains(initialStars) {
-            throw CommunityServiceError.edgeFunctionRejected("评分必须在 1 到 5 星之间。")
-        }
-
-        let currentProfile = try? await fetchCurrentProfile()
-        let insert = CatalogSuggestionInsert(
-            suggestionType: input.type.rawValue,
-            userID: currentProfile?.id,
-            name: name,
-            unit: unit,
-            teacherName: teacherName,
-            category: category,
-            credit: credit,
-            initialStars: input.initialStars,
-            note: trimmedText(input.note)
-        )
-
-        do {
-            _ = try await client
-                .from("catalog_suggestions")
-                .insert(insert)
-                .execute()
-        } catch {
-            if isDuplicateCatalogSuggestion(error) {
-                return
-            }
-            throw error
-        }
-    }
-}
-
-// MARK: - Ratings
-
-extension CommunityService {
-    func fetchTeacherRatingSummaries(
-        search: String = "",
-        limit: Int = 50,
-        offset: Int = 0
-    ) async throws -> [TeacherRatingSummary] {
-        let client = try LeafySupabase.shared.requireClient()
-        let normalizedSearch = trimmedText(search)?.lowercased()
-        let cappedLimit = max(1, min(limit, 100))
-        let safeOffset = max(offset, 0)
-        let rangeEnd = safeOffset + cappedLimit - 1
-
-        let teachers: [TeacherProfile]
-        if let normalizedSearch {
-            teachers = try await client
-                .from("teachers")
-                .select()
-                .ilike("search_text", pattern: "%\(normalizedSearch)%")
-                .order("rating_average", ascending: false)
-                .order("rating_count", ascending: false)
-                .order("name", ascending: true)
-                .order("id", ascending: true)
-                .range(from: safeOffset, to: rangeEnd)
-                .execute()
-                .value
-        } else {
-            teachers = try await client
-                .from("teachers")
-                .select()
-                .order("rating_average", ascending: false)
-                .order("rating_count", ascending: false)
-                .order("name", ascending: true)
-                .order("id", ascending: true)
-                .range(from: safeOffset, to: rangeEnd)
-                .execute()
-                .value
-        }
-
-        let ratings = try await fetchMyTeacherRatings(teacherIDs: teachers.map(\.id))
-        let ratingMap = LeafyFirstValueMap.build(ratings.map { ($0.teacherID, $0) })
-
-        return teachers.map { teacher in
-            TeacherRatingSummary(teacher: teacher, myRating: ratingMap[teacher.id])
-        }
-    }
-
-    func fetchTeacherRatingSummary(teacherID: Int64) async throws -> TeacherRatingSummary {
-        let client = try LeafySupabase.shared.requireClient()
-        let teachers: [TeacherProfile] = try await client
-            .from("teachers")
-            .select()
-            .eq("id", value: Int(teacherID))
-            .limit(1)
-            .execute()
-            .value
-
-        guard let teacher = teachers.first else {
-            throw CommunityServiceError.edgeFunctionRejected("没有找到这位老师。")
-        }
-
-        let rating = try await fetchMyTeacherRatings(teacherIDs: [teacherID]).first
-        return TeacherRatingSummary(teacher: teacher, myRating: rating)
-    }
-
-    func submitTeacherRating(teacherID: Int64, stars: Int) async throws -> TeacherRatingSummary {
-        guard (1...5).contains(stars) else {
-            throw CommunityServiceError.edgeFunctionRejected("评分必须在 1 到 5 星之间。")
-        }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let existingRating = try await fetchMyTeacherRatings(teacherIDs: [teacherID]).first
-        if existingRating == nil {
-            let insert = TeacherRatingInsert(
-                teacherID: teacherID,
-                userID: currentProfile.id,
-                stars: stars
-            )
-
-            do {
-                _ = try await client
-                    .from("teacher_ratings")
-                    .insert(insert)
-                    .execute()
-            } catch {
-                let update = TeacherRatingStarsUpdate(stars: stars)
-                _ = try await client
-                    .from("teacher_ratings")
-                    .update(update)
-                    .eq("teacher_id", value: Int(teacherID))
-                    .eq("user_id", value: currentProfile.id.uuidString)
-                    .execute()
-            }
-        } else {
-            let update = TeacherRatingStarsUpdate(stars: stars)
-            _ = try await client
-                .from("teacher_ratings")
-                .update(update)
-                .eq("teacher_id", value: Int(teacherID))
-                .eq("user_id", value: currentProfile.id.uuidString)
-                .execute()
-        }
-
-        return try await fetchTeacherRatingSummary(teacherID: teacherID)
-    }
-
-    func fetchCourseRatingSummaries(
-        search: String = "",
-        category: String? = nil,
-        limit: Int = 50,
-        offset: Int = 0
-    ) async throws -> [CourseRatingSummary] {
-        let client = try LeafySupabase.shared.requireClient()
-        let normalizedSearch = trimmedText(search)?.lowercased()
-        let normalizedCategory = trimmedText(category)
-        let cappedLimit = max(1, min(limit, 100))
-        let safeOffset = max(offset, 0)
-        let rangeEnd = safeOffset + cappedLimit - 1
-
-        let courses: [CourseProfile]
-        switch (normalizedSearch, normalizedCategory) {
-        case let (search?, category?):
-            courses = try await client
-                .from("course_catalog")
-                .select()
-                .eq("status", value: "published")
-                .eq("category", value: category)
-                .ilike("search_text", pattern: "%\(search)%")
-                .order("rating_average", ascending: false)
-                .order("rating_count", ascending: false)
-                .order("name", ascending: true)
-                .range(from: safeOffset, to: rangeEnd)
-                .execute()
-                .value
-        case let (search?, nil):
-            courses = try await client
-                .from("course_catalog")
-                .select()
-                .eq("status", value: "published")
-                .ilike("search_text", pattern: "%\(search)%")
-                .order("rating_average", ascending: false)
-                .order("rating_count", ascending: false)
-                .order("name", ascending: true)
-                .range(from: safeOffset, to: rangeEnd)
-                .execute()
-                .value
-        case let (nil, category?):
-            courses = try await client
-                .from("course_catalog")
-                .select()
-                .eq("status", value: "published")
-                .eq("category", value: category)
-                .order("rating_average", ascending: false)
-                .order("rating_count", ascending: false)
-                .order("name", ascending: true)
-                .range(from: safeOffset, to: rangeEnd)
-                .execute()
-                .value
-        case (nil, nil):
-            courses = try await client
-                .from("course_catalog")
-                .select()
-                .eq("status", value: "published")
-                .order("rating_average", ascending: false)
-                .order("rating_count", ascending: false)
-                .order("name", ascending: true)
-                .range(from: safeOffset, to: rangeEnd)
-                .execute()
-                .value
-        }
-
-        let ratings = try await fetchMyCourseRatings(courseIDs: courses.map(\.id))
-        let ratingMap = LeafyFirstValueMap.build(ratings.map { ($0.courseID, $0) })
-
-        return courses.map { course in
-            CourseRatingSummary(course: course, myRating: ratingMap[course.id])
-        }
-    }
-
-    func fetchCourseRatingSummary(courseID: Int64) async throws -> CourseRatingSummary {
-        let client = try LeafySupabase.shared.requireClient()
-        let courses: [CourseProfile] = try await client
-            .from("course_catalog")
-            .select()
-            .eq("id", value: Int(courseID))
-            .eq("status", value: "published")
-            .limit(1)
-            .execute()
-            .value
-
-        guard let course = courses.first else {
-            throw CommunityServiceError.edgeFunctionRejected("没有找到这门课程。")
-        }
-
-        let rating = try await fetchMyCourseRatings(courseIDs: [courseID]).first
-        return CourseRatingSummary(course: course, myRating: rating)
-    }
-
-    func submitCourseRating(courseID: Int64, stars: Int) async throws -> CourseRatingSummary {
-        guard (1...5).contains(stars) else {
-            throw CommunityServiceError.edgeFunctionRejected("评分必须在 1 到 5 星之间。")
-        }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let existingRating = try await fetchMyCourseRatings(courseIDs: [courseID]).first
-        if existingRating == nil {
-            let insert = CourseRatingInsert(
-                courseID: courseID,
-                userID: currentProfile.id,
-                stars: stars
-            )
-
-            do {
-                _ = try await client
-                    .from("course_ratings")
-                    .insert(insert)
-                    .execute()
-            } catch {
-                let update = TeacherRatingStarsUpdate(stars: stars)
-                _ = try await client
-                    .from("course_ratings")
-                    .update(update)
-                    .eq("course_id", value: Int(courseID))
-                    .eq("user_id", value: currentProfile.id.uuidString)
-                    .execute()
-            }
-        } else {
-            let update = TeacherRatingStarsUpdate(stars: stars)
-            _ = try await client
-                .from("course_ratings")
-                .update(update)
-                .eq("course_id", value: Int(courseID))
-                .eq("user_id", value: currentProfile.id.uuidString)
-                .execute()
-        }
-
-        return try await fetchCourseRatingSummary(courseID: courseID)
-    }
-
-    func fetchDishRatingSummaries(
-        search: String = "",
-        canteen: String? = nil,
-        location: String? = nil,
-        limit: Int = 50,
-        offset: Int = 0
-    ) async throws -> [DishRatingSummary] {
-        let client = try LeafySupabase.shared.requireClient()
-        let normalizedSearch = trimmedText(search)?.lowercased()
-        let normalizedCanteen = trimmedText(canteen)
-        let normalizedLocation = trimmedText(location)
-        let cappedLimit = max(1, min(limit, 100))
-        let safeOffset = max(offset, 0)
-        let rangeEnd = safeOffset + cappedLimit - 1
-
-        var query = client
-            .from("dish_catalog")
-            .select()
-            .eq("status", value: "published")
-
-        if let normalizedLocation {
-            query = query.eq("location", value: normalizedLocation)
-        } else if let normalizedCanteen {
-            query = query.ilike("location", pattern: "\(normalizedCanteen)%")
-        }
-
-        if let normalizedSearch {
-            query = query.ilike("search_text", pattern: "%\(normalizedSearch)%")
-        }
-
-        let dishes: [DishProfile] = try await query
-            .order("rating_average", ascending: false)
-            .order("rating_count", ascending: false)
-            .order("name", ascending: true)
-            .range(from: safeOffset, to: rangeEnd)
-            .execute()
-            .value
-
-        let ratings = try await fetchMyDishRatings(dishIDs: dishes.map(\.id))
-        let ratingMap = LeafyFirstValueMap.build(ratings.map { ($0.dishID, $0) })
-
-        return dishes.map { dish in
-            DishRatingSummary(dish: dish, myRating: ratingMap[dish.id])
-        }
-    }
-
-    func fetchDishRatingSummary(dishID: Int64) async throws -> DishRatingSummary {
-        let client = try LeafySupabase.shared.requireClient()
-        let dishes: [DishProfile] = try await client
-            .from("dish_catalog")
-            .select()
-            .eq("id", value: Int(dishID))
-            .eq("status", value: "published")
-            .limit(1)
-            .execute()
-            .value
-
-        guard let dish = dishes.first else {
-            throw CommunityServiceError.edgeFunctionRejected("没有找到这个菜品。")
-        }
-
-        let rating = try await fetchMyDishRatings(dishIDs: [dishID]).first
-        return DishRatingSummary(dish: dish, myRating: rating)
-    }
-
-    func submitDishRating(dishID: Int64, stars: Int) async throws -> DishRatingSummary {
-        guard (1...5).contains(stars) else {
-            throw CommunityServiceError.edgeFunctionRejected("评分必须在 1 到 5 星之间。")
-        }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        guard let currentProfile = try await fetchCurrentProfile() else {
-            throw CommunityServiceError.missingAuthenticatedUser
-        }
-
-        let existingRating = try await fetchMyDishRatings(dishIDs: [dishID]).first
-        if existingRating == nil {
-            let insert = DishRatingInsert(
-                dishID: dishID,
-                userID: currentProfile.id,
-                stars: stars
-            )
-
-            do {
-                _ = try await client
-                    .from("dish_ratings")
-                    .insert(insert)
-                    .execute()
-            } catch {
-                let update = TeacherRatingStarsUpdate(stars: stars)
-                _ = try await client
-                    .from("dish_ratings")
-                    .update(update)
-                    .eq("dish_id", value: Int(dishID))
-                    .eq("user_id", value: currentProfile.id.uuidString)
-                    .execute()
-            }
-        } else {
-            let update = TeacherRatingStarsUpdate(stars: stars)
-            _ = try await client
-                .from("dish_ratings")
-                .update(update)
-                .eq("dish_id", value: Int(dishID))
-                .eq("user_id", value: currentProfile.id.uuidString)
-                .execute()
-        }
-
-        return try await fetchDishRatingSummary(dishID: dishID)
-    }
-
-    private func fetchMyTeacherRatings(teacherIDs: [Int64]) async throws -> [TeacherRating] {
-        guard !teacherIDs.isEmpty else { return [] }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil,
-              let currentProfile = try await fetchCurrentProfile() else {
-            return []
-        }
-
-        return try await client
-            .from("teacher_ratings")
-            .select()
-            .eq("user_id", value: currentProfile.id.uuidString)
-            .in("teacher_id", values: teacherIDs.map { Int($0) })
-            .execute()
-            .value
-    }
-
-    private func fetchMyDishRatings(dishIDs: [Int64]) async throws -> [DishRating] {
-        guard !dishIDs.isEmpty else { return [] }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil,
-              let currentProfile = try await fetchCurrentProfile() else {
-            return []
-        }
-
-        return try await client
-            .from("dish_ratings")
-            .select()
-            .eq("user_id", value: currentProfile.id.uuidString)
-            .in("dish_id", values: dishIDs.map { Int($0) })
-            .execute()
-            .value
-    }
-
-    private func fetchMyCourseRatings(courseIDs: [Int64]) async throws -> [CourseRating] {
-        guard !courseIDs.isEmpty else { return [] }
-
-        let client = try LeafySupabase.shared.requireClient()
-        guard client.auth.currentUser != nil,
-              let currentProfile = try await fetchCurrentProfile() else {
-            return []
-        }
-
-        return try await client
-            .from("course_ratings")
-            .select()
-            .eq("user_id", value: currentProfile.id.uuidString)
-            .in("course_id", values: courseIDs.map { Int($0) })
-            .execute()
-            .value
-    }
-}
-
 // MARK: - Shared Supabase Implementation
 
 extension CommunityService {
-    private func createNotification(
+    func createNotification(
         recipientID: UUID,
         actorID: UUID,
         postID: UUID,
@@ -2616,7 +149,7 @@ extension CommunityService {
             .execute()
     }
 
-    private func reportCommunityContent(
+    func reportCommunityContent(
         targetType: CommunityReportTargetType,
         postID: UUID?,
         commentID: UUID?,
@@ -2652,7 +185,7 @@ extension CommunityService {
             .execute()
     }
 
-    private func enforcePostRateLimit(authorID: UUID, client: SupabaseClient) async throws {
+    func enforcePostRateLimit(authorID: UUID, client: SupabaseClient) async throws {
         let threshold = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60 * 60))
         let recentPosts: [CommunityPostRateLimitRecord] = try await client
             .from("posts")
@@ -2668,73 +201,7 @@ extension CommunityService {
         }
     }
 
-    private func uploadPostImages(_ images: [CommunityImageUpload], authorID: UUID, postID: UUID) async throws {
-        let client = try LeafySupabase.shared.requireClient()
-        let authorPathComponent = authorID.uuidString.lowercased()
-        let postPathComponent = postID.uuidString.lowercased()
-
-        for (index, image) in images.enumerated() {
-            let imagePathComponent = image.id.uuidString.lowercased()
-            let objectPath = "posts/\(authorPathComponent)/\(postPathComponent)/full/\(imagePathComponent).\(image.fileExtension)"
-            let thumbnailUpload = try await MainActor.run {
-                try image.thumbnailUpload()
-            }
-            let thumbnailPath = "posts/\(authorPathComponent)/\(postPathComponent)/thumb/\(imagePathComponent).\(thumbnailUpload.fileExtension)"
-            _ = try await client.storage
-                .from(Self.storageBucket)
-                .upload(
-                    objectPath,
-                    data: image.data,
-                    options: FileOptions(
-                        cacheControl: Self.publicImageCacheControl,
-                        contentType: image.mimeType,
-                        upsert: false
-                    )
-                )
-            _ = try await client.storage
-                .from(Self.storageBucket)
-                .upload(
-                    thumbnailPath,
-                    data: thumbnailUpload.data,
-                    options: FileOptions(
-                        cacheControl: Self.publicImageCacheControl,
-                        contentType: thumbnailUpload.mimeType,
-                        upsert: false
-                    )
-                )
-
-            do {
-                let session = try await client.auth.session
-                client.functions.setAuth(token: session.accessToken)
-                let validation: CommunityUploadValidationResponse = try await client.functions.invoke(
-                    "community-validate-upload",
-                    options: FunctionInvokeOptions(
-                        headers: ["Authorization": "Bearer \(session.accessToken)"],
-                        body: CommunityUploadValidationRequest(
-                            postID: postID.uuidString.lowercased(),
-                            fullPath: objectPath,
-                            thumbnailPath: thumbnailPath
-                        )
-                    )
-                )
-                _ = try await client
-                    .rpc(
-                        "attach_community_post_image_v1",
-                        params: CommunityAttachPostImageRPCParams(
-                            receiptID: validation.receiptID,
-                            imageID: image.id,
-                            sortOrder: index
-                        )
-                    )
-                    .execute()
-            } catch {
-                _ = try? await client.storage.from(Self.storageBucket).remove(paths: [objectPath, thumbnailPath])
-                throw CommunityServiceError.edgeFunctionRejected("图片记录写入失败：\(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func markPostDeleted(postID: UUID) async throws {
+    func markPostDeleted(postID: UUID) async throws {
         let client = try LeafySupabase.shared.requireClient()
         _ = try await client
             .rpc(
@@ -2744,7 +211,7 @@ extension CommunityService {
             .execute()
     }
 
-    private func uploadProfileAvatarIfNeeded(_ avatar: CommunityImageUpload?, userID: UUID) async throws -> String? {
+    func uploadProfileAvatarIfNeeded(_ avatar: CommunityImageUpload?, userID: UUID) async throws -> String? {
         guard let avatar else { return nil }
 
         let client = try LeafySupabase.shared.requireClient()
@@ -2774,7 +241,7 @@ extension CommunityService {
         return objectPath
     }
 
-    private func uploadProfileCoverIfNeeded(_ cover: CommunityImageUpload?, userID: UUID) async throws -> String? {
+    func uploadProfileCoverIfNeeded(_ cover: CommunityImageUpload?, userID: UUID) async throws -> String? {
         guard let cover else { return nil }
 
         let client = try LeafySupabase.shared.requireClient()
@@ -2804,7 +271,7 @@ extension CommunityService {
         return objectPath
     }
 
-    private func validateProfileImageUpload(
+    func validateProfileImageUpload(
         kind: String,
         path: String,
         client: SupabaseClient
@@ -2823,7 +290,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func hydratePosts(
+    nonisolated func hydratePosts(
         from records: [CommunityPostRecord],
         client: SupabaseClient,
         viewerID: UUID?,
@@ -2870,7 +337,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func hydrateComments(
+    nonisolated func hydrateComments(
         from records: [CommunityCommentRecord],
         client: SupabaseClient
     ) async throws -> [CommunityComment] {
@@ -2894,7 +361,7 @@ extension CommunityService {
         }
     }
 
-    private func hydrateNotifications(from records: [CommunityNotificationRecord]) async throws -> [CommunityNotification] {
+    func hydrateNotifications(from records: [CommunityNotificationRecord]) async throws -> [CommunityNotification] {
         guard !records.isEmpty else { return [] }
 
         let actorIDs = records.compactMap(\.actorID)
@@ -2918,7 +385,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func fetchProfiles(ids: [UUID], client providedClient: SupabaseClient? = nil) async throws -> [CommunityProfile] {
+    nonisolated func fetchProfiles(ids: [UUID], client providedClient: SupabaseClient? = nil) async throws -> [CommunityProfile] {
         guard !ids.isEmpty else { return [] }
 
         let client: SupabaseClient
@@ -2937,11 +404,11 @@ extension CommunityService {
         return try await hydrateProfiles(profiles, client: client)
     }
 
-    private nonisolated func fetchProfile(id: UUID, client providedClient: SupabaseClient? = nil) async throws -> CommunityProfile? {
+    nonisolated func fetchProfile(id: UUID, client providedClient: SupabaseClient? = nil) async throws -> CommunityProfile? {
         try await fetchProfiles(ids: [id], client: providedClient).first
     }
 
-    private nonisolated func fetchActivePostPins(
+    nonisolated func fetchActivePostPins(
         query: CommunityFeedQuery,
         client: SupabaseClient
     ) async throws -> [CommunityPostPin] {
@@ -2974,7 +441,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func fetchActivePostPins(
+    nonisolated func fetchActivePostPins(
         postIDs: [UUID],
         client: SupabaseClient
     ) async throws -> [CommunityPostPin] {
@@ -3000,7 +467,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func fetchCurrentProfileID(client: SupabaseClient) async throws -> UUID? {
+    nonisolated func fetchCurrentProfileID(client: SupabaseClient) async throws -> UUID? {
         guard let currentUserID = client.auth.currentUser?.id else {
             return nil
         }
@@ -3036,7 +503,7 @@ extension CommunityService {
         return currentUserID
     }
 
-    private nonisolated func uniquePostRecords(_ records: [CommunityPostRecord]) -> [CommunityPostRecord] {
+    nonisolated func uniquePostRecords(_ records: [CommunityPostRecord]) -> [CommunityPostRecord] {
         var seen: Set<UUID> = []
         var result: [CommunityPostRecord] = []
         for record in records where !seen.contains(record.id) {
@@ -3046,7 +513,7 @@ extension CommunityService {
         return result
     }
 
-    private nonisolated func preferredPinMap(from pins: [CommunityPostPin]) -> [UUID: CommunityPostPin] {
+    nonisolated func preferredPinMap(from pins: [CommunityPostPin]) -> [UUID: CommunityPostPin] {
         Dictionary(grouping: pins, by: \.postID).compactMapValues { postPins in
             postPins.sorted { lhs, rhs in
                 if lhs.priority != rhs.priority {
@@ -3059,13 +526,13 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func normalizedCommunityText(_ value: String?) -> String {
+    nonisolated func normalizedCommunityText(_ value: String?) -> String {
         (value ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
     }
 
-    private nonisolated func communityFeedQueryItems(_ query: CommunityFeedQuery) -> [URLQueryItem] {
+    nonisolated func communityFeedQueryItems(_ query: CommunityFeedQuery) -> [URLQueryItem] {
         var items = [
             URLQueryItem(name: "limit", value: String(query.limit)),
             URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
@@ -3083,7 +550,7 @@ extension CommunityService {
         return items
     }
 
-    private nonisolated func fetchPostsFromCommunityAPI(
+    nonisolated func fetchPostsFromCommunityAPI(
         baseURL: URL,
         functionName: String,
         query: CommunityFeedQuery,
@@ -3120,7 +587,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func communityAPIURL(
+    nonisolated func communityAPIURL(
         baseURL: URL,
         functionName: String,
         query: CommunityFeedQuery
@@ -3142,7 +609,7 @@ extension CommunityService {
         return components.url
     }
 
-    private nonisolated func publicStorageURL(path: String?, config _: SupabaseConfig) -> URL? {
+    nonisolated func publicStorageURL(path: String?, config _: SupabaseConfig) -> URL? {
         guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
               !path.isEmpty,
               let client = LeafySupabase.shared.client else {
@@ -3154,7 +621,7 @@ extension CommunityService {
             .getPublicURL(path: path)
     }
 
-    private nonisolated func postWithPublicStorageURLs(_ post: CommunityPost, config: SupabaseConfig) -> CommunityPost {
+    nonisolated func postWithPublicStorageURLs(_ post: CommunityPost, config: SupabaseConfig) -> CommunityPost {
         CommunityPost(
             id: post.id,
             authorID: post.authorID,
@@ -3176,7 +643,7 @@ extension CommunityService {
         )
     }
 
-    private nonisolated func profileWithPublicAvatarURL(_ profile: CommunityProfile, config: SupabaseConfig) -> CommunityProfile {
+    nonisolated func profileWithPublicAvatarURL(_ profile: CommunityProfile, config: SupabaseConfig) -> CommunityProfile {
         CommunityProfile(
             id: profile.id,
             eduID: profile.eduID,
@@ -3207,7 +674,7 @@ extension CommunityService {
         )
     }
 
-    private nonisolated func imageWithPublicStorageURLs(_ image: CommunityPostImage, config: SupabaseConfig) -> CommunityPostImage {
+    nonisolated func imageWithPublicStorageURLs(_ image: CommunityPostImage, config: SupabaseConfig) -> CommunityPostImage {
         CommunityPostImage(
             id: image.id,
             postID: image.postID,
@@ -3227,7 +694,7 @@ extension CommunityService {
         )
     }
 
-    private nonisolated func pollWithPublicAvatarURL(_ poll: CommunityPoll) throws -> CommunityPoll {
+    nonisolated func pollWithPublicAvatarURL(_ poll: CommunityPoll) throws -> CommunityPoll {
         let config = try LeafySupabase.shared.requireConfig()
         return CommunityPoll(
             id: poll.id,
@@ -3250,7 +717,7 @@ extension CommunityService {
         )
     }
 
-    private nonisolated func hydratePolls(
+    nonisolated func hydratePolls(
         from records: [CommunityPollRecord],
         client: SupabaseClient,
         viewerID: UUID?
@@ -3296,7 +763,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func fetchPollVotes(
+    nonisolated func fetchPollVotes(
         pollIDs: [UUID],
         viewerID: UUID?,
         client: SupabaseClient
@@ -3312,7 +779,7 @@ extension CommunityService {
             .value
     }
 
-    private nonisolated func fetchPostImages(postIDs: [UUID], client: SupabaseClient) async throws -> [CommunityPostImage] {
+    nonisolated func fetchPostImages(postIDs: [UUID], client: SupabaseClient) async throws -> [CommunityPostImage] {
         guard !postIDs.isEmpty else { return [] }
 
         let records: [CommunityPostImageRecord] = try await client
@@ -3383,7 +850,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func fetchPostLikes(postIDs: [UUID], client: SupabaseClient) async throws -> [CommunityPostLikeRecord] {
+    nonisolated func fetchPostLikes(postIDs: [UUID], client: SupabaseClient) async throws -> [CommunityPostLikeRecord] {
         guard !postIDs.isEmpty else { return [] }
 
         return try await client
@@ -3394,7 +861,7 @@ extension CommunityService {
             .value
     }
 
-    private nonisolated func fetchPostAttachments(
+    nonisolated func fetchPostAttachments(
         postIDs: [UUID],
         client: SupabaseClient
     ) async throws -> [CommunityPostAttachment] {
@@ -3431,7 +898,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func fetchPostFavorites(
+    nonisolated func fetchPostFavorites(
         postIDs: [UUID],
         viewerID: UUID?,
         client: SupabaseClient
@@ -3447,7 +914,7 @@ extension CommunityService {
             .value
     }
 
-    private nonisolated func fetchBlockedUserIDs(viewerID: UUID, client: SupabaseClient) async throws -> Set<UUID> {
+    nonisolated func fetchBlockedUserIDs(viewerID: UUID, client: SupabaseClient) async throws -> Set<UUID> {
         let records: [CommunityBlockRecord] = try await client
             .from("community_blocks")
             .select()
@@ -3458,7 +925,7 @@ extension CommunityService {
         return Set(records.map(\.blockedID))
     }
 
-    private nonisolated func filterBlockedPosts(
+    nonisolated func filterBlockedPosts(
         _ posts: [CommunityPost],
         viewerID: UUID?,
         client: SupabaseClient
@@ -3469,7 +936,7 @@ extension CommunityService {
         return posts.filter { !blockedIDs.contains($0.authorID) }
     }
 
-    private nonisolated func filterBlockedComments(
+    nonisolated func filterBlockedComments(
         _ comments: [CommunityComment],
         viewerID: UUID?,
         client: SupabaseClient
@@ -3480,7 +947,7 @@ extension CommunityService {
         return comments.filter { !blockedIDs.contains($0.authorID) }
     }
 
-    private func fetchSiteAnnouncementReads(
+    func fetchSiteAnnouncementReads(
         announcementIDs: [UUID],
         userID: UUID
     ) async throws -> [SiteAnnouncementReadRecord] {
@@ -3496,7 +963,7 @@ extension CommunityService {
             .value
     }
 
-    private func isSiteAnnouncementActive(_ record: SiteAnnouncementRecord) -> Bool {
+    func isSiteAnnouncementActive(_ record: SiteAnnouncementRecord) -> Bool {
         guard record.status == "published" else { return false }
 
         let now = Date()
@@ -3513,7 +980,7 @@ extension CommunityService {
         return true
     }
 
-    private nonisolated func hydrateProfiles(_ profiles: [CommunityProfile], client: SupabaseClient) async throws -> [CommunityProfile] {
+    nonisolated func hydrateProfiles(_ profiles: [CommunityProfile], client: SupabaseClient) async throws -> [CommunityProfile] {
         let storagePaths = profiles
             .flatMap { [$0.avatarPath, $0.coverPath] }
             .compactMap { $0 }
@@ -3564,7 +1031,7 @@ extension CommunityService {
         }
     }
 
-    private func requireCompletedCurrentProfile() async throws -> CommunityProfile {
+    func requireCompletedCurrentProfile() async throws -> CommunityProfile {
         guard let profile = try await fetchCurrentProfile() else {
             throw CommunityServiceError.missingAuthenticatedUser
         }
@@ -3577,18 +1044,18 @@ extension CommunityService {
         return profile
     }
 
-    private func requireAcceptedCurrentTerms() async throws {
+    func requireAcceptedCurrentTerms() async throws {
         guard try await hasAcceptedCurrentTerms() else {
             throw CommunityServiceError.termsAcceptanceRequired
         }
     }
 
-    private func trimmedText(_ text: String?) -> String? {
+    func trimmedText(_ text: String?) -> String? {
         let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func mapEmailAuthError(_ error: Error) -> CommunityServiceError {
+    func mapEmailAuthError(_ error: Error) -> CommunityServiceError {
         if let serviceError = error as? CommunityServiceError {
             return serviceError
         }
@@ -3631,19 +1098,19 @@ extension CommunityService {
         return .edgeFunctionRejected(message)
     }
 
-    private func isDuplicateCatalogSuggestion(_ error: Error) -> Bool {
+    func isDuplicateCatalogSuggestion(_ error: Error) -> Bool {
         let message = error.localizedDescription.lowercased()
         return message.contains("23505")
             || message.contains("duplicate key")
             || message.contains("idx_catalog_suggestions_open_unique")
     }
 
-    private nonisolated func isMissingSchemaColumn(_ error: Error, column: String) -> Bool {
+    nonisolated func isMissingSchemaColumn(_ error: Error, column: String) -> Bool {
         let message = error.localizedDescription
         return message.contains(column) && message.localizedCaseInsensitiveContains("schema cache")
     }
 
-    private nonisolated func isMissingPostPinsTable(_ error: Error) -> Bool {
+    nonisolated func isMissingPostPinsTable(_ error: Error) -> Bool {
         let message = error.localizedDescription
         return message.contains("community_post_pins")
             && (
@@ -3653,7 +1120,7 @@ extension CommunityService {
             )
     }
 
-    private nonisolated func backendFeatureSupport(_ feature: BackendFeature) async -> Bool? {
+    nonisolated func backendFeatureSupport(_ feature: BackendFeature) async -> Bool? {
         do {
             return try await SupabaseBackendClient.shared.capabilities().supports(feature)
         } catch {
@@ -3662,7 +1129,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func backendRPCSupport(_ name: String) async -> Bool? {
+    nonisolated func backendRPCSupport(_ name: String) async -> Bool? {
         do {
             return try await SupabaseBackendClient.shared.capabilities().supportsRPC(name)
         } catch {
@@ -3671,7 +1138,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func requireBackendRPC(
+    nonisolated func requireBackendRPC(
         _ name: String,
         unavailableMessage: String
     ) async throws {
@@ -3686,7 +1153,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func requireBackendEdgeFunction(
+    nonisolated func requireBackendEdgeFunction(
         _ name: String,
         unavailableMessage: String
     ) async throws {
@@ -3710,66 +1177,7 @@ extension CommunityService {
         }
     }
 
-    private nonisolated func shouldFallbackToLegacyCommunityFeed(_ error: Error) -> Bool {
-        if let functionsError = error as? FunctionsError {
-            return shouldFallbackToLegacyCommunityFeed(functionsError)
-        }
-
-        return isMissingCommunityFeedCapability(error.localizedDescription)
-    }
-
-    private nonisolated func shouldFallbackToLegacyCommunityFeed(_ error: FunctionsError) -> Bool {
-        switch error {
-        case .relayError:
-            return true
-        case .httpError(let code, let data):
-            let payload = try? JSONDecoder().decode(EdgeFunctionErrorPayload.self, from: data)
-            let message = payload?.errorEnvelope?.message
-                ?? payload?.error
-                ?? String(data: data, encoding: .utf8)
-                ?? ""
-            return code == 404
-                || code == 503
-                || isMissingCommunityFeedCapability(message)
-        }
-    }
-
-    private nonisolated func shouldFallbackToLegacyCommunityMutation(_ error: Error) -> Bool {
-        isMissingCommunityFeedCapability(error.localizedDescription)
-    }
-
-    nonisolated static func isMissingCommunityFeedCapabilityMessage(_ message: String) -> Bool {
-        isMissingCommunityFeedCapability(message)
-    }
-
-    private nonisolated static func isMissingCommunityFeedCapability(_ message: String) -> Bool {
-        let lowercasedMessage = message.lowercased()
-        let capabilityNames = [
-            "community-feed",
-            "community_feed_v1",
-            "community_hot_posts_v1",
-            "community_post_summary_v1",
-            "toggle_post_like_v1",
-            "toggle_post_favorite_v1"
-        ]
-
-        guard capabilityNames.contains(where: { lowercasedMessage.contains($0) }) else {
-            return false
-        }
-
-        return lowercasedMessage.contains("schema cache")
-            || lowercasedMessage.contains("does not exist")
-            || lowercasedMessage.contains("not found")
-            || lowercasedMessage.contains("could not find")
-            || lowercasedMessage.contains("404")
-            || lowercasedMessage.contains("pgrst202")
-    }
-
-    private nonisolated func isMissingCommunityFeedCapability(_ message: String) -> Bool {
-        Self.isMissingCommunityFeedCapability(message)
-    }
-
-    private nonisolated func mapFunctionsError(_ error: FunctionsError) -> CommunityServiceError {
+    nonisolated func mapFunctionsError(_ error: FunctionsError) -> CommunityServiceError {
         let envelope = SupabaseBackendClient.shared.mapFunctionsError(
             error,
             fallbackMessage: "社区函数调用失败，请稍后重试。"
@@ -3777,11 +1185,7 @@ extension CommunityService {
         return .edgeFunctionRejected(envelope.message)
     }
 
-    private func mapCreatePostError(_ error: Error) -> CommunityServiceError {
-        mapCommunityMutationError(error, fallback: "帖子发布失败")
-    }
-
-    private func mapCommunityMutationError(_ error: Error, fallback: String) -> CommunityServiceError {
+    func mapCommunityMutationError(_ error: Error, fallback: String) -> CommunityServiceError {
         let message = error.localizedDescription
         if message.contains("POST_RATE_LIMIT_EXCEEDED") {
             return .postRateLimitExceeded
@@ -3824,19 +1228,19 @@ extension CommunityService {
     }
 }
 
-private nonisolated struct EdgeFunctionErrorPayload: Decodable, Sendable {
+nonisolated struct EdgeFunctionErrorPayload: Decodable, Sendable {
     let error: String?
     let errorEnvelope: BackendErrorEnvelope?
 }
 
-private nonisolated enum CommunityCampusRequestAction: String, Encodable, Sendable {
+nonisolated enum CommunityCampusRequestAction: String, Encodable, Sendable {
     case current
     case submitNewSchool = "submit_new_school"
     case selectExisting = "select_existing"
     case requestChange = "request_change"
 }
 
-private nonisolated struct CommunityCampusSearchParams: Encodable, Sendable {
+nonisolated struct CommunityCampusSearchParams: Encodable, Sendable {
     let search: String
     let limit: Int
 
@@ -3846,7 +1250,7 @@ private nonisolated struct CommunityCampusSearchParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityCampusRequestSubmitRequest: Encodable, Sendable {
+nonisolated struct CommunityCampusRequestSubmitRequest: Encodable, Sendable {
     let action: CommunityCampusRequestAction
     let schoolName: String?
     let campusID: String?
@@ -3868,12 +1272,12 @@ private nonisolated struct CommunityCampusRequestSubmitRequest: Encodable, Senda
     }
 }
 
-private nonisolated struct CommunityCampusRequestResponse: Decodable, Sendable {
+nonisolated struct CommunityCampusRequestResponse: Decodable, Sendable {
     let profile: CommunityProfile?
     let request: CommunityCampusMembershipRequest?
 }
 
-private nonisolated struct CommunityBootstrapRequest: Encodable, Sendable {
+nonisolated struct CommunityBootstrapRequest: Encodable, Sendable {
     let eduID: String
     let displayName: String
     let campusID: String
@@ -3885,7 +1289,7 @@ private nonisolated struct CommunityBootstrapRequest: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityBootstrapResponse: Decodable, Sendable {
+nonisolated struct CommunityBootstrapResponse: Decodable, Sendable {
     let profile: CommunityProfile
     let isNewUser: Bool
     let isProfileComplete: Bool
@@ -3897,11 +1301,11 @@ private nonisolated struct CommunityBootstrapResponse: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityAccountDeletionResponse: Decodable, Sendable {
+nonisolated struct CommunityAccountDeletionResponse: Decodable, Sendable {
     let deleted: Bool
 }
 
-private nonisolated struct CommunityFeedResponse: Decodable, Sendable {
+nonisolated struct CommunityFeedResponse: Decodable, Sendable {
     let generatedAt: String?
     let posts: [CommunityPost]
 
@@ -3911,7 +1315,7 @@ private nonisolated struct CommunityFeedResponse: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityProfileStatsRPCParams: Encodable, Sendable {
+nonisolated struct CommunityProfileStatsRPCParams: Encodable, Sendable {
     let profileIDs: [UUID]
 
     enum CodingKeys: String, CodingKey {
@@ -3919,7 +1323,7 @@ private nonisolated struct CommunityProfileStatsRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityProfileStatsResponse: Decodable, Sendable {
+nonisolated struct CommunityProfileStatsResponse: Decodable, Sendable {
     let generatedAt: String?
     let profiles: [CommunityProfileStats]
 
@@ -3929,7 +1333,7 @@ private nonisolated struct CommunityProfileStatsResponse: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityProfileAuthLinkRecord: Decodable, Sendable {
+nonisolated struct CommunityProfileAuthLinkRecord: Decodable, Sendable {
     let authUserID: UUID
     let profileID: UUID
 
@@ -3983,27 +1387,7 @@ nonisolated struct CommunityProfileUpdate: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityProfileLegacyUpdate: Encodable, Sendable {
-    let nickname: String
-    let avatarPath: String?
-    let bio: String?
-    let major: String?
-    let grade: String?
-    let isProfileComplete: Bool
-    let updatedAt: String
-
-    enum CodingKeys: String, CodingKey {
-        case nickname
-        case avatarPath = "avatar_path"
-        case bio
-        case major
-        case grade
-        case isProfileComplete = "is_profile_complete"
-        case updatedAt = "updated_at"
-    }
-}
-
-private nonisolated struct CommunityPendingEmailUpdate: Encodable, Sendable {
+nonisolated struct CommunityPendingEmailUpdate: Encodable, Sendable {
     let pendingBoundEmail: String
     let emailVerificationSentAt: String
     let updatedAt: String
@@ -4015,7 +1399,7 @@ private nonisolated struct CommunityPendingEmailUpdate: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityVerifiedEmailUpdate: Encodable, Sendable {
+nonisolated struct CommunityVerifiedEmailUpdate: Encodable, Sendable {
     let boundEmail: String
     let pendingBoundEmail: String?
     let emailVerificationSentAt: String?
@@ -4037,7 +1421,7 @@ private nonisolated struct CommunityVerifiedEmailUpdate: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostSoftDeleteRPCParams: Encodable, Sendable {
+nonisolated struct CommunityPostSoftDeleteRPCParams: Encodable, Sendable {
     let targetPostID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4045,7 +1429,7 @@ private nonisolated struct CommunityPostSoftDeleteRPCParams: Encodable, Sendable
     }
 }
 
-private nonisolated struct CommunityCommentSoftDeleteRPCParams: Encodable, Sendable {
+nonisolated struct CommunityCommentSoftDeleteRPCParams: Encodable, Sendable {
     let targetCommentID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4053,7 +1437,7 @@ private nonisolated struct CommunityCommentSoftDeleteRPCParams: Encodable, Senda
     }
 }
 
-private nonisolated struct CommunityTermsAcceptanceRecord: Decodable, Sendable {
+nonisolated struct CommunityTermsAcceptanceRecord: Decodable, Sendable {
     let userID: UUID
     let termsVersion: String
     let acceptedAt: String
@@ -4065,7 +1449,7 @@ private nonisolated struct CommunityTermsAcceptanceRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityTermsAcceptanceRPCParams: Encodable, Sendable {
+nonisolated struct CommunityTermsAcceptanceRPCParams: Encodable, Sendable {
     let termsVersion: String
 
     enum CodingKeys: String, CodingKey {
@@ -4073,7 +1457,7 @@ private nonisolated struct CommunityTermsAcceptanceRPCParams: Encodable, Sendabl
     }
 }
 
-private nonisolated struct CommunityPostIDRPCParams: Encodable, Sendable {
+nonisolated struct CommunityPostIDRPCParams: Encodable, Sendable {
     let postID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4081,7 +1465,7 @@ private nonisolated struct CommunityPostIDRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPollIDRPCParams: Encodable, Sendable {
+nonisolated struct CommunityPollIDRPCParams: Encodable, Sendable {
     let pollID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4089,7 +1473,7 @@ private nonisolated struct CommunityPollIDRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPollListRPCParams: Encodable, Sendable {
+nonisolated struct CommunityPollListRPCParams: Encodable, Sendable {
     let limit: Int
 
     enum CodingKeys: String, CodingKey {
@@ -4097,7 +1481,7 @@ private nonisolated struct CommunityPollListRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityRequestPollDeletionRPCParams: Encodable, Sendable {
+nonisolated struct CommunityRequestPollDeletionRPCParams: Encodable, Sendable {
     let pollID: UUID
     let reason: String?
 
@@ -4107,7 +1491,7 @@ private nonisolated struct CommunityRequestPollDeletionRPCParams: Encodable, Sen
     }
 }
 
-private nonisolated struct CommunityVotePollRPCParams: Encodable, Sendable {
+nonisolated struct CommunityVotePollRPCParams: Encodable, Sendable {
     let pollID: UUID
     let optionID: UUID
 
@@ -4117,7 +1501,7 @@ private nonisolated struct CommunityVotePollRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityCreatePollRPCParams: Encodable, Sendable {
+nonisolated struct CommunityCreatePollRPCParams: Encodable, Sendable {
     let question: String
     let detail: String?
     let options: [String]
@@ -4140,7 +1524,7 @@ private nonisolated struct CommunityCreatePollRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityBlockRecord: Decodable, Sendable {
+nonisolated struct CommunityBlockRecord: Decodable, Sendable {
     let blockerID: UUID
     let blockedID: UUID
     let createdAt: String
@@ -4152,7 +1536,7 @@ private nonisolated struct CommunityBlockRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityReportContentRPCParams: Encodable, Sendable {
+nonisolated struct CommunityReportContentRPCParams: Encodable, Sendable {
     let targetType: CommunityReportTargetType
     let postID: UUID?
     let commentID: UUID?
@@ -4170,7 +1554,7 @@ private nonisolated struct CommunityReportContentRPCParams: Encodable, Sendable 
     }
 }
 
-private nonisolated struct CommunityBlockUserRPCParams: Encodable, Sendable {
+nonisolated struct CommunityBlockUserRPCParams: Encodable, Sendable {
     let blockedID: UUID
     let reason: String?
 
@@ -4180,7 +1564,7 @@ private nonisolated struct CommunityBlockUserRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityUnblockUserRPCParams: Encodable, Sendable {
+nonisolated struct CommunityUnblockUserRPCParams: Encodable, Sendable {
     let blockedID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4188,7 +1572,7 @@ private nonisolated struct CommunityUnblockUserRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostRecord: Decodable, Sendable {
+nonisolated struct CommunityPostRecord: Decodable, Sendable {
     let id: UUID
     let authorID: UUID
     let title: String
@@ -4214,7 +1598,7 @@ private nonisolated struct CommunityPostRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPendingPostContextRecord: Decodable, Sendable {
+nonisolated struct CommunityPendingPostContextRecord: Decodable, Sendable {
     let id: UUID
     let authorID: UUID
     let status: String
@@ -4226,11 +1610,11 @@ private nonisolated struct CommunityPendingPostContextRecord: Decodable, Sendabl
     }
 }
 
-private nonisolated struct CommunityPostRateLimitRecord: Decodable, Sendable {
+nonisolated struct CommunityPostRateLimitRecord: Decodable, Sendable {
     let id: UUID
 }
 
-private nonisolated struct CommunityPollRecord: Decodable, Sendable {
+nonisolated struct CommunityPollRecord: Decodable, Sendable {
     let id: UUID
     let authorID: UUID
     let question: String
@@ -4282,7 +1666,7 @@ private nonisolated struct CommunityPollRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPollVoteRecord: Decodable, Sendable {
+nonisolated struct CommunityPollVoteRecord: Decodable, Sendable {
     let pollID: UUID
     let optionID: UUID
     let userID: UUID
@@ -4298,7 +1682,7 @@ private nonisolated struct CommunityPollVoteRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostLikeRecord: Decodable, Sendable {
+nonisolated struct CommunityPostLikeRecord: Decodable, Sendable {
     let postID: UUID
     let userID: UUID
     let createdAt: String?
@@ -4310,19 +1694,7 @@ private nonisolated struct CommunityPostLikeRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostLikeInsert: Encodable, Sendable {
-    let postID: UUID
-    let userID: UUID
-    let createdAt: String
-
-    enum CodingKeys: String, CodingKey {
-        case postID = "post_id"
-        case userID = "user_id"
-        case createdAt = "created_at"
-    }
-}
-
-private nonisolated struct CommunityPostFavoriteRecord: Decodable, Sendable {
+nonisolated struct CommunityPostFavoriteRecord: Decodable, Sendable {
     let postID: UUID
     let userID: UUID
     let createdAt: String?
@@ -4334,19 +1706,7 @@ private nonisolated struct CommunityPostFavoriteRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostFavoriteInsert: Encodable, Sendable {
-    let postID: UUID
-    let userID: UUID
-    let createdAt: String
-
-    enum CodingKeys: String, CodingKey {
-        case postID = "post_id"
-        case userID = "user_id"
-        case createdAt = "created_at"
-    }
-}
-
-private nonisolated struct CommunityNotificationRecord: Decodable, Sendable {
+nonisolated struct CommunityNotificationRecord: Decodable, Sendable {
     let id: UUID
     let recipientID: UUID
     let actorID: UUID?
@@ -4374,7 +1734,7 @@ private nonisolated struct CommunityNotificationRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityNotificationSettingsRecord: Decodable, Sendable {
+nonisolated struct CommunityNotificationSettingsRecord: Decodable, Sendable {
     let userID: UUID
     let mutedAll: Bool
     let updatedAt: String?
@@ -4386,7 +1746,7 @@ private nonisolated struct CommunityNotificationSettingsRecord: Decodable, Senda
     }
 }
 
-private nonisolated struct SiteAnnouncementRecord: Decodable, Sendable {
+nonisolated struct SiteAnnouncementRecord: Decodable, Sendable {
     let id: UUID
     let title: String
     let body: String
@@ -4410,7 +1770,7 @@ private nonisolated struct SiteAnnouncementRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct SiteAnnouncementReadRecord: Decodable, Sendable {
+nonisolated struct SiteAnnouncementReadRecord: Decodable, Sendable {
     let announcementID: UUID
     let userID: UUID
     let readAt: String
@@ -4424,7 +1784,7 @@ private nonisolated struct SiteAnnouncementReadRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityNotificationReadUpdate: Encodable, Sendable {
+nonisolated struct CommunityNotificationReadUpdate: Encodable, Sendable {
     let isRead: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -4432,7 +1792,7 @@ private nonisolated struct CommunityNotificationReadUpdate: Encodable, Sendable 
     }
 }
 
-private nonisolated struct CommunityNotificationDismissUpdate: Encodable, Sendable {
+nonisolated struct CommunityNotificationDismissUpdate: Encodable, Sendable {
     let isRead: Bool
     let dismissedAt: String
 
@@ -4442,7 +1802,7 @@ private nonisolated struct CommunityNotificationDismissUpdate: Encodable, Sendab
     }
 }
 
-private nonisolated struct CommunityNotificationSettingsUpsert: Encodable, Sendable {
+nonisolated struct CommunityNotificationSettingsUpsert: Encodable, Sendable {
     let userID: UUID
     let mutedAll: Bool
     let updatedAt: String
@@ -4454,7 +1814,7 @@ private nonisolated struct CommunityNotificationSettingsUpsert: Encodable, Senda
     }
 }
 
-private nonisolated struct CommunityNotificationRPCParams: Encodable, Sendable {
+nonisolated struct CommunityNotificationRPCParams: Encodable, Sendable {
     let recipientID: UUID
     let actorID: UUID
     let postID: UUID
@@ -4474,7 +1834,7 @@ private nonisolated struct CommunityNotificationRPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct SiteAnnouncementReadInsert: Encodable, Sendable {
+nonisolated struct SiteAnnouncementReadInsert: Encodable, Sendable {
     let announcementID: UUID
     let userID: UUID
     let readAt: String
@@ -4488,7 +1848,7 @@ private nonisolated struct SiteAnnouncementReadInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct FeedbackSubmissionInsert: Encodable, Sendable {
+nonisolated struct FeedbackSubmissionInsert: Encodable, Sendable {
     let userID: UUID?
     let issueType: String
     let body: String
@@ -4504,7 +1864,7 @@ private nonisolated struct FeedbackSubmissionInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CatalogSuggestionInsert: Encodable, Sendable {
+nonisolated struct CatalogSuggestionInsert: Encodable, Sendable {
     let suggestionType: String
     let userID: UUID?
     let name: String
@@ -4528,7 +1888,7 @@ private nonisolated struct CatalogSuggestionInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct TeacherRatingInsert: Encodable, Sendable {
+nonisolated struct TeacherRatingInsert: Encodable, Sendable {
     let teacherID: Int64
     let userID: UUID
     let stars: Int
@@ -4540,11 +1900,11 @@ private nonisolated struct TeacherRatingInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct TeacherRatingStarsUpdate: Encodable, Sendable {
+nonisolated struct TeacherRatingStarsUpdate: Encodable, Sendable {
     let stars: Int
 }
 
-private nonisolated struct CourseRatingInsert: Encodable, Sendable {
+nonisolated struct CourseRatingInsert: Encodable, Sendable {
     let courseID: Int64
     let userID: UUID
     let stars: Int
@@ -4556,7 +1916,7 @@ private nonisolated struct CourseRatingInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct DishRatingInsert: Encodable, Sendable {
+nonisolated struct DishRatingInsert: Encodable, Sendable {
     let dishID: Int64
     let userID: UUID
     let stars: Int
@@ -4568,25 +1928,7 @@ private nonisolated struct DishRatingInsert: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityCreatePostRPCParams: Encodable, Sendable {
-    let id: UUID
-    let title: String
-    let body: String
-    let category: String?
-    let isAnonymous: Bool
-    let imageCount: Int
-
-    enum CodingKeys: String, CodingKey {
-        case id = "p_id"
-        case title = "p_title"
-        case body = "p_body"
-        case category = "p_category"
-        case isAnonymous = "p_is_anonymous"
-        case imageCount = "p_image_count"
-    }
-}
-
-private nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
+nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
     let id: UUID
     let title: String
     let body: String
@@ -4606,7 +1948,7 @@ private nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
+nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
     let id: UUID
     let postID: UUID
     let path: String
@@ -4636,7 +1978,7 @@ private nonisolated struct CommunityPostImageRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityPostAttachmentRecord: Decodable, Sendable {
+nonisolated struct CommunityPostAttachmentRecord: Decodable, Sendable {
     let id: UUID
     let postID: UUID
     let path: String
@@ -4662,7 +2004,7 @@ private nonisolated struct CommunityPostAttachmentRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable {
+nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable {
     let postID: String
     let fullPath: String
     let thumbnailPath: String
@@ -4674,7 +2016,7 @@ private nonisolated struct CommunityUploadValidationRequest: Encodable, Sendable
     }
 }
 
-private nonisolated struct CommunityAttachmentValidationRequest: Encodable, Sendable {
+nonisolated struct CommunityAttachmentValidationRequest: Encodable, Sendable {
     let postID: String
     let objectPath: String
     let displayName: String
@@ -4686,7 +2028,7 @@ private nonisolated struct CommunityAttachmentValidationRequest: Encodable, Send
     }
 }
 
-private nonisolated struct CommunityAttachmentValidationResponse: Decodable, Sendable {
+nonisolated struct CommunityAttachmentValidationResponse: Decodable, Sendable {
     let receiptID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4694,7 +2036,7 @@ private nonisolated struct CommunityAttachmentValidationResponse: Decodable, Sen
     }
 }
 
-private nonisolated struct CommunityAttachPostAttachmentRPCParams: Encodable, Sendable {
+nonisolated struct CommunityAttachPostAttachmentRPCParams: Encodable, Sendable {
     let receiptID: UUID
     let attachmentID: UUID
     let sortOrder: Int
@@ -4706,7 +2048,7 @@ private nonisolated struct CommunityAttachPostAttachmentRPCParams: Encodable, Se
     }
 }
 
-private nonisolated struct CommunityAttachmentDownloadRequest: Encodable, Sendable {
+nonisolated struct CommunityAttachmentDownloadRequest: Encodable, Sendable {
     let attachmentID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4714,7 +2056,7 @@ private nonisolated struct CommunityAttachmentDownloadRequest: Encodable, Sendab
     }
 }
 
-private nonisolated struct CommunityAttachmentDownloadResponse: Decodable, Sendable {
+nonisolated struct CommunityAttachmentDownloadResponse: Decodable, Sendable {
     let url: URL
     let displayName: String
     let contentType: String
@@ -4728,7 +2070,7 @@ private nonisolated struct CommunityAttachmentDownloadResponse: Decodable, Senda
     }
 }
 
-private nonisolated struct CommunityProfileUploadValidationRequest: Encodable, Sendable {
+nonisolated struct CommunityProfileUploadValidationRequest: Encodable, Sendable {
     let kind: String
     let objectPath: String
 
@@ -4738,11 +2080,11 @@ private nonisolated struct CommunityProfileUploadValidationRequest: Encodable, S
     }
 }
 
-private nonisolated struct CommunityProfileUploadValidationResponse: Decodable, Sendable {
+nonisolated struct CommunityProfileUploadValidationResponse: Decodable, Sendable {
     let validated: Bool
 }
 
-private nonisolated struct CommunityUploadValidationResponse: Decodable, Sendable {
+nonisolated struct CommunityUploadValidationResponse: Decodable, Sendable {
     let receiptID: UUID
 
     enum CodingKeys: String, CodingKey {
@@ -4750,7 +2092,7 @@ private nonisolated struct CommunityUploadValidationResponse: Decodable, Sendabl
     }
 }
 
-private nonisolated struct CommunityAttachPostImageRPCParams: Encodable, Sendable {
+nonisolated struct CommunityAttachPostImageRPCParams: Encodable, Sendable {
     let receiptID: UUID
     let imageID: UUID
     let sortOrder: Int
@@ -4762,7 +2104,7 @@ private nonisolated struct CommunityAttachPostImageRPCParams: Encodable, Sendabl
     }
 }
 
-private nonisolated struct CommunityCommentRecord: Decodable, Sendable {
+nonisolated struct CommunityCommentRecord: Decodable, Sendable {
     let id: UUID
     let postID: UUID
     let authorID: UUID
@@ -4788,21 +2130,7 @@ private nonisolated struct CommunityCommentRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityCreateCommentRPCParams: Encodable, Sendable {
-    let id: UUID
-    let postID: UUID
-    let body: String
-    let isAnonymous: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case id = "p_id"
-        case postID = "p_post_id"
-        case body = "p_body"
-        case isAnonymous = "p_is_anonymous"
-    }
-}
-
-private nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
+nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
     let id: UUID
     let postID: UUID
     let body: String
@@ -4820,7 +2148,7 @@ private nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendabl
     }
 }
 
-private nonisolated struct CommunityCommentThreadPageRPCParams: Encodable, Sendable {
+nonisolated struct CommunityCommentThreadPageRPCParams: Encodable, Sendable {
     let postID: UUID
     let afterCreatedAt: String?
     let afterID: UUID?
@@ -4834,7 +2162,7 @@ private nonisolated struct CommunityCommentThreadPageRPCParams: Encodable, Senda
     }
 }
 
-private nonisolated struct CommunityCommentThreadPageRecord: Decodable, Sendable {
+nonisolated struct CommunityCommentThreadPageRecord: Decodable, Sendable {
     let comments: [CommunityThreadCommentRecord]
     let hasMore: Bool
     let nextCursorCreatedAt: String?
@@ -4848,7 +2176,7 @@ private nonisolated struct CommunityCommentThreadPageRecord: Decodable, Sendable
     }
 }
 
-private nonisolated struct CommunityThreadCommentRecord: Decodable, Sendable {
+nonisolated struct CommunityThreadCommentRecord: Decodable, Sendable {
     let threadRootID: UUID
     let id: UUID
     let postID: UUID
@@ -4886,7 +2214,7 @@ private nonisolated struct CommunityThreadCommentRecord: Decodable, Sendable {
     }
 }
 
-private nonisolated struct CommunityCommentIDRPCParams: Encodable, Sendable {
+nonisolated struct CommunityCommentIDRPCParams: Encodable, Sendable {
     let commentID: UUID
     let requestID: UUID
 

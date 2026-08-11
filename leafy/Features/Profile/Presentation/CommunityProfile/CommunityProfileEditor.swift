@@ -3,11 +3,7 @@ import PhotosUI
 import Photos
 import SwiftData
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 enum CommunityProfileOptions {
     static let colleges = CommunityCatalogOptions.units

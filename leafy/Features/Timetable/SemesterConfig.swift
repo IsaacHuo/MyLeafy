@@ -93,7 +93,6 @@ nonisolated enum SemesterRuntimeConfigCache {
     private static let key = "semester.runtimeConfig.v1"
 
     static func load(defaults: UserDefaults = .standard) -> SemesterRuntimeConfig? {
-        migrateLegacyValue(defaults: defaults)
         guard let data = defaults.data(forKey: scopedKey(defaults: defaults)),
               let config = try? JSONDecoder().decode(SemesterRuntimeConfig.self, from: data),
               config.isUsable else {
@@ -118,14 +117,6 @@ nonisolated enum SemesterRuntimeConfigCache {
         CampusScopedDefaults.key(key, defaults: defaults)
     }
 
-    private static func migrateLegacyValue(defaults: UserDefaults) {
-        CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-            keys: [key],
-            migrationID: "semesterConfig",
-            identity: CampusIdentityStore.currentIdentity(defaults: defaults),
-            defaults: defaults
-        )
-    }
 }
 
 actor SemesterRuntimeConfigService {

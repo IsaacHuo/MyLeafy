@@ -2,11 +2,7 @@ import Foundation
 import CommonCrypto
 import Security
 import SwiftSoup
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 extension SchoolNetworkManager {
     func fetchCaptcha() async throws -> (key: String, image: UIImage) {

@@ -1,9 +1,5 @@
 import Foundation
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 nonisolated enum CommunityNickname {
     static let maxLength = 8
@@ -726,8 +722,8 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
         self.viewerHasFavorited = viewerHasFavorited
         self.pin = pin
         self.author = author
-        self.images = images
-        self.attachments = attachments
+        self.images = images.sorted { $0.sortOrder < $1.sortOrder }
+        self.attachments = attachments.sorted { $0.sortOrder < $1.sortOrder }
     }
 
     init(from decoder: Decoder) throws {
@@ -747,8 +743,10 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
         viewerHasFavorited = try container.decodeIfPresent(Bool.self, forKey: .viewerHasFavorited) ?? false
         pin = try container.decodeIfPresent(CommunityPostPin.self, forKey: .pin)
         author = try container.decodeIfPresent(CommunityProfile.self, forKey: .author)
-        images = try container.decodeIfPresent([CommunityPostImage].self, forKey: .images) ?? []
-        attachments = try container.decodeIfPresent([CommunityPostAttachment].self, forKey: .attachments) ?? []
+        images = try container.decodeIfPresent([CommunityPostImage].self, forKey: .images)?
+            .sorted { $0.sortOrder < $1.sortOrder } ?? []
+        attachments = try container.decodeIfPresent([CommunityPostAttachment].self, forKey: .attachments)?
+            .sorted { $0.sortOrder < $1.sortOrder } ?? []
     }
 
     var displayAuthorName: String {

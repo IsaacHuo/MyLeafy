@@ -1,37 +1,7 @@
 import Foundation
 
 enum AppStoreUpdateLookup {
-    enum Platform {
-        case iOS
-        case macOS
-
-        nonisolated static var current: Platform {
-#if os(macOS)
-            .macOS
-#else
-            .iOS
-#endif
-        }
-
-        fileprivate var lookupEntity: String {
-            switch self {
-            case .iOS: "software"
-            case .macOS: "macSoftware"
-            }
-        }
-
-        fileprivate var resultKind: String {
-            switch self {
-            case .iOS: "software"
-            case .macOS: "mac-software"
-            }
-        }
-    }
-
-    static func appStoreURL(
-        bundleIdentifier: String,
-        platform: Platform = .current
-    ) async throws -> URL? {
+    static func appStoreURL(bundleIdentifier: String) async throws -> URL? {
         var lastError: Error?
         var seenCountryCodes: Set<String> = []
         let countryCodes: [String?] = [
@@ -47,8 +17,7 @@ enum AppStoreUpdateLookup {
             do {
                 if let url = try await lookupAppStoreURL(
                     bundleIdentifier: bundleIdentifier,
-                    countryCode: countryCode,
-                    platform: platform
+                    countryCode: countryCode
                 ) {
                     return url
                 }
@@ -77,15 +46,14 @@ enum AppStoreUpdateLookup {
         return components.url ?? appStoreURL
     }
 
-    static func preferredURL(from data: Data, platform: Platform) throws -> URL? {
+    static func preferredURL(from data: Data) throws -> URL? {
         let response = try JSONDecoder().decode(AppStoreLookupResponse.self, from: data)
-        return response.results.first { $0.kind == platform.resultKind }?.trackViewURL
+        return response.results.first { $0.kind == "software" }?.trackViewURL
     }
 
     private static func lookupAppStoreURL(
         bundleIdentifier: String,
-        countryCode: String?,
-        platform: Platform
+        countryCode: String?
     ) async throws -> URL? {
         guard var components = URLComponents(string: "https://itunes.apple.com/lookup") else {
             return nil
@@ -93,7 +61,7 @@ enum AppStoreUpdateLookup {
 
         var queryItems = [
             URLQueryItem(name: "bundleId", value: bundleIdentifier),
-            URLQueryItem(name: "entity", value: platform.lookupEntity)
+            URLQueryItem(name: "entity", value: "software")
         ]
         if let countryCode, !countryCode.isEmpty {
             queryItems.append(URLQueryItem(name: "country", value: countryCode))
@@ -105,7 +73,7 @@ enum AppStoreUpdateLookup {
         }
 
         let (data, _) = try await URLSession.shared.data(from: url)
-        return try preferredURL(from: data, platform: platform)
+        return try preferredURL(from: data)
     }
 }
 

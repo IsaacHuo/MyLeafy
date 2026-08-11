@@ -141,7 +141,7 @@ Features/
 - `Domain`：不依赖 UI 的模型、规则、投影、索引和纯计算。
 - `Data`：某些领域的 live service 实现或数据适配。
 
-依赖方向保持为 `Presentation → Application → Domain`。`Data` 实现应用层定义的窄协议，组合根负责将实现注入页面；Domain 不依赖 SwiftUI、Supabase 或具体持久化。社区和课表的公开类型名与方法签名应在结构调整中保持兼容，目录迁移不代表业务或存储 schema 变化。
+依赖方向保持为 `Presentation → Application → Domain`。`Data` 实现应用层定义的窄协议，组合根负责将实现注入页面；Domain 不依赖 SwiftUI、Supabase 或具体持久化。结构调整保持当前 UI、导航、深链、SwiftData 模型名和当前后端契约稳定，但不保留已经被当前实现取代的别名、存储键、解码入口或兼容方法。
 
 历史代码仍有部分跨层文件。新增代码应遵守依赖方向；旧文件只在相关功能改动时迁移。
 
@@ -311,7 +311,7 @@ Supabase 不接管学校登录。常规链路是：
 - `Features/Community/Application/CommunitySessionManager`：会话和 profile 生命周期。
 - `Features/Community/Data/Supabase/CommunityService`：社区数据操作。
 - `TimetableSharingService`：共享课表数据、邀请码和共享关系。
-- `Live*Repository`：面向功能的仓储实现或兼容 facade。
+- `Live*Repository`：面向当前功能契约的仓储实现。
 
 安全不能依赖客户端代码。表访问由 RLS、校园作用域和所有权约束；需要跨用户或高权限的操作由 Edge Functions 完成。
 

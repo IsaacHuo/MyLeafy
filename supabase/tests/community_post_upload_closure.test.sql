@@ -5,7 +5,7 @@ set local search_path = public, extensions;
 set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = '91000000-0000-0000-0000-000000000001';
 
-select plan(15);
+select plan(14);
 
 insert into auth.users (id)
 values ('91000000-0000-0000-0000-000000000001');
@@ -217,37 +217,6 @@ select is(
   )).status,
   'published',
   'admin retry publishes a complete failed upload'
-);
-
-insert into public.posts (
-  id, campus_id, author_id, title, body, category, status, expected_image_count
-) values (
-  '94000000-0000-0000-0000-000000000004',
-  'bjfu',
-  '92000000-0000-0000-0000-000000000001',
-  '旧版上传',
-  '旧客户端仍可完成发布',
-  '测试',
-  'pending_review',
-  null
-);
-
-insert into public.post_images (
-  id, post_id, path, thumbnail_path, sort_order, width, height
-) values (
-  '96000000-0000-0000-0000-000000000004',
-  '94000000-0000-0000-0000-000000000004',
-  'posts/legacy/full/one.jpg',
-  'posts/legacy/thumb/one.jpg',
-  0,
-  100,
-  100
-);
-
-select is(
-  (public.publish_community_post_v1('94000000-0000-0000-0000-000000000004')).status,
-  'published',
-  'legacy clients retain the validated publish RPC'
 );
 
 select ok(

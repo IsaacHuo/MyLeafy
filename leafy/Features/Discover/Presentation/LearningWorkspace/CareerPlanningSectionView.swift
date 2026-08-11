@@ -4,11 +4,7 @@ import Supabase
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct CareerPlanningSectionView: View {
     @Environment(\.modelContext) private var modelContext
@@ -972,7 +968,6 @@ private struct CareerDocumentPreviewSheet: View {
     }
 }
 
-#if canImport(UIKit)
 private struct CareerDocumentPreview: UIViewControllerRepresentable {
     let url: URL
 
@@ -1007,9 +1002,7 @@ private struct CareerDocumentPreview: UIViewControllerRepresentable {
         }
     }
 }
-#else
-private typealias CareerDocumentPreview = LeafyDocumentPreview
-#endif
+
 
 enum CareerDocumentFileStore {
     struct StoredFile {

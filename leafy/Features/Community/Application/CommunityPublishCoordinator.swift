@@ -2,7 +2,6 @@ import Combine
 import Foundation
 import Network
 import OSLog
-import Supabase
 import UIKit
 
 nonisolated enum CommunityPublishTaskState: String, Codable, Hashable, Sendable {
@@ -398,10 +397,12 @@ final class CommunityPublishCoordinator: ObservableObject {
     private let networkMonitorQueue = DispatchQueue(label: "com.isaachuo.leafy.community-publish-network")
     private let notificationReadKey = "community.publish.notification.read.ids"
     private let notificationDismissedKey = "community.publish.notification.dismissed.ids"
+    private let backend: any CommunityPublishBackend
     private var workers: [UUID: Task<Void, Never>] = [:]
     private var hasConfigured = false
 
-    private init() {
+    private init(backend: any CommunityPublishBackend = LiveCommunityPublishBackend()) {
+        self.backend = backend
         tasks = loadPersistedTasks()
         CommunityBackgroundTransferManager.shared.progressHandler = { descriptor, progress in
             Task { @MainActor in
@@ -598,8 +599,8 @@ final class CommunityPublishCoordinator: ObservableObject {
         workers[taskID] = nil
         CommunityBackgroundTransferManager.shared.cancel(publishTaskID: taskID)
         Task {
-            if (try? await CommunityService.shared.pendingPostContext(postID: taskID)) != nil {
-                try? await CommunityService.shared.abortPendingPost(postID: taskID)
+            if (try? await backend.pendingPostContext(postID: taskID)) != nil {
+                try? await backend.abortPendingPost(postID: taskID)
             }
             await MainActor.run {
                 self.finishCancellation(taskID: taskID)
@@ -691,11 +692,11 @@ final class CommunityPublishCoordinator: ObservableObject {
         do {
             guard !Task.isCancelled else { return }
             var task = try requiredTask(taskID)
-            try await requireBackendCapabilities(for: task)
+            try await backend.requireCapabilities(for: Set(task.media.map(\.kind)))
 
             if task.authorID == nil {
                 setState(taskID, .creatingPost)
-                if let existing = try await CommunityService.shared.pendingPostContext(postID: taskID) {
+                if let existing = try await backend.pendingPostContext(postID: taskID) {
                     updateTask(taskID) {
                         $0.authorID = existing.authorID
                     }
@@ -704,13 +705,13 @@ final class CommunityPublishCoordinator: ObservableObject {
                         return
                     }
                 } else {
-                    _ = try await CommunityService.shared.createPendingPost(
+                    _ = try await backend.createPendingPost(
                         id: taskID,
                         input: task.input,
                         imageCount: task.media.filter { $0.kind == .image }.count,
                         attachmentCount: task.media.filter { $0.kind == .attachment }.count
                     )
-                    guard let context = try await CommunityService.shared.pendingPostContext(postID: taskID) else {
+                    guard let context = try await backend.pendingPostContext(postID: taskID) else {
                         throw CommunityServiceError.edgeFunctionRejected("帖子创建后未能读取发布状态。")
                     }
                     updateTask(taskID) {
@@ -736,7 +737,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             }
 
             setState(taskID, .publishing)
-            guard let post = try await CommunityService.shared.fetchPost(postID: taskID),
+            guard let post = try await backend.fetchPost(postID: taskID),
                   post.status == "published" else {
                 throw CommunityServiceError.edgeFunctionRejected("媒体已上传，但帖子尚未完成发布。")
             }
@@ -803,7 +804,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             }
 
             setState(taskID, .validating)
-            try await CommunityService.shared.validateAndAttachPostImage(
+            try await backend.validateAndAttachPostImage(
                 postID: taskID,
                 imageID: mediaID,
                 fullPath: remotePath,
@@ -829,7 +830,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             }
             media = try requiredMedia(taskID: taskID, mediaID: mediaID)
             setState(taskID, .validating)
-            try await CommunityService.shared.validateAndAttachPostAttachment(
+            try await backend.validateAndAttachPostAttachment(
                 postID: taskID,
                 attachmentID: mediaID,
                 objectPath: remotePath,
@@ -853,16 +854,16 @@ final class CommunityPublishCoordinator: ObservableObject {
         fileURL: URL,
         descriptor: CommunityBackgroundTransferDescriptor
     ) async throws {
-        let credentials = try await uploadCredentials()
+        let credentials = try await backend.uploadCredentials()
         var request = URLRequest(
-            url: credentials.config.url
+            url: credentials.baseURL
                 .appendingPathComponent("storage/v1/object")
                 .appendingPathComponent(bucket)
                 .appendingPathComponent(objectPath)
         )
         request.httpMethod = "POST"
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.config.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.setValue("false", forHTTPHeaderField: "x-upsert")
         request.setValue("31536000", forHTTPHeaderField: "cache-control")
@@ -919,11 +920,11 @@ final class CommunityPublishCoordinator: ObservableObject {
                 length: Int(length)
             )
             defer { try? fileManager.removeItem(at: chunkURL) }
-            let credentials = try await uploadCredentials()
+            let credentials = try await backend.uploadCredentials()
             var request = URLRequest(url: uploadURL)
             request.httpMethod = "PATCH"
             request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue(credentials.config.publishableKey, forHTTPHeaderField: "apikey")
+            request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
             request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
             request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
             request.setValue(String(offset), forHTTPHeaderField: "Upload-Offset")
@@ -952,13 +953,13 @@ final class CommunityPublishCoordinator: ObservableObject {
         contentType: String,
         byteSize: Int
     ) async throws -> URL {
-        let credentials = try await uploadCredentials()
-        let endpoint = directStorageBaseURL(config: credentials.config)
+        let credentials = try await backend.uploadCredentials()
+        let endpoint = directStorageBaseURL(baseURL: credentials.baseURL)
             .appendingPathComponent("storage/v1/upload/resumable")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.config.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
         request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         request.setValue(String(byteSize), forHTTPHeaderField: "Upload-Length")
         request.setValue(
@@ -985,11 +986,11 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     private func tusOffset(uploadURL: URL) async throws -> Int64 {
-        let credentials = try await uploadCredentials()
+        let credentials = try await backend.uploadCredentials()
         var request = URLRequest(url: uploadURL)
         request.httpMethod = "HEAD"
         request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.config.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
         request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse,
@@ -1004,54 +1005,16 @@ final class CommunityPublishCoordinator: ObservableObject {
         return offset
     }
 
-    private func requireBackendCapabilities(for task: CommunityPublishTask) async throws {
-        let mediaKinds = Set(task.media.map(\.kind))
-        let cachedCapabilities = try await SupabaseBackendClient.shared.capabilities()
-        let capabilities = try await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
-            cachedCapabilities,
-            mediaKinds: mediaKinds
-        ) {
-            try await SupabaseBackendClient.shared.capabilities(forceRefresh: true)
-        }
-
-        let missingRPCs = CommunityPublishCapabilityRequirements.missingRPCs(
-            in: capabilities,
-            mediaKinds: mediaKinds
-        )
-        let missingEdgeFunctions = CommunityPublishCapabilityRequirements.missingEdgeFunctions(
-            in: capabilities,
-            mediaKinds: mediaKinds
-        )
-        guard missingRPCs.isEmpty, missingEdgeFunctions.isEmpty else {
-            CommunityDiagnostics.log.error(
-                """
-                Community publish capabilities unavailable after refresh. \
-                version=\(capabilities.version, privacy: .public) \
-                media_kinds=\(mediaKinds.map(\.rawValue).sorted().joined(separator: ","), privacy: .public) \
-                missing_rpcs=\(missingRPCs.joined(separator: ","), privacy: .public) \
-                missing_edge_functions=\(missingEdgeFunctions.joined(separator: ","), privacy: .public)
-                """
-            )
-            throw CommunityServiceError.edgeFunctionRejected("社区服务需要更新后才能发布，请稍后重试。")
-        }
-    }
-
-    private func uploadCredentials() async throws -> (config: SupabaseConfig, accessToken: String) {
-        let client = try LeafySupabase.shared.requireClient()
-        let session = try await client.auth.session
-        return (try LeafySupabase.shared.requireConfig(), session.accessToken)
-    }
-
-    private func directStorageBaseURL(config: SupabaseConfig) -> URL {
-        guard let host = config.url.host,
+    private func directStorageBaseURL(baseURL: URL) -> URL {
+        guard let host = baseURL.host,
               host.hasSuffix(".supabase.co"),
               !host.hasSuffix(".storage.supabase.co"),
-              var components = URLComponents(url: config.url, resolvingAgainstBaseURL: false) else {
-            return config.url
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return baseURL
         }
         components.host = host.replacingOccurrences(of: ".supabase.co", with: ".storage.supabase.co")
         components.path = ""
-        return components.url ?? config.url
+        return components.url ?? baseURL
     }
 
     private func tusMetadata(_ key: String, _ value: String) -> String {

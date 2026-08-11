@@ -36,8 +36,8 @@ struct FeatureCard<Destination: View>: View {
             .frame(width: 140, alignment: .leading)
             .padding(18)
             .background(AppTheme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: UIConstants.cornerRadiusLarge, style: .continuous))
-            .shadow(color: UIConstants.floatingShadow(for: .light), radius: 8, x: 0, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+            .shadow(color: AppShadow.color(for: .light), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(.plain)
     }

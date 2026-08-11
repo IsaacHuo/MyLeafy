@@ -19,8 +19,7 @@ nonisolated enum ScheduleMemoKind: String, CaseIterable, Identifiable, Sendable 
         }
     }
 
-    static func normalized(_ rawValue: String?) -> ScheduleMemoKind {
-        guard let rawValue else { return .quickMemo }
+    static func normalized(_ rawValue: String) -> ScheduleMemoKind {
         return ScheduleMemoKind(rawValue: rawValue) ?? .quickMemo
     }
 }
@@ -29,9 +28,7 @@ nonisolated enum ScheduleMemoKind: String, CaseIterable, Identifiable, Sendable 
 final class ScheduleMemo {
     var id: UUID
     var body: String
-    // These fields were added after the original memo store shipped. Keep them
-    // optional so existing rows migrate without a destructive backfill.
-    var kindRawValue: String?
+    var kindRawValue: String
     var title: String?
     var tagsRawValue: String
     var createdAt: Date
@@ -51,7 +48,7 @@ final class ScheduleMemo {
         trashedAt: Date? = nil,
         linkedScheduleKindRawValue: String? = nil,
         linkedScheduleID: String? = nil,
-        kindRawValue: String? = nil,
+        kindRawValue: String = ScheduleMemoKind.quickMemo.rawValue,
         title: String? = nil
     ) {
         self.id = id

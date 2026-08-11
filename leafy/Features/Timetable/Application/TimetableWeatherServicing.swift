@@ -348,11 +348,7 @@ final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationPr
     private func requestAuthorization() async -> CLAuthorizationStatus {
         await withCheckedContinuation { continuation in
             authorizationContinuation = continuation
-#if os(macOS)
-            manager.requestAlwaysAuthorization()
-#else
             manager.requestWhenInUseAuthorization()
-#endif
         }
     }
 
@@ -385,10 +381,6 @@ final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationPr
     }
 
     private static func isAuthorized(_ status: CLAuthorizationStatus) -> Bool {
-#if os(macOS)
-        status == .authorizedAlways
-#else
         status == .authorizedAlways || status == .authorizedWhenInUse
-#endif
     }
 }

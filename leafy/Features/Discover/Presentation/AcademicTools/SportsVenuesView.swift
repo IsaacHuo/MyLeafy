@@ -4,11 +4,7 @@ import Supabase
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct SportsVenuesView: View {
     var body: some View {

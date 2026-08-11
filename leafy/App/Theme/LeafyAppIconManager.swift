@@ -1,9 +1,5 @@
 import Foundation
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 import WidgetKit
 
 @MainActor
@@ -13,21 +9,7 @@ enum LeafyAppIconManager {
         customColorHex: String,
         iconPreferenceRaw: String
     ) {
-        let themeSnapshot = LeafyWidgetThemeSnapshot(
-            preferenceRaw: preferenceRaw,
-            customColorHex: customColorHex
-        )
-        let iconPreference = migratedIconPreference(
-            rawValue: iconPreferenceRaw,
-            themeSnapshot: themeSnapshot
-        )
-
-        if iconPreferenceRaw == "followTheme" {
-            UserDefaults.standard.set(
-                iconPreference.rawValue,
-                forKey: LeafyAppIconAppearancePreference.storageKey
-            )
-        }
+        let iconPreference = LeafyAppIconAppearancePreference.storedValue(iconPreferenceRaw)
 
         LeafyWidgetThemeStore.save(preferenceRaw: preferenceRaw, customHex: customColorHex)
         WidgetCenter.shared.reloadTimelines(ofKind: LeafyWidgetConstants.widgetKind)
@@ -37,7 +19,6 @@ enum LeafyAppIconManager {
     static func applyIconIfNeeded(
         iconPreference: LeafyAppIconAppearancePreference
     ) {
-        #if canImport(UIKit)
         guard UIApplication.shared.supportsAlternateIcons else { return }
 
         let iconName = alternateIconName(iconPreference: iconPreference)
@@ -50,7 +31,6 @@ enum LeafyAppIconManager {
             }
             #endif
         }
-        #endif
     }
 
     static func alternateIconName(
@@ -74,29 +54,6 @@ enum LeafyAppIconManager {
         }
     }
 
-    static func migratedIconPreference(
-        rawValue: String,
-        themeSnapshot: LeafyWidgetThemeSnapshot
-    ) -> LeafyAppIconAppearancePreference {
-        guard rawValue == "followTheme" else {
-            return LeafyAppIconAppearancePreference.storedValue(rawValue)
-        }
-
-        switch themeSnapshot.preference {
-        case .green:
-            return .green
-        case .tiffanyBlue:
-            return .tiffanyBlue
-        case .candyPink:
-            return .candyPink
-        case .sunsetApricot:
-            return .sunsetApricot
-        case .irisPurple:
-            return .irisPurple
-        case .custom:
-            return .green
-        }
-    }
 }
 
 extension LeafyAppIconAppearancePreference {

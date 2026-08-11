@@ -52,8 +52,8 @@ select ok(
   'clients can consume but cannot mint upload receipts'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.publish_community_post_v1(uuid)', 'EXECUTE'),
-  'only the validated publish RPC exposes pending posts'
+  to_regprocedure('public.publish_community_post_v1(uuid)') is null,
+  'the obsolete standalone publish RPC is removed'
 );
 select ok(
   exists (select 1 from pg_trigger where tgname = 'community_posts_guard_status_transition' and not tgisinternal),

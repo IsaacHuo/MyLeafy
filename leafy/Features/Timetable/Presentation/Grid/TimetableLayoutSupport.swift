@@ -16,11 +16,7 @@ nonisolated enum TimetableCurrentTimeIndicatorPreference {
     }
 }
 
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct TimetableLayoutMetrics: Equatable {
     let rowHeight: CGFloat

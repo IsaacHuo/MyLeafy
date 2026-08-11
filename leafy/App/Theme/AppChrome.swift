@@ -1,9 +1,5 @@
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 enum LeafyRootChromeMetrics {
     static let controlDiameter: CGFloat = 44
@@ -207,7 +203,6 @@ struct LeafyGlassGroup<Content: View>: View {
     }
 
     var body: some View {
-        #if os(iOS)
         if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             GlassEffectContainer(spacing: spacing) {
                 content()
@@ -215,9 +210,6 @@ struct LeafyGlassGroup<Content: View>: View {
         } else {
             content()
         }
-        #else
-        content()
-        #endif
     }
 }
 
@@ -301,7 +293,6 @@ extension View {
         fallbackFill: Color? = nil,
         isInteractive: Bool = false
     ) -> some View {
-        #if os(iOS)
         if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             let glass = tint.map { Glass.regular.tint($0) } ?? Glass.regular
             if isInteractive {
@@ -324,17 +315,6 @@ extension View {
                     )
                 }
             }
-        #else
-        if let fallbackFill {
-            self
-                .background(fallbackFill, in: shape)
-                .overlay(shape.stroke(AppTheme.separator, lineWidth: 1))
-        } else {
-            self
-                .background(AppTheme.topBarMaterial, in: shape)
-                .overlay(shape.stroke(AppTheme.separator, lineWidth: 1))
-        }
-        #endif
     }
 }
 
@@ -425,7 +405,6 @@ extension View {
     }
 }
 
-#if canImport(UIKit)
 private struct LeafyScrollRailBackgroundClearer: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -494,10 +473,3 @@ private extension UIView {
         return nil
     }
 }
-#else
-private struct LeafyScrollRailBackgroundClearer: View {
-    var body: some View {
-        Color.clear.frame(width: 0, height: 0)
-    }
-}
-#endif
