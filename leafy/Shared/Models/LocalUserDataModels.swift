@@ -1241,10 +1241,6 @@ extension Course {
         )
     }
 
-    func legacyOccurrenceKey(week: Int) -> String {
-        CourseOccurrenceNote.occurrenceKey(courseKey: stableCourseKey, week: week)
-    }
-
     private var locationTextForKey: String {
         if !location.isEmpty { return location }
         if !room.isEmpty { return room }

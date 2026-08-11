@@ -493,7 +493,23 @@ private actor SuspendingCommunityRepository: CommunityRepository {
         []
     }
 
+    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?, limit: Int) async throws -> CommunityCommentPage {
+        CommunityCommentPage(threads: [], nextCursor: nil)
+    }
+
     func createComment(postID: UUID, body: String) async throws -> CommunityComment {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    func createComment(postID: UUID, body: String, parentCommentID: UUID?, replyToCommentID: UUID?) async throws -> CommunityComment {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -520,6 +536,11 @@ private actor SuspendingCommunityRepository: CommunityRepository {
     }
 
     func createPost(input: CreatePostInput, images: [CommunityImageUpload]) async throws -> CommunityPost {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    @MainActor
+    func enqueuePostPublication(input: CreatePostInput, images: [CommunityImageUpload], attachments: [CommunityAttachmentUpload]) throws -> UUID {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -568,6 +589,19 @@ private actor SuspendingCommunityRepository: CommunityRepository {
     func fetchUnreadNotificationCount() async throws -> Int {
         0
     }
+
+    func notificationEvents(profileID: UUID) async -> AsyncThrowingStream<Void, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem] { [] }
+    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
+    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
+    func markNotificationFeedRead(announcementLimit: Int) async throws {}
+    func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {}
+    func markNotificationRead(notificationID: UUID) async throws {}
+    func markSiteAnnouncementRead(announcementID: UUID) async throws {}
+    func fetchLinkedPost(postID: UUID) async throws -> CommunityPost? { try await fetchPost(postID: postID) }
 }
 
 private enum CommunityRepositoryTestError: LocalizedError, Sendable {
@@ -623,7 +657,23 @@ private actor FakePollRepository: CommunityRepository {
         []
     }
 
+    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?, limit: Int) async throws -> CommunityCommentPage {
+        CommunityCommentPage(threads: [], nextCursor: nil)
+    }
+
     func createComment(postID: UUID, body: String) async throws -> CommunityComment {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    func createComment(postID: UUID, body: String, parentCommentID: UUID?, replyToCommentID: UUID?) async throws -> CommunityComment {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -650,6 +700,11 @@ private actor FakePollRepository: CommunityRepository {
     }
 
     func createPost(input: CreatePostInput, images: [CommunityImageUpload]) async throws -> CommunityPost {
+        throw CommunityRepositoryTestError.failure("未实现")
+    }
+
+    @MainActor
+    func enqueuePostPublication(input: CreatePostInput, images: [CommunityImageUpload], attachments: [CommunityAttachmentUpload]) throws -> UUID {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -794,6 +849,19 @@ private actor FakePollRepository: CommunityRepository {
     func fetchUnreadNotificationCount() async throws -> Int {
         0
     }
+
+    func notificationEvents(profileID: UUID) async -> AsyncThrowingStream<Void, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem] { [] }
+    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
+    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
+    func markNotificationFeedRead(announcementLimit: Int) async throws {}
+    func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {}
+    func markNotificationRead(notificationID: UUID) async throws {}
+    func markSiteAnnouncementRead(announcementID: UUID) async throws {}
+    func fetchLinkedPost(postID: UUID) async throws -> CommunityPost? { try await fetchPost(postID: postID) }
 
     private func makePoll(
         id: UUID = UUID(),

@@ -1,7 +1,6 @@
 import Combine
 import Foundation
 import OSLog
-import Supabase
 import SwiftUI
 
 @MainActor
@@ -12,18 +11,20 @@ final class CommunitySessionManager: ObservableObject {
     @Published private(set) var isBootstrapping = false
     @Published var bootstrapError: String?
 
-    private let service = CommunityService.shared
+    private let repository: any CommunityIdentitySessionRepository
     private var activeBootstrapTask: Task<Void, Never>?
     private static let bootstrapTimeoutMessage = "社区身份初始化超时。请检查网络或稍后重试；帖子列表仍可浏览。"
 
-    private init() {}
+    private init(repository: any CommunityIdentitySessionRepository = LiveCommunitySessionRepository()) {
+        self.repository = repository
+    }
 
     var currentUserID: UUID? {
         profile?.id
     }
 
     private var currentAuthUserID: UUID? {
-        LeafySupabase.shared.client?.auth.currentUser?.id
+        repository.currentAuthUserID
     }
 
     var requiresProfileCompletion: Bool {
@@ -56,7 +57,7 @@ final class CommunitySessionManager: ObservableObject {
         }
 
         do {
-            profile = try await service.fetchCurrentProfile()
+            profile = try await repository.fetchCurrentProfile()
             bootstrapError = nil
             CommunityDiagnostics.log.info("Community session restore finished; hasProfile=\((self.profile != nil), privacy: .public)")
         } catch {
@@ -139,8 +140,8 @@ final class CommunitySessionManager: ObservableObject {
             try await CommunityTimeout.run(
                 seconds: 12,
                 message: Self.bootstrapTimeoutMessage
-            ) { [service] in
-                try await service.ensureAnonymousSession()
+            ) { [repository] in
+                try await repository.ensureAnonymousSession()
             }
             guard !Task.isCancelled else { return }
 
@@ -166,8 +167,8 @@ final class CommunitySessionManager: ObservableObject {
             let profile = try await CommunityTimeout.run(
                 seconds: 12,
                 message: Self.bootstrapTimeoutMessage
-            ) { [service] in
-                try await service.bootstrapCommunityUser(
+            ) { [repository] in
+                try await repository.bootstrapCommunityUser(
                     eduID: eduID,
                     displayName: schoolManager.authenticatedDisplayName ?? eduID,
                     campusID: campusID
@@ -200,9 +201,7 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func signOut() async {
-        if let client = LeafySupabase.shared.client {
-            try? await client.auth.signOut()
-        }
+        await repository.signOut(localOnly: false)
 
         profile = nil
         bootstrapError = nil
@@ -225,11 +224,8 @@ final class CommunitySessionManager: ObservableObject {
             }
         }
 
-        try await service.deleteCurrentAccount()
-
-        if let client = LeafySupabase.shared.client {
-            try? await client.auth.signOut(scope: .local)
-        }
+        try await repository.deleteCurrentAccount()
+        await repository.signOut(localOnly: true)
 
         profile = nil
         bootstrapError = nil
@@ -254,7 +250,7 @@ final class CommunitySessionManager: ObservableObject {
         cover: CommunityImageUpload? = nil,
         resetCoverToDefault: Bool = false
     ) async throws -> CommunityProfile {
-        let updatedProfile = try await service.updateProfile(
+        let updatedProfile = try await repository.updateProfile(
             input: input,
             avatar: avatar,
             cover: cover,
@@ -266,13 +262,13 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func requestEmailVerification(input: CommunityEmailBindingInput) async throws {
-        let updatedProfile = try await service.requestEmailVerification(input: input)
+        let updatedProfile = try await repository.requestEmailVerification(input: input)
         profile = updatedProfile
         bootstrapError = nil
     }
 
     func verifyEmailBinding(input: CommunityEmailVerificationInput) async throws {
-        let updatedProfile = try await service.verifyEmailBinding(input: input)
+        let updatedProfile = try await repository.verifyEmailBinding(input: input)
         profile = updatedProfile
         bootstrapError = nil
     }
@@ -283,32 +279,32 @@ final class CommunitySessionManager: ObservableObject {
 
     @discardableResult
     func submitCampusMembershipRequest(schoolName: String) async throws -> CommunityProfile {
-        let updatedProfile = try await service.submitCampusMembershipRequest(schoolName: schoolName)
+        let updatedProfile = try await repository.submitCampusMembershipRequest(schoolName: schoolName)
         profile = updatedProfile
         bootstrapError = nil
         return updatedProfile
     }
 
     func searchCommunityCampuses(query: String, limit: Int = 20) async throws -> [CommunityCampusOption] {
-        try await service.searchCommunityCampuses(query: query, limit: limit)
+        try await repository.searchCommunityCampuses(query: query, limit: limit)
     }
 
     @discardableResult
     func selectCommunityCampus(campusID: String) async throws -> CommunityProfile {
-        let updatedProfile = try await service.selectCommunityCampus(campusID: campusID)
+        let updatedProfile = try await repository.selectCommunityCampus(campusID: campusID)
         profile = updatedProfile
         bootstrapError = nil
         return updatedProfile
     }
 
     func fetchCurrentCampusMembershipRequest() async throws -> CommunityCampusMembershipRequest? {
-        try await service.fetchCurrentCampusMembershipRequest()
+        try await repository.fetchCurrentCampusMembershipRequest()
     }
 
     @discardableResult
     func submitCommunitySchoolChangeRequest(campusID: String) async throws -> CommunityCampusMembershipRequest {
-        let request = try await service.submitCommunitySchoolChangeRequest(campusID: campusID)
-        if let updatedProfile = try await service.fetchCurrentProfile() {
+        let request = try await repository.submitCommunitySchoolChangeRequest(campusID: campusID)
+        if let updatedProfile = try await repository.fetchCurrentProfile() {
             profile = updatedProfile
         }
         bootstrapError = nil

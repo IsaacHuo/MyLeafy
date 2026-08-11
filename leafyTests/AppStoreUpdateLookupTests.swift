@@ -3,7 +3,7 @@ import XCTest
 @testable import Leafy
 
 final class AppStoreUpdateLookupTests: XCTestCase {
-    func testLookupSelectsResultForRequestedPlatform() throws {
+    func testLookupSelectsIOSResult() throws {
         let data = Data(
             """
             {
@@ -16,22 +16,18 @@ final class AppStoreUpdateLookupTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            try AppStoreUpdateLookup.preferredURL(from: data, platform: .iOS)?.absoluteString,
+            try AppStoreUpdateLookup.preferredURL(from: data)?.absoluteString,
             "https://apps.apple.com/app/id-ios"
-        )
-        XCTAssertEqual(
-            try AppStoreUpdateLookup.preferredURL(from: data, platform: .macOS)?.absoluteString,
-            "https://apps.apple.com/app/id-mac"
         )
     }
 
-    func testLookupDoesNotFallBackToWrongPlatform() throws {
+    func testLookupIgnoresNonIOSResult() throws {
         let data = Data(
             """
-            {"results":[{"kind":"software","trackViewUrl":"https://apps.apple.com/app/id-ios"}]}
+            {"results":[{"kind":"mac-software","trackViewUrl":"https://apps.apple.com/app/id-mac"}]}
             """.utf8
         )
 
-        XCTAssertNil(try AppStoreUpdateLookup.preferredURL(from: data, platform: .macOS))
+        XCTAssertNil(try AppStoreUpdateLookup.preferredURL(from: data))
     }
 }

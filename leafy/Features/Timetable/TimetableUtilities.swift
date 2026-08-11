@@ -1,10 +1,6 @@
 import Foundation
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 import UserNotifications
 
 nonisolated enum TimetablePeriodSchedule {
@@ -165,7 +161,6 @@ enum TimetableCacheMetadata {
 
     static var lastSyncAt: Date? {
         get {
-            migrateLegacyValues()
             return UserDefaults.standard.object(forKey: scoped(lastSyncKey)) as? Date
         }
         set { UserDefaults.standard.set(newValue, forKey: scoped(lastSyncKey)) }
@@ -173,7 +168,6 @@ enum TimetableCacheMetadata {
 
     static var lastFailureMessage: String? {
         get {
-            migrateLegacyValues()
             return UserDefaults.standard.string(forKey: scoped(lastFailureKey))
         }
         set {
@@ -187,7 +181,6 @@ enum TimetableCacheMetadata {
 
     static var lastSyncedSemesterID: String? {
         get {
-            migrateLegacyValues()
             return UserDefaults.standard.string(forKey: scoped(lastSyncedSemesterKey))
         }
         set {
@@ -210,12 +203,6 @@ enum TimetableCacheMetadata {
         CampusScopedDefaults.key(key)
     }
 
-    private static func migrateLegacyValues() {
-        CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-            keys: [lastSyncKey, lastFailureKey, lastSyncedSemesterKey],
-            migrationID: "timetableMetadata"
-        )
-    }
 }
 
 enum TimetableAdaptiveMode: Equatable {
@@ -345,9 +332,9 @@ enum TimetableNoteResolver {
         courseNotes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote]
     ) -> String? {
-        let occurrenceKeys = [course.occurrenceKey(week: week), course.legacyOccurrenceKey(week: week)]
+        let occurrenceKey = course.occurrenceKey(week: week)
         if let occurrenceText = occurrenceNotes
-            .filter({ occurrenceKeys.contains($0.occurrenceKey) })
+            .filter({ occurrenceKey == $0.occurrenceKey })
             .sorted(by: latestFirst)
             .compactMap({ trimmed($0.text) })
             .first {
@@ -404,7 +391,6 @@ enum TimetableNoteResolver {
         occurrenceNotesByKey: [String: String]
     ) -> String? {
         occurrenceNotesByKey[course.occurrenceKey(week: week)]
-            ?? occurrenceNotesByKey[course.legacyOccurrenceKey(week: week)]
             ?? courseNotesByKey[course.stableCourseKey]
     }
 
@@ -662,7 +648,6 @@ enum TimetableNotificationError: LocalizedError {
     }
 }
 
-#if canImport(UIKit)
 struct LeafySystemShare: UIViewControllerRepresentable {
     let activityItems: [Any]
 
@@ -672,36 +657,6 @@ struct LeafySystemShare: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
-#elseif canImport(AppKit)
-struct LeafySystemShare: NSViewRepresentable {
-    let activityItems: [Any]
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
-        DispatchQueue.main.async {
-            context.coordinator.present(items: activityItems, from: view)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-
-    final class Coordinator {
-        private var picker: NSSharingServicePicker?
-
-        func present(items: [Any], from view: NSView) {
-            guard !items.isEmpty, view.window != nil else { return }
-            let picker = NSSharingServicePicker(items: items)
-            self.picker = picker
-            picker.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
-        }
-    }
-}
-#endif
 
 typealias ShareSheet = LeafySystemShare
 

@@ -119,6 +119,8 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     private func refreshFromNetwork(query: CommunityFeedQuery, loadID: UUID) async {
+        let signpostState = LeafyPerformanceSignposter.community.beginInterval("feed-refresh")
+        defer { LeafyPerformanceSignposter.community.endInterval("feed-refresh", signpostState) }
         CommunityDiagnostics.log.info("Community feed load started")
 
         isLoading = true

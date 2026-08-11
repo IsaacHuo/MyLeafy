@@ -1,10 +1,6 @@
 import CryptoKit
 import Foundation
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 nonisolated struct CampusID: RawRepresentable, Codable, Hashable, Sendable {
     let rawValue: String
@@ -177,9 +173,8 @@ nonisolated struct CampusIdentity: Codable, Equatable, Hashable, Sendable {
         let campusID = try container.decode(CampusID.self, forKey: .campusID)
         let eduID = try container.decode(String.self, forKey: .eduID)
         let displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
-        let portal = try container.decodeIfPresent(SchoolPortal.self, forKey: .portal) ?? .undergraduate
-        let kind = try container.decodeIfPresent(CampusIdentityKind.self, forKey: .kind)
-            ?? (campusID == .custom ? .customSupabase : .schoolPortal)
+        let portal = try container.decode(SchoolPortal.self, forKey: .portal)
+        let kind = try container.decode(CampusIdentityKind.self, forKey: .kind)
         self.init(campusID: campusID, eduID: eduID, displayName: displayName, portal: portal, kind: kind)
     }
 }
@@ -204,31 +199,9 @@ nonisolated enum CampusCatalog {
 
 nonisolated enum CampusIdentityStore {
     private static let activeIdentityKey = "leafy.activeCampusIdentity.v1"
-    private static let legacyMigrationMarkerKey = "leafy.activeCampusIdentity.legacyMigrated.v1"
 
     static func currentIdentity(defaults: UserDefaults = .standard) -> CampusIdentity? {
-        if let identity = storedIdentity(defaults: defaults) {
-            return identity
-        }
-
-        guard !defaults.bool(forKey: legacyMigrationMarkerKey) else {
-            return nil
-        }
-
-        guard let legacyEduID = defaults.string(forKey: "authenticatedEduID")?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !legacyEduID.isEmpty else {
-            return nil
-        }
-
-        let identity = CampusIdentity(
-            campusID: .bjfu,
-            eduID: legacyEduID,
-            displayName: defaults.string(forKey: "authenticatedDisplayName"),
-            portal: SchoolPortal(rawValue: defaults.string(forKey: "schoolPortal") ?? "") ?? .undergraduate
-        )
-        activate(identity, defaults: defaults)
-        return identity
+        storedIdentity(defaults: defaults)
     }
 
     private static func storedIdentity(defaults: UserDefaults) -> CampusIdentity? {
@@ -247,7 +220,6 @@ nonisolated enum CampusIdentityStore {
         }
         let previousScopeKey = storedIdentity(defaults: defaults)?.scopeKey
         defaults.set(data, forKey: activeIdentityKey)
-        defaults.set(true, forKey: legacyMigrationMarkerKey)
         if previousScopeKey != identity.scopeKey {
             NotificationCenter.default.post(name: .campusIdentityDidChange, object: identity)
         }
@@ -255,19 +227,11 @@ nonisolated enum CampusIdentityStore {
 
     static func clear(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: activeIdentityKey)
-        defaults.removeObject(forKey: "authenticatedEduID")
-        defaults.removeObject(forKey: "authenticatedDisplayName")
-        defaults.removeObject(forKey: "isLoggedIn")
-        defaults.removeObject(forKey: "schoolSessionCookies")
-        defaults.removeObject(forKey: "schoolPortal")
-        defaults.removeObject(forKey: "lastLandingURL")
         NotificationCenter.default.post(name: .campusIdentityDidChange, object: nil)
     }
 }
 
 nonisolated enum CampusScopedDefaults {
-    private static let migrationPrefix = "leafy.campus.defaultsMigration.v1"
-
     static func key(
         _ baseKey: String,
         identity: CampusIdentity? = nil,
@@ -279,29 +243,6 @@ nonisolated enum CampusScopedDefaults {
         return "leafy.campus.\(identity.scopeKey).\(baseKey)"
     }
 
-    static func migrateLegacyValuesIfNeeded(
-        keys: [String],
-        prefixes: [String] = [],
-        migrationID: String,
-        identity: CampusIdentity? = CampusIdentityStore.currentIdentity(),
-        defaults: UserDefaults = .standard
-    ) {
-        guard let identity else { return }
-        let marker = "\(migrationPrefix).\(migrationID).\(identity.scopeKey)"
-        guard !defaults.bool(forKey: marker) else { return }
-
-        let dynamicKeys = defaults.dictionaryRepresentation().keys.filter { candidate in
-            prefixes.contains(where: { candidate.hasPrefix($0) })
-        }
-        for legacyKey in Set(keys + dynamicKeys) {
-            let scopedKey = key(legacyKey, identity: identity, defaults: defaults)
-            if defaults.object(forKey: scopedKey) == nil,
-               let value = defaults.object(forKey: legacyKey) {
-                defaults.set(value, forKey: scopedKey)
-            }
-        }
-        defaults.set(true, forKey: marker)
-    }
 }
 
 nonisolated enum ActiveCampusContext {

@@ -321,7 +321,7 @@ supabase functions deploy admin-export
 
 图片帖发布流程涉及前向 migration `20260725190000_community_post_upload_closure.sql`。发布顺序固定为：
 
-1. 部署 migration，保留 `create_community_post_v2` 与 `publish_community_post_v1` 兼容旧客户端。
+1. 部署 migration，并确认当前 `create_community_post_v4` 与媒体原子发布链路可用；不再部署 `publish_community_post_v1` 旧客户端入口。
 2. 部署 `admin-community`，使 `retryPostPublish` 与 `getModerationReport` 可用。
 3. 发布 Web 静态资源；iOS 新版本改用 `create_community_post_v3`。
 4. 使用合成内容验证自动发布；真实异常帖子只检查图片和操作是否可见，不替管理员批准内容。
@@ -357,7 +357,7 @@ supabase functions deploy admin-export
 - 普通用户 RLS 不因后台存在而放宽。
 - 管理表不授予 anon/authenticated 直接访问。
 - 登录尝试等安全数据只允许服务端角色访问。
-- migration 保持前向兼容，危险删除在兼容窗口后执行。
+- migration 保持可重建且可审计；危险删除必须在当前客户端与能力清单确认无调用后执行。
 
 ## 13. 交互规范
 

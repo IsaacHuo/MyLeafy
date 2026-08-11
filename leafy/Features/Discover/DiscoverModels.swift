@@ -823,75 +823,32 @@ extension CustomScheduleEvent {
 
 extension Notification.Name {
     static let customScheduleEventsDidChange = Notification.Name("customScheduleEventsDidChange")
-    static let customCountdownEventsDidChange = Notification.Name("customCountdownEventsDidChange")
     static let schoolExamScheduleDidChange = Notification.Name("schoolExamScheduleDidChange")
 }
 
 enum CustomScheduleStore {
-    private struct LegacyCountdownEvent: Codable {
-        let id: String
-        let title: String
-        let targetDate: Date
-    }
-
     private static let storageKey = "customScheduleEvents.v1"
-    private static let legacyCountdownStorageKey = "customCountdownEvents"
 
     static func load(defaults: UserDefaults = .standard) -> [CustomScheduleEvent] {
-        if let data = defaults.data(forKey: storageKey),
-           let events = try? JSONDecoder().decode([CustomScheduleEvent].self, from: data) {
-            return events
-        }
-
-        let migrated = migratedLegacyEvents(defaults: defaults)
-        if !migrated.isEmpty {
-            save(migrated, defaults: defaults)
-        }
-        return migrated
+        guard let data = defaults.data(forKey: storageKey),
+              let events = try? JSONDecoder().decode([CustomScheduleEvent].self, from: data)
+        else { return [] }
+        return events
     }
 
     static func save(_ events: [CustomScheduleEvent], defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(events) else { return }
         defaults.set(data, forKey: storageKey)
         NotificationCenter.default.post(name: .customScheduleEventsDidChange, object: nil)
-        NotificationCenter.default.post(name: .customCountdownEventsDidChange, object: nil)
     }
 
     static func clear(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: storageKey)
-        defaults.removeObject(forKey: legacyCountdownStorageKey)
         NotificationCenter.default.post(name: .customScheduleEventsDidChange, object: nil)
-        NotificationCenter.default.post(name: .customCountdownEventsDidChange, object: nil)
     }
 
-    static func storageKeysForTesting() -> (current: String, legacy: String) {
-        (storageKey, legacyCountdownStorageKey)
-    }
-
-    private static func migratedLegacyEvents(defaults: UserDefaults) -> [CustomScheduleEvent] {
-        guard let legacyData = defaults.data(forKey: legacyCountdownStorageKey) else { return [] }
-
-        if let legacyEvents = try? JSONDecoder().decode([LegacyCountdownEvent].self, from: legacyData) {
-            return legacyEvents.map {
-                CustomScheduleEvent(id: $0.id, title: $0.title, startsAt: $0.targetDate)
-            }
-        }
-
-        return (try? JSONDecoder().decode([CustomScheduleEvent].self, from: legacyData)) ?? []
-    }
-}
-
-enum CustomCountdownStore {
-    static func load(defaults: UserDefaults = .standard) -> [CustomCountdownEvent] {
-        CustomScheduleStore.load(defaults: defaults)
-    }
-
-    static func save(_ events: [CustomCountdownEvent], defaults: UserDefaults = .standard) {
-        CustomScheduleStore.save(events, defaults: defaults)
-    }
-
-    static func clear(defaults: UserDefaults = .standard) {
-        CustomScheduleStore.clear(defaults: defaults)
+    static func storageKeyForTesting() -> String {
+        storageKey
     }
 }
 
@@ -1121,7 +1078,6 @@ enum SchoolDataCache {
     }
 
     static func loadCampusHeatmapData() throws -> CachedCampusHeatmapData? {
-        migrateLegacyValues()
         guard let data = UserDefaults.standard.data(forKey: scoped(campusHeatmapDataKey)) else { return nil }
         return try JSONDecoder().decode(CachedCampusHeatmapData.self, from: data)
     }
@@ -1132,7 +1088,6 @@ enum SchoolDataCache {
     }
 
     static func lastSyncDate(for kind: SchoolCacheKind) -> Date? {
-        migrateLegacyValues()
         switch kind {
         case .examSchedule:
             return UserDefaults.standard.object(forKey: scoped(lastExamSyncKey)) as? Date
@@ -1170,7 +1125,6 @@ enum SchoolDataCache {
     }
 
     private static func load<T: Decodable>(_ type: T.Type, forKey key: String) -> T? {
-        migrateLegacyValues()
         guard let data = UserDefaults.standard.data(forKey: scoped(key)) else { return nil }
         return try? JSONDecoder().decode(type, from: data)
     }
@@ -1202,13 +1156,6 @@ enum SchoolDataCache {
         CampusScopedDefaults.key(key)
     }
 
-    private static func migrateLegacyValues() {
-        CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-            keys: fixedKeys,
-            prefixes: [emptyClassroomPrefix, classroomUsagePrefix],
-            migrationID: "schoolDataCache"
-        )
-    }
 }
 
 enum SchoolCacheKind {

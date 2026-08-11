@@ -4,16 +4,12 @@ import Supabase
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import SafariServices
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct ExamScheduleView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var exams: [ExamArrangement] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -437,7 +433,7 @@ private struct ExamEditorSheet: View {
 
 struct TeachingPlanView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var sections: [TeachingPlanSection] = SchoolDataCache.loadTeachingPlan()
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -810,7 +806,7 @@ struct TrainingProgramView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Query(sort: \Grade.term, order: .reverse) private var grades: [Grade]
 
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var document: TrainingProgramDocument? = SchoolDataCache.loadTrainingProgram()
     @State private var requirements: [GraduationCreditRequirement] = SchoolDataCache.loadGraduationRequirements()
     @State private var creditSummary: GradeCreditSummary? = SchoolDataCache.loadGradeCreditSummary()
@@ -1246,7 +1242,6 @@ private struct TrainingProgramBrowserItem: Identifiable {
     var id: URL { url }
 }
 
-#if canImport(UIKit)
 private struct TrainingProgramSafariView: UIViewControllerRepresentable {
     let url: URL
 
@@ -1256,9 +1251,7 @@ private struct TrainingProgramSafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-#else
-private typealias TrainingProgramSafariView = LeafyExternalBrowserView
-#endif
+
 
 struct EmptyClassroomView: View {
     enum QueryMode: String, CaseIterable, Identifiable {
@@ -1273,7 +1266,7 @@ struct EmptyClassroomView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FavoriteClassroom.createdAt, order: .reverse) private var favoriteClassrooms: [FavoriteClassroom]
 
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var mode: QueryMode = .byRoom
     @State private var selectedDate = Date()
     @State private var startPeriod = min(max(TimetablePeriodSchedule.defaultStudyPeriod(), 1), 12)

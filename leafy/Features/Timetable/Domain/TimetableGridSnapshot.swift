@@ -220,10 +220,6 @@ struct TimetableCourseRenderValue: Identifiable, Hashable {
         )
     }
 
-    func legacyOccurrenceKey(week displayWeek: Int) -> String {
-        let semesterWeek = semesterWeek(for: displayWeek) ?? displayWeek
-        return CourseOccurrenceNote.occurrenceKey(courseKey: stableCourseKey, week: semesterWeek)
-    }
 }
 
 struct TimetableCellReminderRenderValue: Identifiable, Hashable {
@@ -493,10 +489,8 @@ struct TimetableGridSnapshot {
     }
 
     func note(for course: TimetableCourseRenderValue, week: Int) -> String? {
-        let occurrenceText = (
-            occurrenceNotesByKey[course.occurrenceKey(week: week)]
-                ?? occurrenceNotesByKey[course.legacyOccurrenceKey(week: week)]
-        )?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let occurrenceText = occurrenceNotesByKey[course.occurrenceKey(week: week)]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if let occurrenceText, !occurrenceText.isEmpty {
             return occurrenceText
         }

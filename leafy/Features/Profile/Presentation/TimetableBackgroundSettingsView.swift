@@ -1,10 +1,6 @@
 import PhotosUI
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct TimetableBackgroundSettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -29,7 +25,7 @@ struct TimetableBackgroundSettingsView: View {
     @State private var operationAlert: LeafyOperationAlert?
 
     private var selectedKind: TimetableBackgroundKind {
-        TimetableBackgroundKind.resolved(rawValue: kindRaw)
+        TimetableBackgroundKind(rawValue: kindRaw) ?? .photo
     }
 
     private var kindBinding: Binding<TimetableBackgroundKind> {
@@ -453,11 +449,7 @@ struct TimetableBackgroundSettingsView: View {
     }
 
     private func hexString(from color: Color) -> String? {
-        #if canImport(UIKit)
         let platformColor = UIColor(color)
-        #else
-        let platformColor = NSColor(color)
-        #endif
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0

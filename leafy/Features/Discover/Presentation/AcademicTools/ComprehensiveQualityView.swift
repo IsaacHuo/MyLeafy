@@ -1,11 +1,7 @@
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct ComprehensiveQualityView: View {
     @Environment(\.modelContext) private var modelContext
@@ -678,9 +674,9 @@ struct ComprehensiveQualityView: View {
         )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             alertMessage = L10n.text("请稍后重试，或先截图保存当前页面。", language: leafyLanguage)
             return
         }

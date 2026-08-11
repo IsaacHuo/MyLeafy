@@ -2,11 +2,7 @@ import SwiftData
 import SwiftSoup
 import SwiftUI
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct TimetableExportSheet: View {
     let currentWeek: Int
@@ -477,9 +473,9 @@ struct DayScheduleSummarySheet: View {
         )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前卡片。", language: leafyLanguage)
             return
         }
@@ -622,9 +618,9 @@ struct WeekScheduleSheet: View {
         )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前卡片。", language: leafyLanguage)
             return
         }

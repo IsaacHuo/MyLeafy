@@ -321,7 +321,6 @@ private struct MedicalPolicyInfoLine: View {
     }
 }
 
-#if canImport(UIKit)
 private struct MedicalPolicySafariView: UIViewControllerRepresentable {
     let url: URL
 
@@ -331,9 +330,7 @@ private struct MedicalPolicySafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-#else
-private typealias MedicalPolicySafariView = LeafyExternalBrowserView
-#endif
+
 
 private struct MedicalPolicyBrowserItem: Identifiable {
     let id = UUID()
@@ -899,7 +896,7 @@ private struct MedicalLedgerEditorSheet: View {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else { continue }
                 let jpegData = try MedicalLedgerPhotoStore.normalizedJPEGData(from: data)
-                guard let image = LeafyPlatformImage(data: jpegData) else { continue }
+                guard let image = UIImage(data: jpegData) else { continue }
                 loaded.append(MedicalLedgerPendingPhoto(
                     originalFilename: "票据照片-\(index + 1).jpg",
                     jpegData: jpegData,
@@ -1096,7 +1093,7 @@ private struct MedicalLedgerPendingPhoto: Identifiable {
     let id = UUID()
     let originalFilename: String
     let jpegData: Data
-    let image: LeafyPlatformImage
+    let image: UIImage
 }
 
 private struct MedicalLedgerDraft {

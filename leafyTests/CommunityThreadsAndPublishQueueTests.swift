@@ -572,6 +572,15 @@ private struct CommunityPostDetailRepositoryStub: CommunityPostDetailRepository 
         page.threads[0].root
     }
 
+    func createComment(
+        postID _: UUID,
+        body _: String,
+        parentCommentID _: UUID?,
+        replyToCommentID _: UUID?
+    ) async throws -> CommunityComment {
+        page.threads[0].root
+    }
+
     func toggleCommentLike(commentID _: UUID) async throws -> CommunityCommentLikeState {
         switch toggleOutcome {
         case .success(let state):

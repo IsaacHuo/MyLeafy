@@ -175,8 +175,6 @@ extension SchoolNetworkManager {
 
     func clearPersistedCookies() {
         persistedCookieValues = [:]
-        UserDefaults.standard.removeObject(forKey: CampusScopedDefaults.key("schoolSessionCookies"))
-
         let schoolURLs = [URL(string: baseURL), URL(string: graduateBaseURL)].compactMap { $0 }
         for url in schoolURLs {
             for cookie in HTTPCookieStorage.shared.cookies(for: url) ?? [] {
@@ -208,18 +206,6 @@ extension SchoolNetworkManager {
                 lastLandingURLString = landingURLString
             }
             currentPortal = portal
-            CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-                keys: [
-                    "isLoggedIn",
-                    "schoolSessionCookies",
-                    "schoolPortal",
-                    "lastLandingURL",
-                    "authenticatedEduID",
-                    "authenticatedDisplayName"
-                ],
-                migrationID: "schoolSession",
-                identity: identity
-            )
         }
 
         authenticatedEduID = trimmedEduID.isEmpty ? nil : trimmedEduID

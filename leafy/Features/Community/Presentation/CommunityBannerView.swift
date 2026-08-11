@@ -1,15 +1,21 @@
 import Combine
 import OSLog
+import SafariServices
 import SwiftUI
+import UIKit
 
 @MainActor
 final class CommunityBannerViewModel: ObservableObject {
     @Published private(set) var banner: CommunityBanner?
+    private let repository: any CommunityBannerRepository
+
+    init(repository: any CommunityBannerRepository) {
+        self.repository = repository
+    }
 
     func load(campusID: String, defaults: UserDefaults = .standard) async {
         do {
-            try await CommunityService.shared.ensureAnonymousSession()
-            guard let fetched = try await CommunityService.shared.fetchActiveBanner(campusID: campusID),
+            guard let fetched = try await repository.fetchActiveBanner(campusID: campusID),
                   !defaults.bool(forKey: fetched.dismissalKey)
             else {
                 banner = nil
@@ -34,12 +40,24 @@ final class CommunityBannerViewModel: ObservableObject {
 struct CommunityBannerSlot: View {
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @StateObject private var viewModel = CommunityBannerViewModel()
+    @StateObject private var viewModel: CommunityBannerViewModel
     @State private var browserItem: CommunityBannerBrowserItem?
 
     let refreshID: UUID
     let campusID: String
     @Binding var isVisible: Bool
+
+    init(
+        repository: any CommunityBannerRepository,
+        refreshID: UUID,
+        campusID: String,
+        isVisible: Binding<Bool>
+    ) {
+        _viewModel = StateObject(wrappedValue: CommunityBannerViewModel(repository: repository))
+        self.refreshID = refreshID
+        self.campusID = campusID
+        _isVisible = isVisible
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -67,7 +85,7 @@ struct CommunityBannerSlot: View {
             await viewModel.load(campusID: campusID)
         }
         .leafySheet(item: $browserItem) { item in
-            LeafyExternalBrowserView(url: item.url)
+            CommunityBannerSafariView(url: item.url)
         }
     }
 
@@ -101,6 +119,16 @@ struct CommunityBannerSlot: View {
             }
         }
     }
+}
+
+private struct CommunityBannerSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 private struct CommunityBannerLoadID: Hashable {

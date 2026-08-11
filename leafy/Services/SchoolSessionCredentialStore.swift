@@ -77,30 +77,6 @@ nonisolated enum SchoolSessionCredentialStore {
         return true
     }
 
-    static func migrateLegacyCookiesIfNeeded(
-        defaults: UserDefaults,
-        defaultsKey: String,
-        identity: CampusIdentity?,
-        portal: SchoolPortal
-    ) -> [String: String] {
-        let stored = load(identity: identity, portal: portal)
-        guard stored.isEmpty,
-              let legacy = defaults.dictionary(forKey: defaultsKey) as? [String: String],
-              !legacy.isEmpty else {
-            if !stored.isEmpty {
-                defaults.removeObject(forKey: defaultsKey)
-            }
-            return stored
-        }
-
-        guard save(legacy, identity: identity, portal: portal) else {
-            logger.error("Legacy school cookies remain in defaults because Keychain migration failed")
-            return legacy
-        }
-        defaults.removeObject(forKey: defaultsKey)
-        return legacy
-    }
-
     private static func account(identity: CampusIdentity?, portal: SchoolPortal) -> String? {
         guard let identity else { return nil }
         return "\(identity.scopeKey):\(portal.rawValue)"

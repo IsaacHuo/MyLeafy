@@ -2,11 +2,7 @@ import SwiftData
 import SwiftSoup
 import SwiftUI
 import OSLog
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 private struct CourseNotePreview: Identifiable {
     let id = UUID()
@@ -45,7 +41,7 @@ struct TimetableView: View {
     @Query private var occurrenceNotes: [CourseOccurrenceNote]
     @Query private var courseReminderSettings: [CourseReminderSetting]
 
-    @State private var networkManager = ActiveCampusContext.networkManager
+    @ObservedObject private var networkManager = ActiveCampusContext.networkManager
     @State private var isFetching = false
     @State private var alertMessage = ""
     @State private var showAlert = false
@@ -82,7 +78,7 @@ struct TimetableView: View {
     @State private var timetableAgendaItemCache = TimetableAgendaItemCache()
     @State private var isWeatherAdvicePresented = false
     @State private var cachedTimetableWeather: TimetableWeatherSnapshot?
-    @State private var customCountdownEvents: [CustomScheduleEvent]
+    @State private var customScheduleEvents: [CustomScheduleEvent]
     @State private var cachedExamArrangements: [ExamArrangement]
     @State private var calendarEventSignature = AcademicCalendarEvents.displayEvents()
     @State private var timetableScheduleProjectionSnapshot: TimetableScheduleProjectionSnapshot
@@ -116,18 +112,10 @@ struct TimetableView: View {
     private var timetableDaySpacing: CGFloat { 5 * leafyControlScale }
     private var timetableWeekSpacing: CGFloat { 6 * leafyControlScale }
     private var allowsTimetableAgendaFallback: Bool {
-#if os(macOS)
-        true
-#else
         UIDevice.current.userInterfaceIdiom == .pad
-#endif
     }
     private var showsToolbarRefreshButton: Bool {
-#if os(macOS)
-        true
-#else
         UIDevice.current.userInterfaceIdiom == .pad
-#endif
     }
 
     private static func makeAcademicYearTimetable(
@@ -158,7 +146,7 @@ struct TimetableView: View {
         )
         _currentWeek = State(initialValue: currentPage)
         _scrollToWeek = State(initialValue: currentPage)
-        _customCountdownEvents = State(initialValue: countdownEvents)
+        _customScheduleEvents = State(initialValue: countdownEvents)
         _cachedExamArrangements = State(initialValue: exams)
         _timetableScheduleProjectionSnapshot = State(
             initialValue: TimetableScheduleProjectionSnapshot.make(
@@ -307,7 +295,7 @@ struct TimetableView: View {
         .onChange(of: appNavigation.requestedTimetableCourseID) { _, requestedID in
             handleTimetableCourseDeepLink(requestedID)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .customCountdownEventsDidChange)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
             reloadCustomCountdownEvents()
         }
         .onReceive(NotificationCenter.default.publisher(for: .schoolExamScheduleDidChange)) { _ in
@@ -605,7 +593,7 @@ struct TimetableView: View {
     }
 
     private func reloadCustomCountdownEvents() {
-        customCountdownEvents = CustomScheduleStore.load()
+        customScheduleEvents = CustomScheduleStore.load()
         syncTimetableScheduleProjectionSnapshot()
         refreshScheduleReportNotifications()
     }
@@ -785,7 +773,6 @@ struct TimetableView: View {
 
     @ToolbarContentBuilder
     private var leadingToolbarItems: some ToolbarContent {
-#if os(iOS)
         if #available(iOS 26.0, *) {
             ToolbarItem(placement: .leafyLeading) {
                 quickAccessMenu
@@ -802,14 +789,6 @@ struct TimetableView: View {
                 }
             }
         }
-#else
-        ToolbarItem(placement: .leafyLeading) {
-            HStack(spacing: 8 * leafyControlScale) {
-                quickAccessMenu
-                timetableWeatherButton
-            }
-        }
-#endif
     }
 
     private var quickAccessMenu: some View {
@@ -837,17 +816,12 @@ struct TimetableView: View {
 
     @ViewBuilder
     private var quickAccessPopoverPresentation: some View {
-#if os(iOS)
         if #available(iOS 26.0, *) {
             quickAccessPopoverContent
         } else {
             quickAccessPopoverContent
                 .presentationBackground(AppTheme.topBarMaterial)
         }
-#else
-        quickAccessPopoverContent
-            .presentationBackground(AppTheme.topBarMaterial)
-#endif
     }
 
     private var quickAccessPopoverContent: some View {
@@ -1844,7 +1818,7 @@ struct TimetableView: View {
     }
 
     private func presentCustomScheduleEditor(for projection: TimetableCountdownProjection) {
-        guard let event = customCountdownEvents.first(where: { $0.id == projection.eventID }) else {
+        guard let event = customScheduleEvents.first(where: { $0.id == projection.eventID }) else {
             alertMessage = "该日程已更新，请刷新课表后重试。"
             showAlert = true
             return
@@ -2250,7 +2224,7 @@ struct TimetableView: View {
 
     private func syncTimetableScheduleProjectionSnapshot() {
         timetableScheduleProjectionSnapshot = TimetableScheduleProjectionSnapshot.make(
-            countdownEvents: customCountdownEvents,
+            countdownEvents: customScheduleEvents,
             exams: cachedExamArrangements,
             academicYear: academicYearTimetable
         )

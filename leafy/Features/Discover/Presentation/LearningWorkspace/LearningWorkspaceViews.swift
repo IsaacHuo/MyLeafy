@@ -4,11 +4,7 @@ import Supabase
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 private enum LearningProjectDeletionText {
     static let dialogTitle = "删除学习空间？"
@@ -615,7 +611,6 @@ private struct LearningMaterialPreviewSheet: View {
     }
 }
 
-#if canImport(UIKit)
 private struct LearningMaterialQuickLookPreview: UIViewControllerRepresentable {
     let url: URL
 
@@ -650,9 +645,7 @@ private struct LearningMaterialQuickLookPreview: UIViewControllerRepresentable {
         }
     }
 }
-#else
-private typealias LearningMaterialQuickLookPreview = LeafyDocumentPreview
-#endif
+
 
 private struct LearningSummaryTableRow: View {
     let title: String
@@ -1482,9 +1475,9 @@ struct LearningWorkspaceDetailView: View {
             generatedAt: Date()
         )
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             shareErrorMessage = "请稍后重试，或先截图保存当前页面。"
             return
         }
@@ -2285,9 +2278,9 @@ struct StudyTimeRecordsView: View {
             generatedAt: Date()
         )
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前页面。", language: leafyLanguage)
             return
         }

@@ -707,7 +707,6 @@ private struct PostgraduatePill: View {
     }
 }
 
-#if canImport(UIKit)
 private struct PostgraduateSafariView: UIViewControllerRepresentable {
     let url: URL
 
@@ -717,9 +716,7 @@ private struct PostgraduateSafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-#else
-private typealias PostgraduateSafariView = LeafyExternalBrowserView
-#endif
+
 
 private struct PostgraduateBrowserItem: Identifiable {
     let id = UUID()

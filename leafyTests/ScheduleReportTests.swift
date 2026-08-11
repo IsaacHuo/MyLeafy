@@ -2,25 +2,6 @@ import XCTest
 @testable import Leafy
 
 final class ScheduleReportTests: XCTestCase {
-    private struct LegacyScheduleReportSettings: Codable {
-        let isEnabled: Bool
-        let modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
-        let scheduledNotificationIDs: [String]
-    }
-
-    private struct LegacyScheduleReportSettingsWithReminder: Codable {
-        let isEnabled: Bool
-        let modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
-        let customReminder: ScheduleReportCustomSetting
-        let scheduledNotificationIDs: [String]
-    }
-
-    private struct LegacyCountdownEvent: Codable {
-        let id: String
-        let title: String
-        let targetDate: Date
-    }
-
     func testSettingsDefaultToDisabledModes() {
         let settings = ScheduleReportSettings()
 
@@ -56,65 +37,39 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertTrue(loaded.isEnabled)
     }
 
-    func testLegacySettingsDecodeWithoutCustomReminder() throws {
-        let legacy = LegacyScheduleReportSettings(
+    func testSettingsDecodeCurrentContract() throws {
+        let settings = ScheduleReportSettings(
             isEnabled: true,
-            modeSettings: [
-                .morningReport: ScheduleReportModeSetting(isEnabled: true, hour: 8, minute: 15)
-            ],
-            scheduledNotificationIDs: ["legacy"]
+            modeSettings: [.morningReport: ScheduleReportModeSetting(isEnabled: true, hour: 8, minute: 15)],
+            scheduledNotificationIDs: ["current"]
         )
+        let decoded = try JSONDecoder().decode(ScheduleReportSettings.self, from: JSONEncoder().encode(settings))
 
-        let decoded = try JSONDecoder().decode(
-            ScheduleReportSettings.self,
-            from: JSONEncoder().encode(legacy)
-        )
-
-        XCTAssertFalse(decoded.customReminder.isConfigured)
-        XCTAssertFalse(decoded.customReminder.isEnabled)
         XCTAssertEqual(decoded.setting(for: .morningReport).hour, 8)
-        XCTAssertEqual(decoded.scheduledNotificationIDs, ["legacy"])
+        XCTAssertEqual(decoded.scheduledNotificationIDs, ["current"])
     }
 
-    func testV1StoreMigratesSingleReminderIntoV2List() throws {
+    func testV1StoreIsIgnored() throws {
         let defaults = try makeDefaults()
-        let fireDate = try makeDateTime("2026-03-10 09:30")
-        let legacy = LegacyScheduleReportSettingsWithReminder(
-            isEnabled: true,
-            modeSettings: [:],
-            customReminder: ScheduleReportCustomSetting(
-                isEnabled: true,
-                title: "提交材料",
-                body: "带上盖章版",
-                fireDate: fireDate
-            ),
-            scheduledNotificationIDs: ["legacy-id"]
-        )
         let legacyKey = ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)
             .replacingOccurrences(of: ".v2", with: ".v1")
-        defaults.set(try JSONEncoder().encode(legacy), forKey: legacyKey)
+        defaults.set(Data("obsolete".utf8), forKey: legacyKey)
 
-        let migrated = ScheduleReportSettingsStore.load(defaults: defaults)
+        let settings = ScheduleReportSettingsStore.load(defaults: defaults)
 
-        XCTAssertEqual(migrated.reminders.count, 1)
-        XCTAssertEqual(migrated.customReminder.title, "提交材料")
-        XCTAssertEqual(migrated.customReminder.body, "带上盖章版")
-        XCTAssertEqual(migrated.customReminder.fireDate, fireDate)
-        XCTAssertEqual(migrated.reminders.first?.leadMinutes, [0])
-        XCTAssertNotNil(defaults.data(forKey: ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)))
+        XCTAssertFalse(settings.isEnabled)
+        XCTAssertTrue(settings.reminders.isEmpty)
+        XCTAssertNil(defaults.data(forKey: ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)))
     }
 
     func testCustomReminderBuildsOneDraftWithDefaultBody() throws {
         let now = try makeDateTime("2026-03-09 06:00")
         let fireDate = try makeDateTime("2026-03-10 14:25")
-        var settings = ScheduleReportSettings(
-            customReminder: ScheduleReportCustomSetting(
-                isEnabled: true,
-                title: "  提交报名材料  ",
-                body: "   ",
-                fireDate: fireDate
+        var settings = ScheduleReportSettings(reminders: [
+            ScheduleReminder(
+                source: .freeform(title: "  提交报名材料  ", body: "   ", fireDate: fireDate)
             )
-        )
+        ])
         settings.deriveEnabledState(now: now)
 
         let drafts = ScheduleReportPlanner.drafts(
@@ -128,49 +83,32 @@ final class ScheduleReportTests: XCTestCase {
         XCTAssertEqual(drafts.count, 1)
         XCTAssertEqual(draft.mode, .custom)
         XCTAssertEqual(draft.title, "提交报名材料")
-        XCTAssertEqual(draft.body, ScheduleReportCustomSetting.defaultBody)
+        XCTAssertEqual(draft.body, ScheduleReminder.defaultBody)
         XCTAssertEqual(draft.fireDate, fireDate)
     }
 
     func testExpiredCustomReminderDisablesWithoutClearingContent() throws {
         let now = try makeDateTime("2026-03-10 12:00")
         let fireDate = try makeDateTime("2026-03-10 11:00")
-        var settings = ScheduleReportSettings(
-            customReminder: ScheduleReportCustomSetting(
-                isEnabled: true,
-                title: "查看报名结果",
-                body: "记得截图",
-                fireDate: fireDate
+        var settings = ScheduleReportSettings(reminders: [
+            ScheduleReminder(
+                source: .freeform(title: "查看报名结果", body: "记得截图", fireDate: fireDate)
             )
-        )
+        ])
 
         settings.deriveEnabledState(now: now)
 
-        XCTAssertFalse(settings.customReminder.isEnabled)
+        XCTAssertFalse(settings.reminders[0].isEnabled)
         XCTAssertFalse(settings.isEnabled)
-        XCTAssertEqual(settings.customReminder.title, "查看报名结果")
-        XCTAssertEqual(settings.customReminder.body, "记得截图")
-        XCTAssertEqual(settings.customReminder.fireDate, fireDate)
+        XCTAssertEqual(settings.reminders[0].source, .freeform(title: "查看报名结果", body: "记得截图", fireDate: fireDate))
     }
 
-    func testCustomScheduleStoreMigratesLegacyCountdownsOnce() throws {
+    func testCustomScheduleStoreIgnoresObsoleteCountdownKey() throws {
         let defaults = try makeDefaults()
-        let keys = CustomScheduleStore.storageKeysForTesting()
-        let targetDate = try makeDateTime("2026-03-11 12:00")
-        let legacyEvents = [
-            LegacyCountdownEvent(id: "cet", title: "四级报名", targetDate: targetDate)
-        ]
-        defaults.set(try JSONEncoder().encode(legacyEvents), forKey: keys.legacy)
+        defaults.set(Data("obsolete".utf8), forKey: "customCountdownEvents")
 
-        let migrated = CustomScheduleStore.load(defaults: defaults)
-        let repeated = CustomScheduleStore.load(defaults: defaults)
-
-        XCTAssertEqual(migrated.count, 1)
-        XCTAssertEqual(migrated.first?.id, "cet")
-        XCTAssertEqual(migrated.first?.title, "四级报名")
-        XCTAssertEqual(migrated.first?.startsAt, targetDate)
-        XCTAssertEqual(repeated, migrated)
-        XCTAssertNotNil(defaults.data(forKey: keys.current))
+        XCTAssertTrue(CustomScheduleStore.load(defaults: defaults).isEmpty)
+        XCTAssertNil(defaults.data(forKey: CustomScheduleStore.storageKeyForTesting()))
     }
 
     func testUnifiedScheduleProjectsInsideSemesterAndCountsDownOutsideSemester() {

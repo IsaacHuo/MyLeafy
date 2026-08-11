@@ -2,11 +2,7 @@ import Charts
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct ManualGradeDraft: Equatable {
     var term: String = ""
@@ -131,7 +127,7 @@ struct GradesView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
-    @State private var networkManager = ActiveCampusContext.networkManager
+    @ObservedObject private var networkManager = ActiveCampusContext.networkManager
     @State private var collapsedTerms: Set<String> = []
     @State private var creditSummary: GradeCreditSummary? = SchoolDataCache.loadGradeCreditSummary()
     @State private var gradePresentationSnapshot = GradePresentationSnapshot.empty
@@ -855,7 +851,7 @@ struct GradeAnalyticsDetailView: View {
     @State private var rankingMessage = L10n.text("正在查询官方排名")
     @State private var isLoadingRankings = false
     @State private var creditSummary: GradeCreditSummary? = SchoolDataCache.loadGradeCreditSummary()
-    @State private var networkManager = ActiveCampusContext.networkManager
+    private let networkManager = ActiveCampusContext.networkManager
     @State private var courseSort: GradeCourseSort = .lowScore
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var sharePreviewImage: UIImage?
@@ -1188,9 +1184,9 @@ struct GradeAnalyticsDetailView: View {
         )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             exportErrorMessage = L10n.text("请稍后重试，或先截图保存当前页面。", language: leafyLanguage)
             return
         }

@@ -4,11 +4,7 @@ import Supabase
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct FitnessTestShareSnapshot: Equatable {
     struct Group: Identifiable, Equatable {
@@ -272,9 +268,9 @@ struct FitnessTestRecordsView: View {
             )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = LeafyImageCodec.displayScale
+        renderer.scale = UIScreen.main.scale
 
-        guard let image = renderer.leafyPlatformImage else {
+        guard let image = renderer.uiImage else {
             operationAlert = .failure(
                 L10n.text("分享图片生成失败，请稍后重试。", language: leafyLanguage)
             )

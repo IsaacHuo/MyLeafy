@@ -140,7 +140,6 @@ struct ToolEntryCard: View {
     }
 }
 
-#if canImport(UIKit)
 private struct LeafySafariView: UIViewControllerRepresentable {
     let url: URL
 
@@ -150,9 +149,7 @@ private struct LeafySafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-#else
-private typealias LeafySafariView = LeafyExternalBrowserView
-#endif
+
 
 private struct LibrarySeatReservationBrowserItem: Identifiable {
     let id = UUID()

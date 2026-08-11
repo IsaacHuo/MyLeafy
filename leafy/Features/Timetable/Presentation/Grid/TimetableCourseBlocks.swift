@@ -2,11 +2,7 @@ import SwiftData
 import SwiftSoup
 import SwiftUI
 import UniformTypeIdentifiers
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 private struct CourseBlockContent {
     let displayCourseName: String

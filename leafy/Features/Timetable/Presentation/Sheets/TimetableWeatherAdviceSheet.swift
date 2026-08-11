@@ -1,10 +1,6 @@
 import SwiftUI
 import Charts
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 struct TimetableWeatherAdviceSheet: View {
     let currentWeek: Int

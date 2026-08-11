@@ -1,11 +1,7 @@
 import Foundation
 import OSLog
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 nonisolated struct CommunityPostCardTheme: Sendable, Equatable {
     let preferenceRawValue: String
@@ -238,7 +234,6 @@ enum CommunityPostCardLayout {
         lineSpacing: CGFloat = 0
     ) -> CGFloat {
         guard !text.isEmpty else { return 0 }
-#if canImport(UIKit)
         let font = UIFont.systemFont(ofSize: fontSize, weight: weight.uiKitWeight)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = lineSpacing
@@ -246,15 +241,6 @@ enum CommunityPostCardLayout {
             .font: font,
             .paragraphStyle: paragraph
         ]
-#elseif canImport(AppKit)
-        let font = NSFont.systemFont(ofSize: fontSize, weight: weight.appKitWeight)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = lineSpacing
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .paragraphStyle: paragraph
-        ]
-#endif
         return ceil(
             (text as NSString).boundingRect(
                 with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude),
@@ -270,21 +256,12 @@ private enum LeafyCardFontWeight {
     case regular
     case bold
 
-#if canImport(UIKit)
     var uiKitWeight: UIFont.Weight {
         switch self {
         case .regular: return .regular
         case .bold: return .bold
         }
     }
-#elseif canImport(AppKit)
-    var appKitWeight: NSFont.Weight {
-        switch self {
-        case .regular: return .regular
-        case .bold: return .bold
-        }
-    }
-#endif
 }
 
 @MainActor
@@ -311,7 +288,7 @@ enum CommunityPostCardGenerator {
         }
 
         var photos: [Data] = []
-        for (index, image) in post.images.sorted(by: { $0.sortOrder < $1.sortOrder }).enumerated() {
+        for (index, image) in post.images.enumerated() {
             guard let url = image.resolvedFullURL else {
                 throw CommunityPostCardGenerationError.photoDownloadFailed(index + 1)
             }
@@ -329,9 +306,7 @@ enum CommunityPostCardGenerator {
             category: post.categoryLabel,
             title: post.title,
             body: post.body,
-            attachmentNames: post.attachments
-                .sorted { $0.sortOrder < $1.sortOrder }
-                .map(\.displayName),
+            attachmentNames: post.attachments.map(\.displayName),
             photoData: photos,
             isAnonymous: post.isAnonymous
         )
@@ -389,7 +364,7 @@ enum CommunityPostCardGenerator {
             .fixedSize(horizontal: false, vertical: true)
         let renderer = ImageRenderer(content: view)
         renderer.scale = CommunityPostCardLayout.renderScale
-        guard let image = renderer.leafyPlatformImage,
+        guard let image = renderer.uiImage,
               let cgImage = image.cgImage else {
             throw CommunityPostCardGenerationError.renderFailed
         }
@@ -596,11 +571,7 @@ struct CommunityPostCardPreviewSheet: View {
         defer { isSaving = false }
         do {
             try await LeafyPhotoLibrarySaver.saveImageFiles([cardURL])
-#if os(macOS)
-            resultMessage = L10n.text("已保存到所选文件夹。")
-#else
             resultMessage = L10n.text("图文长图已保存到系统相册。")
-#endif
         } catch {
             resultMessage = error.localizedDescription
         }

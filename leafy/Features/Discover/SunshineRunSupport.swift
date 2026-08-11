@@ -465,7 +465,6 @@ enum SunshineRunStore {
     private static let ruleSettingsKey = "sunshineRun.ruleSettings"
 
     static func loadRecords() -> [SunshineRunRecord] {
-        migrateLegacyValues()
         guard let data = UserDefaults.standard.data(forKey: scoped(recordsKey)) else { return [] }
         let records = (try? JSONDecoder().decode([SunshineRunRecord].self, from: data)) ?? []
         return SunshineRunPlanner.normalizedRecords(records)
@@ -478,7 +477,6 @@ enum SunshineRunStore {
     }
 
     static func loadReminderSettings() -> SunshineRunReminderSettings {
-        migrateLegacyValues()
         guard let data = UserDefaults.standard.data(forKey: scoped(reminderSettingsKey)),
               let settings = try? JSONDecoder().decode(SunshineRunReminderSettings.self, from: data)
         else { return SunshineRunReminderSettings() }
@@ -497,7 +495,6 @@ enum SunshineRunStore {
     }
 
     static func loadRuleSettings() -> SunshineRunRuleSettings {
-        migrateLegacyValues()
         guard let data = UserDefaults.standard.data(forKey: scoped(ruleSettingsKey)),
               let settings = try? JSONDecoder().decode(SunshineRunRuleSettings.self, from: data)
         else { return .bjfuDefault }
@@ -524,12 +521,6 @@ enum SunshineRunStore {
         CampusScopedDefaults.key(key)
     }
 
-    private static func migrateLegacyValues() {
-        CampusScopedDefaults.migrateLegacyValuesIfNeeded(
-            keys: [recordsKey, reminderSettingsKey, ruleSettingsKey],
-            migrationID: "sunshineRun"
-        )
-    }
 }
 
 @MainActor

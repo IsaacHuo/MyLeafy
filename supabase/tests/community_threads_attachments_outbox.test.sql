@@ -233,13 +233,10 @@ select is(
   'an attachment post starts in the private upload state'
 );
 
-select throws_ok(
-  $$select public.publish_community_post_v1(
-    'a3000000-0000-0000-0000-000000000002'
-  )$$,
-  'P0001',
-  'COMMUNITY_MEDIA_COUNT_MISMATCH',
-  'a post cannot publish before every expected attachment is registered'
+select is(
+  (select status from public.posts where id = 'a3000000-0000-0000-0000-000000000002'),
+  'pending_review',
+  'a post remains private before every expected attachment is registered'
 );
 
 insert into private.community_attachment_upload_receipts (

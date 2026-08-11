@@ -1,10 +1,6 @@
 import SwiftData
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 private enum TimetableSharingLoadState: Equatable {
     case loading
@@ -688,28 +684,20 @@ struct TimetableSharingView: View {
 private extension View {
     @ViewBuilder
     func timetableSharingPrimaryButtonStyle() -> some View {
-        #if os(iOS)
         if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             buttonStyle(.glassProminent)
         } else {
             buttonStyle(.borderedProminent)
         }
-        #else
-        buttonStyle(.borderedProminent)
-        #endif
     }
 
     @ViewBuilder
     func timetableSharingSecondaryButtonStyle() -> some View {
-        #if os(iOS)
         if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
             buttonStyle(.glass)
         } else {
             buttonStyle(.bordered)
         }
-        #else
-        buttonStyle(.bordered)
-        #endif
     }
 
     func timetableSharingCompactControl() -> some View {
@@ -1039,11 +1027,7 @@ private struct SharedTimetableGridDetailView: View {
     private var timetableDaySpacing: CGFloat { 5 * leafyControlScale }
     private var timetableWeekSpacing: CGFloat { 6 * leafyControlScale }
     private var allowsTimetableAgendaFallback: Bool {
-#if os(macOS)
-        true
-#else
         UIDevice.current.userInterfaceIdiom == .pad
-#endif
     }
     private var visibleDayRange: ClosedRange<Int> { 1...7 }
 

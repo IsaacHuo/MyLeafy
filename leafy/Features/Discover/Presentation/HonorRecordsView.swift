@@ -371,7 +371,6 @@ private struct HonorRecordImagePreview: View {
     }
 }
 
-#if canImport(UIKit)
 private struct PDFPreview: UIViewRepresentable {
     let url: URL
 
@@ -390,26 +389,6 @@ private struct PDFPreview: UIViewRepresentable {
         }
     }
 }
-#else
-private struct PDFPreview: NSViewRepresentable {
-    let url: URL
-
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.displayMode = .singlePageContinuous
-        view.backgroundColor = .clear
-        view.document = PDFDocument(url: url)
-        return view
-    }
-
-    func updateNSView(_ view: PDFView, context: Context) {
-        if view.document?.documentURL != url {
-            view.document = PDFDocument(url: url)
-        }
-    }
-}
-#endif
 
 private enum HonorRecordFileStore {
     struct StoredFile {

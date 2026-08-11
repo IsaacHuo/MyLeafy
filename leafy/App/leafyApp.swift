@@ -62,8 +62,6 @@ struct LeafyApp: App {
     }
 
     init() {
-        AppAppearancePreference.migrateStoredAppearanceIfNeeded()
-        AppThemeColorPreference.migrateStoredThemeIfNeeded()
         CommunityPostCardGenerator.cleanupStaleRenderedFiles()
         let setup = AppModelContainerFactory.make()
         self._modelContainerSetup = State(initialValue: setup)
@@ -138,8 +136,6 @@ struct LeafyApp: App {
             .animation(appearanceAnimation, value: appAppearancePreferenceRaw)
             .animation(appearanceAnimation, value: appThemeCustomColorHex)
             .onAppear {
-                AppAppearancePreference.migrateStoredAppearanceIfNeeded()
-                AppThemeColorPreference.migrateStoredThemeIfNeeded()
                 syncThemeAppearance()
                 LeafyNotificationCoordinator.shared.configure(appNavigation: appNavigation)
                 CommunityPublishCoordinator.shared.configureAndResume()
@@ -202,7 +198,7 @@ struct LeafyApp: App {
             .onReceive(NotificationCenter.default.publisher(for: .schoolExamScheduleDidChange)) { _ in
                 refreshScheduleReportNotifications()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .customCountdownEventsDidChange)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
                 refreshScheduleReportNotifications()
             }
             .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in

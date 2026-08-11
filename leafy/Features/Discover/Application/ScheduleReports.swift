@@ -96,41 +96,6 @@ struct ScheduleReportModeSetting: Codable, Hashable {
     }
 }
 
-struct ScheduleReportCustomSetting: Codable, Hashable, Identifiable {
-    static let defaultBody = "你设置的提醒时间到了。"
-
-    var id: String { "custom" }
-    var isEnabled: Bool
-    var title: String
-    var body: String
-    var fireDate: Date?
-
-    init(
-        isEnabled: Bool = false,
-        title: String = "",
-        body: String = "",
-        fireDate: Date? = nil
-    ) {
-        self.isEnabled = isEnabled
-        self.title = title
-        self.body = body
-        self.fireDate = fireDate
-    }
-
-    var trimmedTitle: String {
-        title.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var resolvedBody: String {
-        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? Self.defaultBody : trimmed
-    }
-
-    var isConfigured: Bool {
-        !trimmedTitle.isEmpty && fireDate != nil
-    }
-}
-
 enum ScheduleReminderCourseScope: String, Codable, CaseIterable, Hashable {
     case singleOccurrence
     case remainingSemester
@@ -167,6 +132,7 @@ enum ScheduleReminderAvailability: String, Codable, Hashable {
 }
 
 struct ScheduleReminder: Codable, Hashable, Identifiable {
+    static let defaultBody = "你设置的提醒时间到了。"
     static let presetLeadMinutes = [0, 10, 30, 60, 1_440, 4_320, 10_080]
     static let customLeadMinuteRange = 1...10_080
 
@@ -207,7 +173,6 @@ struct ScheduleReportSettings: Codable, Hashable {
         isEnabled: Bool = false,
         modeSettings: [ScheduleReportMode: ScheduleReportModeSetting] = [:],
         reminders: [ScheduleReminder] = [],
-        customReminder: ScheduleReportCustomSetting? = nil,
         scheduledNotificationIDs: [String] = [],
         scheduledCount: Int = 0,
         waitingCount: Int = 0
@@ -215,10 +180,6 @@ struct ScheduleReportSettings: Codable, Hashable {
         self.isEnabled = isEnabled
         self.modeSettings = Self.normalizedModeSettings(modeSettings)
         self.reminders = reminders
-        if let customReminder,
-           customReminder.isConfigured || customReminder.isEnabled {
-            self.reminders.append(Self.migratedReminder(from: customReminder))
-        }
         self.scheduledNotificationIDs = scheduledNotificationIDs
         self.scheduledCount = max(0, scheduledCount)
         self.waitingCount = max(0, waitingCount)
@@ -228,7 +189,6 @@ struct ScheduleReportSettings: Codable, Hashable {
         case isEnabled
         case modeSettings
         case reminders
-        case customReminder
         case scheduledNotificationIDs
         case scheduledCount
         case waitingCount
@@ -236,24 +196,19 @@ struct ScheduleReportSettings: Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let legacyReminder = try container.decodeIfPresent(
-            ScheduleReportCustomSetting.self,
-            forKey: .customReminder
-        )
         self.init(
-            isEnabled: try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false,
-            modeSettings: try container.decodeIfPresent(
+            isEnabled: try container.decode(Bool.self, forKey: .isEnabled),
+            modeSettings: try container.decode(
                 [ScheduleReportMode: ScheduleReportModeSetting].self,
                 forKey: .modeSettings
-            ) ?? [:],
-            reminders: try container.decodeIfPresent([ScheduleReminder].self, forKey: .reminders) ?? [],
-            customReminder: legacyReminder,
-            scheduledNotificationIDs: try container.decodeIfPresent(
+            ),
+            reminders: try container.decode([ScheduleReminder].self, forKey: .reminders),
+            scheduledNotificationIDs: try container.decode(
                 [String].self,
                 forKey: .scheduledNotificationIDs
-            ) ?? [],
-            scheduledCount: try container.decodeIfPresent(Int.self, forKey: .scheduledCount) ?? 0,
-            waitingCount: try container.decodeIfPresent(Int.self, forKey: .waitingCount) ?? 0
+            ),
+            scheduledCount: try container.decode(Int.self, forKey: .scheduledCount),
+            waitingCount: try container.decode(Int.self, forKey: .waitingCount)
         )
     }
 
@@ -297,48 +252,6 @@ struct ScheduleReportSettings: Codable, Hashable {
         isEnabled = !enabledModes.isEmpty || reminders.contains(where: \.isEnabled)
     }
 
-    var customReminder: ScheduleReportCustomSetting {
-        get {
-            guard let reminder = reminders.first(where: {
-                if case .freeform = $0.source { return true }
-                return false
-            }),
-                  case .freeform(let title, let body, let fireDate) = reminder.source
-            else {
-                return ScheduleReportCustomSetting()
-            }
-            return ScheduleReportCustomSetting(
-                isEnabled: reminder.isEnabled,
-                title: title,
-                body: body,
-                fireDate: fireDate
-            )
-        }
-        set {
-            let migrated = Self.migratedReminder(from: newValue)
-            if let index = reminders.firstIndex(where: {
-                if case .freeform = $0.source { return true }
-                return false
-            }) {
-                reminders[index] = migrated
-            } else if newValue.isConfigured || newValue.isEnabled {
-                reminders.append(migrated)
-            }
-        }
-    }
-
-    private static func migratedReminder(from setting: ScheduleReportCustomSetting) -> ScheduleReminder {
-        ScheduleReminder(
-            isEnabled: setting.isEnabled,
-            source: .freeform(
-                title: setting.title,
-                body: setting.body,
-                fireDate: setting.fireDate
-            ),
-            leadMinutes: [0]
-        )
-    }
-
     private static func normalizedModeSettings(
         _ modeSettings: [ScheduleReportMode: ScheduleReportModeSetting]
     ) -> [ScheduleReportMode: ScheduleReportModeSetting] {
@@ -360,12 +273,10 @@ struct ScheduleReportSettings: Codable, Hashable {
 
 enum ScheduleReportSettingsStore {
     private static let key = "scheduleReport.settings.v2"
-    private static let legacyKey = "scheduleReport.settings.v1"
 
     static func load(defaults: UserDefaults = .standard) -> ScheduleReportSettings {
         let currentKey = scopedKey(key, defaults: defaults)
-        let legacyStorageKey = scopedKey(legacyKey, defaults: defaults)
-        guard let data = defaults.data(forKey: currentKey) ?? defaults.data(forKey: legacyStorageKey),
+        guard let data = defaults.data(forKey: currentKey),
               let settings = try? JSONDecoder().decode(ScheduleReportSettings.self, from: data)
         else { return .disabled }
         var normalized = ScheduleReportSettings(
@@ -377,9 +288,6 @@ enum ScheduleReportSettingsStore {
             waitingCount: settings.waitingCount
         )
         normalized.deriveEnabledState()
-        if defaults.data(forKey: currentKey) == nil {
-            save(normalized, defaults: defaults)
-        }
         return normalized
     }
 
@@ -392,7 +300,6 @@ enum ScheduleReportSettingsStore {
 
     static func clear(defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: scopedKey(key, defaults: defaults))
-        defaults.removeObject(forKey: scopedKey(legacyKey, defaults: defaults))
     }
 
     static func scopedStorageKey(defaults: UserDefaults = .standard) -> String {
@@ -671,7 +578,7 @@ enum ScheduleReportPlanner {
                 ResolvedReminderOccurrence(
                     sourceDate: fireDate,
                     title: trimmedTitle,
-                    body: trimmedBody.isEmpty ? ScheduleReportCustomSetting.defaultBody : trimmedBody
+                    body: trimmedBody.isEmpty ? ScheduleReminder.defaultBody : trimmedBody
                 )
             ]
 

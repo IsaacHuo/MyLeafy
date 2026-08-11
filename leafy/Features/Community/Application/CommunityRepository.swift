@@ -24,7 +24,6 @@ nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
         cursor: CommunityCommentCursor?,
         limit: Int
     ) async throws -> CommunityCommentPage
-    func createComment(postID: UUID, body: String) async throws -> CommunityComment
     func createComment(
         postID: UUID,
         body: String,
@@ -40,47 +39,6 @@ nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
     func blockUser(userID: UUID, reason: String?) async throws
     func deletePost(postID: UUID) async throws
     func deleteComment(commentID: UUID) async throws
-}
-
-extension CommunityPostDetailRepository {
-    func fetchCommentThreads(
-        postID: UUID,
-        cursor: CommunityCommentCursor?,
-        limit: Int
-    ) async throws -> CommunityCommentPage {
-        guard cursor == nil else {
-            return CommunityCommentPage(threads: [], nextCursor: nil)
-        }
-        let comments = try await fetchComments(postID: postID)
-        let grouped = Dictionary(grouping: comments, by: \.threadRootID)
-        let threads = comments
-            .filter { !$0.isReply }
-            .prefix(max(1, limit))
-            .map { root in
-                CommunityCommentThread(
-                    root: root,
-                    replies: (grouped[root.id] ?? []).filter(\.isReply)
-                )
-            }
-        return CommunityCommentPage(threads: Array(threads), nextCursor: nil)
-    }
-
-    func createComment(
-        postID: UUID,
-        body: String,
-        parentCommentID _: UUID?,
-        replyToCommentID _: UUID?
-    ) async throws -> CommunityComment {
-        try await createComment(postID: postID, body: body)
-    }
-
-    func toggleCommentLike(commentID _: UUID) async throws -> CommunityCommentLikeState {
-        throw CommunityServiceError.edgeFunctionRejected("当前社区服务暂不支持评论点赞。")
-    }
-
-    func attachmentDownloadURL(attachmentID _: UUID) async throws -> CommunityAttachmentDownload {
-        throw CommunityServiceError.edgeFunctionRejected("当前社区服务暂不支持附件下载。")
-    }
 }
 
 nonisolated protocol CommunityPollRepository: CommunitySessionRepository {
@@ -100,6 +58,15 @@ nonisolated protocol CommunityCatalogRatingRepository: CommunitySessionRepositor
 
 nonisolated protocol CommunityNotificationRepository: CommunitySessionRepository {
     func fetchUnreadNotificationCount() async throws -> Int
+    func notificationEvents(profileID: UUID) async -> AsyncThrowingStream<Void, Error>
+    func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem]
+    func fetchNotificationSettings() async throws -> CommunityNotificationSettings
+    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings
+    func markNotificationFeedRead(announcementLimit: Int) async throws
+    func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws
+    func markNotificationRead(notificationID: UUID) async throws
+    func markSiteAnnouncementRead(announcementID: UUID) async throws
+    func fetchLinkedPost(postID: UUID) async throws -> CommunityPost?
 }
 
 nonisolated protocol CommunityRepository:
@@ -108,7 +75,6 @@ nonisolated protocol CommunityRepository:
     CommunityPollRepository,
     CommunityCatalogRatingRepository,
     CommunityNotificationRepository {
-    func createPost(input: CreatePostInput, images: [CommunityImageUpload]) async throws -> CommunityPost
     @MainActor
     func enqueuePostPublication(
         input: CreatePostInput,
@@ -117,21 +83,6 @@ nonisolated protocol CommunityRepository:
     ) throws -> UUID
     func fetchMyAuthoredPolls(limit: Int) async throws -> [CommunityPoll]
     func fetchMyVotedPolls(limit: Int) async throws -> [CommunityPoll]
-}
-
-extension CommunityRepository {
-    func fetchPosts() async throws -> [CommunityPost] {
-        try await fetchPosts(query: .default)
-    }
-
-    @MainActor
-    func enqueuePostPublication(
-        input _: CreatePostInput,
-        images _: [CommunityImageUpload],
-        attachments _: [CommunityAttachmentUpload]
-    ) throws -> UUID {
-        throw CommunityServiceError.edgeFunctionRejected("当前社区服务暂不支持后台发布。")
-    }
 }
 
 struct LiveCommunityRepository: CommunityRepository {
@@ -176,10 +127,6 @@ struct LiveCommunityRepository: CommunityRepository {
         limit: Int
     ) async throws -> CommunityCommentPage {
         try await service.fetchCommentThreads(postID: postID, cursor: cursor, limit: limit)
-    }
-
-    func createComment(postID: UUID, body: String) async throws -> CommunityComment {
-        try await service.createComment(postID: postID, body: body)
     }
 
     func createComment(
@@ -236,10 +183,6 @@ struct LiveCommunityRepository: CommunityRepository {
         try await service.hasAcceptedCurrentTerms()
     }
 
-    func createPost(input: CreatePostInput, images: [CommunityImageUpload]) async throws -> CommunityPost {
-        try await service.createPost(input: input, images: images)
-    }
-
     func fetchPolls(limit: Int) async throws -> [CommunityPoll] {
         try await service.fetchPolls(limit: limit)
     }
@@ -292,5 +235,41 @@ struct LiveCommunityRepository: CommunityRepository {
 
     func fetchUnreadNotificationCount() async throws -> Int {
         try await service.fetchUnreadNotificationCount()
+    }
+
+    func notificationEvents(profileID: UUID) async -> AsyncThrowingStream<Void, Error> {
+        await service.notificationEvents(profileID: profileID)
+    }
+
+    func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem] {
+        try await service.fetchNotificationFeed(limit: limit)
+    }
+
+    func fetchNotificationSettings() async throws -> CommunityNotificationSettings {
+        try await service.fetchNotificationSettings()
+    }
+
+    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings {
+        try await service.updateNotificationSettings(mutedAll: mutedAll)
+    }
+
+    func markNotificationFeedRead(announcementLimit: Int) async throws {
+        try await service.markNotificationFeedRead(announcementLimit: announcementLimit)
+    }
+
+    func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {
+        try await service.dismissNotificationFeedItem(item)
+    }
+
+    func markNotificationRead(notificationID: UUID) async throws {
+        try await service.markNotificationRead(notificationID: notificationID)
+    }
+
+    func markSiteAnnouncementRead(announcementID: UUID) async throws {
+        try await service.markSiteAnnouncementRead(announcementID: announcementID)
+    }
+
+    func fetchLinkedPost(postID: UUID) async throws -> CommunityPost? {
+        try await service.fetchPost(postID: postID)
     }
 }

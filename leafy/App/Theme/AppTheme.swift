@@ -1,9 +1,5 @@
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 enum AppDisplaySizePreference: String, CaseIterable, Identifiable {
     case compact = "compact"
@@ -79,15 +75,12 @@ enum AppDisplaySizePreference: String, CaseIterable, Identifiable {
     }
 }
 
-typealias AppFontSizePreference = AppDisplaySizePreference
-
 enum AppAppearancePreference: String, CaseIterable, Identifiable {
     case system = "system"
     case light = "light"
     case dark = "dark"
 
     nonisolated static let storageKey = "appAppearancePreference"
-    nonisolated private static let legacyForcesDarkModeKey = "appForcesDarkMode"
 
     var id: String { rawValue }
 
@@ -148,11 +141,6 @@ enum AppAppearancePreference: String, CaseIterable, Identifiable {
         }
     }
 
-    nonisolated static func migrateStoredAppearanceIfNeeded(userDefaults: UserDefaults = .standard) {
-        guard userDefaults.string(forKey: storageKey) == nil else { return }
-        let migratedValue = userDefaults.bool(forKey: legacyForcesDarkModeKey) ? dark.rawValue : light.rawValue
-        userDefaults.set(migratedValue, forKey: storageKey)
-    }
 }
 
 enum AppThemeColorPreference: String, CaseIterable, Identifiable {
@@ -198,8 +186,6 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
             return .irisPurple
         case custom.rawValue:
             return .custom
-        case .some:
-            return .custom
         default:
             return .green
         }
@@ -207,26 +193,6 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
 
     var swatchColor: Color {
         AppTheme.accent(for: self)
-    }
-
-    nonisolated static func migrateStoredThemeIfNeeded(userDefaults: UserDefaults = .standard) {
-        guard let rawValue = userDefaults.string(forKey: storageKey),
-              ![
-                  green.rawValue,
-                  tiffanyBlue.rawValue,
-                  candyPink.rawValue,
-                  sunsetApricot.rawValue,
-                  irisPurple.rawValue,
-                  custom.rawValue
-              ].contains(rawValue)
-        else {
-            return
-        }
-
-        if userDefaults.string(forKey: customColorHexKey) == nil {
-            userDefaults.set(legacyColorHex(for: rawValue), forKey: customColorHexKey)
-        }
-        userDefaults.set(custom.rawValue, forKey: storageKey)
     }
 
     nonisolated static func color(fromHex hex: String?) -> Color {
@@ -241,19 +207,9 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
 
-        #if canImport(UIKit)
         guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
             return defaultCustomColorHex
         }
-        #elseif canImport(AppKit)
-        guard let converted = uiColor.usingColorSpace(.deviceRGB) else {
-            return defaultCustomColorHex
-        }
-        red = converted.redComponent
-        green = converted.greenComponent
-        blue = converted.blueComponent
-        alpha = converted.alphaComponent
-        #endif
 
         return String(
             format: "#%02X%02X%02X",
@@ -281,28 +237,6 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
         )
     }
 
-    nonisolated private static func legacyColorHex(for rawValue: String) -> String {
-        switch rawValue {
-        case "sunnyAmber", "champagne", "antiqueOchre", "warmTaupe":
-            return "#FBBC54"
-        case "coralPink":
-            return "#FC5E70"
-        case "tangerine", "peachOrange", "terracotta":
-            return "#FF8531"
-        case "lemonYellow":
-            return "#FFCA3A"
-        case "limeGreen", "pistachio":
-            return "#8AC926"
-        case "aquaCyan", "powderBlue", "smokyJade":
-            return "#00AEEF"
-        case "orchidPurple", "periwinkle", "softLilac":
-            return "#C095E4"
-        case "roseGold", "dustyRose", "damsonPlum":
-            return "#FB6095"
-        default:
-            return defaultCustomColorHex
-        }
-    }
 }
 
 private struct LeafyThemeColorPreferenceKey: EnvironmentKey {
@@ -638,16 +572,6 @@ extension EnvironmentValues {
     var leafyControlScale: CGFloat {
         get { self[LeafyControlScaleKey.self] }
         set { self[LeafyControlScaleKey.self] = newValue }
-    }
-}
-
-// MARK: - Backward compatibility during UI migration
-enum UIConstants {
-    static let cornerRadiusLarge: CGFloat = AppRadius.large
-    static let cornerRadiusSmall: CGFloat = AppRadius.medium
-
-    static func floatingShadow(for colorScheme: ColorScheme) -> Color {
-        AppShadow.color(for: colorScheme)
     }
 }
 
