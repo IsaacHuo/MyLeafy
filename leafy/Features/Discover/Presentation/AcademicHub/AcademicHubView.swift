@@ -382,7 +382,7 @@ private struct AcademicSidebarTabItem: View {
                     in: Circle()
                 )
 
-            Text(tab.title(language: language))
+            Text(tab.compactTitle(language: language))
                 .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
                 .foregroundStyle(AppTheme.primaryText)
                 .lineLimit(1)

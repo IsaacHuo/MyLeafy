@@ -1,146 +1,160 @@
 {
-  "sourceLanguage": "zh-Hans",
-  "strings": {
-    "%@ 超过 25 MB，无法导入。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ exceeds 25 MB and cannot be imported."
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "%@ 超过 25 MB，无法导入。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ exceeds 25 MB and cannot be imported."
           }
         }
       }
     },
-    "无法找到暂存文件 %@，请重新导入。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unable to find temporary file %@, please re-import."
+    "单次导入总大小不能超过 100 MB。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The total size of a single import cannot exceed 100 MB."
           }
         }
       }
     },
-    "暂不支持导入 %@。请使用 PDF、图片、Word 或 PPT 文件。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importing %@ is currently not supported. Please use PDF, image, Word, or PPT files."
+    "学习资料" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Study Materials"
           }
         }
       }
     },
-    "单次导入总大小不能超过 100 MB。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The total size of a single import cannot exceed 100 MB."
+    "完成" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completed"
           }
         }
       }
     },
-    "学习资料": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Study Materials"
+    "已暂存，正在打开 MyLeafy..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporarily saved, opening MyLeafy..."
           }
         }
       }
     },
-    "完成": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Completed"
+    "文件已暂存，请手动打开 MyLeafy 完成保存。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File has been temporarily saved, please manually open MyLeafy to complete saving."
           }
         }
       }
     },
-    "已暂存，正在打开 MyLeafy...": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Temporarily saved, opening MyLeafy..."
+    "无法找到暂存文件 %@，请重新导入。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to find temporary file %@, please re-import."
           }
         }
       }
     },
-    "文件已暂存，请手动打开 MyLeafy 完成保存。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "File has been temporarily saved, please manually open MyLeafy to complete saving."
+    "无法访问 MyLeafy 共享暂存目录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot access MyLeafy shared temporary directory."
           }
         }
       }
     },
-    "无法访问 MyLeafy 共享暂存目录。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot access MyLeafy shared temporary directory."
+    "暂不支持导入 %@。请使用 PDF、图片、Word 或 PPT 文件。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing %@ is currently not supported. Please use PDF, image, Word, or PPT files."
           }
         }
       }
     },
-    "正在保存到 MyLeafy...": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saving to MyLeafy..."
+    "正在保存到 MyLeafy..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving to MyLeafy..."
           }
         }
       }
     },
-    "每次最多导入 10 个文件。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Up to 10 files can be imported at a time."
+    "每次最多导入 10 个文件。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to 10 files can be imported at a time."
           }
         }
       }
     },
-    "没有找到可导入的文件。请使用 PDF、图片、Word 或 PPT 文件。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No files found for import. Please use PDF, image, Word, or PPT files."
+    "没有找到可导入的文件。请使用 PDF、图片、Word 或 PPT 文件。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No files found for import. Please use PDF, image, Word, or PPT files."
           }
         }
       }
     },
-    "设备可用空间不足，无法暂存这些文件。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Insufficient device space to temporarily save these files."
+    "设备可用空间不足，无法暂存这些文件。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insufficient device space to temporarily save these files."
           }
         }
       }
     },
-    "这批外部文件暂存记录已失效，请重新从微信或 QQ 打开。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This batch of external temporary file records has expired, please reopen from WeChat or QQ."
+    "这批外部文件暂存记录已失效，请重新从微信或 QQ 打开。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This batch of external temporary file records has expired, please reopen from WeChat or QQ."
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

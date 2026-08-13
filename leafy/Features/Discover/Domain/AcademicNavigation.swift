@@ -17,6 +17,22 @@ nonisolated enum AcademicPrimaryTab: String, CaseIterable, Identifiable, Equatab
         L10n.text(rawValue, language: language)
     }
 
+    func compactTitle(language: AppLanguagePreference) -> String {
+        let key: String
+        switch self {
+        case .cultivation: key = "campus.sidebar.academics"
+        case .classrooms: key = "campus.sidebar.study"
+        case .learning: key = "campus.sidebar.spaces"
+        case .sports: key = "campus.sidebar.sports"
+        case .career: key = "campus.sidebar.career"
+        case .postgraduate: key = "campus.sidebar.grad-school"
+        case .medical: key = "campus.sidebar.health"
+        case .weekendTravel: key = "campus.sidebar.explore"
+        case .ratings: key = "campus.sidebar.ratings"
+        }
+        return L10n.text(key, language: language)
+    }
+
     var icon: String {
         switch self {
         case .cultivation: return "graduationcap.fill"

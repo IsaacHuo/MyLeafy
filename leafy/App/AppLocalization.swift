@@ -70,6 +70,20 @@ nonisolated enum AppLanguagePreference: String, Sendable {
         let keys = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
         return L10n.text(keys[index], language: self)
     }
+
+    func timetableWeekdayTitle(for day: Int) -> String {
+        let index = max(0, min(day - 1, 6))
+        let keys = [
+            "timetable.weekday.mon",
+            "timetable.weekday.tues",
+            "timetable.weekday.wed",
+            "timetable.weekday.thurs",
+            "timetable.weekday.fri",
+            "timetable.weekday.sat",
+            "timetable.weekday.sun"
+        ]
+        return L10n.text(keys[index], language: self)
+    }
 }
 
 private struct LeafyLanguageKey: EnvironmentKey {

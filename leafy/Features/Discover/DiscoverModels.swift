@@ -1237,6 +1237,14 @@ enum DateFormatters {
         )
     }
 
+    static func shortMonth(language: AppLanguagePreference) -> DateFormatter {
+        localizedFormatter(
+            chineseFormat: "M月",
+            englishTemplate: "MMM",
+            language: language
+        )
+    }
+
     private static func localizedFormatter(
         chineseFormat: String,
         englishTemplate: String,

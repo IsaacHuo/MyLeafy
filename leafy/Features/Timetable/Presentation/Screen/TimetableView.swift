@@ -959,9 +959,15 @@ struct TimetableView: View {
             Button {
                 isWeatherAdvicePresented = true
             } label: {
-                weatherTextLabel(cachedTimetableWeather.timetableCapsuleText)
+                weatherTextLabel(cachedTimetableWeather.timetableCapsuleText(language: leafyLanguage))
             }
-            .accessibilityLabel("天气建议，\(cachedTimetableWeather.timetableCapsuleText)")
+            .accessibilityLabel(
+                L10n.text(
+                    "天气建议，%@",
+                    language: leafyLanguage,
+                    cachedTimetableWeather.timetableCapsuleText(language: leafyLanguage)
+                )
+            )
         } else {
             Button {
                 isWeatherAdvicePresented = true
@@ -1050,7 +1056,7 @@ struct TimetableView: View {
         case let .teaching(_, weekNumber):
             return L10n.text("第 %d 周", language: leafyLanguage, weekNumber)
         case let .vacation(_, category):
-            return TimetableCalendarMenuModel.vacationTitle(category: category)
+            return TimetableCalendarMenuModel.vacationTitle(category: category, language: leafyLanguage)
         case .unconfigured:
             return shortWeekDateRange(week)
         }
@@ -1068,7 +1074,7 @@ struct TimetableView: View {
             )
             return "\(academicYear)学年，\(semester)，第 \(weekNumber) 周"
         case let .vacation(_, category):
-            return TimetableCalendarMenuModel.vacationTitle(category: category)
+            return TimetableCalendarMenuModel.vacationTitle(category: category, language: leafyLanguage)
         case .unconfigured:
             return shortWeekDateRange(week)
         }
@@ -1650,7 +1656,7 @@ struct TimetableView: View {
                 Spacer()
 
                 if let event = metadata.event {
-                    Text(event.title)
+                    Text(event.displayTitle(language: leafyLanguage))
                         .font(.system(size: 11 * leafyControlScale, weight: .semibold))
                         .foregroundStyle(dayHeaderForeground(event: event, hasExam: false))
                         .lineLimit(1)
@@ -1901,7 +1907,7 @@ struct TimetableView: View {
                 .minimumScaleFactor(0.72)
                 .allowsTightening(true)
             if let event = metadata.event {
-                Text(event.title)
+                Text(event.displayTitle(language: leafyLanguage))
                     .font(.system(size: 8.5 * leafyControlScale, weight: .regular))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -2170,8 +2176,7 @@ struct TimetableView: View {
 
     private func monthString() -> String {
         let date = dateFor(dayOfWeek: 1, in: currentWeek)
-        let month = Calendar.current.component(.month, from: date)
-        return "\(month)月"
+        return DateFormatters.shortMonth(language: leafyLanguage).string(from: date)
     }
 
     private func dayTitle(_ day: Int) -> String {

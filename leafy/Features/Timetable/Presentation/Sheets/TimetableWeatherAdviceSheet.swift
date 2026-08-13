@@ -182,7 +182,7 @@ struct TimetableWeatherAdviceSheet: View {
                     .font(.system(size: 26 * leafyControlScale, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text(snapshot.condition)
+                Text(snapshot.localizedCondition(language: leafyLanguage))
                     .leafyHeadline()
                     .foregroundStyle(AppTheme.secondaryText)
                     .lineLimit(1)

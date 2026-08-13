@@ -459,6 +459,20 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
         academicCategory == .winterBreak || academicCategory == .summerBreak
     }
 
+    func displayTitle(language: AppLanguagePreference) -> String {
+        switch academicCategory {
+        case .winterBreak:
+            return L10n.text("寒假", language: language)
+        case .summerBreak:
+            return L10n.text("暑假", language: language)
+        case .semesterEnd:
+            return L10n.text("学期结束", language: language)
+        case .publicHoliday, .importantDate, .none:
+            // School-provided calendar names remain in their source language.
+            return title
+        }
+    }
+
     var solarTermSeason: SolarTermSeason? {
         guard kind == .solarTerm else { return nil }
         switch title {

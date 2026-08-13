@@ -1,122 +1,179 @@
 {
-  "sourceLanguage": "zh-Hans",
-  "strings": {
-    "%arg · %arg": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$arg · %2$arg"
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "%@ · %@" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %@"
           }
         },
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%arg · %arg"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
           }
         }
       }
     },
-    "还有 %d 节": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "There are still %d periods"
+    "%arg · %arg" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%arg · %arg"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$arg · %2$arg"
           }
         }
       }
     },
-    "MyLeafy 课表": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MyLeafy schedule"
+    "MyLeafy 课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MyLeafy schedule"
           }
         }
       }
     },
-    "今": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Today"
+    "今" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
           }
         }
       }
     },
-    "今日课表": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Today's Schedule"
+    "今日课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today's Schedule"
           }
         }
       }
     },
-    "打开课表": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open Schedule"
+    "切换 MyLeafy 小组件显示今天或明天的课表。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle the MyLeafy widget to display today's or tomorrow's class schedule."
           }
         }
       }
     },
-    "明": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tomorrow"
+    "切换课表日期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch class schedule dates"
           }
         }
       }
     },
-    "明日课表": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tomorrow's Schedule"
+    "打开课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Schedule"
           }
         }
       }
     },
-    "显示今天课表": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show today's schedule"
+    "日期偏移" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "date offset"
           }
         }
       }
     },
-    "显示明天课表": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show tomorrow's schedule"
+    "明" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow"
           }
         }
       }
     },
-    "查看今天课程、备注和课前提醒。": {
-      "localizations": {
-        "en-US": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View today's courses, notes, and pre-class reminders."
+    "明日课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow's Schedule"
+          }
+        }
+      }
+    },
+    "显示今天课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show today's schedule"
+          }
+        }
+      }
+    },
+    "显示明天课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show tomorrow's schedule"
+          }
+        }
+      }
+    },
+    "查看今天课程、备注和课前提醒。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View today's courses, notes, and pre-class reminders."
+          }
+        }
+      }
+    },
+    "还有 %d 节" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are still %d periods"
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

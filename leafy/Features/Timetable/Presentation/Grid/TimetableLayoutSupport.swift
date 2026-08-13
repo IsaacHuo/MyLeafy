@@ -352,7 +352,7 @@ final class TimetableDayMetadataCache {
             day: day,
             date: date,
             isToday: calendar.isDate(date, inSameDayAs: today),
-            dayTitle: language.weekdayTitle(for: day),
+            dayTitle: language.timetableWeekdayTitle(for: day),
             numericDateText: String(format: "%02d-%02d", numericComponents.month ?? 1, numericComponents.day ?? 1),
             chineseDateText: DateFormatters.chineseDay.string(from: date),
             event: AcademicCalendarEvents.event(on: date, campusEvents: calendarEvents, calendar: calendar),

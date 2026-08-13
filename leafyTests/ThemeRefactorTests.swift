@@ -17,6 +17,8 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(AppLanguagePreference.enUS.localeIdentifier, "en-US")
         XCTAssertEqual(AppLanguagePreference.zhHans.weekdayTitle(for: 1), "周一")
         XCTAssertEqual(AppLanguagePreference.zhHans.weekdayTitle(for: 7), "周日")
+        XCTAssertEqual(AppLanguagePreference.zhHans.timetableWeekdayTitle(for: 1), "周一")
+        XCTAssertEqual(AppLanguagePreference.zhHans.timetableWeekdayTitle(for: 7), "周日")
     }
 
     func testExplicitLocalizationReturnsRequestedLanguageAndFormatsValues() {
@@ -24,6 +26,12 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(L10n.text("第 %d 周", language: .zhHans, 3), "第 3 周")
         XCTAssertEqual(L10n.text("语言", language: .enUS), "Language")
         XCTAssertEqual(AppLanguagePreference.enUS.weekdayTitle(for: 1), "Monday")
+        XCTAssertEqual(
+            (1...7).map { AppLanguagePreference.enUS.timetableWeekdayTitle(for: $0) },
+            ["Mon.", "Tues.", "Wed.", "Thurs.", "Fri.", "Sat.", "Sun."]
+        )
+        XCTAssertEqual(AcademicPrimaryTab.learning.compactTitle(language: .enUS), "Spaces")
+        XCTAssertEqual(AcademicPrimaryTab.classrooms.compactTitle(language: .enUS), "Study")
     }
 
     func testMissingLocalizationFallsBackToSourceKey() {
@@ -56,6 +64,13 @@ extension PerformanceRefactorTests {
 
         XCTAssertEqual(chineseFormatter.string(from: date), "5月12日")
         XCTAssertEqual(englishFormatter.string(from: date), "May 12")
+
+        let chineseMonthFormatter = DateFormatters.shortMonth(language: .zhHans)
+        let englishMonthFormatter = DateFormatters.shortMonth(language: .enUS)
+        chineseMonthFormatter.timeZone = calendar.timeZone
+        englishMonthFormatter.timeZone = calendar.timeZone
+        XCTAssertEqual(chineseMonthFormatter.string(from: date), "5月")
+        XCTAssertEqual(englishMonthFormatter.string(from: date), "May")
     }
 
     func testTimetableBackgroundPaletteExtractsSoftColorsFromSolidImage() throws {

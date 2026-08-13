@@ -155,14 +155,17 @@ nonisolated struct TimetableCalendarMenuModel {
         }
     }
 
-    static func vacationTitle(category: SchoolCalendarEvent.AcademicCategory) -> String {
+    static func vacationTitle(
+        category: SchoolCalendarEvent.AcademicCategory,
+        language: AppLanguagePreference = .current
+    ) -> String {
         switch category {
         case .winterBreak:
-            return "寒假"
+            return L10n.text("寒假", language: language)
         case .summerBreak:
-            return "暑假"
+            return L10n.text("暑假", language: language)
         case .publicHoliday, .importantDate, .semesterEnd:
-            return "假期"
+            return L10n.text("假期", language: language)
         }
     }
 

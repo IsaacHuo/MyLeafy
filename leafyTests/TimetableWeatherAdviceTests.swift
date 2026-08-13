@@ -80,8 +80,10 @@ final class TimetableWeatherAdviceTests: XCTestCase {
             makeHour(date: classStartDate, temperature: -2.6, condition: "雪")
         ])
 
-        XCTAssertEqual(mild.timetableCapsuleText, "23℃ 多云")
-        XCTAssertEqual(cold.timetableCapsuleText, "-3℃ 雪天")
+        XCTAssertEqual(mild.timetableCapsuleText(language: .zhHans), "23°C 多云")
+        XCTAssertEqual(cold.timetableCapsuleText(language: .zhHans), "-3°C 雪天")
+        XCTAssertEqual(mild.timetableCapsuleText(language: .enUS), "23°C Cloudy")
+        XCTAssertEqual(cold.timetableCapsuleText(language: .enUS), "-3°C Snow")
     }
 
     func testTimetableCapsuleTextUsesTwoCharacterWeatherConditions() {
@@ -102,7 +104,7 @@ final class TimetableWeatherAdviceTests: XCTestCase {
                 makeHour(date: classStartDate, temperature: 20, condition: condition)
             ])
 
-            XCTAssertEqual(snapshot.timetableCapsuleText, "20℃ \(expected)")
+            XCTAssertEqual(snapshot.timetableCapsuleText(language: .zhHans), "20°C \(expected)")
             XCTAssertEqual(expected.count, 2)
         }
     }

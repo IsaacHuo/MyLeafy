@@ -39,7 +39,15 @@ nonisolated struct TimetableWeatherSnapshot: Codable, Equatable, Sendable {
     }
 
     var timetableCapsuleText: String {
-        "\(Int(temperature.rounded()))℃ \(timetableCapsuleCondition)"
+        timetableCapsuleText(language: .current)
+    }
+
+    func timetableCapsuleText(language: AppLanguagePreference) -> String {
+        "\(Int(temperature.rounded()))°C \(localizedCondition(language: language))"
+    }
+
+    func localizedCondition(language: AppLanguagePreference) -> String {
+        L10n.text(timetableCapsuleCondition, language: language)
     }
 
     func upcomingHourlyForecast(now: Date = Date(), limit: Int = 12) -> [TimetableHourlyWeather] {
