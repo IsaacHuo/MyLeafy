@@ -1989,6 +1989,159 @@
         }
       }
     },
+    "campus.sidebar.academics" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Academics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学校教学"
+          }
+        }
+      }
+    },
+    "campus.sidebar.career" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Career"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "职业规划"
+          }
+        }
+      }
+    },
+    "campus.sidebar.explore" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explore"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周末去哪"
+          }
+        }
+      }
+    },
+    "campus.sidebar.grad-school" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grad School"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "考研信息"
+          }
+        }
+      }
+    },
+    "campus.sidebar.health" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "医疗事项"
+          }
+        }
+      }
+    },
+    "campus.sidebar.ratings" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ratings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "评价相关"
+          }
+        }
+      }
+    },
+    "campus.sidebar.spaces" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spaces"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习空间"
+          }
+        }
+      }
+    },
+    "campus.sidebar.sports" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sports"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "体育相关"
+          }
+        }
+      }
+    },
+    "campus.sidebar.study" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Study"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自习安排"
+          }
+        }
+      }
+    },
     "CSV 字段" : {
       "localizations" : {
         "en-US" : {
@@ -2078,6 +2231,125 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "term can write the semester, credit and score should be filled in according to the school's original table; type can write compulsory, elective, general education, etc."
+          }
+        }
+      }
+    },
+    "timetable.weekday.fri" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fri."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周五"
+          }
+        }
+      }
+    },
+    "timetable.weekday.mon" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mon."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周一"
+          }
+        }
+      }
+    },
+    "timetable.weekday.sat" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sat."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周六"
+          }
+        }
+      }
+    },
+    "timetable.weekday.sun" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周日"
+          }
+        }
+      }
+    },
+    "timetable.weekday.thurs" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thurs."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周四"
+          }
+        }
+      }
+    },
+    "timetable.weekday.tues" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tues."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周二"
+          }
+        }
+      }
+    },
+    "timetable.weekday.wed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周三"
           }
         }
       }
@@ -2875,6 +3147,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Physical test record"
+          }
+        }
+      }
+    },
+    "体育相关" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sports"
           }
         }
       }
@@ -4436,6 +4719,17 @@
         }
       }
     },
+    "医疗事项" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health"
+          }
+        }
+      }
+    },
     "医疗台账" : {
       "localizations" : {
         "en-US" : {
@@ -5140,6 +5434,17 @@
         }
       }
     },
+    "周末去哪" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explore"
+          }
+        }
+      }
+    },
     "周次" : {
       "localizations" : {
         "en-US" : {
@@ -5261,6 +5566,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recycle Bin is empty"
+          }
+        }
+      }
+    },
+    "图书馆座位预约" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserve a Library Seat"
           }
         }
       }
@@ -5679,6 +5995,17 @@
         }
       }
     },
+    "多云" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloudy"
+          }
+        }
+      }
+    },
     "天气" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5712,6 +6039,7 @@
       }
     },
     "天气建议，%@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -6043,6 +6371,17 @@
         }
       }
     },
+    "学期结束" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semester Ends"
+          }
+        }
+      }
+    },
     "学校" : {
       "localizations" : {
         "en-US" : {
@@ -6080,6 +6419,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The school's official GPA is currently only displayed as an overview; GPA trends are not shown at semester breakdown without analysis."
+          }
+        }
+      }
+    },
+    "学校教学" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Academics"
           }
         }
       }
@@ -6289,6 +6639,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Password"
+          }
+        }
+      }
+    },
+    "寒假" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Winter Break"
           }
         }
       }
@@ -6522,6 +6883,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This will remove all courses, exams, and reminder events written to the system calendar by %arg for this semester."
+          }
+        }
+      }
+    },
+    "小雨" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light Rain"
           }
         }
       }
@@ -9763,6 +10135,17 @@
         }
       }
     },
+    "晴天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        }
+      }
+    },
     "暂不支持导入 %@。请使用 PDF、图片、Word 或 PPT 文件。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10232,6 +10615,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "App Store page not found, please try again later."
+          }
+        }
+      }
+    },
+    "暑假" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summer Break"
           }
         }
       }
@@ -11030,6 +11424,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "View the official school VPN usage guide"
+          }
+        }
+      }
+    },
+    "查看当前教学楼拥挤度" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See how busy teaching buildings are."
           }
         }
       }
@@ -13062,6 +13467,17 @@
         }
       }
     },
+    "空闲教室查询、图书馆座位预约和校园热力图集中在这里。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find open rooms, reserve a library seat, or check building activity."
+          }
+        }
+      }
+    },
     "空间名称" : {
       "localizations" : {
         "en-US" : {
@@ -13292,6 +13708,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filter courses"
+          }
+        }
+      }
+    },
+    "筛选选定时段空教室" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find rooms available at your chosen time."
           }
         }
       }
@@ -13869,6 +14296,17 @@
         }
       }
     },
+    "考研信息" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grad School"
+          }
+        }
+      }
+    },
     "考试" : {
       "localizations" : {
         "en-US" : {
@@ -14040,6 +14478,17 @@
         }
       }
     },
+    "职业规划" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Career"
+          }
+        }
+      }
+    },
     "职业规划参考" : {
       "localizations" : {
         "en-US" : {
@@ -14109,6 +14558,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Background color"
+          }
+        }
+      }
+    },
+    "自习安排" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Study Resources"
           }
         }
       }
@@ -14754,6 +15214,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Set Reimbursement Deadline"
+          }
+        }
+      }
+    },
+    "评价相关" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ratings"
           }
         }
       }
@@ -15643,6 +16114,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jump to This Week"
+          }
+        }
+      }
+    },
+    "跳转链接" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the reservation site"
           }
         }
       }
@@ -16739,6 +17221,17 @@
         }
       }
     },
+    "阴天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overcast"
+          }
+        }
+      }
+    },
     "附件" : {
       "localizations" : {
         "en-US" : {
@@ -16856,6 +17349,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Note details operations"
+          }
+        }
+      }
+    },
+    "雨天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rain"
+          }
+        }
+      }
+    },
+    "雪天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snow"
+          }
+        }
+      }
+    },
+    "雷雨" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thunderstorms"
+          }
+        }
+      }
+    },
+    "雾天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fog"
           }
         }
       }
@@ -17085,177 +17622,6 @@
           }
         }
       }
-    },
-    "campus.sidebar.academics" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Academics" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "学校教学" } }
-      }
-    },
-    "campus.sidebar.career" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Career" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "职业规划" } }
-      }
-    },
-    "campus.sidebar.explore" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Explore" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周末去哪" } }
-      }
-    },
-    "campus.sidebar.grad-school" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Grad School" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "考研信息" } }
-      }
-    },
-    "campus.sidebar.health" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Health" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "医疗事项" } }
-      }
-    },
-    "campus.sidebar.ratings" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Ratings" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "评价相关" } }
-      }
-    },
-    "campus.sidebar.spaces" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Spaces" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "学习空间" } }
-      }
-    },
-    "campus.sidebar.sports" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Sports" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "体育相关" } }
-      }
-    },
-    "campus.sidebar.study" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Study" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "自习安排" } }
-      }
-    },
-    "timetable.weekday.fri" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Fri." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周五" } }
-      }
-    },
-    "timetable.weekday.mon" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Mon." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周一" } }
-      }
-    },
-    "timetable.weekday.sat" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Sat." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周六" } }
-      }
-    },
-    "timetable.weekday.sun" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Sun." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周日" } }
-      }
-    },
-    "timetable.weekday.thurs" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Thurs." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周四" } }
-      }
-    },
-    "timetable.weekday.tues" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Tues." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周二" } }
-      }
-    },
-    "timetable.weekday.wed" : {
-      "localizations" : {
-        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Wed." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "周三" } }
-      }
-    },
-    "学校教学" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Academics" } } }
-    },
-    "自习安排" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Study Resources" } } }
-    },
-    "体育相关" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Sports" } } }
-    },
-    "职业规划" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Career" } } }
-    },
-    "考研信息" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Grad School" } } }
-    },
-    "医疗事项" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Health" } } }
-    },
-    "周末去哪" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Explore" } } }
-    },
-    "评价相关" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Ratings" } } }
-    },
-    "空闲教室查询、图书馆座位预约和校园热力图集中在这里。" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Find open rooms, reserve a library seat, or check building activity." } } }
-    },
-    "筛选选定时段空教室" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Find rooms available at your chosen time." } } }
-    },
-    "图书馆座位预约" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Reserve a Library Seat" } } }
-    },
-    "跳转链接" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Opens the reservation site" } } }
-    },
-    "查看当前教学楼拥挤度" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "See how busy teaching buildings are." } } }
-    },
-    "寒假" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Winter Break" } } }
-    },
-    "暑假" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Summer Break" } } }
-    },
-    "学期结束" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Semester Ends" } } }
-    },
-    "晴天" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Clear" } } }
-    },
-    "阴天" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Overcast" } } }
-    },
-    "雨天" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Rain" } } }
-    },
-    "小雨" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Light Rain" } } }
-    },
-    "雪天" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Snow" } } }
-    },
-    "雾天" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Fog" } } }
-    },
-    "多云" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Cloudy" } } }
-    },
-    "雷雨" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Thunderstorms" } } }
-    },
-    "天气建议，%@" : {
-      "localizations" : { "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Weather advice, %@" } } }
     }
   },
   "version" : "1.0"
