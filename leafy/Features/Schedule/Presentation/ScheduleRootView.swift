@@ -348,6 +348,7 @@ private enum ScheduleMemoFilter: String, CaseIterable, Identifiable {
 struct ScheduleMemoFeedView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @Environment(\.openURL) private var openURL
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @Query private var attachments: [ScheduleMemoAttachment]
@@ -359,7 +360,8 @@ struct ScheduleMemoFeedView: View {
     @State private var sort: ScheduleMemoSort = .newest
     @State private var editingMemo: ScheduleMemo?
     @State private var convertingMemo: ScheduleMemo?
-    @State private var shareCardSource: CommunityPostCardPreviewSource?
+    @State private var shareCardSource: ScheduleMemoShareCardPreviewSource?
+    @State private var submissionFallback: ScheduleMemoSubmissionDraft?
     @State private var importantDates = CustomScheduleStore.load()
     @State private var detailMemo: ScheduleMemo?
     @State private var composerHeight: CGFloat = 0
@@ -381,9 +383,6 @@ struct ScheduleMemoFeedView: View {
         self.initialTag = initialTag
         self.presentation = presentation
         _selectedTag = State(initialValue: initialTag)
-        _daytraceScrollPosition = State(
-            initialValue: presentation == .daytraceRoot ? .cardsStart : nil
-        )
     }
 
     private var visibleMemos: [ScheduleMemo] {
@@ -418,7 +417,11 @@ struct ScheduleMemoFeedView: View {
     var body: some View {
         configuredFeed
         .leafySheet(item: $editingMemo) { memo in
-            ScheduleMemoEditorView(memo: memo)
+            if memo.kind == .audio {
+                ScheduleMemoEditorView(memo: memo)
+            } else {
+                ScheduleMemoAdvancedEditorView(memo: memo)
+            }
         }
         .leafySheet(item: $convertingMemo) { memo in
             CustomScheduleEditorSheet(
@@ -438,7 +441,7 @@ struct ScheduleMemoFeedView: View {
             )
         }
         .leafySheet(item: $shareCardSource) { source in
-            CommunityPostCardPreviewSheet(source: source)
+            ScheduleMemoShareCardPreviewSheet(source: source)
         }
         .navigationDestination(isPresented: Binding(
             get: { detailMemo != nil },
@@ -455,6 +458,7 @@ struct ScheduleMemoFeedView: View {
                     onEdit: { editingMemo = detailMemo },
                     onConvert: { convertingMemo = detailMemo },
                     onShareCard: { makeShareCard(for: detailMemo) },
+                    onSubmit: { submit(detailMemo) },
                     onPin: { togglePin(detailMemo) },
                     onTrash: {
                         requestTrash(detailMemo, closesDetail: true)
@@ -484,6 +488,28 @@ struct ScheduleMemoFeedView: View {
                     dismissButton: .default(Text("知道了"))
                 )
             }
+        }
+        .confirmationDialog(
+            "无法打开邮箱 App",
+            isPresented: Binding(
+                get: { submissionFallback != nil },
+                set: { if !$0 { submissionFallback = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let draft = submissionFallback {
+                Button("复制投稿内容") {
+                    UIPasteboard.general.string = draft.body
+                    submissionFallback = nil
+                }
+                Button("复制投稿邮箱") {
+                    UIPasteboard.general.string = ScheduleMemoSubmissionDraft.recipient
+                    submissionFallback = nil
+                }
+            }
+            Button("取消", role: .cancel) { submissionFallback = nil }
+        } message: {
+            Text("请复制投稿内容，稍后发送至 \(ScheduleMemoSubmissionDraft.recipient)。")
         }
     }
 
@@ -519,88 +545,86 @@ struct ScheduleMemoFeedView: View {
 
     private var memoScrollView: some View {
         GeometryReader { viewport in
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        if presentation == .daytraceRoot {
-                            searchFilterBar
-                                .padding(.top, AppSpacing.compact)
-                                .opacity(hasPositionedDaytraceFeed ? searchRevealProgress : 0)
-                                .allowsHitTesting(
-                                    hasPositionedDaytraceFeed && searchRevealProgress >= 0.99
-                                )
-                                .accessibilityHidden(
-                                    !hasPositionedDaytraceFeed || searchRevealProgress < 0.99
-                                )
-                                .background {
-                                    GeometryReader { geometry in
-                                        let frame = geometry.frame(
-                                            in: .named(ScheduleMemoFeedCoordinateSpace.scroll)
+            ScrollView {
+                VStack(spacing: 0) {
+                    if presentation == .daytraceRoot {
+                        searchFilterBar
+                            .padding(.top, AppSpacing.compact)
+                            .opacity(hasPositionedDaytraceFeed ? searchRevealProgress : 0)
+                            .allowsHitTesting(
+                                hasPositionedDaytraceFeed && searchRevealProgress >= 0.99
+                            )
+                            .accessibilityHidden(
+                                !hasPositionedDaytraceFeed || searchRevealProgress < 0.99
+                            )
+                            .background {
+                                GeometryReader { geometry in
+                                    let frame = geometry.frame(
+                                        in: .named(ScheduleMemoFeedCoordinateSpace.scroll)
+                                    )
+                                    Color.clear.preference(
+                                        key: ScheduleMemoSearchRevealGeometryPreferenceKey.self,
+                                        value: ScheduleMemoSearchRevealGeometry(
+                                            height: geometry.size.height,
+                                            minY: frame.minY
                                         )
-                                        Color.clear.preference(
-                                            key: ScheduleMemoSearchRevealGeometryPreferenceKey.self,
-                                            value: ScheduleMemoSearchRevealGeometry(
-                                                height: geometry.size.height,
-                                                minY: frame.minY
-                                            )
-                                        )
-                                    }
+                                    )
                                 }
-                                .id(ScheduleMemoFeedAnchor.search)
+                            }
+                            .id(ScheduleMemoFeedAnchor.search)
 
-                            Color.clear
-                                .frame(height: AppSpacing.card)
-                                .id(ScheduleMemoFeedAnchor.cardsStart)
-                        }
-
-                        memoCards
-                            .leafyAdaptiveContentWidth(maxWidth: 760)
+                        Color.clear
+                            .frame(height: AppSpacing.card)
+                            .id(ScheduleMemoFeedAnchor.cardsStart)
                     }
-                    .scrollTargetLayout()
-                    .frame(
-                        minHeight: viewport.size.height
-                            + (presentation == .daytraceRoot ? searchRevealHeight : 0),
-                        alignment: .top
-                    )
-                    .padding(.bottom, AppSpacing.card)
+
+                    memoCards
+                        .leafyAdaptiveContentWidth(maxWidth: 760)
                 }
-                .coordinateSpace(name: ScheduleMemoFeedCoordinateSpace.scroll)
-                .scrollPosition(id: $daytraceScrollPosition, anchor: .top)
-                .scrollTargetBehavior(ScheduleMemoSearchRevealTargetBehavior(
-                    isEnabled: presentation == .daytraceRoot,
-                    revealHeight: searchRevealHeight
-                ))
-                .scrollBounceBehavior(.always, axes: .vertical)
-                .onPreferenceChange(ScheduleMemoSearchRevealGeometryPreferenceKey.self) { geometry in
-                    guard presentation == .daytraceRoot, geometry.height > 0 else { return }
+                .scrollTargetLayout()
+                .frame(
+                    minHeight: viewport.size.height
+                        + (presentation == .daytraceRoot ? searchRevealHeight : 0),
+                    alignment: .top
+                )
+                .padding(.bottom, AppSpacing.card)
+            }
+            .coordinateSpace(name: ScheduleMemoFeedCoordinateSpace.scroll)
+            .scrollPosition(id: $daytraceScrollPosition, anchor: .top)
+            .scrollTargetBehavior(ScheduleMemoSearchRevealTargetBehavior(
+                isEnabled: presentation == .daytraceRoot,
+                revealHeight: searchRevealHeight
+            ))
+            .scrollBounceBehavior(.always, axes: .vertical)
+            .opacity(presentation == .daytraceRoot && !hasPositionedDaytraceFeed ? 0 : 1)
+            .onPreferenceChange(ScheduleMemoSearchRevealGeometryPreferenceKey.self) { geometry in
+                guard presentation == .daytraceRoot, geometry.height > 0 else { return }
 
-                    if abs(searchRevealHeight - geometry.height) > 0.5 {
-                        searchRevealHeight = geometry.height
-                    }
+                if abs(searchRevealHeight - geometry.height) > 0.5 {
+                    searchRevealHeight = geometry.height
+                }
 
-                    let progress = min(
-                        max((geometry.minY + geometry.height) / geometry.height, 0),
-                        1
-                    )
-                    if abs(searchRevealProgress - progress) > 0.001 {
-                        searchRevealProgress = progress
-                    }
+                let progress = min(
+                    max((geometry.minY + geometry.height) / geometry.height, 0),
+                    1
+                )
+                if abs(searchRevealProgress - progress) > 0.001 {
+                    searchRevealProgress = progress
+                }
 
-                    guard !hasPositionedDaytraceFeed, !isPositioningDaytraceFeed else { return }
-                    isPositioningDaytraceFeed = true
-                    Task { @MainActor in
-                        await Task.yield()
-                        var transaction = Transaction()
-                        transaction.disablesAnimations = true
-                        withTransaction(transaction) {
-                            searchRevealProgress = 0
-                            daytraceScrollPosition = .cardsStart
-                            proxy.scrollTo(ScheduleMemoFeedAnchor.cardsStart, anchor: .top)
-                        }
-                        await Task.yield()
-                        hasPositionedDaytraceFeed = true
-                        isPositioningDaytraceFeed = false
+                guard !hasPositionedDaytraceFeed, !isPositioningDaytraceFeed else { return }
+                isPositioningDaytraceFeed = true
+                Task { @MainActor in
+                    await Task.yield()
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        searchRevealProgress = 0
+                        daytraceScrollPosition = .cardsStart
                     }
+                    await Task.yield()
+                    hasPositionedDaytraceFeed = true
+                    isPositioningDaytraceFeed = false
                 }
             }
         }
@@ -631,6 +655,7 @@ struct ScheduleMemoFeedView: View {
                         onEdit: { editingMemo = memo },
                         onConvert: { convertingMemo = memo },
                         onShareCard: { makeShareCard(for: memo) },
+                        onSubmit: { submit(memo) },
                         onPin: { togglePin(memo) },
                         onTrash: { requestTrash(memo) }
                     )
@@ -796,13 +821,36 @@ struct ScheduleMemoFeedView: View {
 
     private func makeShareCard(for memo: ScheduleMemo) {
         do {
-            shareCardSource = try scheduleMemoShareCardSource(
-                memo: memo,
-                images: memoImages(for: memo),
-                attachments: memoAttachments(for: memo)
+            shareCardSource = ScheduleMemoShareCardPreviewSource(
+                snapshot: try ScheduleMemoShareCardSnapshot.make(
+                    memo: memo,
+                    images: memoImages(for: memo),
+                    attachments: memoAttachments(for: memo)
+                )
             )
         } catch {
             presentedAlert = .failure(id: UUID(), message: error.localizedDescription)
+        }
+    }
+
+    private func submit(_ memo: ScheduleMemo) {
+        let draft = ScheduleMemoSubmissionDraft.make(
+            title: memo.kind == .article ? memo.title : nil,
+            source: memo.body,
+            tags: memo.tags,
+            createdAt: memo.createdAt,
+            updatedAt: memo.updatedAt,
+            attachmentNames: Dictionary(uniqueKeysWithValues: memoAttachments(for: memo).map {
+                ($0.id, $0.originalFilename)
+            })
+        )
+        guard let url = draft.mailtoURL else {
+            submissionFallback = draft
+            return
+        }
+        openURL(url) { accepted in
+            guard !accepted else { return }
+            Task { @MainActor in submissionFallback = draft }
         }
     }
 
@@ -941,13 +989,14 @@ private struct ScheduleMemoCard: View {
     let audio: ScheduleMemoAudio?
     let audioPlayback: ScheduleMemoAudioPlaybackController
     let linkedSchedule: ScheduleMemoLinkedSchedule?
-    let onOpen: () -> Void
-    let onTag: (String) -> Void
-    let onEdit: () -> Void
-    let onConvert: () -> Void
-    let onShareCard: () -> Void
-    let onPin: () -> Void
-    let onTrash: () -> Void
+    let onOpen: (() -> Void)?
+    let onTag: ((String) -> Void)?
+    let onEdit: (() -> Void)?
+    let onConvert: (() -> Void)?
+    let onShareCard: (() -> Void)?
+    let onSubmit: () -> Void
+    let onPin: (() -> Void)?
+    let onTrash: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -959,7 +1008,7 @@ private struct ScheduleMemoCard: View {
             }
 
             if linkedSchedule == nil, !memo.body.isEmpty {
-                Text(memo.kind == .article ? ScheduleMemoMarkdownParser.plainText(from: memo.body) : memo.body)
+                Text(ScheduleMemoMarkdownParser.plainText(from: memo.body))
                     .leafyBody()
                     .foregroundStyle(AppTheme.primaryText)
                     .lineLimit(memo.kind == .article ? 3 : 6)
@@ -984,17 +1033,14 @@ private struct ScheduleMemoCard: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(memo.tags, id: \.self) { tag in
-                            Button {
-                                onTag(tag)
-                            } label: {
-                                Text("#\(tag)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .contentShape(Capsule())
+                            Group {
+                                if let onTag {
+                                    Button { onTag(tag) } label: { tagLabel(tag) }
+                                        .buttonStyle(.plain)
+                                } else {
+                                    tagLabel(tag)
+                                }
                             }
-                            .buttonStyle(.plain)
                             .background(
                                 AppTheme.accent(for: themeColorPreference),
                                 in: Capsule()
@@ -1034,25 +1080,43 @@ private struct ScheduleMemoCard: View {
                 .stroke(AppTheme.separator, lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
-        .onTapGesture(perform: onOpen)
-        .accessibilityHint("打开随记详情")
+        .onTapGesture { onOpen?() }
+        .accessibilityHint(onOpen == nil ? "" : "打开随记详情")
     }
 
     private var actionsMenu: some View {
         Menu {
-            Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin") { onPin() }
-            Button("编辑", systemImage: "pencil") { onEdit() }
-            Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus") { onConvert() }
-            if memo.kind != .audio {
-                Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled") { onShareCard() }
+            if let onPin {
+                Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin", action: onPin)
             }
-            Button("移到回收站", systemImage: "trash", role: .destructive) { onTrash() }
+            if let onEdit {
+                Button("编辑", systemImage: "pencil", action: onEdit)
+            }
+            if let onConvert {
+                Button(linkedSchedule == nil ? "转为日程" : "重新创建日程", systemImage: "calendar.badge.plus", action: onConvert)
+            }
+            if memo.kind != .audio, let onShareCard {
+                Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
+            }
+            Button("投稿", systemImage: "envelope", action: onSubmit)
+            if let onTrash {
+                Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("随记操作")
+    }
+
+    private func tagLabel(_ tag: String) -> some View {
+        Text("#\(tag)")
+            .font(.subheadline)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Capsule())
     }
 
     private func linkedScheduleSummary(_ schedule: ScheduleMemoLinkedSchedule) -> some View {
@@ -1189,10 +1253,26 @@ private struct ScheduleMemoDetailView: View {
     let onEdit: () -> Void
     let onConvert: () -> Void
     let onShareCard: () -> Void
+    let onSubmit: () -> Void
     let onPin: () -> Void
     let onTrash: () -> Void
 
     @State private var previewFile: ScheduleMemoPreviewFile?
+
+    private var markdownResources: ScheduleMemoMarkdownResourceSet {
+        var imageMap: [UUID: UIImage] = [:]
+        for image in images {
+            if let value = ScheduleMemoImageStore.image(named: image.localFilename) {
+                imageMap[image.id] = value
+            }
+        }
+        return .init(
+            images: imageMap,
+            imageOrder: images.map(\.id),
+            attachmentNames: Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, $0.originalFilename) }),
+            attachmentOrder: attachments.map(\.id)
+        )
+    }
 
     var body: some View {
         ScrollView {
@@ -1202,36 +1282,28 @@ private struct ScheduleMemoDetailView: View {
                         .font(.largeTitle.bold())
                         .foregroundStyle(AppTheme.primaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ScheduleMemoMarkdownView(source: memo.body)
-                } else if !memo.body.isEmpty {
+                }
+
+                if memo.kind == .audio, !memo.body.isEmpty {
                     Text(memo.body)
                         .leafyBody()
                         .foregroundStyle(AppTheme.primaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
+                } else if memo.kind != .audio {
+                    ScheduleMemoRichMarkdownView(
+                        source: memo.body,
+                        resources: markdownResources,
+                        onOpenAttachment: { id in
+                            guard let attachment = attachments.first(where: { $0.id == id }),
+                                  let url = ScheduleMemoAttachmentStore.fileURL(for: attachment) else { return }
+                            previewFile = .init(url: url)
+                        }
+                    )
                 }
-
-                ScheduleMemoPhotoStrip(images: images, layout: .detail)
 
                 if let audio {
                     ScheduleMemoAudioPlayerBar(audio: audio, controller: audioPlayback)
-                }
-
-                if !attachments.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("附件")
-                            .font(.headline)
-                        ForEach(attachments) { attachment in
-                            Button {
-                                if let url = ScheduleMemoAttachmentStore.fileURL(for: attachment) {
-                                    previewFile = .init(url: url)
-                                }
-                            } label: {
-                                ScheduleMemoAttachmentRow(attachment: attachment)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
                 }
 
                 if let linkedSchedule {
@@ -1297,6 +1369,7 @@ private struct ScheduleMemoDetailView: View {
                 Button("生成图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
             }
             Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin", action: onPin)
+            Button("投稿", systemImage: "envelope", action: onSubmit)
             Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -2251,6 +2324,7 @@ private struct ScheduleMemoEditorView: View {
     @Environment(\.modelContext) private var modelContext
     let memo: ScheduleMemo
     @State private var bodyText: String
+    @State private var errorMessage: String?
 
     init(memo: ScheduleMemo) {
         self.memo = memo
@@ -2258,54 +2332,54 @@ private struct ScheduleMemoEditorView: View {
     }
 
     var body: some View {
-        Group {
-            if memo.kind == .article {
-                ScheduleMemoWritingEditor(
-                    navigationTitle: "编辑写文",
-                    title: memo.title ?? "",
-                    source: memo.body
-                ) { title, source in
-                    memo.title = title
-                    memo.updateBody(source)
-                    try? modelContext.save()
-                    dismiss()
+        NavigationStack {
+            Form {
+                Section("录音备注") {
+                    TextField("添加一句备注（可选）", text: $bodyText, axis: .vertical)
+                        .lineLimit(5...14)
                 }
-            } else {
-                NavigationStack {
-                    Form {
-                        Section("随记内容") {
-                            TextField(memo.kind == .audio ? "添加一句备注（可选）" : "写点什么…", text: $bodyText, axis: .vertical)
-                                .lineLimit(5...14)
-                        }
-                        Section {
-                            Text("正文里的 #标签 和 #学习/Swift 会自动成为标签。")
-                                .foregroundStyle(AppTheme.secondaryText)
-                        }
-                    }
-                    .navigationTitle(memo.kind == .audio ? "编辑录音备注" : "编辑随记")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("保存") {
-                                memo.updateBody(bodyText)
-                                try? modelContext.save()
-                                dismiss()
-                            }
+                Section {
+                    Text("正文里的 #标签 和 #学习/Swift 会自动成为标签。")
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+            .navigationTitle("编辑录音备注")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        memo.updateBody(bodyText)
+                        do {
+                            try modelContext.save()
+                            dismiss()
+                        } catch {
+                            modelContext.rollback()
+                            errorMessage = error.localizedDescription
                         }
                     }
                 }
             }
         }
+        .alert("无法保存随记", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("好") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 }
 
 private struct ScheduleMemoReviewView: View {
+    @Environment(\.openURL) private var openURL
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @Query private var attachments: [ScheduleMemoAttachment]
     @Query private var audioRecords: [ScheduleMemoAudio]
     @State private var page = 0
-    @State private var shareCardSource: CommunityPostCardPreviewSource?
+    @State private var shareCardSource: ScheduleMemoShareCardPreviewSource?
+    @State private var submissionFallback: ScheduleMemoSubmissionDraft?
     @State private var operationAlert: LeafyOperationAlert?
     @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
 
@@ -2340,10 +2414,10 @@ private struct ScheduleMemoReviewView: View {
                             audio: audioRecords.first { $0.memoID == memo.id },
                             audioPlayback: audioPlayback,
                             linkedSchedule: nil,
-                            onOpen: {},
-                            onTag: { _ in },
-                            onEdit: {},
-                            onConvert: {},
+                            onOpen: nil,
+                            onTag: nil,
+                            onEdit: nil,
+                            onConvert: nil,
                             onShareCard: {
                                 do {
                                     let memoImages = images
@@ -2352,17 +2426,20 @@ private struct ScheduleMemoReviewView: View {
                                     let memoAttachments = attachments
                                         .filter { $0.memoID == memo.id }
                                         .sorted { $0.sortOrder < $1.sortOrder }
-                                    shareCardSource = try scheduleMemoShareCardSource(
-                                        memo: memo,
-                                        images: memoImages,
-                                        attachments: memoAttachments
+                                    shareCardSource = ScheduleMemoShareCardPreviewSource(
+                                        snapshot: try ScheduleMemoShareCardSnapshot.make(
+                                            memo: memo,
+                                            images: memoImages,
+                                            attachments: memoAttachments
+                                        )
                                     )
                                 } catch {
                                     operationAlert = .failure(error.localizedDescription)
                                 }
                             },
-                            onPin: {},
-                            onTrash: {}
+                            onSubmit: { submit(memo) },
+                            onPin: nil,
+                            onTrash: nil
                         )
                     }
                 }
@@ -2373,9 +2450,51 @@ private struct ScheduleMemoReviewView: View {
         .background(LeafyPageBackground())
         .navigationTitle("每日回顾")
         .leafySheet(item: $shareCardSource) { source in
-            CommunityPostCardPreviewSheet(source: source)
+            ScheduleMemoShareCardPreviewSheet(source: source)
         }
         .leafyOperationAlert($operationAlert)
+        .confirmationDialog(
+            "无法打开邮箱 App",
+            isPresented: Binding(
+                get: { submissionFallback != nil },
+                set: { if !$0 { submissionFallback = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let draft = submissionFallback {
+                Button("复制投稿内容") {
+                    UIPasteboard.general.string = draft.body
+                    submissionFallback = nil
+                }
+                Button("复制投稿邮箱") {
+                    UIPasteboard.general.string = ScheduleMemoSubmissionDraft.recipient
+                    submissionFallback = nil
+                }
+            }
+            Button("取消", role: .cancel) { submissionFallback = nil }
+        } message: {
+            Text("请复制投稿内容，稍后发送至 \(ScheduleMemoSubmissionDraft.recipient)。")
+        }
+    }
+
+    private func submit(_ memo: ScheduleMemo) {
+        let memoAttachments = attachments.filter { $0.memoID == memo.id }
+        let draft = ScheduleMemoSubmissionDraft.make(
+            title: memo.kind == .article ? memo.title : nil,
+            source: memo.body,
+            tags: memo.tags,
+            createdAt: memo.createdAt,
+            updatedAt: memo.updatedAt,
+            attachmentNames: Dictionary(uniqueKeysWithValues: memoAttachments.map { ($0.id, $0.originalFilename) })
+        )
+        guard let url = draft.mailtoURL else {
+            submissionFallback = draft
+            return
+        }
+        openURL(url) { accepted in
+            guard !accepted else { return }
+            Task { @MainActor in submissionFallback = draft }
+        }
     }
 }
 
@@ -2653,49 +2772,6 @@ private struct ScheduleMemoTrashView: View {
             errorMessage = error.localizedDescription
         }
     }
-}
-
-@MainActor
-private func scheduleMemoShareCardSource(
-    memo: ScheduleMemo,
-    images: [ScheduleMemoImage],
-    attachments: [ScheduleMemoAttachment] = []
-) throws -> CommunityPostCardPreviewSource {
-    var photoData: [Data] = []
-    for (index, imageRecord) in images.enumerated() {
-        guard let data = ScheduleMemoImageStore.data(named: imageRecord.localFilename) else {
-            throw CommunityPostCardGenerationError.invalidImage(index + 1)
-        }
-        photoData.append(data)
-    }
-
-    let lines = memo.body
-        .split(whereSeparator: \.isNewline)
-        .map(String.init)
-    let profile = CommunitySessionManager.shared.profile
-    let authorName = profile?.resolvedDisplayName ?? AppBrand.displayName
-    let resolvedTitle: String
-    let resolvedBody: String
-    if memo.kind == .article {
-        resolvedTitle = memo.displayTitle
-        resolvedBody = ScheduleMemoMarkdownParser.plainText(from: memo.body)
-    } else {
-        resolvedTitle = lines.first.map { String($0.prefix(80)) } ?? "图片随记"
-        resolvedBody = lines.dropFirst().joined(separator: "\n")
-    }
-    let snapshot = CommunityPostCardSnapshot(
-        authorName: authorName,
-        avatarData: CommunityAvatarCache.shared.data(for: profile),
-        avatarFallbackText: profile?.shortName ?? String(authorName.prefix(1)),
-        dateText: DateFormatters.headerWithTime.string(from: memo.createdAt),
-        category: memo.kind == .article ? "写文" : "日程随记",
-        title: resolvedTitle,
-        body: resolvedBody,
-        attachmentNames: attachments.map(\.originalFilename),
-        photoData: photoData,
-        isAnonymous: false
-    )
-    return CommunityPostCardPreviewSource(content: .snapshot(snapshot))
 }
 
 private func memoTitle(_ body: String) -> String {
