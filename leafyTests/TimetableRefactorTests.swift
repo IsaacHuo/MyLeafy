@@ -357,6 +357,70 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
+    func testTimetableRefreshSummaryDistinguishesCurrentAndChangedData() {
+        let existing = Course(
+            courseName: "数据结构",
+            teacher: "林老师",
+            classInfo: "计科 1 班",
+            room: "205",
+            location: "二教",
+            dayOfWeek: 1,
+            weeks: [1, 2, 3],
+            duration: [1, 2],
+            sourceSemesterID: "2026-2027-1"
+        )
+        let unchangedRecord = ParsedCourseRecord(
+            courseName: "数据结构",
+            teacher: "林老师",
+            classInfo: "计科 1 班",
+            room: "205",
+            location: "二教",
+            dayOfWeek: 1,
+            weeks: [3, 2, 1],
+            duration: [2, 1]
+        )
+
+        let unchanged = TimetableRefreshSummary.compare(
+            records: [unchangedRecord],
+            existingCourses: [existing],
+            semesterID: "2026-2027-1"
+        )
+        XCTAssertEqual(unchanged.courseCount, 1)
+        XCTAssertEqual(unchanged.scheduleCount, 1)
+        XCTAssertFalse(unchanged.hasChanges)
+
+        let changedRecord = ParsedCourseRecord(
+            courseName: unchangedRecord.courseName,
+            teacher: unchangedRecord.teacher,
+            classInfo: unchangedRecord.classInfo,
+            room: "306",
+            location: unchangedRecord.location,
+            dayOfWeek: unchangedRecord.dayOfWeek,
+            weeks: unchangedRecord.weeks,
+            duration: unchangedRecord.duration
+        )
+        let changed = TimetableRefreshSummary.compare(
+            records: [changedRecord],
+            existingCourses: [existing],
+            semesterID: "2026-2027-1"
+        )
+        XCTAssertTrue(changed.hasChanges)
+    }
+
+    @MainActor
+    func testTimetableRefreshSummaryReportsEmptyResponse() {
+        let summary = TimetableRefreshSummary.compare(
+            records: [],
+            existingCourses: [],
+            semesterID: "2026-2027-1"
+        )
+
+        XCTAssertEqual(summary.courseCount, 0)
+        XCTAssertEqual(summary.scheduleCount, 0)
+        XCTAssertFalse(summary.hasChanges)
+    }
+
+    @MainActor
     func testTimetableRefreshPersistsCoursesPerSemester() throws {
         let schema = Schema([Course.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

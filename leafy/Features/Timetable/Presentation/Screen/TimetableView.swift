@@ -2280,6 +2280,10 @@ struct TimetableView: View {
                 lastFailureMessage = nil
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
+                if userInitiated {
+                    alertMessage = L10n.text("同步完成，已加载示例课表。", language: leafyLanguage)
+                    showAlert = true
+                }
             }
             return
         }
@@ -2331,6 +2335,11 @@ struct TimetableView: View {
             }
 
             try await MainActor.run {
+                let refreshSummary = TimetableRefreshSummary.compare(
+                    records: parsedCourseRecords,
+                    existingCourses: courses,
+                    semesterID: semesterConfig.semesterID
+                )
                 let newCourses = parsedCourseRecords.map {
                     $0.makeCourse(semesterID: semesterConfig.semesterID)
                 }
@@ -2367,6 +2376,10 @@ struct TimetableView: View {
                 isFetching = false
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
+                if userInitiated {
+                    alertMessage = timetableRefreshMessage(for: refreshSummary)
+                    showAlert = true
+                }
             }
         } catch {
             await MainActor.run {
@@ -2386,6 +2399,26 @@ struct TimetableView: View {
                 }
             }
         }
+    }
+
+    private func timetableRefreshMessage(for summary: TimetableRefreshSummary) -> String {
+        if summary.scheduleCount == 0 {
+            return L10n.text("同步完成，学校当前没有返回课程安排。", language: leafyLanguage)
+        }
+        if !summary.hasChanges {
+            return L10n.text(
+                "同步完成，课表已是最新，共 %d 门课程、%d 条安排。",
+                language: leafyLanguage,
+                summary.courseCount,
+                summary.scheduleCount
+            )
+        }
+        return L10n.text(
+            "同步完成，获取到 %d 门课程、%d 条安排。",
+            language: leafyLanguage,
+            summary.courseCount,
+            summary.scheduleCount
+        )
     }
 
     private func publishWidgetSnapshot() {
