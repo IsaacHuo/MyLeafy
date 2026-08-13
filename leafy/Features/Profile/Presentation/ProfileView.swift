@@ -1594,7 +1594,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             detail: "随记、日程与推送",
             intro: "日迹顶部提供随记、日程和推送，内容按当前校园身份保存在本机。",
             rows: [
-                ManualInfo(title: "随记", body: "随记支持文字、图片、最多 3 个常用文档附件、录音、Tag、回顾和统计。已有 Markdown 文章仍可查看和编辑。卡片可置顶、编辑、转为个人日程或移到回收站。"),
+                ManualInfo(title: "随记", body: "随记支持文字、图片、最多 3 个常用文档附件、录音、Tag、回顾和统计。已有的文字随记可使用 Markdown 编辑与预览，并把本地图片或附件插入正文位置。卡片可置顶、编辑、生成图文卡片、转为个人日程、创建投稿邮件或移到回收站。"),
                 ManualInfo(title: "输入器", body: "点按输入区后会展开编辑；内容达到 4 个视觉行时，可使用右上角按钮放大或缩小编辑区。"),
                 ManualInfo(title: "Tag 筛选", body: "点击卡片上的 Tag 后，列表顶部会显示当前 Tag。点“全部随记”即可清除 Tag 筛选并回到完整列表。"),
                 ManualInfo(title: "记录日迹", body: "在日迹侧栏“记录”分组中打开“记录日迹”。页面按自然年查看每月随记数和记录天数，也会显示近 30 天热力、连续记录、星期与时段习惯、常用标签和里程碑。点按近 30 天的日期可查看当天随记。"),
@@ -1605,6 +1605,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             ],
             steps: [
                 ManualStep(title: "创建随记", body: "在随记页底部输入文字，或使用加号添加图片、附件和录音。加号不再提供新建文章入口。"),
+                ManualStep(title: "编辑与投稿", body: "打开随记菜单后选择编辑，可在源文与预览之间切换，并插入格式、图片或附件。选择“投稿”会调起系统默认邮箱并生成邮件草稿；本地图片和附件需要在邮箱 App 中按需补充。"),
                 ManualStep(title: "查看某个 Tag", body: "点卡片上的 Tag 查看筛选结果；点“全部随记”返回完整列表。"),
                 ManualStep(title: "维护个人日程", body: "切换到“日程”创建或编辑计划，日期在当前学年内时可在课表中查看。")
             ]
