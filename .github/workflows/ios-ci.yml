@@ -2,6 +2,9 @@ name: iOS CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -25,8 +28,8 @@ jobs:
         id: changes
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           git diff --check "${BASE_SHA}...${HEAD_SHA}"
           if git diff --name-only "${BASE_SHA}...${HEAD_SHA}" | grep -Eq '^(leafy/|leafyTests/|leafyWidget/|LeafyWidgetShared/|LeafyShareExtension/|LeafyExternalImportShared/|Config/|leafy\.xcodeproj/|\.github/workflows/ios-ci\.yml$)'; then

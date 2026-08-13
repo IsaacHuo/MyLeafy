@@ -100,6 +100,7 @@ Before changing code:
 Git branch workflow:
 - Before every new task, fetch `origin`, switch to `main`, update it with a fast-forward-only merge from `origin/main`, verify that local `main` matches `origin/main`, and create a dedicated `codex/<task>` branch from that commit. Do not implement task changes directly on `main`.
 - After a task is verified, integrate it into `main`, push `origin/main`, switch back to `main`, and verify that local and remote `main` match.
+- Pull requests are optional. Verified task branches may be fast-forwarded directly into `main`; CI must run on pushes to `main` so direct integration keeps automated checks without requiring a PR.
 - Delete the completed task's local branch and any same-name remote branch created for that task. Do not delete unrelated collaborators' branches. The maintained long-lived branch is `main`.
 - If the worktree is dirty, `main` has diverged, or a fast-forward update is not possible, preserve existing work and stop for explicit resolution instead of resetting, overwriting, or force-updating `main`.
 
