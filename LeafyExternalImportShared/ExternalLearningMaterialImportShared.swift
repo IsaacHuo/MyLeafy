@@ -1,6 +1,37 @@
 import Foundation
 import UniformTypeIdentifiers
 
+nonisolated enum ExternalImportL10n {
+    private static let appGroupIdentifier = "group.com.isaachuo.leafy"
+    private static let languagePreferenceKey = "leafy.appLanguagePreference"
+
+    static func text(_ key: String, _ arguments: CVarArg...) -> String {
+        let rawValue = UserDefaults(suiteName: appGroupIdentifier)?
+            .string(forKey: languagePreferenceKey)
+        let localizationIdentifier: String
+        switch rawValue {
+        case "en-US":
+            localizationIdentifier = "en-US"
+        case "zh-Hans":
+            localizationIdentifier = "zh-Hans"
+        default:
+            let preferredLanguage = Locale.preferredLanguages.first?.lowercased() ?? ""
+            localizationIdentifier = preferredLanguage.hasPrefix("en") ? "en-US" : "zh-Hans"
+        }
+
+        let localizedFormat = String(
+            localized: String.LocalizationValue(key),
+            bundle: .main,
+            locale: Locale(identifier: localizationIdentifier)
+        )
+        return String(
+            format: localizedFormat,
+            locale: Locale(identifier: localizationIdentifier),
+            arguments: arguments
+        )
+    }
+}
+
 enum ExternalLearningMaterialImportError: LocalizedError, Equatable {
     case appGroupUnavailable
     case unsupportedFile(String)
@@ -15,23 +46,23 @@ enum ExternalLearningMaterialImportError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .appGroupUnavailable:
-            return "无法访问 MyLeafy 共享暂存目录。"
+            return ExternalImportL10n.text("无法访问 MyLeafy 共享暂存目录。")
         case .unsupportedFile(let filename):
-            return "暂不支持导入 \(filename)。请使用 PDF、图片、Word 或 PPT 文件。"
+            return ExternalImportL10n.text("暂不支持导入 %@。请使用 PDF、图片、Word 或 PPT 文件。", filename)
         case .emptyBatch:
-            return "没有找到可导入的文件。请使用 PDF、图片、Word 或 PPT 文件。"
+            return ExternalImportL10n.text("没有找到可导入的文件。请使用 PDF、图片、Word 或 PPT 文件。")
         case .missingBatch:
-            return "这批外部文件暂存记录已失效，请重新从微信或 QQ 打开。"
+            return ExternalImportL10n.text("这批外部文件暂存记录已失效，请重新从微信或 QQ 打开。")
         case .missingStagedFile(let filename):
-            return "无法找到暂存文件 \(filename)，请重新导入。"
+            return ExternalImportL10n.text("无法找到暂存文件 %@，请重新导入。", filename)
         case .tooManyFiles:
-            return "每次最多导入 10 个文件。"
+            return ExternalImportL10n.text("每次最多导入 10 个文件。")
         case .fileTooLarge(let filename):
-            return "\(filename) 超过 25 MB，无法导入。"
+            return ExternalImportL10n.text("%@ 超过 25 MB，无法导入。", filename)
         case .batchTooLarge:
-            return "单次导入总大小不能超过 100 MB。"
+            return ExternalImportL10n.text("单次导入总大小不能超过 100 MB。")
         case .insufficientDiskSpace:
-            return "设备可用空间不足，无法暂存这些文件。"
+            return ExternalImportL10n.text("设备可用空间不足，无法暂存这些文件。")
         }
     }
 }
@@ -142,7 +173,7 @@ enum ExternalLearningMaterialImport {
         return UTType(filenameExtension: fileExtension)
     }
 
-    static func normalizedFilename(_ filename: String, fallback: String = "学习资料") -> String {
+    static func normalizedFilename(_ filename: String, fallback: String = ExternalImportL10n.text("学习资料")) -> String {
         let trimmed = filename.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? fallback : trimmed
     }

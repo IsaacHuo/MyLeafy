@@ -8,16 +8,22 @@ import SwiftData
 @testable import Leafy
 
 extension PerformanceRefactorTests {
-    func testAppLanguagePreferenceDefaultsToSimplifiedChinese() {
-        XCTAssertEqual(AppLanguagePreference.current, .zhHans)
+    func testAppLanguagePreferenceSupportsSystemChineseAndEnglish() {
+        XCTAssertEqual(AppLanguagePreference.storedValue(nil), .system)
+        XCTAssertEqual(AppLanguagePreference.storedValue("zh-Hans"), .zhHans)
+        XCTAssertEqual(AppLanguagePreference.storedValue("en-US"), .enUS)
+        XCTAssertEqual(AppLanguagePreference.storedValue("unsupported"), .system)
         XCTAssertEqual(AppLanguagePreference.zhHans.localeIdentifier, "zh-Hans")
+        XCTAssertEqual(AppLanguagePreference.enUS.localeIdentifier, "en-US")
         XCTAssertEqual(AppLanguagePreference.zhHans.weekdayTitle(for: 1), "周一")
         XCTAssertEqual(AppLanguagePreference.zhHans.weekdayTitle(for: 7), "周日")
     }
 
-    func testSimplifiedChineseLocalizationReturnsSourceTextAndFormatsValues() {
+    func testExplicitLocalizationReturnsRequestedLanguageAndFormatsValues() {
         XCTAssertEqual(L10n.text("语言", language: .zhHans), "语言")
         XCTAssertEqual(L10n.text("第 %d 周", language: .zhHans, 3), "第 3 周")
+        XCTAssertEqual(L10n.text("语言", language: .enUS), "Language")
+        XCTAssertEqual(AppLanguagePreference.enUS.weekdayTitle(for: 1), "Monday")
     }
 
     func testTimetableBackgroundPaletteExtractsSoftColorsFromSolidImage() throws {

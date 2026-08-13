@@ -11,12 +11,12 @@ final class ShareViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        statusLabel.text = "正在保存到 MyLeafy..."
+        statusLabel.text = ExternalImportL10n.text("正在保存到 MyLeafy...")
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
         statusLabel.font = .preferredFont(forTextStyle: .body)
 
-        doneButton.setTitle("完成", for: .normal)
+        doneButton.setTitle(ExternalImportL10n.text("完成"), for: .normal)
         doneButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         doneButton.isHidden = true
         doneButton.addTarget(self, action: #selector(closeExtension), for: .touchUpInside)
@@ -176,7 +176,7 @@ final class ShareViewController: UIViewController {
                 }
 
                 guard UTType(typeIdentifier)?.conforms(to: .image) == true else {
-                    continuation.resume(throwing: ExternalLearningMaterialImportError.unsupportedFile(suggestedName ?? "学习资料"))
+                    continuation.resume(throwing: ExternalLearningMaterialImportError.unsupportedFile(suggestedName ?? ExternalImportL10n.text("学习资料")))
                     return
                 }
 
@@ -254,7 +254,7 @@ final class ShareViewController: UIViewController {
         typeIdentifier: String,
         fileURL: URL? = nil
     ) -> String {
-        let candidate = fileURL?.lastPathComponent ?? suggestedName ?? "学习资料"
+        let candidate = fileURL?.lastPathComponent ?? suggestedName ?? ExternalImportL10n.text("学习资料")
         let normalized = ExternalLearningMaterialImport.normalizedFilename(candidate)
         guard (normalized as NSString).pathExtension.isEmpty,
               let fileExtension = UTType(typeIdentifier)?.preferredFilenameExtension
@@ -266,13 +266,13 @@ final class ShareViewController: UIViewController {
 
     @MainActor
     private func openContainingApp(batchID: UUID) async {
-        statusLabel.text = "已暂存，正在打开 MyLeafy..."
+        statusLabel.text = ExternalImportL10n.text("已暂存，正在打开 MyLeafy...")
         let callbackURL = ExternalLearningMaterialImport.callbackURL(for: batchID)
         let success = await extensionContext?.open(callbackURL) ?? false
         if success {
             extensionContext?.completeRequest(returningItems: nil)
         } else {
-            showManualOpenMessage("文件已暂存，请手动打开 MyLeafy 完成保存。")
+            showManualOpenMessage(ExternalImportL10n.text("文件已暂存，请手动打开 MyLeafy 完成保存。"))
         }
     }
 

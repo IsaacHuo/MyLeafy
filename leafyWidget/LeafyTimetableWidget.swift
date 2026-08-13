@@ -62,6 +62,7 @@ struct LeafyTimetableWidget: Widget {
             provider: LeafyTimetableProvider()
         ) { entry in
             LeafyWidgetEntryView(entry: entry)
+                .environment(\.locale, LeafyWidgetLanguagePreference.current.locale)
         }
         .configurationDisplayName(LeafyWidgetL10n.text("MyLeafy 课表"))
         .description(LeafyWidgetL10n.text("查看今天课程、备注和课前提醒。"))

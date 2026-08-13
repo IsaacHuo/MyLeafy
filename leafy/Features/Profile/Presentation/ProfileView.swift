@@ -853,6 +853,7 @@ private struct PersonalizationSettingsView: View {
     @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw = LeafyAppIconAppearancePreference.green.rawValue
     @AppStorage("appFontSizePreference") private var appDisplaySizePreferenceRaw = AppDisplaySizePreference.standard.rawValue
     @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
+    @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system.rawValue
     @AppStorage(TimetableCurrentTimeIndicatorPreference.isEnabledKey) private var currentTimeIndicatorIsEnabled = TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
     @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey) private var currentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.defaultThickness
     @State private var showingCustomThemeColorPicker = false
@@ -871,6 +872,10 @@ private struct PersonalizationSettingsView: View {
 
     private var appearancePreference: AppAppearancePreference {
         AppAppearancePreference.storedValue(appAppearancePreferenceRaw)
+    }
+
+    private var languagePreference: AppLanguagePreference {
+        AppLanguagePreference.storedValue(appLanguagePreferenceRaw)
     }
 
     private var currentTimeIndicatorThicknessBinding: Binding<Double> {
@@ -944,6 +949,27 @@ private struct PersonalizationSettingsView: View {
                 }
             } header: {
                 Text("App 外观")
+            }
+            .listRowBackground(AppTheme.cardBackground)
+
+            Section {
+                ForEach([AppLanguagePreference.system, .zhHans, .enUS], id: \.self) { option in
+                    Button {
+                        appLanguagePreferenceRaw = option.rawValue
+                    } label: {
+                        selectionRow(
+                            title: option.title(displayLanguage: leafyLanguage),
+                            isSelected: option == languagePreference
+                        ) {
+                            LeafyIconBadge(systemName: "globe")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("语言")
+            } footer: {
+                Text("仅更改 MyLeafy 的显示语言，不会修改系统语言。")
             }
             .listRowBackground(AppTheme.cardBackground)
 

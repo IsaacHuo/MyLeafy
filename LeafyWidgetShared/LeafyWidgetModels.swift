@@ -9,16 +9,56 @@ nonisolated enum LeafyWidgetConstants {
     static let themeSnapshotKey = "leafyWidget.themeSnapshot"
     static let themePreferenceKey = "leafyWidget.themePreference"
     static let themeCustomColorHexKey = "leafyWidget.themeCustomColorHex"
+    static let appLanguagePreferenceKey = "leafy.appLanguagePreference"
     static let supportedDayOffsets = [0, 1]
+}
+
+nonisolated enum LeafyWidgetLanguagePreference: String, Sendable {
+    case system
+    case zhHans = "zh-Hans"
+    case enUS = "en-US"
+
+    static var current: LeafyWidgetLanguagePreference {
+        let rawValue = UserDefaults(suiteName: LeafyWidgetConstants.appGroupIdentifier)?
+            .string(forKey: LeafyWidgetConstants.appLanguagePreferenceKey)
+        return LeafyWidgetLanguagePreference(rawValue: rawValue ?? "") ?? .system
+    }
+
+    var locale: Locale {
+        switch self {
+        case .system:
+            return .autoupdatingCurrent
+        case .zhHans:
+            return Locale(identifier: "zh-Hans")
+        case .enUS:
+            return Locale(identifier: "en-US")
+        }
+    }
+
+    var localizationIdentifier: String {
+        switch self {
+        case .system:
+            let preferredLanguage = Locale.preferredLanguages.first?.lowercased() ?? ""
+            return preferredLanguage.hasPrefix("en") ? "en-US" : "zh-Hans"
+        case .zhHans:
+            return "zh-Hans"
+        case .enUS:
+            return "en-US"
+        }
+    }
 }
 
 nonisolated enum LeafyWidgetL10n {
     static func text(_ key: String) -> String {
-        key
+        String(
+            localized: String.LocalizationValue(key),
+            bundle: .main,
+            locale: LeafyWidgetLanguagePreference.current.locale
+        )
     }
 
     static func text(_ key: String, _ arguments: CVarArg...) -> String {
-        String(format: key, locale: Locale(identifier: "zh-Hans"), arguments: arguments)
+        String(format: text(key), locale: LeafyWidgetLanguagePreference.current.locale, arguments: arguments)
     }
 }
 

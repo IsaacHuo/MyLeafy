@@ -29,6 +29,7 @@ struct LeafyApp: App {
     @AppStorage(AppThemeColorPreference.customColorHexKey) private var appThemeCustomColorHex = AppThemeColorPreference.defaultCustomColorHex
     @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw = LeafyAppIconAppearancePreference.green.rawValue
     @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
+    @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system.rawValue
     @State private var modelContainerSetup: AppModelContainerSetup
     @State private var modelContainerRevision = UUID()
     @State private var modelRecoveryMessage: String?
@@ -55,6 +56,10 @@ struct LeafyApp: App {
 
     private var appearancePreference: AppAppearancePreference {
         AppAppearancePreference.storedValue(appAppearancePreferenceRaw)
+    }
+
+    private var languagePreference: AppLanguagePreference {
+        AppLanguagePreference.storedValue(appLanguagePreferenceRaw)
     }
 
     private var appearanceAnimation: Animation {
@@ -106,19 +111,19 @@ struct LeafyApp: App {
                     appNavigation: appNavigation
                 )
             }
-            .alert(L10n.text("本地缓存已恢复", language: .zhHans), isPresented: Binding(
+            .alert(L10n.text("本地缓存已恢复", language: languagePreference), isPresented: Binding(
                 get: { modelRecoveryMessage != nil },
                 set: { if !$0 { modelRecoveryMessage = nil } }
             )) {
-                Button(L10n.text("知道了", language: .zhHans), role: .cancel) {}
+                Button(L10n.text("知道了", language: languagePreference), role: .cancel) {}
             } message: {
                 Text(modelRecoveryMessage ?? "")
             }
-            .alert(L10n.text("邮箱验证", language: .zhHans), isPresented: Binding(
+            .alert(L10n.text("邮箱验证", language: languagePreference), isPresented: Binding(
                 get: { authCallbackMessage != nil },
                 set: { if !$0 { authCallbackMessage = nil } }
             )) {
-                Button(L10n.text("知道了", language: .zhHans), role: .cancel) {}
+                Button(L10n.text("知道了", language: languagePreference), role: .cancel) {}
             } message: {
                 Text(authCallbackMessage ?? "")
             }
@@ -136,6 +141,7 @@ struct LeafyApp: App {
             .animation(appearanceAnimation, value: appAppearancePreferenceRaw)
             .animation(appearanceAnimation, value: appThemeCustomColorHex)
             .onAppear {
+                languagePreference.syncToAppGroup()
                 syncThemeAppearance()
                 LeafyNotificationCoordinator.shared.configure(appNavigation: appNavigation)
                 CommunityPublishCoordinator.shared.configureAndResume()
@@ -164,6 +170,11 @@ struct LeafyApp: App {
             }
             .onChange(of: appIconAppearancePreferenceRaw) { _, _ in
                 syncThemeAppearance()
+            }
+            .onChange(of: appLanguagePreferenceRaw) { _, _ in
+                languagePreference.syncToAppGroup()
+                refreshWidgetSnapshot()
+                refreshScheduleReportNotifications()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 AppLifecycleCoordinator.handleScenePhase(newPhase)
@@ -212,8 +223,8 @@ struct LeafyApp: App {
         .environment(\.leafyFontScale, displaySizePreference.fontScale)
         .environment(\.leafyControlScale, displaySizePreference.controlScale)
         .environment(\.leafyThemeColorPreference, themeColorPreference)
-        .environment(\.leafyLanguage, .zhHans)
-        .environment(\.locale, Locale(identifier: AppLanguagePreference.zhHans.localeIdentifier))
+        .environment(\.leafyLanguage, languagePreference)
+        .environment(\.locale, languagePreference.locale)
         .environment(\.defaultMinListRowHeight, displaySizePreference.listRowMinHeight)
         .modelContainer(sharedModelContainer)
     }
@@ -242,7 +253,7 @@ struct LeafyApp: App {
             if networkManager.hasCachedIdentity, ActiveCampusContext.identity?.isCustom != true {
                 authCallbackMessage = L10n.text(
                     "邮箱绑定请回到 App 输入邮件验证码完成。",
-                    language: .zhHans
+                    language: languagePreference
                 )
                 return
             }
@@ -250,13 +261,13 @@ struct LeafyApp: App {
             externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
             authCallbackMessage = L10n.text(
                 "邮箱验证已完成，已登录通用入口账号 %@。",
-                language: .zhHans,
+                language: languagePreference,
                 session.email
             )
         } catch {
             authCallbackMessage = L10n.text(
                 "邮箱验证链接无法自动完成。%@",
-                language: .zhHans,
+                language: languagePreference,
                 error.localizedDescription
             )
         }
@@ -345,7 +356,7 @@ struct LeafyApp: App {
         guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
         SchoolDataPrefetchCoordinator.shared.prefetchIfNeeded(
             modelContext: sharedModelContainer.mainContext,
-            language: .zhHans,
+            language: languagePreference,
             trigger: trigger
         )
     }
