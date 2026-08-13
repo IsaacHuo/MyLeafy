@@ -153,8 +153,9 @@ values (
   '应随账户删除'
 );
 
-insert into public.catalog_suggestions (suggestion_type, user_id, name, unit)
+insert into public.catalog_suggestions (campus_id, suggestion_type, user_id, name, unit)
 values (
+  'bjfu',
   'teacher',
   '72000000-0000-0000-0000-000000000001',
   '删除建议',
