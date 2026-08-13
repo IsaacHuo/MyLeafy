@@ -11,6 +11,7 @@ import SwiftData
 import SwiftUI
 import StoreKit
 import UIKit
+import UserNotifications
 
 @main
 struct LeafyApp: App {
@@ -174,7 +175,7 @@ struct LeafyApp: App {
             .onChange(of: appLanguagePreferenceRaw) { _, _ in
                 languagePreference.syncToAppGroup()
                 refreshWidgetSnapshot()
-                refreshScheduleReportNotifications()
+                refreshLocalizedNotifications()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 AppLifecycleCoordinator.handleScenePhase(newPhase)
@@ -311,6 +312,108 @@ struct LeafyApp: App {
                 logger.error("Schedule report notification refresh failed: \(error.localizedDescription, privacy: .public)")
             }
             scheduleReportRefreshTask = nil
+        }
+    }
+
+    @MainActor
+    private func refreshLocalizedNotifications() {
+        scheduleReportRefreshTask?.cancel()
+        scheduleReportRefreshTask = Task { @MainActor in
+            let authorizationStatus = await UNUserNotificationCenter.current()
+                .notificationSettings()
+                .authorizationStatus
+            guard authorizationStatus == .authorized ||
+                    authorizationStatus == .provisional ||
+                    authorizationStatus == .ephemeral
+            else {
+                scheduleReportRefreshTask = nil
+                return
+            }
+
+            await refreshTimetableNotificationsForCurrentLanguage()
+            await refreshSunshineRunNotificationsForCurrentLanguage()
+
+            do {
+                let service = LeafyDependencies.live.timetableWeatherService
+                let weather: TimetableWeatherSnapshot?
+                if let cached = service.cachedWeather(maxAge: 30 * 60) {
+                    weather = cached
+                } else if service.authorizationState() == .authorized {
+                    weather = try? await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+                } else {
+                    weather = nil
+                }
+                try Task.checkCancellation()
+                try await ScheduleReportNotificationManager.refreshIfEnabled(
+                    modelContext: sharedModelContainer.mainContext,
+                    weather: weather
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                logger.error("Localized schedule report notification refresh failed: \(error.localizedDescription, privacy: .public)")
+            }
+
+            guard !Task.isCancelled else { return }
+            scheduleReportRefreshTask = nil
+        }
+    }
+
+    @MainActor
+    private func refreshTimetableNotificationsForCurrentLanguage() async {
+        let context = sharedModelContainer.mainContext
+        let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
+        let currentCoursesByKey = Dictionary(
+            courses
+                .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID }
+                .map { ($0.stableCourseKey, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let courseSettings = (try? context.fetch(FetchDescriptor<CourseReminderSetting>())) ?? []
+        let cellReminders = (try? context.fetch(FetchDescriptor<TimetableCellReminder>())) ?? []
+
+        do {
+            for setting in courseSettings where setting.minutesBefore > 0 {
+                try Task.checkCancellation()
+                guard let course = currentCoursesByKey[setting.courseKey] else { continue }
+                try await TimetableNotificationManager.applyReminder(
+                    minutesBefore: setting.minutesBefore,
+                    anchorPeriod: setting.anchorPeriod,
+                    course: course
+                )
+            }
+            for reminder in cellReminders where reminder.minutesBefore > 0 {
+                try Task.checkCancellation()
+                _ = try await TimetableNotificationManager.applyReminder(for: reminder)
+            }
+            for event in CustomScheduleStore.load() where event.minutesBefore > 0 {
+                try Task.checkCancellation()
+                _ = try await TimetableNotificationManager.applyReminder(for: event)
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            logger.error("Localized timetable notification refresh failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    @MainActor
+    private func refreshSunshineRunNotificationsForCurrentLanguage() async {
+        let settings = SunshineRunStore.loadReminderSettings()
+        guard settings.isEnabled else { return }
+
+        do {
+            try Task.checkCancellation()
+            let updatedSettings = try await SunshineRunNotificationManager.updateNotifications(
+                settings: settings,
+                records: SunshineRunStore.loadRecords(),
+                rules: SunshineRunStore.loadRuleSettings()
+            )
+            SunshineRunStore.saveReminderSettings(updatedSettings)
+        } catch is CancellationError {
+            return
+        } catch {
+            logger.error("Localized sunshine run notification refresh failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

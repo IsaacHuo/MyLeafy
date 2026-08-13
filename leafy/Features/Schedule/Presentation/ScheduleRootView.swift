@@ -44,6 +44,7 @@ enum SchedulePrimaryContentPresentation: Equatable {
 }
 
 struct ScheduleRootView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @State private var compactPath: [ScheduleDestination] = []
@@ -174,7 +175,7 @@ struct ScheduleRootView: View {
                         primarySection = section
                     }
                 } label: {
-                    Text(section.title)
+                    Text(L10n.text(section.title, language: leafyLanguage))
                         .font(.body.weight(primarySection == section ? .semibold : .regular))
                         .foregroundStyle(
                             primarySection == section
@@ -263,6 +264,7 @@ private struct ScheduleSidebar: View {
 
     @Binding var selection: ScheduleDestination?
     var presentation: Presentation = .sidebar
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Query private var memos: [ScheduleMemo]
     @State private var selectedStatisticsDate: Date?
 
@@ -322,7 +324,7 @@ private struct ScheduleSidebar: View {
     }
 
     private func row(_ destination: ScheduleDestination) -> some View {
-        Label(destination.title, systemImage: destination.systemImage)
+        Label(L10n.text(destination.title, language: leafyLanguage), systemImage: destination.systemImage)
             .tag(destination)
             .contentShape(Rectangle())
             .onTapGesture { selection = destination }
@@ -346,6 +348,7 @@ private enum ScheduleMemoFilter: String, CaseIterable, Identifiable {
 }
 
 struct ScheduleMemoFeedView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.openURL) private var openURL
@@ -716,10 +719,14 @@ struct ScheduleMemoFeedView: View {
     private var filterMenu: some View {
         Menu {
             Picker("筛选", selection: $filter) {
-                ForEach(ScheduleMemoFilter.allCases) { Text($0.title).tag($0) }
+                ForEach(ScheduleMemoFilter.allCases) {
+                    Text(L10n.text($0.title, language: leafyLanguage)).tag($0)
+                }
             }
             Picker("排序", selection: $sort) {
-                ForEach(ScheduleMemoSort.allCases) { Text($0.title).tag($0) }
+                ForEach(ScheduleMemoSort.allCases) {
+                    Text(L10n.text($0.title, language: leafyLanguage)).tag($0)
+                }
             }
         } label: {
             Image(systemName: filter == .all ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
@@ -763,7 +770,7 @@ struct ScheduleMemoFeedView: View {
                     Button {
                         filter = .all
                     } label: {
-                        Text("\(filter.title)  ×")
+                        Text("\(L10n.text(filter.title, language: leafyLanguage))  ×")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)

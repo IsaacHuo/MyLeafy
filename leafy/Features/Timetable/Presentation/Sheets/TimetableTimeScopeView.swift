@@ -200,13 +200,11 @@ struct TimetableTimeScopeSnapshot: Equatable {
     }
 
     private static func currentDateText(for date: Date, language: AppLanguagePreference) -> String {
-        DateFormatters.fullDateWithWeekday.string(from: date)
+        DateFormatters.fullDateWithWeekday(language: language).string(from: date)
     }
 
     private static func monthTitle(for date: Date, calendar: Calendar, language: AppLanguagePreference) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: language.localeIdentifier)
-        formatter.dateFormat = "yyyy年M月"
+        let formatter = DateFormatters.monthYear(language: language)
         formatter.calendar = calendar
         return formatter.string(from: date)
     }
@@ -216,7 +214,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
     }
 
     private static func shortDate(for date: Date, language: AppLanguagePreference) -> String {
-        DateFormatters.chineseDay.string(from: date)
+        DateFormatters.chineseDay(language: language).string(from: date)
     }
 }
 

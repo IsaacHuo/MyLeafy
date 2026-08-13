@@ -2471,6 +2471,7 @@ private struct TimetableWeekPickerPanel: View {
     let onSelect: (Date) -> Void
 
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @State private var expandedSemesterIDs: Set<String>
 
     private let columns = Array(
@@ -2587,18 +2588,14 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private func semesterRangeText(_ semester: TimetableCalendarMenuSemester) -> String {
-        let start = Self.semesterMonthFormatter.string(from: semester.startDate)
-        guard let endDate = semester.endDate else { return "\(start)起" }
-        return "\(start)到\(Self.semesterMonthFormatter.string(from: endDate))"
-    }
-
-    private static let semesterMonthFormatter: DateFormatter = {
-        let formatter = DateFormatter()
+        let formatter = DateFormatters.monthYear(language: leafyLanguage)
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "yyyy年M月"
-        return formatter
-    }()
+        let start = formatter.string(from: semester.startDate)
+        guard let endDate = semester.endDate else {
+            return L10n.text("%@起", language: leafyLanguage, start)
+        }
+        return L10n.text("%@到%@", language: leafyLanguage, start, formatter.string(from: endDate))
+    }
 
     private func weekButton(
         _ week: TimetableCalendarMenuWeek,

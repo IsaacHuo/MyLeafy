@@ -8,19 +8,115 @@
             "state": "new",
             "value": "%1$arg · %2$arg"
           }
+        },
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%arg · %arg"
+          }
         }
       }
     },
-    "还有 %d 节": {},
-    "MyLeafy 课表": {},
-    "今": {},
-    "今日课表": {},
-    "打开课表": {},
-    "明": {},
-    "明日课表": {},
-    "显示今天课表": {},
-    "显示明天课表": {},
-    "查看今天课程、备注和课前提醒。": {}
+    "还有 %d 节": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are still %d periods"
+          }
+        }
+      }
+    },
+    "MyLeafy 课表": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MyLeafy schedule"
+          }
+        }
+      }
+    },
+    "今": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        }
+      }
+    },
+    "今日课表": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today's Schedule"
+          }
+        }
+      }
+    },
+    "打开课表": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Schedule"
+          }
+        }
+      }
+    },
+    "明": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomorrow"
+          }
+        }
+      }
+    },
+    "明日课表": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomorrow's Schedule"
+          }
+        }
+      }
+    },
+    "显示今天课表": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show today's schedule"
+          }
+        }
+      }
+    },
+    "显示明天课表": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show tomorrow's schedule"
+          }
+        }
+      }
+    },
+    "查看今天课程、备注和课前提醒。": {
+      "localizations": {
+        "en-US": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View today's courses, notes, and pre-class reminders."
+          }
+        }
+      }
+    }
   },
   "version": "1.0"
 }

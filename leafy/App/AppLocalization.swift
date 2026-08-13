@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+private nonisolated final class AppLocalizationBundleToken: NSObject {}
+
 nonisolated enum AppLanguagePreference: String, Sendable {
     case system
     case zhHans = "zh-Hans"
@@ -82,16 +84,28 @@ extension EnvironmentValues {
 }
 
 nonisolated enum L10n {
+    private static let bundle = Bundle(for: AppLocalizationBundleToken.self)
+
     static func text(_ key: String, language: AppLanguagePreference = .current) -> String {
-        String(
+        let resolvedLanguage = language.resolvedLocalization
+        return String(
             localized: String.LocalizationValue(key),
-            bundle: .main,
-            locale: language.resolvedLocalization.locale
+            bundle: localizedBundle(for: resolvedLanguage),
+            locale: resolvedLanguage.locale
         )
     }
 
     static func text(_ key: String, language: AppLanguagePreference = .current, _ arguments: CVarArg...) -> String {
         let format = text(key, language: language)
         return String(format: format, locale: language.resolvedLocalization.locale, arguments: arguments)
+    }
+
+    private static func localizedBundle(for language: AppLanguagePreference) -> Bundle {
+        guard let url = bundle.url(forResource: language.rawValue, withExtension: "lproj"),
+              let localizedBundle = Bundle(url: url)
+        else {
+            return bundle
+        }
+        return localizedBundle
     }
 }

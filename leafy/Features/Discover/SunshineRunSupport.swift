@@ -76,15 +76,15 @@ struct SunshineRunPeriod: Identifiable, Hashable {
     var id: Int { index }
     var title: String {
         guard let firstWeek = activeWeeks.first, let lastWeek = activeWeeks.last else {
-            return "第 \(startWeek)-\(endWeek) 周"
+            return L10n.text("第 %d-%d 周", startWeek, endWeek)
         }
         if activeWeeks.count == 1 {
-            return "第 \(firstWeek) 周"
+            return L10n.text("第 %d 周", firstWeek)
         }
         if activeWeeks == Array(firstWeek...lastWeek) {
-            return "第 \(firstWeek)-\(lastWeek) 周"
+            return L10n.text("第 %d-%d 周", firstWeek, lastWeek)
         }
-        return "第 \(activeWeeks.map(String.init).joined(separator: "、")) 周"
+        return L10n.text("第 %@ 周", activeWeeks.map(String.init).joined(separator: L10n.text("、")))
     }
 
     var hasSkippedWeeks: Bool {
@@ -552,8 +552,8 @@ enum SunshineRunNotificationManager {
         let center = try await authorizedNotificationCenter()
         for item in planItems {
             let content = UNMutableNotificationContent()
-            content.title = "阳光长跑提醒"
-            content.body = "\(item.periodTitle)这一组还差 \(item.remainingCount) 次。"
+            content.title = L10n.text("阳光长跑提醒")
+            content.body = L10n.text("%@这一组还差 %d 次。", item.periodTitle, item.remainingCount)
             content.sound = .default
 
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)

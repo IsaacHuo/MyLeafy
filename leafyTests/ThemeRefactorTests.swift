@@ -26,6 +26,38 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(AppLanguagePreference.enUS.weekdayTitle(for: 1), "Monday")
     }
 
+    func testMissingLocalizationFallsBackToSourceKey() {
+        let missingKey = "__leafy_missing_localization_test__"
+        XCTAssertEqual(L10n.text(missingKey, language: .zhHans), missingKey)
+        XCTAssertEqual(L10n.text(missingKey, language: .enUS), missingKey)
+    }
+
+    func testLanguagePreferenceSynchronizesToAppGroupDefaults() {
+        let suiteName = "AppLanguagePreferenceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        AppLanguagePreference.enUS.syncToAppGroup(defaults: defaults)
+
+        XCTAssertEqual(
+            defaults.string(forKey: AppLanguagePreference.appGroupStorageKey),
+            AppLanguagePreference.enUS.rawValue
+        )
+    }
+
+    func testExplicitLanguageDateFormattingUsesRequestedLocale() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 5, day: 12)))
+        let chineseFormatter = DateFormatters.chineseDay(language: .zhHans)
+        let englishFormatter = DateFormatters.chineseDay(language: .enUS)
+        chineseFormatter.timeZone = calendar.timeZone
+        englishFormatter.timeZone = calendar.timeZone
+
+        XCTAssertEqual(chineseFormatter.string(from: date), "5月12日")
+        XCTAssertEqual(englishFormatter.string(from: date), "May 12")
+    }
+
     func testTimetableBackgroundPaletteExtractsSoftColorsFromSolidImage() throws {
         let image = makePaletteTestImage(colors: [.systemRed])
         let palette = TimetableBackgroundPaletteExtractor.palette(from: try XCTUnwrap(image.cgImage))

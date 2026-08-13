@@ -2116,7 +2116,7 @@ nonisolated enum CommunityTimestampFormatter {
 
     private static func relativeFormatter(language: AppLanguagePreference) -> RelativeDateTimeFormatter {
         let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.locale = language.resolvedLocalization.locale
         formatter.unitsStyle = .full
         return formatter
     }
@@ -2127,17 +2127,11 @@ nonisolated enum CommunityTimestampFormatter {
 
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: language.localeIdentifier)
-            formatter.dateFormat = "今天 HH:mm"
-            return formatter.string(from: date)
+            return L10n.text("今天 %@", language: language, timeText(for: date, language: language))
         }
 
         if calendar.isDateInYesterday(date) {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: language.localeIdentifier)
-            formatter.dateFormat = "昨天 HH:mm"
-            return formatter.string(from: date)
+            return L10n.text("昨天 %@", language: language, timeText(for: date, language: language))
         }
 
         let now = Date()
@@ -2146,8 +2140,20 @@ nonisolated enum CommunityTimestampFormatter {
         }
 
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: language.localeIdentifier)
-        formatter.dateFormat = "MM-dd HH:mm"
+        let resolvedLanguage = language.resolvedLocalization
+        formatter.locale = resolvedLanguage.locale
+        if resolvedLanguage == .zhHans {
+            formatter.dateFormat = "MM-dd HH:mm"
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("Mdjmm")
+        }
+        return formatter.string(from: date)
+    }
+
+    private static func timeText(for date: Date, language: AppLanguagePreference) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = language.resolvedLocalization.locale
+        formatter.setLocalizedDateFormatFromTemplate("jmm")
         return formatter.string(from: date)
     }
 

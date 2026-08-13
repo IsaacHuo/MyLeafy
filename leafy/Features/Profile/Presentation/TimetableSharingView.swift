@@ -1955,10 +1955,7 @@ private struct SharedTimetableGridCourseDetailSheet: View {
     }
 
     private var dateText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: leafyLanguage.localeIdentifier)
-        formatter.dateFormat = "yyyy年M月d日"
-        return formatter.string(from: context.date)
+        DateFormatters.fullDate(language: leafyLanguage).string(from: context.date)
     }
 }
 

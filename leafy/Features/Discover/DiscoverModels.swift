@@ -1176,7 +1176,17 @@ enum DateFormatters {
         return formatter
     }()
 
-    static let chineseDay: DateFormatter = localizedFormatter(chineseFormat: "M月d日")
+    static var chineseDay: DateFormatter {
+        chineseDay(language: .current)
+    }
+
+    static func chineseDay(language: AppLanguagePreference) -> DateFormatter {
+        localizedFormatter(
+            chineseFormat: "M月d日",
+            englishTemplate: "MMMd",
+            language: language
+        )
+    }
 
     static let queryDate: DateFormatter = {
         let formatter = DateFormatter()
@@ -1186,20 +1196,60 @@ enum DateFormatters {
         return formatter
     }()
 
-    static let header: DateFormatter = localizedFormatter(chineseFormat: "M月d日 EEEE")
+    static var header: DateFormatter {
+        localizedFormatter(chineseFormat: "M月d日 EEEE", englishTemplate: "MMMEd")
+    }
 
-    static let headerWithTime: DateFormatter = localizedFormatter(chineseFormat: "M月d日 EEEE HH:mm")
+    static var headerWithTime: DateFormatter {
+        localizedFormatter(chineseFormat: "M月d日 EEEE HH:mm", englishTemplate: "MMMEdjmm")
+    }
 
-    static let timeOnly: DateFormatter = localizedFormatter(chineseFormat: "HH:mm")
+    static var timeOnly: DateFormatter {
+        localizedFormatter(chineseFormat: "HH:mm", englishTemplate: "jmm")
+    }
 
     /// `yyyy年M月d日 EEEE` — full date with weekday (timetable header).
-    static let fullDateWithWeekday: DateFormatter = localizedFormatter(chineseFormat: "yyyy年M月d日 EEEE")
+    static var fullDateWithWeekday: DateFormatter {
+        fullDateWithWeekday(language: .current)
+    }
 
-    private static func localizedFormatter(chineseFormat: String) -> DateFormatter {
-        let language = AppLanguagePreference.current
+    static func fullDateWithWeekday(language: AppLanguagePreference) -> DateFormatter {
+        localizedFormatter(
+            chineseFormat: "yyyy年M月d日 EEEE",
+            englishTemplate: "yMMMMEEEEd",
+            language: language
+        )
+    }
+
+    static func fullDate(language: AppLanguagePreference) -> DateFormatter {
+        localizedFormatter(
+            chineseFormat: "yyyy年M月d日",
+            englishTemplate: "yMMMMd",
+            language: language
+        )
+    }
+
+    static func monthYear(language: AppLanguagePreference) -> DateFormatter {
+        localizedFormatter(
+            chineseFormat: "yyyy年M月",
+            englishTemplate: "yMMMM",
+            language: language
+        )
+    }
+
+    private static func localizedFormatter(
+        chineseFormat: String,
+        englishTemplate: String,
+        language: AppLanguagePreference = .current
+    ) -> DateFormatter {
+        let language = language.resolvedLocalization
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: language.localeIdentifier)
-        formatter.dateFormat = chineseFormat
+        formatter.locale = language.locale
+        if language == .zhHans {
+            formatter.dateFormat = chineseFormat
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate(englishTemplate)
+        }
         return formatter
     }
 }
