@@ -6,6 +6,70 @@ struct TimetableRefreshResult {
     let sharedCourses: [SharedTimetableCourse]
 }
 
+struct TimetableRefreshSummary: Equatable {
+    let courseCount: Int
+    let scheduleCount: Int
+    let hasChanges: Bool
+
+    @MainActor
+    static func compare(
+        records: [ParsedCourseRecord],
+        existingCourses: [Course],
+        semesterID: String
+    ) -> TimetableRefreshSummary {
+        let incomingSignatures = records.map(TimetableCourseContentSignature.init(record:))
+        let existingSignatures = existingCourses
+            .filter { $0.sourceSemesterID == semesterID }
+            .map(TimetableCourseContentSignature.init(course:))
+
+        return TimetableRefreshSummary(
+            courseCount: Set(records.map(\.courseName)).count,
+            scheduleCount: records.count,
+            hasChanges: signatureCounts(incomingSignatures) != signatureCounts(existingSignatures)
+        )
+    }
+
+    private static func signatureCounts(
+        _ signatures: [TimetableCourseContentSignature]
+    ) -> [TimetableCourseContentSignature: Int] {
+        Dictionary(grouping: signatures, by: { $0 }).mapValues(\.count)
+    }
+}
+
+private struct TimetableCourseContentSignature: Hashable {
+    let courseName: String
+    let teacher: String
+    let classInfo: String
+    let room: String
+    let location: String
+    let dayOfWeek: Int
+    let weeks: [Int]
+    let duration: [Int]
+
+    init(record: ParsedCourseRecord) {
+        courseName = record.courseName
+        teacher = record.teacher
+        classInfo = record.classInfo
+        room = record.room
+        location = record.location
+        dayOfWeek = record.dayOfWeek
+        weeks = record.weeks.sorted()
+        duration = record.duration.sorted()
+    }
+
+    @MainActor
+    init(course: Course) {
+        courseName = course.courseName
+        teacher = course.teacher
+        classInfo = course.classInfo
+        room = course.room
+        location = course.location
+        dayOfWeek = course.dayOfWeek
+        weeks = course.weeks.sorted()
+        duration = course.duration.sorted()
+    }
+}
+
 @MainActor
 extension ParsedCourseRecord {
     func makeCourse(semesterID: String) -> Course {
