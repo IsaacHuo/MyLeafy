@@ -72,7 +72,7 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 - Supabase Auth、PostgreSQL、Storage 与 Edge Functions 承载非教务业务；RLS、校园范围和资源所有权共同约束数据访问。
 - Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，管理会话不暴露给浏览器 JavaScript。
 
-详细边界、数据流和依赖方向见[架构说明](docs/engineering/architecture.md)。
+详细边界、数据流和依赖方向见[当前架构](state/ARCHITECTURE.md)。
 
 ## 技术栈
 
@@ -95,7 +95,7 @@ leafy/
 ├── leafy/                  # iOS 主应用
 │   ├── App/                # 应用启动、根导航、主题与生命周期
 │   ├── Core/               # 依赖、持久化、校园能力、并发等基础设施
-│   ├── Features/           # Auth、Timetable、Community、Discover、Profile
+│   ├── Features/           # Auth、Timetable、Community、Schedule、Discover、Profile
 │   ├── Services/           # 教务、Supabase、同步与诊断服务
 │   ├── Parsers/            # 教务 HTML 解析
 │   └── Shared/             # 跨功能模型与共享组件
@@ -105,7 +105,9 @@ leafy/
 ├── supabase/               # migrations、Edge Functions、模板与测试
 ├── site/                   # 官网、运营后台与 Cloudflare Functions
 ├── Config/                 # 可提交的配置模板；本地密钥文件不入库
-└── docs/                   # 产品、架构、设计与后端文档
+├── docs/                   # 产品、设计、工程与运维文档（设计与规划）
+├── state/                  # 当前真实状态：进度与架构（CURRENT / ARCHITECTURE）
+└── logs/                   # 可复用的排查与根因知识
 ```
 
 ## 本地运行
@@ -165,14 +167,14 @@ supabase functions deploy community-bootstrap-user
 | 文档 | 适用读者 | 内容 |
 |---|---|---|
 | [项目总览](docs/product/overview.md) | 所有人 | 产品定位、能力范围、数据边界与限制 |
-| [架构说明](docs/engineering/architecture.md) | iOS/后端开发者 | 分层、依赖、教务链路、本地存储与系统边界 |
+| [当前架构](state/ARCHITECTURE.md) | iOS/后端开发者 | 当前分层、依赖、教务链路、本地存储与系统边界 |
 | [App 产品设计](docs/design/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
 | [UI 风格规范](docs/design/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
 | [Supabase 接入](docs/engineering/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
 | [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
 | [贡献规范](CONTRIBUTING.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
-文档索引见 [`docs/README.md`](docs/README.md)。
+文档索引见 [`docs/README.md`](docs/README.md)。当前开发状态见 [`state/CURRENT.md`](state/CURRENT.md)，可复用排查知识见 [`logs/`](logs/)。
 
 ## 已知边界
 

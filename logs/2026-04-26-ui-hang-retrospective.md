@@ -1,6 +1,6 @@
 # 2026-04-26 UI 卡死系统复盘：布局、线程、网络与排查思维
 
-> 历史记录：本文保留当时的故障模型、证据和排查经验，不代表当前版本仍存在相同问题。当前产品事实见[项目总览](../../product/overview.md)，现行技术边界见[架构说明](../../engineering/architecture.md)。
+> 历史记录：本文保留当时的故障模型、证据和排查经验，不代表当前版本仍存在相同问题。当前产品事实见[项目总览](../docs/product/overview.md)，现行技术边界见[架构说明](../state/ARCHITECTURE.md)。
 
 ## 宏观分类
 
@@ -268,7 +268,7 @@ xcrun xctrace record --template 'Time Profiler' --device <udid> --attach <pid> -
 
 ### 2. 建立 UI Hang 排查清单
 
-后续 UI Hang 复盘统一放在 `docs/operations/incidents/`，并至少记录：
+后续 UI Hang 复盘统一放在 `logs/`，并至少记录：
 
 - 进程是否还在？
 - 主线程采样在哪？

@@ -1,6 +1,6 @@
 # MyLeafy 项目总览
 
-本文给出 MyLeafy 的产品定位、系统组成、当前能力与责任边界。实现细节见[架构说明](../engineering/architecture.md)，页面和交互规则见[App 产品设计](../design/app-design.md)。
+本文给出 MyLeafy 的产品定位、系统组成、当前能力与责任边界。当前实现以代码和[当前架构](../../state/ARCHITECTURE.md)为准，页面和交互规则见[App 产品设计](../design/app-design.md)。
 
 ## 1. 产品定位
 
@@ -187,7 +187,7 @@ MyLeafy 已具备 iOS、Supabase 和 Web 管理三端架构。当前工作重点
 
 ## 9. 继续阅读
 
-- [架构说明](../engineering/architecture.md)：代码分层、数据链路与运行时边界。
+- [当前架构](../../state/ARCHITECTURE.md)：代码分层、数据链路与运行时边界。
 - [App 产品设计](../design/app-design.md)：导航、页面、流程和状态设计。
 - [UI 风格规范](../design/ui-style-guide.md)：视觉语言、组件和可访问性要求。
 - [Supabase 接入](../engineering/supabase.md)：身份、数据域、RLS、Functions 和联调。

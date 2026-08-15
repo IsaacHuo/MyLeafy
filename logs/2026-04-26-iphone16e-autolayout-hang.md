@@ -1,6 +1,6 @@
 # 2026-04-26 iPhone 16e 课表 Auto Layout 卡死复盘
 
-> 历史记录：本文保留当时的设备、日志、判断和修复证据，不代表当前版本仍存在相同问题。当前产品事实见[项目总览](../../product/overview.md)，现行技术边界见[架构说明](../../engineering/architecture.md)。
+> 历史记录：本文保留当时的设备、日志、判断和修复证据，不代表当前版本仍存在相同问题。当前产品事实见[项目总览](../docs/product/overview.md)，现行技术边界见[架构说明](../state/ARCHITECTURE.md)。
 
 ## 现象
 
