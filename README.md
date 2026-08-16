@@ -17,7 +17,7 @@
     <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/zh-cn?size=250x83&releaseDate=2026-05-09" alt="在 App Store 中下载">
   </a>
   <a href="https://github.com/IsaacHuo/MyLeafy/releases">
-    <img src="assets/download-apk-badge.svg" alt="下载 APK" width="250">
+    <img src="https://play.google.com/intl/zh-cn/badges/static/images/badges/zh-cn_badge_web_generic.png" alt="在 Google Play 获取" width="250">
   </a>
 </p>
 
