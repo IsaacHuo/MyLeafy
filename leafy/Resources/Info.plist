@@ -56,7 +56,7 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>MyLeafy 需要访问日历，以便把课表导出到本地日历，并在重复导出时更新已写入的课程。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MyLeafy 需要使用当前位置，以便在课表页显示天气并给出出行建议。</string>
+	<string>用于获取你所在地区的天气信息，并结合当天课表提供出行建议。</string>
 	<key>CFBundleIcons</key>
 	<dict>
 		<key>CFBundleAlternateIcons</key>

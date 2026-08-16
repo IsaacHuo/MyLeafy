@@ -60,10 +60,13 @@ struct TimetableWeatherAdviceSheet: View {
         case .permissionRequired:
             permissionCard(
                 title: "开启当前位置天气",
-                detail: "允许 MyLeafy 使用当前位置后，可以根据今天后续课程给出带伞、加衣或防晒建议。",
-                primaryTitle: "允许定位"
+                detail: "使用当前位置显示天气，并根据今天后续课程给出带伞、加衣或防晒建议。",
+                primaryTitle: "继续",
+                secondaryTitle: "暂不使用"
             ) {
                 Task { await loadWeather(requestsPermissionIfNeeded: true) }
+            } secondaryAction: {
+                dismiss()
             }
         case .permissionDenied:
             permissionCard(
@@ -96,7 +99,9 @@ struct TimetableWeatherAdviceSheet: View {
         title: String,
         detail: String,
         primaryTitle: String,
-        action: @escaping () -> Void
+        secondaryTitle: String? = nil,
+        action: @escaping () -> Void,
+        secondaryAction: (() -> Void)? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 16 * leafyControlScale) {
             HStack(alignment: .top, spacing: 12 * leafyControlScale) {
@@ -118,6 +123,12 @@ struct TimetableWeatherAdviceSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.accent(for: themeColorPreference))
+
+            if let secondaryTitle, let secondaryAction {
+                Button(secondaryTitle, action: secondaryAction)
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(18 * leafyControlScale)
         .leafyCardStyle()

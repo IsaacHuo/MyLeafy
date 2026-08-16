@@ -307,6 +307,12 @@ struct ProfileView: View {
                 profileRow(icon: "building.columns.fill", title: "常用链接", detail: "教务系统等常用网站")
             }
         }
+
+        NavigationLink {
+            SystemPermissionsView()
+        } label: {
+            profileRow(icon: "hand.raised.fill", title: "权限管理", detail: "查看并管理系统权限")
+        }
     }
 
     @ViewBuilder
