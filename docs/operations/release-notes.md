@@ -2,6 +2,8 @@
 
 本文是 MyLeafy 正式版本、源码锚点和用户可见更新摘要的唯一记录入口。App Store 实际使用过的短文案与根据 Git 历史补录的版本摘要分开标注；特定审核过程见 [`app-store/`](app-store/)。正式 tag 创建后不得移动、覆盖或强制更新。
 
+发布通过 GitHub Actions 的 `Cut iOS Release` workflow（`workflow_dispatch`）完成：它会用当前 `main` 构建未签名的 `.xcarchive`，在 `main` 上创建 `vX.Y` tag，并生成一个挂载归档的 draft Release。确认草稿内容后手动发布即可；App Store 提交流程仍为人工操作。
+
 ## 未发布
 
 - 根导航为课表、社区、日迹、校园、我的；日迹顶部提供随记、日程、推送。
