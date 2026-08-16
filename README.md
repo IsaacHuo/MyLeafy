@@ -12,6 +12,12 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-555555" alt="Apache-2.0">
 </p>
 
+<p align="center">
+  <a href="https://apps.apple.com/cn/app/myleafy-%E6%9E%97%E9%97%B4%E6%A0%A1%E5%9B%AD/id6763968535">
+    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/zh-cn?size=250x83&releaseDate=2026-05-09" alt="在 App Store 中下载">
+  </a>
+</p>
+
 MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校园社区与共享课表整合在一个原生 iOS 客户端中。根导航为课表、社区、日迹、校园、我的；日迹顶部直接提供随记、日程、推送，侧栏“记录”分组提供“记录日迹”和“每日回顾”。随记与个人日程按校园身份保存在本地。北京林业大学入口直接连接学校教务系统获取用户授权的数据；通用入口只提供本机导入能力。Supabase 承载社区、通知、评分、共享与运营数据。
 
 > 仓库名、Xcode target 与部分内部类型仍使用 `leafy` / `Leafy`。对外产品名称统一为 **MyLeafy**。
