@@ -2,19 +2,23 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import { adminActionAuditMatrix } from "./action-audit.ts";
 
 const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+const schemaLedger = await Deno.readTextFile(new URL("../../schema-ledger.md", import.meta.url));
+const reliabilityDoc = await Deno.readTextFile(new URL("../../../docs/engineering/admin-backend-reliability.md", import.meta.url));
+const runtimeActionNames = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm), (match) => match[1]);
 
-Deno.test("admin-community keeps 73 registered action contracts", () => {
-  const names = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm), (match) => match[1]);
-  assertEquals(names.length, 73);
+Deno.test("admin-community keeps its registered action contracts", () => {
+  const names = runtimeActionNames;
   for (const required of ["overview", "retryPostPublish", "getModerationReport", "bulkModeratePosts", "globalSearch", "listAdminSessions", "revokeAdminSession", "listNationalCalendarRuntimeConfigs", "upsertNationalCalendarRuntimeConfig"]) {
     assert(names.includes(required), `missing ${required}`);
   }
 });
 
-Deno.test("all 73 runtime actions match the machine-readable audit matrix", () => {
+Deno.test("runtime action count and names match the audit matrix and docs", () => {
   const matches = Array.from(source.matchAll(/^\s{2}([A-Za-z0-9]+): defineAction\(/gm));
-  assertEquals(adminActionAuditMatrix.length, 73);
-  assertEquals(adminActionAuditMatrix.map((row) => row.action), matches.map((match) => match[1]));
+  assertEquals(adminActionAuditMatrix.length, runtimeActionNames.length);
+  assertEquals(adminActionAuditMatrix.map((row) => row.action), runtimeActionNames);
+  assert(reliabilityDoc.includes(`exactly ${runtimeActionNames.length} \`admin-community\` actions`));
+  assert(schemaLedger.includes(`expose ${runtimeActionNames.length} registered actions`));
   for (const [index, match] of matches.entries()) {
     const block = source.slice(match.index ?? 0, matches[index + 1]?.index ?? source.indexOf("} satisfies Record"));
     const runtimeRole = block.includes('permission: "super_admin"')
@@ -25,6 +29,13 @@ Deno.test("all 73 runtime actions match the machine-readable audit matrix", () =
     assertEquals(row.mutating, block.includes("mutating: true"), `${row.action} mutating flag drifted`);
     assert(row.auditTarget.length > 0, `${row.action} audit target missing`);
   }
+});
+
+Deno.test("retired publish RPC is absent from the runtime ledger", () => {
+  const retiredRPC = "publish_community_post_v1";
+  assert(!source.includes(`rpc("${retiredRPC}"`));
+  assert(!schemaLedger.includes(retiredRPC));
+  assert(schemaLedger.includes("20260812120000_remove_obsolete_community_publish_rpc.sql"));
 });
 
 Deno.test("critical multi-write actions declare transaction RPC boundaries", () => {

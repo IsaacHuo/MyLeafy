@@ -1,6 +1,6 @@
 # Admin backend reliability
 
-The `/admin` backend exposes exactly 65 `admin-community` actions. The machine-readable review matrix is
+The `/admin` backend exposes exactly 73 `admin-community` actions. The machine-readable review matrix is
 `supabase/functions/admin-community/action-audit.ts`; its contract test compares every action name, role,
 mutation flag, campus policy, transaction boundary, and audit target with the runtime registry.
 
