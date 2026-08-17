@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import Leafy
 
 final class SchoolDataRefreshTests: XCTestCase {
@@ -134,6 +135,26 @@ final class SchoolDataRefreshTests: XCTestCase {
 
         TimetableCacheMetadata.clear()
         XCTAssertNil(TimetableCacheMetadata.lastSyncedSemesterID)
+    }
+
+    @MainActor
+    func testVerifiedEmptyGradesClearPreviouslyCachedGrades() throws {
+        let schema = Schema([Grade.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        context.insert(Grade(
+            term: "2025-2026-2",
+            courseName: "森林生态学",
+            credit: "2.0",
+            score: "92",
+            type: "必修"
+        ))
+        try context.save()
+
+        try SchoolDataSyncService.persistGrades([], modelContext: context)
+
+        XCTAssertTrue(try context.fetch(FetchDescriptor<Grade>()).isEmpty)
     }
 
     private func observeSchoolDataRefreshEvents(_ action: () -> Void) -> [SchoolDataRefreshEvent] {

@@ -82,6 +82,20 @@ nonisolated struct ParsedCourseRecord: Sendable {
     }
 }
 
+nonisolated enum TimetableParseResult: Sendable {
+    case records([ParsedCourseRecord])
+    case verifiedEmpty
+
+    var records: [ParsedCourseRecord] {
+        switch self {
+        case .records(let records):
+            return records
+        case .verifiedEmpty:
+            return []
+        }
+    }
+}
+
 nonisolated private struct GraduateSchedulePayload: Decodable {
     let rows: [GraduateScheduleRow]
 }
@@ -468,7 +482,7 @@ class HTMLParser {
         return records
     }
 
-    nonisolated private static func parseGraduateTimetableRecords(json: String) throws -> [ParsedCourseRecord] {
+    nonisolated private static func parseGraduateTimetableResult(json: String) throws -> TimetableParseResult {
         guard let data = json.data(using: .utf8) else {
             throw URLError(.cannotDecodeContentData)
         }
@@ -492,7 +506,13 @@ class HTMLParser {
             }
         }
 
-        return records
+        if records.isEmpty {
+            guard payload.rows.isEmpty else {
+                throw HTMLParserError.tableRowsUnparseable("研究生课表")
+            }
+            return .verifiedEmpty
+        }
+        return .records(records)
     }
     
     // Compare classes for continuous time merge
@@ -621,33 +641,57 @@ class HTMLParser {
         return try buildCourseRecords(from: weeklySchedule)
     }
 
-    nonisolated static func parseTimetableRecords(html: String) throws -> [ParsedCourseRecord] {
+    nonisolated static func parseTimetableResult(html: String) throws -> TimetableParseResult {
         let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("{"),
            trimmed.contains("\"rows\"") {
-            return try parseGraduateTimetableRecords(json: trimmed)
+            return try parseGraduateTimetableResult(json: trimmed)
         }
 
         let document = try SwiftSoup.parse(html)
-        
-        do {
+
+        let contentElements = try document.select("[id^=kbcontent_], .kbcontent").array()
+        if !contentElements.isEmpty {
             let records = try parseTimetableContentElements(document)
-            if records.count > 3 {
-                return records
+            if !records.isEmpty {
+                return .records(records)
             }
-        } catch {
-            // Ignore error and fallback to old table parser
+            let containsCourseContent = try contentElements
+                .map { try $0.text() }
+                .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            guard !containsCourseContent else {
+                throw HTMLParserError.tableRowsUnparseable("课表")
+            }
+            return .verifiedEmpty
         }
 
         if let timetableTable = try document.select("#kbtable").first() {
-            var allRecords = try parseTimetableTable(timetableTable)
-            if allRecords.isEmpty {
-                allRecords = try parseTimetableContentElements(document)
+            let records = try parseTimetableTable(timetableTable)
+            if !records.isEmpty {
+                return .records(records)
             }
-            return allRecords
+            let rows = try timetableTable.select("tr").array()
+            guard rows.count > 2 else {
+                throw HTMLParserError.timetableTableNotFound
+            }
+            let courseBlocks = try rows.dropFirst().dropLast().flatMap { row in
+                let divs = try row.select("div").array()
+                return stride(from: 1, to: divs.count, by: 2).map { divs[$0] }
+            }
+            let containsCourseContent = try courseBlocks
+                .map { try $0.text() }
+                .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            guard !containsCourseContent else {
+                throw HTMLParserError.tableRowsUnparseable("课表")
+            }
+            return .verifiedEmpty
         }
 
-        return try parseTimetableContentElements(document)
+        throw HTMLParserError.timetableTableNotFound
+    }
+
+    nonisolated static func parseTimetableRecords(html: String) throws -> [ParsedCourseRecord] {
+        try parseTimetableResult(html: html).records
     }
 
     /// 解析强智教务系统（如北京林业大学）的课程表 HTML
@@ -669,7 +713,11 @@ class HTMLParser {
                 && headerText.contains("学分")
                 && (headerText.contains("开课学期") || headerText.contains("课程编号"))
         }
-        let rows = try (gradeTables.first ?? document.select("#dataList").first())?.select("tr").array() ?? []
+        guard let gradeTable = try gradeTables.first ?? document.select("#dataList").first() else {
+            throw HTMLParserError.tableNotFound("成绩")
+        }
+        let rows = try gradeTable.select("tr").array()
+        let dataRows = try rows.filter { try !$0.select("td").isEmpty() }
 
         for row in rows {
             let tds = try row.select("td")
@@ -708,7 +756,10 @@ class HTMLParser {
                 parsedGrades.append(grade)
             }
         }
-        
+
+        if !dataRows.isEmpty && parsedGrades.isEmpty {
+            throw HTMLParserError.tableRowsUnparseable("成绩")
+        }
         return parsedGrades
     }
 

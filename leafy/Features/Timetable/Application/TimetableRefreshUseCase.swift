@@ -100,7 +100,7 @@ struct TimetableRefreshUseCase {
 
     static func parseRecords(html: String) async throws -> [ParsedCourseRecord] {
         try await Task.detached(priority: .userInitiated) {
-            try HTMLParser.parseTimetableRecords(html: html)
+            try HTMLParser.parseTimetableResult(html: html).records
         }.value
     }
 

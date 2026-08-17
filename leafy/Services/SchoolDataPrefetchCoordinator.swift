@@ -94,6 +94,12 @@ final class SchoolDataPrefetchCoordinator {
             case .success:
                 lastSuccessAt = now()
                 logger.info("Academic prefetch completed")
+            case .partialSuccess:
+                lastFailureAt = now()
+                logger.warning("Academic prefetch partially completed")
+            case .failure:
+                lastFailureAt = now()
+                logger.error("Academic prefetch failed")
             case .needsLogin:
                 lastFailureAt = now()
                 logger.info("Academic prefetch skipped because login is required")

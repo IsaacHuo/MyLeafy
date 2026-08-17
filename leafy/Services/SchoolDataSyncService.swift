@@ -3,6 +3,8 @@ import SwiftData
 
 enum SchoolDataSyncOutcome: Equatable {
     case success(String)
+    case partialSuccess(String)
+    case failure(String)
     case needsLogin
     case needsReauthentication(SchoolReauthenticationContext)
 }
@@ -81,6 +83,8 @@ enum SchoolDataSyncService {
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: true)
 
         var results: [String] = []
+        var successfulOperationCount = 0
+        var failedOperationCount = 0
         var refreshedScopes: Set<SchoolDataRefreshScope> = []
         var parsedGrades: [Grade]?
         var gradeRankingsToSave: [GradeRankingRecord]?
@@ -91,12 +95,13 @@ enum SchoolDataSyncService {
 
         do {
             let html = try await networkManager.fetchTimetable()
-            let parsed = try HTMLParser.parseTimetable(html: html)
+            let parsed = try HTMLParser.parseTimetableResult(html: html).records.map { $0.makeCourse() }
             try persistTimetable(
                 parsed,
                 semesterID: semesterConfig.semesterID,
                 modelContext: modelContext
             )
+            successfulOperationCount += 1
             results.append(L10n.text("课表 %d 门", language: language, parsed.count))
             if await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(
                 courses: parsed.map(SharedTimetableCourse.init(course:))
@@ -109,6 +114,7 @@ enum SchoolDataSyncService {
                 return .needsReauthentication(.schoolDataSync)
             }
             TimetableCacheMetadata.lastFailureMessage = error.localizedDescription
+            failedOperationCount += 1
             results.append(L10n.text("课表失败", language: language))
         }
 
@@ -125,11 +131,11 @@ enum SchoolDataSyncService {
                     gradeCreditSummaryToSave = creditSummary
                 }
                 parsedGrades = parsed
-                results.append(L10n.text("成绩 %d 条", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     return .needsReauthentication(.schoolDataSync)
                 }
+                failedOperationCount += 1
                 results.append(L10n.text("成绩失败", language: language))
             }
 
@@ -140,11 +146,13 @@ enum SchoolDataSyncService {
                 if let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html) {
                     gradeCreditSummaryToSave = creditSummary
                 }
+                successfulOperationCount += 1
                 results.append(L10n.text("排名 %d 条", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     return .needsReauthentication(.schoolDataSync)
                 }
+                failedOperationCount += 1
                 results.append(L10n.text("排名未开放", language: language))
             }
 
@@ -152,11 +160,13 @@ enum SchoolDataSyncService {
                 let html = try await networkManager.fetchExamSchedule()
                 let parsed = try HTMLParser.parseExams(html: html)
                 examScheduleToSave = parsed
+                successfulOperationCount += 1
                 results.append(L10n.text("考试 %d 条", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     return .needsReauthentication(.schoolDataSync)
                 }
+                failedOperationCount += 1
                 results.append(L10n.text("考试失败", language: language))
             }
 
@@ -164,11 +174,13 @@ enum SchoolDataSyncService {
                 let html = try await networkManager.fetchTeachingPlan()
                 let parsed = try HTMLParser.parseTeachingPlan(html: html)
                 teachingPlanToSave = parsed
+                successfulOperationCount += 1
                 results.append(L10n.text("教学计划 %d 学期", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     return .needsReauthentication(.schoolDataSync)
                 }
+                failedOperationCount += 1
                 results.append(L10n.text("教学计划失败", language: language))
             }
 
@@ -176,24 +188,29 @@ enum SchoolDataSyncService {
                 let html = try await networkManager.fetchGraduationRequirements()
                 let document = try HTMLParser.parseTrainingProgram(html: html)
                 trainingProgramToSave = document
+                successfulOperationCount += 1
                 results.append(L10n.text("培养方案 %d 类", language: language, document.creditRequirements.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     return .needsReauthentication(.schoolDataSync)
                 }
+                failedOperationCount += 1
                 results.append(L10n.text("培养方案失败", language: language))
             }
         }
 
-        if let parsedGrades, !parsedGrades.isEmpty {
-            for grade in fetch(Grade.self, from: modelContext) {
-                modelContext.delete(grade)
+        if let parsedGrades {
+            do {
+                try persistGrades(parsedGrades, modelContext: modelContext)
+                SchoolDataCache.markGradeDetailsSynced()
+                refreshedScopes.insert(.grades)
+                successfulOperationCount += 1
+                results.append(L10n.text("成绩 %d 条", language: language, parsedGrades.count))
+            } catch {
+                modelContext.rollback()
+                failedOperationCount += 1
+                results.append(L10n.text("成绩保存失败", language: language))
             }
-            for grade in parsedGrades {
-                modelContext.insert(grade)
-            }
-            SchoolDataCache.markGradeDetailsSynced()
-            refreshedScopes.insert(.grades)
         }
 
         if let gradeRankingsToSave {
@@ -217,19 +234,23 @@ enum SchoolDataSyncService {
             refreshedScopes.insert(.trainingProgram)
         }
 
-        try? modelContext.save()
         if examScheduleToSave != nil {
             LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         }
         SchoolDataRefreshNotifier.post(refreshedScopes)
 
-        return .success(
-            L10n.text(
-                "同步完成：%@。",
-                language: language,
-                results.joined(separator: L10n.text("，", language: language))
-            )
+        let message = L10n.text(
+            failedOperationCount == 0 ? "同步完成：%@。" : "同步结果：%@。",
+            language: language,
+            results.joined(separator: L10n.text("，", language: language))
         )
+        if failedOperationCount == 0 {
+            return .success(message)
+        }
+        if successfulOperationCount > 0 {
+            return .partialSuccess(message)
+        }
+        return .failure(message)
     }
 
     private static func persistTimetable(
@@ -259,6 +280,21 @@ enum SchoolDataSyncService {
         AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: now)
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         SchoolDataRefreshNotifier.post(.timetable)
+    }
+
+    static func persistGrades(_ grades: [Grade], modelContext: ModelContext) throws {
+        for grade in fetch(Grade.self, from: modelContext) {
+            modelContext.delete(grade)
+        }
+        for grade in grades {
+            modelContext.insert(grade)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
     }
 
     private static func requiresReauthentication(

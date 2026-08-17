@@ -560,6 +560,46 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(try HTMLParser.parseTimetable(html: #"{"rows":[]}"#).count, 0)
     }
 
+    func testUnrecognizedTimetablePageThrowsInsteadOfReturningEmptyList() {
+        let html = "<html><body><form id=\"login\"></form></body></html>"
+
+        XCTAssertThrowsError(try HTMLParser.parseTimetable(html: html)) { error in
+            guard case HTMLParserError.timetableTableNotFound = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testMalformedTimetableContentThrowsInsteadOfReturningEmptyList() {
+        let html = """
+        <html><body><div id="kbcontent_1_1">无法识别的课程结构</div></body></html>
+        """
+
+        XCTAssertThrowsError(try HTMLParser.parseTimetable(html: html)) { error in
+            guard case HTMLParserError.tableRowsUnparseable("课表") = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testGradeParserRejectsMissingTable() {
+        XCTAssertThrowsError(try HTMLParser.parseGrades(html: "<html><body></body></html>")) { error in
+            guard case HTMLParserError.tableNotFound("成绩") = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testGradeParserAcceptsRecognizedEmptyTable() throws {
+        let html = """
+        <table id="dataList">
+          <tr><th>开课学期</th><th>课程编号</th><th>课程名称</th><th>成绩</th><th>学分</th></tr>
+        </table>
+        """
+
+        XCTAssertTrue(try HTMLParser.parseGrades(html: html).isEmpty)
+    }
+
     func testTimetableParserSkipsOutOfRangeContentDayIDs() throws {
         let html = """
         <html>

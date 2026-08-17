@@ -177,6 +177,82 @@ final class SchoolDataPrefetchTests: XCTestCase {
     }
 
     @MainActor
+    func testPartialSuccessUsesFailureCooldown() async throws {
+        defer { cleanupSchoolSession() }
+        activateBJFUIdentity()
+        let defaults = try makeDefaults()
+        var now = Date(timeIntervalSince1970: 3_500)
+        let coordinator = SchoolDataPrefetchCoordinator(userDefaults: defaults, now: { now })
+        let context = try makeModelContainer().mainContext
+        var syncCount = 0
+
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .foreground
+            ) { _, _ in
+                syncCount += 1
+                return .partialSuccess("partial")
+            },
+            .started
+        )
+        await waitUntil { syncCount == 1 }
+
+        now = now.addingTimeInterval(60)
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .foreground
+            ) { _, _ in
+                syncCount += 1
+                return .success("should not run")
+            },
+            .skipped(.failureCooldown)
+        )
+        XCTAssertEqual(syncCount, 1)
+    }
+
+    @MainActor
+    func testFailureUsesFailureCooldown() async throws {
+        defer { cleanupSchoolSession() }
+        activateBJFUIdentity()
+        let defaults = try makeDefaults()
+        var now = Date(timeIntervalSince1970: 4_000)
+        let coordinator = SchoolDataPrefetchCoordinator(userDefaults: defaults, now: { now })
+        let context = try makeModelContainer().mainContext
+        var syncCount = 0
+
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .foreground
+            ) { _, _ in
+                syncCount += 1
+                return .failure("failed")
+            },
+            .started
+        )
+        await waitUntil { syncCount == 1 }
+
+        now = now.addingTimeInterval(60)
+        XCTAssertEqual(
+            coordinator.prefetchIfNeeded(
+                modelContext: context,
+                language: .zhHans,
+                trigger: .foreground
+            ) { _, _ in
+                syncCount += 1
+                return .success("should not run")
+            },
+            .skipped(.failureCooldown)
+        )
+        XCTAssertEqual(syncCount, 1)
+    }
+
+    @MainActor
     func testCustomCampusSkipsSchoolSystemPrefetch() throws {
         defer { cleanupSchoolSession() }
         activateCustomIdentity()
