@@ -1,6 +1,6 @@
 # MyLeafy Supabase Schema Ledger
 
-Last updated: 2026-08-07
+Last updated: 2026-08-17
 
 This ledger records the deployed schema facts that the app relies on. It is not
 a replacement for migrations, and existing migration history should not be
@@ -12,7 +12,7 @@ contract.
 
 | Domain | Owns | Public entry points |
 | --- | --- | --- |
-| `community-social` | Profiles, posts, comments, images, likes, favorites, pins, feed hydration | `community-bootstrap-user`, `community-feed`, `create_community_post_v3`, `attach_community_post_image_v1`, `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1` |
+| `community-social` | Profiles, posts, comments, images, attachments, likes, favorites, pins, feed hydration | `community-bootstrap-user`, `community-feed`, `create_community_post_v4`, `create_community_comment_v2`, `attach_community_post_image_v1`, `attach_community_post_attachment_v1`, `community_feed_v1` |
 | `moderation` | Reports, hidden/pending/deleted content states, profile mute actions, poll deletion review | `admin-community` moderation actions, `retryPostPublish`, `getModerationReport`, report/comment/post status updates |
 | `catalog-ratings` | Teachers, courses, dishes, ratings, catalog suggestions, postgraduate sources | Teacher/course/dish tables and rating CRUD paths, catalog suggestion admin actions |
 | `timetable-sharing` | Timetable snapshots, invite codes, share members, owner/viewer state changes | `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
@@ -23,6 +23,9 @@ contract.
 
 - Keep existing Edge Function names and admin action names stable unless a
   versioned replacement is shipped with an adapter.
+- Keep the shipped 7-argument `create_community_post_v4` and 6-argument
+  `create_community_comment_v2` signatures executable. New clients use the
+  request-ID overloads advertised by the matching `*_idempotent` capabilities.
 - Return backend failures through `{ error, errorEnvelope }`, where
   `errorEnvelope` has `{ code, message, retryable, details? }`.
 - Use `public.backend_capabilities_v1()` for feature availability. Clients
@@ -56,7 +59,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 
 | Domain | Tables |
 | --- | --- |
-| `community-social` | `profiles`, `profile_auth_links`, `posts`, `post_images`, `comments`, `community_images`, `post_likes`, `post_favorites`, `community_blocks`, `community_notifications`, `community_post_pins` |
+| `community-social` | `profiles`, `profile_auth_links`, `posts`, `post_images`, `post_attachments`, `comments`, `community_images`, `post_likes`, `comment_likes`, `post_favorites`, `community_blocks`, `community_notifications`, `community_post_pins`; private `community_create_requests` and upload receipt tables |
 | `moderation` | `community_reports`, content status fields on posts/comments/polls/profiles |
 | `catalog-ratings` | `teachers`, `teacher_ratings`, `course_catalog`, `course_ratings`, `dish_catalog`, `dish_ratings`, `catalog_suggestions`, `postgraduate_sources`, `postgraduate_source_suggestions` |
 | `timetable-sharing` | `timetable_snapshots`, `timetable_invites`, `timetable_share_members` |
@@ -67,7 +70,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 
 | Domain | RPCs |
 | --- | --- |
-| `community-social` | `create_community_post_v3`, `attach_community_post_image_v1`, `publish_community_post_v1` (legacy compatibility), `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_post_favorite_v1`, `create_community_notification`, `unblock_community_user` |
+| `community-social` | `create_community_post_v4` (7-argument compatibility and 8-argument idempotent overloads), `create_community_comment_v2` (6-argument compatibility and 7-argument idempotent overloads), `attach_community_post_image_v1`, `attach_community_post_attachment_v1`, `abort_community_post_upload_v1`, `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_community_comment_like_v1`, `toggle_post_favorite_v1` |
 | `community-social` polls | `my_authored_community_polls_v1`, `my_voted_community_polls_v1`, `request_delete_community_poll_v1`, `delete_own_community_poll_v1` |
 | `timetable-sharing` | `can_view_timetable_snapshot`, `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config`, `admin_upsert_semester_runtime_config`, `admin_upsert_national_calendar_runtime_config` |
@@ -156,6 +159,8 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260725203000_admin_database_lint_closure.sql`
 - `20260803120000_retire_managed_campus_ai.sql`
 - `20260807123000_retire_campus_ai_tools.sql`
+- `20260812120000_remove_obsolete_community_publish_rpc.sql`
+- `20260817120000_community_create_request_idempotency.sql`
 
 The retired migrations remain in history so an empty database can reproduce the
 old schema before forward-only retirement migrations remove its quota,
@@ -163,11 +168,19 @@ entitlement, StoreKit, research-tool RPC, event-table, and capability objects.
 
 ## Community Post Upload Invariants
 
-- `posts.expected_image_count` records the exact image count for `create_community_post_v3`; text-only posts publish immediately.
-- Each image attachment consumes one short-lived validation receipt. When the attached count reaches the expected count, the final attachment publishes the post in the same database transaction.
+- `posts.expected_image_count` and `posts.expected_attachment_count` record the exact media counts for `create_community_post_v4`; text-only posts publish immediately.
+- Each image or attachment consumes one short-lived validation receipt. When both attached counts reach their expected values, the final attachment publishes the post in the same database transaction.
 - `posts.status = pending_review` denotes an incomplete upload or publication exception. It is not an editorial approval queue and is excluded from generic restore-to-published actions.
 - `admin_retry_pending_post_publish_v1` publishes only a pending post with at least one validated image and a complete expected count. Incomplete, deleted, or conflicting records fail explicitly.
 - Poll `pending_review` remains a manual moderation state with separate approve and reject transitions.
+
+## Community Create Idempotency Invariants
+
+- The iOS publish queue persists one UUID and reuses it as both the post ID and request ID for every retry. Comment retries retain their request ID while body and reply targets are unchanged.
+- `private.community_create_requests` owns the unique `(actor_id, request_id)` boundary for post and comment creation. A replay returns the originally mapped row and does not repeat comment notifications.
+- Reusing an actor request ID for another mutation kind or different normalized parameters fails with `COMMUNITY_CREATE_REQUEST_REUSED`.
+- The shipped post RPC also treats an exact replay of the same actor-owned post UUID as success instead of surfacing a primary-key violation.
+- Request idempotency does not mint, reuse, or bypass media validation receipts. Image and attachment validation and atomic publication retain their existing contracts.
 
 ## Community Identity Invariants
 
@@ -202,6 +215,6 @@ entitlement, StoreKit, research-tool RPC, event-table, and capability objects.
 - Admin global-search indexes use `pg_trgm` for substring lookup and a
   full-text GIN index for post content. They add no App table privileges and do
   not change existing RLS policies.
-- Admin Edge actions preserve all legacy names and expose 67 registered actions,
+- Admin Edge actions preserve all legacy names and expose 73 registered actions,
   including `retryPostPublish` and `getModerationReport`. CSV export is isolated
   in `admin-export` with server-side resource and field allowlists.

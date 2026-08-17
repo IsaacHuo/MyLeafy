@@ -5,7 +5,7 @@ set local search_path = public, extensions;
 set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = 'a1000000-0000-0000-0000-000000000001';
 
-select plan(25);
+select plan(35);
 
 insert into auth.users (id) values
   ('a1000000-0000-0000-0000-000000000001'),
@@ -294,6 +294,140 @@ select throws_ok(
   'COMMUNITY_REPLY_TARGET_INVALID',
   'a reply target cannot cross posts'
 );
+
+set local request.jwt.claim.sub = 'a1000000-0000-0000-0000-000000000001';
+
+select is(
+  (public.create_community_post_v4(
+    'a3000000-0000-0000-0000-000000000003',
+    '幂等发帖',
+    '只应创建一次',
+    '测试',
+    false,
+    0,
+    0,
+    'b3000000-0000-0000-0000-000000000001'
+  )).id,
+  'a3000000-0000-0000-0000-000000000003'::uuid,
+  'an idempotent post request returns its created post'
+);
+
+select is(
+  (public.create_community_post_v4(
+    'a3000000-0000-0000-0000-000000000003',
+    '幂等发帖',
+    '只应创建一次',
+    '测试',
+    false,
+    0,
+    0,
+    'b3000000-0000-0000-0000-000000000001'
+  )).id,
+  'a3000000-0000-0000-0000-000000000003'::uuid,
+  'replaying a post request returns the first result'
+);
+
+select is(
+  (select count(*)::integer from public.posts
+   where id = 'a3000000-0000-0000-0000-000000000003'),
+  1,
+  'replaying a post request creates one post'
+);
+
+select throws_ok(
+  $$select public.create_community_post_v4(
+    'a3000000-0000-0000-0000-000000000003',
+    '更换标题',
+    '只应创建一次',
+    '测试',
+    false,
+    0,
+    0,
+    'b3000000-0000-0000-0000-000000000001'
+  )$$,
+  '22023',
+  'COMMUNITY_CREATE_REQUEST_REUSED',
+  'a post request id cannot be replayed with different parameters'
+);
+
+select is(
+  (public.create_community_post_v4(
+    'a3000000-0000-0000-0000-000000000003',
+    '幂等发帖',
+    '只应创建一次',
+    '测试',
+    false,
+    0,
+    0
+  )).id,
+  'a3000000-0000-0000-0000-000000000003'::uuid,
+  'the shipped v4 signature treats a repeated post UUID as success'
+);
+
+set local request.jwt.claim.sub = 'a1000000-0000-0000-0000-000000000002';
+
+select is(
+  (public.create_community_comment_v2(
+    'a4000000-0000-0000-0000-000000000004',
+    'a3000000-0000-0000-0000-000000000003',
+    '网络超时重试',
+    null,
+    null,
+    false,
+    'b4000000-0000-0000-0000-000000000001'
+  )).id,
+  'a4000000-0000-0000-0000-000000000004'::uuid,
+  'an idempotent comment request returns its created comment'
+);
+
+select is(
+  (public.create_community_comment_v2(
+    'a4000000-0000-0000-0000-000000000005',
+    'a3000000-0000-0000-0000-000000000003',
+    '网络超时重试',
+    null,
+    null,
+    false,
+    'b4000000-0000-0000-0000-000000000001'
+  )).id,
+  'a4000000-0000-0000-0000-000000000004'::uuid,
+  'replaying a comment request returns the first result'
+);
+
+select is(
+  (select count(*)::integer from public.comments
+   where post_id = 'a3000000-0000-0000-0000-000000000003'
+     and body = '网络超时重试'),
+  1,
+  'a timed-out comment replay creates one comment'
+);
+
+select is(
+  (select count(*)::integer from public.community_notifications
+   where recipient_id = 'a2000000-0000-0000-0000-000000000001'
+     and actor_id = 'a2000000-0000-0000-0000-000000000002'
+     and comment_id = 'a4000000-0000-0000-0000-000000000004'
+     and type = 'comment'),
+  1,
+  'a timed-out comment replay notifies once'
+);
+
+select throws_ok(
+  $$select public.create_community_comment_v2(
+    'a4000000-0000-0000-0000-000000000006',
+    'a3000000-0000-0000-0000-000000000003',
+    '更换评论正文',
+    null,
+    null,
+    false,
+    'b4000000-0000-0000-0000-000000000001'
+  )$$,
+  '22023',
+  'COMMUNITY_CREATE_REQUEST_REUSED',
+  'a comment request id cannot be replayed with different parameters'
+);
+
+set local request.jwt.claim.sub = 'a1000000-0000-0000-0000-000000000001';
 
 update public.posts
 set status = 'deleted'

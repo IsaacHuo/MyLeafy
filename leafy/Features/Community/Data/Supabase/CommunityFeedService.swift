@@ -161,6 +161,22 @@ extension CommunityService {
         imageCount: Int,
         attachmentCount: Int
     ) async throws -> UUID {
+        try await createPendingPost(
+            id: id,
+            requestID: id,
+            input: input,
+            imageCount: imageCount,
+            attachmentCount: attachmentCount
+        )
+    }
+
+    func createPendingPost(
+        id: UUID,
+        requestID: UUID,
+        input: CreatePostInput,
+        imageCount: Int,
+        attachmentCount: Int
+    ) async throws -> UUID {
         guard imageCount >= 0, imageCount <= CommunityImageUpload.postImageLimit,
               attachmentCount >= 0, attachmentCount <= CommunityPostAttachment.postAttachmentLimit else {
             throw CommunityServiceError.edgeFunctionRejected("帖子媒体数量无效。")
@@ -187,6 +203,7 @@ extension CommunityService {
                 "create_community_post_v4",
                 params: CommunityCreatePostV4RPCParams(
                     id: id,
+                    requestID: requestID,
                     title: title,
                     body: body,
                     category: CommunityPostCategory.normalized(input.category),

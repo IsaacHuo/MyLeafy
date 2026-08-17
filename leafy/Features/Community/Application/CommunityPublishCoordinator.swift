@@ -41,7 +41,7 @@ nonisolated enum CommunityPublishMediaKind: String, Codable, Hashable, Sendable 
 
 nonisolated enum CommunityPublishCapabilityRequirements {
     static func requiredRPCs(for mediaKinds: Set<CommunityPublishMediaKind>) -> [String] {
-        var names = ["create_community_post_v4"]
+        var names = ["create_community_post_v4_idempotent"]
         if mediaKinds.contains(.image) {
             names.append("attach_community_post_image_v1")
         }
@@ -707,6 +707,7 @@ final class CommunityPublishCoordinator: ObservableObject {
                 } else {
                     _ = try await backend.createPendingPost(
                         id: taskID,
+                        requestID: taskID,
                         input: task.input,
                         imageCount: task.media.filter { $0.kind == .image }.count,
                         attachmentCount: task.media.filter { $0.kind == .attachment }.count

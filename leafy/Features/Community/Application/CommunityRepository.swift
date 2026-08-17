@@ -30,6 +30,13 @@ nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
         parentCommentID: UUID?,
         replyToCommentID: UUID?
     ) async throws -> CommunityComment
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?,
+        requestID: UUID
+    ) async throws -> CommunityComment
     func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState
     func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload
     func togglePostLike(postID: UUID) async throws -> CommunityPost
@@ -39,6 +46,23 @@ nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
     func blockUser(userID: UUID, reason: String?) async throws
     func deletePost(postID: UUID) async throws
     func deleteComment(commentID: UUID) async throws
+}
+
+extension CommunityPostDetailRepository {
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?,
+        requestID _: UUID
+    ) async throws -> CommunityComment {
+        try await createComment(
+            postID: postID,
+            body: body,
+            parentCommentID: parentCommentID,
+            replyToCommentID: replyToCommentID
+        )
+    }
 }
 
 nonisolated protocol CommunityPollRepository: CommunitySessionRepository {
@@ -140,6 +164,22 @@ struct LiveCommunityRepository: CommunityRepository {
             body: body,
             parentCommentID: parentCommentID,
             replyToCommentID: replyToCommentID
+        )
+    }
+
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?,
+        requestID: UUID
+    ) async throws -> CommunityComment {
+        try await service.createComment(
+            postID: postID,
+            body: body,
+            parentCommentID: parentCommentID,
+            replyToCommentID: replyToCommentID,
+            requestID: requestID
         )
     }
 

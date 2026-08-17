@@ -15,6 +15,13 @@ nonisolated protocol CommunityPublishBackend: Sendable {
         imageCount: Int,
         attachmentCount: Int
     ) async throws -> UUID
+    func createPendingPost(
+        id: UUID,
+        requestID: UUID,
+        input: CreatePostInput,
+        imageCount: Int,
+        attachmentCount: Int
+    ) async throws -> UUID
     func fetchPost(postID: UUID) async throws -> CommunityPost?
     func validateAndAttachPostImage(
         postID: UUID,
@@ -32,4 +39,21 @@ nonisolated protocol CommunityPublishBackend: Sendable {
     ) async throws
     func requireCapabilities(for mediaKinds: Set<CommunityPublishMediaKind>) async throws
     func uploadCredentials() async throws -> CommunityUploadCredentials
+}
+
+extension CommunityPublishBackend {
+    func createPendingPost(
+        id: UUID,
+        requestID _: UUID,
+        input: CreatePostInput,
+        imageCount: Int,
+        attachmentCount: Int
+    ) async throws -> UUID {
+        try await createPendingPost(
+            id: id,
+            input: input,
+            imageCount: imageCount,
+            attachmentCount: attachmentCount
+        )
+    }
 }

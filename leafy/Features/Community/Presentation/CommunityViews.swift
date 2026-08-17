@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import OSLog
 import PhotosUI
 import QuickLook
@@ -283,6 +284,73 @@ nonisolated enum CommunityCommentComposerPolicy {
     }
 }
 
+struct CommunityCommentRequestTracker {
+    private struct PendingRequest: Codable {
+        let bodyFingerprint: String
+        let parentID: UUID?
+        let replyID: UUID?
+        let requestID: UUID
+    }
+
+    private var pending: PendingRequest?
+    private let userDefaults: UserDefaults?
+    private let storageKey: String?
+
+    init(postID: UUID? = nil, userDefaults: UserDefaults = .standard) {
+        guard let postID else {
+            self.userDefaults = nil
+            storageKey = nil
+            pending = nil
+            return
+        }
+        self.userDefaults = userDefaults
+        let key = CampusScopedDefaults.key("community.commentRequest.\(postID.uuidString)", defaults: userDefaults)
+        storageKey = key
+        pending = userDefaults.data(forKey: key).flatMap {
+            try? JSONDecoder().decode(PendingRequest.self, from: $0)
+        }
+    }
+
+    mutating func requestID(body: String, parentID: UUID?, replyID: UUID?) -> UUID {
+        let bodyFingerprint = Self.fingerprint(body)
+        if let pending,
+           pending.bodyFingerprint == bodyFingerprint,
+           pending.parentID == parentID,
+           pending.replyID == replyID {
+            return pending.requestID
+        }
+        let requestID = UUID()
+        pending = PendingRequest(
+            bodyFingerprint: bodyFingerprint,
+            parentID: parentID,
+            replyID: replyID,
+            requestID: requestID
+        )
+        persistPendingRequest()
+        return requestID
+    }
+
+    mutating func complete(requestID: UUID) {
+        if pending?.requestID == requestID {
+            pending = nil
+            if let storageKey {
+                userDefaults?.removeObject(forKey: storageKey)
+            }
+        }
+    }
+
+    private mutating func persistPendingRequest() {
+        guard let pending, let storageKey else { return }
+        if let data = try? JSONEncoder().encode(pending) {
+            userDefaults?.set(data, forKey: storageKey)
+        }
+    }
+
+    private static func fingerprint(_ body: String) -> String {
+        SHA256.hash(data: Data(body.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 @MainActor
 final class CommunityPostDetailViewModel: ObservableObject {
     @Published private(set) var post: CommunityPost
@@ -298,11 +366,13 @@ final class CommunityPostDetailViewModel: ObservableObject {
 
     private let postID: UUID
     private let repository: any CommunityPostDetailRepository
+    private var commentRequestTracker: CommunityCommentRequestTracker
 
     init(post: CommunityPost, repository: any CommunityPostDetailRepository = LiveCommunityRepository()) {
         self.post = post
         postID = post.id
         self.repository = repository
+        commentRequestTracker = CommunityCommentRequestTracker(postID: post.id)
     }
 
     var comments: [CommunityComment] {
@@ -357,17 +427,24 @@ final class CommunityPostDetailViewModel: ObservableObject {
 
         isSubmitting = true
         defer { isSubmitting = false }
+        let requestID = commentRequestTracker.requestID(
+            body: trimmed,
+            parentID: target?.threadRootID,
+            replyID: target?.id
+        )
 
         do {
             _ = try await repository.createComment(
                 postID: postID,
                 body: trimmed,
                 parentCommentID: target?.threadRootID,
-                replyToCommentID: target?.id
+                replyToCommentID: target?.id,
+                requestID: requestID
             )
             let page = try await repository.fetchCommentThreads(postID: postID, cursor: nil, limit: 20)
             commentThreads = page.threads
             nextCommentCursor = page.nextCursor
+            commentRequestTracker.complete(requestID: requestID)
             errorMessage = nil
             return true
         } catch {
@@ -721,13 +798,17 @@ struct RealCommunitySectionView: View {
 
     @ViewBuilder
     private var feedContent: some View {
-        if viewModel.isLoading && viewModel.items.isEmpty {
+        if (viewModel.isLoading || viewModel.isLoadingPolls) && viewModel.items.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
         } else if let errorMessage = viewModel.errorMessage, viewModel.items.isEmpty {
             CommunityErrorCard(message: errorMessage) {
                 Task { await viewModel.load(mode: .refresh, query: feedQuery) }
+            }
+        } else if let pollErrorMessage = viewModel.pollErrorMessage, viewModel.items.isEmpty {
+            CommunityErrorCard(message: pollErrorMessage) {
+                Task { await viewModel.retryPolls() }
             }
         } else if viewModel.items.isEmpty && feedQuery.contentFilter == .polls {
             ContentUnavailableView("暂无投票", systemImage: "chart.bar.xaxis", description: Text("有同学发起新投票后会显示在这里。"))
@@ -762,6 +843,12 @@ struct RealCommunitySectionView: View {
 
             CommunityMasonryGrid(items: viewModel.items, spacing: 10) { item in
                 masonryItem(item)
+            }
+
+            if let pollErrorMessage = viewModel.pollErrorMessage {
+                CommunityErrorCard(message: pollErrorMessage) {
+                    Task { await viewModel.retryPolls() }
+                }
             }
 
             loadMoreFooter

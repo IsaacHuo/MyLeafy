@@ -1930,6 +1930,7 @@ nonisolated struct DishRatingInsert: Encodable, Sendable {
 
 nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
     let id: UUID
+    let requestID: UUID?
     let title: String
     let body: String
     let category: String?
@@ -1939,6 +1940,7 @@ nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id = "p_id"
+        case requestID = "p_request_id"
         case title = "p_title"
         case body = "p_body"
         case category = "p_category"
@@ -2132,6 +2134,7 @@ nonisolated struct CommunityCommentRecord: Decodable, Sendable {
 
 nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
     let id: UUID
+    let requestID: UUID?
     let postID: UUID
     let body: String
     let parentCommentID: UUID?
@@ -2140,6 +2143,7 @@ nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id = "p_id"
+        case requestID = "p_request_id"
         case postID = "p_post_id"
         case body = "p_body"
         case parentCommentID = "p_parent_comment_id"

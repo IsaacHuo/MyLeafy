@@ -186,9 +186,57 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         )
     }
 
+    func testCommentRequestTrackerReusesFailedRequestAndRotatesForChangedContent() {
+        var tracker = CommunityCommentRequestTracker()
+        let parentID = UUID()
+        let first = tracker.requestID(body: "同一条评论", parentID: parentID, replyID: parentID)
+
+        XCTAssertEqual(
+            tracker.requestID(body: "同一条评论", parentID: parentID, replyID: parentID),
+            first
+        )
+        XCTAssertNotEqual(
+            tracker.requestID(body: "修改后的评论", parentID: parentID, replyID: parentID),
+            first
+        )
+
+        let completed = tracker.requestID(body: "准备完成", parentID: nil, replyID: nil)
+        tracker.complete(requestID: completed)
+        XCTAssertNotEqual(
+            tracker.requestID(body: "准备完成", parentID: nil, replyID: nil),
+            completed
+        )
+    }
+
+    func testCommentRequestTrackerPersistsAcrossRecreationWithoutStoringBody() throws {
+        let suiteName = "CommunityCommentRequestTrackerTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let postID = UUID()
+        let body = "网络超时后的评论正文"
+
+        var firstTracker = CommunityCommentRequestTracker(postID: postID, userDefaults: defaults)
+        let firstRequestID = firstTracker.requestID(body: body, parentID: nil, replyID: nil)
+        let storedData = defaults.dictionaryRepresentation().values.compactMap { $0 as? Data }
+        XCTAssertFalse(storedData.contains { String(data: $0, encoding: .utf8)?.contains(body) == true })
+
+        var restoredTracker = CommunityCommentRequestTracker(postID: postID, userDefaults: defaults)
+        XCTAssertEqual(
+            restoredTracker.requestID(body: body, parentID: nil, replyID: nil),
+            firstRequestID
+        )
+
+        restoredTracker.complete(requestID: firstRequestID)
+        var completedTracker = CommunityCommentRequestTracker(postID: postID, userDefaults: defaults)
+        XCTAssertNotEqual(
+            completedTracker.requestID(body: body, parentID: nil, replyID: nil),
+            firstRequestID
+        )
+    }
+
     func testPublishCapabilityRequirementsAreMediaSpecific() throws {
         let staleCapabilities = try decodeCapabilities(
-            rpcs: ["create_community_post_v4": true],
+            rpcs: ["create_community_post_v4_idempotent": true],
             edgeFunctions: []
         )
         let textKinds: Set<CommunityPublishMediaKind> = []
@@ -234,7 +282,7 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
     func testPublishCapabilitiesRefreshOnlyWhenCachedValueIsMissingRequirements() async throws {
         let mediaKinds: Set<CommunityPublishMediaKind> = [.attachment]
         let staleCapabilities = try decodeCapabilities(
-            rpcs: ["create_community_post_v4": true],
+            rpcs: ["create_community_post_v4_idempotent": true],
             edgeFunctions: []
         )
         let currentCapabilities = try decodeCapabilities(
@@ -246,7 +294,7 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
             edgeFunctions: CommunityPublishCapabilityRequirements.requiredEdgeFunctions(for: mediaKinds)
         )
 
-        let refreshed = try await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
+        let refreshed = await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
             staleCapabilities,
             mediaKinds: mediaKinds
         ) {
@@ -259,7 +307,7 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
             )
         )
 
-        let preserved = try await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
+        let preserved = await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
             currentCapabilities,
             mediaKinds: mediaKinds
         ) {

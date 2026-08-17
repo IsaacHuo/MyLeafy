@@ -189,7 +189,7 @@ MyLeafy 同时维护两个独立身份：
 - 对象路径按用户或 profile 命名空间隔离。
 - 上传前由客户端进行大小、格式和尺寸处理；服务端策略仍限制路径与权限。
 - 帖子创建时记录准确的预期图片和附件数量。每个对象使用短期、单次验证凭证挂载；只有两类媒体都完整且数量匹配时，帖子才在同一数据库事务中发布。
-- 当前客户端只使用 `create_community_post_v4`、`create_community_comment_v2` 及当前媒体校验链路；不再为旧客户端保留发布与评论兼容入口。
+- 当前客户端使用带 request ID 的 `create_community_post_v4`、`create_community_comment_v2` 重载；服务端按 community actor + request ID 返回首次创建结果。已发布客户端使用的旧参数签名继续可执行，重复的固定 post UUID 返回已有帖子。该兼容边界不恢复已移除的独立 publish RPC，也不改变媒体校验链路。
 - 附件验证扩展名、MIME、文件签名、Markdown UTF-8，以及 DOCX/XLSX 的 OOXML 容器结构；这不是病毒或恶意软件扫描。
 - 附件下载先校验登录、同校范围和帖子可见性，只签发 10 分钟 URL。公开分享页只显示“含附件”，不暴露文件名和地址。
 - 读取通过 signed URL 或受控函数。

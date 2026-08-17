@@ -179,6 +179,22 @@ extension CommunityService {
         parentCommentID: UUID?,
         replyToCommentID: UUID?
     ) async throws -> CommunityComment {
+        try await createComment(
+            postID: postID,
+            body: body,
+            parentCommentID: parentCommentID,
+            replyToCommentID: replyToCommentID,
+            requestID: UUID()
+        )
+    }
+
+    func createComment(
+        postID: UUID,
+        body: String,
+        parentCommentID: UUID?,
+        replyToCommentID: UUID?,
+        requestID: UUID
+    ) async throws -> CommunityComment {
         let normalizedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedBody.isEmpty, normalizedBody.count <= 2_000 else {
             throw CommunityServiceError.edgeFunctionRejected("评论需为 1–2,000 个字符。")
@@ -188,7 +204,7 @@ extension CommunityService {
             throw CommunityServiceError.missingAuthenticatedUser
         }
         try await requireBackendRPC(
-            "create_community_comment_v2",
+            "create_community_comment_v2_idempotent",
             unavailableMessage: "社区服务需要更新后才能发布回复，请稍后重试。"
         )
         let actorProfile = try await requireCompletedCurrentProfile()
@@ -201,6 +217,7 @@ extension CommunityService {
                     "create_community_comment_v2",
                     params: CommunityCreateCommentV2RPCParams(
                         id: UUID(),
+                        requestID: requestID,
                         postID: postID,
                         body: normalizedBody,
                         parentCommentID: parentCommentID,

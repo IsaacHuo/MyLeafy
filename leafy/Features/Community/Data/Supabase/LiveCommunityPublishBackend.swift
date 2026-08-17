@@ -27,6 +27,22 @@ nonisolated struct LiveCommunityPublishBackend: CommunityPublishBackend {
         )
     }
 
+    func createPendingPost(
+        id: UUID,
+        requestID: UUID,
+        input: CreatePostInput,
+        imageCount: Int,
+        attachmentCount: Int
+    ) async throws -> UUID {
+        try await service.createPendingPost(
+            id: id,
+            requestID: requestID,
+            input: input,
+            imageCount: imageCount,
+            attachmentCount: attachmentCount
+        )
+    }
+
     func fetchPost(postID: UUID) async throws -> CommunityPost? {
         try await service.fetchPost(postID: postID)
     }
