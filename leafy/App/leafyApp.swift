@@ -220,7 +220,6 @@ struct LeafyApp: App {
                 refreshScheduleReportNotifications()
             }
         }
-        .environment(\.dynamicTypeSize, displaySizePreference.dynamicTypeSize)
         .environment(\.leafyFontScale, displaySizePreference.fontScale)
         .environment(\.leafyControlScale, displaySizePreference.controlScale)
         .environment(\.leafyThemeColorPreference, themeColorPreference)

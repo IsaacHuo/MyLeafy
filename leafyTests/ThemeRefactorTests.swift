@@ -40,6 +40,27 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(L10n.text(missingKey, language: .enUS), missingKey)
     }
 
+    func testAppPreservesSystemDynamicTypeAndThemeFontsScaleRelatively() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: repositoryRoot.appendingPathComponent("leafy/App/leafyApp.swift"),
+            encoding: .utf8
+        )
+        let themeSource = try String(
+            contentsOf: repositoryRoot.appendingPathComponent("leafy/App/Theme/AppTheme.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(appSource.contains(".environment(\\.dynamicTypeSize"))
+        XCTAssertFalse(themeSource.contains("var dynamicTypeSize: DynamicTypeSize"))
+        XCTAssertTrue(themeSource.contains("ScaledMetric(wrappedValue: baseSize, relativeTo: textStyle)"))
+        XCTAssertTrue(themeSource.contains("scaledBaseSize * leafyFontScale"))
+        XCTAssertTrue(themeSource.contains("relativeTo: .body"))
+        XCTAssertTrue(themeSource.contains("relativeTo: .largeTitle"))
+    }
+
     func testLanguagePreferenceSynchronizesToAppGroupDefaults() {
         let suiteName = "AppLanguagePreferenceTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

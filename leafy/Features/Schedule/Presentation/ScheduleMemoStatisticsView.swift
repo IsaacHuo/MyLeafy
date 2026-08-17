@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 
 struct ScheduleMemoStatisticsView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Query private var memos: [ScheduleMemo]
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
@@ -34,9 +35,9 @@ struct ScheduleMemoStatisticsView: View {
 
                 if statistics.memoCount == 0 {
                     ContentUnavailableView(
-                        "还没有记录日迹",
+                        L10n.text("还没有记录日迹", language: leafyLanguage),
                         systemImage: "chart.bar.xaxis",
-                        description: Text("写下第一条随记后，这里会逐渐形成你的记录频率和习惯。")
+                        description: Text(L10n.text("写下第一条随记后，这里会逐渐形成你的记录频率和习惯。", language: leafyLanguage))
                     )
                     .padding(.vertical, 72)
                 } else {
@@ -55,7 +56,7 @@ struct ScheduleMemoStatisticsView: View {
             .padding(.vertical, AppSpacing.card)
         }
         .background(LeafyPageBackground())
-        .navigationTitle("记录日迹")
+        .navigationTitle(L10n.text("记录日迹", language: leafyLanguage))
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -68,7 +69,7 @@ struct ScheduleMemoStatisticsView: View {
                 }
                 .buttonBorderShape(.circle)
                 .disabled(statistics.memoCount == 0)
-                .accessibilityLabel("导出记录日迹图片")
+                .accessibilityLabel(L10n.text("导出记录日迹图片", language: leafyLanguage))
             }
         }
         .onChange(of: selectedYear) { _, _ in
@@ -85,11 +86,11 @@ struct ScheduleMemoStatisticsView: View {
                 ScheduleMemoDayView(date: selectedDate ?? Date())
             }
         }
-        .alert("无法生成图片", isPresented: Binding(
+        .alert(L10n.text("无法生成图片", language: leafyLanguage), isPresented: Binding(
             get: { shareErrorMessage != nil },
             set: { if !$0 { shareErrorMessage = nil } }
         )) {
-            Button("好", role: .cancel) {}
+            Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
         } message: {
             Text(shareErrorMessage ?? "")
         }
@@ -108,7 +109,7 @@ struct ScheduleMemoStatisticsView: View {
             }
             .buttonStyle(.plain)
             .disabled(previousYear == nil)
-            .accessibilityLabel("上一年")
+            .accessibilityLabel(L10n.text("上一年", language: leafyLanguage))
 
             Menu {
                 ForEach(availableYears, id: \.self) { year in
@@ -116,21 +117,21 @@ struct ScheduleMemoStatisticsView: View {
                         selectedYear = year
                     } label: {
                         if year == selectedYear {
-                            Label("\(year) 年", systemImage: "checkmark")
+                            Label(L10n.text("%@ 年", language: leafyLanguage, String(year)), systemImage: "checkmark")
                         } else {
-                            Text("\(year) 年")
+                            Text(L10n.text("%@ 年", language: leafyLanguage, String(year)))
                         }
                     }
                 }
             } label: {
-                Text("\(selectedYear) 年")
+                Text(L10n.text("%@ 年", language: leafyLanguage, String(selectedYear)))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(AppTheme.primaryText)
                     .frame(minWidth: 116, minHeight: 44)
                     .background(AppTheme.softFill, in: Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("选择统计年份")
+            .accessibilityLabel(L10n.text("选择统计年份", language: leafyLanguage))
 
             Button {
                 guard let nextYear else { return }
@@ -143,7 +144,7 @@ struct ScheduleMemoStatisticsView: View {
             }
             .buttonStyle(.plain)
             .disabled(nextYear == nil)
-            .accessibilityLabel("下一年")
+            .accessibilityLabel(L10n.text("下一年", language: leafyLanguage))
         }
         .frame(maxWidth: .infinity)
     }
@@ -158,30 +159,48 @@ struct ScheduleMemoStatisticsView: View {
 
     private func overviewSection(_ statistics: ScheduleMemoStatistics) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.compact) {
-            LeafySectionTitle("截至今天", subtitle: "当前校园身份下保存在本机的随记")
+            LeafySectionTitle(
+                L10n.text("截至今天", language: leafyLanguage),
+                subtitle: L10n.text("当前校园身份下保存在本机的随记", language: leafyLanguage)
+            )
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible())],
                 spacing: AppSpacing.compact
             ) {
-                overviewMetric("总随记", value: statistics.memoCount, systemImage: "note.text")
-                overviewMetric("记录天数", value: statistics.recordingDayCount, systemImage: "calendar")
-                overviewMetric("连续记录", value: statistics.currentStreak, suffix: "天", systemImage: "flame")
-                overviewMetric("最长连续", value: statistics.longestStreak, suffix: "天", systemImage: "trophy")
+                overviewMetric(
+                    L10n.text("总随记", language: leafyLanguage),
+                    value: L10n.text("%d 条随记", language: leafyLanguage, statistics.memoCount),
+                    systemImage: "note.text"
+                )
+                overviewMetric(
+                    L10n.text("记录天数", language: leafyLanguage),
+                    value: L10n.text("%d 天", language: leafyLanguage, statistics.recordingDayCount),
+                    systemImage: "calendar"
+                )
+                overviewMetric(
+                    L10n.text("连续记录", language: leafyLanguage),
+                    value: L10n.text("%d 天", language: leafyLanguage, statistics.currentStreak),
+                    systemImage: "flame"
+                )
+                overviewMetric(
+                    L10n.text("最长连续", language: leafyLanguage),
+                    value: L10n.text("%d 天", language: leafyLanguage, statistics.longestStreak),
+                    systemImage: "trophy"
+                )
             }
         }
     }
 
     private func overviewMetric(
         _ title: String,
-        value: Int,
-        suffix: String = "",
+        value: String,
         systemImage: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: systemImage)
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
-            Text("\(value)\(suffix)")
+            Text(value)
                 .font(.title2.weight(.bold))
                 .foregroundStyle(AppTheme.primaryText)
                 .contentTransition(.numericText())
@@ -196,16 +215,16 @@ struct ScheduleMemoStatisticsView: View {
             VStack(alignment: .leading, spacing: AppSpacing.compact) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("全年记录频率")
+                        Text(L10n.text("全年记录频率", language: leafyLanguage))
                             .leafyHeadline()
-                        Text("\(selectedYear) 年 1 月至 12 月")
+                        Text(L10n.text("%@ 年 1 月至 12 月", language: leafyLanguage, String(selectedYear)))
                             .microCaption()
                             .foregroundStyle(AppTheme.secondaryText)
                     }
                     Spacer()
-                    Picker("统计指标", selection: $annualMetric) {
+                    Picker(L10n.text("统计指标", language: leafyLanguage), selection: $annualMetric) {
                         ForEach(ScheduleMemoAnnualMetric.allCases) { metric in
-                            Text(metric.title).tag(metric)
+                            Text(metric.title(language: leafyLanguage)).tag(metric)
                         }
                     }
                     .pickerStyle(.menu)
@@ -213,8 +232,8 @@ struct ScheduleMemoStatisticsView: View {
 
                 Chart(statistics.selectedYearMonths) { month in
                     BarMark(
-                        x: .value("月份", month.month),
-                        y: .value(annualMetric.title, annualMetric.value(for: month))
+                        x: .value(L10n.text("月份", language: leafyLanguage), month.month),
+                        y: .value(annualMetric.title(language: leafyLanguage), annualMetric.value(for: month))
                     )
                     .foregroundStyle(
                         month.month == Calendar.current.component(.month, from: Date()) &&
@@ -228,7 +247,7 @@ struct ScheduleMemoStatisticsView: View {
                     AxisMarks(values: statistics.selectedYearMonths.map(\.month)) { value in
                         AxisValueLabel {
                             if let month = value.as(Int.self) {
-                                Text("\(month)月")
+                                Text(L10n.text("%d月", language: leafyLanguage, month))
                                     .font(.caption2)
                             }
                         }
@@ -239,16 +258,26 @@ struct ScheduleMemoStatisticsView: View {
                 }
                 .frame(height: 210)
                 .chartXSelection(value: $selectedMonth)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(L10n.text("全年记录频率", language: leafyLanguage))
+                .accessibilityValue(
+                    ScheduleMemoStatisticsAccessibility.annualSummary(
+                        selectedYear: statistics.selectedYear,
+                        months: statistics.selectedYearMonths,
+                        metric: annualMetric,
+                        language: leafyLanguage
+                    )
+                )
 
                 if let month = selectedMonth,
                    let detail = statistics.selectedYearMonths.first(where: { $0.month == month }) {
-                    Text("\(month) 月 · \(detail.memoCount) 条随记 · 记录 \(detail.recordingDayCount) 天")
+                    Text(ScheduleMemoStatisticsAccessibility.monthSummary(detail, language: leafyLanguage))
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentTransition(.numericText())
                 } else {
-                    Text("点按柱形查看当月记录情况。")
+                    Text(L10n.text("点按柱形查看当月记录情况。", language: leafyLanguage))
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -260,7 +289,7 @@ struct ScheduleMemoStatisticsView: View {
         AcademicDetailCard {
             VStack(alignment: .leading, spacing: AppSpacing.compact) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("近 30 天")
+                    Text(L10n.text("近 30 天", language: leafyLanguage))
                         .leafyHeadline()
                     Text(recentSummary(statistics))
                         .microCaption()
@@ -270,6 +299,7 @@ struct ScheduleMemoStatisticsView: View {
                 ScheduleMemoRecentHeatmap(
                     days: statistics.recent30Days,
                     themeColorPreference: themeColorPreference,
+                    language: leafyLanguage,
                     onSelectDate: { selectedDate = $0 }
                 )
 
@@ -282,33 +312,44 @@ struct ScheduleMemoStatisticsView: View {
 
     private func habitsSection(_ statistics: ScheduleMemoStatistics) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.compact) {
-            LeafySectionTitle("记录习惯", subtitle: habitSummary(statistics))
+            LeafySectionTitle(
+                L10n.text("记录习惯", language: leafyLanguage),
+                subtitle: habitSummary(statistics)
+            )
 
             AcademicDetailCard {
                 VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Text("星期分布")
+                    Text(L10n.text("星期分布", language: leafyLanguage))
                         .leafyHeadline()
                     Chart(weekdayData(statistics)) { item in
                         BarMark(
-                            x: .value("星期", item.name),
-                            y: .value("随记", item.count)
+                            x: .value(L10n.text("星期", language: leafyLanguage), item.name),
+                            y: .value(L10n.text("随记", language: leafyLanguage), item.count)
                         )
                         .foregroundStyle(AppTheme.accent(for: themeColorPreference).opacity(0.72))
                         .cornerRadius(3)
                     }
                     .chartYAxis(.hidden)
                     .frame(height: 128)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.text("星期分布", language: leafyLanguage))
+                    .accessibilityValue(
+                        ScheduleMemoStatisticsAccessibility.weekdaySummary(
+                            counts: statistics.weekdayDistribution,
+                            language: leafyLanguage
+                        )
+                    )
                 }
             }
 
             AcademicDetailCard {
                 VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Text("时间段分布")
+                    Text(L10n.text("时间段分布", language: leafyLanguage))
                         .leafyHeadline()
                     Chart(statistics.timePeriodDistribution) { item in
                         BarMark(
-                            x: .value("随记", item.count),
-                            y: .value("时间段", item.period.title)
+                            x: .value(L10n.text("随记", language: leafyLanguage), item.count),
+                            y: .value(L10n.text("时间段", language: leafyLanguage), item.period.title(language: leafyLanguage))
                         )
                         .foregroundStyle(AppTheme.accent(for: themeColorPreference).opacity(0.72))
                         .cornerRadius(3)
@@ -320,6 +361,14 @@ struct ScheduleMemoStatisticsView: View {
                     }
                     .chartXAxis(.hidden)
                     .frame(height: 180)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.text("时间段分布", language: leafyLanguage))
+                    .accessibilityValue(
+                        ScheduleMemoStatisticsAccessibility.timePeriodSummary(
+                            periods: statistics.timePeriodDistribution,
+                            language: leafyLanguage
+                        )
+                    )
                 }
             }
         }
@@ -328,7 +377,7 @@ struct ScheduleMemoStatisticsView: View {
     private func tagsSection(_ statistics: ScheduleMemoStatistics) -> some View {
         AcademicDetailCard {
             VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                Text("常用标签")
+                Text(L10n.text("常用标签", language: leafyLanguage))
                     .leafyHeadline()
 
                 ForEach(statistics.topTags) { tag in
@@ -363,21 +412,38 @@ struct ScheduleMemoStatisticsView: View {
     private func milestonesSection(_ statistics: ScheduleMemoStatistics) -> some View {
         AcademicDetailCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text("记录里程碑")
+                Text(L10n.text("记录里程碑", language: leafyLanguage))
                     .leafyHeadline()
 
                 if let firstDate = statistics.firstRecordingDate {
-                    milestoneRow("第一次记录", detail: milestoneDateText(firstDate), systemImage: "flag")
+                    milestoneRow(
+                        L10n.text("第一次记录", language: leafyLanguage),
+                        detail: milestoneDateText(firstDate),
+                        systemImage: "flag"
+                    )
                 }
                 if let peakDate = statistics.peakDate {
                     milestoneRow(
-                        "记录最多的一天",
-                        detail: "\(milestoneDateText(peakDate)) · \(statistics.peakMemoCount) 条",
+                        L10n.text("记录最多的一天", language: leafyLanguage),
+                        detail: L10n.text(
+                            "%@ · %d 条随记",
+                            language: leafyLanguage,
+                            milestoneDateText(peakDate),
+                            statistics.peakMemoCount
+                        ),
                         systemImage: "sparkles"
                     )
                 }
-                milestoneRow("最长连续记录", detail: "\(statistics.longestStreak) 天", systemImage: "flame")
-                milestoneRow("有记录的月份", detail: "\(statistics.recordingMonthCount) 个月", systemImage: "calendar.badge.checkmark")
+                milestoneRow(
+                    L10n.text("最长连续记录", language: leafyLanguage),
+                    detail: L10n.text("%d 天", language: leafyLanguage, statistics.longestStreak),
+                    systemImage: "flame"
+                )
+                milestoneRow(
+                    L10n.text("有记录的月份", language: leafyLanguage),
+                    detail: L10n.text("%d 个月", language: leafyLanguage, statistics.recordingMonthCount),
+                    systemImage: "calendar.badge.checkmark"
+                )
             }
         }
     }
@@ -406,7 +472,10 @@ struct ScheduleMemoStatisticsView: View {
     }
 
     private var privacyFooter: some View {
-        Label("统计在本机完成，导出图片只包含汇总数字。", systemImage: "lock.shield")
+        Label(
+            L10n.text("统计在本机完成，导出图片只包含汇总数字。", language: leafyLanguage),
+            systemImage: "lock.shield"
+        )
             .microCaption()
             .foregroundStyle(AppTheme.secondaryText)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -414,34 +483,43 @@ struct ScheduleMemoStatisticsView: View {
     }
 
     private func recentSummary(_ statistics: ScheduleMemoStatistics) -> String {
-        "记录了 \(statistics.recent30DayRecordingDayCount) 天，共 \(statistics.recent30DayMemoCount) 条随记"
+        L10n.text(
+            "记录了 %d 天，共 %d 条随记",
+            language: leafyLanguage,
+            statistics.recent30DayRecordingDayCount,
+            statistics.recent30DayMemoCount
+        )
     }
 
     private func recentComparison(_ statistics: ScheduleMemoStatistics) -> String {
         let difference = statistics.recent30DayMemoCount - statistics.previous30DayMemoCount
         if statistics.previous30DayMemoCount == 0 {
-            return statistics.recent30DayMemoCount == 0 ? "前 30 天和最近 30 天都没有记录。" : "前 30 天暂无记录。"
+            return statistics.recent30DayMemoCount == 0
+                ? L10n.text("前 30 天和最近 30 天都没有记录。", language: leafyLanguage)
+                : L10n.text("前 30 天暂无记录。", language: leafyLanguage)
         }
         if difference == 0 {
-            return "与前 30 天的随记数量相同。"
+            return L10n.text("与前 30 天的随记数量相同。", language: leafyLanguage)
         }
-        return difference > 0 ? "比前 30 天多 \(difference) 条。" : "比前 30 天少 \(-difference) 条。"
+        return difference > 0
+            ? L10n.text("比前 30 天多 %d 条。", language: leafyLanguage, difference)
+            : L10n.text("比前 30 天少 %d 条。", language: leafyLanguage, -difference)
     }
 
     private func habitSummary(_ statistics: ScheduleMemoStatistics) -> String {
         guard let weekdayIndex = statistics.weekdayDistribution.indices.max(by: {
             statistics.weekdayDistribution[$0] < statistics.weekdayDistribution[$1]
         }), statistics.weekdayDistribution[weekdayIndex] > 0 else {
-            return "记录多一些后，这里会显示你的常用时间。"
+            return L10n.text("记录多一些后，这里会显示你的常用时间。", language: leafyLanguage)
         }
-        let weekday = ScheduleMemoWeekday.names[weekdayIndex]
-        let period = statistics.timePeriodDistribution.max(by: { $0.count < $1.count })?.period.title ?? ""
-        return "你最常在\(weekday)的\(period)记录。"
+        let weekday = leafyLanguage.weekdayTitle(for: weekdayIndex + 1)
+        let period = statistics.timePeriodDistribution.max(by: { $0.count < $1.count })?.period.title(language: leafyLanguage) ?? ""
+        return L10n.text("你最常在%@的%@记录。", language: leafyLanguage, weekday, period)
     }
 
     private func weekdayData(_ statistics: ScheduleMemoStatistics) -> [ScheduleMemoNamedCount] {
-        zip(ScheduleMemoWeekday.shortNames, statistics.weekdayDistribution).map {
-            ScheduleMemoNamedCount(name: $0.0, count: $0.1)
+        zip(ScheduleMemoWeekday.shortNames(language: leafyLanguage), statistics.weekdayDistribution).enumerated().map {
+            ScheduleMemoNamedCount(id: "weekday-\($0.offset)", name: $0.element.0, count: $0.element.1)
         }
     }
 
@@ -455,31 +533,36 @@ struct ScheduleMemoStatisticsView: View {
         let content = ScheduleMemoStatisticsShareCard(
             statistics: statistics,
             generatedAt: Date(),
-            themeColorPreference: themeColorPreference
+            themeColorPreference: themeColorPreference,
+            language: leafyLanguage
         )
         .frame(width: 360)
 
         let renderer = ImageRenderer(content: content)
         renderer.scale = 3
         guard let image = renderer.uiImage else {
-            shareErrorMessage = "请稍后重试，或先截图保存当前页面。"
+            shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前页面。", language: leafyLanguage)
             return
         }
         shareItem = ScheduleMemoStatisticsShareItem(image: image)
     }
 }
 
-private enum ScheduleMemoAnnualMetric: String, CaseIterable, Identifiable {
+enum ScheduleMemoAnnualMetric: String, CaseIterable, Identifiable {
     case memoCount
     case recordingDays
 
     var id: String { rawValue }
 
-    var title: String {
+    fileprivate var localizationKey: String {
         switch self {
         case .memoCount: return "随记数"
         case .recordingDays: return "记录天数"
         }
+    }
+
+    func title(language: AppLanguagePreference) -> String {
+        L10n.text(localizationKey, language: language)
     }
 
     func value(for month: ScheduleMemoMonthStatistics) -> Int {
@@ -491,32 +574,126 @@ private enum ScheduleMemoAnnualMetric: String, CaseIterable, Identifiable {
 }
 
 private struct ScheduleMemoNamedCount: Identifiable {
+    let id: String
     let name: String
     let count: Int
-
-    var id: String { name }
 }
 
 private enum ScheduleMemoWeekday {
-    static let names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
-    static let shortNames = ["一", "二", "三", "四", "五", "六", "日"]
+    static func shortNames(language: AppLanguagePreference) -> [String] {
+        (1...7).map { day in
+            let title = language.weekdayTitle(for: day)
+            return language.resolvedLocalization == .zhHans
+                ? String(title.dropFirst())
+                : String(title.prefix(1))
+        }
+    }
 }
 
-private extension ScheduleMemoTimePeriod {
-    var title: String {
+fileprivate extension ScheduleMemoTimePeriod {
+    func title(language: AppLanguagePreference) -> String {
         switch self {
-        case .earlyMorning: return "清晨"
-        case .morning: return "上午"
-        case .afternoon: return "下午"
-        case .evening: return "晚间"
-        case .lateNight: return "深夜"
+        case .earlyMorning: return L10n.text("清晨", language: language)
+        case .morning: return L10n.text("上午", language: language)
+        case .afternoon: return L10n.text("下午", language: language)
+        case .evening: return L10n.text("晚间", language: language)
+        case .lateNight: return L10n.text("深夜", language: language)
         }
+    }
+}
+
+enum ScheduleMemoStatisticsAccessibility {
+    static func annualSummary(
+        selectedYear: Int,
+        months: [ScheduleMemoMonthStatistics],
+        metric: ScheduleMemoAnnualMetric,
+        language: AppLanguagePreference
+    ) -> String {
+        let values = months.map { month in
+            switch metric {
+            case .memoCount:
+                return L10n.text("%d 月 %d 条随记", language: language, month.month, month.memoCount)
+            case .recordingDays:
+                return L10n.text("%d 月记录 %d 天", language: language, month.month, month.recordingDayCount)
+            }
+        }
+        return L10n.text(
+            "%@ 年全年记录频率（%@）：%@",
+            language: language,
+            String(selectedYear),
+            metric.title(language: language),
+            values.joined(separator: L10n.text("、", language: language))
+        )
+    }
+
+    static func monthSummary(
+        _ month: ScheduleMemoMonthStatistics,
+        language: AppLanguagePreference
+    ) -> String {
+        L10n.text(
+            "%d 月 · %d 条随记 · 记录 %d 天",
+            language: language,
+            month.month,
+            month.memoCount,
+            month.recordingDayCount
+        )
+    }
+
+    static func weekdaySummary(
+        counts: [Int],
+        language: AppLanguagePreference
+    ) -> String {
+        let values = counts.enumerated().map { index, count in
+            L10n.text(
+                "%@：%d 条随记",
+                language: language,
+                language.weekdayTitle(for: index + 1),
+                count
+            )
+        }
+        return L10n.text(
+            "星期分布：%@",
+            language: language,
+            values.joined(separator: L10n.text("、", language: language))
+        )
+    }
+
+    static func timePeriodSummary(
+        periods: [ScheduleMemoTimePeriodFrequency],
+        language: AppLanguagePreference
+    ) -> String {
+        let values = periods.map { period in
+            L10n.text(
+                "%@：%d 条随记",
+                language: language,
+                period.period.title(language: language),
+                period.count
+            )
+        }
+        return L10n.text(
+            "时间段分布：%@",
+            language: language,
+            values.joined(separator: L10n.text("、", language: language))
+        )
+    }
+
+    static func heatmapSummary(
+        days: [ScheduleMemoActivityDay],
+        language: AppLanguagePreference
+    ) -> String {
+        L10n.text(
+            "近 30 天热力图：%d 条随记，%d 天有记录。",
+            language: language,
+            days.reduce(0) { $0 + $1.count },
+            days.filter { $0.count > 0 }.count
+        )
     }
 }
 
 private struct ScheduleMemoRecentHeatmap: View {
     let days: [ScheduleMemoActivityDay]
     let themeColorPreference: AppThemeColorPreference
+    let language: AppLanguagePreference
     let onSelectDate: (Date) -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
@@ -531,7 +708,7 @@ private struct ScheduleMemoRecentHeatmap: View {
     var body: some View {
         VStack(spacing: 7) {
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(ScheduleMemoWeekday.shortNames, id: \.self) { weekday in
+                ForEach(Array(ScheduleMemoWeekday.shortNames(language: language).enumerated()), id: \.offset) { _, weekday in
                     Text(weekday)
                         .font(.caption2)
                         .foregroundStyle(AppTheme.tertiaryText)
@@ -552,7 +729,20 @@ private struct ScheduleMemoRecentHeatmap: View {
                                 }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(day.date.formatted(date: .long, time: .omitted))，\(day.count) 条随记")
+                        .accessibilityLabel(
+                            L10n.text(
+                                "%@，%d 条随记",
+                                language: language,
+                                day.date.formatted(
+                                    Date.FormatStyle.dateTime
+                                        .year()
+                                        .month(.wide)
+                                        .day()
+                                        .locale(language.locale)
+                                ),
+                                day.count
+                            )
+                        )
                     } else {
                         Color.clear
                             .aspectRatio(1, contentMode: .fit)
@@ -560,6 +750,11 @@ private struct ScheduleMemoRecentHeatmap: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L10n.text("近 30 天", language: language))
+        .accessibilityValue(
+            ScheduleMemoStatisticsAccessibility.heatmapSummary(days: days, language: language)
+        )
     }
 
     private func activityColor(_ count: Int) -> Color {
@@ -580,6 +775,7 @@ private struct ScheduleMemoStatisticsShareItem: Identifiable {
 
 private struct ScheduleMemoStatisticsSharePreview: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.leafyLanguage) private var leafyLanguage
     let item: ScheduleMemoStatisticsShareItem
     @State private var showsSystemShare = false
 
@@ -593,17 +789,17 @@ private struct ScheduleMemoStatisticsSharePreview: View {
                     .padding(AppSpacing.page)
             }
             .background(LeafyPageBackground())
-            .navigationTitle("记录日迹图片")
+            .navigationTitle(L10n.text("记录日迹图片", language: leafyLanguage))
             .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") { dismiss() }
+                    Button(L10n.text("完成", language: leafyLanguage)) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         showsSystemShare = true
                     } label: {
-                        Label("分享", systemImage: "square.and.arrow.up")
+                        Label(L10n.text("分享", language: leafyLanguage), systemImage: "square.and.arrow.up")
                     }
                 }
             }
@@ -618,6 +814,7 @@ private struct ScheduleMemoStatisticsShareCard: View {
     let statistics: ScheduleMemoStatistics
     let generatedAt: Date
     let themeColorPreference: AppThemeColorPreference
+    let language: AppLanguagePreference
 
     private let monthColumns = Array(repeating: GridItem(.flexible(), spacing: 5), count: 12)
     private let heatmapColumns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 10)
@@ -626,10 +823,10 @@ private struct ScheduleMemoStatisticsShareCard: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("记录日迹")
+                    Text(L10n.text("记录日迹", language: language))
                         .font(.title2.weight(.bold))
                         .foregroundStyle(AppTheme.primaryText)
-                    Text("\(statistics.selectedYear) 年 · MyLeafy")
+                    Text(L10n.text("%@ 年 · %@", language: language, String(statistics.selectedYear), AppBrand.displayName))
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -640,18 +837,27 @@ private struct ScheduleMemoStatisticsShareCard: View {
             }
 
             HStack(spacing: 8) {
-                shareMetric("本年随记", selectedYearMemoCount)
-                shareMetric("本年记录天数", selectedYearRecordingDayCount)
-                shareMetric("历史最长连续", statistics.longestStreak, suffix: "天")
+                shareMetric(
+                    L10n.text("本年随记", language: language),
+                    value: String(selectedYearMemoCount)
+                )
+                shareMetric(
+                    L10n.text("本年记录天数", language: language),
+                    value: L10n.text("%d 天", language: language, selectedYearRecordingDayCount)
+                )
+                shareMetric(
+                    L10n.text("历史最长连续", language: language),
+                    value: L10n.text("%d 天", language: language, statistics.longestStreak)
+                )
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("全年频率")
+                Text(L10n.text("全年频率", language: language))
                     .font(.headline)
                 Chart(statistics.selectedYearMonths) { month in
                     BarMark(
-                        x: .value("月份", month.month),
-                        y: .value("随记", month.memoCount)
+                        x: .value(L10n.text("月份", language: language), month.month),
+                        y: .value(L10n.text("随记", language: language), month.memoCount)
                     )
                     .foregroundStyle(AppTheme.accent(for: themeColorPreference).opacity(0.72))
                     .cornerRadius(3)
@@ -660,7 +866,7 @@ private struct ScheduleMemoStatisticsShareCard: View {
                     AxisMarks(values: [1, 3, 5, 7, 9, 11]) { value in
                         AxisValueLabel {
                             if let month = value.as(Int.self) {
-                                Text("\(month)月").font(.caption2)
+                                Text(L10n.text("%d月", language: language, month)).font(.caption2)
                             }
                         }
                     }
@@ -673,10 +879,17 @@ private struct ScheduleMemoStatisticsShareCard: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("当前近 30 天")
+                    Text(L10n.text("当前近 30 天", language: language))
                         .font(.headline)
                     Spacer()
-                    Text("\(statistics.recent30DayMemoCount) 条 · \(statistics.recent30DayRecordingDayCount) 天")
+                    Text(
+                        L10n.text(
+                            "%d 条 · %d 天",
+                            language: language,
+                            statistics.recent30DayMemoCount,
+                            statistics.recent30DayRecordingDayCount
+                        )
+                    )
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -693,12 +906,26 @@ private struct ScheduleMemoStatisticsShareCard: View {
 
             HStack(spacing: 10) {
                 Image(systemName: "lock.shield")
-                Text("图片只包含本机汇总统计，不包含随记正文和标签名称。")
+                Text(L10n.text("图片只包含本机汇总统计，不包含随记正文和标签名称。", language: language))
             }
             .font(.caption)
             .foregroundStyle(AppTheme.secondaryText)
 
-            Text("生成于 \(generatedAt.formatted(date: .abbreviated, time: .shortened))")
+            Text(
+                L10n.text(
+                    "生成于 %@",
+                    language: language,
+                    generatedAt.formatted(
+                        Date.FormatStyle.dateTime
+                            .year()
+                            .month(.abbreviated)
+                            .day()
+                            .hour()
+                            .minute()
+                            .locale(language.locale)
+                    )
+                )
+            )
                 .font(.caption2)
                 .foregroundStyle(AppTheme.tertiaryText)
         }
@@ -714,9 +941,9 @@ private struct ScheduleMemoStatisticsShareCard: View {
         statistics.selectedYearMonths.reduce(0) { $0 + $1.recordingDayCount }
     }
 
-    private func shareMetric(_ title: String, _ value: Int, suffix: String = "") -> some View {
+    private func shareMetric(_ title: String, value: String) -> some View {
         VStack(spacing: 4) {
-            Text("\(value)\(suffix)")
+            Text(value)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(AppTheme.primaryText)
             Text(title)

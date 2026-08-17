@@ -43,9 +43,25 @@ enum SchedulePrimaryContentPresentation: Equatable {
     case daytraceRoot
 }
 
+enum ScheduleRootTopBarLayout: Equatable {
+    case regular
+    case combinedActions
+    case stacked
+
+    static func resolve(viewportWidth: CGFloat, usesAccessibilitySizes: Bool) -> Self {
+        if usesAccessibilitySizes {
+            return .stacked
+        }
+        return viewportWidth <= 350 ? .combinedActions : .regular
+    }
+
+}
+
 struct ScheduleRootView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var scaledPickerHeight = LeafyRootChromeMetrics.controlDiameter
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @State private var compactPath: [ScheduleDestination] = []
     @State private var primarySection: SchedulePrimarySection = .memos
@@ -91,51 +107,72 @@ struct ScheduleRootView: View {
 
     private var primaryView: some View {
         ZStack {
-            primaryLayer(.memos) {
-                ScheduleMemoFeedView(presentation: .daytraceRoot)
-            }
+            ScheduleMemoFeedView(presentation: .daytraceRoot)
+                .opacity(primarySection == .memos ? 1 : 0)
+                .allowsHitTesting(primarySection == .memos)
+                .accessibilityHidden(primarySection != .memos)
 
-            primaryLayer(.schedules) {
+            if primarySection == .schedules {
                 CustomScheduleListView(presentation: .daytraceRoot)
-            }
-
-            primaryLayer(.reports) {
+                    .transition(.opacity)
+            } else if primarySection == .reports {
                 ScheduleReportsView(presentation: .daytraceRoot)
+                    .transition(.opacity)
             }
         }
-        .background(LeafyPageBackground())
-    }
-
-    private func primaryLayer<Content: View>(
-        _ section: SchedulePrimarySection,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        let isSelected = primarySection == section
-        return content()
-            .opacity(isSelected ? 1 : 0)
-            .allowsHitTesting(isSelected)
-            .accessibilityHidden(!isSelected)
-            .zIndex(isSelected ? 1 : 0)
-            .animation(.easeInOut(duration: 0.32), value: isSelected)
     }
 
     private var rootTopBar: some View {
-        HStack(spacing: AppSpacing.compact) {
-            rootMenuButton
-            Spacer(minLength: 0)
-            rootSectionPicker
-            Spacer(minLength: 0)
-            rootNewScheduleButton
+        GeometryReader { geometry in
+            let layout = ScheduleRootTopBarLayout.resolve(
+                viewportWidth: geometry.size.width,
+                usesAccessibilitySizes: dynamicTypeSize.isAccessibilitySize
+            )
+
+            Group {
+                switch layout {
+                case .regular:
+                    HStack(spacing: AppSpacing.compact) {
+                        rootMenuButton
+                        Spacer(minLength: 0)
+                        rootSectionPicker(expands: false, usesCompactLabels: false)
+                        Spacer(minLength: 0)
+                        rootNewScheduleButton
+                    }
+                case .combinedActions:
+                    HStack(spacing: AppSpacing.compact) {
+                        rootCombinedActionsMenu
+                        rootSectionPicker(expands: true, usesCompactLabels: true)
+                    }
+                case .stacked:
+                    VStack(spacing: AppSpacing.compact) {
+                        HStack {
+                            rootMenuButton
+                            Spacer()
+                            rootNewScheduleButton
+                        }
+                        rootSectionPicker(expands: true, usesCompactLabels: false)
+                    }
+                }
+            }
+            .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
-        .frame(height: LeafyRootChromeMetrics.controlDiameter)
+        .frame(height: rootTopBarHeight)
+    }
+
+    private var rootTopBarHeight: CGFloat {
+        guard dynamicTypeSize.isAccessibilitySize else {
+            return LeafyRootChromeMetrics.controlDiameter
+        }
+        return LeafyRootChromeMetrics.controlDiameter
+            + AppSpacing.compact
+            + max(scaledPickerHeight, LeafyRootChromeMetrics.controlDiameter)
     }
 
     private var rootMenuButton: some View {
         LeafyRootCircularToolbarButton(
             systemName: "line.3.horizontal",
-            accessibilityLabel: "打开日迹记录菜单"
+            accessibilityLabel: L10n.text("打开日迹记录菜单", language: leafyLanguage)
         ) {
             showsMenu = true
         }
@@ -144,21 +181,48 @@ struct ScheduleRootView: View {
     private var rootNewScheduleButton: some View {
         LeafyRootCircularToolbarButton(
             systemName: "plus",
-            accessibilityLabel: "添加自定日程"
+            accessibilityLabel: L10n.text("添加自定日程", language: leafyLanguage)
         ) {
-            newSchedulePresentation = .importantDate(
-                nil,
-                defaultContext: CustomScheduleDefaultContext.make(),
-                allowsModeSelection: true
-            )
+            presentNewSchedule()
         }
     }
 
-    private var rootSectionPicker: some View {
-        primarySectionButtons
+    private var rootCombinedActionsMenu: some View {
+        Menu {
+            Button(
+                L10n.text("打开日迹记录菜单", language: leafyLanguage),
+                systemImage: "line.3.horizontal"
+            ) {
+                showsMenu = true
+            }
+            Button(
+                L10n.text("添加自定日程", language: leafyLanguage),
+                systemImage: "calendar.badge.plus"
+            ) {
+                presentNewSchedule()
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: LeafyRootChromeMetrics.iconPointSize, weight: .semibold))
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                .frame(
+                    width: LeafyRootChromeMetrics.controlDiameter,
+                    height: LeafyRootChromeMetrics.controlDiameter
+                )
+                .contentShape(Circle())
+                .leafyGlassSurface(in: Circle(), isInteractive: true)
+        }
+        .accessibilityLabel(L10n.text("日迹操作", language: leafyLanguage))
+    }
+
+    private func rootSectionPicker(expands: Bool, usesCompactLabels: Bool) -> some View {
+        primarySectionButtons(expands: expands, usesCompactLabels: usesCompactLabels)
             .padding(4)
-            .frame(maxWidth: 236)
-            .frame(height: LeafyRootChromeMetrics.controlDiameter)
+            .fixedSize(horizontal: !expands, vertical: false)
+            .frame(maxWidth: expands ? .infinity : nil)
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize
+                ? max(scaledPickerHeight, LeafyRootChromeMetrics.controlDiameter)
+                : LeafyRootChromeMetrics.controlDiameter)
             .leafyGlassSurface(
                 in: Capsule(),
                 fallbackFill: Color(uiColor: .secondarySystemBackground),
@@ -167,7 +231,7 @@ struct ScheduleRootView: View {
             .layoutPriority(1)
     }
 
-    private var primarySectionButtons: some View {
+    private func primarySectionButtons(expands: Bool, usesCompactLabels: Bool) -> some View {
         HStack(spacing: 0) {
             ForEach(SchedulePrimarySection.allCases) { section in
                 Button {
@@ -182,6 +246,10 @@ struct ScheduleRootView: View {
                                 ? AppTheme.accentEmphasis(for: themeColorPreference)
                                 : AppTheme.primaryText
                         )
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+                        .minimumScaleFactor(usesCompactLabels ? 0.85 : 1)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, usesCompactLabels ? 4 : 8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
@@ -190,6 +258,14 @@ struct ScheduleRootView: View {
                 .accessibilityAddTraits(primarySection == section ? .isSelected : [])
             }
         }
+    }
+
+    private func presentNewSchedule() {
+        newSchedulePresentation = .importantDate(
+            nil,
+            defaultContext: CustomScheduleDefaultContext.make(),
+            allowsModeSelection: true
+        )
     }
 
     @ViewBuilder
@@ -347,6 +423,26 @@ private enum ScheduleMemoFilter: String, CaseIterable, Identifiable {
     }
 }
 
+struct ScheduleMemoMediaIndex {
+    let imagesByMemoID: [UUID: [ScheduleMemoImage]]
+    let attachmentsByMemoID: [UUID: [ScheduleMemoAttachment]]
+    let audioByMemoID: [UUID: ScheduleMemoAudio]
+
+    init(
+        images: [ScheduleMemoImage],
+        attachments: [ScheduleMemoAttachment],
+        audioRecords: [ScheduleMemoAudio]
+    ) {
+        imagesByMemoID = Dictionary(grouping: images, by: \.memoID).mapValues {
+            $0.sorted { $0.sortOrder < $1.sortOrder }
+        }
+        attachmentsByMemoID = Dictionary(grouping: attachments, by: \.memoID).mapValues {
+            $0.sorted { $0.sortOrder < $1.sortOrder }
+        }
+        audioByMemoID = Dictionary(grouping: audioRecords, by: \.memoID).compactMapValues(\.first)
+    }
+}
+
 struct ScheduleMemoFeedView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
@@ -388,7 +484,7 @@ struct ScheduleMemoFeedView: View {
         _selectedTag = State(initialValue: initialTag)
     }
 
-    private var visibleMemos: [ScheduleMemo] {
+    private func visibleMemos(using mediaIndex: ScheduleMemoMediaIndex) -> [ScheduleMemo] {
         let byID = Dictionary(uniqueKeysWithValues: memos.map { ($0.id, $0) })
         let records = memos.map { memo in
             ScheduleMemoSearchRecord(
@@ -396,14 +492,13 @@ struct ScheduleMemoFeedView: View {
                 title: memo.title ?? "",
                 body: memo.body,
                 tags: memo.tags,
-                attachmentNames: attachments.lazy
-                    .filter { $0.memoID == memo.id }
+                attachmentNames: mediaIndex.attachmentsByMemoID[memo.id, default: []]
                     .map(\.originalFilename),
                 createdAt: memo.createdAt,
                 updatedAt: memo.updatedAt,
                 pinnedAt: memo.pinnedAt,
                 isTrashed: memo.isTrashed,
-                imageCount: images.lazy.filter { $0.memoID == memo.id }.count,
+                imageCount: mediaIndex.imagesByMemoID[memo.id, default: []].count,
                 isLinked: memo.linkedScheduleKind != nil && memo.linkedScheduleID != nil
             )
         }
@@ -418,7 +513,12 @@ struct ScheduleMemoFeedView: View {
     }
 
     var body: some View {
-        configuredFeed
+        let mediaIndex = ScheduleMemoMediaIndex(
+            images: images,
+            attachments: attachments,
+            audioRecords: audioRecords
+        )
+        configuredFeed(using: mediaIndex)
         .leafySheet(item: $editingMemo) { memo in
             if memo.kind == .audio {
                 ScheduleMemoEditorView(memo: memo)
@@ -453,9 +553,9 @@ struct ScheduleMemoFeedView: View {
             if let detailMemo {
                 ScheduleMemoDetailView(
                     memo: detailMemo,
-                    images: memoImages(for: detailMemo),
-                    attachments: memoAttachments(for: detailMemo),
-                    audio: memoAudio(for: detailMemo),
+                    images: mediaIndex.imagesByMemoID[detailMemo.id, default: []],
+                    attachments: mediaIndex.attachmentsByMemoID[detailMemo.id, default: []],
+                    audio: mediaIndex.audioByMemoID[detailMemo.id],
                     audioPlayback: audioPlayback,
                     linkedSchedule: linkedSchedule(for: detailMemo),
                     onEdit: { editingMemo = detailMemo },
@@ -517,11 +617,11 @@ struct ScheduleMemoFeedView: View {
     }
 
     @ViewBuilder
-    private var configuredFeed: some View {
+    private func configuredFeed(using mediaIndex: ScheduleMemoMediaIndex) -> some View {
         if presentation == .daytraceRoot {
-            daytraceRootFeed
+            daytraceRootFeed(using: mediaIndex)
         } else {
-            memoScrollView
+            memoScrollView(using: mediaIndex)
                 .background(LeafyPageBackground())
                 .searchable(
                     text: $searchText,
@@ -540,13 +640,13 @@ struct ScheduleMemoFeedView: View {
     }
 
     @ViewBuilder
-    private var daytraceRootFeed: some View {
-        memoScrollView
+    private func daytraceRootFeed(using mediaIndex: ScheduleMemoMediaIndex) -> some View {
+        memoScrollView(using: mediaIndex)
             .background(LeafyPageBackground())
             .scheduleMemoComposerOverlay(height: $composerHeight)
     }
 
-    private var memoScrollView: some View {
+    private func memoScrollView(using mediaIndex: ScheduleMemoMediaIndex) -> some View {
         GeometryReader { viewport in
             ScrollView {
                 VStack(spacing: 0) {
@@ -581,7 +681,7 @@ struct ScheduleMemoFeedView: View {
                             .id(ScheduleMemoFeedAnchor.cardsStart)
                     }
 
-                    memoCards
+                    memoCards(using: mediaIndex)
                         .leafyAdaptiveContentWidth(maxWidth: 760)
                 }
                 .scrollTargetLayout()
@@ -634,8 +734,9 @@ struct ScheduleMemoFeedView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
-    private var memoCards: some View {
-        LazyVStack(spacing: AppSpacing.card) {
+    private func memoCards(using mediaIndex: ScheduleMemoMediaIndex) -> some View {
+        let visibleMemos = visibleMemos(using: mediaIndex)
+        return LazyVStack(spacing: AppSpacing.card) {
             filterSummary
             if visibleMemos.isEmpty {
                 ContentUnavailableView(
@@ -648,9 +749,9 @@ struct ScheduleMemoFeedView: View {
                 ForEach(visibleMemos) { memo in
                     ScheduleMemoCard(
                         memo: memo,
-                        images: memoImages(for: memo),
-                        attachments: memoAttachments(for: memo),
-                        audio: memoAudio(for: memo),
+                        images: mediaIndex.imagesByMemoID[memo.id, default: []],
+                        attachments: mediaIndex.attachmentsByMemoID[memo.id, default: []],
+                        audio: mediaIndex.audioByMemoID[memo.id],
                         audioPlayback: audioPlayback,
                         linkedSchedule: linkedSchedule(for: memo),
                         onOpen: { detailMemo = memo },
@@ -1228,7 +1329,7 @@ private struct ScheduleMemoAttachmentRow: View {
                 .foregroundStyle(AppTheme.accent)
             Text(attachment.originalFilename)
                 .font(.subheadline)
-                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(AppTheme.primaryText)
             Spacer(minLength: 6)
             if isInteractive {

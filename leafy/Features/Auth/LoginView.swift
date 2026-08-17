@@ -214,23 +214,27 @@ struct LoginView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(loginEntryTitle(for: campus))
-                .accessibilityValue(campus.id == selectedCampusID ? "已选择" : "未选择")
+                .accessibilityValue(
+                    campus.id == selectedCampusID
+                        ? L10n.text("已选择", language: leafyLanguage)
+                        : L10n.text("未选择", language: leafyLanguage)
+                )
             }
         }
     }
 
     private func loginEntryTitle(for campus: CampusDescriptor) -> String {
         if campus.connectorKind == .custom {
-            return "通用入口"
+            return L10n.text("通用入口", language: leafyLanguage)
         }
         return campus.displayName
     }
 
     private func loginEntrySubtitle(for campus: CampusDescriptor) -> String {
         if campus.connectorKind == .custom {
-            return "通用入口，不连接教务系统，进入 App 后手动导入数据。"
+            return L10n.text("通用入口，不连接教务系统，进入 App 后手动导入数据。", language: leafyLanguage)
         }
-        return "已接入教务系统，可使用校园账号登录。"
+        return L10n.text("已接入教务系统，可使用校园账号登录。", language: leafyLanguage)
     }
 
     private func loginEntryIcon(for campus: CampusDescriptor) -> String {
@@ -239,26 +243,33 @@ struct LoginView: View {
 
     private var customAuthModePicker: some View {
         VStack(spacing: 8) {
-            Picker("账号操作", selection: $customAuthMode) {
+            Picker(L10n.text("账号操作", language: leafyLanguage), selection: $customAuthMode) {
                 ForEach(CustomAuthMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+                    Text(L10n.text(mode.title, language: leafyLanguage)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
 
-            Text(customAuthMode.hint)
+            Text(L10n.text(customAuthMode.hint, language: leafyLanguage))
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if customAuthMode == .signUp, let customSignUpCodeEmail {
-                Label("验证码已发送到 \(customSignUpCodeEmail)。国内邮箱可能需要等待数分钟，请也检查垃圾箱。", systemImage: "envelope.badge")
+                Label(
+                    L10n.text(
+                        "验证码已发送到 %@。国内邮箱可能需要等待数分钟，请也检查垃圾箱。",
+                        language: leafyLanguage,
+                        customSignUpCodeEmail
+                    ),
+                    systemImage: "envelope.badge"
+                )
                     .microCaption()
                     .foregroundStyle(AppTheme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Text("通用入口不会连接教务系统；课表、成绩和考试安排进入 App 后手动导入，学校社区在社区页申请。")
+            Text(L10n.text("通用入口不会连接教务系统；课表、成绩和考试安排进入 App 后手动导入，学校社区在社区页申请。", language: leafyLanguage))
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -523,9 +534,11 @@ struct LoginView: View {
 
     private var customSignUpCodeButtonTitle: String {
         if customSignUpCodeCooldownRemaining > 0 {
-            return "\(customSignUpCodeCooldownRemaining) 秒后重发"
+            return L10n.text("%d 秒后重发", language: leafyLanguage, customSignUpCodeCooldownRemaining)
         }
-        return customSignUpCodeEmail == nil ? "发送验证码" : "重发验证码"
+        return customSignUpCodeEmail == nil
+            ? L10n.text("发送验证码", language: leafyLanguage)
+            : L10n.text("重发验证码", language: leafyLanguage)
     }
 
     @MainActor
@@ -704,7 +717,7 @@ struct LoginView: View {
         } catch {
             await MainActor.run {
                 isLoggingIn = false
-                alertMessage = error.localizedDescription
+                alertMessage = loginErrorMessage(for: error)
                 showAlert = true
                 captchaCode = ""
             }
@@ -767,17 +780,33 @@ struct LoginView: View {
                 customSignUpCodePassword = credentials.password
                 isSendingCustomSignUpCode = false
                 customSignUpCode = ""
-                alertMessage = "验证码已发送到 \(credentials.email)。国内邮箱可能需要数分钟，请也检查垃圾箱。"
+                alertMessage = L10n.text(
+                    "验证码已发送到 %@。国内邮箱可能需要等待数分钟，请也检查垃圾箱。",
+                    language: leafyLanguage,
+                    credentials.email
+                )
                 showAlert = true
                 startCustomSignUpCodeCooldown()
             }
         } catch {
             await MainActor.run {
                 isSendingCustomSignUpCode = false
-                alertMessage = error.localizedDescription
+                alertMessage = loginErrorMessage(for: error)
                 showAlert = true
             }
         }
+    }
+
+    private func loginErrorMessage(for error: Error) -> String {
+        if error is SchoolNetworkError || error is CustomCampusAuthError {
+            return L10n.text(error.localizedDescription, language: leafyLanguage)
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return L10n.text("网络连接失败，请检查网络后重试。", language: leafyLanguage)
+        }
+        return L10n.text("登录失败，请稍后重试。", language: leafyLanguage)
     }
 
     @MainActor

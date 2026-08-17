@@ -22,19 +22,6 @@ enum AppDisplaySizePreference: String, CaseIterable, Identifiable {
         }
     }
 
-    var dynamicTypeSize: DynamicTypeSize {
-        switch self {
-        case .compact:
-            return .xSmall
-        case .standard:
-            return .small
-        case .comfortable:
-            return .medium
-        case .spacious:
-            return .large
-        }
-    }
-
     var fontScale: CGFloat {
         switch self {
         case .compact:
@@ -578,51 +565,62 @@ extension EnvironmentValues {
 // MARK: - Typography
 extension View {
     func leafyBrandLargeTitle() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 32, weight: .bold))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 32, relativeTo: .largeTitle, weight: .bold))
     }
 
     func responsiveLargeTitle() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 32, weight: .bold))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 32, relativeTo: .largeTitle, weight: .bold))
     }
 
     func title1() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 26, weight: .semibold))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 26, relativeTo: .title, weight: .semibold))
     }
 
     func title2() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 20, weight: .semibold))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 20, relativeTo: .title2, weight: .semibold))
     }
 
     func leafyBody() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 16, weight: .regular))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 16, relativeTo: .body, weight: .regular))
     }
 
     func leafyHeadline() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 16, weight: .semibold))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 16, relativeTo: .headline, weight: .semibold))
     }
 
     func leafySubheadline() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 14, weight: .regular))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 14, relativeTo: .subheadline, weight: .regular))
     }
 
     func leafyTitle3() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 18, weight: .semibold))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 18, relativeTo: .title3, weight: .semibold))
     }
 
     func microCaption() -> some View {
-        modifier(LeafyScaledSystemFontModifier(baseSize: 11, weight: .regular))
+        modifier(LeafyScaledSystemFontModifier(baseSize: 11, relativeTo: .caption2, weight: .regular))
             .lineSpacing(2)
     }
 }
 
 private struct LeafyScaledSystemFontModifier: ViewModifier {
     @Environment(\.leafyFontScale) private var leafyFontScale
+    @ScaledMetric private var scaledBaseSize: CGFloat
 
-    let baseSize: CGFloat
     let weight: Font.Weight
-    var design: Font.Design = .default
+    let design: Font.Design
+
+    init(
+        baseSize: CGFloat,
+        relativeTo textStyle: Font.TextStyle,
+        weight: Font.Weight,
+        design: Font.Design = .default
+    ) {
+        self._scaledBaseSize = ScaledMetric(wrappedValue: baseSize, relativeTo: textStyle)
+        self.weight = weight
+        self.design = design
+    }
 
     func body(content: Content) -> some View {
-        content.font(.system(size: baseSize * leafyFontScale, weight: weight, design: design))
+        content.font(.system(size: scaledBaseSize * leafyFontScale, weight: weight, design: design))
     }
 }

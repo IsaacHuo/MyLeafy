@@ -190,25 +190,27 @@ struct AcademicHubView: View {
     }
 
     private var academicSidebar: some View {
-        VStack(spacing: 4 * leafyControlScale) {
-            ForEach(visibleAcademicTabs) { tab in
-                Button {
-                    selectAcademicTab(tab)
-                } label: {
-                    AcademicSidebarTabItem(
-                        tab: tab,
-                        isSelected: selectedTab == tab,
-                        language: leafyLanguage,
-                        themeColorPreference: themeColorPreference
-                    )
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 4 * leafyControlScale) {
+                ForEach(visibleAcademicTabs) { tab in
+                    Button {
+                        selectAcademicTab(tab)
+                    } label: {
+                        AcademicSidebarTabItem(
+                            tab: tab,
+                            isSelected: selectedTab == tab,
+                            language: leafyLanguage,
+                            themeColorPreference: themeColorPreference
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                    .accessibilityLabel(tab.title(language: leafyLanguage))
+                    .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
-                .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
-                .accessibilityLabel(tab.title(language: leafyLanguage))
-                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
             }
+            .padding(8 * leafyControlScale)
         }
-        .padding(8 * leafyControlScale)
         .frame(width: academicSidebarWidth, alignment: .top)
         .leafyGlassSurface(
             in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
@@ -220,7 +222,7 @@ struct AcademicHubView: View {
     }
 
     private var academicSidebarWidth: CGFloat {
-        78 * leafyControlScale
+        min(max(74 * leafyControlScale, 72), 92)
     }
 
     @MainActor
@@ -385,11 +387,12 @@ private struct AcademicSidebarTabItem: View {
             Text(tab.compactTitle(language: language))
                 .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
                 .foregroundStyle(AppTheme.primaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 54 * leafyControlScale)
+        .frame(minHeight: 54 * leafyControlScale)
         .background(
             isSelected ? AppTheme.accent(for: themeColorPreference).opacity(0.12) : Color.clear,
             in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)

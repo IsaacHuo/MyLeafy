@@ -39,11 +39,30 @@ final class PerformanceProjectionTests: XCTestCase {
         XCTAssertEqual(columns.right, ["post-0", "post-2"])
     }
 
-    func testCompactTimestampFormatterKeepsExistingFeedFormat() throws {
+    func testCompactTimestampFormatterUsesRequestedLocale() throws {
         let calendar = Calendar.current
         let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 7, day: 22, hour: 9, minute: 5)))
 
-        XCTAssertEqual(CommunityCompactTimestampFormatter.string(from: date), "7/22 09:05")
+        let chinese = CommunityCompactTimestampFormatter.string(
+            from: date,
+            locale: Locale(identifier: "zh-Hans")
+        )
+        let english = CommunityCompactTimestampFormatter.string(
+            from: date,
+            locale: Locale(identifier: "en-US")
+        )
+
+        XCTAssertEqual(chinese, "7/22 09:05")
+        XCTAssertTrue(english.contains("7/22"))
+        XCTAssertTrue(english.contains("AM"))
+        XCTAssertNotEqual(chinese, english)
+    }
+
+    func testMasonryFavoriteAccessibilityTextIsLocalizedForEachState() {
+        XCTAssertEqual(L10n.text("收藏", language: .enUS), "Favorite")
+        XCTAssertEqual(L10n.text("取消收藏", language: .enUS), "Cancel collection")
+        XCTAssertEqual(L10n.text("未选择", language: .enUS), "Not selected")
+        XCTAssertEqual(L10n.text("已选择", language: .enUS), "Selected")
     }
 
     @MainActor

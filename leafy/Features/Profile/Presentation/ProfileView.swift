@@ -85,7 +85,10 @@ struct ProfileView: View {
                     if isCommunityEnabled {
                         TimetableSharingView(initialInviteCode: pendingTimetableInviteCode)
                     } else {
-                        ContentUnavailableView("当前入口暂不支持共享课表", systemImage: "person.2.slash")
+                        ContentUnavailableView(
+                            L10n.text("当前入口暂不支持共享课表", language: leafyLanguage),
+                            systemImage: "person.2.slash"
+                        )
                     }
                 case .cacheSync:
                     CacheAndSyncView()
@@ -113,54 +116,54 @@ struct ProfileView: View {
                 Button(logoutButtonTitle, role: .destructive) {
                     AppSessionResetter.returnToLogin(modelContext: modelContext)
                 }
-                Button("取消", role: .cancel) {}
+                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
             } message: {
                 Text(logoutConfirmationMessage)
             }
             .confirmationDialog(
-                "删除 MyLeafy 账户？",
+                L10n.text("删除 MyLeafy 账户？", language: leafyLanguage),
                 isPresented: $showingDeleteAccountConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("继续删除", role: .destructive) {
+                Button(L10n.text("继续删除", language: leafyLanguage), role: .destructive) {
                     showingFinalDeleteAccountConfirmation = true
                 }
-                Button("取消", role: .cancel) {}
+                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
             } message: {
-                Text("这会永久删除社区资料、帖子、评论、互动和私有媒体，并清除当前设备上的课表、成绩、草稿、学习资料和其他 MyLeafy 数据。此操作不会删除或修改北京林业大学官方教务账户。")
+                Text(L10n.text("这会永久删除社区资料、帖子、评论、互动和私有媒体，并清除当前设备上的课表、成绩、草稿、学习资料和其他 MyLeafy 数据。此操作不会删除或修改北京林业大学官方教务账户。", language: leafyLanguage))
             }
-            .alert("最终确认删除？", isPresented: $showingFinalDeleteAccountConfirmation) {
-                Button("永久删除账户", role: .destructive) {
+            .alert(L10n.text("最终确认删除？", language: leafyLanguage), isPresented: $showingFinalDeleteAccountConfirmation) {
+                Button(L10n.text("永久删除账户", language: leafyLanguage), role: .destructive) {
                     Task { await deleteAccount() }
                 }
-                Button("取消", role: .cancel) {}
+                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
             } message: {
-                Text("删除后无法恢复。完成后 App 会清除本机数据并返回登录页。")
+                Text(L10n.text("删除后无法恢复。完成后 App 会清除本机数据并返回登录页。", language: leafyLanguage))
             }
-            .alert("账户删除失败", isPresented: Binding(
+            .alert(L10n.text("账户删除失败", language: leafyLanguage), isPresented: Binding(
                 get: { accountDeletionError != nil },
                 set: { if !$0 { accountDeletionError = nil } }
             )) {
-                Button("重试", role: .destructive) {
+                Button(L10n.text("重试", language: leafyLanguage), role: .destructive) {
                     Task { await deleteAccount() }
                 }
-                Button("取消", role: .cancel) {}
+                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
             } message: {
                 Text(accountDeletionError ?? "")
             }
-            .alert("检查更新", isPresented: Binding(
+            .alert(L10n.text("检查更新", language: leafyLanguage), isPresented: Binding(
                 get: { updateCheckMessage != nil },
                 set: { if !$0 { updateCheckMessage = nil } }
             )) {
-                Button("好", role: .cancel) {}
+                Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
             } message: {
                 Text(updateCheckMessage ?? "")
             }
-            .alert("给 \(AppBrand.displayName) 评分", isPresented: Binding(
+            .alert(L10n.text("给 %@ 评分", language: leafyLanguage, AppBrand.displayName), isPresented: Binding(
                 get: { reviewPageMessage != nil },
                 set: { if !$0 { reviewPageMessage = nil } }
             )) {
-                Button("好", role: .cancel) {}
+                Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
             } message: {
                 Text(reviewPageMessage ?? "")
             }
@@ -182,27 +185,27 @@ struct ProfileView: View {
             Section {
                 profileHeaderRow
             } header: {
-                Text("资料")
+                Text(L10n.text("资料", language: leafyLanguage))
             }
             .listRowBackground(AppTheme.cardBackground)
 
             Section {
                 settingsRows
             } header: {
-                Text("课表与偏好")
+                Text(L10n.text("课表与偏好", language: leafyLanguage))
             }
 
-            Section("帮助与资源") {
+            Section(L10n.text("帮助与资源", language: leafyLanguage)) {
                 helpAndResourcesRows
             }
             .listRowBackground(AppTheme.cardBackground)
 
-            Section("关于 MyLeafy") {
+            Section(L10n.text("关于 MyLeafy", language: leafyLanguage)) {
                 aboutRows
             }
             .listRowBackground(AppTheme.cardBackground)
 
-            Section("我的更多作品") {
+            Section(L10n.text("我的更多作品", language: leafyLanguage)) {
                 moreWorksRows
             }
             .listRowBackground(AppTheme.cardBackground)
@@ -210,10 +213,10 @@ struct ProfileView: View {
             Section {
                 accountRows
             } header: {
-                Text("账户")
+                Text(L10n.text("账户", language: leafyLanguage))
             } footer: {
                 if isReviewDemoAccount, !canDeleteAccount {
-                    Text("此共享演示账户受保护，不能删除。退出演示模式不会影响正式账户与数据。")
+                    Text(L10n.text("此共享演示账户受保护，不能删除。退出演示模式不会影响正式账户与数据。", language: leafyLanguage))
                 }
             }
             .listRowBackground(AppTheme.cardBackground)
@@ -263,10 +266,10 @@ struct ProfileView: View {
                 LeafyCompactProfileIconBadge(systemName: "calendar.badge.minus", size: profileRowIconSize)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("隐藏周末")
+                    Text(L10n.text("隐藏周末", language: leafyLanguage))
                         .leafyBody()
                         .foregroundStyle(AppTheme.primaryText)
-                    Text("课表页仅显示周一至周五")
+                    Text(L10n.text("课表页仅显示周一至周五", language: leafyLanguage))
                         .microCaption()
                         .foregroundStyle(AppTheme.tertiaryText)
                 }
@@ -359,7 +362,7 @@ struct ProfileView: View {
     @ViewBuilder
     private var accountRows: some View {
         if isCommunityEnabled, !isCustomCampus, ActiveCampusContext.descriptor.id == .bjfu {
-            NavigationLink("绑定邮箱") {
+            NavigationLink(L10n.text("绑定邮箱", language: leafyLanguage)) {
                 ProfileEmailBindingView()
             }
         }
@@ -379,29 +382,35 @@ struct ProfileView: View {
 
     private var deleteAccountButton: some View {
         Button(
-            isDeletingAccount ? "正在删除账户…" : "删除 MyLeafy 账户",
+            isDeletingAccount
+                ? L10n.text("正在删除账户…", language: leafyLanguage)
+                : L10n.text("删除 MyLeafy 账户", language: leafyLanguage),
             role: .destructive
         ) {
             showingDeleteAccountConfirmation = true
         }
         .disabled(isDeletingAccount)
-        .accessibilityHint("永久删除社区账户和当前设备上的 MyLeafy 数据")
+        .accessibilityHint(L10n.text("永久删除社区账户和当前设备上的 MyLeafy 数据", language: leafyLanguage))
         .accessibilityIdentifier("profile.delete-account")
     }
 
     private var logoutButtonTitle: String {
-        isReviewDemoAccount ? "退出演示模式" : "退出登录"
+        isReviewDemoAccount
+            ? L10n.text("退出演示模式", language: leafyLanguage)
+            : L10n.text("退出登录", language: leafyLanguage)
     }
 
     private var logoutConfirmationTitle: String {
-        isReviewDemoAccount ? "退出演示模式？" : "确认退出？"
+        isReviewDemoAccount
+            ? L10n.text("退出演示模式？", language: leafyLanguage)
+            : L10n.text("确认退出？", language: leafyLanguage)
     }
 
     private var logoutConfirmationMessage: String {
         if isReviewDemoAccount {
-            return "退出后会返回登录页，正式账户与数据不会受到影响。"
+            return L10n.text("退出后会返回登录页，正式账户与数据不会受到影响。", language: leafyLanguage)
         }
-        return "退出后需重新登录，本地缓存的课表和成绩数据将保留。"
+        return L10n.text("退出后需重新登录，本地缓存的课表和成绩数据将保留。", language: leafyLanguage)
     }
 
     @MainActor
@@ -2227,6 +2236,8 @@ private struct CacheAndSyncView: View {
         ) {
         case .success(let syncMessage):
             message = syncMessage
+        case .partialSuccess(let syncMessage), .failure(let syncMessage):
+            operationAlert = .failure(syncMessage)
         case .needsLogin:
             operationAlert = .failure(L10n.text("请先连接校园网登录教务系统。", language: leafyLanguage))
         case .needsReauthentication(let context):

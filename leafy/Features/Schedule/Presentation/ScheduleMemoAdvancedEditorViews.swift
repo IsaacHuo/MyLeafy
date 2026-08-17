@@ -31,6 +31,8 @@ struct ScheduleMemoMarkdownResourceSet {
 }
 
 struct ScheduleMemoRichMarkdownView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
+
     enum Style {
         case screen
         case shareCard
@@ -157,9 +159,12 @@ struct ScheduleMemoRichMarkdownView: View {
                 .scaledToFit()
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-                .accessibilityLabel("随记图片")
+                .accessibilityLabel(L10n.text("随记图片", language: leafyLanguage))
         } else {
-            missingResource("图片已无法读取", systemImage: "photo.badge.exclamationmark")
+            missingResource(
+                L10n.text("图片已无法读取", language: leafyLanguage),
+                systemImage: "photo.badge.exclamationmark"
+            )
         }
     }
 
@@ -169,12 +174,12 @@ struct ScheduleMemoRichMarkdownView: View {
             Button {
                 onOpenAttachment?(id)
             } label: {
-                HStack(spacing: 9) {
+                HStack(alignment: .top, spacing: 9) {
                     Image(systemName: "paperclip")
                         .foregroundStyle(AppTheme.accent)
                     Text(name)
                         .font(.subheadline)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(AppTheme.primaryText)
                     Spacer(minLength: 8)
                     if onOpenAttachment != nil {
@@ -189,9 +194,16 @@ struct ScheduleMemoRichMarkdownView: View {
             }
             .buttonStyle(.plain)
             .disabled(onOpenAttachment == nil)
-            .accessibilityHint(onOpenAttachment == nil ? "" : "预览附件")
+            .accessibilityHint(
+                onOpenAttachment == nil
+                    ? ""
+                    : L10n.text("预览附件", language: leafyLanguage)
+            )
         } else {
-            missingResource("附件已无法读取", systemImage: "doc.badge.ellipsis")
+            missingResource(
+                L10n.text("附件已无法读取", language: leafyLanguage),
+                systemImage: "doc.badge.ellipsis"
+            )
         }
     }
 
@@ -260,6 +272,7 @@ struct ScheduleMemoEditorDraftAttachment: Identifiable {
 private struct ScheduleMemoSourceTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var selection: NSRange
+    let accessibilityLabel: String
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -274,12 +287,13 @@ private struct ScheduleMemoSourceTextView: UIViewRepresentable {
         view.alwaysBounceVertical = true
         view.keyboardDismissMode = .interactive
         view.textContainerInset = UIEdgeInsets(top: 12, left: 10, bottom: 24, right: 10)
-        view.accessibilityLabel = "Markdown 正文"
+        view.accessibilityLabel = accessibilityLabel
         return view
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
+        view.accessibilityLabel = accessibilityLabel
         if view.text != text {
             view.text = text
         }
@@ -321,6 +335,7 @@ struct ScheduleMemoAdvancedEditorView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
     @Query private var allImages: [ScheduleMemoImage]
     @Query private var allAttachments: [ScheduleMemoAttachment]
@@ -399,9 +414,9 @@ struct ScheduleMemoAdvancedEditorView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("编辑模式", selection: $mode) {
+                Picker(L10n.text("编辑模式", language: leafyLanguage), selection: $mode) {
                     ForEach(Mode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                        Text(L10n.text(mode.title, language: leafyLanguage)).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -415,14 +430,17 @@ struct ScheduleMemoAdvancedEditorView: View {
                 }
             }
             .background(LeafyPageBackground())
-            .navigationTitle(memo.kind == .article ? "编辑写文" : "编辑随记")
+            .navigationTitle(L10n.text(
+                memo.kind == .article ? "编辑写文" : "编辑随记",
+                language: leafyLanguage
+            ))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消", action: requestDismiss)
+                    Button(L10n.text("取消", language: leafyLanguage), action: requestDismiss)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "保存中…" : "保存") { save() }
+                    Button(L10n.text(isSaving ? "保存中…" : "保存", language: leafyLanguage)) { save() }
                         .disabled(!canSave)
                 }
             }
@@ -459,15 +477,19 @@ struct ScheduleMemoAdvancedEditorView: View {
         .sheet(isPresented: $showsResources) {
             resourceManager
         }
-        .confirmationDialog("放弃未保存的更改？", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-            Button("放弃更改", role: .destructive) { dismiss() }
-            Button("继续编辑", role: .cancel) {}
+        .confirmationDialog(
+            L10n.text("放弃未保存的更改？", language: leafyLanguage),
+            isPresented: $confirmsDiscard,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.text("放弃更改", language: leafyLanguage), role: .destructive) { dismiss() }
+            Button(L10n.text("继续编辑", language: leafyLanguage), role: .cancel) {}
         }
-        .alert("无法保存随记", isPresented: Binding(
+        .alert(L10n.text("无法保存随记", language: leafyLanguage), isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
         )) {
-            Button("好") {
+            Button(L10n.text("好", language: leafyLanguage)) {
                 errorMessage = nil
                 if dismissAfterError {
                     dismissAfterError = false
@@ -482,7 +504,7 @@ struct ScheduleMemoAdvancedEditorView: View {
     private var editor: some View {
         VStack(spacing: 0) {
             if memo.kind == .article {
-                TextField("标题", text: $title)
+                TextField(L10n.text("标题", language: leafyLanguage), text: $title)
                     .font(.title2.bold())
                     .padding(.horizontal, AppSpacing.page)
                     .padding(.vertical, 10)
@@ -490,9 +512,13 @@ struct ScheduleMemoAdvancedEditorView: View {
             }
 
             ZStack(alignment: .topLeading) {
-                ScheduleMemoSourceTextView(text: $source, selection: $selection)
+                ScheduleMemoSourceTextView(
+                    text: $source,
+                    selection: $selection,
+                    accessibilityLabel: L10n.text("Markdown 正文", language: leafyLanguage)
+                )
                 if source.isEmpty {
-                    Text("使用 Markdown 写下正文…")
+                    Text(L10n.text("使用 Markdown 写下正文…", language: leafyLanguage))
                         .foregroundStyle(AppTheme.tertiaryText)
                         .padding(.top, 19)
                         .padding(.leading, 26)
@@ -509,7 +535,11 @@ struct ScheduleMemoAdvancedEditorView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.card) {
                 if memo.kind == .article {
-                    Text(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名文章" : title)
+                    Text(
+                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? L10n.text("未命名文章", language: leafyLanguage)
+                            : title
+                    )
                         .font(.largeTitle.bold())
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -523,36 +553,36 @@ struct ScheduleMemoAdvancedEditorView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
                 Menu {
-                    Button("一级标题") { apply(.heading(1)) }
-                    Button("二级标题") { apply(.heading(2)) }
-                    Button("三级标题") { apply(.heading(3)) }
+                    Button(L10n.text("一级标题", language: leafyLanguage)) { apply(.heading(1)) }
+                    Button(L10n.text("二级标题", language: leafyLanguage)) { apply(.heading(2)) }
+                    Button(L10n.text("三级标题", language: leafyLanguage)) { apply(.heading(3)) }
                 } label: {
-                    editorTool("textformat.size", label: "标题")
+                    editorTool("textformat.size", label: L10n.text("标题", language: leafyLanguage))
                 }
-                tool("bold", label: "粗体", command: .bold)
-                tool("italic", label: "斜体", command: .italic)
-                tool("strikethrough", label: "删除线", command: .strikethrough)
-                tool("text.quote", label: "引用", command: .quote)
+                tool("bold", label: L10n.text("粗体", language: leafyLanguage), command: .bold)
+                tool("italic", label: L10n.text("斜体", language: leafyLanguage), command: .italic)
+                tool("strikethrough", label: L10n.text("删除线", language: leafyLanguage), command: .strikethrough)
+                tool("text.quote", label: L10n.text("引用", language: leafyLanguage), command: .quote)
                 Menu {
-                    Button("项目列表", systemImage: "list.bullet") { apply(.unorderedList) }
-                    Button("编号列表", systemImage: "list.number") { apply(.orderedList) }
-                    Button("待办事项", systemImage: "checklist") { apply(.task) }
+                    Button(L10n.text("项目列表", language: leafyLanguage), systemImage: "list.bullet") { apply(.unorderedList) }
+                    Button(L10n.text("编号列表", language: leafyLanguage), systemImage: "list.number") { apply(.orderedList) }
+                    Button(L10n.text("待办事项", language: leafyLanguage), systemImage: "checklist") { apply(.task) }
                 } label: {
-                    editorTool("list.bullet", label: "列表")
+                    editorTool("list.bullet", label: L10n.text("列表", language: leafyLanguage))
                 }
                 Menu {
-                    Button("行内代码", systemImage: "chevron.left.forwardslash.chevron.right") { apply(.inlineCode) }
-                    Button("代码块", systemImage: "curlybraces.square") { apply(.codeBlock) }
+                    Button(L10n.text("行内代码", language: leafyLanguage), systemImage: "chevron.left.forwardslash.chevron.right") { apply(.inlineCode) }
+                    Button(L10n.text("代码块", language: leafyLanguage), systemImage: "curlybraces.square") { apply(.codeBlock) }
                 } label: {
-                    editorTool("chevron.left.forwardslash.chevron.right", label: "代码")
+                    editorTool("chevron.left.forwardslash.chevron.right", label: L10n.text("代码", language: leafyLanguage))
                 }
-                tool("link", label: "链接", command: .link)
-                tool("minus", label: "分隔线", command: .divider)
+                tool("link", label: L10n.text("链接", language: leafyLanguage), command: .link)
+                tool("minus", label: L10n.text("分隔线", language: leafyLanguage), command: .divider)
                 insertMenu
             }
             .padding(.horizontal, 8)
         }
-        .frame(height: 52)
+        .frame(minHeight: 52)
         .leafyGlassSurface(
             in: RoundedRectangle(cornerRadius: 20, style: .continuous),
             fallbackFill: Color(uiColor: .secondarySystemBackground)
@@ -563,33 +593,45 @@ struct ScheduleMemoAdvancedEditorView: View {
 
     private var insertMenu: some View {
         Menu {
-            Button("照片图库", systemImage: "photo.on.rectangle") {
+            Button(L10n.text("照片图库", language: leafyLanguage), systemImage: "photo.on.rectangle") {
                 guard existingImages.count + draftImages.count < ScheduleMemoImageStore.maximumImageCount else {
-                    errorMessage = "一条随记最多添加 \(ScheduleMemoImageStore.maximumImageCount) 张图片。"
+                    errorMessage = L10n.text(
+                        "一条随记最多添加 %d 张图片。",
+                        language: leafyLanguage,
+                        ScheduleMemoImageStore.maximumImageCount
+                    )
                     return
                 }
                 showsPhotoPicker = true
             }
-            Button("拍照", systemImage: "camera") {
+            Button(L10n.text("拍照", language: leafyLanguage), systemImage: "camera") {
                 guard existingImages.count + draftImages.count < ScheduleMemoImageStore.maximumImageCount else {
-                    errorMessage = "一条随记最多添加 \(ScheduleMemoImageStore.maximumImageCount) 张图片。"
+                    errorMessage = L10n.text(
+                        "一条随记最多添加 %d 张图片。",
+                        language: leafyLanguage,
+                        ScheduleMemoImageStore.maximumImageCount
+                    )
                     return
                 }
                 showsCamera = true
             }
-            Button("文件", systemImage: "doc.badge.plus") {
+            Button(L10n.text("文件", language: leafyLanguage), systemImage: "doc.badge.plus") {
                 guard existingAttachments.count + draftAttachments.count < ScheduleMemoAttachmentStore.maximumAttachmentCount else {
-                    errorMessage = "一条随记最多添加 \(ScheduleMemoAttachmentStore.maximumAttachmentCount) 个附件。"
+                    errorMessage = L10n.text(
+                        "一条随记最多添加 %d 个附件。",
+                        language: leafyLanguage,
+                        ScheduleMemoAttachmentStore.maximumAttachmentCount
+                    )
                     return
                 }
                 showsFileImporter = true
             }
             if !existingImages.isEmpty || !existingAttachments.isEmpty || !draftImages.isEmpty || !draftAttachments.isEmpty {
                 Divider()
-                Button("插入已有内容", systemImage: "square.grid.2x2") { showsResources = true }
+                Button(L10n.text("插入已有内容", language: leafyLanguage), systemImage: "square.grid.2x2") { showsResources = true }
             }
         } label: {
-            editorTool("plus", label: "插入")
+            editorTool("plus", label: L10n.text("插入", language: leafyLanguage))
         }
     }
 
@@ -611,20 +653,31 @@ struct ScheduleMemoAdvancedEditorView: View {
         NavigationStack {
             List {
                 if resources.images.isEmpty && resources.attachmentNames.isEmpty {
-                    ContentUnavailableView("还没有媒体", systemImage: "photo.on.rectangle")
+                    ContentUnavailableView(
+                        L10n.text("还没有媒体", language: leafyLanguage),
+                        systemImage: "photo.on.rectangle"
+                    )
                 }
                 ForEach(resources.imageOrder, id: \.self) { id in
-                    resourceRow(title: "图片", systemImage: "photo", reference: .init(kind: .image, id: id))
+                    resourceRow(
+                        title: L10n.text("图片", language: leafyLanguage),
+                        systemImage: "photo",
+                        reference: .init(kind: .image, id: id)
+                    )
                 }
                 ForEach(resources.attachmentOrder, id: \.self) { id in
-                    resourceRow(title: resources.attachmentNames[id] ?? "附件", systemImage: "paperclip", reference: .init(kind: .attachment, id: id))
+                    resourceRow(
+                        title: resources.attachmentNames[id] ?? L10n.text("附件", language: leafyLanguage),
+                        systemImage: "paperclip",
+                        reference: .init(kind: .attachment, id: id)
+                    )
                 }
             }
-            .navigationTitle("随记内容")
+            .navigationTitle(L10n.text("随记内容", language: leafyLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { showsResources = false }
+                    Button(L10n.text("完成", language: leafyLanguage)) { showsResources = false }
                 }
             }
         }
@@ -636,19 +689,29 @@ struct ScheduleMemoAdvancedEditorView: View {
         systemImage: String,
         reference: ScheduleMemoInlineResourceReference
     ) -> some View {
-        HStack {
+        HStack(alignment: .top, spacing: AppSpacing.compact) {
             Label(title, systemImage: systemImage)
-                .lineLimit(1)
-            Spacer()
-            Button("插入") {
-                insert(reference)
-                showsResources = false
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: AppSpacing.compact)
+            Menu {
+                Button(L10n.text("插入", language: leafyLanguage), systemImage: "arrow.down.to.line") {
+                    insert(reference)
+                    showsResources = false
+                }
+                Button(
+                    L10n.text("移除", language: leafyLanguage),
+                    systemImage: "trash",
+                    role: .destructive
+                ) {
+                    remove(reference)
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.bordered)
-            Button("移除", role: .destructive) {
-                remove(reference)
-            }
-            .buttonStyle(.bordered)
+            .accessibilityLabel(L10n.text("附件操作", language: leafyLanguage))
         }
         .padding(.vertical, 3)
     }
@@ -808,7 +871,11 @@ struct ScheduleMemoAdvancedEditorView: View {
             }
             isSaving = false
             errorMessage = didSave
-                ? "随记已保存，但未能清理已移除的本地文件：\(error.localizedDescription)"
+                ? L10n.text(
+                    "随记已保存，但未能清理已移除的本地文件：%@",
+                    language: leafyLanguage,
+                    error.localizedDescription
+                )
                 : error.localizedDescription
         }
     }
@@ -818,6 +885,6 @@ private enum ScheduleMemoEditorSaveError: LocalizedError {
     case missingResource
 
     var errorDescription: String? {
-        "正文引用了已不存在的图片或附件，请移除该标记后重试。"
+        L10n.text("正文引用了已不存在的图片或附件，请移除该标记后重试。")
     }
 }

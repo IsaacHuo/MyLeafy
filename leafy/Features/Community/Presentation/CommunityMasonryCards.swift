@@ -3,23 +3,22 @@ import os
 import SwiftUI
 
 enum CommunityCompactTimestampFormatter {
-    private static let lock = NSLock()
-    private static let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.dateFormat = "M/d HH:mm"
-        return formatter
-    }()
-
-    static func string(from date: Date) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return formatter.string(from: date)
+    static func string(from date: Date, locale: Locale) -> String {
+        date.formatted(
+            Date.FormatStyle.dateTime
+                .month(.defaultDigits)
+                .day(.defaultDigits)
+                .hour()
+                .minute()
+                .locale(locale)
+        )
     }
 }
 
 struct CommunityMasonryPostCard: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
+    @Environment(\.locale) private var locale
+
     let post: CommunityPost
     var isFavoriteLoading = false
     var showsAuthor = true
@@ -28,51 +27,87 @@ struct CommunityMasonryPostCard: View {
     var onToggleFavorite: (() async -> Void)?
 
     private let iconSize: CGFloat = 14
+    private let favoriteControlSize: CGFloat = 44
     private let longImageAspectRatioThreshold: CGFloat = 0.75
     private let longImageCoverHeightToWidthRatio: CGFloat = 4.0 / 3.0
 
     var body: some View {
-        Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 0) {
-                if !post.images.isEmpty {
-                    cover
-                }
-
-                VStack(alignment: .leading, spacing: post.images.isEmpty ? 8 : 9) {
-                    Text(post.title)
-                        .leafySubheadline()
-                        .fontWeight(.semibold)
-                        .foregroundStyle(AppTheme.primaryText)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    if post.images.isEmpty {
-                        let preview = post.body.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !preview.isEmpty {
-                            Text(preview)
-                                .microCaption()
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .lineLimit(3)
-                                .multilineTextAlignment(.leading)
-                        }
+        ZStack(alignment: .bottomTrailing) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if !post.images.isEmpty {
+                        cover
                     }
 
-                    footer
+                    VStack(alignment: .leading, spacing: post.images.isEmpty ? 8 : 9) {
+                        Text(post.title)
+                            .leafySubheadline()
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppTheme.primaryText)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        if post.images.isEmpty {
+                            let preview = post.body.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !preview.isEmpty {
+                                Text(preview)
+                                    .microCaption()
+                                    .foregroundStyle(AppTheme.secondaryText)
+                                    .lineLimit(3)
+                                    .multilineTextAlignment(.leading)
+                            }
+                        }
+
+                        footer
+                    }
+                    .padding(cardContentPadding)
                 }
-                .padding(post.images.isEmpty ? 11 : 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        .stroke(cardStrokeColor, lineWidth: cardStrokeWidth)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .contentShape(.interaction, RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                    .stroke(cardStrokeColor, lineWidth: cardStrokeWidth)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            .buttonStyle(.plain)
             .contentShape(.interaction, RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+
+            if let onToggleFavorite {
+                Button {
+                    Task { await onToggleFavorite() }
+                } label: {
+                    favoriteIcon
+                        .overlay {
+                            if isFavoriteLoading {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            }
+                        }
+                        .frame(width: favoriteControlSize, height: favoriteControlSize)
+                }
+                .buttonStyle(.plain)
+                .disabled(isFavoriteLoading)
+                .accessibilityLabel(
+                    L10n.text(post.viewerHasFavorited ? "取消收藏" : "收藏", language: leafyLanguage)
+                )
+                .accessibilityValue(
+                    L10n.text(post.viewerHasFavorited ? "已选择" : "未选择", language: leafyLanguage)
+                )
+                .padding(.trailing, favoriteControlPadding)
+                .padding(.bottom, favoriteControlPadding)
+            }
         }
-        .buttonStyle(.plain)
-        .contentShape(.interaction, RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+    }
+
+    private var cardContentPadding: CGFloat {
+        post.images.isEmpty ? 11 : 10
+    }
+
+    private var favoriteControlPadding: CGFloat {
+        0
     }
 
     @ViewBuilder
@@ -170,20 +205,9 @@ struct CommunityMasonryPostCard: View {
                     CommunityMasonryMetric(icon: "bubble.left", value: "\(post.commentCount)")
                     CommunityMasonryMetric(icon: "heart", value: "\(post.likeCount)")
 
-                    if let onToggleFavorite {
-                        Button {
-                            Task { await onToggleFavorite() }
-                        } label: {
-                            favoriteIcon
-                                .overlay {
-                                    if isFavoriteLoading {
-                                        ProgressView()
-                                            .controlSize(.mini)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isFavoriteLoading)
+                    if onToggleFavorite != nil {
+                        Color.clear
+                            .frame(width: favoriteControlSize, height: iconSize)
                     } else {
                         favoriteIcon
                     }
@@ -197,7 +221,7 @@ struct CommunityMasonryPostCard: View {
         guard let date = CommunityTimestampFormatter.parse(post.createdAt) else {
             return post.relativeTimestamp
         }
-        return CommunityCompactTimestampFormatter.string(from: date)
+        return CommunityCompactTimestampFormatter.string(from: date, locale: locale)
     }
 
     private var categoryBadge: some View {
@@ -296,6 +320,8 @@ struct CommunityMasonryGrid<Item: Identifiable & Equatable, Content: View>: View
 }
 
 struct CommunityMasonryPollCard: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
+
     let poll: CommunityPoll
     let onOpen: () -> Void
 
@@ -305,13 +331,13 @@ struct CommunityMasonryPollCard: View {
                 HStack(spacing: 7) {
                     Image(systemName: "chart.bar.xaxis")
                         .font(.caption.weight(.bold))
-                    Text("投票")
+                    Text(L10n.text("投票", language: leafyLanguage))
                         .microCaption()
                         .fontWeight(.semibold)
 
                     Spacer(minLength: 4)
 
-                    Text(poll.statusText)
+                    Text(L10n.text(poll.statusText, language: leafyLanguage))
                         .microCaption()
                 }
                 .foregroundStyle(AppTheme.accentEmphasis)
@@ -348,7 +374,10 @@ struct CommunityMasonryPollCard: View {
                 HStack(spacing: 10) {
                     CommunityMasonryMetric(icon: "person.2", value: "\(poll.totalVoteCount)")
                     if poll.viewerOptionID != nil {
-                        CommunityMasonryMetric(icon: "checkmark.circle", value: "已投")
+                        CommunityMasonryMetric(
+                            icon: "checkmark.circle",
+                            value: L10n.text("已选择", language: leafyLanguage)
+                        )
                     }
                     Spacer(minLength: 4)
                     Text(poll.relativeTimestamp)

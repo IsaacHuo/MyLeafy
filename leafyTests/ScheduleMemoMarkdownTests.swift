@@ -3,6 +3,21 @@ import XCTest
 @testable import Leafy
 
 final class ScheduleMemoMarkdownTests: XCTestCase {
+    func testScheduleRootTopBarUsesCompactAndAccessibleLayouts() {
+        XCTAssertEqual(
+            ScheduleRootTopBarLayout.resolve(viewportWidth: 320, usesAccessibilitySizes: false),
+            .combinedActions
+        )
+        XCTAssertEqual(
+            ScheduleRootTopBarLayout.resolve(viewportWidth: 390, usesAccessibilitySizes: false),
+            .regular
+        )
+        XCTAssertEqual(
+            ScheduleRootTopBarLayout.resolve(viewportWidth: 390, usesAccessibilitySizes: true),
+            .stacked
+        )
+    }
+
     func testParserRecognizesFormattingAndInlineResources() {
         let imageID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
         let attachmentID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!

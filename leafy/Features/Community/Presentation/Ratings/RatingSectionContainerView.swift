@@ -43,36 +43,30 @@ struct RatingSectionContainerView: View {
                 }
                 .pickerStyle(.segmented)
 
-                ZStack(alignment: .topLeading) {
+                Group {
+                    switch mode {
+                    case .teachers:
                     TeacherSectionView(
                         selectedTeacher: $selectedTeacher,
                         refreshID: teacherRefreshID,
-                        isActive: mode == .teachers,
+                        isActive: true,
                         lifecycleStore: workspace.teachers
                     )
-                    .opacity(mode == .teachers ? 1 : 0)
-                    .allowsHitTesting(mode == .teachers)
-                    .accessibilityHidden(mode != .teachers)
-
+                    case .courses:
                     CourseSectionView(
                         selectedCourse: $selectedCourse,
                         refreshID: courseRefreshID,
-                        isActive: mode == .courses,
+                        isActive: true,
                         lifecycleStore: workspace.courses
                     )
-                    .opacity(mode == .courses ? 1 : 0)
-                    .allowsHitTesting(mode == .courses)
-                    .accessibilityHidden(mode != .courses)
-
+                    case .dishes:
                     DishSectionView(
                         selectedDish: $selectedDish,
                         refreshID: dishRefreshID,
-                        isActive: mode == .dishes,
+                        isActive: true,
                         lifecycleStore: workspace.dishes
                     )
-                    .opacity(mode == .dishes ? 1 : 0)
-                    .allowsHitTesting(mode == .dishes)
-                    .accessibilityHidden(mode != .dishes)
+                }
                 }
                 .animation(.easeInOut(duration: 0.18), value: mode)
             } else {
