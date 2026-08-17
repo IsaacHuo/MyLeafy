@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-08-15
+Last verified: 2026-08-17
 
 ## Current Focus
 
@@ -11,6 +11,8 @@ Last verified: 2026-08-15
 
 ## Recently Completed
 
+- 教务全量同步区分完整成功、部分成功与失败；可信空数据和解析异常不再混用，异常页面不会覆盖最近成功缓存。
+- 社区投票局部错误、帖子/评论重试幂等、日迹长列表投影、Dynamic Type、VoiceOver 与核心英文文案完成一轮可靠性收敛。
 - 2.9 正式发布（build 27，App Store 2026-08-03，tag `v2.9`）。
 - 完整英文本地化 + App 内语言偏好基础设施。
 - 随记 Markdown 编辑与投稿能力升级。
