@@ -93,7 +93,7 @@ extension PerformanceRefactorTests {
         await viewModel.load(mode: .refresh)
 
         XCTAssertEqual(viewModel.posts, [post])
-        XCTAssertEqual(viewModel.errorMessage, "刷新失败")
+        XCTAssertEqual(viewModel.errorMessage, L10n.text("社区内容加载失败，请重试。"))
     }
 
     @MainActor
@@ -106,7 +106,7 @@ extension PerformanceRefactorTests {
 
         XCTAssertTrue(viewModel.posts.isEmpty)
         XCTAssertTrue(viewModel.items.isEmpty)
-        XCTAssertEqual(viewModel.errorMessage, "初次加载失败")
+        XCTAssertEqual(viewModel.errorMessage, L10n.text("社区内容加载失败，请重试。"))
     }
 
     func testCommunityFeedCacheDropsCorruptPayload() {
@@ -230,6 +230,29 @@ extension PerformanceRefactorTests {
         await viewModel.load()
 
         XCTAssertEqual(viewModel.items, [.poll(poll)])
+    }
+
+    @MainActor
+    func testCommunityFeedPaginationKeepsExistingPollsWhenPollRefreshFails() async {
+        let initialPosts = (0..<20).map { makeCommunityPost(title: "帖子 \($0)") }
+        let nextPosts = initialPosts + [makeCommunityPost(title: "新增帖子")]
+        let poll = makeCommunityPoll(
+            question: "保留已有投票？",
+            createdAt: "2030-01-01T00:00:00Z"
+        )
+        let repository = FakeCommunityRepository(
+            postResponses: [initialPosts, nextPosts],
+            pollResponses: [[poll]]
+        )
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+        await viewModel.load()
+        XCTAssertTrue(viewModel.items.contains(.poll(poll)))
+        await repository.setPollFetchError(.failure("投票分页失败"))
+
+        await viewModel.loadMoreIfNeeded()
+
+        XCTAssertTrue(viewModel.items.contains(.poll(poll)))
+        XCTAssertEqual(viewModel.pollErrorMessage, L10n.text("社区投票加载失败，请重试。"))
     }
 
     @MainActor

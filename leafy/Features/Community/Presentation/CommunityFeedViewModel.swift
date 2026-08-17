@@ -56,17 +56,20 @@ final class CommunityFeedViewModel: ObservableObject {
     @Published private(set) var items: [CommunityFeedItem] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
+    @Published private(set) var isLoadingPolls = false
     @Published private(set) var hasMoreItems = true
     @Published private(set) var activeLikePostIDs: Set<UUID> = []
     @Published private(set) var activeFavoritePostIDs: Set<UUID> = []
     @Published private(set) var activePollIDs: Set<UUID> = []
     @Published var errorMessage: String?
+    @Published private(set) var pollErrorMessage: String?
 
     private static let pageSize = 20
     private static let maximumFeedLimit = 50
 
     private var currentQuery = CommunityFeedQuery.default
     private var activeLoadID: UUID?
+    private var activePollRetryID: UUID?
     private let repository: any CommunityFeedRepository
     private let cache: any CommunityFeedCaching
 
@@ -98,6 +101,7 @@ final class CommunityFeedViewModel: ObservableObject {
         if didChangeQuery {
             posts = []
             items = []
+            pollErrorMessage = nil
         }
 
         switch mode {
@@ -124,9 +128,13 @@ final class CommunityFeedViewModel: ObservableObject {
         CommunityDiagnostics.log.info("Community feed load started")
 
         isLoading = true
+        activePollRetryID = nil
+        isLoadingPolls = query.includesPollsInFeed
+        pollErrorMessage = nil
         defer {
             if activeLoadID == loadID {
                 isLoading = false
+                isLoadingPolls = false
             }
         }
 
@@ -141,7 +149,17 @@ final class CommunityFeedViewModel: ObservableObject {
 
             async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: query)
             async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: query)
-            let (loadedPosts, loadedPolls) = try await (postsRequest, pollsRequest)
+            let loadedPosts = try await postsRequest
+            let loadedPolls: [CommunityPoll]
+            do {
+                loadedPolls = try await pollsRequest
+            } catch {
+                guard !Task.isCancelled else { return }
+                guard activeLoadID == loadID, currentQuery == query else { return }
+                pollErrorMessage = L10n.text("社区投票加载失败，请重试。")
+                CommunityDiagnostics.log.error("Community feed polls load failed: \(error.localizedDescription, privacy: .public)")
+                loadedPolls = []
+            }
             guard !Task.isCancelled else { return }
             guard activeLoadID == loadID, currentQuery == query else { return }
 
@@ -155,7 +173,7 @@ final class CommunityFeedViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             guard activeLoadID == loadID else { return }
             CommunityDiagnostics.log.error("Community feed load failed: \(error.localizedDescription, privacy: .public)")
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.text("社区内容加载失败，请重试。")
             return
         }
 
@@ -165,19 +183,41 @@ final class CommunityFeedViewModel: ObservableObject {
         }
     }
 
-    private func loadPollsIfNeeded(query: CommunityFeedQuery) async -> [CommunityPoll] {
+    private func loadPollsIfNeeded(query: CommunityFeedQuery) async throws -> [CommunityPoll] {
         guard query.includesPollsInFeed else { return [] }
 
-        do {
-            return try await CommunityTimeout.run(
-                seconds: 10,
-                message: L10n.text("社区投票加载超时，请检查网络后重试。")
-            ) { [repository] in
-                try await repository.fetchPolls(limit: query.limit)
+        return try await CommunityTimeout.run(
+            seconds: 10,
+            message: L10n.text("社区投票加载超时，请检查网络后重试。")
+        ) { [repository] in
+            try await repository.fetchPolls(limit: query.limit)
+        }
+    }
+
+    func retryPolls() async {
+        guard currentQuery.includesPollsInFeed, !isLoadingPolls else { return }
+
+        let query = currentQuery
+        let loadID = activeLoadID
+        let retryID = UUID()
+        activePollRetryID = retryID
+        isLoadingPolls = true
+        pollErrorMessage = nil
+        defer {
+            if activePollRetryID == retryID {
+                activePollRetryID = nil
+                isLoadingPolls = false
             }
+        }
+
+        do {
+            let loadedPolls = try await loadPollsIfNeeded(query: query)
+            guard !Task.isCancelled, activeLoadID == loadID, currentQuery == query else { return }
+            items = CommunityFeedItemOrdering.ordered(posts: posts, polls: loadedPolls, matching: query)
         } catch {
-            CommunityDiagnostics.log.error("Community feed polls load failed: \(error.localizedDescription, privacy: .public)")
-            return []
+            guard !Task.isCancelled, activeLoadID == loadID, currentQuery == query else { return }
+            CommunityDiagnostics.log.error("Community feed polls retry failed: \(error.localizedDescription, privacy: .public)")
+            pollErrorMessage = L10n.text("社区投票加载失败，请重试。")
         }
     }
 
@@ -211,10 +251,29 @@ final class CommunityFeedViewModel: ObservableObject {
         do {
             async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: nextQuery)
             async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: nextQuery)
-            let (loadedPosts, loadedPolls) = try await (postsRequest, pollsRequest)
+            let loadedPosts = try await postsRequest
+            let loadedPolls: [CommunityPoll]
+            let didLoadPolls: Bool
+            let existingPolls = items.compactMap { item -> CommunityPoll? in
+                guard case .poll(let poll) = item else { return nil }
+                return poll
+            }
+            do {
+                loadedPolls = try await pollsRequest
+                didLoadPolls = true
+            } catch {
+                guard !Task.isCancelled, currentQuery == baseQuery else { return }
+                CommunityDiagnostics.log.error("Community feed polls load more failed: \(error.localizedDescription, privacy: .public)")
+                pollErrorMessage = L10n.text("社区投票加载失败，请重试。")
+                loadedPolls = existingPolls
+                didLoadPolls = false
+            }
             guard !Task.isCancelled, currentQuery == baseQuery else { return }
 
             currentQuery = nextQuery
+            if didLoadPolls {
+                pollErrorMessage = nil
+            }
             posts = loadedPosts
             items = CommunityFeedItemOrdering.ordered(posts: loadedPosts, polls: loadedPolls, matching: nextQuery)
             hasMoreItems = canLoadMore(after: loadedPosts, query: nextQuery)
@@ -224,7 +283,7 @@ final class CommunityFeedViewModel: ObservableObject {
         } catch {
             guard !Task.isCancelled else { return }
             CommunityDiagnostics.log.error("Community feed load more failed: \(error.localizedDescription, privacy: .public)")
-            errorMessage = error.localizedDescription
+            errorMessage = L10n.text("社区内容加载失败，请重试。")
             hasMoreItems = false
         }
     }
@@ -262,7 +321,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
-            return error.localizedDescription
+            return actionErrorMessage(for: error)
         }
     }
 
@@ -281,7 +340,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
-            return error.localizedDescription
+            return actionErrorMessage(for: error)
         }
     }
 
@@ -303,7 +362,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
-            return error.localizedDescription
+            return actionErrorMessage(for: error)
         }
     }
 
@@ -321,7 +380,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
-            return error.localizedDescription
+            return actionErrorMessage(for: error)
         }
     }
 
@@ -332,7 +391,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
-            return error.localizedDescription
+            return actionErrorMessage(for: error)
         }
     }
 
@@ -347,9 +406,24 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return updatedPoll
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = actionErrorMessage(for: error)
             return nil
         }
+    }
+
+    private func actionErrorMessage(for error: Error) -> String {
+        if let serviceError = error as? CommunityServiceError {
+            if case .edgeFunctionRejected = serviceError {
+                return L10n.text("社区操作失败，请稍后重试。")
+            }
+            return L10n.text(serviceError.localizedDescription)
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return L10n.text("网络连接失败，请检查网络后重试。")
+        }
+        return L10n.text("社区操作失败，请稍后重试。")
     }
 
     private func savePostsToCache() {

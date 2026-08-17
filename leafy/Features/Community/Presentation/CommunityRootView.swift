@@ -71,7 +71,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
             CommunityDiagnostics.log.info("Community notification badge refresh started")
             let fetchedCount = try await CommunityTimeout.run(
                 seconds: 6,
-                message: "未读通知加载超时。"
+                message: L10n.text("未读通知加载超时。", language: .current)
             ) {
                 try await self.repository.fetchUnreadNotificationCount()
             }
@@ -86,7 +86,6 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
                   self.subscriptionID == subscriptionID
             else { return }
             CommunityDiagnostics.log.error("Community notification badge refresh failed: \(error.localizedDescription, privacy: .public)")
-            unreadCount = 0
         }
     }
 
@@ -254,11 +253,11 @@ struct CommunityRootView: View {
                 }
                     .presentationDetents([.medium, .large])
             }
-            .alert("社区操作失败", isPresented: Binding(
+            .alert(L10n.text("社区操作失败", language: leafyLanguage), isPresented: Binding(
                 get: { communityActionError != nil },
                 set: { if !$0 { communityActionError = nil } }
             )) {
-                Button("知道了", role: .cancel) {}
+                Button(L10n.text("知道了", language: leafyLanguage), role: .cancel) {}
             } message: {
                 Text(communityActionError ?? "")
             }
@@ -286,11 +285,11 @@ struct CommunityRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .communityPublishTaskDidFinish)) { notification in
                 if (notification.userInfo?["succeeded"] as? Bool) == true {
-                    operationAlert = .success("帖子已发布。")
+                    operationAlert = .success(L10n.text("帖子已发布。", language: leafyLanguage))
                 } else {
                     operationAlert = .failure(
                         (notification.userInfo?["message"] as? String)
-                            ?? "帖子发布失败，可在社区顶部任务条中重试。"
+                            ?? L10n.text("帖子发布失败，可在社区顶部任务条中重试。", language: leafyLanguage)
                     )
                 }
             }
@@ -327,7 +326,13 @@ struct CommunityRootView: View {
 
         do {
             _ = try await sessionManager.selectCommunityCampus(campusID: campus.id)
-            operationAlert = .success("已加入 \(campus.displayName) 社区。之后如需更换学校，请在个人资料中提交审核。")
+            operationAlert = .success(
+                L10n.text(
+                    "已加入 %@ 社区。之后如需更换学校，请在个人资料中提交审核。",
+                    language: leafyLanguage,
+                    campus.displayName
+                )
+            )
         } catch {
             communityActionError = error.localizedDescription
         }
@@ -341,7 +346,7 @@ struct CommunityRootView: View {
 
         _ = try await sessionManager.submitCampusMembershipRequest(schoolName: schoolName)
         communityActionError = nil
-        operationAlert = .success("学校申请已提交，审核通过后会自动进入对应学校社区。")
+        operationAlert = .success(L10n.text("学校申请已提交，审核通过后会自动进入对应学校社区。", language: leafyLanguage))
     }
 
     private var communityHeader: some View {
@@ -354,7 +359,7 @@ struct CommunityRootView: View {
                         HStack(spacing: 9) {
                             DiscoverLiquidGlassIconButton(
                                 systemName: isTopicFilterPresented ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
-                                accessibilityLabel: "筛选话题",
+                                accessibilityLabel: L10n.text("筛选话题", language: leafyLanguage),
                                 action: {
                                     withAnimation(.easeOut(duration: 0.18)) {
                                         isTopicFilterPresented.toggle()
@@ -365,7 +370,7 @@ struct CommunityRootView: View {
                             DiscoverLiquidGlassIconButton(
                                 systemName: "bell",
                                 showsBadge: notificationBadgeViewModel.unreadCount > 0,
-                                accessibilityLabel: "通知",
+                                accessibilityLabel: L10n.text("通知", language: leafyLanguage),
                                 action: {
                                     showingNotifications = true
                                 }
@@ -374,7 +379,7 @@ struct CommunityRootView: View {
                             DiscoverLiquidGlassIconButton(
                                 systemName: "plus",
                                 isLoading: isPreparingComposer,
-                                accessibilityLabel: "发布",
+                                accessibilityLabel: L10n.text("发布", language: leafyLanguage),
                                 action: handleComposerTapped
                             )
                         }
@@ -419,7 +424,7 @@ struct CommunityRootView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(AppTheme.tertiaryText)
 
-                Text("搜索帖子")
+                Text(L10n.text("搜索帖子", language: leafyLanguage))
                     .leafyBody()
                     .foregroundStyle(AppTheme.secondaryText)
 
@@ -433,7 +438,7 @@ struct CommunityRootView: View {
         .buttonStyle(.plain)
         .contentShape(shape)
         .communityNativeGlassSurface(in: shape, isInteractive: true)
-        .accessibilityLabel("搜索帖子")
+        .accessibilityLabel(L10n.text("搜索帖子", language: leafyLanguage))
     }
 
     private var communityAccessGate: CommunityAccessGate {
@@ -536,6 +541,7 @@ private struct CommunityDiagnosticsShellView: View {
 }
 
 private struct CommunityCampusRequestGateView: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     let profile: CommunityProfile?
     let isBootstrapping: Bool
@@ -564,20 +570,20 @@ private struct CommunityCampusRequestGateView: View {
 
     private var title: String {
         if isBootstrapping && profile == nil {
-            return "正在同步社区身份"
+            return L10n.text("正在同步社区身份", language: leafyLanguage)
         }
         if bootstrapError != nil && profile == nil {
-            return "社区身份同步失败"
+            return L10n.text("社区身份同步失败", language: leafyLanguage)
         }
         switch status {
         case .pending:
-            return "学校申请审核中"
+            return L10n.text("学校申请审核中", language: leafyLanguage)
         case .rejected:
-            return "当前为通用模式"
+            return L10n.text("当前为通用模式", language: leafyLanguage)
         case .approved:
-            return "社区身份已通过"
+            return L10n.text("社区身份已通过", language: leafyLanguage)
         case .general:
-            return "选择学校社区"
+            return L10n.text("选择学校社区", language: leafyLanguage)
         }
     }
 
@@ -589,14 +595,14 @@ private struct CommunityCampusRequestGateView: View {
         case .pending:
             let school = profile?.communitySchoolName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return school.isEmpty
-                ? "申请通过后会自动进入对应学校社区。"
-                : "\(school) 的社区申请正在审核，审核通过后会自动进入学校社区。"
+                ? L10n.text("申请通过后会自动进入对应学校社区。", language: leafyLanguage)
+                : L10n.text("%@ 的社区申请正在审核，审核通过后会自动进入学校社区。", language: leafyLanguage, school)
         case .rejected:
-            return "学校申请未通过。当前处于通用模式，社区功能暂不可用。"
+            return L10n.text("学校申请未通过。当前处于通用模式，社区功能暂不可用。", language: leafyLanguage)
         case .approved:
-            return "正在进入学校社区。"
+            return L10n.text("正在进入学校社区。", language: leafyLanguage)
         case .general:
-            return "通用入口可以继续使用本地学业功能；首次选择已有学校社区会立即生效，之后更换学校需要审核。"
+            return L10n.text("通用入口可以继续使用本地学业功能；首次选择已有学校社区会立即生效，之后更换学校需要审核。", language: leafyLanguage)
         }
     }
 
@@ -639,7 +645,7 @@ private struct CommunityCampusRequestGateView: View {
             }
 
             if profile == nil, bootstrapError != nil {
-                Button("重试同步") {
+                Button(L10n.text("重试同步", language: leafyLanguage)) {
                     onRetry()
                 }
                 .buttonStyle(.borderedProminent)
@@ -655,39 +661,40 @@ enum CommunityCampusSelectionMode: Equatable {
     case initial
     case change(currentSchoolName: String?)
 
-    var emptyResultMessage: String {
+    func emptyResultMessage(language: AppLanguagePreference) -> String {
         switch self {
         case .initial:
-            return "暂时没有可直接加入的学校社区，你仍可以申请新增学校。"
+            return L10n.text("暂时没有可直接加入的学校社区，你仍可以申请新增学校。", language: language)
         case .change:
-            return "暂时没有其他可更换的学校社区。"
+            return L10n.text("暂时没有其他可更换的学校社区。", language: language)
         }
     }
 
-    var confirmationTitle: String {
+    func confirmationTitle(language: AppLanguagePreference) -> String {
         switch self {
         case .initial:
-            return "确认加入这个学校社区？"
+            return L10n.text("确认加入这个学校社区？", language: language)
         case .change:
-            return "提交更换学校申请？"
+            return L10n.text("提交更换学校申请？", language: language)
         }
     }
 
-    func confirmationMessage(for campus: CommunityCampusOption) -> String {
+    func confirmationMessage(for campus: CommunityCampusOption, language: AppLanguagePreference) -> String {
         switch self {
         case .initial:
-            return "你将加入“\(campus.displayName)”社区。之后如果要更换学校，需要在个人资料中提交审核。"
+            return L10n.text("你将加入“%@”社区。之后如果要更换学校，需要在个人资料中提交审核。", language: language, campus.displayName)
         case .change(let currentSchoolName):
             let current = currentSchoolName?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let current, !current.isEmpty {
-                return "你将申请从“\(current)”更换到“\(campus.displayName)”。审核通过前仍保留当前学校社区。"
+                return L10n.text("你将申请从“%@”更换到“%@”。审核通过前仍保留当前学校社区。", language: language, current, campus.displayName)
             }
-            return "你将申请更换到“\(campus.displayName)”。审核通过前不会改变当前学校社区。"
+            return L10n.text("你将申请更换到“%@”。审核通过前不会改变当前学校社区。", language: language, campus.displayName)
         }
     }
 }
 
 struct CommunityCampusSelectionPanel: View {
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @State private var campusOptions: [CommunityCampusOption] = []
     @State private var selectedCampus: CommunityCampusOption?
@@ -708,7 +715,7 @@ struct CommunityCampusSelectionPanel: View {
                     Text(errorMessage)
                         .microCaption()
                         .foregroundStyle(AppTheme.danger)
-                    Button("重新加载") {
+                    Button(L10n.text("重新加载", language: leafyLanguage)) {
                         Task { await loadCampuses() }
                     }
                     .buttonStyle(.bordered)
@@ -718,13 +725,13 @@ struct CommunityCampusSelectionPanel: View {
             if isLoading {
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("正在加载学校社区")
+                    Text(L10n.text("正在加载学校社区", language: leafyLanguage))
                         .microCaption()
                         .foregroundStyle(AppTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else if campusOptions.isEmpty {
-                Text(mode.emptyResultMessage)
+                Text(mode.emptyResultMessage(language: leafyLanguage))
                     .microCaption()
                     .foregroundStyle(AppTheme.secondaryText)
             } else {
@@ -776,7 +783,7 @@ struct CommunityCampusSelectionPanel: View {
                 Button {
                     isNewSchoolRequestPresented = true
                 } label: {
-                    Label("申请新增学校", systemImage: "building.2.crop.circle.badge.plus")
+                    Label(L10n.text("申请新增学校", language: leafyLanguage), systemImage: "building.2.crop.circle.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -791,7 +798,7 @@ struct CommunityCampusSelectionPanel: View {
             await loadCampuses()
         }
         .confirmationDialog(
-            mode.confirmationTitle,
+            mode.confirmationTitle(language: leafyLanguage),
             isPresented: Binding(
                 get: { pendingConfirmation != nil },
                 set: { if !$0 { pendingConfirmation = nil } }
@@ -803,20 +810,20 @@ struct CommunityCampusSelectionPanel: View {
                 pendingConfirmation = nil
                 onSelectCampus(campus)
             }
-            Button("取消", role: .cancel) {
+            Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {
                 pendingConfirmation = nil
             }
         } message: { campus in
-            Text(mode.confirmationMessage(for: campus))
+            Text(mode.confirmationMessage(for: campus, language: leafyLanguage))
         }
     }
 
     private var primaryActionTitle: String {
         switch mode {
         case .initial:
-            return "确认加入学校社区"
+            return L10n.text("确认加入学校社区", language: leafyLanguage)
         case .change:
-            return "提交更换申请"
+            return L10n.text("提交更换申请", language: leafyLanguage)
         }
     }
 
@@ -841,6 +848,7 @@ struct CommunityCampusSelectionPanel: View {
 
 private struct CommunityNewSchoolRequestSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.leafyLanguage) private var leafyLanguage
     @FocusState private var isSchoolNameFocused: Bool
 
     let onSubmit: (String) async throws -> Void
@@ -857,27 +865,27 @@ private struct CommunityNewSchoolRequestSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("学校全称", text: $schoolName)
+                    TextField(L10n.text("学校全称", language: leafyLanguage), text: $schoolName)
                         .leafyDisableAutocapitalization()
                         .autocorrectionDisabled()
                         .focused($isSchoolNameFocused)
                 } footer: {
-                    Text("请填写学校官方全称。提交后需要管理员审核，审核通过后会自动进入对应学校社区。")
+                    Text(L10n.text("请填写学校官方全称。提交后需要管理员审核，审核通过后会自动进入对应学校社区。", language: leafyLanguage))
                 }
 
                 if let errorMessage {
-                    Section("提交失败") {
+                    Section(L10n.text("提交失败", language: leafyLanguage)) {
                         Text(errorMessage)
                             .foregroundStyle(AppTheme.danger)
                     }
                 }
             }
-            .navigationTitle("申请新增学校")
+            .navigationTitle(L10n.text("申请新增学校", language: leafyLanguage))
             .leafyInlineNavigationTitle()
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(L10n.text("取消", language: leafyLanguage)) {
                         dismiss()
                     }
                     .disabled(isSubmitting)
@@ -890,7 +898,7 @@ private struct CommunityNewSchoolRequestSheet: View {
                         if isSubmitting {
                             ProgressView()
                         } else {
-                            Text("提交申请")
+                            Text(L10n.text("提交申请", language: leafyLanguage))
                         }
                     }
                     .disabled(trimmedSchoolName.isEmpty || isSubmitting)

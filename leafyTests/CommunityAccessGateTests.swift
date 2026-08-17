@@ -193,6 +193,45 @@ final class CommunityAccessGateTests: XCTestCase {
         XCTAssertEqual(viewModel.posts, [searchPost])
     }
 
+    @MainActor
+    func testCommunityFeedPollFailureIsIndependentAndRetryable() async {
+        let repository = FakePollRepository()
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: EmptyCommunityFeedCache())
+        await repository.setPollError(CommunityRepositoryTestError.failure("投票请求失败"))
+
+        await viewModel.load(query: .default)
+
+        XCTAssertTrue(viewModel.posts.isEmpty)
+        XCTAssertTrue(viewModel.items.isEmpty)
+        XCTAssertEqual(viewModel.pollErrorMessage, L10n.text("社区投票加载失败，请重试。"))
+        XCTAssertNil(viewModel.errorMessage)
+
+        let poll = makeTestCommunityPoll(question: "去哪自习？")
+        await repository.setPolls([poll])
+        await repository.setPollError(nil)
+        await viewModel.retryPolls()
+
+        XCTAssertEqual(viewModel.items, [.poll(poll)])
+        XCTAssertNil(viewModel.pollErrorMessage)
+    }
+
+    @MainActor
+    func testCommunityNotificationBadgeKeepsKnownCountWhenRefreshFails() async {
+        let repository = FakePollRepository()
+        let viewModel = CommunityNotificationBadgeViewModel(repository: repository)
+        let profileID = UUID()
+        await repository.setUnreadCount(7)
+        viewModel.start(profileID: profileID)
+        await viewModel.refresh()
+        XCTAssertEqual(viewModel.unreadCount, 7)
+
+        await repository.setUnreadError(CommunityRepositoryTestError.failure("通知请求失败"))
+        await viewModel.refresh()
+
+        XCTAssertEqual(viewModel.unreadCount, 7)
+        viewModel.stop(reset: true)
+    }
+
     func testSearchDebounceCanBeCancelled() async {
         let query = CommunityFeedQuery(search: "图书馆")
         let task = Task {
@@ -638,9 +677,24 @@ private func makeTestCommunityPost(title: String) -> CommunityPost {
 
 private actor FakePollRepository: CommunityRepository {
     private var polls: [CommunityPoll] = []
+    private var pollError: Error?
+    private var unreadCount = 0
+    private var unreadError: Error?
 
     func setPolls(_ polls: [CommunityPoll]) {
         self.polls = polls
+    }
+
+    func setPollError(_ error: Error?) {
+        pollError = error
+    }
+
+    func setUnreadCount(_ count: Int) {
+        unreadCount = count
+    }
+
+    func setUnreadError(_ error: Error?) {
+        unreadError = error
     }
 
     func ensureAnonymousSession() async throws {}
@@ -709,7 +763,8 @@ private actor FakePollRepository: CommunityRepository {
     }
 
     func fetchPolls(limit: Int) async throws -> [CommunityPoll] {
-        Array(polls.prefix(limit))
+        if let pollError { throw pollError }
+        return Array(polls.prefix(limit))
     }
 
     func fetchMyAuthoredPolls(limit: Int) async throws -> [CommunityPoll] {
@@ -847,7 +902,8 @@ private actor FakePollRepository: CommunityRepository {
     func submitCatalogSuggestion(input: CatalogSuggestionInput) async throws {}
 
     func fetchUnreadNotificationCount() async throws -> Int {
-        0
+        if let unreadError { throw unreadError }
+        return unreadCount
     }
 
     func notificationEvents(profileID: UUID) async -> AsyncThrowingStream<Void, Error> {

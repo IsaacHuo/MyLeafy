@@ -190,6 +190,7 @@ actor FakeCommunityRepository: CommunityRepository {
     private var postResponses: [[CommunityPost]]
     private var pollResponses: [[CommunityPoll]]
     private var fetchError: PerformanceCommunityRepositoryTestError?
+    private var pollFetchError: PerformanceCommunityRepositoryTestError?
     private var shouldSuspendFetch = false
     private var suspendedFetchContinuation: CheckedContinuation<[CommunityPost], Error>?
     private var suspendedFetchWaiters: [CheckedContinuation<Void, Never>] = []
@@ -207,6 +208,10 @@ actor FakeCommunityRepository: CommunityRepository {
 
     func setFetchError(_ error: PerformanceCommunityRepositoryTestError?) {
         fetchError = error
+    }
+
+    func setPollFetchError(_ error: PerformanceCommunityRepositoryTestError?) {
+        pollFetchError = error
     }
 
     func suspendFetches() {
@@ -342,6 +347,9 @@ actor FakeCommunityRepository: CommunityRepository {
 
     func fetchPolls(limit: Int) async throws -> [CommunityPoll] {
         pollFetchLimits.append(limit)
+        if let pollFetchError {
+            throw pollFetchError
+        }
         guard !pollResponses.isEmpty else { return [] }
         guard pollResponses.count > 1 else { return pollResponses[0] }
         return pollResponses.removeFirst()
