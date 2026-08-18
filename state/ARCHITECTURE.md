@@ -11,6 +11,7 @@ Last verified: 2026-08-16
 | 运行单元 | 部署位置 | 职责 |
 |---|---|---|
 | MyLeafy iOS App | 用户设备 | 学校登录、教务数据获取、本地持久化、用户交互与普通 Supabase 业务 |
+| MyLeafy Android App | 用户设备 | 同 iOS 的产品行为，Android 原生实现（Kotlin/Compose/Room/OkHttp），见 `docs/engineering/android-migration.md`；阶段 1 为可编译可导航的工程骨架 |
 | 学校教务系统 | 学校基础设施 | 身份、课表、成绩、考试、教学计划等权威教务数据（非稳定 API） |
 | Supabase | 托管云服务 | Auth、PostgreSQL、RLS、Storage、Realtime、Edge Functions |
 | 官网与运营后台 | Cloudflare Pages | 公开页面、分享落地页、管理界面与管理 API 代理 |
@@ -85,6 +86,7 @@ leafy/
 ├── Parsers/                # SwiftSoup 教务 HTML 解析
 ├── Shared/                 # 跨功能模型、平台兼容、扩展共享数据
 └── WidgetSupport/          # Widget 展示数据构建
+android/                    # Android 原生客户端（单 app module，阶段 1 工程骨架）
 ```
 
 ## 4. 分层与依赖方向

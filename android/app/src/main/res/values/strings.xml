@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MyLeafy</string>
+
+    <string name="tab_timetable">课表</string>
+    <string name="tab_community">社区</string>
+    <string name="tab_schedule">日迹</string>
+    <string name="tab_campus">校园</string>
+    <string name="tab_profile">我的</string>
+
+    <string name="feature_phase1_placeholder">第一阶段占位</string>
+    <string name="feature_coming_soon">功能将于后续阶段迁移</string>
+</resources>

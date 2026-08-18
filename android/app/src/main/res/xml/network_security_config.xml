@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 教务系统为纯 HTTP，仅对这两个学校域名放开明文流量（与 iOS ATS 例外一致） -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">newjwxt.bjfu.edu.cn</domain>
+        <domain includeSubdomains="true">gradms.bjfu.edu.cn</domain>
+    </domain-config>
+</network-security-config>

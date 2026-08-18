@@ -1,0 +1,108 @@
+{
+  "说明": "每个 fixture 的期望解析结果，与 iOS leafyTests 行为对齐。字段语义见 docs/engineering/android-migration.md 教务协议记录。",
+  "fixtures": {
+    "timetable_kbcontent_div.html": {
+      "kind": "timetable",
+      "result": "records",
+      "courses": [
+        {
+          "courseName": "森林生态学",
+          "teacher": "王老师",
+          "classInfo": "",
+          "room": "205",
+          "location": "二教",
+          "dayOfWeek": 1,
+          "weeks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+          "duration": [1, 2]
+        },
+        {
+          "courseName": "数据结构",
+          "teacher": "李老师",
+          "classInfo": "",
+          "room": "301",
+          "location": "二教",
+          "dayOfWeek": 3,
+          "weeks": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+          "duration": [3, 4]
+        }
+      ]
+    },
+    "timetable_empty_kbcontent.html": {
+      "kind": "timetable",
+      "result": "verified_empty",
+      "courses": []
+    },
+    "timetable_graduate_empty.json": {
+      "kind": "timetable_graduate",
+      "result": "verified_empty",
+      "courses": []
+    },
+    "timetable_unrecognized_page.html": {
+      "kind": "timetable",
+      "result": "error",
+      "error": "timetable_table_not_found"
+    },
+    "timetable_malformed_content.html": {
+      "kind": "timetable",
+      "result": "error",
+      "error": "table_rows_unparseable",
+      "detail": "课表"
+    },
+    "timetable_out_of_range_days.html": {
+      "kind": "timetable",
+      "result": "records",
+      "courses": [
+        {
+          "courseName": "有效课程",
+          "teacher": "张老师",
+          "classInfo": "",
+          "room": "101",
+          "location": "二教",
+          "dayOfWeek": 1,
+          "weeks": [1, 2],
+          "duration": [1, 2]
+        }
+      ]
+    },
+    "timetable_semester_form.html": {
+      "kind": "timetable_form",
+      "result": "request",
+      "note": "resolveTimetableRequest 应产出 POST /jsxsd/xskb/xskb_list.do，body 含 xnxq01id=2026-2027-1（首选学期优先）"
+    },
+    "grades_empty_table.html": {
+      "kind": "grades",
+      "result": "verified_empty",
+      "grades": []
+    },
+    "exams_backend_shape.html": {
+      "kind": "exams",
+      "result": "records",
+      "exams": [
+        {
+          "id": 1,
+          "courseID": "DS-001",
+          "name": "数据结构",
+          "date": "2026-06-20",
+          "start": "09:00",
+          "end": "11:00",
+          "location": "二教 205"
+        }
+      ]
+    },
+    "exams_split_columns.html": {
+      "kind": "exams",
+      "result": "records",
+      "exams": [
+        {
+          "id": 2,
+          "courseID": "MATH-001",
+          "name": "高等数学 A",
+          "date": "2026-06-21",
+          "start": "14:00",
+          "end": "16:00",
+          "location": "主楼 112"
+        }
+      ]
+    }
+  }
+}
