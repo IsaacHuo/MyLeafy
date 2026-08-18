@@ -210,12 +210,12 @@ struct AcademicHubView: View {
                 }
             }
             .padding(8 * leafyControlScale)
+            .leafyGlassSurface(
+                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
+                fallbackFill: Color(uiColor: .systemBackground).opacity(0.9)
+            )
         }
         .frame(width: academicSidebarWidth, alignment: .top)
-        .leafyGlassSurface(
-            in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
-            fallbackFill: Color(uiColor: .systemBackground).opacity(0.9)
-        )
         .frame(maxHeight: .infinity, alignment: .top)
         .padding(.top, -(AppSpacing.micro / 15))
         .accessibilityElement(children: .contain)

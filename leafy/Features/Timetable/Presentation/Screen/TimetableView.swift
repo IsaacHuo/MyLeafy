@@ -2539,11 +2539,7 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private func academicYearSection(_ academicYear: TimetableCalendarMenuAcademicYear) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.compact) {
-            Text("\(academicYear.academicYear)学年")
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-
+        VStack(alignment: .leading, spacing: AppSpacing.micro) {
             ForEach(academicYear.semesters) { semester in
                 semesterSection(semester)
             }

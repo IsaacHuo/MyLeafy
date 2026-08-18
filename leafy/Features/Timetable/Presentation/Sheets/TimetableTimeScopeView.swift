@@ -550,7 +550,7 @@ struct TimetableTimeScopeMonthCalendar: View {
     let monthTransitionDirection: Int
     let onChangeMonth: (Int) -> Void
 
-    @GestureState private var monthDragTranslation: CGFloat = 0
+    @State private var monthDragTranslation: CGFloat = 0
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(minimum: 28), spacing: 6 * leafyControlScale), count: 7)
@@ -558,8 +558,12 @@ struct TimetableTimeScopeMonthCalendar: View {
 
     var body: some View {
         monthCalendarContent
-            .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
-            .simultaneousGesture(monthSwipeGesture)
+            .overlay {
+                TimetableHorizontalPanGesture(
+                    onChanged: { monthDragTranslation = $0 },
+                    onEnded: finishMonthSwipe
+                )
+            }
             .accessibilityAdjustableAction { direction in
                 switch direction {
                 case .increment:
@@ -655,23 +659,85 @@ struct TimetableTimeScopeMonthCalendar: View {
         )
     }
 
-    private var monthSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 12, coordinateSpace: .local)
-            .updating($monthDragTranslation) { value, state, _ in
-                guard abs(value.translation.width) > abs(value.translation.height) * 0.72 else { return }
-                state = value.translation.width
-            }
-            .onEnded { value in
-                let horizontalDistance = value.translation.width
-                let verticalDistance = value.translation.height
-                let projectedDistance = value.predictedEndTranslation.width
-                let effectiveDistance = abs(projectedDistance) > abs(horizontalDistance) ? projectedDistance : horizontalDistance
-                guard abs(effectiveDistance) > max(34 * leafyControlScale, abs(verticalDistance) * 1.12) else {
-                    return
-                }
+    private func finishMonthSwipe(translation: CGFloat, velocity: CGFloat) {
+        let projectedDistance = translation + velocity * 0.15
+        let effectiveDistance = abs(projectedDistance) > abs(translation) ? projectedDistance : translation
 
-                onChangeMonth(effectiveDistance < 0 ? 1 : -1)
+        withAnimation(.easeOut(duration: 0.18)) {
+            monthDragTranslation = 0
+        }
+
+        guard abs(effectiveDistance) > 34 * leafyControlScale else { return }
+        onChangeMonth(effectiveDistance < 0 ? 1 : -1)
+    }
+}
+
+private struct TimetableHorizontalPanGesture: UIViewRepresentable {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onChanged: onChanged, onEnded: onEnded)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isAccessibilityElement = false
+
+        let panGesture = UIPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePan(_:))
+        )
+        panGesture.cancelsTouchesInView = false
+        panGesture.delegate = context.coordinator
+        view.addGestureRecognizer(panGesture)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onChanged = onChanged
+        context.coordinator.onEnded = onEnded
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onChanged: (CGFloat) -> Void
+        var onEnded: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
+
+        init(
+            onChanged: @escaping (CGFloat) -> Void,
+            onEnded: @escaping (_ translation: CGFloat, _ velocity: CGFloat) -> Void
+        ) {
+            self.onChanged = onChanged
+            self.onEnded = onEnded
+        }
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            let translation = gesture.translation(in: gesture.view).x
+            switch gesture.state {
+            case .changed:
+                onChanged(translation)
+            case .ended:
+                onEnded(translation, gesture.velocity(in: gesture.view).x)
+            case .cancelled, .failed:
+                onEnded(0, 0)
+            default:
+                break
             }
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = panGesture.velocity(in: panGesture.view)
+            return abs(velocity.x) > abs(velocity.y)
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
     }
 }
 
