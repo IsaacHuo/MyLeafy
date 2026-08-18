@@ -694,6 +694,11 @@ struct RealCommunitySectionView: View {
                                     ? AppSpacing.card
                                     : 0
                             )
+
+                            if !viewModel.items.isEmpty {
+                                loadMoreFooter
+                                    .padding(.top, AppSpacing.card)
+                            }
                         }
                         .padding(.top, topContentInset + 10 * leafyControlScale)
                         .padding(.bottom, 40)
@@ -850,8 +855,6 @@ struct RealCommunitySectionView: View {
                     Task { await viewModel.retryPolls() }
                 }
             }
-
-            loadMoreFooter
         }
     }
 
@@ -917,37 +920,38 @@ struct RealCommunitySectionView: View {
 
     @ViewBuilder
     private var loadMoreFooter: some View {
-        if viewModel.isLoadingMore {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("正在加载更多")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-        } else if viewModel.hasMoreItems {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 13, weight: .medium))
-                Text("继续滑动加载更多")
-                    .microCaption()
-            }
-            .foregroundStyle(AppTheme.tertiaryText)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .onAppear {
-                Task {
-                    await viewModel.loadMoreIfNeeded()
+        Group {
+            if viewModel.isLoadingMore {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在加载更多")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
-            }
-        } else if !feedQuery.mode.isHot {
-            Text("已经到底了")
-                .microCaption()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+            } else if viewModel.hasMoreItems {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("继续滑动加载更多")
+                        .microCaption()
+                }
                 .foregroundStyle(AppTheme.tertiaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
+            } else if !feedQuery.mode.isHot {
+                Text("已经到底了")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.tertiaryText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+        }
+        .task(id: viewModel.feedGeneration) {
+            guard viewModel.hasMoreItems, !viewModel.isLoading, !viewModel.isLoadingMore else { return }
+            await viewModel.loadMoreIfNeeded()
         }
     }
 

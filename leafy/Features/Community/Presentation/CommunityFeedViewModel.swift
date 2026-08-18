@@ -58,6 +58,7 @@ final class CommunityFeedViewModel: ObservableObject {
     @Published private(set) var isLoadingMore = false
     @Published private(set) var isLoadingPolls = false
     @Published private(set) var hasMoreItems = true
+    @Published private(set) var feedGeneration = 0
     @Published private(set) var activeLikePostIDs: Set<UUID> = []
     @Published private(set) var activeFavoritePostIDs: Set<UUID> = []
     @Published private(set) var activePollIDs: Set<UUID> = []
@@ -167,6 +168,7 @@ final class CommunityFeedViewModel: ObservableObject {
             items = CommunityFeedItemOrdering.ordered(posts: loadedPosts, polls: loadedPolls, matching: query)
             hasMoreItems = canLoadMore(after: loadedPosts, query: query)
             savePostsToCache()
+            feedGeneration += 1
             errorMessage = nil
             CommunityDiagnostics.log.info("Community feed load finished with \(loadedPosts.count) posts and \(loadedPolls.count) polls")
         } catch {
@@ -278,6 +280,7 @@ final class CommunityFeedViewModel: ObservableObject {
             items = CommunityFeedItemOrdering.ordered(posts: loadedPosts, polls: loadedPolls, matching: nextQuery)
             hasMoreItems = canLoadMore(after: loadedPosts, query: nextQuery)
             savePostsToCache()
+            feedGeneration += 1
             errorMessage = nil
             CommunityDiagnostics.log.info("Community feed load more finished with \(loadedPosts.count) posts and \(loadedPolls.count) polls")
         } catch {
