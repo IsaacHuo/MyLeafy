@@ -77,6 +77,17 @@
         }
       }
     },
+    "、" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", "
+          }
+        }
+      }
+    },
     "·" : {
       "localizations" : {
         "en-US" : {
@@ -225,6 +236,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$arg"
+          }
+        }
+      }
+    },
+    "%@ · %d 条随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · %d note(s)"
           }
         }
       }
@@ -443,6 +465,50 @@
         }
       }
     },
+    "%@ 年" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
+          }
+        }
+      }
+    },
+    "%@ 年 · %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Year %@ · %@"
+          }
+        }
+      }
+    },
+    "%@ 年 1 月至 12 月" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ January to December"
+          }
+        }
+      }
+    },
+    "%@ 年全年记录频率（%@）：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Year-round recording frequency for %@ (%@): %@"
+          }
+        }
+      }
+    },
     "%@ 开始" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -522,6 +588,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@’s shared class schedule"
+          }
+        }
+      }
+    },
+    "%@ 的社区申请正在审核，审核通过后会自动进入学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@'s community application is under review. You will automatically enter the school community once it is approved."
           }
         }
       }
@@ -632,6 +709,17 @@
         }
       }
     },
+    "%@，%d 条随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, %d note(s)"
+          }
+        }
+      }
+    },
     "%@，%lld 条随记" : {
       "localizations" : {
         "en-US" : {
@@ -660,6 +748,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@，第 %2$lld 周%3$@%4$@"
+          }
+        }
+      }
+    },
+    "%@：%d 条随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: %d note(s)"
           }
         }
       }
@@ -1403,6 +1502,17 @@
         }
       }
     },
+    "%d 个月" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d month(s)"
+          }
+        }
+      }
+    },
     "%d 个空间 / %d 份资料" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1491,6 +1601,17 @@
         }
       }
     },
+    "%d 天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d day(s)"
+          }
+        }
+      }
+    },
     "%d 小时 %d 分钟" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1498,6 +1619,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%d Hours %d Minutes"
+          }
+        }
+      }
+    },
+    "%d 月 · %d 条随记 · 记录 %d 天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d month · %d note(s) · %d recording day(s)"
+          }
+        }
+      }
+    },
+    "%d 月 %d 条随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d: %d note(s)"
+          }
+        }
+      }
+    },
+    "%d 月记录 %d 天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d: %d recording day(s)"
+          }
+        }
+      }
+    },
+    "%d 条 · %d 天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d note(s) · %d day(s)"
           }
         }
       }
@@ -1564,6 +1729,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%d note(s)"
+          }
+        }
+      }
+    },
+    "%d 秒后重发" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resend in %d seconds"
           }
         }
       }
@@ -1645,6 +1821,17 @@
         }
       }
     },
+    "%d月" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
         "en-US" : {
@@ -1712,6 +1899,7 @@
       }
     },
     "%lld 年" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -1722,6 +1910,7 @@
       }
     },
     "%lld 年 · MyLeafy" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -1732,6 +1921,7 @@
       }
     },
     "%lld 年 1 月至 12 月" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -1752,6 +1942,7 @@
       }
     },
     "%lld 月 · %lld 条随记 · 记录 %lld 天" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -1778,6 +1969,7 @@
       }
     },
     "%lld 条 · %lld 天" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -1872,6 +2064,7 @@
       }
     },
     "%lld%@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -1908,6 +2101,7 @@
       }
     },
     "%lld月" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -2205,6 +2399,17 @@
         }
       }
     },
+    "Markdown 正文" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown body"
+          }
+        }
+      }
+    },
     "PDF、Word 和图片会导入到本机私有目录，不会上传到云端。" : {
       "localizations" : {
         "en-US" : {
@@ -2365,7 +2570,30 @@
         }
       }
     },
+    "一条随记最多添加 %d 个附件。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A memo can contain up to %d attachments."
+          }
+        }
+      }
+    },
+    "一条随记最多添加 %d 张图片。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A memo can contain up to %d images."
+          }
+        }
+      }
+    },
     "一级标题" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -2386,6 +2614,7 @@
       }
     },
     "三级标题" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -2406,11 +2635,23 @@
       }
     },
     "上一年" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Last Year"
+          }
+        }
+      }
+    },
+    "上午" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morning"
           }
         }
       }
@@ -2498,6 +2739,7 @@
       }
     },
     "下一年" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -2514,6 +2756,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Next Period: %@"
+          }
+        }
+      }
+    },
+    "下午" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afternoon"
           }
         }
       }
@@ -2557,6 +2810,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cannot like your own post"
+          }
+        }
+      }
+    },
+    "与前 30 天的随记数量相同。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The note count matches the previous 30 days."
           }
         }
       }
@@ -2807,6 +3071,7 @@
       }
     },
     "二级标题" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3018,7 +3283,19 @@
         }
       }
     },
+    "代码" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code"
+          }
+        }
+      }
+    },
     "代码块" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3194,12 +3471,56 @@
         }
       }
     },
+    "你最常在%@的%@记录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You record most often on %@ during %@."
+          }
+        }
+      }
+    },
     "你可以在这里查看社区规则，并重新选择是否同意。不同意后将不能进入社区、发帖或评论。" : {
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "You can check the community rules here and reconsider whether to agree. If you disagree, you will not be allowed to enter the community, post, or comment."
+          }
+        }
+      }
+    },
+    "你将加入“%@”社区。之后如果要更换学校，需要在个人资料中提交审核。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will join the %@ community. Future school changes require a review request from your profile."
+          }
+        }
+      }
+    },
+    "你将申请从“%@”更换到“%@”。审核通过前仍保留当前学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will request a change from %@ to %@. Your current school community will remain until the request is approved."
+          }
+        }
+      }
+    },
+    "你将申请更换到“%@”。审核通过前不会改变当前学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will request a change to %@. Your current school community will not change until the request is approved."
           }
         }
       }
@@ -3216,6 +3537,7 @@
       }
     },
     "使用 Markdown 写下正文…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3263,6 +3585,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Use System Appearance Settings"
+          }
+        }
+      }
+    },
+    "使用邮箱和密码登录通用入口账号。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to your general access account with your email and password."
           }
         }
       }
@@ -3319,6 +3652,7 @@
       }
     },
     "保存中…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3606,6 +3940,7 @@
       }
     },
     "全年记录频率" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3616,6 +3951,7 @@
       }
     },
     "全年频率" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3892,6 +4228,7 @@
       }
     },
     "最终确认删除？" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -3932,6 +4269,28 @@
         }
       }
     },
+    "最长连续" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longest streak"
+          }
+        }
+      }
+    },
+    "最长连续记录" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longest recording streak"
+          }
+        }
+      }
+    },
     "写一句个人签名" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3944,6 +4303,7 @@
       }
     },
     "写下第一条随记后，这里会逐渐形成你的记录频率和习惯。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -4179,6 +4539,17 @@
         }
       }
     },
+    "分隔线" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Divider"
+          }
+        }
+      }
+    },
     "切换 MyLeafy 小组件显示今天或明天的课表。" : {
       "localizations" : {
         "en-US" : {
@@ -4195,6 +4566,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Switch class schedule dates"
+          }
+        }
+      }
+    },
+    "列表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "List"
           }
         }
       }
@@ -4220,6 +4602,7 @@
       }
     },
     "删除 MyLeafy 账户" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -4230,6 +4613,7 @@
       }
     },
     "删除 MyLeafy 账户？" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -4321,6 +4705,7 @@
       }
     },
     "删除后无法恢复。完成后 App 会清除本机数据并返回登录页。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -4370,6 +4755,17 @@
         }
       }
     },
+    "删除待审核" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deletion pending review"
+          }
+        }
+      }
+    },
     "删除成绩" : {
       "localizations" : {
         "en-US" : {
@@ -4397,6 +4793,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete Request Submitted."
+          }
+        }
+      }
+    },
+    "删除线" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Strikethrough"
           }
         }
       }
@@ -4437,6 +4844,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete draft"
+          }
+        }
+      }
+    },
+    "删除被拒" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deletion rejected"
           }
         }
       }
@@ -4580,6 +4998,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Previous %.0f%%"
+          }
+        }
+      }
+    },
+    "前 30 天和最近 30 天都没有记录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No records in either the previous or latest 30 days."
+          }
+        }
+      }
+    },
+    "前 30 天暂无记录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No records in the previous 30 days."
           }
         }
       }
@@ -4854,6 +5294,17 @@
         }
       }
     },
+    "历史最长连续" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Longest streak ever"
+          }
+        }
+      }
+    },
     "原日程已不可用" : {
       "localizations" : {
         "en-US" : {
@@ -5026,6 +5477,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Send invitation"
+          }
+        }
+      }
+    },
+    "发送验证码" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Verification Code"
           }
         }
       }
@@ -5322,6 +5784,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sync the latest schedule from the academic system"
+          }
+        }
+      }
+    },
+    "同步结果：%@。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync result: %@."
           }
         }
       }
@@ -5646,6 +6119,7 @@
       }
     },
     "图片只包含本机汇总统计，不包含随记正文和标签名称。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -5661,6 +6135,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Images and attachments will also be deleted from the local device, this action cannot be undone."
+          }
+        }
+      }
+    },
+    "图片已无法读取" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image is no longer available"
           }
         }
       }
@@ -6393,6 +6878,7 @@
       }
     },
     "学校全称" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -6430,6 +6916,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Academics"
+          }
+        }
+      }
+    },
+    "学校申请审核中" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "School application under review"
+          }
+        }
+      }
+    },
+    "学校申请已提交，审核通过后会自动进入对应学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your school application was submitted. You will automatically enter its community once it is approved."
+          }
+        }
+      }
+    },
+    "学校申请未通过。当前处于通用模式，社区功能暂不可用。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your school application was not approved. Community features are unavailable while using general mode."
           }
         }
       }
@@ -6643,6 +7162,17 @@
         }
       }
     },
+    "密码至少需要 8 位。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your password must be at least 8 characters."
+          }
+        }
+      }
+    },
     "寒假" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6837,6 +7367,7 @@
       }
     },
     "导出记录日迹图片" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7175,6 +7706,17 @@
         }
       }
     },
+    "已加入 %@ 社区。之后如需更换学校，请在个人资料中提交审核。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You joined the %@ community. To change schools later, submit a review request from your profile."
+          }
+        }
+      }
+    },
     "已发布的内容会展示在这里" : {
       "localizations" : {
         "en-US" : {
@@ -7357,6 +7899,17 @@
         }
       }
     },
+    "已接入教务系统，可使用校园账号登录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected to the academic system. Sign in with your campus account."
+          }
+        }
+      }
+    },
     "已提交，等待审核。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7505,6 +8058,17 @@
         }
       }
     },
+    "帖子发布失败，可在社区顶部任务条中重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The post could not be published. Try again from the task bar at the top of Community."
+          }
+        }
+      }
+    },
     "帖子发布成功" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7538,6 +8102,17 @@
         }
       }
     },
+    "帖子已发布。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post published."
+          }
+        }
+      }
+    },
     "帖子详情" : {
       "localizations" : {
         "en-US" : {
@@ -7549,6 +8124,7 @@
       }
     },
     "帮助与资源" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7569,6 +8145,7 @@
       }
     },
     "常用标签" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7749,6 +8326,17 @@
         }
       }
     },
+    "引用" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quote"
+          }
+        }
+      }
+    },
     "归档" : {
       "localizations" : {
         "en-US" : {
@@ -7779,7 +8367,41 @@
         }
       }
     },
+    "当前 Supabase 项目未启用邮箱登录，请先在后台开启 Email Auth。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email sign-in is not enabled for this Supabase project. Enable Email Auth in the dashboard first."
+          }
+        }
+      }
+    },
+    "当前 Supabase 项目未开放邮箱验证码注册。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email verification sign-up is not enabled for this Supabase project."
+          }
+        }
+      }
+    },
+    "当前为通用模式" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Currently using general mode"
+          }
+        }
+      }
+    },
     "当前入口暂不支持共享课表" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7955,6 +8577,17 @@
         }
       }
     },
+    "当前校园身份下保存在本机的随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes saved on this device for the current campus identity"
+          }
+        }
+      }
+    },
     "当前没有合适的目的地，可以稍后再试。" : {
       "localizations" : {
         "en-US" : {
@@ -8051,6 +8684,7 @@
       }
     },
     "当前近 30 天" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -8143,6 +8777,7 @@
       }
     },
     "待办事项" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -8214,6 +8849,17 @@
         }
       }
     },
+    "总随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total notes"
+          }
+        }
+      }
+    },
     "恢复" : {
       "localizations" : {
         "en-US" : {
@@ -8281,6 +8927,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Grade estimate"
+          }
+        }
+      }
+    },
+    "成绩保存失败" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grades could not be saved"
           }
         }
       }
@@ -8421,6 +9078,7 @@
       }
     },
     "我的更多作品" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -8497,6 +9155,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deadline time"
+          }
+        }
+      }
+    },
+    "截至今天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As of today"
           }
         }
       }
@@ -8583,6 +9252,17 @@
         }
       }
     },
+    "打开日迹记录菜单" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Daytrace records menu"
+          }
+        }
+      }
+    },
     "打开社区资料编辑页面" : {
       "localizations" : {
         "en-US" : {
@@ -8660,6 +9340,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vote"
+          }
+        }
+      }
+    },
+    "投票中" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voting open"
           }
         }
       }
@@ -8974,6 +9665,7 @@
       }
     },
     "提交失败" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -8999,6 +9691,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Before submitting a new dish name, it is recommended to first search the dish name on the dish review page and switch locations to confirm whether someone has already submitted it."
+          }
+        }
+      }
+    },
+    "提交更换学校申请？" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submit a school change request?"
+          }
+        }
+      }
+    },
+    "提交更换申请" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submit Change Request"
           }
         }
       }
@@ -9127,6 +9841,7 @@
       }
     },
     "插入" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9137,6 +9852,7 @@
       }
     },
     "插入已有内容" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9341,6 +10057,7 @@
       }
     },
     "放弃更改" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9361,6 +10078,7 @@
       }
     },
     "放弃未保存的更改？" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9591,6 +10309,17 @@
         }
       }
     },
+    "斜体" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Italic"
+          }
+        }
+      }
+    },
     "新增台账" : {
       "localizations" : {
         "en-US" : {
@@ -9779,6 +10508,7 @@
       }
     },
     "无法生成图片" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9946,6 +10676,17 @@
         }
       }
     },
+    "日迹操作" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daytrace actions"
+          }
+        }
+      }
+    },
     "旧缓存已备份到 %@。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9979,6 +10720,7 @@
       }
     },
     "时间段" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9989,11 +10731,23 @@
       }
     },
     "时间段分布" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Time slot distribution"
+          }
+        }
+      }
+    },
+    "时间段分布：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time period distribution: %@"
           }
         }
       }
@@ -10041,11 +10795,23 @@
       }
     },
     "星期分布" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Week distribution"
+          }
+        }
+      }
+    },
+    "星期分布：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekday distribution: %@"
           }
         }
       }
@@ -10131,6 +10897,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Display Mode"
+          }
+        }
+      }
+    },
+    "晚间" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evening"
           }
         }
       }
@@ -10597,6 +11374,28 @@
         }
       }
     },
+    "暂时没有其他可更换的学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no other school communities available to switch to."
+          }
+        }
+      }
+    },
+    "暂时没有可直接加入的学校社区，你仍可以申请新增学校。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no school communities available to join directly. You can still request a new school."
+          }
+        }
+      }
+    },
     "暂未找到 App Store 评分页面，请稍后再试。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10733,6 +11532,7 @@
       }
     },
     "月份" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -10805,6 +11605,17 @@
         }
       }
     },
+    "有记录的月份" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Months with records"
+          }
+        }
+      }
+    },
     "未分类" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10823,6 +11634,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No old cache files available for backup."
+          }
+        }
+      }
+    },
+    "未命名文章" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untitled article"
           }
         }
       }
@@ -11020,12 +11842,34 @@
         }
       }
     },
+    "未读通知加载超时。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading unread notifications timed out."
+          }
+        }
+      }
+    },
     "未选择" : {
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Not selected"
+          }
+        }
+      }
+    },
+    "未通过" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not approved"
           }
         }
       }
@@ -11188,6 +12032,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Local notification: %d minutes in advance"
+          }
+        }
+      }
+    },
+    "本年记录天数" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recording days this year"
+          }
+        }
+      }
+    },
+    "本年随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes this year"
           }
         }
       }
@@ -11652,6 +12518,7 @@
       }
     },
     "检查更新" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -11756,6 +12623,7 @@
       }
     },
     "正在删除账户…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -11776,6 +12644,7 @@
       }
     },
     "正在加载学校社区" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -11821,6 +12690,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Synchronizing"
+          }
+        }
+      }
+    },
+    "正在同步社区身份" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing community identity"
           }
         }
       }
@@ -11937,6 +12817,17 @@
         }
       }
     },
+    "正在进入学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entering the school community."
+          }
+        }
+      }
+    },
     "正文" : {
       "localizations" : {
         "en-US" : {
@@ -11957,6 +12848,17 @@
         }
       }
     },
+    "正文引用了已不存在的图片或附件，请移除该标记后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The body references an image or attachment that no longer exists. Remove its marker and try again."
+          }
+        }
+      }
+    },
     "正文里的 #标签 和 #学习/Swift 会自动成为标签。" : {
       "localizations" : {
         "en-US" : {
@@ -11968,6 +12870,7 @@
       }
     },
     "此共享演示账户受保护，不能删除。退出演示模式不会影响正式账户与数据。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12100,6 +13003,28 @@
         }
       }
     },
+    "比前 30 天多 %d 条。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d more note(s) than the previous 30 days."
+          }
+        }
+      }
+    },
+    "比前 30 天少 %d 条。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d fewer note(s) than the previous 30 days."
+          }
+        }
+      }
+    },
     "毕业进度" : {
       "localizations" : {
         "en-US" : {
@@ -12151,6 +13076,7 @@
       }
     },
     "永久删除社区账户和当前设备上的 MyLeafy 数据" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12161,6 +13087,7 @@
       }
     },
     "永久删除账户" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12243,6 +13170,17 @@
         }
       }
     },
+    "注册" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign Up"
+          }
+        }
+      }
+    },
     "浅色" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12270,6 +13208,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Test date"
+          }
+        }
+      }
+    },
+    "深夜" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Late night"
           }
         }
       }
@@ -12516,6 +13465,17 @@
         }
       }
     },
+    "清晨" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Early morning"
+          }
+        }
+      }
+    },
     "清理" : {
       "localizations" : {
         "en-US" : {
@@ -12740,6 +13700,7 @@
       }
     },
     "点按柱形查看当月记录情况。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12791,6 +13752,7 @@
       }
     },
     "照片图库" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12862,6 +13824,7 @@
       }
     },
     "生成于 %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12944,11 +13907,23 @@
       }
     },
     "申请新增学校" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Request to add school"
+          }
+        }
+      }
+    },
+    "申请通过后会自动进入对应学校社区。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will automatically enter the school community once your application is approved."
           }
         }
       }
@@ -12960,6 +13935,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Login"
+          }
+        }
+      }
+    },
+    "登录会话未建立，请稍后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sign-in session could not be created. Try again later."
+          }
+        }
+      }
+    },
+    "登录失败，请稍后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign-in failed. Please try again later."
           }
         }
       }
@@ -13143,6 +14140,28 @@
         }
       }
     },
+    "确认加入学校社区" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm Joining School Community"
+          }
+        }
+      }
+    },
+    "确认加入这个学校社区？" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join this school community?"
+          }
+        }
+      }
+    },
     "确认清除教务缓存？" : {
       "localizations" : {
         "en-US" : {
@@ -13169,6 +14188,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirm record"
+          }
+        }
+      }
+    },
+    "确认退出？" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out?"
           }
         }
       }
@@ -13204,6 +14234,17 @@
         }
       }
     },
+    "社区内容加载失败，请重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community content could not be loaded. Try again."
+          }
+        }
+      }
+    },
     "社区安全与技术支持" : {
       "localizations" : {
         "en-US" : {
@@ -13235,6 +14276,17 @@
         }
       }
     },
+    "社区投票加载失败，请重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community polls could not be loaded. Try again."
+          }
+        }
+      }
+    },
     "社区投票加载超时，请检查网络后重试。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13247,11 +14299,23 @@
       }
     },
     "社区操作失败" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Community operation failed"
+          }
+        }
+      }
+    },
+    "社区操作失败，请稍后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The community action failed. Please try again later."
           }
         }
       }
@@ -13318,6 +14382,17 @@
         }
       }
     },
+    "社区身份同步失败" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community identity sync failed"
+          }
+        }
+      }
+    },
     "社区身份尚未建立，请确认教务登录仍有效后重试。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13325,6 +14400,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Community identity has not been established, please confirm that your academic login is still valid and try again."
+          }
+        }
+      }
+    },
+    "社区身份已通过" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community identity verified"
           }
         }
       }
@@ -13635,6 +14721,17 @@
         }
       }
     },
+    "第一次记录" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First record"
+          }
+        }
+      }
+    },
     "第一节：%@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13704,6 +14801,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filter dishes"
+          }
+        }
+      }
+    },
+    "筛选话题" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter topics"
           }
         }
       }
@@ -13810,6 +14918,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Type: Exam"
+          }
+        }
+      }
+    },
+    "粗体" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bold"
           }
         }
       }
@@ -13939,6 +15058,7 @@
       }
     },
     "给 %@ 评分" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -13960,6 +15080,7 @@
       }
     },
     "统计在本机完成，导出图片只包含汇总数字。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -13970,6 +15091,7 @@
       }
     },
     "统计指标" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14001,6 +15123,7 @@
       }
     },
     "继续删除" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14071,6 +15194,7 @@
       }
     },
     "编号列表" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14111,6 +15235,7 @@
       }
     },
     "编辑写文" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14192,6 +15317,7 @@
       }
     },
     "编辑模式" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14273,6 +15399,7 @@
       }
     },
     "编辑随记" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14288,6 +15415,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reduce editor"
+          }
+        }
+      }
+    },
+    "网络连接失败，请检查网络后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The network connection failed. Check your connection and try again."
           }
         }
       }
@@ -14969,6 +16107,7 @@
       }
     },
     "行内代码" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15112,6 +16251,28 @@
         }
       }
     },
+    "记录习惯" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recording habits"
+          }
+        }
+      }
+    },
+    "记录了 %d 天，共 %d 条随记" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recorded on %d day(s), %d note(s) total"
+          }
+        }
+      }
+    },
     "记录仅保存在当前设备 · 由 MyLeafy 生成" : {
       "localizations" : {
         "en-US" : {
@@ -15132,7 +16293,41 @@
         }
       }
     },
+    "记录最多的一天" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day with the most records"
+          }
+        }
+      }
+    },
+    "记录多一些后，这里会显示你的常用时间。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Record more often to see your usual time here."
+          }
+        }
+      }
+    },
+    "记录天数" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recording days"
+          }
+        }
+      }
+    },
     "记录日迹" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15143,6 +16338,7 @@
       }
     },
     "记录日迹图片" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15153,6 +16349,7 @@
       }
     },
     "记录里程碑" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15475,6 +16672,7 @@
       }
     },
     "请填写学校官方全称。提交后需要管理员审核，审核通过后会自动进入对应学校社区。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15606,6 +16804,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Please enter the 8-digit verification code from the %arg email. Domestic email may take a few minutes, and please also check the spam folder."
+          }
+        }
+      }
+    },
+    "请输入有效的邮箱地址。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid email address."
           }
         }
       }
@@ -15818,6 +17027,7 @@
       }
     },
     "课表与偏好" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15914,6 +17124,7 @@
       }
     },
     "课表页仅显示周一至周五" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15978,6 +17189,7 @@
       }
     },
     "账号操作" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15988,6 +17200,7 @@
       }
     },
     "账户" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15998,6 +17211,7 @@
       }
     },
     "账户删除失败" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16277,6 +17491,7 @@
       }
     },
     "近 30 天" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16292,6 +17507,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "New interactions in the last 30 days will appear here."
+          }
+        }
+      }
+    },
+    "近 30 天热力图：%d 条随记，%d 天有记录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last 30 days heatmap: %d note(s), %d days with records."
           }
         }
       }
@@ -16337,6 +17563,7 @@
       }
     },
     "还没有媒体" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16357,6 +17584,7 @@
       }
     },
     "还没有记录日迹" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16418,6 +17646,39 @@
         }
       }
     },
+    "这个邮箱已经注册。请切换到登录；如果还没完成验证，可以在注册页重新发送验证码。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This email is already registered. Switch to sign in, or resend the verification code from sign-up if verification is incomplete."
+          }
+        }
+      }
+    },
+    "这个邮箱验证链接已失效或已经使用过。请回到 App 输入验证码，或使用邮箱和密码登录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This email verification link has expired or was already used. Return to the app to enter the code, or sign in with your email and password."
+          }
+        }
+      }
+    },
+    "这个验证链接需要在发起注册的设备上完成。请回到 App 输入验证码，或使用邮箱和密码登录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This verification link must be completed on the device where sign-up began. Return to the app to enter the code, or sign in with your email and password."
+          }
+        }
+      }
+    },
     "这份草稿不属于当前社区账号。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16450,6 +17711,7 @@
       }
     },
     "这会永久删除社区资料、帖子、评论、互动和私有媒体，并清除当前设备上的课表、成绩、草稿、学习资料和其他 MyLeafy 数据。此操作不会删除或修改北京林业大学官方教务账户。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16562,6 +17824,72 @@
         }
       }
     },
+    "连续记录" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current streak"
+          }
+        }
+      }
+    },
+    "退出后会返回登录页，正式账户与数据不会受到影响。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will return to the sign-in screen. Your regular account and data will not be affected."
+          }
+        }
+      }
+    },
+    "退出后需重新登录，本地缓存的课表和成绩数据将保留。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will need to sign in again. Cached timetable and grade data will remain on this device."
+          }
+        }
+      }
+    },
+    "退出演示模式" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exit Demo Mode"
+          }
+        }
+      }
+    },
+    "退出演示模式？" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exit Demo Mode?"
+          }
+        }
+      }
+    },
+    "退出登录" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign Out"
+          }
+        }
+      }
+    },
     "适合已有 CSV 表格的情况。导入会替换当前通用入口本机课表。" : {
       "localizations" : {
         "en-US" : {
@@ -16645,6 +17973,17 @@
         }
       }
     },
+    "选择学校社区" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a School Community"
+          }
+        }
+      }
+    },
     "选择文件" : {
       "localizations" : {
         "en-US" : {
@@ -16686,6 +18025,7 @@
       }
     },
     "选择统计年份" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16766,7 +18106,30 @@
         }
       }
     },
+    "通用入口" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General Access"
+          }
+        }
+      }
+    },
+    "通用入口，不连接教务系统，进入 App 后手动导入数据。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General access does not connect to an academic system. Import your data manually after entering the app."
+          }
+        }
+      }
+    },
     "通用入口不会连接教务系统；课表、成绩和考试安排进入 App 后手动导入，学校社区在社区页申请。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -16783,6 +18146,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The general entry does not connect to the academic system. Please use 'Import' on the schedule, grades, and exam pages to update local data."
+          }
+        }
+      }
+    },
+    "通用入口可以继续使用本地学业功能；首次选择已有学校社区会立即生效，之后更换学校需要审核。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General access keeps local academic features available. Your first existing school community selection takes effect immediately; later changes require review."
           }
         }
       }
@@ -16983,6 +18357,17 @@
         }
       }
     },
+    "邮箱或密码不正确。如果是第一次使用，请先注册并完成邮箱验证码。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The email or password is incorrect. If this is your first time, sign up and complete email verification first."
+          }
+        }
+      }
+    },
     "邮箱验证" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -17011,6 +18396,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Some class sessions returned by the academic system cannot be confirmed. Please refer to the original page of the academic system or the on-site information."
+          }
+        }
+      }
+    },
+    "重发验证码" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resend Verification Code"
           }
         }
       }
@@ -17047,6 +18443,7 @@
       }
     },
     "重新加载" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17127,6 +18524,7 @@
       }
     },
     "重试同步" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17248,6 +18646,28 @@
         }
       }
     },
+    "附件已无法读取" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachment is no longer available"
+          }
+        }
+      }
+    },
+    "附件操作" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachment actions"
+          }
+        }
+      }
+    },
     "附件操作失败" : {
       "localizations" : {
         "en-US" : {
@@ -17279,6 +18699,7 @@
       }
     },
     "隐藏周末" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17300,6 +18721,7 @@
       }
     },
     "随记" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17310,6 +18732,7 @@
       }
     },
     "随记内容" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17329,12 +18752,34 @@
         }
       }
     },
+    "随记已保存，但未能清理已移除的本地文件：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The memo was saved, but removed local files could not be cleaned up: %@"
+          }
+        }
+      }
+    },
     "随记操作" : {
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Note operations"
+          }
+        }
+      }
+    },
+    "随记数" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes"
           }
         }
       }
@@ -17477,6 +18922,7 @@
       }
     },
     "项目列表" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17492,6 +18938,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quick rating (optional)"
+          }
+        }
+      }
+    },
+    "预览" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview"
           }
         }
       }
@@ -17518,6 +18975,7 @@
       }
     },
     "预览附件" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17543,6 +19001,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The darker the color, the more records there are on that day. Tap the date to view notes for that day."
+          }
+        }
+      }
+    },
+    "首次使用需要邮箱、密码和邮件验证码；验证成功后下次可直接用邮箱密码登录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To get started, enter your email, password, and email verification code. After verification, you can sign in with your email and password."
           }
         }
       }
@@ -17578,7 +19047,30 @@
         }
       }
     },
+    "验证码不正确，请核对邮件中的数字后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The verification code is incorrect. Check the code in your email and try again."
+          }
+        }
+      }
+    },
+    "验证码发送太频繁，请稍后再试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verification codes were requested too frequently. Try again later."
+          }
+        }
+      }
+    },
     "验证码已发送到 %@。国内邮箱可能需要等待数分钟，请也检查垃圾箱。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17595,6 +19087,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verification code has been sent to %arg. Domestic email may take a few minutes; please check the spam folder as well."
+          }
+        }
+      }
+    },
+    "验证码已失效，请重新发送验证码。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The verification code has expired. Send a new code."
+          }
+        }
+      }
+    },
+    "验证码邮件发送失败，请稍后重试。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The verification email could not be sent. Try again later."
           }
         }
       }
@@ -17625,1306 +19139,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Default rule is still 34 times, two weeks per group, 4 times per group; generic schools can adjust according to their own physical education requirements."
-          }
-        }
-      }
-    },
-    "Markdown 正文" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Markdown body"
-          }
-        }
-      }
-    },
-    "一条随记最多添加 %d 个附件。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A memo can contain up to %d attachments."
-          }
-        }
-      }
-    },
-    "一条随记最多添加 %d 张图片。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A memo can contain up to %d images."
-          }
-        }
-      }
-    },
-    "代码" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Code"
-          }
-        }
-      }
-    },
-    "列表" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "List"
-          }
-        }
-      }
-    },
-    "分隔线" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Divider"
-          }
-        }
-      }
-    },
-    "删除线" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Strikethrough"
-          }
-        }
-      }
-    },
-    "图片已无法读取" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Image is no longer available"
-          }
-        }
-      }
-    },
-    "打开日迹记录菜单" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Daytrace records menu"
-          }
-        }
-      }
-    },
-    "引用" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quote"
-          }
-        }
-      }
-    },
-    "斜体" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Italic"
-          }
-        }
-      }
-    },
-    "日迹操作" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daytrace actions"
-          }
-        }
-      }
-    },
-    "未命名文章" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Untitled article"
-          }
-        }
-      }
-    },
-    "正文引用了已不存在的图片或附件，请移除该标记后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The body references an image or attachment that no longer exists. Remove its marker and try again."
-          }
-        }
-      }
-    },
-    "粗体" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bold"
-          }
-        }
-      }
-    },
-    "附件已无法读取" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attachment is no longer available"
-          }
-        }
-      }
-    },
-    "附件操作" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Attachment actions"
-          }
-        }
-      }
-    },
-    "随记已保存，但未能清理已移除的本地文件：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The memo was saved, but removed local files could not be cleaned up: %@"
-          }
-        }
-      }
-    },
-    "预览" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preview"
-          }
-        }
-      }
-    },
-    "%@ 年" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@"
-          }
-        }
-      }
-    },
-    "截至今天" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As of today"
-          }
-        }
-      }
-    },
-    "当前校园身份下保存在本机的随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes saved on this device for the current campus identity"
-          }
-        }
-      }
-    },
-    "总随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Total notes"
-          }
-        }
-      }
-    },
-    "记录天数" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recording days"
-          }
-        }
-      }
-    },
-    "%d 天" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d day(s)"
-          }
-        }
-      }
-    },
-    "连续记录" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Current streak"
-          }
-        }
-      }
-    },
-    "最长连续" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Longest streak"
-          }
-        }
-      }
-    },
-    "%@ 年 1 月至 12 月" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ January to December"
-          }
-        }
-      }
-    },
-    "%d月" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d"
-          }
-        }
-      }
-    },
-    "随记数" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes"
-          }
-        }
-      }
-    },
-    "记录习惯" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recording habits"
-          }
-        }
-      }
-    },
-    "第一次记录" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First record"
-          }
-        }
-      }
-    },
-    "记录最多的一天" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Day with the most records"
-          }
-        }
-      }
-    },
-    "%@ · %d 条随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · %d note(s)"
-          }
-        }
-      }
-    },
-    "最长连续记录" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Longest recording streak"
-          }
-        }
-      }
-    },
-    "有记录的月份" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Months with records"
-          }
-        }
-      }
-    },
-    "%d 个月" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d month(s)"
-          }
-        }
-      }
-    },
-    "记录了 %d 天，共 %d 条随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recorded on %d day(s), %d note(s) total"
-          }
-        }
-      }
-    },
-    "前 30 天和最近 30 天都没有记录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No records in either the previous or latest 30 days."
-          }
-        }
-      }
-    },
-    "前 30 天暂无记录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No records in the previous 30 days."
-          }
-        }
-      }
-    },
-    "与前 30 天的随记数量相同。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The note count matches the previous 30 days."
-          }
-        }
-      }
-    },
-    "比前 30 天多 %d 条。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d more note(s) than the previous 30 days."
-          }
-        }
-      }
-    },
-    "比前 30 天少 %d 条。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d fewer note(s) than the previous 30 days."
-          }
-        }
-      }
-    },
-    "记录多一些后，这里会显示你的常用时间。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Record more often to see your usual time here."
-          }
-        }
-      }
-    },
-    "你最常在%@的%@记录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You record most often on %@ during %@."
-          }
-        }
-      }
-    },
-    "清晨" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Early morning"
-          }
-        }
-      }
-    },
-    "上午" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Morning"
-          }
-        }
-      }
-    },
-    "下午" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afternoon"
-          }
-        }
-      }
-    },
-    "晚间" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Evening"
-          }
-        }
-      }
-    },
-    "深夜" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Late night"
-          }
-        }
-      }
-    },
-    "、" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : ", "
-          }
-        }
-      }
-    },
-    "%d 月 %d 条随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d: %d note(s)"
-          }
-        }
-      }
-    },
-    "%d 月记录 %d 天" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d: %d recording day(s)"
-          }
-        }
-      }
-    },
-    "%@ 年全年记录频率（%@）：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Year-round recording frequency for %@ (%@): %@"
-          }
-        }
-      }
-    },
-    "%d 月 · %d 条随记 · 记录 %d 天" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d month · %d note(s) · %d recording day(s)"
-          }
-        }
-      }
-    },
-    "%@：%d 条随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@: %d note(s)"
-          }
-        }
-      }
-    },
-    "星期分布：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weekday distribution: %@"
-          }
-        }
-      }
-    },
-    "时间段分布：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Time period distribution: %@"
-          }
-        }
-      }
-    },
-    "近 30 天热力图：%d 条随记，%d 天有记录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Last 30 days heatmap: %d note(s), %d days with records."
-          }
-        }
-      }
-    },
-    "本年随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes this year"
-          }
-        }
-      }
-    },
-    "本年记录天数" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recording days this year"
-          }
-        }
-      }
-    },
-    "历史最长连续" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Longest streak ever"
-          }
-        }
-      }
-    },
-    "%@ 年 · %@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Year %@ · %@"
-          }
-        }
-      }
-    },
-    "%d 条 · %d 天" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d note(s) · %d day(s)"
-          }
-        }
-      }
-    },
-    "%@，%d 条随记" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, %d note(s)"
-          }
-        }
-      }
-    },
-    "网络连接失败，请检查网络后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The network connection failed. Check your connection and try again."
-          }
-        }
-      }
-    },
-    "登录失败，请稍后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign-in failed. Please try again later."
-          }
-        }
-      }
-    },
-    "社区操作失败，请稍后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The community action failed. Please try again later."
-          }
-        }
-      }
-    },
-    "%@ 的社区申请正在审核，审核通过后会自动进入学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@'s community application is under review. You will automatically enter the school community once it is approved."
-          }
-        }
-      }
-    },
-    "%d 秒后重发" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resend in %d seconds"
-          }
-        }
-      }
-    },
-    "你将加入“%@”社区。之后如果要更换学校，需要在个人资料中提交审核。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You will join the %@ community. Future school changes require a review request from your profile."
-          }
-        }
-      }
-    },
-    "你将申请从“%@”更换到“%@”。审核通过前仍保留当前学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You will request a change from %@ to %@. Your current school community will remain until the request is approved."
-          }
-        }
-      }
-    },
-    "你将申请更换到“%@”。审核通过前不会改变当前学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You will request a change to %@. Your current school community will not change until the request is approved."
-          }
-        }
-      }
-    },
-    "发送验证码" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Send Verification Code"
-          }
-        }
-      }
-    },
-    "学校申请审核中" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "School application under review"
-          }
-        }
-      }
-    },
-    "学校申请已提交，审核通过后会自动进入对应学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your school application was submitted. You will automatically enter its community once it is approved."
-          }
-        }
-      }
-    },
-    "学校申请未通过。当前处于通用模式，社区功能暂不可用。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your school application was not approved. Community features are unavailable while using general mode."
-          }
-        }
-      }
-    },
-    "已加入 %@ 社区。之后如需更换学校，请在个人资料中提交审核。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You joined the %@ community. To change schools later, submit a review request from your profile."
-          }
-        }
-      }
-    },
-    "已接入教务系统，可使用校园账号登录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connected to the academic system. Sign in with your campus account."
-          }
-        }
-      }
-    },
-    "帖子发布失败，可在社区顶部任务条中重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The post could not be published. Try again from the task bar at the top of Community."
-          }
-        }
-      }
-    },
-    "帖子已发布。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Post published."
-          }
-        }
-      }
-    },
-    "当前为通用模式" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Currently using general mode"
-          }
-        }
-      }
-    },
-    "提交更换学校申请？" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Submit a school change request?"
-          }
-        }
-      }
-    },
-    "提交更换申请" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Submit Change Request"
-          }
-        }
-      }
-    },
-    "暂时没有其他可更换的学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There are no other school communities available to switch to."
-          }
-        }
-      }
-    },
-    "暂时没有可直接加入的学校社区，你仍可以申请新增学校。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There are no school communities available to join directly. You can still request a new school."
-          }
-        }
-      }
-    },
-    "未读通知加载超时。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading unread notifications timed out."
-          }
-        }
-      }
-    },
-    "正在同步社区身份" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Syncing community identity"
-          }
-        }
-      }
-    },
-    "正在进入学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entering the school community."
-          }
-        }
-      }
-    },
-    "申请通过后会自动进入对应学校社区。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You will automatically enter the school community once your application is approved."
-          }
-        }
-      }
-    },
-    "确认加入学校社区" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Confirm Joining School Community"
-          }
-        }
-      }
-    },
-    "确认加入这个学校社区？" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Join this school community?"
-          }
-        }
-      }
-    },
-    "确认退出？" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign out?"
-          }
-        }
-      }
-    },
-    "社区身份同步失败" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community identity sync failed"
-          }
-        }
-      }
-    },
-    "社区身份已通过" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community identity verified"
-          }
-        }
-      }
-    },
-    "筛选话题" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filter topics"
-          }
-        }
-      }
-    },
-    "退出后会返回登录页，正式账户与数据不会受到影响。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You will return to the sign-in screen. Your regular account and data will not be affected."
-          }
-        }
-      }
-    },
-    "退出后需重新登录，本地缓存的课表和成绩数据将保留。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You will need to sign in again. Cached timetable and grade data will remain on this device."
-          }
-        }
-      }
-    },
-    "退出演示模式" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exit Demo Mode"
-          }
-        }
-      }
-    },
-    "退出演示模式？" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exit Demo Mode?"
-          }
-        }
-      }
-    },
-    "退出登录" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign Out"
-          }
-        }
-      }
-    },
-    "选择学校社区" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a School Community"
-          }
-        }
-      }
-    },
-    "通用入口" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "General Access"
-          }
-        }
-      }
-    },
-    "通用入口可以继续使用本地学业功能；首次选择已有学校社区会立即生效，之后更换学校需要审核。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "General access keeps local academic features available. Your first existing school community selection takes effect immediately; later changes require review."
-          }
-        }
-      }
-    },
-    "通用入口，不连接教务系统，进入 App 后手动导入数据。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "General access does not connect to an academic system. Import your data manually after entering the app."
-          }
-        }
-      }
-    },
-    "重发验证码" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resend Verification Code"
-          }
-        }
-      }
-    },
-    "注册" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign Up"
-          }
-        }
-      }
-    },
-    "使用邮箱和密码登录通用入口账号。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign in to your general access account with your email and password."
-          }
-        }
-      }
-    },
-    "首次使用需要邮箱、密码和邮件验证码；验证成功后下次可直接用邮箱密码登录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To get started, enter your email, password, and email verification code. After verification, you can sign in with your email and password."
-          }
-        }
-      }
-    },
-    "删除待审核" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deletion pending review"
-          }
-        }
-      }
-    },
-    "删除被拒" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deletion rejected"
-          }
-        }
-      }
-    },
-    "投票中" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voting open"
-          }
-        }
-      }
-    },
-    "未通过" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not approved"
-          }
-        }
-      }
-    },
-    "请输入有效的邮箱地址。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a valid email address."
-          }
-        }
-      }
-    },
-    "密码至少需要 8 位。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your password must be at least 8 characters."
-          }
-        }
-      }
-    },
-    "验证码不正确，请核对邮件中的数字后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The verification code is incorrect. Check the code in your email and try again."
-          }
-        }
-      }
-    },
-    "验证码已失效，请重新发送验证码。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The verification code has expired. Send a new code."
-          }
-        }
-      }
-    },
-    "邮箱或密码不正确。如果是第一次使用，请先注册并完成邮箱验证码。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The email or password is incorrect. If this is your first time, sign up and complete email verification first."
-          }
-        }
-      }
-    },
-    "验证码发送太频繁，请稍后再试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verification codes were requested too frequently. Try again later."
-          }
-        }
-      }
-    },
-    "当前 Supabase 项目未启用邮箱登录，请先在后台开启 Email Auth。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Email sign-in is not enabled for this Supabase project. Enable Email Auth in the dashboard first."
-          }
-        }
-      }
-    },
-    "当前 Supabase 项目未开放邮箱验证码注册。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Email verification sign-up is not enabled for this Supabase project."
-          }
-        }
-      }
-    },
-    "这个邮箱已经注册。请切换到登录；如果还没完成验证，可以在注册页重新发送验证码。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This email is already registered. Switch to sign in, or resend the verification code from sign-up if verification is incomplete."
-          }
-        }
-      }
-    },
-    "验证码邮件发送失败，请稍后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The verification email could not be sent. Try again later."
-          }
-        }
-      }
-    },
-    "这个邮箱验证链接已失效或已经使用过。请回到 App 输入验证码，或使用邮箱和密码登录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This email verification link has expired or was already used. Return to the app to enter the code, or sign in with your email and password."
-          }
-        }
-      }
-    },
-    "这个验证链接需要在发起注册的设备上完成。请回到 App 输入验证码，或使用邮箱和密码登录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This verification link must be completed on the device where sign-up began. Return to the app to enter the code, or sign in with your email and password."
-          }
-        }
-      }
-    },
-    "登录会话未建立，请稍后重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The sign-in session could not be created. Try again later."
-          }
-        }
-      }
-    },
-    "社区投票加载失败，请重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community polls could not be loaded. Try again."
-          }
-        }
-      }
-    },
-    "社区内容加载失败，请重试。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community content could not be loaded. Try again."
-          }
-        }
-      }
-    },
-    "成绩保存失败" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Grades could not be saved"
-          }
-        }
-      }
-    },
-    "同步结果：%@。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sync result: %@."
           }
         }
       }
