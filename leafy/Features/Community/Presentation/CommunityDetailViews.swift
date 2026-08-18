@@ -5,6 +5,14 @@ import QuickLook
 import SwiftUI
 import UniformTypeIdentifiers
 
+private struct CommunityCommentComposerHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct RealCommunityPostDetailSheet: View {
     let post: CommunityPost
     let onPostChanged: (CommunityPost) -> Void
@@ -27,6 +35,7 @@ struct RealCommunityPostDetailSheet: View {
     @State private var downloadingAttachmentIDs: Set<UUID> = []
     @State private var attachmentDownloadError: String?
     @State private var attachmentPreview: CommunityAttachmentPreview?
+    @State private var commentComposerHeight: CGFloat = 0
     @FocusState private var isCommentFieldFocused: Bool
 
     private var communityAccessGate: CommunityAccessGate {
@@ -180,27 +189,14 @@ struct RealCommunityPostDetailSheet: View {
                 }
                 .padding(.horizontal, AppSpacing.page)
                 .padding(.top, 8)
-                .padding(.bottom, AppSpacing.page)
+                .padding(.bottom, max(AppSpacing.page, commentComposerHeight))
             }
             .background(LeafyPageBackground())
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("帖子详情")
             .leafyInlineNavigationTitle()
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 10) {
-                    if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
-                        CommunityInlineError(message: errorMessage)
-                            .padding(.horizontal, AppSpacing.page)
-                    }
-
-                    LeafyGlassGroup(spacing: 8) {
-                        commentComposer
-                    }
-                    .padding(.horizontal, AppSpacing.page)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                    .background(AppTheme.topBarMaterial)
-                }
+            .overlay(alignment: .bottom) {
+                commentComposerOverlay
             }
             .task {
                 await viewModel.load()
@@ -297,9 +293,36 @@ struct RealCommunityPostDetailSheet: View {
         .padding(.trailing, 2)
         .frame(minHeight: 44)
         .leafyGlassSurface(
-            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous),
+            in: Capsule(),
             isInteractive: true
         )
+    }
+
+    private var commentComposerOverlay: some View {
+        VStack(spacing: 10) {
+            if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
+                CommunityInlineError(message: errorMessage)
+                    .padding(.horizontal, AppSpacing.page)
+            }
+
+            LeafyGlassGroup(spacing: 8) {
+                commentComposer
+            }
+            .padding(.horizontal, AppSpacing.page)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CommunityCommentComposerHeightKey.self,
+                    value: proxy.size.height
+                )
+            }
+        }
+        .onPreferenceChange(CommunityCommentComposerHeightKey.self) { height in
+            commentComposerHeight = height
+        }
     }
 
     private var commentField: some View {

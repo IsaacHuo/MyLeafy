@@ -86,7 +86,11 @@ struct CommunityMasonryPostCard: View {
                                     .controlSize(.mini)
                             }
                         }
-                        .frame(width: favoriteControlSize, height: favoriteControlSize)
+                        .frame(
+                            width: favoriteControlSize,
+                            height: favoriteControlSize,
+                            alignment: .bottomTrailing
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(isFavoriteLoading)
@@ -96,18 +100,14 @@ struct CommunityMasonryPostCard: View {
                 .accessibilityValue(
                     L10n.text(post.viewerHasFavorited ? "已选择" : "未选择", language: leafyLanguage)
                 )
-                .padding(.trailing, favoriteControlPadding)
-                .padding(.bottom, favoriteControlPadding)
+                .padding(.trailing, cardContentPadding)
+                .padding(.bottom, cardContentPadding)
             }
         }
     }
 
     private var cardContentPadding: CGFloat {
         post.images.isEmpty ? 11 : 10
-    }
-
-    private var favoriteControlPadding: CGFloat {
-        0
     }
 
     @ViewBuilder
@@ -207,7 +207,7 @@ struct CommunityMasonryPostCard: View {
 
                     if onToggleFavorite != nil {
                         Color.clear
-                            .frame(width: favoriteControlSize, height: iconSize)
+                            .frame(width: iconSize, height: iconSize)
                     } else {
                         favoriteIcon
                     }
