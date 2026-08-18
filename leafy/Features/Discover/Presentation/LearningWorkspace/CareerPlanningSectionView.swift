@@ -125,10 +125,6 @@ struct CareerPlanningSectionView: View {
                         Text("个人简历")
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
-                        Text("PDF、Word 和图片会导入到本机私有目录，不会上传到云端。")
-                            .leafySubheadline()
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: AppSpacing.micro)

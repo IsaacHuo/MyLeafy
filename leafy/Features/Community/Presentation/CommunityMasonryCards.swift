@@ -8,7 +8,7 @@ enum CommunityCompactTimestampFormatter {
             Date.FormatStyle.dateTime
                 .month(.defaultDigits)
                 .day(.defaultDigits)
-                .hour()
+                .hour(.defaultDigits(amPM: .omitted))
                 .minute()
                 .locale(locale)
         )

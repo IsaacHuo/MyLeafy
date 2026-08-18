@@ -584,8 +584,8 @@ struct ScheduleMemoAdvancedEditorView: View {
         }
         .frame(minHeight: 52)
         .leafyGlassSurface(
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous),
-            fallbackFill: Color(uiColor: .secondarySystemBackground)
+            in: Capsule(),
+            isInteractive: true
         )
         .padding(.horizontal, AppSpacing.compact)
         .padding(.vertical, 6)
