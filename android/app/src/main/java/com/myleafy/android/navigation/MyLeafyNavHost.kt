@@ -12,23 +12,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navDeepLink
+import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.community.CommunityScreen
 import com.myleafy.android.features.profile.ProfileScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
 import com.myleafy.android.features.timetable.TimetableScreen
 
+object Routes {
+    const val LOGIN = "login"
+    const val DEEP_LINK_COMMUNITY_POST = "myleafy://community-post?id={postId}"
+    const val DEEP_LINK_TIMETABLE_INVITE = "myleafy://timetable-invite?code={code}"
+}
+
 /**
- * 根导航壳：Scaffold + NavigationBar（Material 3）+ NavHost。
- * Tab 切换使用 saveState / restoreState 保留各页状态。
+ * 根导航壳：Scaffold + NavigationBar + NavHost。
+ * 5 个固定 Tab + 登录路由；社区/共享课表深链挂靠对应 Tab。
  */
 @Composable
-fun MyLeafyNavHost() {
-    val navController = rememberNavController()
+fun MyLeafyNavHost(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
@@ -68,10 +75,25 @@ fun MyLeafyNavHost() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(RootTab.TIMETABLE.route) { TimetableScreen() }
-            composable(RootTab.COMMUNITY.route) { CommunityScreen() }
+            composable(
+                route = RootTab.COMMUNITY.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.DEEP_LINK_COMMUNITY_POST },
+                ),
+            ) { CommunityScreen() }
             composable(RootTab.SCHEDULE.route) { ScheduleScreen() }
             composable(RootTab.CAMPUS.route) { CampusScreen() }
-            composable(RootTab.PROFILE.route) { ProfileScreen() }
+            composable(
+                route = RootTab.PROFILE.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.DEEP_LINK_TIMETABLE_INVITE },
+                ),
+            ) {
+                ProfileScreen(onLoginClick = { navController.navigate(Routes.LOGIN) })
+            }
+            composable(Routes.LOGIN) {
+                LoginScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyLeafyTheme {
-                MyLeafyApp()
+                MyLeafyApp(deepLinkIntent = intent)
             }
         }
     }

@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -19,62 +21,88 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.core.data.local.CourseEntity
+import com.myleafy.android.features.timetable.domain.SemesterConfig
 
-/**
- * 课表页。阶段 1 展示本地缓存（Room）数据链路是否打通；
- * 教务抓取与网格渲染在阶段 2 接入。
- */
 @Composable
 fun TimetableScreen(
     viewModel: TimetableViewModel = viewModel(
         factory = appViewModelFactory { container ->
             TimetableViewModel(
                 repository = container.timetableRepository,
-                semesterId = DEFAULT_SEMESTER_ID,
+                semesterId = SemesterConfig.currentSemesterId,
             )
         },
     ),
+    modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "课表",
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                } else {
+        Text(text = "课表", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        when (val state = uiState) {
+            is TimetableUiState.Loading -> {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            }
+
+            is TimetableUiState.Error -> {
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            is TimetableUiState.Loaded -> {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "学期 ${state.semesterId} · 第 ${state.week} 周",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "本地已缓存 ${state.courses.size} 门课程",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                if (state.courses.isEmpty()) {
                     Text(
-                        text = "学期 ${uiState.semesterId}",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "本地已缓存 ${uiState.courseCount} 门课程",
+                        text = "暂无课程，教务抓取阶段 2 接入后自动同步",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.outline,
                     )
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(state.courses, key = { it.id }) { course ->
+                            CourseRow(course = course)
+                        }
+                    }
                 }
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "第一阶段占位 · 教务抓取阶段 2 接入",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline,
-        )
     }
 }
 
-// 阶段 1 内置默认学期；阶段 2 由 semester_runtime_configs 远程配置替换
-private const val DEFAULT_SEMESTER_ID = "2025-2026-2"
+@Composable
+private fun CourseRow(course: CourseEntity) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(text = course.courseName, style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = "${course.teacher} · ${course.location} ${course.room} · 第 ${course.duration.joinToString("-")} 节",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}

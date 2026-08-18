@@ -2,42 +2,50 @@ package com.myleafy.android.features.timetable
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.myleafy.android.core.data.local.CourseEntity
+import com.myleafy.android.features.timetable.domain.SemesterConfig
+import java.time.LocalDate
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-data class TimetableUiState(
-    val semesterId: String = "",
-    val courseCount: Int = 0,
-    val isLoading: Boolean = true,
-)
+sealed interface TimetableUiState {
+    data object Loading : TimetableUiState
+    data class Loaded(
+        val semesterId: String,
+        val week: Int,
+        val courses: List<CourseEntity>,
+    ) : TimetableUiState
+
+    data class Error(val message: String) : TimetableUiState
+}
 
 /**
- * 课表 ViewModel。阶段 1 展示本地缓存（Room）的课表数量，验证
- * UI → ViewModel → Repository → DataSource 数据链路；教务抓取阶段 2 接入。
+ * 课表 ViewModel。阶段 1.5 展示本地缓存课程与当前教学周；
+ * 教务抓取（OkHttp + jsoup）阶段 2 接入。
  */
 class TimetableViewModel(
     repository: TimetableRepository,
-    semesterId: String,
+    semesterId: String = SemesterConfig.currentSemesterId,
 ) : ViewModel() {
 
-    val uiState: StateFlow<TimetableUiState> = repository.coursesForSemester(semesterId)
+    private val mapped: Flow<TimetableUiState> = repository.coursesForSemester(semesterId)
         .map { courses ->
-            TimetableUiState(
+            TimetableUiState.Loaded(
                 semesterId = semesterId,
-                courseCount = courses.size,
-                isLoading = false,
+                week = SemesterConfig.currentWeek(LocalDate.now()),
+                courses = courses,
             )
         }
+
+    val uiState: StateFlow<TimetableUiState> = mapped
+        .catch { emit(TimetableUiState.Error(it.message ?: "课表加载失败")) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = TimetableUiState(semesterId = semesterId, isLoading = true),
+            initialValue = TimetableUiState.Loading,
         )
-
-    private val _refreshing = MutableStateFlow(false)
-    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 }

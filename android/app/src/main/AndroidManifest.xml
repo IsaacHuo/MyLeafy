@@ -23,6 +23,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- 深链：myleafy://community-post?id=… / myleafy://timetable-invite?code=… -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="myleafy" android:host="community-post" />
+                <data android:scheme="myleafy" android:host="timetable-invite" />
+            </intent-filter>
         </activity>
     </application>
 

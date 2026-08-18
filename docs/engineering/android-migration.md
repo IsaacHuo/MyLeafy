@@ -13,10 +13,13 @@
 | SDK | compileSdk 36 / targetSdk 36 / **minSdk 29**（Android 10+） |
 | JDK | 构建用 JDK 17（Android Studio 内嵌 JBR 亦可） |
 | 包 | `com.myleafy.android`，versionCode 1，versionName 0.1.0 |
-| 结构 | 单 `:app` module；本地 Room 库 `myleafy.db` |
-| 验证 | `./gradlew :app:assembleDebug` ✓；`./gradlew :app:testDebugUnitTest` ✓（9 用例） |
+| 结构 | 单 `:app` module；本地 Room 库 `myleafy.db`（v2） |
+| 数据层 | Room v2：Course / Grade / Exam / ScheduleMemo / ScheduleEvent；DataStore Preferences（非敏感设置） |
+| 导航 | 5 个固定根 Tab + `login` 路由 + 深链（`myleafy://community-post` / `timetable-invite`） |
+| 验证 | `./gradlew :app:assembleDebug` ✓；`./gradlew :app:testDebugUnitTest` ✓（23 用例，含学期/节次纯逻辑） |
 
 阶段 1 交付：可编译、可运行、5 Tab 可导航、架构（Compose → ViewModel → Repository → DataSource）正确的工程骨架。
+阶段 1.5 交付：全部功能的基础架构（UiState 状态机 / Repository / Room / DTO / 登录路由 / 深链）已搭好，教务网络与 Supabase 仍未接入（占位实现如实展示“未接入”文案）。
 
 ## A. 迁移清单（Migration Inventory）
 
@@ -90,7 +93,7 @@
 
 只选成熟维护良好的库；优先 Android 官方。
 
-**阶段 1 已接入：** compose（ui/material3/icons-extended）、navigation-compose、lifecycle（runtime/viewmodel-compose）、activity-compose、core-ktx、room（runtime/ktx/compiler via KSP）、junit（测试）。
+**阶段 1 已接入：** compose（ui/material3/icons-extended）、navigation-compose、lifecycle（runtime/viewmodel-compose）、activity-compose、core-ktx、room（runtime/ktx/compiler via KSP）、datastore-preferences、junit（测试）。
 
 **版本目录已锁定、阶段 2 按需接入：** okhttp 5.5.0、jsoup 1.23.1。
 
@@ -111,33 +114,47 @@ android/
 ├── README.md                          # 构建说明
 └── app/
     └── src/main/
-        ├── AndroidManifest.xml        # 含 network-security-config（两教务域明文）
+        ├── AndroidManifest.xml        # 含 network-security-config 与 myleafy:// 深链
         ├── res/                       # 字符串、主题、自适应启动图标
         └── java/com/myleafy/android/
             ├── MyLeafyApplication.kt / MainActivity.kt
             ├── ui/theme/              # M3 亮/暗，鼠尾草绿
             ├── ui/MyLeafyApp.kt / ui/components/
-            ├── navigation/            # RootTab + MyLeafyNavHost（5 Tab 固定）
+            ├── navigation/            # RootTab + MyLeafyNavHost + Routes（5 Tab + login + 深链）
             ├── features/
-            │   ├── auth/              # 登录仓储 + ViewModel + 占位页
-            │   ├── timetable/         # Room 数据链路已验证 + 占位页
-            │   ├── community/         # 仓储接口 + ViewModel + 占位页
-            │   ├── schedule/ campus/ profile/  # ViewModel + 占位页
+            │   ├── auth/              # 登录表单 + 状态机（阶段 2 接强智）
+            │   ├── timetable/         # domain（SemesterConfig/PeriodSchedule）+ Room 数据链路
+            │   ├── community/         # DTO（shared/model）+ 仓储接口 + 占位页
+            │   ├── schedule/          # 随记/日程 Room CRUD（本地权威，真实可用）
+            │   ├── campus/            # 成绩/考试 Room 缓存 + 占位页
+            │   └── profile/           # 本地身份 + 社区资料占位
             ├── core/
             │   ├── campus/            # CampusID/Capability/Descriptor/ActiveCampusContext
-            │   ├── data/local/        # Room：CourseEntity + CourseDao + AppDatabase
+            │   ├── data/local/        # Room v2：Course/Grade/Exam/ScheduleMemo/ScheduleEvent
             │   ├── di/                # AppContainer + appViewModelFactory
             │   ├── network/           # 教务客户端接口/Cookie 契约/错误/身份 scopeKey
+            │   ├── prefs/             # SettingsStore（DataStore：身份/主题/语言）
             │   ├── security/          # SecureStorage（Keystore AES-GCM）+ 凭据/Cookie 存储
             ├── parsers/               # HtmlParser 接口 + 解析结果类型
-            └── services/              # SupabaseConfig（BuildConfig ← secrets.properties）
+            ├── services/              # SupabaseConfig（BuildConfig ← secrets.properties）
+            └── shared/model/          # 社区 DTO（snake_case，跨平台契约）
 ```
+
+### 阶段 1.5 架构要点
+
+- 每个功能都有独立 `sealed UiState`（Loading / Loaded / Empty / Error），满足「新功能必须定义 Loading、Empty、Error 与恢复行为」不变量。
+- 依赖方向：Compose UI → ViewModel → Repository → Room/DataStore/占位；无 UseCase 泛滥、无 Base 类。
+- 日迹（Schedule）为真实可用的本地功能：随记新增/软删除、个人日程读写，Room 持久化。
+- 登录路由 `login` 已接入 NavHost；Profile 页提供入口，阶段 2 替换为强智登录协议。
+- 深链 `myleafy://community-post?id=…` 与 `myleafy://timetable-invite?code=…` 挂靠社区/我的 Tab（对应 iOS 深链路由白名单）。
+- 占位仓储（Community/Auth/Profile）通过 `isPlaceholder` 标识在 UI 如实展示“未接入”，不静默返回假数据。
+- 纯逻辑（学期周次、节次时段、Cookie 契约）已单元测试覆盖。
 
 ### 架构决策
 
 - 依赖方向固定：`Compose UI → ViewModel → Repository → DataSource`；无 UseCase 泛滥、无 Base 类。
 - 阶段 1 固定 5 Tab（课表/社区/日迹/校园/我的），不做 capability 门控；社区门控逻辑保留在 `CampusDescriptor`，后续接入。
-- `CourseEntity` 已映射并在课表页展示「本地缓存课程数」，验证 Room 全链路可编译运行。
+- 本地数据分类：教务副本（Course/Grade/Exam，学校权威）与用户数据（ScheduleMemo/ScheduleEvent，本地权威）分实体注册，社区数据以 Supabase 为权威不落 Room。
 - Room 早期采用 `fallbackToDestructiveMigration(dropAllTables = true)`；正式发布前改为受控 migration。
 
 ## 数据模型映射表（DTO / Entity）
