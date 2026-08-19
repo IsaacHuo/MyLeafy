@@ -21,6 +21,7 @@
 阶段 1 交付：可编译、可运行、5 Tab 可导航、架构（Compose → ViewModel → Repository → DataSource）正确的工程骨架。
 阶段 1.5 交付：全部功能的基础架构（UiState 状态机 / Repository / Room / DTO / 登录路由 / 深链）已搭好，教务网络与 Supabase 仍未接入（占位实现如实展示“未接入”文案）。
 **阶段 2（M2.1-M2.5）已完成：** OkHttp 教务客户端与 Cookie 契约 → 强智登录（encodeKey/验证码/会话验证）→ 课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库 → 周课表网格渲染 → 成绩/考试抓取 + 校园页。`assembleDebug` + `testDebugUnitTest`（67 用例）通过。
+**阶段 4 社区（M4.1-M4.3）已完成：** supabase-kt 客户端层（auth/postgrest/functions，匿名 Auth + bootstrap + feed）→ 帖子详情 + 评论线程 + 点赞 → 文本发帖 + 评论。`assembleDebug` + `testDebugUnitTest`（70 用例）通过。
 
 ## A. 迁移清单（Migration Inventory）
 
@@ -299,9 +300,9 @@ Gradle 已预留 `versionCode / versionName / applicationId / signingConfig（re
 ## 后续阶段路线
 
 - **阶段 2 教务接入（M2.1-M2.5）：已完成。** OkHttp 客户端（登录/Cookie/编码）、jsoup 解析器与 Fixture 回归、Room 落库、课表网格渲染、登录页、成绩/考试抓取与展示。
-- **阶段 4 社区**：supabase-kt、匿名 Auth + bootstrap、Feed/详情/发布/通知/投票。
+- **阶段 4 社区（M4.1-M4.3）：已完成。** supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论/点赞、文本发帖与评论。
+- **阶段 5 校园与我的**：空教室、我的社区资料（bootstrap 展示）、评价目录、共享课表。
 - **阶段 3 日迹强化**：Markdown 编辑、统计（本机可测）、分享卡片。
-- **阶段 5 校园与我的**：空教室、评价目录、个人资料、共享课表。
 - **发布工程**：WorkManager 后台刷新、Widget（Glance）、通知、release 签名与 CI。
 
 每阶段验收：`./gradlew assembleDebug` 通过；能单测的纯逻辑加测试；行为/边界变化同步更新本文、`state/` 与 `contracts/`。
