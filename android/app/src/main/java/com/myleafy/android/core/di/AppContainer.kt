@@ -21,7 +21,7 @@ import com.myleafy.android.features.campus.AcademicRepository
 import com.myleafy.android.features.campus.LiveAcademicRepository
 import com.myleafy.android.features.community.CommunityRepository
 import com.myleafy.android.features.community.LiveCommunityRepository
-import com.myleafy.android.features.profile.PlaceholderProfileRepository
+import com.myleafy.android.features.profile.LiveProfileRepository
 import com.myleafy.android.features.profile.ProfileRepository
 import com.myleafy.android.features.schedule.RoomScheduleRepository
 import com.myleafy.android.features.schedule.ScheduleRepository
@@ -84,7 +84,7 @@ class AppContainer(context: Context) {
     val communityService: CommunityService? = SupabaseClientProvider.create()?.let { CommunityService(it) }
     val communityRepository: CommunityRepository = LiveCommunityRepository(communityService)
 
-    val profileRepository: ProfileRepository = PlaceholderProfileRepository()
+    val profileRepository: ProfileRepository = LiveProfileRepository(communityService, schoolSessionState)
     val authRepository: AuthRepository = SchoolAuthRepository(
         client = schoolNetworkClient,
         sessionState = schoolSessionState,
