@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
+import com.myleafy.android.core.network.SchoolNetworkClient
+import com.myleafy.android.core.network.okhttp.OkHttpSchoolNetworkClient
 import com.myleafy.android.core.prefs.SettingsStore
 import com.myleafy.android.core.security.KeystoreSchoolLoginCredentialStore
 import com.myleafy.android.core.security.KeystoreSchoolSessionCookieStore
@@ -50,6 +52,15 @@ class AppContainer(context: Context) {
         KeystoreSchoolLoginCredentialStore(secureStorage)
     val schoolSessionCookieStore: SchoolSessionCookieStore =
         KeystoreSchoolSessionCookieStore(secureStorage)
+
+    // 教务 OkHttp 客户端。身份在 M2.2 登录成功后接入；
+    // 目前无身份 → Cookie 字典为空，业务方法未实现时 fail-fast。
+    val schoolNetworkClient: SchoolNetworkClient = OkHttpSchoolNetworkClient(
+        cookieStore = schoolSessionCookieStore,
+        identityProvider = { null },
+        baseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.undergraduateBaseUrl,
+        graduateBaseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.graduateBaseUrl,
+    )
 
     val timetableRepository: TimetableRepository = RoomTimetableRepository(database.courseDao())
     val scheduleRepository: ScheduleRepository =
