@@ -29,6 +29,7 @@ import com.myleafy.android.shared.model.PostDto
 @Composable
 fun CommunityScreen(
     onPostClick: (String) -> Unit = {},
+    onComposeClick: () -> Unit = {},
     viewModel: CommunityViewModel = viewModel(
         factory = appViewModelFactory { container ->
             CommunityViewModel(
@@ -46,7 +47,19 @@ fun CommunityScreen(
             .fillMaxSize()
             .padding(20.dp),
     ) {
-        Text(text = "社区", style = MaterialTheme.typography.headlineMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "社区",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = onComposeClick) {
+                Text("发帖")
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
 
         when (val state = uiState) {

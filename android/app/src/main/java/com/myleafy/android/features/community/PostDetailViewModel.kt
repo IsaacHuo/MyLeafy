@@ -63,4 +63,15 @@ class PostDetailViewModel(
             )
         }
     }
+
+    fun createComment(body: String, parentCommentId: String? = null, replyToCommentId: String? = null) {
+        val current = _uiState.value as? PostDetailUiState.Loaded ?: return
+        if (body.isBlank()) return
+        viewModelScope.launch {
+            val result = runCatching {
+                repository.createComment(postId, body.trim(), parentCommentId, replyToCommentId)
+            }
+            result.onSuccess { load() }
+        }
+    }
 }

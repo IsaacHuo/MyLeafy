@@ -1,6 +1,7 @@
 package com.myleafy.android.features.community
 
 import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.shared.model.CommentDto
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadPageDto
 import com.myleafy.android.shared.model.FeedQuery
@@ -28,6 +29,17 @@ interface CommunityRepository {
 
     /** 点赞/取消点赞，返回更新后的帖子。 */
     suspend fun togglePostLike(postId: String): PostDto
+
+    /** 发帖（文本，暂无图片/附件）。 */
+    suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto
+
+    /** 评论（最多两层：parentCommentId 为根评论 id）。 */
+    suspend fun createComment(
+        postId: String,
+        body: String,
+        parentCommentId: String?,
+        replyToCommentId: String?,
+    ): CommentDto
 }
 
 /** 线上仓储：匿名 Auth + community-feed + postgrest RPC。 */
@@ -54,6 +66,16 @@ class LiveCommunityRepository(
 
     override suspend fun togglePostLike(postId: String): PostDto =
         requireService().togglePostLike(postId)
+
+    override suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto =
+        requireService().createPost(title, body, category, isAnonymous)
+
+    override suspend fun createComment(
+        postId: String,
+        body: String,
+        parentCommentId: String?,
+        replyToCommentId: String?,
+    ): CommentDto = requireService().createComment(postId, body, parentCommentId, replyToCommentId)
 }
 
 /** 占位实现（如无 Supabase 配置时兜底）。 */
@@ -68,4 +90,14 @@ class PlaceholderCommunityRepository : CommunityRepository {
 
     override suspend fun togglePostLike(postId: String): PostDto =
         throw NotImplementedError("社区功能未接入")
+
+    override suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto =
+        throw NotImplementedError("社区功能未接入")
+
+    override suspend fun createComment(
+        postId: String,
+        body: String,
+        parentCommentId: String?,
+        replyToCommentId: String?,
+    ): CommentDto = throw NotImplementedError("社区功能未接入")
 }

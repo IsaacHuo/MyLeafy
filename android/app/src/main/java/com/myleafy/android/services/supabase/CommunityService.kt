@@ -1,6 +1,7 @@
 package com.myleafy.android.services.supabase
 
 import com.myleafy.android.shared.model.BootstrapResponse
+import com.myleafy.android.shared.model.CommentDto
 import com.myleafy.android.shared.model.CommentThreadPageDto
 import com.myleafy.android.shared.model.FeedQuery
 import com.myleafy.android.shared.model.FeedResponse
@@ -12,6 +13,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
+import java.util.UUID
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
@@ -93,6 +95,45 @@ class CommunityService(private val client: SupabaseClient) {
         return client.postgrest.rpc(
             "toggle_post_like_v1",
             buildJsonObject { put("p_post_id", postId) },
+        ).decodeAs()
+    }
+
+    /** 发帖（create_community_post_v4，p_id 为客户端幂等 UUID，暂不支持图片/附件）。 */
+    suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto {
+        ensureAnonymousSession()
+        return client.postgrest.rpc(
+            "create_community_post_v4",
+            buildJsonObject {
+                put("p_id", UUID.randomUUID().toString())
+                put("p_title", title)
+                put("p_body", body)
+                if (category != null) put("p_category", category)
+                put("p_is_anonymous", isAnonymous)
+                put("p_image_count", 0)
+                put("p_attachment_count", 0)
+            },
+        ).decodeAs()
+    }
+
+    /** 评论（create_community_comment_v2，p_id 为客户端幂等 UUID；评论最多两层）。 */
+    suspend fun createComment(
+        postId: String,
+        body: String,
+        parentCommentId: String?,
+        replyToCommentId: String?,
+        isAnonymous: Boolean = false,
+    ): CommentDto {
+        ensureAnonymousSession()
+        return client.postgrest.rpc(
+            "create_community_comment_v2",
+            buildJsonObject {
+                put("p_id", UUID.randomUUID().toString())
+                put("p_post_id", postId)
+                put("p_body", body)
+                if (parentCommentId != null) put("p_parent_comment_id", parentCommentId)
+                if (replyToCommentId != null) put("p_reply_to_comment_id", replyToCommentId)
+                put("p_is_anonymous", isAnonymous)
+            },
         ).decodeAs()
     }
 }
