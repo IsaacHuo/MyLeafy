@@ -1,36 +1,45 @@
 package com.myleafy.android.core.network.okhttp
 
+import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.CampusIdentity
 import com.myleafy.android.core.network.CourseRecord
+import com.myleafy.android.core.network.SchoolCookies
+import com.myleafy.android.core.network.SchoolEncoding
+import com.myleafy.android.core.network.SchoolLoginEncoder
 import com.myleafy.android.core.network.SchoolNetworkClient
+import com.myleafy.android.core.network.SchoolNetworkError
+import com.myleafy.android.core.network.SchoolPageDetector
 import com.myleafy.android.core.network.SchoolPortal
+import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.security.SchoolSessionCookieStore
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import okhttp3.CookieJar
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /**
- * OkHttp 教务客户端（M2.1：骨架 + Cookie 契约）。
+ * OkHttp 教务客户端。
  *
- * - Cookie 管理完全复刻 iOS（SchoolCookieInterceptor + NO_COOKIES jar）。
- * - 请求头/缓存策略与 iOS 一致（UA、no-cache、超时）。
- * - 登录（M2.2）、课表/成绩抓取（M2.3）等业务方法尚未实现，失败时明确抛出，
- *   不做假数据。
+ * - M2.1：骨架 + Cookie 契约（SchoolCookieInterceptor + NO_COOKIES jar）。
+ * - M2.2：强智本科生登录（key / 验证码 / encodeKey / 会话验证）与页面识别。
+ * - 研究生登录（RSA + AES）、课表/成绩抓取（M2.3+）未实现，fail-fast。
  */
 class OkHttpSchoolNetworkClient(
     private val cookieStore: SchoolSessionCookieStore,
-    private val identityProvider: () -> CampusIdentity?,
+    private val sessionState: SchoolSessionState,
     private val baseUrl: String,
     private val graduateBaseUrl: String?,
 ) : SchoolNetworkClient {
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(CookieJar.NO_COOKIES)
-        .addInterceptor(SchoolCookieInterceptor(cookieStore, identityProvider))
+        .addInterceptor(SchoolCookieInterceptor(cookieStore) { sessionState.identity })
         .cache(null)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
@@ -46,44 +55,132 @@ class OkHttpSchoolNetworkClient(
         portal: SchoolPortal = SchoolPortal.UNDERGRADUATE,
         referer: String? = null,
     ): Request.Builder {
-        val base = if (portal == SchoolPortal.GRADUATE) {
+        val rawBase = if (portal == SchoolPortal.GRADUATE) {
             graduateBaseUrl ?: error("研究生门户未配置")
         } else {
             baseUrl
         }
-        return SchoolRequests.builder(base + path, referer = referer)
+        val base = rawBase.trimEnd('/')
+        val url = "$base/${path.trimStart('/')}"
+        return SchoolRequests.builder(url, referer = referer)
     }
 
-    /** 执行请求并解析响应 Set-Cookie（供后续登录/抓取复用）。 */
+    /** 执行请求并解析响应 Set-Cookie。 */
     internal fun execute(request: Request): Response = client.newCall(request).execute()
 
-    override suspend fun fetchUndergraduateCaptcha(): ByteArray = notYet("M2.2 强智登录")
-
-    override suspend fun fetchGraduatePublicKey(): String = notYet("M2.2 研究生登录")
+    override suspend fun fetchUndergraduateCaptcha(): ByteArray {
+        clearSession()
+        fetchLoginKey()
+        val request = requestBuilder("/verifycode.servlet").get().build()
+        return execute(request).use { it.body?.bytes() ?: byteArrayOf() }
+    }
 
     override suspend fun loginUndergraduate(account: String, password: String, captcha: String) {
-        notYet("M2.2 强智登录")
+        clearSession()
+        val key = fetchLoginKey()
+        val encoded = SchoolLoginEncoder.encodeKey(key, account, password)
+        if (encoded.isEmpty()) {
+            throw SchoolNetworkError.LoginFailed("登录密钥无效，请重试")
+        }
+
+        val bodyText = "useDogCode=&encoded=${SchoolLoginEncoder.formUrlEncode(encoded)}" +
+            "&RANDOMCODE=${SchoolLoginEncoder.formUrlEncode(captcha.trim())}"
+        val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+        val request = requestBuilder("/Logon.do?method=logon", referer = baseUrl).post(body).build()
+
+        val response = execute(request)
+        val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
+        val responseUrl = response.request.url.toString()
+        val loginSetCookies = response.headers.values("Set-Cookie")
+        response.close()
+
+        SchoolPageDetector.extractLoginMessage(html)?.let {
+            throw SchoolNetworkError.LoginFailed(it)
+        }
+        if (SchoolPageDetector.isLoginPage(html)) {
+            throw SchoolNetworkError.LoginFailed("登录失败，请检查学号与验证码")
+        }
+        val loginResponseAuthenticated = SchoolPageDetector.isAuthenticatedResponse(responseUrl, html)
+
+        // 提交身份与登录 Cookie，供会话验证请求携带
+        val identity = undergraduateIdentity(account)
+        sessionState.identity = identity
+        if (loginSetCookies.isNotEmpty()) {
+            val merged = SchoolCookies.mergeSetCookie(loadCookies(), loginSetCookies)
+            cookieStore.save(merged, identity.scopeKey, identity.portal.rawValue)
+        }
+
+        val sessionAuthenticated = verifyAuthenticatedSession().isSuccess
+        val success = loginResponseAuthenticated && sessionAuthenticated || sessionAuthenticated
+        if (!success) {
+            sessionState.clear()
+            cookieStore.delete(identity.scopeKey, identity.portal.rawValue)
+            throw SchoolNetworkError.LoginFailed("登录失败，请重试")
+        }
+
+        sessionState.markLoggedIn(identity)
     }
+
+    override suspend fun verifyAuthenticatedSession(): Result<Unit> {
+        val retryCount = 1
+        for (attempt in 0..retryCount) {
+            try {
+                val request = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
+                val response = execute(request)
+                val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
+                val responseUrl = response.request.url.toString()
+                response.close()
+                if (SchoolPageDetector.isAuthenticatedResponse(responseUrl, html)) {
+                    return Result.success(Unit)
+                }
+            } catch (_: Exception) {
+                // 重试
+            }
+            if (attempt < retryCount) delay(300)
+        }
+        return Result.failure(SchoolNetworkError.SessionExpired)
+    }
+
+    override suspend fun fetchGraduatePublicKey(): String = notYet("研究生登录（RSA）")
 
     override suspend fun loginGraduate(account: String, password: String, captcha: String) {
-        notYet("M2.2 研究生登录")
+        notYet("研究生登录（AES）")
     }
-
-    override suspend fun verifyAuthenticatedSession(): Result<Unit> = notYet("M2.2 会话验证")
 
     override suspend fun fetchTimetable(semesterId: String): Flow<List<CourseRecord>> =
         flow { throw NotImplementedError("课表抓取将在 M2.3 接入（jsoup 解析）") }
 
     override fun clearSession() {
-        val identity = identityProvider() ?: return
-        cookieStore.delete(identity.scopeKey, identity.portal.rawValue)
+        val identity = sessionState.identity
+        if (identity != null) {
+            cookieStore.delete(identity.scopeKey, identity.portal.rawValue)
+        }
+        sessionState.clear()
+    }
+
+    private fun fetchLoginKey(): String {
+        val request = requestBuilder("/Logon.do?method=logon&flag=sess").get().build()
+        return execute(request).use {
+            val text = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()).trim()
+            check(text.isNotBlank()) { "未获取到登录 key" }
+            text
+        }
     }
 
     private fun loadCookies(): Map<String, String> {
-        val identity = identityProvider() ?: return emptyMap()
+        val identity = sessionState.identity ?: return emptyMap()
         return cookieStore.load(identity.scopeKey, identity.portal.rawValue)
     }
 
+    private fun undergraduateIdentity(account: String): CampusIdentity = CampusIdentity(
+        // M2.2 仅支持 BJFU 本科门户；多校园/研究生在后续阶段扩展
+        campusId = CampusID.bjfu,
+        eduId = account,
+        displayName = null,
+        portal = SchoolPortal.UNDERGRADUATE,
+        kind = CampusIdentity.IdentityKind.SCHOOL_PORTAL,
+    )
+
     private fun notYet(stage: String): Nothing =
-        throw NotImplementedError("$stage 尚未实现（M2.1 仅完成客户端骨架与 Cookie 契约）")
+        throw NotImplementedError("$stage 尚未实现")
 }

@@ -12,11 +12,13 @@ data class LoginUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val loginSucceeded: Boolean = false,
+    val captchaBytes: ByteArray? = null,
+    val isCaptchaLoading: Boolean = false,
 )
 
 /**
- * 登录 ViewModel。阶段 1.5 校验输入并调用 AuthRepository；
- * 占位实现会如实返回失败（错误状态可见），阶段 2 接入强智登录。
+ * 登录 ViewModel（M2.2 接入强智登录）。
+ * 验证码自动获取，登录失败后自动刷新验证码。
  */
 class LoginViewModel(
     private val repository: AuthRepository,
@@ -26,6 +28,23 @@ class LoginViewModel(
         LoginUiState(hasCachedIdentity = repository.hasCachedIdentity),
     )
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
+
+    init {
+        refreshCaptcha()
+    }
+
+    fun refreshCaptcha() {
+        _uiState.value = _uiState.value.copy(isCaptchaLoading = true, captchaBytes = null)
+        viewModelScope.launch {
+            val bytes = runCatching { repository.fetchUndergraduateCaptcha() }
+                .getOrNull()
+            _uiState.value = _uiState.value.copy(
+                isCaptchaLoading = false,
+                captchaBytes = bytes,
+                errorMessage = if (bytes == null) "验证码获取失败，请检查校园网" else _uiState.value.errorMessage,
+            )
+        }
+    }
 
     fun submit(account: String, password: String, captcha: String) {
         if (account.isBlank() || password.isBlank() || captcha.isBlank()) {
@@ -48,6 +67,7 @@ class LoginViewModel(
                         isSubmitting = false,
                         errorMessage = it.message ?: "登录失败",
                     )
+                    refreshCaptcha()
                 },
             )
         }

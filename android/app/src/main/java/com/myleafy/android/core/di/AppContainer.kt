@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.network.SchoolNetworkClient
+import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.network.okhttp.OkHttpSchoolNetworkClient
 import com.myleafy.android.core.prefs.SettingsStore
 import com.myleafy.android.core.security.KeystoreSchoolLoginCredentialStore
@@ -13,7 +14,7 @@ import com.myleafy.android.core.security.SchoolLoginCredentialStore
 import com.myleafy.android.core.security.SchoolSessionCookieStore
 import com.myleafy.android.core.security.SecureStorage
 import com.myleafy.android.features.auth.AuthRepository
-import com.myleafy.android.features.auth.PlaceholderAuthRepository
+import com.myleafy.android.features.auth.SchoolAuthRepository
 import com.myleafy.android.features.campus.AcademicRepository
 import com.myleafy.android.features.campus.RoomAcademicRepository
 import com.myleafy.android.features.community.CommunityRepository
@@ -53,11 +54,13 @@ class AppContainer(context: Context) {
     val schoolSessionCookieStore: SchoolSessionCookieStore =
         KeystoreSchoolSessionCookieStore(secureStorage)
 
-    // 教务 OkHttp 客户端。身份在 M2.2 登录成功后接入；
-    // 目前无身份 → Cookie 字典为空，业务方法未实现时 fail-fast。
+    // 教务会话状态：身份驱动 Cookie 作用域（M2.2 登录成功后写入）
+    val schoolSessionState = SchoolSessionState()
+
+    // 教务 OkHttp 客户端。登录（M2.2）后建立身份与 Cookie；抓取方法（M2.3+）未实现时 fail-fast。
     val schoolNetworkClient: SchoolNetworkClient = OkHttpSchoolNetworkClient(
         cookieStore = schoolSessionCookieStore,
-        identityProvider = { null },
+        sessionState = schoolSessionState,
         baseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.undergraduateBaseUrl,
         graduateBaseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.graduateBaseUrl,
     )
@@ -69,5 +72,10 @@ class AppContainer(context: Context) {
         RoomAcademicRepository(database.gradeDao(), database.examDao())
     val communityRepository: CommunityRepository = PlaceholderCommunityRepository()
     val profileRepository: ProfileRepository = PlaceholderProfileRepository()
-    val authRepository: AuthRepository = PlaceholderAuthRepository()
+    val authRepository: AuthRepository = SchoolAuthRepository(
+        client = schoolNetworkClient,
+        sessionState = schoolSessionState,
+        credentialStore = schoolLoginCredentialStore,
+        settingsStore = settingsStore,
+    )
 }

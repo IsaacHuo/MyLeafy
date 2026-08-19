@@ -3,7 +3,7 @@ package com.myleafy.android.core.network
 /**
  * 教务网络错误语义（对应 iOS `SchoolNetworkError`，行为契约一致）。
  */
-sealed class SchoolNetworkError(val message: String) {
+sealed class SchoolNetworkError(message: String) : Exception(message) {
     class LoginFailed(reason: String) : SchoolNetworkError(reason)
     object SessionExpired : SchoolNetworkError("教务会话已失效")
     object TimetableDataUnavailable : SchoolNetworkError("课表数据不可用")

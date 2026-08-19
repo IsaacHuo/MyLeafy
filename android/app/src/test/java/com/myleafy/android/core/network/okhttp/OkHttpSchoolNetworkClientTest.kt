@@ -4,6 +4,7 @@ import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.CampusIdentity
 import com.myleafy.android.core.network.FakeSchoolSessionCookieStore
 import com.myleafy.android.core.network.SchoolPortal
+import com.myleafy.android.core.network.SchoolSessionState
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -21,6 +22,7 @@ class OkHttpSchoolNetworkClientTest {
 
     private lateinit var server: MockWebServer
     private lateinit var store: FakeSchoolSessionCookieStore
+    private lateinit var session: SchoolSessionState
     private lateinit var client: OkHttpSchoolNetworkClient
     private val identity = CampusIdentity(
         campusId = CampusID.bjfu,
@@ -35,9 +37,11 @@ class OkHttpSchoolNetworkClientTest {
         server = MockWebServer()
         server.start()
         store = FakeSchoolSessionCookieStore()
+        session = SchoolSessionState()
+        session.identity = identity
         client = OkHttpSchoolNetworkClient(
             cookieStore = store,
-            identityProvider = { identity },
+            sessionState = session,
             baseUrl = server.url("/").toString(),
             graduateBaseUrl = null,
         )
@@ -80,7 +84,7 @@ class OkHttpSchoolNetworkClientTest {
     fun withoutIdentityNoCookieHeaderIsSent() {
         val anonymousClient = OkHttpSchoolNetworkClient(
             cookieStore = store,
-            identityProvider = { null },
+            sessionState = SchoolSessionState(),
             baseUrl = server.url("/").toString(),
             graduateBaseUrl = null,
         )
@@ -119,7 +123,10 @@ class OkHttpSchoolNetworkClientTest {
     @Test
     fun unimplementedBusinessMethodsFailFast() {
         assertThrows(NotImplementedError::class.java) {
-            runBlocking { client.loginUndergraduate("account", "password", "captcha") }
+            runBlocking { client.fetchGraduatePublicKey() }
+        }
+        assertThrows(NotImplementedError::class.java) {
+            runBlocking { client.loginGraduate("account", "password", "captcha") }
         }
         assertThrows(NotImplementedError::class.java) {
             runBlocking { client.fetchTimetable("2025-2026-2").first() }
