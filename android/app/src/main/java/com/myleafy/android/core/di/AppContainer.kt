@@ -20,13 +20,15 @@ import com.myleafy.android.features.auth.SchoolAuthRepository
 import com.myleafy.android.features.campus.AcademicRepository
 import com.myleafy.android.features.campus.LiveAcademicRepository
 import com.myleafy.android.features.community.CommunityRepository
-import com.myleafy.android.features.community.PlaceholderCommunityRepository
+import com.myleafy.android.features.community.LiveCommunityRepository
 import com.myleafy.android.features.profile.PlaceholderProfileRepository
 import com.myleafy.android.features.profile.ProfileRepository
 import com.myleafy.android.features.schedule.RoomScheduleRepository
 import com.myleafy.android.features.schedule.ScheduleRepository
 import com.myleafy.android.features.timetable.LiveTimetableRepository
 import com.myleafy.android.features.timetable.TimetableRepository
+import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.services.supabase.SupabaseClientProvider
 
 /**
  * 手动组合根（对应 iOS `LeafyDependencies`）。
@@ -77,7 +79,11 @@ class AppContainer(context: Context) {
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao())
     val academicRepository: AcademicRepository =
         LiveAcademicRepository(schoolNetworkClient, database.gradeDao(), database.examDao())
-    val communityRepository: CommunityRepository = PlaceholderCommunityRepository()
+
+    // 社区（Supabase，阶段 4）：未配置 anon key 时 service 为 null，Feed 如实报错
+    val communityService: CommunityService? = SupabaseClientProvider.create()?.let { CommunityService(it) }
+    val communityRepository: CommunityRepository = LiveCommunityRepository(communityService)
+
     val profileRepository: ProfileRepository = PlaceholderProfileRepository()
     val authRepository: AuthRepository = SchoolAuthRepository(
         client = schoolNetworkClient,
