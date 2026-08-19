@@ -76,6 +76,23 @@ class JsoupHtmlParserTest {
     }
 
     @Test
+    fun parsesGradesWithRows() {
+        val grades = parser.parseGrades(fixture("grades_with_rows.html"))
+        assertEquals(2, grades.size)
+
+        val ds = grades.first { it.courseName == "数据结构" }
+        assertEquals("2025-2026-2", ds.term)
+        assertEquals("92", ds.score)
+        assertEquals("3.5", ds.credit)
+        assertEquals("必修 · 专业核心", ds.type)
+
+        val math = grades.first { it.courseName == "高等数学 A" }
+        assertEquals("88", math.score)
+        assertEquals("5", math.credit)
+        assertEquals("必修 · 公共基础", math.type)
+    }
+
+    @Test
     fun parsesExamBackendShape() {
         val exams = parser.parseExams(fixture("exams_backend_shape.html"))
         assertEquals(1, exams.size)

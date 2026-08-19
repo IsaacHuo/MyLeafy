@@ -14,6 +14,8 @@ import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.security.SchoolSessionCookieStore
 import com.myleafy.android.parsers.HtmlParser
 import com.myleafy.android.parsers.HtmlParseError
+import com.myleafy.android.parsers.ParsedExamRecord
+import com.myleafy.android.parsers.ParsedGradeRecord
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import okhttp3.CookieJar
@@ -176,6 +178,44 @@ class OkHttpSchoolNetworkClient(
                 weeks = r.weeks,
                 duration = r.duration,
             )
+        }
+    }
+
+    override suspend fun fetchGrades(): List<ParsedGradeRecord> {
+        val request = requestBuilder(
+            "/jsxsd/kscj/cjcx_list",
+            referer = "${baseUrl}/jsxsd/framework/xsMain.jsp",
+        ).get().build()
+        val html = execute(request).use {
+            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+        }
+        if (SchoolPageDetector.isLoginPage(html)) {
+            throw SchoolNetworkError.SessionExpired
+        }
+        return try {
+            parser.parseGrades(html)
+        } catch (e: HtmlParseError) {
+            throw SchoolNetworkError.GradeDataUnavailable
+        }
+    }
+
+    override suspend fun fetchExams(semesterId: String): List<ParsedExamRecord> {
+        val bodyText = "xqlbmc=&xnxqid=${SchoolLoginEncoder.formUrlEncode(semesterId)}&xqlb="
+        val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+        val request = requestBuilder(
+            "/jsxsd/xsks/xsksap_list",
+            referer = "${baseUrl}/jsxsd/framework/xsMain.jsp",
+        ).post(body).build()
+        val html = execute(request).use {
+            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+        }
+        if (SchoolPageDetector.isLoginPage(html)) {
+            throw SchoolNetworkError.SessionExpired
+        }
+        return try {
+            parser.parseExams(html)
+        } catch (e: HtmlParseError) {
+            throw SchoolNetworkError.ExamDataUnavailable
         }
     }
 

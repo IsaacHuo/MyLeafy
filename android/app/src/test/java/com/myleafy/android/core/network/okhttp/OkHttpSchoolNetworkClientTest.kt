@@ -18,6 +18,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -164,6 +165,60 @@ class OkHttpSchoolNetworkClientTest {
 
         assertThrows(SchoolNetworkError.SessionExpired::class.java) {
             runBlocking { client.fetchTimetable("2025-2026-2") }
+        }
+    }
+
+    @Test
+    fun fetchGradesParsesRecords() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/kscj/cjcx_list") == true ->
+                    MockResponse().setBody(fixture("grades_with_rows.html"))
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+
+        val grades = runBlocking { client.fetchGrades() }
+        assertEquals(2, grades.size)
+        assertEquals("数据结构", grades[0].courseName)
+        assertEquals("92", grades[0].score)
+    }
+
+    @Test
+    fun fetchExamsPostsSemesterAndParsesRecords() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/xsks/xsksap_list") == true ->
+                    MockResponse().setBody(fixture("exams_backend_shape.html"))
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+
+        val exams = runBlocking { client.fetchExams("2025-2026-2") }
+        assertEquals(1, exams.size)
+        assertEquals("数据结构", exams[0].name)
+        assertEquals("2026-06-20", exams[0].date)
+
+        val recorded = server.takeRequest(5, TimeUnit.SECONDS)
+        assertEquals("POST", recorded?.method)
+        val body = recorded?.body?.readUtf8() ?: ""
+        assertTrue(body.contains("xnxqid=2025-2026-2"))
+        assertTrue(body.contains("xqlbmc="))
+        assertTrue(body.contains("xqlb="))
+    }
+
+    @Test
+    fun fetchGradesThrowsSessionExpiredOnLoginPage() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/kscj/cjcx_list") == true ->
+                    MockResponse().setBody("<html>验证码</html>")
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+
+        assertThrows(SchoolNetworkError.SessionExpired::class.java) {
+            runBlocking { client.fetchGrades() }
         }
     }
 

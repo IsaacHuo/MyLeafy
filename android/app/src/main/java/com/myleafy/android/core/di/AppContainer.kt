@@ -18,7 +18,7 @@ import com.myleafy.android.core.security.SecureStorage
 import com.myleafy.android.features.auth.AuthRepository
 import com.myleafy.android.features.auth.SchoolAuthRepository
 import com.myleafy.android.features.campus.AcademicRepository
-import com.myleafy.android.features.campus.RoomAcademicRepository
+import com.myleafy.android.features.campus.LiveAcademicRepository
 import com.myleafy.android.features.community.CommunityRepository
 import com.myleafy.android.features.community.PlaceholderCommunityRepository
 import com.myleafy.android.features.profile.PlaceholderProfileRepository
@@ -76,7 +76,7 @@ class AppContainer(context: Context) {
     val scheduleRepository: ScheduleRepository =
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao())
     val academicRepository: AcademicRepository =
-        RoomAcademicRepository(database.gradeDao(), database.examDao())
+        LiveAcademicRepository(schoolNetworkClient, database.gradeDao(), database.examDao())
     val communityRepository: CommunityRepository = PlaceholderCommunityRepository()
     val profileRepository: ProfileRepository = PlaceholderProfileRepository()
     val authRepository: AuthRepository = SchoolAuthRepository(

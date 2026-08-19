@@ -74,6 +74,26 @@
       "result": "verified_empty",
       "grades": []
     },
+    "grades_with_rows.html": {
+      "kind": "grades",
+      "result": "records",
+      "grades": [
+        {
+          "term": "2025-2026-2",
+          "courseName": "数据结构",
+          "credit": "3.5",
+          "score": "92",
+          "type": "必修 · 专业核心"
+        },
+        {
+          "term": "2025-2026-2",
+          "courseName": "高等数学 A",
+          "credit": "5",
+          "score": "88",
+          "type": "必修 · 公共基础"
+        }
+      ]
+    },
     "exams_backend_shape.html": {
       "kind": "exams",
       "result": "records",

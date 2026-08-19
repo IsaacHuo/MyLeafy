@@ -7,6 +7,8 @@ sealed class SchoolNetworkError(message: String) : Exception(message) {
     class LoginFailed(reason: String) : SchoolNetworkError(reason)
     object SessionExpired : SchoolNetworkError("教务会话已失效")
     object TimetableDataUnavailable : SchoolNetworkError("课表数据不可用")
+    object GradeDataUnavailable : SchoolNetworkError("成绩数据不可用")
+    object ExamDataUnavailable : SchoolNetworkError("考试安排数据不可用")
     object TimetableQueryFormNotFound : SchoolNetworkError("未找到课表查询表单")
     object TimetableSemesterMismatch : SchoolNetworkError("课表学期不匹配")
     object ClassroomDataUnavailable : SchoolNetworkError("空教室数据不可用")

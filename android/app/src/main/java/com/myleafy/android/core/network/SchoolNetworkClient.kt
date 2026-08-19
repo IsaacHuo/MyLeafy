@@ -1,5 +1,7 @@
 package com.myleafy.android.core.network
 
+import com.myleafy.android.parsers.ParsedExamRecord
+import com.myleafy.android.parsers.ParsedGradeRecord
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -27,6 +29,12 @@ interface SchoolNetworkClient {
 
     /** 抓取并解析课表（强智本科）。需已登录；返回解析后的课程记录。 */
     suspend fun fetchTimetable(semesterId: String): List<CourseRecord>
+
+    /** 抓取并解析成绩（强智 /jsxsd/kscj/cjcx_list）。 */
+    suspend fun fetchGrades(): List<ParsedGradeRecord>
+
+    /** 抓取并解析考试安排（强智 /jsxsd/xsks/xsksap_list）。 */
+    suspend fun fetchExams(semesterId: String): List<ParsedExamRecord>
 
     fun clearSession()
 }
