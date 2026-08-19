@@ -11,7 +11,11 @@ Last verified: 2026-08-17
 
 ## Recently Completed
 
-- **Android 工程骨架（阶段 1 / 1.5）**：`android/` 为可编译可运行的 Compose 单模块工程（Gradle 8.14.5 / AGP 8.13.2 / Kotlin 2.2.21 / minSdk 29）；5 个根 Tab 真实导航，全功能基础架构已搭好（UiState 状态机 / Repository / Room v2 / DTO / DataStore / 登录路由 / 深链），日迹为真实可用的本地 CRUD；教务网络与 Supabase 仍未接入（占位如实展示未接入文案）。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
+- **Android 工程骨架（阶段 1 / 1.5）**：`android/` 为可编译可运行的 Compose 单模块工程（Gradle 8.14.5 / AGP 8.13.2 / Kotlin 2.2.21 / minSdk 29）；5 个根 Tab 真实导航，全功能基础架构已搭好（UiState 状态机 / Repository / Room v2 / DTO / DataStore / 登录路由 / 深链），日迹为真实可用的本地 CRUD。
+- **Android 阶段 2（教务，M2.1-M2.5）**：OkHttp 教务客户端 + Cookie 契约、强智登录（encodeKey/验证码/会话验证）、课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库、周课表网格、成绩/考试抓取与校园页。
+- **Android 阶段 4（社区，M4.1-M4.3）**：supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论线程/点赞、文本发帖与评论。
+- **Android 阶段 5 部分（M5.1-M5.2）**：我的页社区资料（bootstrap）、空闲教室查询。
+- 教务网络（研究生 RSA/AES）与部分校园工具（共享课表、评价目录）、日迹强化、发布工程（Widget/WorkManager/签名）仍待接入。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
 - 教务全量同步区分完整成功、部分成功与失败；可信空数据和解析异常不再混用，异常页面不会覆盖最近成功缓存。
 - 社区投票局部错误、帖子/评论重试幂等、日迹长列表投影、Dynamic Type、VoiceOver 与核心英文文案完成一轮可靠性收敛。
 - 2.9 正式发布（build 27，App Store 2026-08-03，tag `v2.9`）。
