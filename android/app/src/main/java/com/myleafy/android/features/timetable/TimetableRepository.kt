@@ -2,6 +2,8 @@ package com.myleafy.android.features.timetable
 
 import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.data.local.CourseEntity
+import com.myleafy.android.core.network.SchoolNetworkClient
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -10,11 +12,37 @@ import kotlinx.coroutines.flow.Flow
  */
 interface TimetableRepository {
     fun coursesForSemester(semesterId: String): Flow<List<CourseEntity>>
+
+    /** 从教务抓取当前学期课表并写入 Room。失败时抛出 [Exception]。 */
+    suspend fun refresh(semesterId: String)
 }
 
-class RoomTimetableRepository(
+/** 线上仓储：教务抓取（OkHttp + jsoup）→ 解析 → Room 落库。 */
+class LiveTimetableRepository(
+    private val client: SchoolNetworkClient,
     private val courseDao: CourseDao,
 ) : TimetableRepository {
+
     override fun coursesForSemester(semesterId: String): Flow<List<CourseEntity>> =
         courseDao.coursesForSemester(semesterId)
+
+    override suspend fun refresh(semesterId: String) {
+        val records = client.fetchTimetable(semesterId)
+        val entities = records.map { r ->
+            CourseEntity(
+                id = UUID.randomUUID().toString(),
+                sourceSemesterID = semesterId,
+                courseName = r.courseName,
+                teacher = r.teacher,
+                classInfo = r.classInfo,
+                room = r.room,
+                location = r.location,
+                dayOfWeek = r.dayOfWeek,
+                weeks = r.weeks,
+                duration = r.duration,
+            )
+        }
+        courseDao.clearForSemester(semesterId)
+        courseDao.upsertAll(entities)
+    }
 }

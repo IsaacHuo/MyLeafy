@@ -3,6 +3,7 @@ package com.myleafy.android.core.network.okhttp
 import com.myleafy.android.core.network.FakeSchoolSessionCookieStore
 import com.myleafy.android.core.network.SchoolNetworkError
 import com.myleafy.android.core.network.SchoolSessionState
+import com.myleafy.android.parsers.JsoupHtmlParser
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.Dispatcher
@@ -35,6 +36,7 @@ class SchoolAuthFlowTest {
             sessionState = session,
             baseUrl = server.url("/").toString(),
             graduateBaseUrl = null,
+            parser = JsoupHtmlParser(),
         )
     }
 

@@ -3,13 +3,16 @@ package com.myleafy.android.core.network.okhttp
 import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.CampusIdentity
 import com.myleafy.android.core.network.FakeSchoolSessionCookieStore
+import com.myleafy.android.core.network.SchoolNetworkError
 import com.myleafy.android.core.network.SchoolPortal
 import com.myleafy.android.core.network.SchoolSessionState
+import com.myleafy.android.parsers.JsoupHtmlParser
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -44,6 +47,7 @@ class OkHttpSchoolNetworkClientTest {
             sessionState = session,
             baseUrl = server.url("/").toString(),
             graduateBaseUrl = null,
+            parser = JsoupHtmlParser(),
         )
     }
 
@@ -87,6 +91,7 @@ class OkHttpSchoolNetworkClientTest {
             sessionState = SchoolSessionState(),
             baseUrl = server.url("/").toString(),
             graduateBaseUrl = null,
+            parser = JsoupHtmlParser(),
         )
         server.enqueue(MockResponse().setResponseCode(200))
 
@@ -128,8 +133,44 @@ class OkHttpSchoolNetworkClientTest {
         assertThrows(NotImplementedError::class.java) {
             runBlocking { client.loginGraduate("account", "password", "captcha") }
         }
-        assertThrows(NotImplementedError::class.java) {
-            runBlocking { client.fetchTimetable("2025-2026-2").first() }
+    }
+
+    @Test
+    fun fetchTimetableParsesRecords() {
+        val html = fixture("timetable_kbcontent_div.html")
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/xskb/xskb_list.do") == true ->
+                    MockResponse().setBody(html)
+                else -> MockResponse().setResponseCode(404)
+            }
         }
+
+        val records = runBlocking { client.fetchTimetable("2025-2026-2") }
+        assertEquals(2, records.size)
+        assertEquals("森林生态学", records.first { it.courseName == "森林生态学" }.courseName)
+        assertEquals(3, records.first { it.courseName == "数据结构" }.dayOfWeek)
+    }
+
+    @Test
+    fun fetchTimetableThrowsSessionExpiredOnLoginPage() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/xskb/xskb_list.do") == true ->
+                    MockResponse().setBody("<html>验证码</html>")
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+
+        assertThrows(SchoolNetworkError.SessionExpired::class.java) {
+            runBlocking { client.fetchTimetable("2025-2026-2") }
+        }
+    }
+
+    private fun fixture(name: String): String {
+        val stream = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/$name")) {
+            "Fixture 缺失: jwxt/fixtures/$name"
+        }
+        return stream.bufferedReader().readText()
     }
 }

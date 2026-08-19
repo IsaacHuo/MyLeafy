@@ -3,11 +3,10 @@ package com.myleafy.android.core.network
 import kotlinx.coroutines.flow.Flow
 
 /**
- * 学校教务客户端接口（阶段 2 由 OkHttp 实现）。
+ * 学校教务客户端接口（OkHttp 实现）。
  *
  * 行为契约来自 iOS `SchoolNetworkManager`，包括：强智登录（encodeKey 算法、
- * 验证码、会话验证）、Cookie 持久化、研究生 AES 链路、课表/成绩/考试接口。
- * 阶段 1 只定义接口与结果类型，不提供实现。
+ * 验证码、会话验证）、Cookie 持久化、课表抓取；研究生 AES 链路后续接入。
  */
 interface SchoolNetworkClient {
 
@@ -26,7 +25,8 @@ interface SchoolNetworkClient {
 
     suspend fun verifyAuthenticatedSession(): Result<Unit>
 
-    suspend fun fetchTimetable(semesterId: String): Flow<List<CourseRecord>>
+    /** 抓取并解析课表（强智本科）。需已登录；返回解析后的课程记录。 */
+    suspend fun fetchTimetable(semesterId: String): List<CourseRecord>
 
     fun clearSession()
 }

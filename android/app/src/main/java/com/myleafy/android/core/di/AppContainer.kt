@@ -8,6 +8,8 @@ import com.myleafy.android.core.network.SchoolNetworkClient
 import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.network.okhttp.OkHttpSchoolNetworkClient
 import com.myleafy.android.core.prefs.SettingsStore
+import com.myleafy.android.parsers.HtmlParser
+import com.myleafy.android.parsers.JsoupHtmlParser
 import com.myleafy.android.core.security.KeystoreSchoolLoginCredentialStore
 import com.myleafy.android.core.security.KeystoreSchoolSessionCookieStore
 import com.myleafy.android.core.security.SchoolLoginCredentialStore
@@ -23,7 +25,7 @@ import com.myleafy.android.features.profile.PlaceholderProfileRepository
 import com.myleafy.android.features.profile.ProfileRepository
 import com.myleafy.android.features.schedule.RoomScheduleRepository
 import com.myleafy.android.features.schedule.ScheduleRepository
-import com.myleafy.android.features.timetable.RoomTimetableRepository
+import com.myleafy.android.features.timetable.LiveTimetableRepository
 import com.myleafy.android.features.timetable.TimetableRepository
 
 /**
@@ -57,15 +59,20 @@ class AppContainer(context: Context) {
     // 教务会话状态：身份驱动 Cookie 作用域（M2.2 登录成功后写入）
     val schoolSessionState = SchoolSessionState()
 
-    // 教务 OkHttp 客户端。登录（M2.2）后建立身份与 Cookie；抓取方法（M2.3+）未实现时 fail-fast。
+    // 教务 HTML 解析器（jsoup，M2.3）
+    val htmlParser: HtmlParser = JsoupHtmlParser()
+
+    // 教务 OkHttp 客户端：登录（M2.2）+ 课表抓取（M2.3）
     val schoolNetworkClient: SchoolNetworkClient = OkHttpSchoolNetworkClient(
         cookieStore = schoolSessionCookieStore,
         sessionState = schoolSessionState,
         baseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.undergraduateBaseUrl,
         graduateBaseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.graduateBaseUrl,
+        parser = htmlParser,
     )
 
-    val timetableRepository: TimetableRepository = RoomTimetableRepository(database.courseDao())
+    val timetableRepository: TimetableRepository =
+        LiveTimetableRepository(schoolNetworkClient, database.courseDao())
     val scheduleRepository: ScheduleRepository =
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao())
     val academicRepository: AcademicRepository =

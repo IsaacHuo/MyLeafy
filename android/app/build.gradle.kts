@@ -49,12 +49,21 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // 解析回归测试直接复用仓库根 contracts/ 下的教务 Fixture（单一事实来源）
+    sourceSets {
+        getByName("test") {
+            resources.srcDir(rootProject.file("../contracts"))
+        }
     }
 }
 
@@ -86,6 +95,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.okhttp)
+    implementation(libs.jsoup)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)

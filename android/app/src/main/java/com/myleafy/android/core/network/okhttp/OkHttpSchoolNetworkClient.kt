@@ -12,10 +12,10 @@ import com.myleafy.android.core.network.SchoolPageDetector
 import com.myleafy.android.core.network.SchoolPortal
 import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.security.SchoolSessionCookieStore
+import com.myleafy.android.parsers.HtmlParser
+import com.myleafy.android.parsers.HtmlParseError
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -28,13 +28,15 @@ import okhttp3.Response
  *
  * - M2.1：骨架 + Cookie 契约（SchoolCookieInterceptor + NO_COOKIES jar）。
  * - M2.2：强智本科生登录（key / 验证码 / encodeKey / 会话验证）与页面识别。
- * - 研究生登录（RSA + AES）、课表/成绩抓取（M2.3+）未实现，fail-fast。
+ * - M2.3：强智课表抓取 + jsoup 解析。
+ * - 研究生登录（RSA + AES）后续接入，fail-fast。
  */
 class OkHttpSchoolNetworkClient(
     private val cookieStore: SchoolSessionCookieStore,
     private val sessionState: SchoolSessionState,
     private val baseUrl: String,
     private val graduateBaseUrl: String?,
+    private val parser: HtmlParser,
 ) : SchoolNetworkClient {
 
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -147,8 +149,35 @@ class OkHttpSchoolNetworkClient(
         notYet("研究生登录（AES）")
     }
 
-    override suspend fun fetchTimetable(semesterId: String): Flow<List<CourseRecord>> =
-        flow { throw NotImplementedError("课表抓取将在 M2.3 接入（jsoup 解析）") }
+    override suspend fun fetchTimetable(semesterId: String): List<CourseRecord> {
+        val request = requestBuilder(
+            "/jsxsd/xskb/xskb_list.do?xnxq01id=$semesterId",
+            referer = "${baseUrl}/Logon.do?method=logon",
+        ).get().build()
+        val html = execute(request).use {
+            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+        }
+        if (SchoolPageDetector.isLoginPage(html)) {
+            throw SchoolNetworkError.SessionExpired
+        }
+        val records = try {
+            parser.parseTimetable(html)
+        } catch (e: HtmlParseError) {
+            throw SchoolNetworkError.TimetableDataUnavailable
+        }
+        return records.map { r ->
+            CourseRecord(
+                courseName = r.courseName,
+                teacher = r.teacher,
+                classInfo = r.classInfo,
+                room = r.room,
+                location = r.location,
+                dayOfWeek = r.dayOfWeek,
+                weeks = r.weeks,
+                duration = r.duration,
+            )
+        }
+    }
 
     override fun clearSession() {
         val identity = sessionState.identity
