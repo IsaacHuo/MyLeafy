@@ -1,15 +1,11 @@
 package com.myleafy.android.features.timetable
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,13 +15,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
-import com.myleafy.android.core.data.local.CourseEntity
 import com.myleafy.android.features.timetable.domain.SemesterConfig
+import com.myleafy.android.features.timetable.presentation.TimetableGrid
+import com.myleafy.android.features.timetable.presentation.WeekSelector
 
 @Composable
 fun TimetableScreen(
@@ -41,6 +41,7 @@ fun TimetableScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
+    var selectedWeek by rememberSaveable { mutableIntStateOf(0) }
 
     Column(
         modifier = modifier
@@ -64,6 +65,9 @@ fun TimetableScreen(
             }
 
             is TimetableUiState.Loaded -> {
+                LaunchedEffect(state) {
+                    if (selectedWeek == 0) selectedWeek = state.week
+                }
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -94,7 +98,14 @@ fun TimetableScreen(
                     }
                 }
                 SyncStatus(syncState, viewModel::consumeSyncResult)
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                WeekSelector(
+                    week = selectedWeek,
+                    totalWeeks = SemesterConfig.supportedWeeks,
+                    onWeekSelected = { selectedWeek = it },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
 
                 if (state.courses.isEmpty()) {
                     Text(
@@ -103,11 +114,7 @@ fun TimetableScreen(
                         color = MaterialTheme.colorScheme.outline,
                     )
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.courses, key = { it.id }) { course ->
-                            CourseRow(course = course)
-                        }
-                    }
+                    TimetableGrid(courses = state.courses, week = selectedWeek)
                 }
             }
         }
@@ -137,19 +144,5 @@ private fun SyncStatus(syncState: TimetableSyncState, onConsume: () -> Unit) {
             },
         )
         Spacer(modifier = Modifier.height(8.dp))
-    }
-}
-
-@Composable
-private fun CourseRow(course: CourseEntity) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = course.courseName, style = MaterialTheme.typography.titleSmall)
-            Text(
-                text = "${course.teacher} · ${course.location} ${course.room} · 第 ${course.duration.joinToString("-")} 节",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
