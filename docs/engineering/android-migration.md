@@ -95,7 +95,7 @@
 
 **阶段 1 已接入：** compose（ui/material3/icons-extended）、navigation-compose、lifecycle（runtime/viewmodel-compose）、activity-compose、core-ktx、room（runtime/ktx/compiler via KSP）、datastore-preferences、junit（测试）。
 
-**版本目录已锁定、阶段 2 按需接入：** okhttp 5.5.0、jsoup 1.23.1。
+**版本目录已锁定、阶段 2 按需接入：** okhttp 4.12.0（5.x 需 compileSdk 37，与 AGP 8.13.2 上限冲突）、jsoup 1.23.1。
 
 **阶段 2 评估：** supabase-kt（postgrest/auth/functions）、datastore-preferences、coil（图片加载）、workmanager。
 
