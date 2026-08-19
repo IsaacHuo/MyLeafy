@@ -18,7 +18,9 @@ import com.myleafy.android.core.security.SecureStorage
 import com.myleafy.android.features.auth.AuthRepository
 import com.myleafy.android.features.auth.SchoolAuthRepository
 import com.myleafy.android.features.campus.AcademicRepository
+import com.myleafy.android.features.campus.ClassroomRepository
 import com.myleafy.android.features.campus.LiveAcademicRepository
+import com.myleafy.android.features.campus.LiveClassroomRepository
 import com.myleafy.android.features.community.CommunityRepository
 import com.myleafy.android.features.community.LiveCommunityRepository
 import com.myleafy.android.features.profile.LiveProfileRepository
@@ -79,6 +81,7 @@ class AppContainer(context: Context) {
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao())
     val academicRepository: AcademicRepository =
         LiveAcademicRepository(schoolNetworkClient, database.gradeDao(), database.examDao())
+    val classroomRepository: ClassroomRepository = LiveClassroomRepository(schoolNetworkClient)
 
     // 社区（Supabase，阶段 4）：未配置 anon key 时 service 为 null，Feed 如实报错
     val communityService: CommunityService? = SupabaseClientProvider.create()?.let { CommunityService(it) }

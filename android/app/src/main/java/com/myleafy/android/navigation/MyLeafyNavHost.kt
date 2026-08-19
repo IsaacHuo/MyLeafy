@@ -21,6 +21,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
+import com.myleafy.android.features.campus.ClassroomScreen
 import com.myleafy.android.features.community.CommunityScreen
 import com.myleafy.android.features.community.ComposePostScreen
 import com.myleafy.android.features.community.PostDetailScreen
@@ -32,6 +33,7 @@ object Routes {
     const val LOGIN = "login"
     const val COMMUNITY_POST_DETAIL = "community/post/{postId}"
     const val COMMUNITY_COMPOSE = "community/compose"
+    const val CLASSROOM = "campus/classroom"
     const val DEEP_LINK_COMMUNITY_POST = "myleafy://community-post?id={postId}"
     const val DEEP_LINK_TIMETABLE_INVITE = "myleafy://timetable-invite?code={code}"
 
@@ -115,7 +117,14 @@ fun MyLeafyNavHost(navController: NavHostController) {
                 )
             }
             composable(RootTab.SCHEDULE.route) { ScheduleScreen() }
-            composable(RootTab.CAMPUS.route) { CampusScreen() }
+            composable(RootTab.CAMPUS.route) {
+                CampusScreen(
+                    onClassroomClick = { navController.navigate(Routes.CLASSROOM) },
+                )
+            }
+            composable(Routes.CLASSROOM) {
+                ClassroomScreen(onBack = { navController.popBackStack() })
+            }
             composable(
                 route = RootTab.PROFILE.route,
                 deepLinks = listOf(

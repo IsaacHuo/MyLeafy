@@ -1,5 +1,6 @@
 package com.myleafy.android.core.network
 
+import com.myleafy.android.parsers.EmptyClassroom
 import com.myleafy.android.parsers.ParsedExamRecord
 import com.myleafy.android.parsers.ParsedGradeRecord
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,15 @@ interface SchoolNetworkClient {
 
     /** 抓取并解析考试安排（强智 /jsxsd/xsks/xsksap_list）。 */
     suspend fun fetchExams(semesterId: String): List<ParsedExamRecord>
+
+    /** 抓取并解析空闲教室（强智 /jsxsd/kbxx/jsjy_query2）。 */
+    suspend fun fetchEmptyClassrooms(
+        semesterId: String,
+        week: Int,
+        day: Int,
+        startPeriod: Int,
+        endPeriod: Int,
+    ): List<EmptyClassroom>
 
     fun clearSession()
 }

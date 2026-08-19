@@ -120,6 +120,15 @@ class JsoupHtmlParserTest {
         assertEquals("主楼 112", exam.location)
     }
 
+    @Test
+    fun parsesEmptyClassroomsWithBuildingAliases() {
+        val rooms = parser.parseEmptyClassrooms(fixture("empty_classrooms.html"))
+        assertEquals(3, rooms.size)
+        assertEquals(EmptyClassroom(building = "学研A座", room = "0304"), rooms[0])
+        assertEquals(EmptyClassroom(building = "学研B座", room = "0405"), rooms[1])
+        assertEquals(EmptyClassroom(building = "二教", room = "608"), rooms[2])
+    }
+
     private fun fixture(name: String): String {
         val stream = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/$name")) {
             "Fixture 缺失: jwxt/fixtures/$name"

@@ -123,6 +123,16 @@
           "location": "主楼 112"
         }
       ]
+    },
+    "empty_classrooms.html": {
+      "kind": "empty_classrooms",
+      "result": "records",
+      "note": "按楼权重降序、房间名升序",
+      "rooms": [
+        { "building": "学研A座", "room": "0304" },
+        { "building": "学研B座", "room": "0405" },
+        { "building": "二教", "room": "608" }
+      ]
     }
   }
 }

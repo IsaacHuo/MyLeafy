@@ -1,0 +1,155 @@
+package com.myleafy.android.features.campus
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.features.timetable.domain.SemesterConfig
+
+@Composable
+fun ClassroomScreen(
+    onBack: () -> Unit,
+    viewModel: ClassroomViewModel = viewModel(
+        factory = appViewModelFactory { container ->
+            ClassroomViewModel(repository = container.classroomRepository)
+        },
+    ),
+    modifier: Modifier = Modifier,
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var week by rememberSaveable { mutableIntStateOf(viewModel.currentWeek) }
+    var day by rememberSaveable { mutableIntStateOf(1) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+            Text(text = "空闲教室", style = MaterialTheme.typography.headlineSmall)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(text = "周次", style = MaterialTheme.typography.labelMedium)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items((1..SemesterConfig.supportedWeeks).toList()) { candidate ->
+                FilterChip(
+                    selected = candidate == week,
+                    onClick = { week = candidate },
+                    label = { Text("第 $candidate 周") },
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "星期", style = MaterialTheme.typography.labelMedium)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日").withIndex().toList()) { (index, label) ->
+                FilterChip(
+                    selected = (index + 1) == day,
+                    onClick = { day = index + 1 },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = { viewModel.query(week, day, startPeriod = 1, endPeriod = 12) },
+            enabled = uiState !is ClassroomUiState.Loading,
+        ) {
+            if (uiState is ClassroomUiState.Loading) {
+                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+            } else {
+                Text("查询全天空闲教室")
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        when (val state = uiState) {
+            is ClassroomUiState.Idle -> {
+                Text(
+                    text = "选择周次与星期后查询",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+
+            is ClassroomUiState.Loading -> Unit
+
+            is ClassroomUiState.Error -> {
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            is ClassroomUiState.Loaded -> {
+                if (state.rooms.isEmpty()) {
+                    Text(
+                        text = "该时段没有空闲教室",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                } else {
+                    Column {
+                        Text(
+                            text = "共 ${state.rooms.size} 间",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                        state.rooms.groupBy { it.building }.forEach { (building, rooms) ->
+                            Text(
+                                text = building,
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                            )
+                            Row {
+                                rooms.forEach { room ->
+                                    Card(modifier = Modifier.padding(end = 6.dp, bottom = 6.dp)) {
+                                        Text(
+                                            text = room.room,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

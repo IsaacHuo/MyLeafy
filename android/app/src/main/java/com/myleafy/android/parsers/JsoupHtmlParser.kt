@@ -507,6 +507,46 @@ class JsoupHtmlParser : HtmlParser {
         return start to end
     }
 
+    // MARK: - 空教室
+
+    override fun parseEmptyClassrooms(html: String): List<EmptyClassroom> {
+        val document = Jsoup.parse(html)
+        val rows = document.select("#dataList tr")
+        if (rows.size <= 4) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "空教室")
+
+        val dataRows = rows.subList(2, rows.size - 2)
+        val result = mutableListOf<Pair<Int, EmptyClassroom>>()
+        for (row in dataRows) {
+            val texts = row.select("td").map { normalizedClassroomCellText(it.text()) }
+            if (texts.size <= 1) continue
+            if (texts.drop(1).any { it.isNotEmpty() }) continue
+            parseClassroomRow(texts[0])?.let { result.add(it) }
+        }
+        return result
+            .sortedWith(compareByDescending<Pair<Int, EmptyClassroom>> { it.first }.thenBy { it.second.room })
+            .map { it.second }
+    }
+
+    private fun parseClassroomRow(text: String): Pair<Int, EmptyClassroom>? {
+        val normalized = normalizedClassroomCellText(text)
+            .replace("（", "(")
+            .replace("）", ")")
+        val match = Regex(CLASSROOM_ROW_PATTERN).find(normalized) ?: return null
+        val rawBuilding = match.groupValues[1]
+            .trim()
+            .replace(" ", "")
+            .replace("　", "")
+        val room = match.groupValues[2].uppercase()
+        val mapped = classroomBuildingMap[rawBuilding] ?: return null
+        return mapped.first to EmptyClassroom(building = mapped.second, room = room)
+    }
+
+    private fun normalizedClassroomCellText(text: String): String =
+        text.trim()
+            .replace("\u00A0", "")
+            .replace(" ", "")
+            .replace("　", "")
+
     // MARK: - 辅助
 
     private fun normalizedTableCellText(element: Element): String =
@@ -597,5 +637,40 @@ class JsoupHtmlParser : HtmlParser {
         const val FULL_DATE_PATTERN = "(\\d{4})[-/.年](\\d{1,2})[-/.月](\\d{1,2})"
         const val SHORT_DATE_PATTERN = "(\\d{1,2})[月/-](\\d{1,2})日?"
         const val TIME_RANGE_PATTERN = "(\\d{1,2})[:：](\\d{2})\\s*(?:~|～|—|–|-|至|到)\\s*(\\d{1,2})[:：](\\d{2})"
+        const val CLASSROOM_ROW_PATTERN = "^([^\\(\\d]+?)(\\d+[A-Za-z]?)(?:\\((\\d+)\\s*/\\s*(\\d+)\\))?$"
+
+        val classroomBuildingMap = mapOf(
+            "A" to (10 to "学研A座"),
+            "A座" to (10 to "学研A座"),
+            "学研A" to (10 to "学研A座"),
+            "学研A座" to (10 to "学研A座"),
+            "学研楼A座" to (10 to "学研A座"),
+            "B" to (9 to "学研B座"),
+            "B座" to (9 to "学研B座"),
+            "学研B" to (9 to "学研B座"),
+            "学研B座" to (9 to "学研B座"),
+            "学研楼B座" to (9 to "学研B座"),
+            "C" to (8 to "学研C座"),
+            "C座" to (8 to "学研C座"),
+            "学研C" to (8 to "学研C座"),
+            "学研C座" to (8 to "学研C座"),
+            "学研楼C座" to (8 to "学研C座"),
+            "第一教学楼" to (8 to "一教"),
+            "一教学楼" to (8 to "一教"),
+            "一教" to (8 to "一教"),
+            "一教楼" to (8 to "一教"),
+            "第二教学楼" to (7 to "二教"),
+            "二教学楼" to (7 to "二教"),
+            "二教" to (7 to "二教"),
+            "二教楼" to (7 to "二教"),
+            "第三教学楼" to (6 to "三教"),
+            "三教学楼" to (6 to "三教"),
+            "三教" to (6 to "三教"),
+            "三教楼" to (6 to "三教"),
+            "基础楼" to (5 to "基础楼"),
+            "林业楼" to (4 to "林业楼"),
+            "生物楼" to (3 to "生物楼"),
+            "实验楼" to (2 to "实验楼"),
+        )
     }
 }

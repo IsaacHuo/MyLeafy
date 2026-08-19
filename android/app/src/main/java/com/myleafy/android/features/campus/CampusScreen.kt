@@ -28,6 +28,7 @@ import com.myleafy.android.features.timetable.domain.SemesterConfig
 
 @Composable
 fun CampusScreen(
+    onClassroomClick: () -> Unit = {},
     viewModel: CampusViewModel = viewModel(
         factory = appViewModelFactory { container ->
             CampusViewModel(
@@ -74,6 +75,11 @@ fun CampusScreen(
                     }
                 }
                 SyncStatus(syncState, viewModel::consumeSyncResult)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(onClick = onClassroomClick) {
+                    Text("空闲教室")
+                }
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LazyColumn {

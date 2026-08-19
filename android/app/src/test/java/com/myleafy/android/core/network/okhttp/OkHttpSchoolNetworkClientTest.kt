@@ -222,6 +222,29 @@ class OkHttpSchoolNetworkClientTest {
         }
     }
 
+    @Test
+    fun fetchEmptyClassroomsParsesRooms() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/kbxx/jsjy_query2") == true ->
+                    MockResponse().setBody(fixture("empty_classrooms.html"))
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+
+        val rooms = runBlocking { client.fetchEmptyClassrooms("2025-2026-2", week = 1, day = 1, startPeriod = 1, endPeriod = 12) }
+        assertEquals(3, rooms.size)
+        assertEquals("学研A座", rooms[0].building)
+        assertEquals("0304", rooms[0].room)
+
+        val recorded = server.takeRequest(5, TimeUnit.SECONDS)
+        val path = recorded?.path ?: ""
+        assertTrue(path.contains("zc=1"))
+        assertTrue(path.contains("xq=1"))
+        assertTrue(path.contains("jszt=5"))
+        assertTrue(path.contains("xnxqh=2025-2026-2"))
+    }
+
     private fun fixture(name: String): String {
         val stream = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/$name")) {
             "Fixture 缺失: jwxt/fixtures/$name"

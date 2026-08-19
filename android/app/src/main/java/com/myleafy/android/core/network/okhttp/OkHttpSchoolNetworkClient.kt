@@ -12,6 +12,7 @@ import com.myleafy.android.core.network.SchoolPageDetector
 import com.myleafy.android.core.network.SchoolPortal
 import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.security.SchoolSessionCookieStore
+import com.myleafy.android.parsers.EmptyClassroom
 import com.myleafy.android.parsers.HtmlParser
 import com.myleafy.android.parsers.HtmlParseError
 import com.myleafy.android.parsers.ParsedExamRecord
@@ -216,6 +217,36 @@ class OkHttpSchoolNetworkClient(
             parser.parseExams(html)
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.ExamDataUnavailable
+        }
+    }
+
+    override suspend fun fetchEmptyClassrooms(
+        semesterId: String,
+        week: Int,
+        day: Int,
+        startPeriod: Int,
+        endPeriod: Int,
+    ): List<EmptyClassroom> {
+        val path = buildString {
+            append("/jsxsd/kbxx/jsjy_query2")
+            append("?xnxqh=").append(semesterId)
+            append("&zc=").append(week).append("&zc2=").append(week)
+            append("&jc=").append(startPeriod).append("&jc2=").append(endPeriod)
+            append("&xqbh=&jxqbh=&jxlbh=&jsbh=&bjfh=&rnrs=&xnxqhmc=")
+            append("&xq=").append(day).append("&xq2=").append(day)
+            append("&jszt=5")
+        }
+        val request = requestBuilder(path, referer = "${baseUrl}/jsxsd/framework/xsMain.jsp").get().build()
+        val html = execute(request).use {
+            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+        }
+        if (SchoolPageDetector.isLoginPage(html)) {
+            throw SchoolNetworkError.SessionExpired
+        }
+        return try {
+            parser.parseEmptyClassrooms(html)
+        } catch (e: HtmlParseError) {
+            throw SchoolNetworkError.ClassroomDataUnavailable
         }
     }
 

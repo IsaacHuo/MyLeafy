@@ -18,6 +18,9 @@ interface HtmlParser {
 
     /** 解析考试安排页面。 */
     fun parseExams(html: String): List<ParsedExamRecord>
+
+    /** 解析空教室页面（空闲教室，占用行会被跳过）。 */
+    fun parseEmptyClassrooms(html: String): List<EmptyClassroom>
 }
 
 /** 课表课程记录（解析器中间产物，不直接持久化）。 */
@@ -50,6 +53,12 @@ data class ParsedExamRecord(
     val start: String,
     val end: String,
     val location: String,
+)
+
+/** 空教室。 */
+data class EmptyClassroom(
+    val building: String,
+    val room: String,
 )
 
 class HtmlParseError(val kind: ParseErrorKind, detail: String) : Exception(detail) {
