@@ -110,3 +110,54 @@ data class BootstrapResponse(
     val is_new_user: Boolean = false,
     val is_profile_complete: Boolean = false,
 )
+
+/** 评论线程条目（list_community_comment_threads_v1 返回的扁平评论行）。 */
+@Serializable
+data class CommentThreadDto(
+    val thread_root_id: String,
+    val id: String,
+    val post_id: String,
+    val author_id: String,
+    val body: String = "",
+    val is_anonymous: Boolean = false,
+    val status: String = "published",
+    val created_at: String = "",
+    val updated_at: String = "",
+    val parent_comment_id: String? = null,
+    val reply_to_comment_id: String? = null,
+    val reply_to_author_id: String? = null,
+    val reply_target_is_visible: Boolean = false,
+    val like_count: Int = 0,
+    val viewer_has_liked: Boolean = false,
+    val is_deleted_placeholder: Boolean = false,
+)
+
+/** 评论线程分页响应：{ comments, has_more, next_cursor_created_at, next_cursor_id }。 */
+@Serializable
+data class CommentThreadPageDto(
+    val comments: List<CommentThreadDto> = emptyList(),
+    val has_more: Boolean = false,
+    val next_cursor_created_at: String? = null,
+    val next_cursor_id: String? = null,
+)
+
+/** 评论线程（根评论 + 最多一层回复），展示用。 */
+data class CommentThread(
+    val root: CommentThreadDto,
+    val replies: List<CommentThreadDto>,
+)
+
+/**
+ * 扁平评论列表按线程分组（评论最多两层：根 + 回复）。
+ * 回复的 parent_comment_id 指向根评论 id。
+ */
+fun groupCommentThreads(comments: List<CommentThreadDto>): List<CommentThread> {
+    val roots = comments.filter { it.parent_comment_id == null }
+    val replies = comments.filter { it.parent_comment_id != null }
+    return roots.map { root ->
+        CommentThread(
+            root = root,
+            replies = replies.filter { it.parent_comment_id == root.id },
+        )
+    }
+}

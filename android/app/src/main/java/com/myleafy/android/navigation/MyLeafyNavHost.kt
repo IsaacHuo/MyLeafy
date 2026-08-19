@@ -13,21 +13,27 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.community.CommunityScreen
+import com.myleafy.android.features.community.PostDetailScreen
 import com.myleafy.android.features.profile.ProfileScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
 import com.myleafy.android.features.timetable.TimetableScreen
 
 object Routes {
     const val LOGIN = "login"
+    const val COMMUNITY_POST_DETAIL = "community/post/{postId}"
     const val DEEP_LINK_COMMUNITY_POST = "myleafy://community-post?id={postId}"
     const val DEEP_LINK_TIMETABLE_INVITE = "myleafy://timetable-invite?code={code}"
+
+    fun communityPostDetail(postId: String) = "community/post/$postId"
 }
 
 /**
@@ -75,12 +81,26 @@ fun MyLeafyNavHost(navController: NavHostController) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(RootTab.TIMETABLE.route) { TimetableScreen() }
+            composable(RootTab.COMMUNITY.route) {
+                CommunityScreen(
+                    onPostClick = { postId ->
+                        navController.navigate(Routes.communityPostDetail(postId))
+                    },
+                )
+            }
             composable(
-                route = RootTab.COMMUNITY.route,
+                route = Routes.COMMUNITY_POST_DETAIL,
+                arguments = listOf(navArgument("postId") { type = NavType.StringType }),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.DEEP_LINK_COMMUNITY_POST },
                 ),
-            ) { CommunityScreen() }
+            ) { entry ->
+                val postId = entry.arguments?.getString("postId").orEmpty()
+                PostDetailScreen(
+                    postId = postId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(RootTab.SCHEDULE.route) { ScheduleScreen() }
             composable(RootTab.CAMPUS.route) { CampusScreen() }
             composable(

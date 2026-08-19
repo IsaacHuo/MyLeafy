@@ -1,15 +1,19 @@
 package com.myleafy.android.services.supabase
 
 import com.myleafy.android.shared.model.BootstrapResponse
+import com.myleafy.android.shared.model.CommentThreadPageDto
 import com.myleafy.android.shared.model.FeedQuery
 import com.myleafy.android.shared.model.FeedResponse
 import com.myleafy.android.shared.model.PostDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -57,5 +61,38 @@ class CommunityService(private val client: SupabaseClient) {
             this.method = HttpMethod.Get
         }
         return json.decodeFromString<FeedResponse>(response.bodyAsText()).posts
+    }
+
+    /** 按 id 获取帖子（posts 表，RLS 限定同校园已发布）。 */
+    suspend fun fetchPost(postId: String): PostDto? {
+        ensureAnonymousSession()
+        return client.postgrest.from("posts")
+            .select {
+                filter { eq("id", postId) }
+            }
+            .decodeSingleOrNull()
+    }
+
+    /** 拉取评论线程（list_community_comment_threads_v1）。 */
+    suspend fun fetchCommentThreads(postId: String, limit: Int = 20): CommentThreadPageDto {
+        ensureAnonymousSession()
+        return client.postgrest.rpc(
+            "list_community_comment_threads_v1",
+            buildJsonObject {
+                put("p_post_id", postId)
+                put("p_after_created_at", JsonNull)
+                put("p_after_id", JsonNull)
+                put("p_limit", limit)
+            },
+        ).decodeAs()
+    }
+
+    /** 点赞/取消点赞（toggle_post_like_v1，返回更新后的帖子）。 */
+    suspend fun togglePostLike(postId: String): PostDto {
+        ensureAnonymousSession()
+        return client.postgrest.rpc(
+            "toggle_post_like_v1",
+            buildJsonObject { put("p_post_id", postId) },
+        ).decodeAs()
     }
 }

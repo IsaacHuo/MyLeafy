@@ -1,5 +1,6 @@
 package com.myleafy.android.features.community
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import com.myleafy.android.shared.model.PostDto
 
 @Composable
 fun CommunityScreen(
+    onPostClick: (String) -> Unit = {},
     viewModel: CommunityViewModel = viewModel(
         factory = appViewModelFactory { container ->
             CommunityViewModel(
@@ -74,7 +76,7 @@ fun CommunityScreen(
                 } else {
                     LazyColumn {
                         items(state.posts, key = { it.id }) { post ->
-                            PostRow(post)
+                            PostRow(post, onClick = { onPostClick(post.id) })
                         }
                     }
                 }
@@ -84,8 +86,13 @@ fun CommunityScreen(
 }
 
 @Composable
-private fun PostRow(post: PostDto) {
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+private fun PostRow(post: PostDto, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clickable(onClick = onClick),
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
