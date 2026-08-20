@@ -802,6 +802,7 @@
       }
     },
     "%@学年" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -2411,6 +2412,7 @@
       }
     },
     "PDF、Word 和图片会导入到本机私有目录，不会上传到云端。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
