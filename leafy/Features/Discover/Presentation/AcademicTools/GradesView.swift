@@ -477,26 +477,19 @@ struct GradesView: View {
             let newRankings = (try? HTMLParser.parseGradeRankings(html: htmlData)) ?? []
             let parsedCreditSummary = try? HTMLParser.parseGradeCreditSummary(html: htmlData)
 
-            await MainActor.run {
-                if !newGrades.isEmpty {
-                    for grade in grades {
-                        modelContext.delete(grade)
-                    }
-                    for grade in newGrades {
-                        modelContext.insert(grade)
-                    }
-                    try? modelContext.save()
-                    SchoolDataCache.markGradeDetailsSynced()
-                    SchoolDataRefreshNotifier.post(.grades)
-                    if !newRankings.isEmpty {
-                        SchoolDataCache.saveGradeRankings(newRankings)
-                    }
-                    if let parsedCreditSummary {
-                        creditSummary = parsedCreditSummary
-                        SchoolDataCache.saveGradeCreditSummary(parsedCreditSummary)
-                    }
-                } else {
-                    alertMessage = L10n.text("未解析到任何成绩数据", language: leafyLanguage)
+            try await MainActor.run {
+                try SchoolDataSyncService.persistGrades(newGrades, modelContext: modelContext)
+                SchoolDataCache.markGradeDetailsSynced()
+                SchoolDataRefreshNotifier.post(.grades)
+                if !newRankings.isEmpty {
+                    SchoolDataCache.saveGradeRankings(newRankings)
+                }
+                if let parsedCreditSummary {
+                    creditSummary = parsedCreditSummary
+                    SchoolDataCache.saveGradeCreditSummary(parsedCreditSummary)
+                }
+                if userInitiated, newGrades.isEmpty {
+                    alertMessage = L10n.text("同步完成，学校当前没有返回成绩记录。", language: leafyLanguage)
                     showAlert = true
                 }
                 isFetching = false

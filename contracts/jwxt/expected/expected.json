@@ -94,6 +94,12 @@
         }
       ]
     },
+    "grades_malformed_rows.html": {
+      "kind": "grades",
+      "result": "error",
+      "error": "table_rows_unparseable",
+      "detail": "成绩"
+    },
     "exams_backend_shape.html": {
       "kind": "exams",
       "result": "records",
@@ -124,6 +130,33 @@
         }
       ]
     },
+    "exams_empty_table.html": {
+      "kind": "exams",
+      "result": "verified_empty",
+      "exams": []
+    },
+    "exams_malformed_rows.html": {
+      "kind": "exams",
+      "result": "error",
+      "error": "table_rows_unparseable",
+      "detail": "考试安排"
+    },
+    "teaching_plan_with_rows.html": {
+      "kind": "teaching_plan",
+      "result": "records",
+      "terms": ["2026-2027-1"]
+    },
+    "teaching_plan_empty_table.html": {
+      "kind": "teaching_plan",
+      "result": "verified_empty",
+      "terms": []
+    },
+    "teaching_plan_malformed_rows.html": {
+      "kind": "teaching_plan",
+      "result": "error",
+      "error": "table_rows_unparseable",
+      "detail": "教学计划"
+    },
     "empty_classrooms.html": {
       "kind": "empty_classrooms",
       "result": "records",
@@ -133,6 +166,22 @@
         { "building": "学研B座", "room": "0405" },
         { "building": "二教", "room": "608" }
       ]
+    },
+    "empty_classrooms_no_available.html": {
+      "kind": "empty_classrooms",
+      "result": "verified_empty",
+      "rooms": []
+    },
+    "empty_classrooms_empty_table.html": {
+      "kind": "empty_classrooms",
+      "result": "verified_empty",
+      "rooms": []
+    },
+    "empty_classrooms_malformed_rows.html": {
+      "kind": "empty_classrooms",
+      "result": "error",
+      "error": "table_rows_unparseable",
+      "detail": "空教室"
     }
   }
 }

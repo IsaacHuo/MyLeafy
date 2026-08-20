@@ -600,6 +600,79 @@ extension PerformanceRefactorTests {
         XCTAssertTrue(try HTMLParser.parseGrades(html: html).isEmpty)
     }
 
+    func testAcademicParserFixturesDistinguishVerifiedEmptyFromMalformedRows() throws {
+        XCTAssertTrue(
+            try HTMLParser.parseExams(html: jwxtFixture("exams_empty_table.html")).isEmpty
+        )
+        XCTAssertThrowsError(
+            try HTMLParser.parseExams(html: jwxtFixture("exams_malformed_rows.html"))
+        ) { error in
+            guard case HTMLParserError.tableRowsUnparseable("考试安排") = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        let teachingPlan = try HTMLParser.parseTeachingPlan(
+            html: jwxtFixture("teaching_plan_with_rows.html")
+        )
+        XCTAssertEqual(teachingPlan.map(\.term), ["2026-2027-1"])
+        XCTAssertEqual(teachingPlan.first?.courses.map(\.name), ["森林生态学"])
+        XCTAssertTrue(
+            try HTMLParser.parseTeachingPlan(
+                html: jwxtFixture("teaching_plan_empty_table.html")
+            ).isEmpty
+        )
+        XCTAssertThrowsError(
+            try HTMLParser.parseTeachingPlan(
+                html: jwxtFixture("teaching_plan_malformed_rows.html")
+            )
+        ) { error in
+            guard case HTMLParserError.tableRowsUnparseable("教学计划") = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertTrue(
+            try HTMLParser.parseEmptyClassrooms(
+                html: jwxtFixture("empty_classrooms_no_available.html")
+            ).isEmpty
+        )
+        XCTAssertTrue(
+            try HTMLParser.parseEmptyClassrooms(
+                html: jwxtFixture("empty_classrooms_empty_table.html")
+            ).isEmpty
+        )
+        XCTAssertThrowsError(
+            try HTMLParser.parseEmptyClassrooms(
+                html: jwxtFixture("empty_classrooms_malformed_rows.html")
+            )
+        ) { error in
+            guard case HTMLParserError.tableRowsUnparseable("空教室") = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testGradeParserRejectsNonemptyUnparseableFixture() throws {
+        XCTAssertThrowsError(
+            try HTMLParser.parseGrades(html: jwxtFixture("grades_malformed_rows.html"))
+        ) { error in
+            guard case HTMLParserError.tableRowsUnparseable("成绩") = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    private func jwxtFixture(_ name: String) throws -> String {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repositoryRoot
+            .appendingPathComponent("contracts/jwxt/fixtures", isDirectory: true)
+            .appendingPathComponent(name)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     func testTimetableParserSkipsOutOfRangeContentDayIDs() throws {
         let html = """
         <html>

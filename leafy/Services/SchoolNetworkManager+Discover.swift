@@ -132,13 +132,72 @@ extension SchoolNetworkManager {
         try requireUndergraduatePortal(for: "成绩排名")
 
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
-        let html = try await fetchGrades()
-        do {
-            _ = try HTMLParser.parseGradeRankings(html: html)
-            return html
-        } catch {
-            throw SchoolNetworkError.featureUnavailable(L10n.text("教务暂未开放成绩排名。"))
+        guard let gradesURL = URL(string: "\(baseURL)/jsxsd/kscj/cjcx_list"),
+              let referer = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp") else {
+            throw URLError(.badURL)
         }
+
+        let gradesHTML = try await fetchGrades()
+        if (try? HTMLParser.parseGradeRankings(html: gradesHTML)) != nil {
+            return gradesHTML
+        }
+
+        let discoveredRequests = (try? extractGradeRankingCandidateRequests(
+            from: gradesHTML,
+            baseURL: gradesURL
+        )) ?? []
+        let requests = mergeCandidateRequests(
+            discoveredRequests + gradeRankingDirectCandidateRequests(referer: referer)
+        )
+
+        var lastHTML = gradesHTML
+        var lastResponse: HTTPURLResponse?
+        var lastTransportError: Error?
+
+        for request in requests {
+            do {
+                let (html, response) = try await html(for: request)
+                lastHTML = html
+                lastResponse = response
+
+                if isLoginPage(html) {
+                    continue
+                }
+                if (try? HTMLParser.parseGradeRankings(html: html)) != nil {
+                    _ = persistDebugHTML(html, filename: "last_grade_rankings_page.html")
+                    return html
+                }
+            } catch {
+                lastTransportError = error
+            }
+        }
+
+        if isLoginPage(lastHTML) {
+            if await invalidateSessionIfNeeded() {
+                throw SchoolNetworkError.sessionExpired
+            }
+            throw SchoolNetworkError.loginFailed(
+                L10n.text("成绩排名页面返回了登录页。") +
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_grade_rankings_login_page.html"
+                )
+            )
+        }
+
+        if lastResponse == nil, let lastTransportError {
+            throw lastTransportError
+        }
+
+        throw SchoolNetworkError.featureUnavailable(
+            L10n.text("教务暂未开放成绩排名。") +
+            pageDebugSummary(
+                html: lastHTML,
+                responseURL: lastResponse?.url,
+                snapshotName: "last_grade_rankings_unavailable.html"
+            )
+        )
     }
 
     private func gradeRankingDirectCandidateRequests(referer: URL) -> [URLRequest] {

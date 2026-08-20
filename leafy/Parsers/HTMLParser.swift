@@ -705,15 +705,17 @@ class HTMLParser {
         let document = try SwiftSoup.parse(html)
 
         let gradeTables = try candidateDataTables(in: document).filter { table in
-            let headerText = try table.select("th").array()
+            let headerText = try table.select("tr").first()?
+                .select("th,td")
+                .array()
                 .map { try $0.text().trimmingCharacters(in: .whitespacesAndNewlines) }
-                .joined(separator: " ")
+                .joined(separator: " ") ?? ""
             return headerText.contains("课程名称")
                 && headerText.contains("成绩")
                 && headerText.contains("学分")
                 && (headerText.contains("开课学期") || headerText.contains("课程编号"))
         }
-        guard let gradeTable = try gradeTables.first ?? document.select("#dataList").first() else {
+        guard let gradeTable = gradeTables.first else {
             throw HTMLParserError.tableNotFound("成绩")
         }
         let rows = try gradeTable.select("tr").array()
@@ -757,7 +759,9 @@ class HTMLParser {
             }
         }
 
-        if !dataRows.isEmpty && parsedGrades.isEmpty {
+        if parsedGrades.isEmpty,
+           !dataRows.isEmpty,
+           try !rowsRepresentVerifiedEmpty(dataRows) {
             throw HTMLParserError.tableRowsUnparseable("成绩")
         }
         return parsedGrades
@@ -773,6 +777,11 @@ class HTMLParser {
         let headerCells = try rows.first?.select("th,td").array().map {
             try normalizedTableCellText($0)
         } ?? []
+        let headerText = headerCells.joined(separator: " ")
+        guard headerText.contains("课程"),
+              headerText.contains("考试") || headerText.contains("考试时段") else {
+            throw HTMLParserError.tableNotFound("考试安排")
+        }
         let headerIndex = examHeaderIndex(from: headerCells)
         var parsed: [ExamArrangement] = []
 
@@ -788,27 +797,58 @@ class HTMLParser {
             parsed.append(exam)
         }
 
-        if !rows.dropFirst().isEmpty && parsed.isEmpty {
+        let dataRows = try rows.dropFirst().filter { try !$0.select("td").isEmpty() }
+        if parsed.isEmpty,
+           !dataRows.isEmpty,
+           try !rowsRepresentVerifiedEmpty(dataRows) {
             throw HTMLParserError.tableRowsUnparseable("考试安排")
         }
 
         return parsed
     }
 
-    private static func normalizedTableCellText(_ element: Element) throws -> String {
+    nonisolated private static func normalizedTableCellText(_ element: Element) throws -> String {
         try element.text()
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\u{00a0}", with: " ")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 
+    nonisolated private static let verifiedEmptyMarkers = [
+        "暂无数据",
+        "暂无记录",
+        "没有数据",
+        "没有记录",
+        "无符合条件记录",
+        "未查询到",
+        "查询无结果"
+    ]
+
+    nonisolated private static func rowsRepresentVerifiedEmpty<S: Sequence>(_ rows: S) throws -> Bool where S.Element == Element {
+        let text = try rows
+            .map { try normalizedTableCellText($0) }
+            .joined(separator: " ")
+        if verifiedEmptyMarkers.contains(where: { text.contains($0) }) {
+            return true
+        }
+        return text.contains("暂无")
+            && ["数据", "记录", "结果", "安排"].contains(where: { text.contains($0) })
+    }
+
     static func parseTeachingPlan(html: String) throws -> [TeachingPlanSection] {
         let document = try SwiftSoup.parse(html)
-        let rows = try document.select("#dataList tr").array()
-        guard rows.count > 1 else {
+        guard let table = try document.select("#dataList").first() else {
+            throw HTMLParserError.tableNotFound("教学计划")
+        }
+        let headerText = try table.select("tr").first()?.select("th,td").text() ?? ""
+        guard headerText.contains("课程"),
+              headerText.contains("学分"),
+              headerText.contains("学期") else {
             throw HTMLParserError.tableNotFound("教学计划")
         }
 
+        let rows = try table.select("tr").array()
+        let dataRows = try rows.dropFirst().filter { try !$0.select("td").isEmpty() }
         var currentPeriod = ""
         var grouped: [String: [TeachingPlanCourse]] = [:]
         var orderedTerms: [String] = []
@@ -845,9 +885,15 @@ class HTMLParser {
             grouped[period, default: []].append(course)
         }
 
-        return orderedTerms.map { term in
+        let sections = orderedTerms.map { term in
             TeachingPlanSection(term: term, courses: grouped[term] ?? [])
         }
+        if sections.isEmpty,
+           !dataRows.isEmpty,
+           try !rowsRepresentVerifiedEmpty(dataRows) {
+            throw HTMLParserError.tableRowsUnparseable("教学计划")
+        }
+        return sections
     }
 
     private static func parseExamRow(
@@ -1734,26 +1780,37 @@ class HTMLParser {
 
     nonisolated static func parseEmptyClassrooms(html: String) throws -> [EmptyClassroom] {
         let document = try SwiftSoup.parse(html)
-        let rows = try document.select("#dataList tr").array()
-        guard rows.count > 4 else {
+        guard let table = try document.select("#dataList").first() else {
+            throw HTMLParserError.tableNotFound("空教室")
+        }
+        let headerText = try table.select("th").text()
+        guard headerText.contains("教室") else {
             throw HTMLParserError.tableNotFound("空教室")
         }
 
-        let dataRows = rows.dropFirst(2).dropLast(2)
+        let rows = try table.select("tr").array()
+        let dataRows = try rows.filter { try !$0.select("td").isEmpty() }
+
         var result: [(weight: Int, room: EmptyClassroom)] = []
+        var recognizedRoomRowCount = 0
 
         for row in dataRows {
             let texts = try row.select("td").array().map { cell in
                 try normalizedClassroomCellText(cell.text())
             }
             guard texts.count > 1 else { continue }
+            guard let parsed = parseClassroomRow(texts[0]) else { continue }
+            recognizedRoomRowCount += 1
             if texts.dropFirst().contains(where: { !$0.isEmpty }) {
                 continue
             }
+            result.append(parsed)
+        }
 
-            if let parsed = parseClassroomRow(texts[0]) {
-                result.append(parsed)
-            }
+        if recognizedRoomRowCount == 0,
+           !dataRows.isEmpty,
+           try !rowsRepresentVerifiedEmpty(dataRows) {
+            throw HTMLParserError.tableRowsUnparseable("空教室")
         }
 
         return result.sorted { lhs, rhs in

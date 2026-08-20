@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-08-17
+Last verified: 2026-08-20
 
 ## Current Focus
 
@@ -16,7 +16,7 @@ Last verified: 2026-08-17
 - **Android 阶段 4（社区，M4.1-M4.3）**：supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论线程/点赞、文本发帖与评论。
 - **Android 阶段 5 部分（M5.1-M5.2）**：我的页社区资料（bootstrap）、空闲教室查询。
 - 教务网络（研究生 RSA/AES）与部分校园工具（共享课表、评价目录）、日迹强化、发布工程（Widget/WorkManager/签名）仍待接入。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
-- 教务全量同步区分完整成功、部分成功与失败；可信空数据和解析异常不再混用，异常页面不会覆盖最近成功缓存。
+- 教务全量同步区分完整成功、部分成功与失败；课表、成绩、考试、教学计划与空闲教室只在确认目标结构或可信空结果后更新缓存，异常页面继续保留最近成功数据。
 - 社区投票局部错误、帖子/评论重试幂等、日迹长列表投影、Dynamic Type、VoiceOver 与核心英文文案完成一轮可靠性收敛。
 - 2.9 正式发布（build 27，App Store 2026-08-03，tag `v2.9`）。
 - 完整英文本地化 + App 内语言偏好基础设施。

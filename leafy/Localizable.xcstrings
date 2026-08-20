@@ -5769,6 +5769,16 @@
         }
       }
     },
+    "同步完成，学校当前没有返回成绩记录。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync completed. The school currently returned no grade records."
+          }
+        }
+      }
+    },
     "同步完成，已加载示例课表。" : {
       "extractionState" : "stale",
       "localizations" : {
