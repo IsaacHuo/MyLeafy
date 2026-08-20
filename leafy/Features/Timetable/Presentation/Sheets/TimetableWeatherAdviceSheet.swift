@@ -57,17 +57,6 @@ struct TimetableWeatherAdviceSheet: View {
         switch loadState {
         case .idle, .loading:
             loadingCard
-        case .permissionRequired:
-            permissionCard(
-                title: "开启当前位置天气",
-                detail: "使用当前位置显示天气，并根据今天后续课程给出带伞、加衣或防晒建议。",
-                primaryTitle: "继续",
-                secondaryTitle: "暂不使用"
-            ) {
-                Task { await loadWeather(requestsPermissionIfNeeded: true) }
-            } secondaryAction: {
-                dismiss()
-            }
         case .permissionDenied:
             permissionCard(
                 title: "定位权限未开启",
@@ -99,9 +88,7 @@ struct TimetableWeatherAdviceSheet: View {
         title: String,
         detail: String,
         primaryTitle: String,
-        secondaryTitle: String? = nil,
-        action: @escaping () -> Void,
-        secondaryAction: (() -> Void)? = nil
+        action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 16 * leafyControlScale) {
             HStack(alignment: .top, spacing: 12 * leafyControlScale) {
@@ -123,12 +110,6 @@ struct TimetableWeatherAdviceSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.accent(for: themeColorPreference))
-
-            if let secondaryTitle, let secondaryAction {
-                Button(secondaryTitle, action: secondaryAction)
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
-            }
         }
         .padding(18 * leafyControlScale)
         .leafyCardStyle()
@@ -440,7 +421,7 @@ struct TimetableWeatherAdviceSheet: View {
                 await loadWeather(requestsPermissionIfNeeded: false)
             }
         case .notDetermined:
-            loadState = .permissionRequired
+            await loadWeather(requestsPermissionIfNeeded: true)
         case .denied:
             loadState = .permissionDenied
         case .unavailable:
@@ -457,7 +438,11 @@ struct TimetableWeatherAdviceSheet: View {
             )
             apply(snapshot: snapshot)
         } catch TimetableWeatherServiceError.permissionRequired {
-            loadState = .permissionRequired
+            if requestsPermissionIfNeeded {
+                loadState = .failed
+            } else {
+                await loadWeather(requestsPermissionIfNeeded: true)
+            }
         } catch TimetableWeatherServiceError.permissionDenied {
             loadState = .permissionDenied
         } catch {
@@ -500,7 +485,6 @@ struct TimetableWeatherAdviceSheet: View {
 private enum TimetableWeatherAdviceLoadState: Equatable {
     case idle
     case loading
-    case permissionRequired
     case permissionDenied
     case failed
     case loaded(TimetableWeatherSnapshot, TimetableWeatherAdviceSummary)
