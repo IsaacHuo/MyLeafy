@@ -64,10 +64,7 @@ struct ScheduleMemoStatisticsView: View {
                     generateShareImage(statistics)
                 } label: {
                     Image(systemName: "square.and.arrow.up")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
                 }
-                .buttonBorderShape(.circle)
                 .disabled(statistics.memoCount == 0)
                 .accessibilityLabel(L10n.text("导出记录日迹图片", language: leafyLanguage))
             }
