@@ -58,7 +58,6 @@ enum ScheduleRootTopBarLayout: Equatable {
 }
 
 struct ScheduleRootView: View {
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -130,31 +129,29 @@ struct ScheduleRootView: View {
                 usesAccessibilitySizes: dynamicTypeSize.isAccessibilitySize
             )
 
-            LeafyGlassGroup(spacing: AppSpacing.compact) {
-                Group {
-                    switch layout {
-                    case .regular:
-                        HStack(spacing: AppSpacing.compact) {
+            Group {
+                switch layout {
+                case .regular:
+                    HStack(spacing: AppSpacing.compact) {
+                        rootMenuButton
+                        Spacer(minLength: 0)
+                        rootSectionPicker(expands: false, usesCompactLabels: false)
+                        Spacer(minLength: 0)
+                        rootNewScheduleButton
+                    }
+                case .combinedActions:
+                    HStack(spacing: AppSpacing.compact) {
+                        rootCombinedActionsMenu
+                        rootSectionPicker(expands: true, usesCompactLabels: true)
+                    }
+                case .stacked:
+                    VStack(spacing: AppSpacing.compact) {
+                        HStack {
                             rootMenuButton
-                            Spacer(minLength: 0)
-                            rootSectionPicker(expands: false, usesCompactLabels: false)
-                            Spacer(minLength: 0)
+                            Spacer()
                             rootNewScheduleButton
                         }
-                    case .combinedActions:
-                        HStack(spacing: AppSpacing.compact) {
-                            rootCombinedActionsMenu
-                            rootSectionPicker(expands: true, usesCompactLabels: true)
-                        }
-                    case .stacked:
-                        VStack(spacing: AppSpacing.compact) {
-                            HStack {
-                                rootMenuButton
-                                Spacer()
-                                rootNewScheduleButton
-                            }
-                            rootSectionPicker(expands: true, usesCompactLabels: false)
-                        }
+                        rootSectionPicker(expands: true, usesCompactLabels: false)
                     }
                 }
             }
@@ -173,7 +170,7 @@ struct ScheduleRootView: View {
     }
 
     private var rootMenuButton: some View {
-        LeafyGlassIconButton(
+        LeafyRootCircularToolbarButton(
             systemName: "line.3.horizontal",
             accessibilityLabel: L10n.text("打开日迹记录菜单", language: leafyLanguage)
         ) {
@@ -182,7 +179,7 @@ struct ScheduleRootView: View {
     }
 
     private var rootNewScheduleButton: some View {
-        LeafyGlassIconButton(
+        LeafyRootCircularToolbarButton(
             systemName: "plus",
             accessibilityLabel: L10n.text("添加自定日程", language: leafyLanguage)
         ) {
@@ -205,18 +202,9 @@ struct ScheduleRootView: View {
                 presentNewSchedule()
             }
         } label: {
-            rootCombinedActionsMenuLabel
-        }
-        .leafyCircularGlassControlStyle()
-        .accessibilityLabel(L10n.text("日迹操作", language: leafyLanguage))
-    }
-
-    @ViewBuilder
-    private var rootCombinedActionsMenuLabel: some View {
-        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
-            rootCombinedActionsMenuIcon
-        } else {
-            rootCombinedActionsMenuIcon
+            Image(systemName: "ellipsis")
+                .font(.system(size: LeafyRootChromeMetrics.iconPointSize, weight: .semibold))
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
                 .frame(
                     width: LeafyRootChromeMetrics.controlDiameter,
                     height: LeafyRootChromeMetrics.controlDiameter
@@ -224,13 +212,7 @@ struct ScheduleRootView: View {
                 .contentShape(Circle())
                 .leafyGlassSurface(in: Circle(), isInteractive: true)
         }
-    }
-
-    private var rootCombinedActionsMenuIcon: some View {
-        Image(systemName: "ellipsis")
-            .font(.system(size: LeafyRootChromeMetrics.iconPointSize, weight: .semibold))
-            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-            .frame(width: 20, height: 20)
+        .accessibilityLabel(L10n.text("日迹操作", language: leafyLanguage))
     }
 
     private func rootSectionPicker(expands: Bool, usesCompactLabels: Bool) -> some View {
@@ -253,7 +235,9 @@ struct ScheduleRootView: View {
         HStack(spacing: 0) {
             ForEach(SchedulePrimarySection.allCases) { section in
                 Button {
-                    selectPrimarySection(section)
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
+                        primarySection = section
+                    }
                 } label: {
                     Text(L10n.text(section.title, language: leafyLanguage))
                         .font(.body.weight(primarySection == section ? .semibold : .regular))
@@ -272,16 +256,6 @@ struct ScheduleRootView: View {
                 .buttonStyle(.plain)
                 .zIndex(1)
                 .accessibilityAddTraits(primarySection == section ? .isSelected : [])
-            }
-        }
-    }
-
-    private func selectPrimarySection(_ section: SchedulePrimarySection) {
-        if accessibilityReduceMotion {
-            primarySection = section
-        } else {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
-                primarySection = section
             }
         }
     }

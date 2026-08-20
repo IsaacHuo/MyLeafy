@@ -124,76 +124,72 @@ struct LeafyGlassIconButton: View {
 
     let systemName: String
     var showsBadge = false
-    var isLoading = false
     let accessibilityLabel: String
     let action: () -> Void
 
     var body: some View {
-        styledButton
-            .overlay(alignment: .topTrailing) {
-                if showsBadge {
-                    badge
-                }
-            }
-            .disabled(isLoading)
-            .accessibilityLabel(accessibilityLabel)
-    }
-
-    @ViewBuilder
-    private var styledButton: some View {
-        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
-            Button(action: action) {
-                icon
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .controlSize(.regular)
-            .frame(
-                minWidth: LeafyRootChromeMetrics.controlDiameter,
-                minHeight: LeafyRootChromeMetrics.controlDiameter
-            )
-        } else {
-            Button(action: action) {
-                icon
-                    .frame(
-                        width: LeafyRootChromeMetrics.controlDiameter,
-                        height: LeafyRootChromeMetrics.controlDiameter
-                    )
-                    .contentShape(Circle())
-                    .leafyGlassSurface(in: Circle(), isInteractive: true)
-            }
-            .buttonStyle(.plain)
+        Button(action: action) {
+            label.leafyGlassSurface(in: Circle(), isInteractive: true)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
-    @ViewBuilder
-    private var icon: some View {
-        Group {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: systemName)
-                    .font(.system(
-                        size: LeafyRootChromeMetrics.iconPointSize * leafyControlScale,
-                        weight: .semibold
-                    ))
-            }
-        }
-            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-            .frame(width: 20 * leafyControlScale, height: 20 * leafyControlScale)
-    }
+    private var label: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: systemName)
+                .font(.system(size: 18 * leafyControlScale, weight: .semibold))
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                .frame(
+                    width: LeafyRootChromeMetrics.controlDiameter,
+                    height: LeafyRootChromeMetrics.controlDiameter
+                )
+                .contentShape(Circle())
 
-    private var badge: some View {
-        Circle()
-            .fill(AppTheme.danger)
-            .frame(width: 9 * leafyControlScale, height: 9 * leafyControlScale)
-            .overlay(
+            if showsBadge {
                 Circle()
-                    .stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
+                    .fill(AppTheme.danger)
+                    .frame(width: 9 * leafyControlScale, height: 9 * leafyControlScale)
+                    .overlay(
+                        Circle()
+                            .stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
+                    )
+                    .offset(x: -3 * leafyControlScale, y: 3 * leafyControlScale)
+            }
+        }
+    }
+}
+
+struct LeafyRootCircularToolbarButton: View {
+    @Environment(\.leafyControlScale) private var leafyControlScale
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
+    let systemName: String
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .leafyGlassSurface(in: Circle(), isInteractive: true)
+        }
+        .buttonStyle(.plain)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var label: some View {
+        Image(systemName: systemName)
+            .font(.system(
+                size: LeafyRootChromeMetrics.iconPointSize * leafyControlScale,
+                weight: .semibold
+            ))
+            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+            .frame(
+                width: LeafyRootChromeMetrics.controlDiameter,
+                height: LeafyRootChromeMetrics.controlDiameter
             )
-            .offset(x: -3 * leafyControlScale, y: 3 * leafyControlScale)
-            .accessibilityHidden(true)
+            .contentShape(Circle())
     }
 }
 
@@ -287,22 +283,6 @@ extension View {
                     alert.action?()
                 }
             )
-        }
-    }
-
-    @ViewBuilder
-    func leafyCircularGlassControlStyle() -> some View {
-        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
-            self
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .controlSize(.regular)
-                .frame(
-                    minWidth: LeafyRootChromeMetrics.controlDiameter,
-                    minHeight: LeafyRootChromeMetrics.controlDiameter
-                )
-        } else {
-            self.buttonStyle(.plain)
         }
     }
 

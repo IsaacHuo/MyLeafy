@@ -121,7 +121,6 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
 }
 
 struct CommunityRootView: View {
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
@@ -351,33 +350,39 @@ struct CommunityRootView: View {
     }
 
     private var communityHeader: some View {
-        LeafyGlassGroup(spacing: 10 * leafyControlScale) {
+        CommunityNativeGlassGroup(spacing: 10 * leafyControlScale) {
             VStack(alignment: .leading, spacing: 8 * leafyControlScale) {
                 HStack(spacing: AppSpacing.compact) {
                     communitySearchButton
 
-                    HStack(spacing: 9) {
-                        LeafyGlassIconButton(
-                            systemName: isTopicFilterPresented ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
-                            accessibilityLabel: L10n.text("筛选话题", language: leafyLanguage),
-                            action: toggleTopicFilter
-                        )
+                    CommunityNativeGlassGroup(spacing: 9 * leafyControlScale) {
+                        HStack(spacing: 9) {
+                            DiscoverLiquidGlassIconButton(
+                                systemName: isTopicFilterPresented ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
+                                accessibilityLabel: L10n.text("筛选话题", language: leafyLanguage),
+                                action: {
+                                    withAnimation(.easeOut(duration: 0.18)) {
+                                        isTopicFilterPresented.toggle()
+                                    }
+                                }
+                            )
 
-                        LeafyGlassIconButton(
-                            systemName: "bell",
-                            showsBadge: notificationBadgeViewModel.unreadCount > 0,
-                            accessibilityLabel: L10n.text("通知", language: leafyLanguage),
-                            action: {
-                                showingNotifications = true
-                            }
-                        )
+                            DiscoverLiquidGlassIconButton(
+                                systemName: "bell",
+                                showsBadge: notificationBadgeViewModel.unreadCount > 0,
+                                accessibilityLabel: L10n.text("通知", language: leafyLanguage),
+                                action: {
+                                    showingNotifications = true
+                                }
+                            )
 
-                        LeafyGlassIconButton(
-                            systemName: "plus",
-                            isLoading: isPreparingComposer,
-                            accessibilityLabel: L10n.text("发布", language: leafyLanguage),
-                            action: handleComposerTapped
-                        )
+                            DiscoverLiquidGlassIconButton(
+                                systemName: "plus",
+                                isLoading: isPreparingComposer,
+                                accessibilityLabel: L10n.text("发布", language: leafyLanguage),
+                                action: handleComposerTapped
+                            )
+                        }
                     }
                 }
                 .frame(height: LeafyRootChromeMetrics.controlDiameter)
@@ -400,18 +405,13 @@ struct CommunityRootView: View {
                         guard abs(communityTopicFilterHeight - height) > 0.5 else { return }
                         communityTopicFilterHeight = height
                     }
-                    .transition(accessibilityReduceMotion
-                        ? .opacity
-                        : .move(edge: .top).combined(with: .opacity))
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, LeafyRootChromeMetrics.horizontalInset)
-        .animation(
-            accessibilityReduceMotion ? nil : .easeOut(duration: 0.18),
-            value: isTopicFilterPresented
-        )
+        .animation(.easeOut(duration: 0.18), value: isTopicFilterPresented)
     }
 
     private var communitySearchButton: some View {
@@ -437,18 +437,8 @@ struct CommunityRootView: View {
         }
         .buttonStyle(.plain)
         .contentShape(shape)
-        .leafyGlassSurface(in: shape, isInteractive: true)
+        .communityNativeGlassSurface(in: shape, isInteractive: true)
         .accessibilityLabel(L10n.text("搜索帖子", language: leafyLanguage))
-    }
-
-    private func toggleTopicFilter() {
-        if accessibilityReduceMotion {
-            isTopicFilterPresented.toggle()
-        } else {
-            withAnimation(.easeOut(duration: 0.18)) {
-                isTopicFilterPresented.toggle()
-            }
-        }
     }
 
     private var communityAccessGate: CommunityAccessGate {
@@ -932,6 +922,100 @@ private struct CommunityNewSchoolRequestSheet: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct DiscoverLiquidGlassIconButton: View {
+    @Environment(\.leafyControlScale) private var leafyControlScale
+    @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+
+    let systemName: String
+    var showsBadge = false
+    var isLoading = false
+    let accessibilityLabel: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .communityNativeGlassSurface(in: Circle(), isInteractive: true)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var label: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: systemName)
+                        .font(.system(
+                            size: LeafyRootChromeMetrics.iconPointSize * leafyControlScale,
+                            weight: .semibold
+                        ))
+                }
+            }
+            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+            .frame(
+                width: LeafyRootChromeMetrics.controlDiameter,
+                height: LeafyRootChromeMetrics.controlDiameter
+            )
+            .contentShape(Circle())
+
+            if showsBadge {
+                Circle()
+                    .fill(AppTheme.danger)
+                    .frame(width: 9 * leafyControlScale, height: 9 * leafyControlScale)
+                    .overlay(
+                        Circle()
+                            .stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
+                    )
+                    .offset(x: -4 * leafyControlScale, y: 4 * leafyControlScale)
+            }
+        }
+    }
+}
+
+private struct CommunityNativeGlassGroup<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder let content: () -> Content
+
+    init(spacing: CGFloat, @ViewBuilder content: @escaping () -> Content) {
+        self.spacing = spacing
+        self.content = content
+    }
+
+    var body: some View {
+        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
+            GlassEffectContainer(spacing: spacing) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func communityNativeGlassSurface<S: InsettableShape>(
+        in shape: S,
+        isInteractive: Bool
+    ) -> some View {
+        if #available(iOS 26.0, *), !CommunityDiagnosticsOptions.disablesGlassEffects {
+            let glass = isInteractive ? Glass.regular.interactive() : Glass.regular
+            self.glassEffect(glass, in: shape)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .overlay(
+                    shape.stroke(AppTheme.separator.opacity(0.8), lineWidth: 1)
+                )
         }
     }
 }
