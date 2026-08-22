@@ -58,7 +58,6 @@ App 图标：
 字体策略：
 
 - 中文和普通 UI 使用系统字体。
-- 英文品牌标题使用 `Lora` 资源。
 - 通过 `leafyFontScale`、`leafyControlScale` 和 `dynamicTypeSize` 统一控制显示密度。
 
 显示密度：
