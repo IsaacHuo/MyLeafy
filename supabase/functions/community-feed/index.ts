@@ -112,6 +112,7 @@ function json(payload: unknown, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       ...corsHeaders,
     },
   });
