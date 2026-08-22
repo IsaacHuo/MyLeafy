@@ -4994,6 +4994,86 @@
         }
       }
     },
+    "刷新失败，请检查网络后重试" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh failed. Check your connection and try again."
+          }
+        }
+      }
+    },
+    "刷新完成" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh complete"
+          }
+        }
+      }
+    },
+    "刷新完成，暂无内容" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh complete. No content yet."
+          }
+        }
+      }
+    },
+    "部分内容刷新失败，请重试" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some content could not be refreshed. Try again."
+          }
+        }
+      }
+    },
+    "显示最新内容并回到顶部" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the latest content and return to the top"
+          }
+        }
+      }
+    },
+    "有新内容" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New content available"
+          }
+        }
+      }
+    },
+    "已更新 %d 条内容" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated %d items"
+          }
+        }
+      }
+    },
+    "已是最新" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're up to date"
+          }
+        }
+      }
+    },
     "刷新排名" : {
       "localizations" : {
         "en-US" : {

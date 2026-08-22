@@ -16,6 +16,22 @@ nonisolated protocol CommunityFeedRepository: CommunitySessionRepository {
     func votePoll(pollID: UUID, optionID: UUID) async throws -> CommunityPoll
 }
 
+nonisolated protocol CommunityFeedChangeStreaming: Sendable {
+    func feedEvents(campusID: String) async -> AsyncThrowingStream<Void, Error>
+}
+
+nonisolated struct LiveCommunityFeedChangeStream: CommunityFeedChangeStreaming {
+    private let service: CommunityService
+
+    init(service: CommunityService = .shared) {
+        self.service = service
+    }
+
+    func feedEvents(campusID: String) async -> AsyncThrowingStream<Void, Error> {
+        await service.feedEvents(campusID: campusID)
+    }
+}
+
 nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
     func fetchPost(postID: UUID) async throws -> CommunityPost?
     func fetchComments(postID: UUID) async throws -> [CommunityComment]

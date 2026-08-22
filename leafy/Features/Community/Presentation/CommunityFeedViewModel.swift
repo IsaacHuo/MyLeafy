@@ -35,6 +35,24 @@ enum CommunityFeedLoadMode {
     case refresh
 }
 
+nonisolated enum CommunityFeedRefreshResult: Equatable, Sendable {
+    case updated(newItemCount: Int)
+    case changed
+    case unchanged
+    case empty
+    case partialFailure
+    case failure
+    case cancelled
+}
+
+nonisolated struct CommunityFeedSnapshot: Equatable, Sendable {
+    let query: CommunityFeedQuery
+    let posts: [CommunityPost]
+    let polls: [CommunityPoll]
+    let items: [CommunityFeedItem]
+    let pollsFailed: Bool
+}
+
 nonisolated enum CommunityFeedSearchDebounce {
     static let delay: Duration = .milliseconds(320)
 
@@ -62,6 +80,7 @@ final class CommunityFeedViewModel: ObservableObject {
     @Published private(set) var activeLikePostIDs: Set<UUID> = []
     @Published private(set) var activeFavoritePostIDs: Set<UUID> = []
     @Published private(set) var activePollIDs: Set<UUID> = []
+    @Published private(set) var hasPendingRefresh = false
     @Published var errorMessage: String?
     @Published private(set) var pollErrorMessage: String?
 
@@ -70,30 +89,44 @@ final class CommunityFeedViewModel: ObservableObject {
 
     private var currentQuery = CommunityFeedQuery.default
     private var activeLoadID: UUID?
+    private var activeStageID: UUID?
     private var activePollRetryID: UUID?
+    private var pendingSnapshot: CommunityFeedSnapshot?
+    private var stagedRefreshTask: Task<Void, Never>?
     private let repository: any CommunityFeedRepository
     private let cache: any CommunityFeedCaching
+    private let changeStream: any CommunityFeedChangeStreaming
 
     init(
         repository: any CommunityFeedRepository = LiveCommunityRepository(),
-        cache: any CommunityFeedCaching = CommunityFeedCache()
+        cache: any CommunityFeedCaching = CommunityFeedCache(),
+        changeStream: any CommunityFeedChangeStreaming = LiveCommunityFeedChangeStream()
     ) {
         self.repository = repository
         self.cache = cache
+        self.changeStream = changeStream
     }
 
-    func load(mode: CommunityFeedLoadMode = .cacheFirst, query: CommunityFeedQuery = .default) async {
+    @discardableResult
+    func load(
+        mode: CommunityFeedLoadMode = .cacheFirst,
+        query: CommunityFeedQuery = .default
+    ) async -> CommunityFeedRefreshResult {
         guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
             CommunityDiagnostics.log.info("CommunityFeedViewModel.load skipped by diagnostics")
             isLoading = false
             isLoadingMore = false
             hasMoreItems = false
             errorMessage = nil
-            return
+            return .cancelled
         }
 
         let loadID = UUID()
         activeLoadID = loadID
+        activeStageID = nil
+        stagedRefreshTask?.cancel()
+        stagedRefreshTask = nil
+        clearPendingSnapshot()
 
         let didChangeQuery = currentQuery != query
         currentQuery = query
@@ -108,9 +141,9 @@ final class CommunityFeedViewModel: ObservableObject {
         switch mode {
         case .cacheFirst:
             loadCachedPostsIfAvailable(query: query)
-            await refreshFromNetwork(query: query, loadID: loadID)
+            return await refreshFromNetwork(query: query, loadID: loadID)
         case .refresh:
-            await refreshFromNetwork(query: query, loadID: loadID)
+            return await refreshFromNetwork(query: query, loadID: loadID)
         }
     }
 
@@ -123,10 +156,14 @@ final class CommunityFeedViewModel: ObservableObject {
         }
     }
 
-    private func refreshFromNetwork(query: CommunityFeedQuery, loadID: UUID) async {
+    private func refreshFromNetwork(
+        query: CommunityFeedQuery,
+        loadID: UUID
+    ) async -> CommunityFeedRefreshResult {
         let signpostState = LeafyPerformanceSignposter.community.beginInterval("feed-refresh")
         defer { LeafyPerformanceSignposter.community.endInterval("feed-refresh", signpostState) }
-        CommunityDiagnostics.log.info("Community feed load started")
+        let startedAt = Date()
+        CommunityDiagnostics.log.info("Community feed applied refresh started query=\(query.cacheKey, privacy: .public)")
 
         isLoading = true
         activePollRetryID = nil
@@ -140,45 +177,105 @@ final class CommunityFeedViewModel: ObservableObject {
         }
 
         do {
-            try await CommunityTimeout.run(
-                seconds: 10,
-                message: L10n.text("社区会话建立超时，请检查网络后重试。")
-            ) { [repository] in
-                try await repository.ensureAnonymousSession()
-            }
-            guard !Task.isCancelled else { return }
+            let snapshot = try await fetchSnapshot(query: query)
+            guard !Task.isCancelled else { return .cancelled }
+            guard activeLoadID == loadID, currentQuery == query else { return .cancelled }
 
-            async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: query)
-            async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: query)
-            let loadedPosts = try await postsRequest
-            let loadedPolls: [CommunityPoll]
-            do {
-                loadedPolls = try await pollsRequest
-            } catch {
-                guard !Task.isCancelled else { return }
-                guard activeLoadID == loadID, currentQuery == query else { return }
-                pollErrorMessage = L10n.text("社区投票加载失败，请重试。")
-                CommunityDiagnostics.log.error("Community feed polls load failed: \(error.localizedDescription, privacy: .public)")
-                loadedPolls = []
-            }
-            guard !Task.isCancelled else { return }
-            guard activeLoadID == loadID, currentQuery == query else { return }
-
-            posts = loadedPosts
-            items = CommunityFeedItemOrdering.ordered(posts: loadedPosts, polls: loadedPolls, matching: query)
-            hasMoreItems = canLoadMore(after: loadedPosts, query: query)
-            savePostsToCache()
-            feedGeneration += 1
-            errorMessage = nil
-            CommunityDiagnostics.log.info("Community feed load finished with \(loadedPosts.count) posts and \(loadedPolls.count) polls")
+            let result = refreshResult(for: snapshot)
+            apply(snapshot)
+            CommunityDiagnostics.log.info(
+                "Community feed applied refresh finished query=\(query.cacheKey, privacy: .public) posts=\(snapshot.posts.count) polls=\(snapshot.polls.count) partial=\(snapshot.pollsFailed) duration=\(Date().timeIntervalSince(startedAt), privacy: .public)"
+            )
+            restoreProfileAfterFeedLoad()
+            return result
+        } catch is CancellationError {
+            return .cancelled
         } catch {
-            guard !Task.isCancelled else { return }
-            guard activeLoadID == loadID else { return }
+            guard !Task.isCancelled else { return .cancelled }
+            guard activeLoadID == loadID, currentQuery == query else { return .cancelled }
             CommunityDiagnostics.log.error("Community feed load failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = L10n.text("社区内容加载失败，请重试。")
-            return
+            return .failure
+        }
+    }
+
+    private func fetchSnapshot(query: CommunityFeedQuery) async throws -> CommunityFeedSnapshot {
+        try await CommunityTimeout.run(
+            seconds: 10,
+            message: L10n.text("社区会话建立超时，请检查网络后重试。")
+        ) { [repository] in
+            try await repository.ensureAnonymousSession()
+        }
+        try Task.checkCancellation()
+
+        async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: query)
+        async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: query)
+        let loadedPosts = try await postsRequest
+        let loadedPolls: [CommunityPoll]
+        let pollsFailed: Bool
+        do {
+            loadedPolls = try await pollsRequest
+            pollsFailed = false
+        } catch {
+            try Task.checkCancellation()
+            guard query.includesPostsInFeed else { throw error }
+            pollsFailed = true
+            loadedPolls = currentPolls
+            CommunityDiagnostics.log.error(
+                "Community feed polls load failed query=\(query.cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
         }
 
+        return CommunityFeedSnapshot(
+            query: query,
+            posts: loadedPosts,
+            polls: loadedPolls,
+            items: CommunityFeedItemOrdering.ordered(
+                posts: loadedPosts,
+                polls: loadedPolls,
+                matching: query
+            ),
+            pollsFailed: pollsFailed
+        )
+    }
+
+    private var currentPolls: [CommunityPoll] {
+        items.compactMap { item in
+            guard case .poll(let poll) = item else { return nil }
+            return poll
+        }
+    }
+
+    private func apply(_ snapshot: CommunityFeedSnapshot) {
+        posts = snapshot.posts
+        items = snapshot.items
+        hasMoreItems = canLoadMore(after: snapshot.posts, query: snapshot.query)
+        pollErrorMessage = snapshot.pollsFailed
+            ? L10n.text("社区投票加载失败，请重试。")
+            : nil
+        errorMessage = nil
+        cache.save(snapshot.posts, query: snapshot.query)
+        feedGeneration += 1
+        clearPendingSnapshot()
+    }
+
+    private func refreshResult(for snapshot: CommunityFeedSnapshot) -> CommunityFeedRefreshResult {
+        if snapshot.pollsFailed {
+            return .partialFailure
+        }
+        guard !snapshot.items.isEmpty else { return .empty }
+        guard snapshot.items != items else { return .unchanged }
+
+        let existingIDs = Set(items.map(\.id))
+        let newItemCount = snapshot.items.reduce(into: 0) { count, item in
+            if !existingIDs.contains(item.id) {
+                count += 1
+            }
+        }
+        return newItemCount > 0 ? .updated(newItemCount: newItemCount) : .changed
+    }
+
+    private func restoreProfileAfterFeedLoad() {
         Task.detached {
             try? await Task.sleep(for: .milliseconds(800))
             await CommunitySessionManager.shared.restoreProfileIfPossible()
@@ -194,6 +291,123 @@ final class CommunityFeedViewModel: ObservableObject {
         ) { [repository] in
             try await repository.fetchPolls(limit: query.limit)
         }
+    }
+
+    func observeFeedChanges(campusID: String) async {
+        CommunityDiagnostics.log.info("Community feed realtime observer started campus=\(campusID, privacy: .public)")
+        requestStagedRefresh(after: .milliseconds(700))
+        var retryDelaySeconds = 1
+
+        while !Task.isCancelled {
+            do {
+                let events = await changeStream.feedEvents(campusID: campusID)
+                CommunityDiagnostics.log.info("Community feed realtime subscription active campus=\(campusID, privacy: .public)")
+                retryDelaySeconds = 1
+                for try await _ in events {
+                    guard !Task.isCancelled else { break }
+                    CommunityDiagnostics.log.debug("Community feed realtime change received campus=\(campusID, privacy: .public)")
+                    requestStagedRefresh()
+                }
+
+                if !Task.isCancelled {
+                    CommunityDiagnostics.log.error("Community feed realtime stream ended unexpectedly campus=\(campusID, privacy: .public)")
+                }
+            } catch is CancellationError {
+                break
+            } catch {
+                guard !Task.isCancelled else { break }
+                CommunityDiagnostics.log.error(
+                    "Community feed realtime subscription failed campus=\(campusID, privacy: .public) retry=\(retryDelaySeconds)s error=\(error.localizedDescription, privacy: .public)"
+                )
+            }
+
+            guard !Task.isCancelled else { break }
+            do {
+                try await Task.sleep(for: .seconds(retryDelaySeconds))
+            } catch {
+                break
+            }
+            retryDelaySeconds = min(retryDelaySeconds * 2, 30)
+        }
+
+        stagedRefreshTask?.cancel()
+        stagedRefreshTask = nil
+        CommunityDiagnostics.log.info("Community feed realtime observer stopped campus=\(campusID, privacy: .public)")
+    }
+
+    func requestStagedRefresh(after delay: Duration = .milliseconds(500)) {
+        let query = currentQuery
+        stagedRefreshTask?.cancel()
+        stagedRefreshTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
+            await self?.stageLatestSnapshot(query: query)
+        }
+    }
+
+    @discardableResult
+    func applyPendingSnapshot() -> Bool {
+        guard let pendingSnapshot, pendingSnapshot.query == currentQuery else {
+            clearPendingSnapshot()
+            return false
+        }
+
+        apply(pendingSnapshot)
+        CommunityDiagnostics.log.info(
+            "Community feed staged snapshot applied query=\(pendingSnapshot.query.cacheKey, privacy: .public) posts=\(pendingSnapshot.posts.count) polls=\(pendingSnapshot.polls.count)"
+        )
+        return true
+    }
+
+    private func stageLatestSnapshot(query: CommunityFeedQuery) async {
+        guard !CommunityDiagnosticsOptions.disablesFeedLoad else { return }
+        guard query == currentQuery else { return }
+        if isLoading {
+            requestStagedRefresh(after: .milliseconds(500))
+            return
+        }
+
+        let stageID = UUID()
+        activeStageID = stageID
+        let startedAt = Date()
+        CommunityDiagnostics.log.info("Community feed staged refresh started query=\(query.cacheKey, privacy: .public)")
+
+        do {
+            let snapshot = try await fetchSnapshot(query: query)
+            guard !Task.isCancelled,
+                  activeStageID == stageID,
+                  currentQuery == query
+            else { return }
+
+            if snapshot.items == items {
+                clearPendingSnapshot()
+                CommunityDiagnostics.log.info(
+                    "Community feed staged refresh unchanged query=\(query.cacheKey, privacy: .public) duration=\(Date().timeIntervalSince(startedAt), privacy: .public)"
+                )
+                return
+            }
+
+            pendingSnapshot = snapshot
+            hasPendingRefresh = true
+            CommunityDiagnostics.log.info(
+                "Community feed staged refresh ready query=\(query.cacheKey, privacy: .public) posts=\(snapshot.posts.count) polls=\(snapshot.polls.count) partial=\(snapshot.pollsFailed) duration=\(Date().timeIntervalSince(startedAt), privacy: .public)"
+            )
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, activeStageID == stageID else { return }
+            CommunityDiagnostics.log.error(
+                "Community feed staged refresh failed query=\(query.cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+
+    private func clearPendingSnapshot() {
+        pendingSnapshot = nil
+        hasPendingRefresh = false
     }
 
     func retryPolls() async {
@@ -246,6 +460,10 @@ final class CommunityFeedViewModel: ObservableObject {
             return
         }
 
+        activeStageID = nil
+        stagedRefreshTask?.cancel()
+        stagedRefreshTask = nil
+        clearPendingSnapshot()
         let baseQuery = currentQuery
         isLoadingMore = true
         defer { isLoadingMore = false }
@@ -311,6 +529,7 @@ final class CommunityFeedViewModel: ObservableObject {
 
     func toggleLike(postID: UUID) async -> String? {
         guard !activeLikePostIDs.contains(postID) else { return nil }
+        clearPendingSnapshot()
         activeLikePostIDs.insert(postID)
         defer { activeLikePostIDs.remove(postID) }
 
@@ -330,6 +549,7 @@ final class CommunityFeedViewModel: ObservableObject {
 
     func toggleFavorite(postID: UUID) async -> String? {
         guard !activeFavoritePostIDs.contains(postID) else { return nil }
+        clearPendingSnapshot()
         activeFavoritePostIDs.insert(postID)
         defer { activeFavoritePostIDs.remove(postID) }
 
@@ -348,6 +568,7 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     func removePost(_ post: CommunityPost) {
+        clearPendingSnapshot()
         posts.removeAll { $0.id == post.id }
         items.removeAll { item in
             if case .post(let existingPost) = item {
@@ -370,6 +591,7 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     func blockAuthor(of post: CommunityPost) async -> String? {
+        clearPendingSnapshot()
         do {
             try await repository.blockUser(userID: post.authorID, reason: "用户主动屏蔽")
             posts.removeAll { $0.authorID == post.authorID }
@@ -400,6 +622,7 @@ final class CommunityFeedViewModel: ObservableObject {
 
     func votePoll(pollID: UUID, optionID: UUID) async -> CommunityPoll? {
         guard !activePollIDs.contains(pollID) else { return nil }
+        clearPendingSnapshot()
         activePollIDs.insert(pollID)
         defer { activePollIDs.remove(pollID) }
 

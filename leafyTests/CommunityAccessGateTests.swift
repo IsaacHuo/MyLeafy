@@ -185,11 +185,11 @@ final class CommunityAccessGateTests: XCTestCase {
         await repository.waitForFetch(query: searchQuery)
 
         await repository.resumeFetch(query: searchQuery, posts: [searchPost])
-        await searchLoad.value
+        _ = await searchLoad.value
         XCTAssertEqual(viewModel.posts, [searchPost])
 
         await repository.resumeFetch(query: .default, posts: [defaultPost])
-        await defaultLoad.value
+        _ = await defaultLoad.value
         XCTAssertEqual(viewModel.posts, [searchPost])
     }
 

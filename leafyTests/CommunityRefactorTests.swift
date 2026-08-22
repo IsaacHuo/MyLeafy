@@ -75,7 +75,7 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(viewModel.posts, [cachedPost])
 
         await repository.resumeSuspendedFetch(with: [freshPost])
-        await loadTask.value
+        _ = await loadTask.value
 
         XCTAssertEqual(viewModel.posts, [freshPost])
         XCTAssertEqual(cache.savedPostSnapshots.last, [freshPost])
@@ -90,10 +90,112 @@ extension PerformanceRefactorTests {
 
         await viewModel.load()
         await repository.setFetchError(.failure("刷新失败"))
-        await viewModel.load(mode: .refresh)
+        let result = await viewModel.load(mode: .refresh)
 
+        XCTAssertEqual(result, .failure)
         XCTAssertEqual(viewModel.posts, [post])
         XCTAssertEqual(viewModel.errorMessage, L10n.text("社区内容加载失败，请重试。"))
+    }
+
+    @MainActor
+    func testCommunityFeedManualRefreshReportsNewUnchangedAndEmptyResults() async {
+        let initialPost = makeCommunityPost(title: "初始帖子")
+        let newPost = makeCommunityPost(title: "新增帖子")
+        let repository = FakeCommunityRepository(
+            postResponses: [
+                [initialPost],
+                [newPost, initialPost],
+                [newPost, initialPost],
+                []
+            ]
+        )
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+
+        await viewModel.load()
+        let updated = await viewModel.load(mode: .refresh)
+        let unchanged = await viewModel.load(mode: .refresh)
+        let empty = await viewModel.load(mode: .refresh)
+
+        XCTAssertEqual(updated, .updated(newItemCount: 1))
+        XCTAssertEqual(unchanged, .unchanged)
+        XCTAssertEqual(empty, .empty)
+        XCTAssertTrue(viewModel.items.isEmpty)
+    }
+
+    @MainActor
+    func testCommunityFeedManualRefreshReportsChangedWhenExistingContentChanges() async {
+        let postID = UUID()
+        let initialPost = makeCommunityPost(id: postID, title: "原标题")
+        let changedPost = makeCommunityPost(id: postID, authorID: initialPost.authorID, title: "新标题")
+        let repository = FakeCommunityRepository(postResponses: [[initialPost], [changedPost]])
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+
+        await viewModel.load()
+        let result = await viewModel.load(mode: .refresh)
+
+        XCTAssertEqual(result, .changed)
+        XCTAssertEqual(viewModel.posts, [changedPost])
+    }
+
+    @MainActor
+    func testCommunityFeedPartialPollFailureKeepsExistingPollAndAppliesPosts() async {
+        let initialPost = makeCommunityPost(title: "旧帖子")
+        let newPost = makeCommunityPost(title: "新帖子")
+        let poll = makeCommunityPoll(question: "保留这个投票？")
+        let repository = FakeCommunityRepository(
+            postResponses: [[initialPost], [newPost, initialPost]],
+            pollResponses: [[poll]]
+        )
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+
+        await viewModel.load()
+        await repository.setPollFetchError(.failure("投票刷新失败"))
+        let result = await viewModel.load(mode: .refresh)
+
+        XCTAssertEqual(result, .partialFailure)
+        XCTAssertEqual(viewModel.posts, [newPost, initialPost])
+        XCTAssertTrue(viewModel.items.contains(.poll(poll)))
+        XCTAssertEqual(viewModel.pollErrorMessage, L10n.text("社区投票加载失败，请重试。"))
+    }
+
+    @MainActor
+    func testCommunityFeedStagesLatestSnapshotUntilUserAppliesIt() async throws {
+        let initialPost = makeCommunityPost(title: "旧帖子")
+        let newPost = makeCommunityPost(title: "新帖子")
+        let repository = FakeCommunityRepository(postResponses: [[initialPost], [newPost, initialPost]])
+        let cache = FakeCommunityFeedCache()
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: cache)
+
+        await viewModel.load()
+        viewModel.requestStagedRefresh(after: .zero)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertTrue(viewModel.hasPendingRefresh)
+        XCTAssertEqual(viewModel.posts, [initialPost])
+        XCTAssertEqual(cache.savedPostSnapshots.last, [initialPost])
+
+        XCTAssertTrue(viewModel.applyPendingSnapshot())
+        XCTAssertFalse(viewModel.hasPendingRefresh)
+        XCTAssertEqual(viewModel.posts, [newPost, initialPost])
+        XCTAssertEqual(cache.savedPostSnapshots.last, [newPost, initialPost])
+    }
+
+    @MainActor
+    func testCommunityFeedCoalescesRepeatedStagedRefreshRequests() async throws {
+        let initialPost = makeCommunityPost(title: "旧帖子")
+        let newPost = makeCommunityPost(title: "新帖子")
+        let repository = FakeCommunityRepository(postResponses: [[initialPost], [newPost, initialPost]])
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+
+        await viewModel.load()
+        viewModel.requestStagedRefresh(after: .milliseconds(30))
+        viewModel.requestStagedRefresh(after: .milliseconds(30))
+        viewModel.requestStagedRefresh(after: .milliseconds(30))
+        try await Task.sleep(for: .milliseconds(150))
+
+        let fetchCount = await repository.fetchedPostQueries().count
+        XCTAssertEqual(fetchCount, 2)
+        XCTAssertTrue(viewModel.hasPendingRefresh)
     }
 
     @MainActor

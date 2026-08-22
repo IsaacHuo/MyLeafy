@@ -4,6 +4,7 @@ import OSLog
 import PhotosUI
 import QuickLook
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct CommunityDraftImage: Identifiable, Hashable {
@@ -171,6 +172,93 @@ enum CommunityComposerAttachmentTypes {
 struct CommunityFeedTaskID: Hashable {
     let refreshID: UUID
     let query: CommunityFeedQuery
+}
+
+struct CommunityFeedRealtimeTaskID: Hashable {
+    let campusID: String
+    let isActive: Bool
+}
+
+enum CommunityFeedScrollAnchor: Hashable {
+    case top
+}
+
+struct CommunityRefreshFeedback: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case success
+        case failure
+    }
+
+    let id = UUID()
+    let kind: Kind
+    let message: String
+
+    var systemImage: String {
+        switch kind {
+        case .success:
+            return "checkmark.circle.fill"
+        case .failure:
+            return "exclamationmark.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch kind {
+        case .success:
+            return .green
+        case .failure:
+            return AppTheme.danger
+        }
+    }
+
+    var dismissDelay: Duration {
+        switch kind {
+        case .success:
+            return .seconds(2)
+        case .failure:
+            return .milliseconds(3_500)
+        }
+    }
+
+    static func make(
+        result: CommunityFeedRefreshResult,
+        language: AppLanguagePreference
+    ) -> CommunityRefreshFeedback? {
+        switch result {
+        case .updated(let newItemCount):
+            return CommunityRefreshFeedback(
+                kind: .success,
+                message: L10n.text("已更新 %d 条内容", language: language, newItemCount)
+            )
+        case .changed:
+            return CommunityRefreshFeedback(
+                kind: .success,
+                message: L10n.text("刷新完成", language: language)
+            )
+        case .unchanged:
+            return CommunityRefreshFeedback(
+                kind: .success,
+                message: L10n.text("已是最新", language: language)
+            )
+        case .empty:
+            return CommunityRefreshFeedback(
+                kind: .success,
+                message: L10n.text("刷新完成，暂无内容", language: language)
+            )
+        case .partialFailure:
+            return CommunityRefreshFeedback(
+                kind: .failure,
+                message: L10n.text("部分内容刷新失败，请重试", language: language)
+            )
+        case .failure:
+            return CommunityRefreshFeedback(
+                kind: .failure,
+                message: L10n.text("刷新失败，请检查网络后重试", language: language)
+            )
+        case .cancelled:
+            return nil
+        }
+    }
 }
 
 let communityCategories = [
@@ -609,9 +697,12 @@ final class CommunityPostDetailViewModel: ObservableObject {
 }
 
 struct RealCommunitySectionView: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyDependencies) private var dependencies
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Binding var selectedCategory: String?
     @Binding var isShowingHotPosts: Bool
     @Binding var contentFilter: CommunityFeedContentFilter
@@ -635,6 +726,7 @@ struct RealCommunitySectionView: View {
     @State private var operationAlert: LeafyOperationAlert?
     @State private var bannerRefreshID = UUID()
     @State private var isBannerVisible = false
+    @State private var refreshFeedback: CommunityRefreshFeedback?
 
     private var feedQuery: CommunityFeedQuery {
         if isShowingHotPosts {
@@ -648,6 +740,15 @@ struct RealCommunitySectionView: View {
 
     private var feedTaskID: CommunityFeedTaskID {
         CommunityFeedTaskID(refreshID: refreshID, query: feedQuery)
+    }
+
+    private var feedRealtimeTaskID: CommunityFeedRealtimeTaskID {
+        CommunityFeedRealtimeTaskID(
+            campusID: ActiveCampusContext.descriptor.id.rawValue,
+            isActive: scenePhase == .active
+                && appNavigation.selectedRootTab == .community
+                && hasAcceptedTerms == true
+        )
     }
 
     private var communityAccessGate: CommunityAccessGate {
@@ -664,61 +765,69 @@ struct RealCommunitySectionView: View {
                     showingTermsSheet = true
                 }
             } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        GeometryReader { geometry in
-                            Color.clear.preference(
-                                key: CommunityFeedTopPreferenceKey.self,
-                                value: geometry.frame(in: .named("community-feed-scroll")).minY
-                            )
-                        }
-                        .frame(height: 0)
+                ScrollViewReader { scrollProxy in
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: CommunityFeedTopPreferenceKey.self,
+                                    value: geometry.frame(in: .named("community-feed-scroll")).minY
+                                )
+                            }
+                            .frame(height: 0)
+                            .id(CommunityFeedScrollAnchor.top)
 
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            CommunityBannerSlot(
-                                repository: dependencies.communityBannerRepository,
-                                refreshID: bannerRefreshID,
-                                campusID: ActiveCampusContext.descriptor.id.rawValue,
-                                isVisible: $isBannerVisible
-                            )
-                            if !publishCoordinator.visibleTasks.isEmpty {
-                                CommunityPublishTaskStrip(tasks: publishCoordinator.visibleTasks)
-                                    .padding(.top, isBannerVisible ? AppSpacing.card : 0)
-                            }
-                            VStack(alignment: .leading, spacing: AppSpacing.card) {
-                                feedContent
-                            }
-                            .padding(
-                                .top,
-                                isBannerVisible || !publishCoordinator.visibleTasks.isEmpty
-                                    ? AppSpacing.card
-                                    : 0
-                            )
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                CommunityBannerSlot(
+                                    repository: dependencies.communityBannerRepository,
+                                    refreshID: bannerRefreshID,
+                                    campusID: ActiveCampusContext.descriptor.id.rawValue,
+                                    isVisible: $isBannerVisible
+                                )
+                                if !publishCoordinator.visibleTasks.isEmpty {
+                                    CommunityPublishTaskStrip(tasks: publishCoordinator.visibleTasks)
+                                        .padding(.top, isBannerVisible ? AppSpacing.card : 0)
+                                }
+                                VStack(alignment: .leading, spacing: AppSpacing.card) {
+                                    feedContent
+                                }
+                                .padding(
+                                    .top,
+                                    isBannerVisible || !publishCoordinator.visibleTasks.isEmpty
+                                        ? AppSpacing.card
+                                        : 0
+                                )
 
-                            if !viewModel.items.isEmpty {
-                                loadMoreFooter
-                                    .padding(.top, AppSpacing.card)
+                                if !viewModel.items.isEmpty {
+                                    loadMoreFooter
+                                        .padding(.top, AppSpacing.card)
+                                }
                             }
+                            .padding(.top, topContentInset + 10 * leafyControlScale)
+                            .padding(.bottom, 40)
                         }
-                        .padding(.top, topContentInset + 10 * leafyControlScale)
-                        .padding(.bottom, 40)
                     }
-                }
-                .coordinateSpace(name: "community-feed-scroll")
-                .onPreferenceChange(CommunityFeedTopPreferenceKey.self) { minY in
-                    let newValue = minY >= -(8 * leafyControlScale)
-                    guard isFeedAtTop != newValue else { return }
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        isFeedAtTop = newValue
+                    .coordinateSpace(name: "community-feed-scroll")
+                    .onPreferenceChange(CommunityFeedTopPreferenceKey.self) { minY in
+                        let newValue = minY >= -(8 * leafyControlScale)
+                        guard isFeedAtTop != newValue else { return }
+                        withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.18)) {
+                            isFeedAtTop = newValue
+                        }
                     }
-                }
-                .refreshable {
-                    guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
-                        CommunityDiagnostics.log.info("Community feed refresh skipped by diagnostics")
-                        return
+                    .refreshable {
+                        guard !CommunityDiagnosticsOptions.disablesFeedLoad else {
+                            CommunityDiagnostics.log.info("Community feed refresh skipped by diagnostics")
+                            return
+                        }
+                        let result = await viewModel.load(mode: .refresh, query: feedQuery)
+                        bannerRefreshID = UUID()
+                        presentRefreshFeedback(for: result)
                     }
-                    await viewModel.load(mode: .refresh, query: feedQuery)
-                    bannerRefreshID = UUID()
+                    .overlay(alignment: .top) {
+                        communityFeedStatusOverlay(scrollProxy: scrollProxy)
+                            .padding(.top, topContentInset + 8 * leafyControlScale)
+                    }
                 }
             }
         }
@@ -730,6 +839,22 @@ struct RealCommunitySectionView: View {
         .task(id: feedTaskID) {
             CommunityDiagnostics.log.info("Community feed task began for query \(feedQuery.cacheKey, privacy: .public)")
             await loadFeedForCurrentQuery()
+        }
+        .task(id: feedRealtimeTaskID) {
+            guard feedRealtimeTaskID.isActive else { return }
+            await viewModel.observeFeedChanges(campusID: feedRealtimeTaskID.campusID)
+        }
+        .task(id: refreshFeedback?.id) {
+            guard let feedback = refreshFeedback else { return }
+            do {
+                try await Task.sleep(for: feedback.dismissDelay)
+            } catch {
+                return
+            }
+            guard refreshFeedback?.id == feedback.id else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.18)) {
+                refreshFeedback = nil
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .communityPublishTaskDidFinish)) { notification in
             guard (notification.userInfo?["succeeded"] as? Bool) == true else { return }
@@ -799,6 +924,85 @@ struct RealCommunitySectionView: View {
                 deleteTargetPost = nil
             }
         }
+    }
+
+    @ViewBuilder
+    private func communityFeedStatusOverlay(scrollProxy: ScrollViewProxy) -> some View {
+        VStack(spacing: 8) {
+            if viewModel.hasPendingRefresh {
+                Button {
+                    guard viewModel.applyPendingSnapshot() else { return }
+                    if accessibilityReduceMotion {
+                        scrollProxy.scrollTo(CommunityFeedScrollAnchor.top, anchor: .top)
+                    } else {
+                        withAnimation(.snappy) {
+                            scrollProxy.scrollTo(CommunityFeedScrollAnchor.top, anchor: .top)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(L10n.text("有新内容", language: leafyLanguage))
+                            .leafyBody()
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(AppTheme.accentEmphasis)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 44)
+                    .leafyGlassSurface(
+                        in: Capsule(),
+                        tint: AppTheme.accent.opacity(0.12),
+                        fallbackFill: AppTheme.cardElevated.opacity(0.96),
+                        isInteractive: true
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.text("显示最新内容并回到顶部", language: leafyLanguage))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            if let refreshFeedback {
+                HStack(spacing: 7) {
+                    Image(systemName: refreshFeedback.systemImage)
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(refreshFeedback.message)
+                        .leafyBody()
+                        .fontWeight(.semibold)
+                        .multilineTextAlignment(.center)
+                }
+                .foregroundStyle(refreshFeedback.tint)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .leafyGlassSurface(
+                    in: Capsule(),
+                    tint: refreshFeedback.tint.opacity(0.1),
+                    fallbackFill: AppTheme.cardElevated.opacity(0.96)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(refreshFeedback.message)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(
+            accessibilityReduceMotion ? nil : .easeOut(duration: 0.2),
+            value: viewModel.hasPendingRefresh
+        )
+        .animation(
+            accessibilityReduceMotion ? nil : .easeOut(duration: 0.2),
+            value: refreshFeedback?.id
+        )
+    }
+
+    private func presentRefreshFeedback(for result: CommunityFeedRefreshResult) {
+        guard let feedback = CommunityRefreshFeedback.make(result: result, language: leafyLanguage) else {
+            return
+        }
+        withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.2)) {
+            refreshFeedback = feedback
+        }
+        UIAccessibility.post(notification: .announcement, argument: feedback.message)
     }
 
     @ViewBuilder
