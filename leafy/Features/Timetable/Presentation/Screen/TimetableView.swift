@@ -26,12 +26,17 @@ private enum TimetableQuickAccessAction: Equatable, Sendable {
     case resyncTimetable
 }
 
-private struct TimetableThreeDayEntry: Identifiable {
-    let date: Date
-    let week: Int
-    let day: Int
+private struct TimetableZoomDayRenderPayload: Identifiable {
+    let preparedDay: TimetableZoomPreparedDay
+    let metadata: TimetableDayMetadata?
+    let layouts: [TimetableGridCourseLayout]
+    let occupiedPeriods: Set<Int>
+    let reminders: [TimetableCellReminderRenderValue]
+    let reminderPeriods: Set<Int>
+    let countdownPeriods: Set<Int>
+    let notesByCourseID: [UUID: String]
 
-    var id: Date { date }
+    var id: Date { preparedDay.id }
 }
 
 struct TimetableView: View {
@@ -70,8 +75,6 @@ struct TimetableView: View {
     @State private var timetableCourseWeekProjections: [UUID: TimetableCourseWeekProjection] = [:]
     @State private var timetableCellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
     @State private var currentWeek: Int
-    @State private var scrollToWeek: Int?
-    @State private var animatesNextWeekScroll = false
     @State private var isAwayFromCurrentSchedule = false
     @State private var selectedDaySummary: TimetableDaySelection?
     @State private var lastSyncAt = TimetableCacheMetadata.lastSyncAt
@@ -94,12 +97,11 @@ struct TimetableView: View {
     @State private var timetableBackgroundImage: UIImage?
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
     @State private var timetableBackgroundConfiguration = TimetableBackgroundConfiguration.load()
-    @State private var viewportState: TimetableViewportState
-    @State private var threeDayTimeline: TimetableThreeDayTimeline
-    @State private var threeDayScrollTarget: Int?
-    @State private var zoomTransition: TimetableZoomTransitionState?
-    @State private var zoomAnimationGeneration = 0
-    @State private var weekContainerGeneration = 0
+    @State private var continuousViewport: TimetableContinuousViewportController
+    @State private var continuousRenderWindow: TimetableZoomRenderWindow
+    @State private var continuousDayPayloads: [TimetableZoomDayRenderPayload] = []
+    @State private var hasDeferredContinuousPayloadRefresh = false
+    @State private var settledDisplayMode = TimetableDisplayMode.week
     @State private var timetableViewportSize: CGSize = .zero
 
     @AppStorage("hasSeenTimetableOnboarding") private var hasSeenTimetableOnboarding = false
@@ -153,10 +155,18 @@ struct TimetableView: View {
         let today = calendar.startOfDay(for: Date())
         let academicEnd = calendar.date(byAdding: .day, value: -1, to: timetable.endDate)
             ?? timetable.endDate
-        let threeDayTimeline = TimetableThreeDayTimeline(
-            anchorDate: today,
+        let initialWeekStart = timetable.week(atPageIndex: currentPage)?.weekStartDate
+            ?? today
+        let continuousViewport = TimetableContinuousViewportController(
+            weekStartDate: initialWeekStart,
+            centerDate: today,
             rangeStart: timetable.startDate,
             rangeEnd: academicEnd,
+            calendar: calendar
+        )
+        let continuousRenderWindow = TimetableZoomRenderWindow.make(
+            weekStartDate: initialWeekStart,
+            academicYear: timetable,
             calendar: calendar
         )
         let countdownEvents = CustomScheduleStore.load()
@@ -171,16 +181,8 @@ struct TimetableView: View {
             )
         )
         _currentWeek = State(initialValue: currentPage)
-        _scrollToWeek = State(initialValue: currentPage)
-        _viewportState = State(initialValue: TimetableViewportState(
-            mode: .week,
-            anchorDate: today,
-            page: currentPage,
-            verticalOffset: 0,
-            isAwayFromToday: false
-        ))
-        _threeDayTimeline = State(initialValue: threeDayTimeline)
-        _threeDayScrollTarget = State(initialValue: threeDayTimeline.initialPage)
+        _continuousViewport = State(initialValue: continuousViewport)
+        _continuousRenderWindow = State(initialValue: continuousRenderWindow)
         _customScheduleEvents = State(initialValue: countdownEvents)
         _cachedExamArrangements = State(initialValue: exams)
         _timetableScheduleProjectionSnapshot = State(
@@ -251,58 +253,14 @@ struct TimetableView: View {
     }
 
     private var displayMode: TimetableDisplayMode {
-        viewportState.mode
-    }
-
-    private var currentThreeDayPage: TimetableThreeDayPage {
-        threeDayTimeline.page(viewportState.page)
-    }
-
-    private func threeDayEntries(page: Int) -> [TimetableThreeDayEntry] {
-        threeDayTimeline.page(page).dates.compactMap { date in
-            guard let week = academicYearTimetable.pageIndex(containing: date) else { return nil }
-            let weekday = Calendar.current.component(.weekday, from: date)
-            return TimetableThreeDayEntry(
-                date: Calendar.current.startOfDay(for: date),
-                week: week,
-                day: ((weekday + 5) % 7) + 1
-            )
-        }
-    }
-
-    private var threeDayEntries: [TimetableThreeDayEntry] {
-        threeDayEntries(page: viewportState.page)
-    }
-
-    private var renderedThreeDayPages: [Int] {
-        TimetableRenderedWeekWindow.pages(
-            currentWeek: viewportState.page,
-            pendingWeek: threeDayScrollTarget,
-            totalWeeks: threeDayTimeline.pageCount
-        )
-    }
-
-    private var threeDayPageBinding: Binding<Int> {
-        Binding(
-            get: { viewportState.page },
-            set: { page in
-                let resolvedPage = min(max(page, 1), threeDayTimeline.pageCount)
-                viewportState.page = resolvedPage
-                viewportState.anchorDate = threeDayTimeline.page(resolvedPage).centerDate
-                viewportState.isAwayFromToday = resolvedPage != todayThreeDayPage
-            }
-        )
+        settledDisplayMode
     }
 
     private var viewportVerticalOffsetBinding: Binding<CGFloat> {
         Binding(
-            get: { viewportState.verticalOffset },
-            set: { viewportState.verticalOffset = max($0, 0) }
+            get: { continuousViewport.verticalOffset },
+            set: { continuousViewport.verticalOffset = max($0, 0) }
         )
-    }
-
-    private var todayThreeDayPage: Int {
-        threeDayTimeline.page(containingCenterDate: Date())
     }
 
     private var usesCustomTimetableBackground: Bool {
@@ -415,6 +373,17 @@ struct TimetableView: View {
         }
         .onChange(of: currentWeek) { _, newValue in
             handleCurrentWeekChange(newValue)
+        }
+        .onChange(of: continuousViewport.windowRevision) { _, _ in
+            handleContinuousWindowRevision()
+        }
+        .onChange(of: continuousViewport.phase) { _, phase in
+            guard phase == .idle else { return }
+            settledDisplayMode = continuousViewport.isThreeDay ? .threeDay : .week
+            if hasDeferredContinuousPayloadRefresh {
+                refreshContinuousDayPayloads()
+            }
+            syncReturnButtonVisibility(for: currentWeek)
         }
         .onChange(of: timetableHidesWeekends) { _, _ in
             handleWeekendVisibilityChange()
@@ -597,6 +566,7 @@ struct TimetableView: View {
         }
         hasPerformedInitialAppearance = true
         reloadTimetableBackground()
+        refreshContinuousDayPayloads()
         syncReturnButtonVisibility()
     }
 
@@ -622,18 +592,77 @@ struct TimetableView: View {
     }
 
     private func handleCurrentWeekChange(_ newValue: Int) {
-        if displayMode == .week {
-            viewportState.page = newValue
-            viewportState.anchorDate = academicYearTimetable.week(atPageIndex: newValue)?.referenceDate
-                ?? viewportState.anchorDate
-            viewportState.isAwayFromToday = newValue != currentAcademicYearPage
+        if continuousViewport.phase == .idle,
+           let weekStart = academicYearTimetable.week(atPageIndex: newValue)?.weekStartDate,
+           !Calendar.current.isDate(weekStart, inSameDayAs: continuousViewport.weekStartDate) {
+            continuousViewport.positionOnWeek(
+                weekStart,
+                centersToday: newValue == currentAcademicYearPage
+            )
         }
         syncReturnButtonVisibility(for: newValue)
     }
 
+    private func handleContinuousWindowRevision() {
+        continuousRenderWindow = TimetableZoomRenderWindow.make(
+            weekStartDate: continuousViewport.weekStartDate,
+            academicYear: academicYearTimetable
+        )
+        if let page = academicYearTimetable.pageIndex(containing: continuousViewport.centerDate),
+           page != currentWeek {
+            currentWeek = page
+        }
+        refreshContinuousDayPayloads()
+        syncReturnButtonVisibility(for: currentWeek)
+    }
+
+    private func refreshContinuousDayPayloads() {
+        guard continuousViewport.phase == .idle else {
+            hasDeferredContinuousPayloadRefresh = true
+            return
+        }
+        let signpostState = LeafyPerformanceSignposter.timetable.beginInterval("zoom-window-prepare")
+        defer {
+            LeafyPerformanceSignposter.timetable.endInterval("zoom-window-prepare", signpostState)
+        }
+        let snapshot = currentTimetableGridSnapshot()
+        continuousDayPayloads = continuousRenderWindow.days.map { preparedDay in
+            guard let week = preparedDay.academicWeek else {
+                return TimetableZoomDayRenderPayload(
+                    preparedDay: preparedDay,
+                    metadata: nil,
+                    layouts: [],
+                    occupiedPeriods: [],
+                    reminders: [],
+                    reminderPeriods: [],
+                    countdownPeriods: [],
+                    notesByCourseID: [:]
+                )
+            }
+            let metadata = dayMetadata(day: preparedDay.dayOfWeek, week: week)
+            let layouts = snapshot.layouts(day: preparedDay.dayOfWeek, week: week)
+            let reminders = snapshot.cellReminders(week: week, day: preparedDay.dayOfWeek)
+            let notes = Dictionary(
+                uniqueKeysWithValues: layouts.compactMap { layout in
+                    snapshot.note(for: layout.course, week: week).map { (layout.course.id, $0) }
+                }
+            )
+            return TimetableZoomDayRenderPayload(
+                preparedDay: preparedDay,
+                metadata: metadata,
+                layouts: layouts,
+                occupiedPeriods: snapshot.occupiedPeriods(day: preparedDay.dayOfWeek, week: week),
+                reminders: reminders,
+                reminderPeriods: Set(reminders.flatMap { Array($0.displayPeriodRange) }),
+                countdownPeriods: Set(metadata.countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) }),
+                notesByCourseID: notes
+            )
+        }
+        hasDeferredContinuousPayloadRefresh = false
+    }
+
     private func handleWeekendVisibilityChange() {
         syncTimetableGridSnapshot()
-        scrollToWeek = currentWeek
     }
 
     private func handleCoursesCountChange() {
@@ -779,26 +808,28 @@ struct TimetableView: View {
         let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? 1
         if positionsToReferenceDate {
             currentWeek = referencePage
-            scrollToWeek = referencePage
         } else {
             currentWeek = min(max(currentWeek, 1), totalWeeks)
         }
         let calendar = Calendar.current
         let academicEnd = calendar.date(byAdding: .day, value: -1, to: academicYearTimetable.endDate)
             ?? academicYearTimetable.endDate
-        threeDayTimeline = TimetableThreeDayTimeline(
-            anchorDate: viewportState.anchorDate,
+        continuousViewport.updateBounds(
             rangeStart: academicYearTimetable.startDate,
-            rangeEnd: academicEnd,
+            rangeEnd: academicEnd
+        )
+        if positionsToReferenceDate,
+           let weekStart = academicYearTimetable.week(atPageIndex: referencePage)?.weekStartDate {
+            continuousViewport.positionOnWeek(
+                weekStart,
+                centersToday: referencePage == currentAcademicYearPage
+            )
+        }
+        continuousRenderWindow = TimetableZoomRenderWindow.make(
+            weekStartDate: continuousViewport.weekStartDate,
+            academicYear: academicYearTimetable,
             calendar: calendar
         )
-        if displayMode == .threeDay {
-            let page = threeDayTimeline.page(containingCenterDate: viewportState.anchorDate)
-            viewportState.page = page
-            threeDayScrollTarget = page
-        } else {
-            viewportState.page = currentWeek
-        }
         syncReturnButtonVisibility(for: currentWeek)
     }
 
@@ -1202,7 +1233,6 @@ struct TimetableView: View {
         }
         guard let page = academicYearTimetable.pageIndex(containing: date) else { return }
         currentWeek = page
-        scrollToWeek = page
         isWeekPickerPresented = false
         syncReturnButtonVisibility(for: page)
     }
@@ -1221,27 +1251,14 @@ struct TimetableView: View {
     }
 
     private func returnToCurrentWeek() {
-        if displayMode == .threeDay {
-            let page = todayThreeDayPage
-            viewportState.page = page
-            viewportState.anchorDate = threeDayTimeline.page(page).centerDate
-            viewportState.isAwayFromToday = false
-            isAwayFromCurrentSchedule = false
-            threeDayScrollTarget = page
-            return
-        }
         if !academicYearTimetable.contains(Date()) {
             rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: true)
             return
         }
         let week = currentAcademicYearPage
+        continuousViewport.returnToToday()
         currentWeek = week
-        viewportState.anchorDate = Calendar.current.startOfDay(for: Date())
-        viewportState.page = week
-        viewportState.isAwayFromToday = false
         isAwayFromCurrentSchedule = false
-        animatesNextWeekScroll = true
-        scrollToWeek = week
     }
 
     private var returnButtonTransition: AnyTransition {
@@ -1276,148 +1293,31 @@ struct TimetableView: View {
         VStack(spacing: AppSpacing.card) {
             GeometryReader { geometry in
                 let gridSnapshot = currentTimetableGridSnapshot()
-                let dayCount = displayMode == .threeDay ? max(threeDayEntries.count, 1) : gridSnapshot.visibleDays.count
+                let dayCount = timetableHidesWeekends ? 5 : 7
                 let metrics = layoutMetrics(for: geometry.size, dayCount: dayCount)
-
-                ZStack {
-                    Group {
-                        if displayMode == .threeDay {
-                            threeDayTimetable(gridSnapshot: gridSnapshot, metrics: metrics)
-                        } else {
-                            switch metrics.mode {
-                        case .weekGrid:
-                        TimetableScrollContainer(
-                            axisWidth: axisWidth,
-                            headerHeight: headerHeight,
-                            totalWeeks: totalWeeks,
-                            weekStride: metrics.weekStride,
-                            dayColumnWidth: metrics.dayColumnWidth,
-                            rowHeight: metrics.rowHeight,
-                            rowSpacing: metrics.rowSpacing,
-                            allowsVerticalScroll: metrics.allowsVerticalScroll,
-                            currentWeek: $currentWeek,
-                            scrollToWeek: $scrollToWeek,
-                            animatesNextWeekScroll: $animatesNextWeekScroll,
-                            isAwayFromCurrentWeek: $isAwayFromCurrentSchedule,
-                            verticalOffset: viewportVerticalOffsetBinding,
-                            containerID: "continuous-timetable",
-                            onFirstInteractiveLayout: {
-                                handleFirstInteractiveLayout()
-                            },
-                            onTargetLayoutReady: { page in
-                                handleTargetLayoutReady(mode: .week, page: page)
-                            },
-                            currentWeekProvider: {
-                                currentAcademicYearPage
-                            },
-                            corner: {
-                                cornerHeader
-                                    .frame(width: axisWidth, height: headerHeight)
-                            },
-                            header: {
-                                ZStack(alignment: .topLeading) {
-                                    ForEach(renderedTimetableWeeks, id: \.self) { week in
-                                        HStack(alignment: .top, spacing: metrics.daySpacing) {
-                                            ForEach(gridSnapshot.visibleDays, id: \.self) { day in
-                                                let metadata = dayMetadata(day: day, week: week)
-                                                if isDateInDisplayedAcademicYear(metadata.date) {
-                                                    dayHeader(metadata: metadata)
-                                                        .frame(width: metrics.dayColumnWidth, height: headerHeight)
-                                                } else {
-                                                    Color.clear
-                                                        .frame(width: metrics.dayColumnWidth, height: headerHeight)
-                                                        .accessibilityHidden(true)
-                                                }
-                                            }
-                                        }
-                                        .offset(x: CGFloat(week - 1) * metrics.weekStride)
-                                        .accessibilityHidden(week != currentWeek)
-                                    }
-                                }
-                                .frame(width: timetableContentWidth(metrics: metrics), height: headerHeight, alignment: .topLeading)
-                            },
-                            axis: {
-                                timeAxis(metrics: metrics)
-                            },
-                            body: {
-                                ZStack(alignment: .topLeading) {
-                                    ForEach(renderedTimetableWeeks, id: \.self) { week in
-                                        HStack(alignment: .top, spacing: metrics.daySpacing) {
-                                            ForEach(gridSnapshot.visibleDays, id: \.self) { day in
-                                                let metadata = dayMetadata(day: day, week: week)
-                                                if isDateInDisplayedAcademicYear(metadata.date) {
-                                                    dayColumnBody(
-                                                        day: day,
-                                                        week: week,
-                                                        width: metrics.dayColumnWidth,
-                                                        metrics: metrics,
-                                                        gridSnapshot: gridSnapshot,
-                                                        metadata: metadata
-                                                    )
-                                                } else {
-                                                    Color.clear
-                                                        .frame(width: metrics.dayColumnWidth, height: metrics.gridHeight)
-                                                        .accessibilityHidden(true)
-                                                }
-                                            }
-                                        }
-                                        .offset(x: CGFloat(week - 1) * metrics.weekStride)
-                                        .accessibilityHidden(week != currentWeek)
-                                    }
-
-                                    if timetableCurrentTimeIndicatorIsEnabled {
-                                        currentTimeIndicator(metrics: metrics, visibleDays: gridSnapshot.visibleDays)
-                                    }
-                                }
-                                .frame(
-                                    width: timetableContentWidth(metrics: metrics),
-                                    height: metrics.gridHeight,
-                                    alignment: .topLeading
-                                )
-                            }
-                        )
-                        .id("continuous-timetable-\(weekContainerGeneration)")
-                        .frame(width: metrics.containerWidth, height: metrics.containerHeight, alignment: .topLeading)
-                        .padding(.horizontal, metrics.horizontalPadding)
-                        .transaction { transaction in
-                            transaction.animation = nil
-                        }
-
-                        case .agendaList:
-                            timetableAgendaList(gridSnapshot: gridSnapshot)
-                                .onAppear {
-                                    handleFirstInteractiveLayout()
-                                    scrollToWeek = nil
-                                    syncReturnButtonVisibility(for: currentWeek)
-                                }
-                            }
-                        }
-                    }
-                    .opacity(zoomTransition == nil ? 1 : 0)
-                    .allowsHitTesting(zoomTransition == nil)
-
-                    if let zoomTransition {
-                        timetableZoomMorphLayer(
-                            transition: zoomTransition,
-                            gridSnapshot: gridSnapshot,
-                            viewportSize: geometry.size
-                        )
-                        .zIndex(20)
-                    }
-                }
+                continuousTimetable(gridSnapshot: gridSnapshot, metrics: metrics)
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                 .onAppear { timetableViewportSize = geometry.size }
                 .onChange(of: geometry.size) { _, size in timetableViewportSize = size }
             }
         }
         .simultaneousGesture(timetableMagnificationGesture)
+        .simultaneousGesture(timetableHorizontalPagingGesture)
         .accessibilityValue(displayMode == .threeDay ? "三日放大视图" : "一周课表视图")
         .accessibilityZoomAction { action in
             switch action.direction {
             case .zoomIn:
-                beginProgrammaticZoom(.zoomIn)
+                continuousViewport.setZoomTarget(
+                    1,
+                    centersToday: currentWeek == currentAcademicYearPage,
+                    reducesMotion: accessibilityReduceMotion
+                )
             case .zoomOut:
-                beginProgrammaticZoom(.zoomOut)
+                continuousViewport.setZoomTarget(
+                    0,
+                    centersToday: currentWeek == currentAcademicYearPage,
+                    reducesMotion: accessibilityReduceMotion
+                )
             }
         }
     }
@@ -1425,287 +1325,147 @@ struct TimetableView: View {
     private var timetableMagnificationGesture: some Gesture {
         MagnifyGesture(minimumScaleDelta: 0.04)
             .onChanged { value in
-                updateZoomTransition(with: value)
+                if continuousViewport.phase != .pinching {
+                    continuousViewport.beginMagnification(
+                        centersToday: currentWeek == currentAcademicYearPage
+                    )
+                }
+                var transaction = Transaction(animation: nil)
+                transaction.isContinuous = true
+                withTransaction(transaction) {
+                    continuousViewport.updateMagnification(value.magnification)
+                }
             }
             .onEnded { value in
-                finishZoomGesture(with: value)
+                continuousViewport.endMagnification(
+                    magnification: value.magnification,
+                    velocity: value.velocity,
+                    reducesMotion: accessibilityReduceMotion
+                )
             }
     }
 
-    private func updateZoomTransition(with value: MagnifyGesture.Value) {
-        let direction: TimetableZoomTransitionDirection = displayMode == .week ? .zoomIn : .zoomOut
-        if zoomTransition == nil {
-            guard let context = makeZoomTransitionContext(
-                direction: direction,
-                startLocation: value.startLocation
-            ) else { return }
-            zoomTransition = TimetableZoomTransitionState(
-                context: context,
-                progress: direction == .zoomIn ? 0 : 1,
-                phase: .interactive
-            )
-        }
-        guard zoomTransition?.phase != .awaitingTargetLayout,
-              zoomTransition?.context.direction == direction else { return }
-
-        if zoomTransition?.phase == .settling {
-            zoomAnimationGeneration += 1
-        }
-        let progress = TimetableZoomTransitionPolicy.progress(
-            direction: direction,
-            magnification: value.magnification
-        )
-        var transaction = Transaction(animation: nil)
-        transaction.isContinuous = true
-        withTransaction(transaction) {
-            zoomTransition?.phase = .interactive
-            zoomTransition?.progress = progress
-        }
-    }
-
-    private func finishZoomGesture(with value: MagnifyGesture.Value) {
-        guard let transition = zoomTransition else { return }
-        let commits = TimetableZoomTransitionPolicy.shouldCommit(
-            direction: transition.context.direction,
-            magnification: value.magnification,
-            progress: transition.progress
-        )
-        let targetProgress: CGFloat
-        switch transition.context.direction {
-        case .zoomIn:
-            targetProgress = commits ? 1 : 0
-        case .zoomOut:
-            targetProgress = commits ? 0 : 1
-        }
-        settleZoomTransition(to: targetProgress, commits: commits)
-    }
-
-    private func beginProgrammaticZoom(_ direction: TimetableZoomTransitionDirection) {
-        guard (direction == .zoomIn && displayMode == .week)
-                || (direction == .zoomOut && displayMode == .threeDay),
-              let context = makeZoomTransitionContext(
-                direction: direction,
-                startLocation: CGPoint(x: timetableViewportSize.width * 0.5, y: headerHeight * 0.5)
-              )
-        else { return }
-        zoomTransition = TimetableZoomTransitionState(
-            context: context,
-            progress: direction == .zoomIn ? 0 : 1,
-            phase: .interactive
-        )
-        settleZoomTransition(to: direction == .zoomIn ? 1 : 0, commits: true)
-    }
-
-    private func settleZoomTransition(to progress: CGFloat, commits: Bool) {
-        guard zoomTransition != nil else { return }
-        zoomAnimationGeneration += 1
-        let animationGeneration = zoomAnimationGeneration
-        zoomTransition?.phase = .settling
-        if accessibilityReduceMotion {
-            zoomTransition?.progress = progress
-            completeZoomSettlement(commits: commits, animationGeneration: animationGeneration)
-            return
-        }
-
-        var transaction = Transaction(
-            animation: .interactiveSpring(response: 0.38, dampingFraction: 0.9, blendDuration: 0.08)
-        )
-        transaction.addAnimationCompletion(criteria: .logicallyComplete) {
-            completeZoomSettlement(commits: commits, animationGeneration: animationGeneration)
-        }
-        withTransaction(transaction) {
-            zoomTransition?.progress = progress
-        }
-    }
-
-    private func completeZoomSettlement(commits: Bool, animationGeneration: Int) {
-        guard zoomAnimationGeneration == animationGeneration else { return }
-        guard let transition = zoomTransition else { return }
-        guard commits else {
-            zoomTransition = nil
-            return
-        }
-
-        switch transition.context.direction {
-        case .zoomIn:
-            let calendar = Calendar.current
-            let academicEnd = calendar.date(byAdding: .day, value: -1, to: academicYearTimetable.endDate)
-                ?? academicYearTimetable.endDate
-            let timeline = TimetableThreeDayTimeline(
-                anchorDate: transition.context.anchorDate,
-                rangeStart: academicYearTimetable.startDate,
-                rangeEnd: academicEnd,
-                calendar: calendar
-            )
-            threeDayTimeline = timeline
-            viewportState.mode = .threeDay
-            viewportState.anchorDate = transition.context.anchorDate
-            viewportState.page = timeline.initialPage
-            viewportState.isAwayFromToday = timeline.initialPage != timeline.page(containingCenterDate: Date())
-            threeDayScrollTarget = timeline.initialPage
-            isAwayFromCurrentSchedule = viewportState.isAwayFromToday
-        case .zoomOut:
-            let targetWeek = transition.context.targetWeek
-            currentWeek = targetWeek
-            scrollToWeek = targetWeek
-            viewportState.mode = .week
-            viewportState.anchorDate = transition.context.anchorDate
-            viewportState.page = targetWeek
-            viewportState.isAwayFromToday = targetWeek != currentAcademicYearPage
-            isAwayFromCurrentSchedule = viewportState.isAwayFromToday
-            weekContainerGeneration += 1
-        }
-        zoomTransition?.phase = .awaitingTargetLayout
-    }
-
-    private func handleTargetLayoutReady(mode: TimetableDisplayMode, page: Int) {
-        guard let transition = zoomTransition,
-              transition.phase == .awaitingTargetLayout,
-              viewportState.mode == mode else { return }
-        let expectedPage = mode == .week ? currentWeek : viewportState.page
-        guard page == expectedPage else { return }
-        zoomTransition = nil
-    }
-
-    private func makeZoomTransitionContext(
-        direction: TimetableZoomTransitionDirection,
-        startLocation: CGPoint
-    ) -> TimetableZoomTransitionContext? {
-        let anchorDate: Date
-        let sourceWeek: Int
-        let sourceDates: [Date]
-        let threeDayDates: [Date]
-
-        switch direction {
-        case .zoomIn:
-            anchorDate = resolveWeeklyZoomAnchor(startLocation: startLocation)
-            sourceWeek = currentWeek
-            sourceDates = visibleDays.map { dateFor(dayOfWeek: $0, in: currentWeek) }
-            threeDayDates = (-1...1).compactMap {
-                Calendar.current.date(byAdding: .day, value: $0, to: anchorDate)
+    private var timetableHorizontalPagingGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if continuousViewport.phase == .idle {
+                    continuousViewport.beginPaging()
+                }
+                guard continuousViewport.phase == .paging else { return }
+                var transaction = Transaction(animation: nil)
+                transaction.isContinuous = true
+                withTransaction(transaction) {
+                    continuousViewport.updatePaging(translation: value.translation.width)
+                }
             }
-        case .zoomOut:
-            let page = currentThreeDayPage
-            anchorDate = page.centerDate
-            sourceWeek = academicYearTimetable.pageIndex(containing: anchorDate) ?? currentWeek
-            sourceDates = visibleDays.map { dateFor(dayOfWeek: $0, in: sourceWeek) }
-            threeDayDates = page.dates
-        }
-        let targetWeek = academicYearTimetable.pageIndex(containing: anchorDate) ?? sourceWeek
-        return TimetableZoomTransitionContext(
-            direction: direction,
-            anchorDate: Calendar.current.startOfDay(for: anchorDate),
-            sourceWeek: sourceWeek,
-            targetWeek: targetWeek,
-            sourceDates: sourceDates.map { Calendar.current.startOfDay(for: $0) },
-            threeDayDates: threeDayDates.map { Calendar.current.startOfDay(for: $0) }
+            .onEnded { value in
+                guard continuousViewport.phase == .paging else { return }
+                let estimatedVelocity = (
+                    value.predictedEndTranslation.width - value.translation.width
+                ) / 0.16
+                continuousViewport.endPaging(
+                    predictedTranslation: value.predictedEndTranslation.width,
+                    velocity: estimatedVelocity,
+                    viewportWidth: continuousContentViewportWidth,
+                    reducesMotion: accessibilityReduceMotion
+                )
+            }
+    }
+
+    private var continuousContentViewportWidth: CGFloat {
+        max(
+            timetableViewportSize.width
+                - timetableHorizontalPadding * 2
+                - axisWidth
+                - AppSpacing.micro,
+            1
         )
     }
 
-    private func resolveWeeklyZoomAnchor(startLocation: CGPoint) -> Date {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let days = visibleDays
-        guard !days.isEmpty, timetableViewportSize.width > 0 else {
-            return selectedTimelineDate
-        }
-        let metrics = layoutMetrics(for: timetableViewportSize, dayCount: days.count)
-        let bodyStartX = metrics.horizontalPadding + axisWidth + AppSpacing.micro
-        let visibleDates = days.map { dateFor(dayOfWeek: $0, in: currentWeek) }
-        return TimetableZoomAnchorResolver.anchorDate(
-            gestureX: startLocation.x,
-            contentStartX: bodyStartX,
-            dayColumnWidth: metrics.dayColumnWidth,
-            daySpacing: metrics.daySpacing,
-            visibleDates: visibleDates,
-            hidesWeekends: timetableHidesWeekends,
-            isCurrentWeek: currentWeek == currentAcademicYearPage,
-            today: today,
-            calendar: calendar
-        ) ?? selectedTimelineDate
-    }
-
-    private func threeDayTimetable(
+    private func continuousTimetable(
         gridSnapshot: TimetableGridSnapshot,
         metrics: TimetableLayoutMetrics
     ) -> some View {
-        let pageContentWidth = TimetableCurrentTimeIndicatorGeometry.width(
-            visibleDayCount: 3,
-            metrics: metrics
-        )
-        let pageStride = pageContentWidth + metrics.weekSpacing
-        let totalContentWidth = max(
-            CGFloat(threeDayTimeline.pageCount) * pageStride - metrics.weekSpacing,
-            pageContentWidth
-        )
+        let viewportWidth = max(metrics.containerWidth - axisWidth - AppSpacing.micro, 1)
+        let currentTimeY = TimetableCurrentTimePosition.yPosition(for: Date(), metrics: metrics)
 
         return TimetableScrollContainer(
             axisWidth: axisWidth,
             headerHeight: headerHeight,
-            totalWeeks: threeDayTimeline.pageCount,
-            weekStride: pageStride,
-            dayColumnWidth: metrics.dayColumnWidth,
+            totalWeeks: 1,
+            weekStride: viewportWidth,
+            dayColumnWidth: viewportWidth,
             rowHeight: metrics.rowHeight,
             rowSpacing: metrics.rowSpacing,
             allowsVerticalScroll: metrics.allowsVerticalScroll,
-            currentWeek: threeDayPageBinding,
-            scrollToWeek: $threeDayScrollTarget,
-            isAwayFromCurrentWeek: $isAwayFromCurrentSchedule,
+            currentWeek: .constant(1),
+            scrollToWeek: .constant(nil),
+            isAwayFromCurrentWeek: .constant(false),
             verticalOffset: viewportVerticalOffsetBinding,
-            containerID: "three-day-timetable",
+            containerID: "continuous-zoom-timetable",
             onFirstInteractiveLayout: handleFirstInteractiveLayout,
-            onTargetLayoutReady: { page in
-                handleTargetLayoutReady(mode: .threeDay, page: page)
-            },
-            currentWeekProvider: { todayThreeDayPage },
+            currentWeekProvider: { 1 },
             corner: {
-                threeDayCornerHeader
+                TimetableContinuousCenterDateReader(controller: continuousViewport) { centerDate in
+                    continuousCornerHeader(date: centerDate)
+                }
             },
             header: {
-                ZStack(alignment: .topLeading) {
-                    ForEach(renderedThreeDayPages, id: \.self) { page in
-                        HStack(alignment: .top, spacing: metrics.daySpacing) {
-                            ForEach(threeDayEntries(page: page)) { entry in
-                                dayHeader(metadata: dayMetadata(day: entry.day, week: entry.week))
-                                    .frame(width: metrics.dayColumnWidth, height: headerHeight)
+                TimetableContinuousViewportReader(
+                    controller: continuousViewport,
+                    viewportWidth: viewportWidth,
+                    hidesWeekends: timetableHidesWeekends,
+                    gutter: metrics.daySpacing
+                ) { visualState in
+                    TimetableContinuousColumnsLayout(geometry: visualState.geometry) {
+                        ForEach(continuousDayPayloads) { payload in
+                            if let metadata = payload.metadata {
+                                dayHeader(metadata: metadata)
+                                    .frame(maxWidth: .infinity, minHeight: headerHeight)
+                            } else {
+                                Color.clear
+                                    .frame(maxWidth: .infinity, minHeight: headerHeight)
+                                    .accessibilityHidden(true)
                             }
                         }
-                        .offset(x: CGFloat(page - 1) * pageStride)
-                        .accessibilityHidden(page != viewportState.page)
                     }
+                    .frame(width: viewportWidth, height: headerHeight, alignment: .topLeading)
+                    .clipped()
                 }
-                .frame(width: totalContentWidth, height: headerHeight, alignment: .topLeading)
             },
             axis: {
                 timeAxis(metrics: metrics)
             },
             body: {
-                ZStack(alignment: .topLeading) {
-                    ForEach(renderedThreeDayPages, id: \.self) { page in
-                        let entries = threeDayEntries(page: page)
-                        HStack(alignment: .top, spacing: metrics.daySpacing) {
-                            ForEach(entries) { entry in
-                                let metadata = dayMetadata(day: entry.day, week: entry.week)
-                                dayColumnBody(
-                                    day: entry.day,
-                                    week: entry.week,
-                                    width: metrics.dayColumnWidth,
+                TimetableContinuousViewportReader(
+                    controller: continuousViewport,
+                    viewportWidth: viewportWidth,
+                    hidesWeekends: timetableHidesWeekends,
+                    gutter: metrics.daySpacing
+                ) { visualState in
+                    ZStack {
+                        TimetableContinuousColumnsLayout(geometry: visualState.geometry) {
+                            ForEach(continuousDayPayloads) { payload in
+                                continuousDayColumn(
+                                    payload,
                                     metrics: metrics,
                                     gridSnapshot: gridSnapshot,
-                                    metadata: metadata
+                                    isInteractionActive: visualState.isInteractionActive,
+                                    currentTimeY: currentTimeY
                                 )
                             }
                         }
-                        .offset(x: CGFloat(page - 1) * pageStride)
-                        .accessibilityHidden(page != viewportState.page)
 
-                        if timetableCurrentTimeIndicatorIsEnabled {
-                            threeDayCurrentTimeIndicator(entries: entries, metrics: metrics)
-                                .offset(x: CGFloat(page - 1) * pageStride)
+                        if visualState.isInteractionActive {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .allowsHitTesting(true)
                         }
                     }
+                    .frame(width: viewportWidth, height: metrics.gridHeight, alignment: .topLeading)
+                    .clipped()
                 }
-                .frame(width: totalContentWidth, height: metrics.gridHeight, alignment: .topLeading)
             }
         )
         .frame(width: metrics.containerWidth, height: metrics.containerHeight, alignment: .topLeading)
@@ -1715,117 +1475,57 @@ struct TimetableView: View {
         }
     }
 
-    private var threeDayCornerHeader: some View {
-        Text(DateFormatters.shortMonth(language: leafyLanguage).string(from: currentThreeDayPage.centerDate))
-            .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
-            .foregroundStyle(AppTheme.secondaryText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(AppTheme.cardBackground.opacity(0.62))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .stroke(AppTheme.separator, lineWidth: 1)
-            )
-            .frame(width: axisWidth, height: headerHeight)
-    }
-
-    private func timetableZoomMorphLayer(
-        transition: TimetableZoomTransitionState,
+    @ViewBuilder
+    private func continuousDayColumn(
+        _ payload: TimetableZoomDayRenderPayload,
+        metrics: TimetableLayoutMetrics,
         gridSnapshot: TimetableGridSnapshot,
-        viewportSize: CGSize
+        isInteractionActive: Bool,
+        currentTimeY: CGFloat?
     ) -> some View {
-        let progress = min(max(transition.progress, 0), 1)
-        let sourceDates = Set(transition.context.sourceDates)
-        let targetDates = Set(transition.context.threeDayDates)
-        let dates = Array(sourceDates.union(targetDates)).sorted()
-        let weekMetrics = layoutMetrics(
-            for: viewportSize,
-            dayCount: max(transition.context.sourceDates.count, 1)
-        )
-        let threeDayMetrics = layoutMetrics(for: viewportSize, dayCount: 3)
-        let sourceColumnWidth = weekMetrics.dayColumnWidth
-        let targetColumnWidth = threeDayMetrics.dayColumnWidth
-        let bodyStartX = weekMetrics.horizontalPadding + axisWidth + AppSpacing.micro
-        let bodyStartY = headerHeight + AppSpacing.micro
-        let renderingMetrics = transition.context.direction == .zoomIn ? weekMetrics : threeDayMetrics
+        GeometryReader { proxy in
+            if let week = payload.preparedDay.academicWeek,
+               let metadata = payload.metadata {
+                ZStack(alignment: .topLeading) {
+                    dayColumnBody(
+                        day: payload.preparedDay.dayOfWeek,
+                        week: week,
+                        width: proxy.size.width,
+                        metrics: metrics,
+                        gridSnapshot: gridSnapshot,
+                        metadata: metadata,
+                        preparedPayload: payload
+                    )
 
-        return ZStack(alignment: .topLeading) {
-            morphCornerHeader(date: transition.context.anchorDate)
-
-            timeAxis(metrics: renderingMetrics)
-                .offset(y: bodyStartY - viewportState.verticalOffset)
-
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(dates, id: \.self) { date in
-                    let isSource = sourceDates.contains(date)
-                    let isTarget = targetDates.contains(date)
-                    let width = sourceColumnWidth * (isSource ? 1 - progress : 0)
-                        + targetColumnWidth * (isTarget ? progress : 0)
-                    let opacity: CGFloat = isSource && isTarget
-                        ? 1
-                        : (isSource ? 1 - progress : progress)
-                    if let entry = threeDayEntry(for: date) {
-                        dayHeader(metadata: dayMetadata(day: entry.day, week: entry.week))
-                            .frame(width: max(width, 0.5), height: headerHeight)
-                            .opacity(opacity)
-                            .clipped()
-                            .environment(\.leafyControlScale, leafyControlScale * (1 + progress * 0.12))
+                    if timetableCurrentTimeIndicatorIsEnabled,
+                       metadata.isToday,
+                       let y = currentTimeY {
+                        Rectangle()
+                            .fill(AppTheme.accentEmphasis(for: themeColorPreference))
+                            .frame(
+                                width: proxy.size.width,
+                                height: CGFloat(
+                                    TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
+                                        timetableCurrentTimeIndicatorThickness
+                                    )
+                                )
+                            )
+                            .position(x: proxy.size.width * 0.5, y: y)
+                            .zIndex(10)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
                 }
+                .allowsHitTesting(!isInteractionActive)
+            } else {
+                Color.clear
+                    .accessibilityHidden(true)
             }
-            .offset(x: bodyStartX)
-
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(dates, id: \.self) { date in
-                    let isSource = sourceDates.contains(date)
-                    let isTarget = targetDates.contains(date)
-                    let width = sourceColumnWidth * (isSource ? 1 - progress : 0)
-                        + targetColumnWidth * (isTarget ? progress : 0)
-                    let opacity: CGFloat = isSource && isTarget
-                        ? 1
-                        : (isSource ? 1 - progress : progress)
-                    if let entry = threeDayEntry(for: date) {
-                        let metadata = dayMetadata(day: entry.day, week: entry.week)
-                        dayColumnBody(
-                            day: entry.day,
-                            week: entry.week,
-                            width: max(width, 0.5),
-                            metrics: renderingMetrics,
-                            gridSnapshot: gridSnapshot,
-                            metadata: metadata
-                        )
-                        .opacity(opacity)
-                        .clipped()
-                        .environment(\.leafyControlScale, leafyControlScale * (1 + progress * 0.12))
-                    }
-                }
-            }
-            .offset(
-                x: bodyStartX,
-                y: bodyStartY - viewportState.verticalOffset
-            )
         }
-        .frame(width: viewportSize.width, height: viewportSize.height, alignment: .topLeading)
-        .clipped()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .frame(maxWidth: .infinity, minHeight: metrics.gridHeight)
     }
 
-    private func threeDayEntry(for date: Date) -> TimetableThreeDayEntry? {
-        guard let week = academicYearTimetable.pageIndex(containing: date) else { return nil }
-        let weekday = Calendar.current.component(.weekday, from: date)
-        return TimetableThreeDayEntry(
-            date: Calendar.current.startOfDay(for: date),
-            week: week,
-            day: ((weekday + 5) % 7) + 1
-        )
-    }
-
-    private func morphCornerHeader(date: Date) -> some View {
+    private func continuousCornerHeader(date: Date) -> some View {
         Text(DateFormatters.shortMonth(language: leafyLanguage).string(from: date))
             .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
             .foregroundStyle(AppTheme.secondaryText)
@@ -1841,6 +1541,7 @@ struct TimetableView: View {
                     .stroke(AppTheme.separator, lineWidth: 1)
             )
     }
+
 
     private func layoutMetrics(for size: CGSize, dayCount: Int) -> TimetableLayoutMetrics {
         timetableLayoutMetricsCache.metrics(
@@ -1861,24 +1562,6 @@ struct TimetableView: View {
             interPaneSpacing: AppSpacing.micro,
             allowsAgendaList: allowsTimetableAgendaFallback
         )
-    }
-
-    private var cornerHeader: some View {
-        Text(monthString())
-            .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
-            .foregroundStyle(AppTheme.secondaryText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(AppTheme.cardBackground.opacity(0.62))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .stroke(AppTheme.separator, lineWidth: 1)
-            )
-        .frame(width: axisWidth, height: headerHeight)
     }
 
     private func timeAxis(metrics: TimetableLayoutMetrics) -> some View {
@@ -1916,100 +1599,25 @@ struct TimetableView: View {
         .frame(width: axisWidth, height: metrics.gridHeight, alignment: .topLeading)
     }
 
-    private func currentTimeIndicator(
-        metrics: TimetableLayoutMetrics,
-        visibleDays: [Int]
-    ) -> some View {
-        TimelineView(.periodic(from: Date(), by: 60)) { context in
-            if currentWeek == currentAcademicYearPage,
-               !visibleDays.isEmpty,
-               let y = TimetableCurrentTimePosition.yPosition(for: context.date, metrics: metrics) {
-                Rectangle()
-                    .fill(AppTheme.accentEmphasis(for: themeColorPreference))
-                    .frame(
-                        width: TimetableCurrentTimeIndicatorGeometry.width(
-                            visibleDayCount: visibleDays.count,
-                            metrics: metrics
-                        ),
-                        height: CGFloat(
-                            TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
-                                timetableCurrentTimeIndicatorThickness
-                            )
-                        )
-                    )
-                    .position(
-                        x: TimetableCurrentTimeIndicatorGeometry.centerX(
-                            page: currentAcademicYearPage,
-                            visibleDayCount: visibleDays.count,
-                            metrics: metrics
-                        ),
-                        y: y
-                    )
-                    .zIndex(10)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
-        .frame(
-            width: timetableContentWidth(metrics: metrics),
-            height: metrics.gridHeight,
-            alignment: .topLeading
-        )
-    }
-
-    private func threeDayCurrentTimeIndicator(
-        entries: [TimetableThreeDayEntry],
-        metrics: TimetableLayoutMetrics
-    ) -> some View {
-        TimelineView(.periodic(from: Date(), by: 60)) { context in
-            if let todayIndex = entries.firstIndex(where: {
-                Calendar.current.isDate($0.date, inSameDayAs: context.date)
-            }),
-               let y = TimetableCurrentTimePosition.yPosition(for: context.date, metrics: metrics) {
-                Rectangle()
-                    .fill(AppTheme.accentEmphasis(for: themeColorPreference))
-                    .frame(
-                        width: metrics.dayColumnWidth,
-                        height: CGFloat(
-                            TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
-                                timetableCurrentTimeIndicatorThickness
-                            )
-                        )
-                    )
-                    .position(
-                        x: CGFloat(todayIndex) * (metrics.dayColumnWidth + metrics.daySpacing)
-                            + metrics.dayColumnWidth * 0.5,
-                        y: y
-                    )
-                    .zIndex(10)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
-        .frame(
-            width: TimetableCurrentTimeIndicatorGeometry.width(
-                visibleDayCount: entries.count,
-                metrics: metrics
-            ),
-            height: metrics.gridHeight,
-            alignment: .topLeading
-        )
-    }
-
     private func dayColumnBody(
         day: Int,
         week: Int,
         width: CGFloat,
         metrics: TimetableLayoutMetrics,
         gridSnapshot: TimetableGridSnapshot,
-        metadata: TimetableDayMetadata
+        metadata: TimetableDayMetadata,
+        preparedPayload: TimetableZoomDayRenderPayload? = nil
     ) -> some View {
-        let layouts = gridSnapshot.layouts(day: day, week: week)
-        let occupiedPeriods = gridSnapshot.occupiedPeriods(day: day, week: week)
-        let reminders = gridSnapshot.cellReminders(week: week, day: day)
-        let reminderPeriods = Set(reminders.flatMap { Array($0.displayPeriodRange) })
+        let layouts = preparedPayload?.layouts ?? gridSnapshot.layouts(day: day, week: week)
+        let occupiedPeriods = preparedPayload?.occupiedPeriods
+            ?? gridSnapshot.occupiedPeriods(day: day, week: week)
+        let reminders = preparedPayload?.reminders
+            ?? gridSnapshot.cellReminders(week: week, day: day)
+        let reminderPeriods = preparedPayload?.reminderPeriods
+            ?? Set(reminders.flatMap { Array($0.displayPeriodRange) })
         let countdowns = metadata.countdowns
-        let countdownPeriods = Set(countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) })
+        let countdownPeriods = preparedPayload?.countdownPeriods
+            ?? Set(countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) })
         let exams = metadata.exams
 
         return ZStack(alignment: .topLeading) {
@@ -2102,7 +1710,8 @@ struct TimetableView: View {
             ForEach(layouts) { layout in
                 let blockHeight = heightForCourse(layout.course, metrics: metrics)
                 let blockWidth = widthForLayout(layout, availableWidth: width, metrics: metrics)
-                let noteText = gridSnapshot.note(for: layout.course, week: week)
+                let noteText = preparedPayload?.notesByCourseID[layout.course.id]
+                    ?? gridSnapshot.note(for: layout.course, week: week)
 
                 CourseBlockView(
                     renderValue: layout.course,
@@ -2115,7 +1724,7 @@ struct TimetableView: View {
                     backgroundPalette: timetableBackgroundCoursePalette,
                     courseCardOpacity: timetableBackgroundConfiguration.courseCardOpacity,
                     showsContextMenu: false,
-                    prefersExpandedTypography: displayMode == .threeDay
+                    prefersExpandedTypography: false
                 )
                 .position(
                     x: xOffsetForLayout(layout, availableWidth: width, metrics: metrics) + blockWidth * 0.5,
@@ -2482,7 +2091,6 @@ struct TimetableView: View {
         let nextWeek = min(max(currentWeek + delta, 1), totalWeeks)
         guard nextWeek != currentWeek else { return }
         currentWeek = nextWeek
-        scrollToWeek = nextWeek
         syncReturnButtonVisibility(for: nextWeek)
     }
 
@@ -2663,18 +2271,6 @@ struct TimetableView: View {
         .accessibilityHidden(true)
     }
 
-    private var renderedTimetableWeeks: [Int] {
-        TimetableRenderedWeekWindow.pages(
-            currentWeek: currentWeek,
-            pendingWeek: scrollToWeek,
-            totalWeeks: totalWeeks
-        )
-    }
-
-    private func timetableContentWidth(metrics: TimetableLayoutMetrics) -> CGFloat {
-        max(CGFloat(totalWeeks) * metrics.weekStride - metrics.weekSpacing, 1)
-    }
-
     private func backgroundFillColor(for classIndex: Int) -> Color {
         if classIndex == 5 || classIndex == 9 {
             if usesCustomTimetableBackground {
@@ -2711,8 +2307,8 @@ struct TimetableView: View {
             systemImage: "calendar",
             description: Text(L10n.text(description, language: leafyLanguage))
         )
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
     }
 
     private var customCampusEmptyState: some View {
@@ -2773,14 +2369,15 @@ struct TimetableView: View {
 
     private func syncReturnButtonVisibility(for visibleWeek: Int? = nil) {
         if displayMode == .threeDay {
-            isAwayFromCurrentSchedule = viewportState.page != todayThreeDayPage
-            viewportState.isAwayFromToday = isAwayFromCurrentSchedule
+            isAwayFromCurrentSchedule = !Calendar.current.isDate(
+                continuousViewport.centerDate,
+                inSameDayAs: Date()
+            )
             return
         }
         let week = visibleWeek ?? currentWeek
         isAwayFromCurrentSchedule = !academicYearTimetable.contains(Date())
             || week != currentAcademicYearPage
-        viewportState.isAwayFromToday = isAwayFromCurrentSchedule
     }
 
     private func isDateInDisplayedAcademicYear(_ date: Date) -> Bool {
@@ -2800,15 +2397,6 @@ struct TimetableView: View {
             value: dayOfWeek - 1,
             to: timelineWeek.weekStartDate
         ) ?? timelineWeek.weekStartDate
-    }
-
-    private func monthString() -> String {
-        let date = dateFor(dayOfWeek: 1, in: currentWeek)
-        return DateFormatters.shortMonth(language: leafyLanguage).string(from: date)
-    }
-
-    private func dayTitle(_ day: Int) -> String {
-        leafyLanguage.weekdayTitle(for: day)
     }
 
     private func dayMetadata(day: Int, week: Int) -> TimetableDayMetadata {
@@ -2842,6 +2430,7 @@ struct TimetableView: View {
               timetableGridSnapshot?.totalWeeks != snapshot.totalWeeks
         else { return }
         timetableGridSnapshot = snapshot
+        refreshContinuousDayPayloads()
     }
 
     private func handleStaleTimetableSnapshot() {
@@ -2861,6 +2450,7 @@ struct TimetableView: View {
             exams: cachedExamArrangements,
             academicYear: academicYearTimetable
         )
+        refreshContinuousDayPayloads()
     }
 
     private func persistParserDebugHTML(_ html: String) -> String {
@@ -3081,7 +2671,6 @@ struct TimetableView: View {
             to: config.semesterStartDate
         ), let targetPage = academicYearTimetable.pageIndex(containing: weekStart) else { return }
         currentWeek = targetPage
-        scrollToWeek = targetPage
         selectedCourseContext = SelectedCourseContext(
             course: course,
             week: semesterWeek,
