@@ -736,6 +736,16 @@
         }
       }
     },
+    "%@，%lld 票" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@，%2$lld 票"
+          }
+        }
+      }
+    },
     "%@，第 %lld 周%@%@" : {
       "localizations" : {
         "en-US" : {
@@ -2572,6 +2582,9 @@
         }
       }
     },
+    "一周课表视图" : {
+
+    },
     "一条随记最多添加 %d 个附件。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2614,6 +2627,12 @@
           }
         }
       }
+    },
+    "三日" : {
+
+    },
+    "三日放大视图" : {
+
     },
     "三级标题" : {
       "extractionState" : "stale",
@@ -4593,6 +4612,9 @@
         }
       }
     },
+    "创建于 %@" : {
+
+    },
     "删除" : {
       "localizations" : {
         "en-US" : {
@@ -5758,6 +5780,17 @@
         }
       }
     },
+    "同步完成，学校当前没有返回成绩记录。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync completed. The school currently returned no grade records."
+          }
+        }
+      }
+    },
     "同步完成，学校当前没有返回课程安排。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5765,16 +5798,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sync completed, the school currently returned no course schedule."
-          }
-        }
-      }
-    },
-    "同步完成，学校当前没有返回成绩记录。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sync completed. The school currently returned no grade records."
           }
         }
       }
@@ -9264,6 +9287,9 @@
         }
       }
     },
+    "打开日程编辑" : {
+
+    },
     "打开日迹记录菜单" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9315,6 +9341,9 @@
           }
         }
       }
+    },
+    "打开这位教师的评价" : {
+
     },
     "打开链接" : {
       "localizations" : {
@@ -9401,6 +9430,7 @@
       }
     },
     "投票后可见" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9780,6 +9810,9 @@
           }
         }
       }
+    },
+    "提前 %lld 分钟提醒" : {
+
     },
     "提示" : {
       "localizations" : {
