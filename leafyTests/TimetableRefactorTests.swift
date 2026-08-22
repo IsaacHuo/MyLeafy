@@ -163,7 +163,7 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(snapshot.cellReminders(week: 1, day: 1).map(\.title), ["New"])
     }
 
-    func testThreeDayWindowIncludesWeekendAroundFridayAndSaturday() throws {
+    func testThreeDayTimelineStartsAroundAnchorAndPagesByThreeDays() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let formatter = DateFormatter()
@@ -172,15 +172,170 @@ extension PerformanceRefactorTests {
         formatter.dateFormat = "yyyy-MM-dd"
         let friday = try XCTUnwrap(formatter.date(from: "2026-08-21"))
         let saturday = try XCTUnwrap(formatter.date(from: "2026-08-22"))
+        let rangeStart = try XCTUnwrap(formatter.date(from: "2026-01-01"))
+        let rangeEnd = try XCTUnwrap(formatter.date(from: "2027-12-31"))
 
+        let fridayTimeline = TimetableThreeDayTimeline(
+            anchorDate: friday,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+            calendar: calendar
+        )
         XCTAssertEqual(
-            TimetableThreeDayWindow(referenceDate: friday, calendar: calendar).dates.map { formatter.string(from: $0) },
+            fridayTimeline.page(fridayTimeline.initialPage, calendar: calendar).dates.map { formatter.string(from: $0) },
             ["2026-08-20", "2026-08-21", "2026-08-22"]
         )
         XCTAssertEqual(
-            TimetableThreeDayWindow(referenceDate: saturday, calendar: calendar).dates.map { formatter.string(from: $0) },
+            fridayTimeline.page(fridayTimeline.initialPage + 1, calendar: calendar).dates.map { formatter.string(from: $0) },
+            ["2026-08-23", "2026-08-24", "2026-08-25"]
+        )
+        XCTAssertEqual(
+            fridayTimeline.page(fridayTimeline.initialPage - 1, calendar: calendar).dates.map { formatter.string(from: $0) },
+            ["2026-08-17", "2026-08-18", "2026-08-19"]
+        )
+
+        let saturdayTimeline = TimetableThreeDayTimeline(
+            anchorDate: saturday,
+            rangeStart: rangeStart,
+            rangeEnd: rangeEnd,
+            calendar: calendar
+        )
+        XCTAssertEqual(
+            saturdayTimeline.page(saturdayTimeline.initialPage, calendar: calendar).dates.map { formatter.string(from: $0) },
             ["2026-08-21", "2026-08-22", "2026-08-23"]
         )
+    }
+
+    func testThreeDayTimelineHandlesMonthAndYearBoundaries() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let anchor = try XCTUnwrap(formatter.date(from: "2026-12-31"))
+        let timeline = TimetableThreeDayTimeline(
+            anchorDate: anchor,
+            rangeStart: try XCTUnwrap(formatter.date(from: "2026-09-01")),
+            rangeEnd: try XCTUnwrap(formatter.date(from: "2027-08-31")),
+            calendar: calendar
+        )
+
+        let page = timeline.page(timeline.initialPage, calendar: calendar)
+        XCTAssertEqual(
+            page.dates.map { formatter.string(from: $0) },
+            ["2026-12-30", "2026-12-31", "2027-01-01"]
+        )
+        XCTAssertEqual(formatter.string(from: page.centerDate), "2026-12-31")
+        XCTAssertEqual(timeline.page(containingCenterDate: page.centerDate, calendar: calendar), timeline.initialPage)
+        XCTAssertEqual(
+            formatter.string(from: timeline.page(timeline.initialPage + 1, calendar: calendar).centerDate),
+            "2027-01-03"
+        )
+    }
+
+    func testZoomTransitionPolicySupportsCommitCancelAndReverseProgress() {
+        XCTAssertEqual(
+            TimetableZoomTransitionPolicy.progress(direction: .zoomIn, magnification: 1),
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertTrue(
+            TimetableZoomTransitionPolicy.shouldCommit(
+                direction: .zoomIn,
+                magnification: 1.13,
+                progress: 0.2
+            )
+        )
+        XCTAssertFalse(
+            TimetableZoomTransitionPolicy.shouldCommit(
+                direction: .zoomIn,
+                magnification: 1.05,
+                progress: 0.2
+            )
+        )
+        let reversedZoomOut = TimetableZoomTransitionPolicy.progress(
+            direction: .zoomOut,
+            magnification: 0.98
+        )
+        XCTAssertGreaterThan(reversedZoomOut, 0.55)
+        XCTAssertFalse(
+            TimetableZoomTransitionPolicy.shouldCommit(
+                direction: .zoomOut,
+                magnification: 0.98,
+                progress: reversedZoomOut
+            )
+        )
+        XCTAssertTrue(
+            TimetableZoomTransitionPolicy.shouldCommit(
+                direction: .zoomOut,
+                magnification: 0.87,
+                progress: 0.7
+            )
+        )
+    }
+
+    func testZoomAnchorUsesGestureColumnForSevenAndFiveDayWeeks() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let monday = try XCTUnwrap(formatter.date(from: "2026-08-17"))
+        let sevenDays = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+        let fiveDays = Array(sevenDays.prefix(5))
+
+        let sevenDayAnchor = try XCTUnwrap(TimetableZoomAnchorResolver.anchorDate(
+            gestureX: 10 + 4 * 52 + 20,
+            contentStartX: 10,
+            dayColumnWidth: 48,
+            daySpacing: 4,
+            visibleDates: sevenDays,
+            hidesWeekends: false,
+            isCurrentWeek: true,
+            today: monday,
+            calendar: calendar
+        ))
+        XCTAssertEqual(formatter.string(from: sevenDayAnchor), "2026-08-21")
+
+        let fiveDayAnchor = try XCTUnwrap(TimetableZoomAnchorResolver.anchorDate(
+            gestureX: 10 + 2 * 52 + 20,
+            contentStartX: 10,
+            dayColumnWidth: 48,
+            daySpacing: 4,
+            visibleDates: fiveDays,
+            hidesWeekends: true,
+            isCurrentWeek: true,
+            today: monday,
+            calendar: calendar
+        ))
+        XCTAssertEqual(formatter.string(from: fiveDayAnchor), "2026-08-19")
+    }
+
+    func testZoomAnchorUsesWeekendTodayWhenWeekendColumnsAreHidden() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let monday = try XCTUnwrap(formatter.date(from: "2026-08-17"))
+        let saturday = try XCTUnwrap(formatter.date(from: "2026-08-22"))
+        let weekdays = (0..<5).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+
+        let anchor = try XCTUnwrap(TimetableZoomAnchorResolver.anchorDate(
+            gestureX: 10,
+            contentStartX: 10,
+            dayColumnWidth: 48,
+            daySpacing: 4,
+            visibleDates: weekdays,
+            hidesWeekends: true,
+            isCurrentWeek: true,
+            today: saturday,
+            calendar: calendar
+        ))
+        XCTAssertEqual(formatter.string(from: anchor), "2026-08-22")
     }
 
     @MainActor

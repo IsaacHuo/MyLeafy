@@ -17,12 +17,14 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
     @Binding var scrollToWeek: Int?
     @Binding var animatesNextWeekScroll: Bool
     @Binding var isAwayFromCurrentWeek: Bool
+    @Binding var verticalOffset: CGFloat
     let containerID: String
     let corner: Corner
     let header: Header
     let axis: Axis
     let gridBody: GridBody
     let onFirstInteractiveLayout: () -> Void
+    let onTargetLayoutReady: (Int) -> Void
     let currentWeekProvider: () -> Int
 
     init(
@@ -38,8 +40,10 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         scrollToWeek: Binding<Int?>,
         animatesNextWeekScroll: Binding<Bool> = .constant(false),
         isAwayFromCurrentWeek: Binding<Bool>,
+        verticalOffset: Binding<CGFloat> = .constant(0),
         containerID: String,
         onFirstInteractiveLayout: @escaping () -> Void = {},
+        onTargetLayoutReady: @escaping (Int) -> Void = { _ in },
         currentWeekProvider: @escaping () -> Int = { SemesterConfig.currentWeek() },
         @ViewBuilder corner: () -> Corner,
         @ViewBuilder header: () -> Header,
@@ -58,12 +62,14 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         _scrollToWeek = scrollToWeek
         _animatesNextWeekScroll = animatesNextWeekScroll
         _isAwayFromCurrentWeek = isAwayFromCurrentWeek
+        _verticalOffset = verticalOffset
         self.containerID = containerID
         self.corner = corner()
         self.header = header()
         self.axis = axis()
         self.gridBody = body()
         self.onFirstInteractiveLayout = onFirstInteractiveLayout
+        self.onTargetLayoutReady = onTargetLayoutReady
         self.currentWeekProvider = currentWeekProvider
     }
 
@@ -301,7 +307,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 pendingLayoutRealignmentPasses = 0
                 let targetOffset = CGPoint(
                     x: xOffset(for: targetWeek),
-                    y: clampedYOffset(bodyScrollView.contentOffset.y)
+                    y: clampedYOffset(parent.verticalOffset)
                 )
                 let visibleWeek = week(for: bodyScrollView.contentOffset.x)
                 let shouldAnimateScroll = hasAppliedInitialScrollRequest
@@ -315,6 +321,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 }
                 hasAppliedInitialScrollRequest = true
                 syncFromBody()
+                reportTargetLayoutReady(page: targetWeek)
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, !self.isDismantled else { return }
@@ -325,6 +332,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             } else {
                 applyPendingLayoutRealignmentIfNeeded()
                 syncFromBody()
+                reportTargetLayoutReady(page: parent.currentWeek)
             }
             updateAwayFromCurrentWeek()
         }
@@ -411,6 +419,20 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 CGPoint(x: 0, y: clampedAxisYOffset(bodyScrollView.contentOffset.y)),
                 animated: false
             )
+            let resolvedVerticalOffset = clampedYOffset(bodyScrollView.contentOffset.y)
+            if abs(resolvedVerticalOffset - parent.verticalOffset) > 0.5 {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.isDismantled else { return }
+                    self.parent.verticalOffset = resolvedVerticalOffset
+                }
+            }
+        }
+
+        private func reportTargetLayoutReady(page: Int) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.isDismantled else { return }
+                self.parent.onTargetLayoutReady(self.clampedWeek(page))
+            }
         }
 
         private func queueLayoutRealignment() {
@@ -566,6 +588,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         }
 
         private struct LayoutSignature: Equatable {
+            let totalWeeks: Int
             let axisWidth: CGFloat
             let headerHeight: CGFloat
             let weekStride: CGFloat
@@ -575,6 +598,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             let allowsVerticalScroll: Bool
 
             init(parent: TimetableScrollContainer) {
+                totalWeeks = parent.totalWeeks
                 axisWidth = parent.axisWidth
                 headerHeight = parent.headerHeight
                 weekStride = parent.weekStride

@@ -6,15 +6,143 @@ nonisolated enum TimetableDisplayMode: Equatable, Sendable {
     case threeDay
 }
 
-nonisolated struct TimetableThreeDayWindow: Equatable, Sendable {
+nonisolated struct TimetableThreeDayPage: Identifiable, Equatable, Sendable {
+    let index: Int
     let dates: [Date]
 
-    init(referenceDate: Date = Date(), calendar: Calendar = .current) {
-        let today = calendar.startOfDay(for: referenceDate)
-        dates = (-1...1).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset, to: today)
+    var id: Int { index }
+    var centerDate: Date { dates[1] }
+}
+
+nonisolated struct TimetableThreeDayTimeline: Equatable, Sendable {
+    let startDate: Date
+    let pageCount: Int
+    let initialPage: Int
+
+    init(
+        anchorDate: Date,
+        rangeStart: Date,
+        rangeEnd: Date,
+        calendar: Calendar = .current
+    ) {
+        let anchor = calendar.startOfDay(for: anchorDate)
+        let anchorWindowStart = calendar.date(byAdding: .day, value: -1, to: anchor) ?? anchor
+        let boundedStart = calendar.startOfDay(for: rangeStart)
+        let boundedEnd = calendar.startOfDay(for: rangeEnd)
+        let daysBefore = max(calendar.dateComponents([.day], from: boundedStart, to: anchorWindowStart).day ?? 0, 0)
+        let pagesBefore = Int(ceil(Double(daysBefore) / 3.0))
+        startDate = calendar.date(byAdding: .day, value: -pagesBefore * 3, to: anchorWindowStart)
+            ?? anchorWindowStart
+        initialPage = pagesBefore + 1
+        let coveredDays = max((calendar.dateComponents([.day], from: startDate, to: boundedEnd).day ?? 0) + 1, 3)
+        pageCount = max(Int(ceil(Double(coveredDays) / 3.0)), initialPage)
+    }
+
+    func page(_ index: Int, calendar: Calendar = .current) -> TimetableThreeDayPage {
+        let resolvedIndex = min(max(index, 1), pageCount)
+        let pageStart = calendar.date(byAdding: .day, value: (resolvedIndex - 1) * 3, to: startDate)
+            ?? startDate
+        let dates = (0..<3).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: pageStart)
+        }
+        return TimetableThreeDayPage(index: resolvedIndex, dates: dates)
+    }
+
+    func page(containingCenterDate date: Date, calendar: Calendar = .current) -> Int {
+        let firstCenter = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
+        let offset = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: firstCenter),
+            to: calendar.startOfDay(for: date)
+        ).day ?? 0
+        return min(max(Int(round(Double(offset) / 3.0)) + 1, 1), pageCount)
+    }
+}
+
+nonisolated struct TimetableViewportState: Equatable, Sendable {
+    var mode: TimetableDisplayMode
+    var anchorDate: Date
+    var page: Int
+    var verticalOffset: CGFloat
+    var isAwayFromToday: Bool
+}
+
+nonisolated enum TimetableZoomTransitionDirection: Equatable, Sendable {
+    case zoomIn
+    case zoomOut
+}
+
+nonisolated enum TimetableZoomTransitionPolicy {
+    static func progress(
+        direction: TimetableZoomTransitionDirection,
+        magnification: CGFloat
+    ) -> CGFloat {
+        switch direction {
+        case .zoomIn:
+            min(max((magnification - 1) / 0.28, 0), 1)
+        case .zoomOut:
+            1 - min(max((1 - magnification) / 0.22, 0), 1)
         }
     }
+
+    static func shouldCommit(
+        direction: TimetableZoomTransitionDirection,
+        magnification: CGFloat,
+        progress: CGFloat
+    ) -> Bool {
+        switch direction {
+        case .zoomIn:
+            magnification >= 1.12 || progress >= 0.45
+        case .zoomOut:
+            magnification <= 0.88 || progress <= 0.55
+        }
+    }
+}
+
+nonisolated enum TimetableZoomAnchorResolver {
+    static func anchorDate(
+        gestureX: CGFloat,
+        contentStartX: CGFloat,
+        dayColumnWidth: CGFloat,
+        daySpacing: CGFloat,
+        visibleDates: [Date],
+        hidesWeekends: Bool,
+        isCurrentWeek: Bool,
+        today: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let normalizedToday = calendar.startOfDay(for: today)
+        let todayWeekday = calendar.component(.weekday, from: normalizedToday)
+        if hidesWeekends, isCurrentWeek, todayWeekday == 1 || todayWeekday == 7 {
+            return normalizedToday
+        }
+        guard !visibleDates.isEmpty else { return nil }
+        let stride = max(dayColumnWidth + daySpacing, 1)
+        let localX = max(gestureX - contentStartX, 0)
+        let index = min(max(Int(localX / stride), 0), visibleDates.count - 1)
+        return calendar.startOfDay(for: visibleDates[index])
+    }
+}
+
+nonisolated struct TimetableZoomTransitionContext: Equatable, Sendable {
+    let direction: TimetableZoomTransitionDirection
+    let anchorDate: Date
+    let sourceWeek: Int
+    let targetWeek: Int
+    let sourceDates: [Date]
+    let threeDayDates: [Date]
+}
+
+nonisolated struct TimetableZoomTransitionState: Equatable, Sendable {
+    enum Phase: Equatable, Sendable {
+        case interactive
+        case settling
+        case awaitingTargetLayout
+    }
+
+    var context: TimetableZoomTransitionContext
+    var progress: CGFloat
+    var phase: Phase
 }
 
 @MainActor

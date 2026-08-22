@@ -243,10 +243,16 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         XCTAssertEqual(snapshot.vacationEndDate, DateFormatters.queryDate.date(from: "2027-02-27"))
         XCTAssertEqual(snapshot.semesterEndDate, DateFormatters.queryDate.date(from: "2027-01-15"))
         XCTAssertEqual(snapshot.yearMonths.map(\.id), [
-            "2026-09", "2026-10", "2026-11", "2026-12", "2027-01"
+            "2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06",
+            "2027-07", "2027-08", "2026-09", "2026-10", "2026-11", "2026-12"
         ])
-        XCTAssertTrue(snapshot.yearMonths.first { $0.id == "2027-01" }?.isInSemester ?? false)
-        XCTAssertFalse(snapshot.yearMonths.contains { $0.month == 2 })
+        XCTAssertEqual(snapshot.yearMonths.map(\.month), Array(1...12))
+        let january = try XCTUnwrap(snapshot.yearMonths.first { $0.id == "2027-01" })
+        XCTAssertTrue(january.isInSemester)
+        XCTAssertTrue(january.isInVacation)
+        let february = try XCTUnwrap(snapshot.yearMonths.first { $0.id == "2027-02" })
+        XCTAssertFalse(february.isInSemester)
+        XCTAssertTrue(february.isInVacation)
     }
 
     func testTimeScopeDoesNotInferVacationFromTwentyWeekContainer() throws {
@@ -274,6 +280,10 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         XCTAssertEqual(snapshot.vacationTitle, "假期")
         XCTAssertEqual(snapshot.vacationCountdownText, "校历更新后显示")
         XCTAssertFalse(snapshot.yearMonths.contains { $0.isInVacation })
+        XCTAssertEqual(snapshot.yearMonths.map(\.id), [
+            "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06",
+            "2026-07", "2026-08", "2025-09", "2025-10", "2025-11", "2025-12"
+        ])
     }
 
     private static let firstSemesterCalendarEvents = [

@@ -158,17 +158,17 @@ struct TimetableTimeScopeSnapshot: Equatable {
         let semesterEndExclusive = semesterEnd.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
         let vacationEndExclusive = vacationEnd.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
 
-        let firstMonth = calendar.dateInterval(of: .month, for: semesterStart)?.start ?? semesterStart
-        let lastMonth = semesterEnd.flatMap { calendar.dateInterval(of: .month, for: $0)?.start } ?? firstMonth
-        var monthStart = firstMonth
-        var marks: [TimetableTimeScopeMonthMark] = []
+        let semesterComponents = calendar.dateComponents([.year, .month], from: semesterStart)
+        let semesterYear = semesterComponents.year ?? calendar.component(.year, from: displayedMonthDate)
+        let semesterMonth = semesterComponents.month ?? 9
+        let academicYearStart = semesterMonth >= 9 ? semesterYear : semesterYear - 1
 
-        while monthStart <= lastMonth {
-            guard let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else { break }
-            let components = calendar.dateComponents([.year, .month], from: monthStart)
-            let year = components.year ?? 0
-            let month = components.month ?? 0
-            marks.append(
+        return (1...12).compactMap { month in
+            let year = month >= 9 ? academicYearStart : academicYearStart + 1
+            guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+                  let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart)
+            else { return nil }
+            return
                 TimetableTimeScopeMonthMark(
                     year: year,
                     month: month,
@@ -182,10 +182,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
                     } ?? false,
                     vacationCategory: vacationCategory
                 )
-            )
-            monthStart = monthEnd
         }
-        return marks
     }
 
     private static func intervalsOverlap(_ firstStart: Date, _ firstEnd: Date, _ secondStart: Date, _ secondEnd: Date) -> Bool {
@@ -993,24 +990,36 @@ struct TimetableTimeScopeMonthMarkView: View {
                 .minimumScaleFactor(0.68)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
     }
 
     private var fill: Color {
-        if mark.isDisplayedMonth {
-            return AppTheme.accent(for: themeColorPreference).opacity(0.82)
+        if mark.isInSemester {
+            return AppTheme.accentSoft(for: themeColorPreference).opacity(0.82)
         }
         if mark.isInVacation {
             return mark.vacationCategory == .winterBreak
                 ? Color.cyan.opacity(0.42)
                 : Color.yellow.opacity(0.44)
         }
-        if mark.isInSemester {
-            return AppTheme.accentSoft(for: themeColorPreference).opacity(0.72)
-        }
         return AppTheme.fill.opacity(0.62)
     }
 
     private var stroke: Color {
         mark.isDisplayedMonth ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.separator
+    }
+
+    private var accessibilityText: String {
+        let state: String
+        if mark.isInSemester {
+            state = "学期"
+        } else if mark.isInVacation {
+            state = mark.vacationCategory == .winterBreak ? "寒假" : "暑假"
+        } else {
+            state = "普通月份"
+        }
+        let displayed = mark.isDisplayedMonth ? "，当前显示" : ""
+        return "\(mark.month) 月，\(state)\(displayed)"
     }
 }
