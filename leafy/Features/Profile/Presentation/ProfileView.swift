@@ -2136,7 +2136,7 @@ private struct CacheAndSyncView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await syncAll() }
+            Task { await syncAll(allowsAutomaticRecovery: false) }
         }
         .leafyOperationAlert($operationAlert)
         .onAppear(perform: refreshCacheSummary)
@@ -2210,14 +2210,15 @@ private struct CacheAndSyncView: View {
     }
 
     @MainActor
-    private func syncAll() async {
+    private func syncAll(allowsAutomaticRecovery: Bool = true) async {
         guard !isSyncing else { return }
 
         if !isCustomCampus,
            !ReviewDemoMode.isEnabled,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .schoolDataSync
+               context: .schoolDataSync,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             reauthenticationRequest = request
             return
@@ -2241,7 +2242,10 @@ private struct CacheAndSyncView: View {
         case .needsLogin:
             operationAlert = .failure(L10n.text("请先连接校园网登录教务系统。", language: leafyLanguage))
         case .needsReauthentication(let context):
-            reauthenticationRequest = SchoolReauthenticationRequest(context: context)
+            reauthenticationRequest = SchoolReauthenticationRequest(
+                context: context,
+                allowsAutomaticAttempt: allowsAutomaticRecovery
+            )
         }
     }
 

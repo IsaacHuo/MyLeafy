@@ -117,7 +117,7 @@ struct CampusHeatmapView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await updateData() }
+            Task { await updateData(allowsAutomaticRecovery: false) }
         }
     }
 
@@ -167,7 +167,7 @@ struct CampusHeatmapView: View {
                         } else {
                             Image(systemName: ReviewDemoMode.isEnabled ? "arrow.clockwise" : "person.badge.key")
                         }
-                        Text(ReviewDemoMode.isEnabled ? "更新数据" : "重新登录并更新数据")
+                        Text("更新数据")
                             .fontWeight(.semibold)
                     }
                     .frame(maxWidth: .infinity)
@@ -177,7 +177,7 @@ struct CampusHeatmapView: View {
                 .accessibilityHint("更新所选日期和节次的校园热力图数据")
 
                 if !ReviewDemoMode.isEnabled {
-                    Text("每次重新更新数据时，都需要重新登录教务。")
+                    Text("更新时会优先复用当前教务登录状态，失效后再进行验证。")
                         .microCaption()
                         .foregroundStyle(AppTheme.tertiaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -348,11 +348,7 @@ struct CampusHeatmapView: View {
 
     private func beginUpdate() {
         guard !isLoading else { return }
-        if ReviewDemoMode.isEnabled {
-            Task { await updateData() }
-        } else {
-            reauthenticationRequest = SchoolReauthenticationRequest(context: .campusHeatmap)
-        }
+        Task { await updateData() }
     }
 
     private func loadStoredData() async {
@@ -364,7 +360,7 @@ struct CampusHeatmapView: View {
         }
     }
 
-    private func updateData() async {
+    private func updateData(allowsAutomaticRecovery: Bool = true) async {
         guard !isLoading else { return }
         await MainActor.run {
             isLoading = true
@@ -377,6 +373,12 @@ struct CampusHeatmapView: View {
         await MainActor.run {
             storedData = outcome.storedData
             errorMessage = outcome.errorMessage
+            if outcome.requiresReauthentication {
+                reauthenticationRequest = SchoolReauthenticationRequest(
+                    context: .campusHeatmap,
+                    allowsAutomaticAttempt: allowsAutomaticRecovery
+                )
+            }
         }
     }
 

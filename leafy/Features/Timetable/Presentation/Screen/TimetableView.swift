@@ -527,7 +527,12 @@ struct TimetableView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await fetchAndParseTimetable(userInitiated: true) }
+            Task {
+                await fetchAndParseTimetable(
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
     }
 
@@ -2486,7 +2491,10 @@ struct TimetableView: View {
         #endif
     }
 
-    private func fetchAndParseTimetable(userInitiated: Bool) async {
+    private func fetchAndParseTimetable(
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         guard !isFetching else { return }
         if isCustomCampus {
             await MainActor.run {
@@ -2512,9 +2520,10 @@ struct TimetableView: View {
         }
 
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .timetable(portal: networkManager.currentPortal)
+               context: .timetable(portal: networkManager.currentPortal),
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -2525,7 +2534,8 @@ struct TimetableView: View {
         guard networkManager.isLoggedIn else {
             if userInitiated, networkManager.hasCachedIdentity {
                 reauthenticationRequest = SchoolReauthenticationRequest(
-                    context: .timetable(portal: networkManager.currentPortal)
+                    context: .timetable(portal: networkManager.currentPortal),
+                    allowsAutomaticAttempt: allowsAutomaticRecovery
                 )
             } else {
                 alertMessage = networkManager.hasCachedIdentity
@@ -2612,7 +2622,8 @@ struct TimetableView: View {
                 publishWidgetSnapshot()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
                     reauthenticationRequest = SchoolReauthenticationRequest(
-                        context: .timetable(portal: networkManager.currentPortal)
+                        context: .timetable(portal: networkManager.currentPortal),
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else {
                     alertMessage = courses.isEmpty

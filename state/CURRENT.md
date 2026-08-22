@@ -12,6 +12,7 @@ Last verified: 2026-08-22
 
 ## Recently Completed
 
+- **教务会话渐进恢复**：用户主动更新课表、成绩、考试、教学计划、培养方案和空闲教室时优先复用现有 Session；本科 Session 明确过期后最多执行一次端侧 Vision 验证码识别与自动登录，失败转人工输入，研究生端保持人工验证码恢复。
 - **Android 工程骨架（阶段 1 / 1.5）**：`android/` 为可编译可运行的 Compose 单模块工程（Gradle 8.14.5 / AGP 8.13.2 / Kotlin 2.2.21 / minSdk 29）；5 个根 Tab 真实导航，全功能基础架构已搭好（UiState 状态机 / Repository / Room v2 / DTO / DataStore / 登录路由 / 深链），日迹为真实可用的本地 CRUD。
 - **Android 阶段 2（教务，M2.1-M2.5）**：OkHttp 教务客户端 + Cookie 契约、强智登录（encodeKey/验证码/会话验证）、课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库、周课表网格、成绩/考试抓取与校园页。
 - **Android 阶段 4（社区，M4.1-M4.3）**：supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论线程/点赞、文本发帖与评论。

@@ -64,11 +64,8 @@ final class SchoolNetworkManager: ObservableObject {
     @Published var isLoggedIn: Bool {
         didSet {
             UserDefaults.standard.set(isLoggedIn, forKey: storageKey("isLoggedIn"))
-            lastAuthenticatedSessionValidationAt = isLoggedIn ? Date() : nil
         }
     }
-
-    var lastAuthenticatedSessionValidationAt: Date?
 
     var persistedCookieValues: [String: String] {
         didSet {

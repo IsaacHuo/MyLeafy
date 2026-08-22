@@ -136,7 +136,12 @@ struct ExamScheduleView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await loadExams(userInitiated: true) }
+            Task {
+                await loadExams(
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
         .leafyOperationAlert($operationAlert)
     }
@@ -148,7 +153,10 @@ struct ExamScheduleView: View {
             .leafyCardStyle()
     }
 
-    private func loadExams(userInitiated: Bool) async {
+    private func loadExams(
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         guard !isLoading else { return }
         if isCustomCampus {
             await MainActor.run {
@@ -166,9 +174,10 @@ struct ExamScheduleView: View {
         }
 
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .examSchedule
+               context: .examSchedule,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -179,7 +188,10 @@ struct ExamScheduleView: View {
         guard networkManager.isLoggedIn else {
             await MainActor.run {
                 if userInitiated, networkManager.hasCachedIdentity {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .examSchedule)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .examSchedule,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else if exams.isEmpty {
                     errorMessage = networkManager.hasCachedIdentity
                         ? "本地身份已识别，但刷新考试安排需要连接校园网并重新建立教务登录态。"
@@ -204,7 +216,10 @@ struct ExamScheduleView: View {
         } catch {
             await MainActor.run {
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .examSchedule)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .examSchedule,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else {
                     errorMessage = "加载考试安排失败：\(error.localizedDescription)"
                 }
@@ -508,7 +523,13 @@ struct TeachingPlanView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await loadPlan(force: true, userInitiated: true) }
+            Task {
+                await loadPlan(
+                    force: true,
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
     }
 
@@ -592,7 +613,11 @@ struct TeachingPlanView: View {
         }
     }
 
-    private func loadPlan(force: Bool, userInitiated: Bool) async {
+    private func loadPlan(
+        force: Bool,
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         guard !isLoading else { return }
 
         let cachedSections = SchoolDataCache.loadTeachingPlan()
@@ -622,9 +647,10 @@ struct TeachingPlanView: View {
         }
 
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .teachingPlan
+               context: .teachingPlan,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -636,7 +662,10 @@ struct TeachingPlanView: View {
             await MainActor.run {
                 sections = cachedSections
                 if userInitiated, networkManager.hasCachedIdentity {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .teachingPlan)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .teachingPlan,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else if force || sections.isEmpty {
                     errorMessage = networkManager.hasCachedIdentity
                         ? "本地身份已识别，但同步教学计划需要连接校园网并重新建立教务登录态。"
@@ -663,7 +692,10 @@ struct TeachingPlanView: View {
             await MainActor.run {
                 sections = SchoolDataCache.loadTeachingPlan()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .teachingPlan)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .teachingPlan,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else if sections.isEmpty || force {
                     errorMessage = "加载教学计划失败：\(error.localizedDescription)"
                 }
@@ -939,7 +971,13 @@ struct TrainingProgramView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await loadProgram(force: true, userInitiated: true) }
+            Task {
+                await loadProgram(
+                    force: true,
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
     }
 
@@ -1088,7 +1126,11 @@ struct TrainingProgramView: View {
         }
     }
 
-    private func loadProgram(force: Bool, userInitiated: Bool) async {
+    private func loadProgram(
+        force: Bool,
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         guard !isLoading else { return }
 
         let cachedDocument = SchoolDataCache.loadTrainingProgram()
@@ -1123,9 +1165,10 @@ struct TrainingProgramView: View {
         }
 
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .trainingProgram
+               context: .trainingProgram,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -1138,7 +1181,10 @@ struct TrainingProgramView: View {
                 document = cachedDocument
                 requirements = cachedRequirements
                 if userInitiated, networkManager.hasCachedIdentity {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .trainingProgram)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .trainingProgram,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else if force || (document == nil && requirements.isEmpty) {
                     errorMessage = networkManager.hasCachedIdentity
                         ? "本地身份已识别，但同步培养方案需要连接校园网并重新建立教务登录态。"
@@ -1168,7 +1214,10 @@ struct TrainingProgramView: View {
                 document = fallbackDocument
                 requirements = fallbackDocument?.creditRequirements ?? SchoolDataCache.loadGraduationRequirements()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .trainingProgram)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .trainingProgram,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else if (document == nil && requirements.isEmpty) || force {
                     errorMessage = "加载培养方案失败：\(error.localizedDescription)"
                 }
@@ -1474,7 +1523,12 @@ struct EmptyClassroomView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await submitQuery(userInitiated: true) }
+            Task {
+                await submitQuery(
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
         .leafyOperationAlert($operationAlert)
     }
@@ -1560,7 +1614,10 @@ struct EmptyClassroomView: View {
         .contentShape(Rectangle())
     }
 
-    private func submitQuery(userInitiated: Bool) async {
+    private func submitQuery(
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         guard !isLoading else { return }
         guard !isCustomCampus else {
             errorMessage = nil
@@ -1568,9 +1625,10 @@ struct EmptyClassroomView: View {
         }
 
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .emptyClassrooms
+               context: .emptyClassrooms,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -1597,7 +1655,10 @@ struct EmptyClassroomView: View {
             expandedBuildingIDs = []
             errorMessage = outcome.errorMessage
             if outcome.requiresReauthentication {
-                reauthenticationRequest = SchoolReauthenticationRequest(context: .emptyClassrooms)
+                reauthenticationRequest = SchoolReauthenticationRequest(
+                    context: .emptyClassrooms,
+                    allowsAutomaticAttempt: allowsAutomaticRecovery
+                )
             }
         }
     }

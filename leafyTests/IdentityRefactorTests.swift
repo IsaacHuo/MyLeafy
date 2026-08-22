@@ -20,13 +20,16 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
-    func testSchoolSessionPreflightImmediatelyRequiresLoginWithoutLocalSession() async {
+    func testSchoolSessionPreflightUsesLocalStateWithoutNetworkRequest() {
         let manager = SchoolNetworkManager.shared
         manager.clearSession()
 
-        let result = await manager.preflightAuthenticatedSession()
+        let result = SchoolReauthentication.preflightRequest(
+            networkManager: manager,
+            context: .schoolDataSync
+        )
 
-        XCTAssertEqual(result, .requiresReauthentication)
+        XCTAssertNil(result)
     }
 
     @MainActor

@@ -229,7 +229,12 @@ struct GradesView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await fetchGrades(userInitiated: true) }
+            Task {
+                await fetchGrades(
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
         .onAppear {
             creditSummary = SchoolDataCache.loadGradeCreditSummary()
@@ -429,7 +434,10 @@ struct GradesView: View {
         .contentShape(Rectangle())
     }
 
-    private func fetchGrades(userInitiated: Bool) async {
+    private func fetchGrades(
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         guard !isFetching else { return }
         if isCustomCampus {
             await MainActor.run {
@@ -448,9 +456,10 @@ struct GradesView: View {
         }
 
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .grades
+               context: .grades,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -460,7 +469,10 @@ struct GradesView: View {
 
         guard networkManager.isLoggedIn else {
             if userInitiated, networkManager.hasCachedIdentity {
-                reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
+                reauthenticationRequest = SchoolReauthenticationRequest(
+                    context: .grades,
+                    allowsAutomaticAttempt: allowsAutomaticRecovery
+                )
             } else {
                 alertMessage = networkManager.hasCachedIdentity
                     ? L10n.text("本地身份已识别，但刷新成绩需要连接校园网并重新建立教务登录态。", language: leafyLanguage)
@@ -498,7 +510,10 @@ struct GradesView: View {
             await MainActor.run {
                 isFetching = false
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .grades,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 } else {
                     alertMessage = L10n.text("获取成绩失败：%@", language: leafyLanguage, error.localizedDescription)
                     showAlert = true
@@ -976,7 +991,12 @@ struct GradeAnalyticsDetailView: View {
             request: $reauthenticationRequest,
             networkManager: networkManager
         ) { _ in
-            Task { await refreshRankings(userInitiated: true) }
+            Task {
+                await refreshRankings(
+                    userInitiated: true,
+                    allowsAutomaticRecovery: false
+                )
+            }
         }
         .task {
             await loadSupplementalData()
@@ -1216,11 +1236,15 @@ struct GradeAnalyticsDetailView: View {
         await refreshRankings(userInitiated: false)
     }
 
-    private func refreshRankings(userInitiated: Bool) async {
+    private func refreshRankings(
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool = true
+    ) async {
         if userInitiated,
-           let request = await SchoolReauthentication.preflightRequest(
+           let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
-               context: .grades
+               context: .grades,
+               allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
             await MainActor.run {
                 reauthenticationRequest = request
@@ -1234,16 +1258,25 @@ struct GradeAnalyticsDetailView: View {
                     rankingMessage = L10n.text("教务暂未开放成绩排名，或需要连接校园网后重新登录查询。", language: leafyLanguage)
                 }
                 if userInitiated, networkManager.hasCachedIdentity {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .grades,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 }
             }
             return
         }
 
-        await loadRankings(userInitiated: userInitiated)
+        await loadRankings(
+            userInitiated: userInitiated,
+            allowsAutomaticRecovery: allowsAutomaticRecovery
+        )
     }
 
-    private func loadRankings(userInitiated: Bool) async {
+    private func loadRankings(
+        userInitiated: Bool,
+        allowsAutomaticRecovery: Bool
+    ) async {
         guard !isLoadingRankings else { return }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
@@ -1287,7 +1320,10 @@ struct GradeAnalyticsDetailView: View {
                 rankingMessage = error.localizedDescription.isEmpty ? L10n.text("教务暂未开放成绩排名。", language: leafyLanguage) : error.localizedDescription
                 isLoadingRankings = false
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
-                    reauthenticationRequest = SchoolReauthenticationRequest(context: .grades)
+                    reauthenticationRequest = SchoolReauthenticationRequest(
+                        context: .grades,
+                        allowsAutomaticAttempt: allowsAutomaticRecovery
+                    )
                 }
             }
         }

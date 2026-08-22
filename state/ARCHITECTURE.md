@@ -161,6 +161,7 @@ flowchart TB
 ### `leafy/Services/`
 
 - `SchoolNetworkManager.swift` + `+Core/+Auth/+Timetable/+Discover.swift`：强智登录、Cookie 管理、教务请求、页面识别、会话失效。
+- `SchoolAuthenticationService` / `SchoolReauthentication`：用户主动教务操作的 Session-first 恢复协调；本科使用端侧 Vision 做一次受限验证码识别，研究生与不可靠结果进入人工验证。
 - `SchoolDataSyncService` / `SchoolDataPrefetchCoordinator`：教务数据同步与预取。
 - `SchoolLoginCredentialStore` / `SchoolSessionCredentialStore`：学校凭据与会话存储。
 - `TimetableWebViewBootstrapper`：课表 HTTP 路径失败后的 `WKWebView` 兼容路径。
@@ -178,6 +179,8 @@ flowchart TB
 
 ```text
 SchoolNetworkManager（URLSession 主链路 / WKWebView 课表兼容）
+  → 现有 Cookie 直接请求；明确 Session 过期后才进入认证恢复
+  → 本科一次 Vision 验证码识别 / 人工验证码 fallback
   → HTMLParser（SwiftSoup → Course/Grade/考试/教室等模型）
   → SwiftData 本地缓存
   → TimetableGridSnapshot 等展示投影 → SwiftUI / Widget
@@ -251,6 +254,8 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 - 课表周态与三日态使用同一棵 `TimetableContinuousColumnsLayout` 日期列树，由 `TimetableContinuousViewportController.zoomProgress` 连续驱动，不切换容器、不用 `scrollTo` 居中。本周以今天为三日中心，其他周以周二为中心；三日分页每次移动三个自然日，缩回当前中心日期所属周。隐藏周末只把周态周末 lane 收到零宽，三日态仍展示真实周末。21 日渲染窗口及课程、考试、日程 payload 在交互期间冻结，Header、网格和卡片共用 `TimetableZoomGeometry`。
 - 时间视图不展示已废弃的 2025–2026 春季入口，但底层历史学期配置仍保留；非教学期优先选择最近即将开始的学期。年度缩略固定按 1–12 月自然顺序，1–8 月映射学年结束年、9–12 月映射学年起始年；学期颜色优先于寒暑假颜色。
 - 远程学期运行配置（`semester_runtime_configs`）选择本科 `semester_id` / 研究生 `graduate_timetable_term_code`、首周日期与语义时间线，无需发布 App 版本。
+- 用户主动发起教务请求时必须优先复用当前 URLSession/Cookie，不发送额外的联网 Session 预检。只有服务端明确确认 Session 失效才进入恢复；校园网不可达不得清除 Cookie 或触发验证码。后台预取不主动认证。
+- 本科自动恢复使用 Keychain 中与当前身份匹配的账号密码和同一 URLSession 获取、提交验证码；四位大写字母数字且 Vision 置信度至少 0.90 时最多自动提交一次。格式、置信度、识别、登录或重试失败均转人工；研究生端不做自动 OCR。
 - 校园一级领域包括 `自习安排` 与 `学习空间`；`空闲教室` 是 `自习安排` 下的内部工具；专注记录归 `学习空间`。
 - 校园热力图不内置全学期占用数据：用户显式登录并按需更新所选日期和节次；每个校园账号只保留最近一次成功更新的数据；文案使用“更新数据 / 上次更新”。
 - 一个 `(campus_id, edu_id)` 对应一个长期 community profile；多个可替换的设备 Auth 会话可链接同一 profile，一个 Auth 会话最多映射一个 profile。学校登录自动继承匹配的社区资料；已验证绑定邮箱仅用于通知，不参与登录或社区恢复。
