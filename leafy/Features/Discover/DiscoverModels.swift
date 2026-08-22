@@ -637,6 +637,8 @@ nonisolated struct CustomScheduleEvent: Identifiable, Codable, Hashable {
     var location: String?
     var note: String?
     var minutesBefore: Int
+    var createdAt: Date?
+    var updatedAt: Date?
 
     init(
         id: String = UUID().uuidString,
@@ -645,7 +647,9 @@ nonisolated struct CustomScheduleEvent: Identifiable, Codable, Hashable {
         endsAt: Date? = nil,
         location: String = "",
         note: String = "",
-        minutesBefore: Int = 0
+        minutesBefore: Int = 0,
+        createdAt: Date? = Date(),
+        updatedAt: Date? = Date()
     ) {
         self.id = id
         self.title = title
@@ -654,6 +658,8 @@ nonisolated struct CustomScheduleEvent: Identifiable, Codable, Hashable {
         self.location = Self.normalizedOptionalText(location)
         self.note = Self.normalizedOptionalText(note)
         self.minutesBefore = max(0, minutesBefore)
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 
     init(id: String = UUID().uuidString, title: String, targetDate: Date) {
@@ -669,6 +675,8 @@ nonisolated struct CustomScheduleEvent: Identifiable, Codable, Hashable {
         case location
         case note
         case minutesBefore
+        case createdAt
+        case updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -683,6 +691,8 @@ nonisolated struct CustomScheduleEvent: Identifiable, Codable, Hashable {
         location = Self.normalizedOptionalText(try container.decodeIfPresent(String.self, forKey: .location) ?? "")
         note = Self.normalizedOptionalText(try container.decodeIfPresent(String.self, forKey: .note) ?? "")
         minutesBefore = max(0, try container.decodeIfPresent(Int.self, forKey: .minutesBefore) ?? 0)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -694,6 +704,8 @@ nonisolated struct CustomScheduleEvent: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(note, forKey: .note)
         try container.encode(minutesBefore, forKey: .minutesBefore)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }
 
     var targetDate: Date {

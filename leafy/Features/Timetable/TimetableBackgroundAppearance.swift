@@ -96,7 +96,7 @@ struct TimetableBackgroundConfiguration: Equatable {
             filename: filename,
             displayMode: TimetableBackgroundDisplayMode(
                 rawValue: defaults.string(forKey: TimetableBackgroundStore.displayModeKey) ?? ""
-            ) ?? .fill,
+            ) ?? TimetableBackgroundStore.defaultDisplayMode,
             imageOpacity: storedDouble(
                 defaults: defaults,
                 key: TimetableBackgroundStore.imageOpacityKey,
@@ -178,6 +178,7 @@ enum TimetableBackgroundStore {
     static let solidColorHexKey = "timetableBackground.solidColor"
 
     static let defaultImageOpacity = 0.32
+    static let defaultDisplayMode = TimetableBackgroundDisplayMode.fit
     static let defaultBlurRadius = 0.0
     static let defaultOverlayOpacity = 0.10
     static let defaultCourseCardOpacity = 0.50
@@ -267,8 +268,14 @@ enum TimetableBackgroundStore {
         return Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 
-    static func notifySettingsDidChange() {
-        NotificationCenter.default.post(name: .timetableBackgroundSettingsDidChange, object: nil)
+    static let configurationUserInfoKey = "configuration"
+
+    static func notifySettingsDidChange(configuration: TimetableBackgroundConfiguration? = nil) {
+        NotificationCenter.default.post(
+            name: .timetableBackgroundSettingsDidChange,
+            object: nil,
+            userInfo: configuration.map { [configurationUserInfoKey: $0] }
+        )
     }
 
     nonisolated private static var directoryURL: URL {

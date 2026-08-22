@@ -5,6 +5,38 @@ import XCTest
 
 @MainActor
 final class ScheduleMemoTests: XCTestCase {
+    func testPersonalScheduleFeedItemUsesCreationTimeAndSearchableFields() throws {
+        let createdAt = try date(2026, 8, 22, 10)
+        let item = PersonalScheduleFeedItem(
+            source: .importantDate("schedule-1"),
+            title: "提交课程设计",
+            note: "带上最终报告",
+            location: "学研 A101",
+            startsAt: try date(2026, 9, 10, 14),
+            endsAt: try date(2026, 9, 10, 15),
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            minutesBefore: 20
+        )
+
+        XCTAssertEqual(item.createdAt, createdAt)
+        XCTAssertTrue(item.matches("课程设计"))
+        XCTAssertTrue(item.matches("最终报告"))
+        XCTAssertTrue(item.matches("A101"))
+        XCTAssertFalse(item.matches("不存在"))
+    }
+
+    func testNewCustomScheduleStoresCreationAndUpdateTimestamps() throws {
+        let event = CustomScheduleEvent(
+            title: "新日程",
+            startsAt: try date(2026, 9, 7, 9),
+            endsAt: try date(2026, 9, 7, 10)
+        )
+
+        XCTAssertNotNil(event.createdAt)
+        XCTAssertNotNil(event.updatedAt)
+    }
+
     func testMediaIndexGroupsAndSortsMemoResources() {
         let firstMemoID = UUID()
         let secondMemoID = UUID()

@@ -155,26 +155,37 @@ struct TimetableTimeScopeSnapshot: Equatable {
         vacationCategory: SchoolCalendarEvent.AcademicCategory?,
         calendar: Calendar
     ) -> [TimetableTimeScopeMonthMark] {
-        let year = calendar.component(.year, from: displayedMonthDate)
         let semesterEndExclusive = semesterEnd.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
         let vacationEndExclusive = vacationEnd.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
 
-        return (1...12).compactMap { month -> TimetableTimeScopeMonthMark? in
-            guard let start = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
-                  let end = calendar.date(byAdding: .month, value: 1, to: start)
-            else { return nil }
+        let firstMonth = calendar.dateInterval(of: .month, for: semesterStart)?.start ?? semesterStart
+        let lastMonth = semesterEnd.flatMap { calendar.dateInterval(of: .month, for: $0)?.start } ?? firstMonth
+        var monthStart = firstMonth
+        var marks: [TimetableTimeScopeMonthMark] = []
 
-            return TimetableTimeScopeMonthMark(
-                month: month,
-                label: "\(month)",
-                isDisplayedMonth: calendar.isDate(start, equalTo: displayedMonthDate, toGranularity: .month),
-                isInSemester: semesterEndExclusive.map { intervalsOverlap(start, end, semesterStart, $0) } ?? false,
-                isInVacation: vacationStart.flatMap { vacationStart in
-                    vacationEndExclusive.map { intervalsOverlap(start, end, vacationStart, $0) }
-                } ?? false,
-                vacationCategory: vacationCategory
+        while monthStart <= lastMonth {
+            guard let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart) else { break }
+            let components = calendar.dateComponents([.year, .month], from: monthStart)
+            let year = components.year ?? 0
+            let month = components.month ?? 0
+            marks.append(
+                TimetableTimeScopeMonthMark(
+                    year: year,
+                    month: month,
+                    label: "\(month)",
+                    isDisplayedMonth: calendar.isDate(monthStart, equalTo: displayedMonthDate, toGranularity: .month),
+                    isInSemester: semesterEndExclusive.map {
+                        intervalsOverlap(monthStart, monthEnd, semesterStart, $0)
+                    } ?? calendar.isDate(monthStart, equalTo: semesterStart, toGranularity: .month),
+                    isInVacation: vacationStart.flatMap { vacationStart in
+                        vacationEndExclusive.map { intervalsOverlap(monthStart, monthEnd, vacationStart, $0) }
+                    } ?? false,
+                    vacationCategory: vacationCategory
+                )
             )
+            monthStart = monthEnd
         }
+        return marks
     }
 
     private static func intervalsOverlap(_ firstStart: Date, _ firstEnd: Date, _ secondStart: Date, _ secondEnd: Date) -> Bool {
@@ -232,6 +243,7 @@ struct TimetableTimeScopeDay: Identifiable, Equatable {
 }
 
 struct TimetableTimeScopeMonthMark: Identifiable, Equatable {
+    let year: Int
     let month: Int
     let label: String
     let isDisplayedMonth: Bool
@@ -239,7 +251,30 @@ struct TimetableTimeScopeMonthMark: Identifiable, Equatable {
     let isInVacation: Bool
     let vacationCategory: SchoolCalendarEvent.AcademicCategory?
 
-    var id: Int { month }
+    var id: String { String(format: "%04d-%02d", year, month) }
+}
+
+nonisolated enum TimetableTimeScopeConfigurationResolver {
+    static func configuration(
+        for referenceDate: Date,
+        configurations: [SemesterRuntimeConfig],
+        calendar: Calendar = .current
+    ) -> SemesterRuntimeConfig? {
+        let day = calendar.startOfDay(for: referenceDate)
+        let sorted = configurations.sorted { $0.semesterStartDate < $1.semesterStartDate }
+        if let teaching = sorted.first(where: { configuration in
+            let start = calendar.startOfDay(for: configuration.semesterStartDate)
+            let end = configuration.calendarEvents
+                .first { $0.academicCategory == .semesterEnd }?
+                .endDate
+                .map { calendar.startOfDay(for: $0) }
+            return day >= start && end.map { day <= $0 } == true
+        }) {
+            return teaching
+        }
+        return sorted.first { calendar.startOfDay(for: $0.semesterStartDate) > day }
+            ?? sorted.last
+    }
 }
 
 enum TimetableTimeScopePresentation: Equatable {

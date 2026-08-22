@@ -242,9 +242,11 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         XCTAssertEqual(snapshot.vacationStartDate, DateFormatters.queryDate.date(from: "2027-01-16"))
         XCTAssertEqual(snapshot.vacationEndDate, DateFormatters.queryDate.date(from: "2027-02-27"))
         XCTAssertEqual(snapshot.semesterEndDate, DateFormatters.queryDate.date(from: "2027-01-15"))
-        XCTAssertTrue(snapshot.yearMonths.first { $0.month == 1 }?.isInSemester ?? false)
-        XCTAssertTrue(snapshot.yearMonths.first { $0.month == 1 }?.isInVacation ?? false)
-        XCTAssertTrue(snapshot.yearMonths.first { $0.month == 2 }?.isInVacation ?? false)
+        XCTAssertEqual(snapshot.yearMonths.map(\.id), [
+            "2026-09", "2026-10", "2026-11", "2026-12", "2027-01"
+        ])
+        XCTAssertTrue(snapshot.yearMonths.first { $0.id == "2027-01" }?.isInSemester ?? false)
+        XCTAssertFalse(snapshot.yearMonths.contains { $0.month == 2 })
     }
 
     func testTimeScopeDoesNotInferVacationFromTwentyWeekContainer() throws {

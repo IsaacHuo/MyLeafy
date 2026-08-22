@@ -1654,51 +1654,18 @@ struct CommunityPollCard: View {
 
     private func optionRow(_ option: CommunityPollOption) -> some View {
         let isSelected = poll.viewerOptionID == option.id
-        let share = poll.shouldRevealResults ? option.voteShare(totalVotes: poll.totalVoteCount) : 0
 
         return Button {
             guard poll.canVote, !isLoading else { return }
             Task { await onVote(option) }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(isSelected ? AppTheme.accentEmphasis : AppTheme.tertiaryText)
-                        .frame(width: 22)
-
-                    Text(option.text)
-                        .leafySubheadline()
-                        .foregroundStyle(AppTheme.primaryText)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if isLoading && isSelected {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else if poll.shouldRevealResults {
-                        Text(option.percentageText(totalVotes: poll.totalVoteCount))
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .monospacedDigit()
-                    } else {
-                        Text("投票后可见")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.tertiaryText)
-                    }
-                }
-
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppTheme.fill)
-                        Capsule()
-                            .fill(isSelected ? AppTheme.accentSoft : AppTheme.separator)
-                            .frame(width: max(6, geometry.size.width * share))
-                    }
-                }
-                .frame(height: 6)
-            }
+            CommunityPollOptionProgressRow(
+                option: option,
+                totalVotes: poll.totalVoteCount,
+                isSelected: isSelected,
+                isCompact: false,
+                isLoading: isLoading && isSelected
+            )
             .padding(12)
             .background(
                 isSelected ? AppTheme.accentSoft.opacity(0.72) : AppTheme.softFill,
@@ -1712,6 +1679,63 @@ struct CommunityPollCard: View {
         }
         .buttonStyle(.plain)
         .disabled(!poll.canVote || isLoading)
+    }
+}
+
+struct CommunityPollOptionProgressRow: View {
+    let option: CommunityPollOption
+    let totalVotes: Int
+    let isSelected: Bool
+    let isCompact: Bool
+    var isLoading = false
+
+    private var share: Double {
+        option.voteShare(totalVotes: totalVotes)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isCompact ? 5 : 8) {
+            HStack(spacing: isCompact ? 6 : 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: isCompact ? 13 : 17, weight: .semibold))
+                    .foregroundStyle(isSelected ? AppTheme.accentEmphasis : AppTheme.tertiaryText)
+                    .frame(width: isCompact ? 16 : 22)
+
+                Text(option.text)
+                    .font(isCompact ? .caption : .subheadline)
+                    .fontWeight(isCompact ? .medium : .regular)
+                    .foregroundStyle(AppTheme.primaryText)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(isCompact ? 2 : nil)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text(option.percentageText(totalVotes: totalVotes))
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .monospacedDigit()
+                }
+            }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(AppTheme.fill)
+                    if share > 0 {
+                        Capsule()
+                            .fill(isSelected ? AppTheme.accent : AppTheme.accentSoft)
+                            .frame(width: geometry.size.width * share)
+                    }
+                }
+            }
+            .frame(height: isCompact ? 5 : 6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(option.text)
+        .accessibilityValue("\(option.percentageText(totalVotes: totalVotes))，\(option.voteCount) 票")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

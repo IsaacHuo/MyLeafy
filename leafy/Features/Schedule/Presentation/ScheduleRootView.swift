@@ -443,6 +443,37 @@ struct ScheduleMemoMediaIndex {
     }
 }
 
+private enum ScheduleMemoFeedPresentationItem: Identifiable {
+    case memo(ScheduleMemo)
+    case schedule(PersonalScheduleFeedItem)
+
+    var id: String {
+        switch self {
+        case .memo(let memo): return "memo-\(memo.id.uuidString)"
+        case .schedule(let schedule): return schedule.id
+        }
+    }
+
+    var createdAt: Date {
+        switch self {
+        case .memo(let memo): return memo.createdAt
+        case .schedule(let schedule): return schedule.createdAt
+        }
+    }
+
+    var updatedAt: Date {
+        switch self {
+        case .memo(let memo): return memo.updatedAt
+        case .schedule(let schedule): return schedule.updatedAt
+        }
+    }
+
+    var isPinned: Bool {
+        guard case .memo(let memo) = self else { return false }
+        return memo.isPinned
+    }
+}
+
 struct ScheduleMemoFeedView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
@@ -459,6 +490,7 @@ struct ScheduleMemoFeedView: View {
     @State private var sort: ScheduleMemoSort = .newest
     @State private var editingMemo: ScheduleMemo?
     @State private var convertingMemo: ScheduleMemo?
+    @State private var editingSchedulePresentation: CustomScheduleEditorPresentation?
     @State private var shareCardSource: ScheduleMemoShareCardPreviewSource?
     @State private var submissionFallback: ScheduleMemoSubmissionDraft?
     @State private var importantDates = CustomScheduleStore.load()
@@ -484,7 +516,7 @@ struct ScheduleMemoFeedView: View {
         _selectedTag = State(initialValue: initialTag)
     }
 
-    private func visibleMemos(using mediaIndex: ScheduleMemoMediaIndex) -> [ScheduleMemo] {
+    private func visibleFeedItems(using mediaIndex: ScheduleMemoMediaIndex) -> [ScheduleMemoFeedPresentationItem] {
         let byID = Dictionary(uniqueKeysWithValues: memos.map { ($0.id, $0) })
         let records = memos.map { memo in
             ScheduleMemoSearchRecord(
@@ -502,7 +534,7 @@ struct ScheduleMemoFeedView: View {
                 isLinked: memo.linkedScheduleKind != nil && memo.linkedScheduleID != nil
             )
         }
-        return ScheduleMemoSearchEngine.results(
+        let visibleMemos = ScheduleMemoSearchEngine.results(
             in: records,
             query: searchText,
             tag: selectedTag,
@@ -510,6 +542,63 @@ struct ScheduleMemoFeedView: View {
             requiresLink: filter == .linked,
             sort: sort
         ).compactMap { byID[$0.id] }
+
+        var items = visibleMemos.map(ScheduleMemoFeedPresentationItem.memo)
+        let linkedScheduleKeys = Set(memos.compactMap { memo -> String? in
+            guard !memo.isTrashed,
+                  let kind = memo.linkedScheduleKind,
+                  let stableID = memo.linkedScheduleID else { return nil }
+            return "\(kind.rawValue):\(stableID)"
+        })
+
+        if selectedTag == nil, filter != .withImages {
+            let reminderItems = reminders.compactMap { reminder -> PersonalScheduleFeedItem? in
+                guard let createdAt = reminder.createdAt,
+                      let startsAt = reminder.resolvedStartDate,
+                      !linkedScheduleKeys.contains("\(ScheduleMemoLinkKind.timetableReminder.rawValue):\(reminder.id.uuidString)")
+                else { return nil }
+                let endsAt = reminder.resolvedEndDate ?? startsAt.addingTimeInterval(45 * 60)
+                return PersonalScheduleFeedItem(
+                    source: .timetableReminder(reminder.id),
+                    title: reminder.title,
+                    note: reminder.noteText,
+                    location: reminder.locationText,
+                    startsAt: startsAt,
+                    endsAt: endsAt,
+                    createdAt: createdAt,
+                    updatedAt: reminder.updatedAt,
+                    minutesBefore: reminder.minutesBefore
+                )
+            }
+            let importantDateItems = importantDates.compactMap { event -> PersonalScheduleFeedItem? in
+                guard let createdAt = event.createdAt,
+                      !linkedScheduleKeys.contains("\(ScheduleMemoLinkKind.importantDate.rawValue):\(event.id)")
+                else { return nil }
+                return PersonalScheduleFeedItem(
+                    source: .importantDate(event.id),
+                    title: event.title,
+                    note: event.noteText,
+                    location: event.locationText,
+                    startsAt: event.startsAt,
+                    endsAt: event.endsAt ?? event.startsAt.addingTimeInterval(45 * 60),
+                    createdAt: createdAt,
+                    updatedAt: event.updatedAt ?? createdAt,
+                    minutesBefore: event.minutesBefore
+                )
+            }
+            items.append(contentsOf: (reminderItems + importantDateItems)
+                .filter { $0.matches(searchText) }
+                .map(ScheduleMemoFeedPresentationItem.schedule))
+        }
+
+        return items.sorted { lhs, rhs in
+            if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
+            switch sort {
+            case .newest: return lhs.createdAt > rhs.createdAt
+            case .oldest: return lhs.createdAt < rhs.createdAt
+            case .recentlyUpdated: return lhs.updatedAt > rhs.updatedAt
+            }
+        }
     }
 
     var body: some View {
@@ -542,6 +631,12 @@ struct ScheduleMemoFeedView: View {
                     importantDates = CustomScheduleStore.load()
                 }
             )
+        }
+        .leafySheet(item: $editingSchedulePresentation, onDismiss: {
+            importantDates = CustomScheduleStore.load()
+        }) { presentation in
+            CustomScheduleEditorSheet(presentation: presentation)
+                .presentationDetents([.medium, .large])
         }
         .leafySheet(item: $shareCardSource) { source in
             ScheduleMemoShareCardPreviewSheet(source: source)
@@ -735,10 +830,10 @@ struct ScheduleMemoFeedView: View {
     }
 
     private func memoCards(using mediaIndex: ScheduleMemoMediaIndex) -> some View {
-        let visibleMemos = visibleMemos(using: mediaIndex)
+        let visibleItems = visibleFeedItems(using: mediaIndex)
         return LazyVStack(spacing: AppSpacing.card) {
             filterSummary
-            if visibleMemos.isEmpty {
+            if visibleItems.isEmpty {
                 ContentUnavailableView(
                     searchText.isEmpty ? "还没有随记" : "没有找到随记",
                     systemImage: searchText.isEmpty ? "square.and.pencil" : "magnifyingglass",
@@ -746,23 +841,30 @@ struct ScheduleMemoFeedView: View {
                 )
                 .padding(.top, 72)
             } else {
-                ForEach(visibleMemos) { memo in
-                    ScheduleMemoCard(
-                        memo: memo,
-                        images: mediaIndex.imagesByMemoID[memo.id, default: []],
-                        attachments: mediaIndex.attachmentsByMemoID[memo.id, default: []],
-                        audio: mediaIndex.audioByMemoID[memo.id],
-                        audioPlayback: audioPlayback,
-                        linkedSchedule: linkedSchedule(for: memo),
-                        onOpen: { detailMemo = memo },
-                        onTag: { selectedTag = $0 },
-                        onEdit: { editingMemo = memo },
-                        onConvert: { convertingMemo = memo },
-                        onShareCard: { makeShareCard(for: memo) },
-                        onSubmit: { submit(memo) },
-                        onPin: { togglePin(memo) },
-                        onTrash: { requestTrash(memo) }
-                    )
+                ForEach(visibleItems) { item in
+                    switch item {
+                    case .memo(let memo):
+                        ScheduleMemoCard(
+                            memo: memo,
+                            images: mediaIndex.imagesByMemoID[memo.id, default: []],
+                            attachments: mediaIndex.attachmentsByMemoID[memo.id, default: []],
+                            audio: mediaIndex.audioByMemoID[memo.id],
+                            audioPlayback: audioPlayback,
+                            linkedSchedule: linkedSchedule(for: memo),
+                            onOpen: { detailMemo = memo },
+                            onTag: { selectedTag = $0 },
+                            onEdit: { editingMemo = memo },
+                            onConvert: { convertingMemo = memo },
+                            onShareCard: { makeShareCard(for: memo) },
+                            onSubmit: { submit(memo) },
+                            onPin: { togglePin(memo) },
+                            onTrash: { requestTrash(memo) }
+                        )
+                    case .schedule(let schedule):
+                        PersonalScheduleMemoCard(schedule: schedule) {
+                            openScheduleEditor(for: schedule)
+                        }
+                    }
                 }
             }
 
@@ -911,6 +1013,31 @@ struct ScheduleMemoFeedView: View {
                 endsAt: event.endsAt,
                 location: event.locationText,
                 isMissing: false
+            )
+        }
+    }
+
+    private func openScheduleEditor(for schedule: PersonalScheduleFeedItem) {
+        switch schedule.source {
+        case .timetableReminder(let id):
+            guard let reminder = reminders.first(where: { $0.id == id }) else { return }
+            let context = TimetableCellReminderContext(
+                week: reminder.week,
+                day: reminder.dayOfWeek,
+                period: reminder.displayStartPeriod,
+                date: reminder.resolvedStartDate ?? schedule.startsAt,
+                occupiedPeriods: [],
+                totalPeriods: TimetablePeriodSchedule.slots.count,
+                reminder: reminder,
+                allowsDateSelection: true
+            )
+            editingSchedulePresentation = .timetable(context, allowsModeSelection: false)
+        case .importantDate(let id):
+            guard let event = importantDates.first(where: { $0.id == id }) else { return }
+            editingSchedulePresentation = .importantDate(
+                event,
+                defaultContext: defaultTimetableContext(for: event.startsAt),
+                allowsModeSelection: false
             )
         }
     }
@@ -1341,6 +1468,74 @@ private struct ScheduleMemoAttachmentRow: View {
         .padding(.horizontal, 10)
         .frame(minHeight: 38)
         .background(AppTheme.cardBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private struct PersonalScheduleMemoCard: View {
+    let schedule: PersonalScheduleFeedItem
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label(schedule.title, systemImage: "calendar.badge.clock")
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.primaryText)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.tertiaryText)
+                }
+
+                if !schedule.note.isEmpty {
+                    Text(schedule.note)
+                        .leafyBody()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(dateRangeText, systemImage: "clock")
+                    if !schedule.location.isEmpty {
+                        Label(schedule.location, systemImage: "mappin")
+                            .lineLimit(1)
+                    }
+                    if schedule.minutesBefore > 0 {
+                        Label("提前 \(schedule.minutesBefore) 分钟提醒", systemImage: "bell.fill")
+                    }
+                }
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+
+                Text("创建于 \(schedule.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                    .microCaption()
+                    .foregroundStyle(AppTheme.tertiaryText)
+            }
+            .padding(.top, 14)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                AppTheme.cardElevated,
+                in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                    .stroke(AppTheme.separator, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("打开日程编辑")
+    }
+
+    private var dateRangeText: String {
+        let start = DateFormatters.headerWithTime.string(from: schedule.startsAt)
+        let end = DateFormatters.headerWithTime.string(from: schedule.endsAt)
+        return "\(start) - \(end)"
     }
 }
 

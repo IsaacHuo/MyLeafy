@@ -49,9 +49,60 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
             semesterStartDateString: "2026-09-07",
             supportedWeeks: 20,
             graduateTimetableTermCode: "47",
-            calendarEvents: [],
+            calendarEvents: firstSemester2026CalendarEvents,
             updatedAt: nil,
             isActive: false
+        )
+    ]
+
+    static let firstSemester2026CalendarEvents: [SchoolCalendarEvent] = [
+        SchoolCalendarEvent(
+            id: "bjfu-midautumn-2026",
+            title: "中秋节",
+            startDateString: "2026-09-25",
+            endDateString: "2026-09-27",
+            kind: .holiday,
+            academicCategory: .publicHoliday
+        ),
+        SchoolCalendarEvent(
+            id: "bjfu-national-day-2026",
+            title: "国庆节",
+            startDateString: "2026-10-01",
+            endDateString: "2026-10-07",
+            kind: .holiday,
+            academicCategory: .publicHoliday
+        ),
+        SchoolCalendarEvent(
+            id: "bjfu-anniversary-74-2026",
+            title: "建校74周年校庆日",
+            startDateString: "2026-10-16",
+            endDateString: "2026-10-16",
+            kind: .holiday,
+            academicCategory: .importantDate
+        ),
+        SchoolCalendarEvent(
+            id: "bjfu-new-year-2027",
+            title: "元旦",
+            startDateString: "2027-01-01",
+            endDateString: "2027-01-03",
+            kind: .holiday,
+            academicCategory: .publicHoliday
+        ),
+        SchoolCalendarEvent(
+            id: "bjfu-first-semester-end-2027",
+            title: "第一学期结束",
+            startDateString: "2027-01-15",
+            endDateString: "2027-01-15",
+            kind: .holiday,
+            academicCategory: .semesterEnd
+        ),
+        SchoolCalendarEvent(
+            id: "bjfu-winter-break-2027",
+            title: "寒假",
+            startDateString: "2027-01-16",
+            endDateString: "2027-02-27",
+            kind: .holiday,
+            academicCategory: .winterBreak
         )
     ]
 

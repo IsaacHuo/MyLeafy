@@ -1611,10 +1611,6 @@ nonisolated struct CommunityPoll: Codable, Identifiable, Hashable, Sendable {
         !isClosed && !options.isEmpty
     }
 
-    var shouldRevealResults: Bool {
-        viewerOptionID != nil || isClosed
-    }
-
     var closesAtText: String? {
         guard let closesAt else { return nil }
         return CommunityTimestampFormatter.displayText(from: closesAt)

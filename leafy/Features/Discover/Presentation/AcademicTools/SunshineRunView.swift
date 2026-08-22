@@ -14,10 +14,21 @@ struct SunshineRunView: View {
     @State private var showingBackfillSheet = false
     @State private var operationAlert: LeafyOperationAlert?
 
+    private var semesterContext: SunshineRunSemesterContext {
+        .current
+    }
+
+    private var excludedWeeks: Set<Int> {
+        ruleSettings.excludedWeeks(in: semesterContext)
+    }
+
     private var summary: SunshineRunProgressSummary {
         SunshineRunPlanner.progressSummary(
             records: records,
-            excludedWeeks: ruleSettings.excludedWeeks,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: excludedWeeks,
             weeksPerPeriod: ruleSettings.weeksPerPeriod,
             totalTarget: ruleSettings.totalTarget
         )
@@ -26,7 +37,10 @@ struct SunshineRunView: View {
     private var progresses: [SunshineRunPeriodProgress] {
         SunshineRunPlanner.periodProgresses(
             records: records,
-            excludedWeeks: ruleSettings.excludedWeeks,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: excludedWeeks,
             weeksPerPeriod: ruleSettings.weeksPerPeriod,
             periodTarget: ruleSettings.periodTarget
         )
@@ -34,7 +48,10 @@ struct SunshineRunView: View {
 
     private var currentProgress: SunshineRunPeriodProgress? {
         guard let currentPeriod = SunshineRunPlanner.currentPeriod(
-            excludedWeeks: ruleSettings.excludedWeeks,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: excludedWeeks,
             weeksPerPeriod: ruleSettings.weeksPerPeriod
         ) else { return progresses.first }
         return progresses.first { $0.period.startWeek == currentPeriod.startWeek }
@@ -89,7 +106,7 @@ struct SunshineRunView: View {
         .navigationTitle("阳光长跑")
         .leafyInlineNavigationTitle()
         .leafySheet(isPresented: $showingBackfillSheet) {
-            SunshineRunBackfillSheet { date in
+            SunshineRunBackfillSheet(semesterContext: semesterContext) { date in
                 addRecord(on: date, successMessage: "已补记阳光长跑。")
             }
         }
@@ -111,13 +128,23 @@ struct SunshineRunView: View {
 
     private func addRecord(on date: Date, successMessage: String) {
         let calendar = Calendar.current
-        guard !SunshineRunPlanner.isExcludedDate(date, excludedWeeks: ruleSettings.excludedWeeks, calendar: calendar) else {
+        guard !SunshineRunPlanner.isExcludedDate(
+            date,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: excludedWeeks,
+            calendar: calendar
+        ) else {
             operationAlert = .failure("假期周无需打卡，阳光长跑周期已跳过这一周。")
             return
         }
         guard SunshineRunPlanner.period(
             for: date,
-            excludedWeeks: ruleSettings.excludedWeeks,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: excludedWeeks,
             weeksPerPeriod: ruleSettings.weeksPerPeriod,
             calendar: calendar
         ) != nil else {
@@ -129,7 +156,14 @@ struct SunshineRunView: View {
             return
         }
 
-        records.append(SunshineRunRecord(date: date, calendar: calendar))
+        records.append(SunshineRunRecord(
+            date: date,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: excludedWeeks,
+            calendar: calendar
+        ))
         persistRecords(successMessage: successMessage)
     }
 
@@ -169,7 +203,8 @@ struct SunshineRunView: View {
             let updatedSettings = try await SunshineRunNotificationManager.updateNotifications(
                 settings: reminderSettings,
                 records: records,
-                rules: ruleSettings
+                rules: ruleSettings,
+                semesterContext: semesterContext
             )
             reminderSettings = updatedSettings
             SunshineRunStore.saveReminderSettings(updatedSettings)
@@ -410,15 +445,14 @@ private struct SunshineRunPeriodRow: View {
 }
 
 private struct SunshineRunBackfillSheet: View {
+    let semesterContext: SunshineRunSemesterContext
     let onSave: (Date) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var date = Date()
 
     private var dateRange: ClosedRange<Date> {
-        let start = SemesterConfig.startOfSemesterDate
-        let end = Calendar.current.date(byAdding: .day, value: SemesterConfig.supportedWeeks * 7 - 1, to: start) ?? start
-        return start...end
+        semesterContext.startDate...semesterContext.endDate
     }
 
     var body: some View {

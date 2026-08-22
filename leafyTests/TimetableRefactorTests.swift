@@ -158,9 +158,29 @@ extension PerformanceRefactorTests {
 
         XCTAssertEqual(snapshot.visibleDays, [1, 2, 3, 4, 5])
         XCTAssertEqual(snapshot.layouts(day: 1, week: 1).map(\.course.courseName), ["A"])
-        XCTAssertTrue(snapshot.layouts(day: 6, week: 1).isEmpty)
+        XCTAssertEqual(snapshot.layouts(day: 6, week: 1).map(\.course.courseName), ["B"])
         XCTAssertEqual(snapshot.cellReminder(week: 1, day: 1, period: 2)?.title, "New")
         XCTAssertEqual(snapshot.cellReminders(week: 1, day: 1).map(\.title), ["New"])
+    }
+
+    func testThreeDayWindowIncludesWeekendAroundFridayAndSaturday() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let friday = try XCTUnwrap(formatter.date(from: "2026-08-21"))
+        let saturday = try XCTUnwrap(formatter.date(from: "2026-08-22"))
+
+        XCTAssertEqual(
+            TimetableThreeDayWindow(referenceDate: friday, calendar: calendar).dates.map { formatter.string(from: $0) },
+            ["2026-08-20", "2026-08-21", "2026-08-22"]
+        )
+        XCTAssertEqual(
+            TimetableThreeDayWindow(referenceDate: saturday, calendar: calendar).dates.map { formatter.string(from: $0) },
+            ["2026-08-21", "2026-08-22", "2026-08-23"]
+        )
     }
 
     @MainActor

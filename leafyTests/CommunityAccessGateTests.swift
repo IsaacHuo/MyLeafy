@@ -273,7 +273,6 @@ final class CommunityAccessGateTests: XCTestCase {
         XCTAssertEqual(option.percentageText(totalVotes: poll.totalVoteCount), "25%")
         XCTAssertTrue(poll.isClosed)
         XCTAssertFalse(poll.canVote)
-        XCTAssertTrue(poll.shouldRevealResults)
     }
 
     func testPendingPollAwaitsReviewAndCannotBeVoted() {
@@ -283,7 +282,6 @@ final class CommunityAccessGateTests: XCTestCase {
         XCTAssertEqual(poll.statusText, "待审核")
         XCTAssertTrue(poll.isClosed)
         XCTAssertFalse(poll.canVote)
-        XCTAssertTrue(poll.shouldRevealResults)
     }
 
     func testPollLifecycleStatusTextIncludesDeletionReviewStates() {
@@ -302,12 +300,25 @@ final class CommunityAccessGateTests: XCTestCase {
         XCTAssertTrue(deletionRejected.canRequestDeletion)
     }
 
-    func testActivePollHidesResultsUntilViewerVotes() {
+    func testActivePollPercentagesAreAvailableBeforeViewerVotes() {
         let pendingVotePoll = makeTestCommunityPoll(totalVoteCount: 4)
-        let votedPoll = makeTestCommunityPoll(totalVoteCount: 4, viewerOptionID: pendingVotePoll.options.first?.id)
+        XCTAssertEqual(
+            pendingVotePoll.options.map { $0.percentageText(totalVotes: pendingVotePoll.totalVoteCount) },
+            ["50%", "50%"]
+        )
+    }
 
-        XCTAssertFalse(pendingVotePoll.shouldRevealResults)
-        XCTAssertTrue(votedPoll.shouldRevealResults)
+    @MainActor
+    func testTeacherRatingRouteResolverRequiresOneExactMatch() {
+        let summaries = ReviewDemoDataSeeder.teacherSummaries()
+        let firstName = summaries[0].teacher.name
+
+        XCTAssertEqual(
+            TeacherRatingRouteResolver.exactMatch(named: "  \(firstName)  ", in: summaries)?.teacher.id,
+            summaries[0].teacher.id
+        )
+        XCTAssertNil(TeacherRatingRouteResolver.exactMatch(named: "不存在的老师", in: summaries))
+        XCTAssertNil(TeacherRatingRouteResolver.exactMatch(named: firstName, in: [summaries[0], summaries[0]]))
     }
 
     @MainActor

@@ -14,6 +14,7 @@ struct AcademicHubView: View {
     @State private var teacherRefreshID = UUID()
     @State private var courseRefreshID = UUID()
     @State private var dishRefreshID = UUID()
+    @State private var requestedTeacherName: String?
     @State private var navigationPath: [AcademicNavigationItem] = []
     @State private var isHandlingExternalRoute = false
 
@@ -119,6 +120,9 @@ struct AcademicHubView: View {
             .onChange(of: appNavigation.requestedAcademicDetailRoute) { _, route in
                 handleAcademicDetailRouteRequest(route)
             }
+            .onChange(of: appNavigation.requestedTeacherRatingRoute) { _, route in
+                handleTeacherRatingRouteRequest(route)
+            }
             .onChange(of: appNavigation.requestedClassroomLookup) { _, request in
                 handleClassroomLookupRequest(request)
             }
@@ -126,6 +130,7 @@ struct AcademicHubView: View {
                 sanitizeSelectedTab()
                 handleAcademicRouteRequest(appNavigation.requestedAcademicRoute)
                 handleAcademicDetailRouteRequest(appNavigation.requestedAcademicDetailRoute)
+                handleTeacherRatingRouteRequest(appNavigation.requestedTeacherRatingRoute)
                 handleClassroomLookupRequest(appNavigation.requestedClassroomLookup)
             }
         }
@@ -168,6 +173,7 @@ struct AcademicHubView: View {
                         selectedTeacher: $selectedTeacher,
                         selectedCourse: $selectedCourse,
                         selectedDish: $selectedDish,
+                        requestedTeacherName: $requestedTeacherName,
                         teacherRefreshID: teacherRefreshID,
                         courseRefreshID: courseRefreshID,
                         dishRefreshID: dishRefreshID
@@ -323,6 +329,31 @@ struct AcademicHubView: View {
         }
 
         appNavigation.requestedAcademicDetailRoute = nil
+    }
+
+    @MainActor
+    private func handleTeacherRatingRouteRequest(_ route: TeacherRatingRoute?) {
+        guard let route else { return }
+        guard AcademicPrimaryTab.ratings.isVisible(
+            isCustomCampus: isCustomCampus,
+            isCommunityEnabled: isCommunityEnabled,
+            isMedicalEnabled: isMedicalEnabled,
+            campusID: campusID
+        ) else {
+            appNavigation.requestedTeacherRatingRoute = nil
+            sanitizeSelectedTab()
+            return
+        }
+
+        navigationPath.removeAll()
+        let changesSelectedTab = selectedTab != .ratings
+        isHandlingExternalRoute = changesSelectedTab
+        selectedTab = .ratings
+        requestedTeacherName = route.name
+        if !changesSelectedTab {
+            isHandlingExternalRoute = false
+        }
+        appNavigation.requestedTeacherRatingRoute = nil
     }
 
     @MainActor

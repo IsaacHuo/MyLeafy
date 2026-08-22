@@ -15,6 +15,10 @@ enum RootTab: Hashable {
     case profile
 }
 
+nonisolated struct TeacherRatingRoute: Hashable, Sendable {
+    let name: String
+}
+
 enum AppAccountDeletionOutcome: Equatable, Identifiable {
     case deleted
     case deletedWithLocalCleanupWarning(String)
@@ -100,6 +104,7 @@ final class AppNavigationCoordinator: ObservableObject {
     @Published var selectedAcademicTab: AcademicPrimaryTab = .cultivation
     @Published var requestedAcademicRoute: AcademicRoute?
     @Published var requestedAcademicDetailRoute: AcademicDetailRoute?
+    @Published var requestedTeacherRatingRoute: TeacherRatingRoute?
     @Published var requestedScheduleDestination: ScheduleDestination?
     @Published var requestedClassroomLookup: ClassroomLookupRequest?
     @Published var requestedProfileRoute: ProfileRoute?
@@ -152,6 +157,16 @@ final class AppNavigationCoordinator: ObservableObject {
         }
     }
 
+    func openTeacherRating(name: String) {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty else { return }
+        selectedAcademicTab = .ratings
+        selectedRootTab = .academics
+        deferRouteRequest {
+            self.requestedTeacherRatingRoute = TeacherRatingRoute(name: normalizedName)
+        }
+    }
+
     func openTimetableProcessing() {
         selectedRootTab = .timetable
     }
@@ -160,6 +175,7 @@ final class AppNavigationCoordinator: ObservableObject {
         deferredRouteRequestTask?.cancel()
         requestedAcademicRoute = nil
         requestedAcademicDetailRoute = nil
+        requestedTeacherRatingRoute = nil
         requestedClassroomLookup = nil
         requestedProfileRoute = nil
         requestedScheduleDestination = destination
@@ -223,6 +239,7 @@ final class AppNavigationCoordinator: ObservableObject {
     private func deferRouteRequest(_ request: @escaping @MainActor () -> Void) {
         requestedAcademicRoute = nil
         requestedAcademicDetailRoute = nil
+        requestedTeacherRatingRoute = nil
         requestedScheduleDestination = nil
         requestedClassroomLookup = nil
         requestedProfileRoute = nil

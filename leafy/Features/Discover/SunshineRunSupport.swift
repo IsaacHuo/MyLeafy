@@ -1,6 +1,61 @@
 import Foundation
 import UserNotifications
 
+struct SunshineRunSemesterContext: Hashable {
+    let semesterID: String
+    let startDate: Date
+    let endDate: Date
+    let totalWeeks: Int
+    let excludedWeeks: Set<Int>
+
+    static var current: SunshineRunSemesterContext {
+        resolve()
+    }
+
+    static func resolve(
+        referenceDate: Date = Date(),
+        configurations: [SemesterRuntimeConfig] = SemesterConfig.timelineConfigurations,
+        campusID: CampusID = ActiveCampusContext.descriptor.id,
+        calendar: Calendar = .current
+    ) -> SunshineRunSemesterContext {
+        let configuration = TimetableTimeScopeConfigurationResolver.configuration(
+            for: referenceDate,
+            configurations: configurations,
+            calendar: calendar
+        ) ?? SemesterConfig.current
+        let start = calendar.startOfDay(for: configuration.semesterStartDate)
+        let semanticEnd = configuration.calendarEvents
+            .first { $0.academicCategory == .semesterEnd }?
+            .endDate
+            .map { calendar.startOfDay(for: $0) }
+        let capacityEnd = calendar.date(
+            byAdding: .day,
+            value: max(configuration.supportedWeeks, 1) * 7 - 1,
+            to: start
+        ) ?? start
+        let end = semanticEnd ?? capacityEnd
+        let dayCount = max((calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1, 1)
+        let totalWeeks = max(Int(ceil(Double(dayCount) / 7.0)), 1)
+        let excludedWeeks: Set<Int>
+        if campusID == .bjfu, configuration.semesterID == "2026-2027-1" {
+            excludedWeeks = [3, 4, 5, 17]
+        } else {
+            excludedWeeks = AcademicCalendarEvents.nationalHolidayWeeks(
+                semesterStart: start,
+                totalWeeks: totalWeeks,
+                calendar: calendar
+            )
+        }
+        return SunshineRunSemesterContext(
+            semesterID: configuration.semesterID,
+            startDate: start,
+            endDate: end,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks
+        )
+    }
+}
+
 struct SunshineRunRecord: Identifiable, Codable, Hashable {
     let id: UUID
     var date: Date
@@ -11,6 +66,7 @@ struct SunshineRunRecord: Identifiable, Codable, Hashable {
         id: UUID = UUID(),
         date: Date,
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         calendar: Calendar = .current
@@ -21,6 +77,7 @@ struct SunshineRunRecord: Identifiable, Codable, Hashable {
         if let period = SunshineRunPlanner.period(
             for: normalizedDate,
             semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
             totalWeeks: totalWeeks,
             excludedWeeks: excludedWeeks,
             calendar: calendar
@@ -28,7 +85,7 @@ struct SunshineRunRecord: Identifiable, Codable, Hashable {
             self.periodStartWeek = period.startWeek
             self.periodEndWeek = period.endWeek
         } else {
-            let schedule = SunshineRunPlanner.clampedPeriodWeeks(for: normalizedDate, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, calendar: calendar)
+            let schedule = SunshineRunPlanner.clampedPeriodWeeks(for: normalizedDate, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, calendar: calendar)
             self.periodStartWeek = schedule.startWeek
             self.periodEndWeek = schedule.endWeek
         }
@@ -164,7 +221,11 @@ struct SunshineRunRuleSettings: Codable, Hashable {
     static let bjfuDefault = SunshineRunRuleSettings()
 
     var excludedWeeks: Set<Int> {
-        skipsExcludedWeeks ? SemesterConfig.sunshineRunExcludedWeeks : []
+        excludedWeeks(in: .current)
+    }
+
+    func excludedWeeks(in context: SunshineRunSemesterContext) -> Set<Int> {
+        skipsExcludedWeeks ? context.excludedWeeks : []
     }
 }
 
@@ -174,6 +235,7 @@ enum SunshineRunPlanner {
 
     static func periods(
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
@@ -188,7 +250,8 @@ enum SunshineRunPlanner {
             let startWeek = periodWeeks[0]
             let endWeek = periodWeeks[periodWeeks.count - 1]
             let periodStart = calendar.date(byAdding: .day, value: (startWeek - 1) * 7, to: startDate) ?? startDate
-            let periodEnd = calendar.date(byAdding: .day, value: endWeek * 7 - 1, to: startDate) ?? periodStart
+            let calculatedEnd = calendar.date(byAdding: .day, value: endWeek * 7 - 1, to: startDate) ?? periodStart
+            let periodEnd = semesterEnd.map { min(calendar.startOfDay(for: $0), calculatedEnd) } ?? calculatedEnd
             return SunshineRunPeriod(
                 index: offset + 1,
                 startWeek: startWeek,
@@ -203,20 +266,28 @@ enum SunshineRunPlanner {
     static func period(
         for date: Date,
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
         calendar: Calendar = .current
     ) -> SunshineRunPeriod? {
-        guard let week = weekNumber(for: date, semesterStart: semesterStart, totalWeeks: totalWeeks, calendar: calendar) else {
+        guard let week = weekNumber(
+            for: date,
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            calendar: calendar
+        ) else {
             return nil
         }
-        return period(containingWeek: week, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
+        return period(containingWeek: week, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
     }
 
     static func period(
         containingWeek week: Int,
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
@@ -227,24 +298,25 @@ enum SunshineRunPlanner {
         guard !normalizedExcludedWeeks(excludedWeeks, totalWeeks: totalWeeks).contains(clampedWeek) else {
             return nil
         }
-        return periods(semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
+        return periods(semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
             .first { $0.containsWeek(clampedWeek) }
     }
 
     static func currentPeriod(
         now: Date = Date(),
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
         calendar: Calendar = .current
     ) -> SunshineRunPeriod? {
-        if let period = period(for: now, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) {
+        if let period = period(for: now, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) {
             return period
         }
 
         let week = clampedWeek(for: now, semesterStart: semesterStart, totalWeeks: totalWeeks, calendar: calendar)
-        let allPeriods = periods(semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
+        let allPeriods = periods(semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
         return allPeriods.first { $0.startWeek <= week && week <= $0.endWeek }
             ?? allPeriods.first { $0.startWeek > week }
             ?? allPeriods.last
@@ -270,6 +342,7 @@ enum SunshineRunPlanner {
     static func periodProgresses(
         records: [SunshineRunRecord],
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
@@ -277,9 +350,9 @@ enum SunshineRunPlanner {
         calendar: Calendar = .current
     ) -> [SunshineRunPeriodProgress] {
         let normalizedRecords = normalizedRecords(records, calendar: calendar)
-        return periods(semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar).map { runPeriod in
+        return periods(semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar).map { runPeriod in
             let periodRecords = normalizedRecords.filter { record in
-                guard let recordPeriod = period(for: record.date, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) else {
+                guard let recordPeriod = period(for: record.date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) else {
                     return false
                 }
                 return recordPeriod.startWeek == runPeriod.startWeek
@@ -291,6 +364,7 @@ enum SunshineRunPlanner {
     static func progressSummary(
         records: [SunshineRunRecord],
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
@@ -298,7 +372,7 @@ enum SunshineRunPlanner {
         calendar: Calendar = .current
     ) -> SunshineRunProgressSummary {
         let totalCount = normalizedRecords(records, calendar: calendar)
-            .filter { period(for: $0.date, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) != nil }
+            .filter { period(for: $0.date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) != nil }
             .count
         let safeTotalTarget = max(totalTarget, 1)
         let cappedTotalCount = min(totalCount, safeTotalTarget)
@@ -315,6 +389,7 @@ enum SunshineRunPlanner {
         records: [SunshineRunRecord],
         now: Date = Date(),
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
@@ -326,25 +401,27 @@ enum SunshineRunPlanner {
         guard settings.isEnabled,
               !settings.normalizedSelectedWeekdays.isEmpty,
               limit > 0,
-              !progressSummary(records: records, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, totalTarget: totalTarget, calendar: calendar).isFullScoreReached
+              !progressSummary(records: records, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, totalTarget: totalTarget, calendar: calendar).isFullScoreReached
         else { return [] }
 
         let normalizedWeekdays = Set(settings.normalizedSelectedWeekdays)
         let progressByStartWeek = Dictionary(
-            uniqueKeysWithValues: periodProgresses(records: records, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, periodTarget: periodTarget, calendar: calendar)
+            uniqueKeysWithValues: periodProgresses(records: records, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, periodTarget: periodTarget, calendar: calendar)
                 .map { ($0.period.startWeek, $0) }
         )
         let startDate = calendar.startOfDay(for: max(now, semesterStart))
-        let semesterEnd = calendar.date(byAdding: .day, value: totalWeeks * 7 - 1, to: calendar.startOfDay(for: semesterStart)) ?? startDate
+        let resolvedSemesterEnd = semesterEnd.map { calendar.startOfDay(for: $0) }
+            ?? calendar.date(byAdding: .day, value: totalWeeks * 7 - 1, to: calendar.startOfDay(for: semesterStart))
+            ?? startDate
 
         var items: [SunshineRunNotificationPlanItem] = []
         var currentDay = startDate
-        while currentDay <= semesterEnd, items.count < limit {
+        while currentDay <= resolvedSemesterEnd, items.count < limit {
             let leafyWeekday = leafyWeekday(for: currentDay, calendar: calendar)
             if normalizedWeekdays.contains(leafyWeekday),
                let fireDate = date(on: currentDay, hour: settings.hour, minute: settings.minute, calendar: calendar),
                fireDate > now,
-               let period = period(for: currentDay, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar),
+               let period = period(for: currentDay, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar),
                let progress = progressByStartWeek[period.startWeek],
                progress.remainingCount > 0 {
                 items.append(
@@ -366,12 +443,13 @@ enum SunshineRunPlanner {
     static func clampedPeriodWeeks(
         for date: Date,
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         weeksPerPeriod: Int = 2,
         calendar: Calendar = .current
     ) -> (startWeek: Int, endWeek: Int) {
-        if let period = currentPeriod(now: date, semesterStart: semesterStart, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) {
+        if let period = currentPeriod(now: date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) {
             return (period.startWeek, period.endWeek)
         }
 
@@ -384,11 +462,12 @@ enum SunshineRunPlanner {
     static func isExcludedDate(
         _ date: Date,
         semesterStart: Date = SemesterConfig.startOfSemesterDate,
+        semesterEnd: Date? = nil,
         totalWeeks: Int = SemesterConfig.supportedWeeks,
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         calendar: Calendar = .current
     ) -> Bool {
-        guard let week = weekNumber(for: date, semesterStart: semesterStart, totalWeeks: totalWeeks, calendar: calendar) else {
+        guard let week = weekNumber(for: date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, calendar: calendar) else {
             return false
         }
         return normalizedExcludedWeeks(excludedWeeks, totalWeeks: totalWeeks).contains(week)
@@ -408,12 +487,16 @@ enum SunshineRunPlanner {
     private static func weekNumber(
         for date: Date,
         semesterStart: Date,
+        semesterEnd: Date?,
         totalWeeks: Int,
         calendar: Calendar
     ) -> Int? {
         guard totalWeeks > 0 else { return nil }
         let startDate = calendar.startOfDay(for: semesterStart)
         let targetDate = calendar.startOfDay(for: date)
+        if let semesterEnd, targetDate > calendar.startOfDay(for: semesterEnd) {
+            return nil
+        }
         let dayOffset = calendar.dateComponents([.day], from: startDate, to: targetDate).day ?? 0
         guard dayOffset >= 0, dayOffset < totalWeeks * 7 else { return nil }
         return dayOffset / 7 + 1
@@ -531,6 +614,22 @@ enum SunshineRunNotificationManager {
         rules: SunshineRunRuleSettings,
         now: Date = Date()
     ) async throws -> SunshineRunReminderSettings {
+        try await updateNotifications(
+            settings: settings,
+            records: records,
+            rules: rules,
+            semesterContext: .current,
+            now: now
+        )
+    }
+
+    static func updateNotifications(
+        settings: SunshineRunReminderSettings,
+        records: [SunshineRunRecord],
+        rules: SunshineRunRuleSettings,
+        semesterContext: SunshineRunSemesterContext,
+        now: Date = Date()
+    ) async throws -> SunshineRunReminderSettings {
         cancelScheduledNotifications(settings: settings)
 
         var updatedSettings = settings
@@ -540,7 +639,10 @@ enum SunshineRunNotificationManager {
             settings: settings,
             records: records,
             now: now,
-            excludedWeeks: rules.excludedWeeks,
+            semesterStart: semesterContext.startDate,
+            semesterEnd: semesterContext.endDate,
+            totalWeeks: semesterContext.totalWeeks,
+            excludedWeeks: rules.excludedWeeks(in: semesterContext),
             weeksPerPeriod: rules.weeksPerPeriod,
             periodTarget: rules.periodTarget,
             totalTarget: rules.totalTarget

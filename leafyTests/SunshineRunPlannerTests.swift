@@ -134,17 +134,54 @@ final class SunshineRunPlannerTests: XCTestCase {
     func testRuleSettingsDeriveExcludedWeeksFromNationalHolidays() throws {
         let start = try makeDate("2026-03-09")
         let rules = SunshineRunRuleSettings()
+        let context = SunshineRunSemesterContext(
+            semesterID: "2025-2026-2",
+            startDate: start,
+            endDate: try makeDate("2026-07-26"),
+            totalWeeks: 20,
+            excludedWeeks: [8, 15]
+        )
+        let excludedWeeks = rules.excludedWeeks(in: context)
 
-        XCTAssertTrue(rules.excludedWeeks.contains(8))
-        XCTAssertTrue(rules.excludedWeeks.contains(15))
-        XCTAssertTrue(SunshineRunPlanner.isExcludedDate(try makeDate("2026-05-01"), semesterStart: start, totalWeeks: 20, excludedWeeks: rules.excludedWeeks, calendar: calendar))
-        XCTAssertFalse(SunshineRunPlanner.isExcludedDate(try makeDate("2026-04-24"), semesterStart: start, totalWeeks: 20, excludedWeeks: rules.excludedWeeks, calendar: calendar))
+        XCTAssertEqual(excludedWeeks, [8, 15])
+        XCTAssertTrue(SunshineRunPlanner.isExcludedDate(try makeDate("2026-05-01"), semesterStart: start, totalWeeks: 20, excludedWeeks: excludedWeeks, calendar: calendar))
+        XCTAssertFalse(SunshineRunPlanner.isExcludedDate(try makeDate("2026-04-24"), semesterStart: start, totalWeeks: 20, excludedWeeks: excludedWeeks, calendar: calendar))
     }
 
     func testRuleSettingsCanDisableNationalHolidaySkippedWeeks() throws {
         let rules = SunshineRunRuleSettings(skipsExcludedWeeks: false)
 
         XCTAssertTrue(rules.excludedWeeks.isEmpty)
+    }
+
+    func testFirstSemesterContextSkipsOfficialHolidayWeeksAndClampsFinalPeriod() throws {
+        let context = SunshineRunSemesterContext.resolve(
+            referenceDate: try makeDate("2026-08-22"),
+            configurations: SemesterRuntimeConfig.builtInTimeline,
+            campusID: .bjfu,
+            calendar: calendar
+        )
+        let periods = SunshineRunPlanner.periods(
+            semesterStart: context.startDate,
+            semesterEnd: context.endDate,
+            totalWeeks: context.totalWeeks,
+            excludedWeeks: context.excludedWeeks,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(context.semesterID, "2026-2027-1")
+        XCTAssertEqual(context.totalWeeks, 19)
+        XCTAssertEqual(context.excludedWeeks, [3, 4, 5, 17])
+        XCTAssertEqual(displayDate(context.endDate), "2027-01-15")
+        XCTAssertEqual(displayDate(periods.last?.endDate ?? .distantPast), "2027-01-15")
+        XCTAssertNil(SunshineRunPlanner.period(
+            for: try makeDate("2027-01-16"),
+            semesterStart: context.startDate,
+            semesterEnd: context.endDate,
+            totalWeeks: context.totalWeeks,
+            excludedWeeks: context.excludedWeeks,
+            calendar: calendar
+        ))
     }
 
     func testProgressSummaryIgnoresExcludedHolidayWeekRecords() throws {
@@ -266,6 +303,14 @@ final class SunshineRunPlannerTests: XCTestCase {
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
+    }
+
+    private func displayDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
 }

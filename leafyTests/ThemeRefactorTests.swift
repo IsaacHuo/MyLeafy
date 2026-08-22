@@ -144,6 +144,14 @@ extension PerformanceRefactorTests {
         }
     }
 
+    func testTimetableBackgroundDefaultsToFitButKeepsExplicitFill() {
+        withTemporaryUserDefaults { defaults in
+            XCTAssertEqual(TimetableBackgroundConfiguration.load(defaults: defaults).displayMode, .fit)
+            defaults.set(TimetableBackgroundDisplayMode.fill.rawValue, forKey: TimetableBackgroundStore.displayModeKey)
+            XCTAssertEqual(TimetableBackgroundConfiguration.load(defaults: defaults).displayMode, .fill)
+        }
+    }
+
     func testTimetableBackgroundConfigurationKeepsPausedPhotoReference() {
         withTemporaryUserDefaults { defaults in
             defaults.set(false, forKey: TimetableBackgroundStore.isEnabledKey)

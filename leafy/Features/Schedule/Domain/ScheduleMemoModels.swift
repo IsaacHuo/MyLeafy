@@ -201,6 +201,54 @@ nonisolated enum ScheduleMemoLinkKind: String, Sendable {
     case importantDate
 }
 
+nonisolated struct PersonalScheduleFeedItem: Identifiable, Equatable, Sendable {
+    nonisolated enum Source: Hashable, Sendable {
+        case timetableReminder(UUID)
+        case importantDate(String)
+    }
+
+    let source: Source
+    let title: String
+    let note: String
+    let location: String
+    let startsAt: Date
+    let endsAt: Date
+    let createdAt: Date
+    let updatedAt: Date
+    let minutesBefore: Int
+
+    var id: String {
+        switch source {
+        case .timetableReminder(let id):
+            return "schedule-reminder-\(id.uuidString)"
+        case .importantDate(let id):
+            return "schedule-event-\(id)"
+        }
+    }
+
+    var linkKind: ScheduleMemoLinkKind {
+        switch source {
+        case .timetableReminder: return .timetableReminder
+        case .importantDate: return .importantDate
+        }
+    }
+
+    var stableID: String {
+        switch source {
+        case .timetableReminder(let id): return id.uuidString
+        case .importantDate(let id): return id
+        }
+    }
+
+    func matches(_ query: String) -> Bool {
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty
+            || title.localizedCaseInsensitiveContains(normalized)
+            || note.localizedCaseInsensitiveContains(normalized)
+            || location.localizedCaseInsensitiveContains(normalized)
+    }
+}
+
 nonisolated enum ScheduleMemoSort: String, CaseIterable, Identifiable, Sendable {
     case newest
     case oldest

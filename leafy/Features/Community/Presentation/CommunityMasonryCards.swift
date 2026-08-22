@@ -357,17 +357,14 @@ struct CommunityMasonryPollCard: View {
                         .multilineTextAlignment(.leading)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(poll.options.prefix(2)) { option in
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(AppTheme.accentSoft)
-                                .frame(width: 6, height: 6)
-                            Text(option.text)
-                                .microCaption()
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .lineLimit(1)
-                        }
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(poll.options) { option in
+                        CommunityPollOptionProgressRow(
+                            option: option,
+                            totalVotes: poll.totalVoteCount,
+                            isSelected: poll.viewerOptionID == option.id,
+                            isCompact: true
+                        )
                     }
                 }
 

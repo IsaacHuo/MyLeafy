@@ -6,10 +6,25 @@ import UniformTypeIdentifiers
 import UIKit
 import os
 
+nonisolated enum TeacherRatingRouteResolver {
+    static func exactMatch(
+        named name: String,
+        in summaries: [TeacherRatingSummary]
+    ) -> TeacherRatingSummary? {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matches = summaries.filter {
+            $0.teacher.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                .localizedCaseInsensitiveCompare(normalizedName) == .orderedSame
+        }
+        return matches.count == 1 ? matches[0] : nil
+    }
+}
+
 struct TeacherSectionView: View {
     @Environment(\.leafyDependencies) private var dependencies
 
     @Binding var selectedTeacher: TeacherRatingSummary?
+    @Binding var requestedTeacherName: String?
     let refreshID: UUID
     let isActive: Bool
     let lifecycleStore: RatingCatalogSectionStore
@@ -31,6 +46,7 @@ struct TeacherSectionView: View {
     @State private var errorMessage: String?
     @State private var searchTask: Task<Void, Never>?
     @State private var suggestionSheet: CatalogSuggestionSheetContext?
+    @State private var isApplyingRequestedTeacher = false
 
     private var hasActiveFilters: Bool {
         selectedUnit != nil || selectedStars != nil || !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -69,6 +85,7 @@ struct TeacherSectionView: View {
             await loadTeachers(reset: true)
         }
         .onChange(of: search) { _, _ in
+            guard !isApplyingRequestedTeacher else { return }
             searchTask?.cancel()
             searchTask = Task {
                 try? await Task.sleep(for: .milliseconds(300))
@@ -87,6 +104,10 @@ struct TeacherSectionView: View {
         }
         .onDisappear {
             searchTask?.cancel()
+        }
+        .task(id: requestedTeacherName) {
+            guard let requestedTeacherName else { return }
+            await openRequestedTeacher(named: requestedTeacherName)
         }
         .leafySheet(item: $suggestionSheet) { context in
             CatalogSuggestionSheet(context: context)
@@ -272,6 +293,26 @@ struct TeacherSectionView: View {
         searchTask = Task {
             await loadTeachers(reset: reset)
         }
+    }
+
+    @MainActor
+    private func openRequestedTeacher(named name: String) async {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty else {
+            requestedTeacherName = nil
+            return
+        }
+
+        searchTask?.cancel()
+        isApplyingRequestedTeacher = true
+        search = normalizedName
+        await loadTeachers(reset: true)
+        isApplyingRequestedTeacher = false
+
+        if let exactMatch = TeacherRatingRouteResolver.exactMatch(named: normalizedName, in: teachers) {
+            selectedTeacher = exactMatch
+        }
+        requestedTeacherName = nil
     }
 
     private func updateDerivedTeacherState() {

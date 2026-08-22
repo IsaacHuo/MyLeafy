@@ -9,7 +9,7 @@ struct TimetableBackgroundSettingsView: View {
     @AppStorage(TimetableBackgroundStore.isEnabledKey) private var backgroundIsEnabled = false
     @AppStorage(TimetableBackgroundStore.kindKey) private var kindRaw = TimetableBackgroundKind.photo.rawValue
     @AppStorage(TimetableBackgroundStore.filenameKey) private var backgroundFilename = ""
-    @AppStorage(TimetableBackgroundStore.displayModeKey) private var displayModeRaw = TimetableBackgroundDisplayMode.fill.rawValue
+    @AppStorage(TimetableBackgroundStore.displayModeKey) private var displayModeRaw = TimetableBackgroundStore.defaultDisplayMode.rawValue
     @AppStorage(TimetableBackgroundStore.imageOpacityKey) private var imageOpacity = TimetableBackgroundStore.defaultImageOpacity
     @AppStorage(TimetableBackgroundStore.blurRadiusKey) private var blurRadius = TimetableBackgroundStore.defaultBlurRadius
     @AppStorage(TimetableBackgroundStore.overlayOpacityKey) private var overlayOpacity = TimetableBackgroundStore.defaultOverlayOpacity
@@ -41,7 +41,7 @@ struct TimetableBackgroundSettingsView: View {
     }
 
     private var displayMode: TimetableBackgroundDisplayMode {
-        TimetableBackgroundDisplayMode(rawValue: displayModeRaw) ?? .fill
+        TimetableBackgroundDisplayMode(rawValue: displayModeRaw) ?? TimetableBackgroundStore.defaultDisplayMode
     }
 
     private var hasBackgroundImage: Bool {
@@ -141,7 +141,7 @@ struct TimetableBackgroundSettingsView: View {
             Task { await importBackground(from: newItem) }
         }
         .onChange(of: settingsSignature) { _, _ in
-            TimetableBackgroundStore.notifySettingsDidChange()
+            TimetableBackgroundStore.notifySettingsDidChange(configuration: storedConfiguration)
         }
         .task(id: backgroundFilename) {
             if TimetableBackgroundKind(rawValue: kindRaw) == nil {
@@ -403,14 +403,31 @@ struct TimetableBackgroundSettingsView: View {
             darkPaletteHexes = TimetableBackgroundStore.serialize(hexes: result.palette.darkHexes)
             kindRaw = TimetableBackgroundKind.photo.rawValue
             backgroundIsEnabled = true
+            previewImage = await TimetableBackgroundStore.image(filename: result.filename)
             previewLoadFailed = false
-            TimetableBackgroundStore.notifySettingsDidChange()
+            TimetableBackgroundStore.notifySettingsDidChange(configuration: storedConfiguration)
             operationAlert = .success(L10n.text("课表背景照片已保存。", language: leafyLanguage))
         } catch is CancellationError {
             return
         } catch {
             operationAlert = .failure(L10n.text("加载照片失败：%@", language: leafyLanguage, error.localizedDescription))
         }
+    }
+
+    private var storedConfiguration: TimetableBackgroundConfiguration {
+        TimetableBackgroundConfiguration(
+            isEnabled: backgroundIsEnabled && canEnableBackground,
+            kind: selectedKind,
+            filename: backgroundFilename,
+            displayMode: displayMode,
+            imageOpacity: imageOpacity,
+            blurRadius: blurRadius,
+            overlayOpacity: overlayOpacity,
+            courseCardOpacity: courseCardOpacity,
+            lightPaletteHexes: lightPaletteHexes,
+            darkPaletteHexes: darkPaletteHexes,
+            solidColorHex: solidColorHex
+        )
     }
 
     @MainActor

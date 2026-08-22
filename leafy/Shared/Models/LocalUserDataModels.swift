@@ -91,6 +91,7 @@ final class TimetableCellReminder {
     var startsAt: Date?
     var endsAt: Date?
     var minutesBefore: Int
+    var createdAt: Date?
     var updatedAt: Date
 
     init(
@@ -105,6 +106,7 @@ final class TimetableCellReminder {
         startsAt: Date? = nil,
         endsAt: Date? = nil,
         minutesBefore: Int = 0,
+        createdAt: Date? = Date(),
         updatedAt: Date = Date()
     ) {
         self.id = id
@@ -119,6 +121,7 @@ final class TimetableCellReminder {
         self.startsAt = startsAt
         self.endsAt = endsAt
         self.minutesBefore = minutesBefore
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 

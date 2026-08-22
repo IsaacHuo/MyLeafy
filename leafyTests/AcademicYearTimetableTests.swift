@@ -210,6 +210,40 @@ final class AcademicYearTimetableTests: XCTestCase {
         XCTAssertEqual(firstSemester.semesterID, fall.semesterID)
     }
 
+    func testTimeViewHidesObsoleteSpringWithoutRemovingUnderlyingConfiguration() throws {
+        let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
+        let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
+        let timetable = AcademicYearTimetable(
+            configurations: [spring, fall],
+            referenceDate: date("2026-08-22"),
+            calendar: calendar
+        )
+        let menu = TimetableCalendarMenuModel(
+            timetable: timetable,
+            configurations: [spring, fall],
+            referenceDate: date("2026-08-22"),
+            calendar: calendar
+        )
+
+        XCTAssertTrue(menu.academicYears.flatMap(\.semesters).contains { $0.semesterID == spring.semesterID })
+        XCTAssertFalse(menu.timeViewAcademicYears.flatMap(\.semesters).contains { $0.semesterID == spring.semesterID })
+        XCTAssertEqual(menu.timeViewAcademicYears.flatMap(\.semesters).map(\.semesterID), [fall.semesterID])
+    }
+
+    func testTimeScopeResolverSelectsUpcomingFallDuringSummer() {
+        let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
+        let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
+
+        XCTAssertEqual(
+            TimetableTimeScopeConfigurationResolver.configuration(
+                for: date("2026-08-22"),
+                configurations: [spring, fall],
+                calendar: calendar
+            )?.semesterID,
+            fall.semesterID
+        )
+    }
+
     func testRenderedWeekWindowIncludesNeighborsAndPendingJumpTarget() {
         XCTAssertEqual(
             TimetableRenderedWeekWindow.pages(currentWeek: 1, pendingWeek: nil, totalWeeks: 53),

@@ -19,6 +19,7 @@ struct RatingSectionContainerView: View {
     @Binding var selectedTeacher: TeacherRatingSummary?
     @Binding var selectedCourse: CourseRatingSummary?
     @Binding var selectedDish: DishRatingSummary?
+    @Binding var requestedTeacherName: String?
     let teacherRefreshID: UUID
     let courseRefreshID: UUID
     let dishRefreshID: UUID
@@ -48,6 +49,7 @@ struct RatingSectionContainerView: View {
                     case .teachers:
                     TeacherSectionView(
                         selectedTeacher: $selectedTeacher,
+                        requestedTeacherName: $requestedTeacherName,
                         refreshID: teacherRefreshID,
                         isActive: true,
                         lifecycleStore: workspace.teachers
@@ -79,6 +81,10 @@ struct RatingSectionContainerView: View {
         .task {
             CommunitySessionManager.shared.startBootstrapIfNeeded()
             await CommunitySessionManager.shared.restoreProfileIfPossible()
+        }
+        .onChange(of: requestedTeacherName) { _, name in
+            guard name != nil else { return }
+            mode = .teachers
         }
     }
 }

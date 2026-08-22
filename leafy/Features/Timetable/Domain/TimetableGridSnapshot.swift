@@ -1,6 +1,22 @@
 import Foundation
 import os
 
+nonisolated enum TimetableDisplayMode: Equatable, Sendable {
+    case week
+    case threeDay
+}
+
+nonisolated struct TimetableThreeDayWindow: Equatable, Sendable {
+    let dates: [Date]
+
+    init(referenceDate: Date = Date(), calendar: Calendar = .current) {
+        let today = calendar.startOfDay(for: referenceDate)
+        dates = (-1...1).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: today)
+        }
+    }
+}
+
 @MainActor
 struct TimetableCourseWeekProjection: Hashable {
     let displayWeeks: [Int]
@@ -389,8 +405,7 @@ struct TimetableGridSnapshot {
         }
 
         var coursesByDay: [TimetableGridDayKey: [TimetableCourseRenderValue]] = [:]
-        let visibleDaySet = Set(visibleDays)
-        for course in courseValues where visibleDaySet.contains(course.dayOfWeek) {
+        for course in courseValues where (1...7).contains(course.dayOfWeek) {
             for week in course.weeks where (1...totalWeeks).contains(week) {
                 coursesByDay[TimetableGridDayKey(week: week, day: course.dayOfWeek), default: []].append(course)
             }

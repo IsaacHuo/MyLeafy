@@ -7,6 +7,17 @@ nonisolated struct TimetableCalendarMenuModel {
     let defaultExpandedSemesterIDs: Set<String>
     let unavailableFutureConfigurationMessage: String?
 
+    var timeViewAcademicYears: [TimetableCalendarMenuAcademicYear] {
+        academicYears.compactMap { academicYear in
+            let stages = academicYear.stages.filter { $0.semesterID != "2025-2026-2" }
+            guard stages.contains(where: { $0.semesterID != nil }) else { return nil }
+            return TimetableCalendarMenuAcademicYear(
+                academicYear: academicYear.academicYear,
+                stages: stages
+            )
+        }
+    }
+
     init(
         timetable: AcademicYearTimetable,
         configurations: [SemesterRuntimeConfig],

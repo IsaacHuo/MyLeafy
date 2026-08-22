@@ -29,6 +29,7 @@ struct CourseBlockView: View {
     var backgroundPalette: [Color]?
     var courseCardOpacity: Double?
     var showsContextMenu: Bool
+    var prefersExpandedTypography: Bool
 
     init(
         course: Course,
@@ -40,7 +41,8 @@ struct CourseBlockView: View {
         isTodayCourse: Bool = false,
         backgroundPalette: [Color]? = nil,
         courseCardOpacity: Double? = nil,
-        showsContextMenu: Bool = true
+        showsContextMenu: Bool = true,
+        prefersExpandedTypography: Bool = false
     ) {
         content = CourseBlockContent(
             displayCourseName: course.displayCourseName,
@@ -58,6 +60,7 @@ struct CourseBlockView: View {
         self.backgroundPalette = backgroundPalette
         self.courseCardOpacity = courseCardOpacity
         self.showsContextMenu = showsContextMenu
+        self.prefersExpandedTypography = prefersExpandedTypography
     }
 
     init(
@@ -70,7 +73,8 @@ struct CourseBlockView: View {
         isTodayCourse: Bool = false,
         backgroundPalette: [Color]? = nil,
         courseCardOpacity: Double? = nil,
-        showsContextMenu: Bool = false
+        showsContextMenu: Bool = false,
+        prefersExpandedTypography: Bool = false
     ) {
         content = CourseBlockContent(
             displayCourseName: renderValue.displayCourseName,
@@ -88,6 +92,7 @@ struct CourseBlockView: View {
         self.backgroundPalette = backgroundPalette
         self.courseCardOpacity = courseCardOpacity
         self.showsContextMenu = showsContextMenu
+        self.prefersExpandedTypography = prefersExpandedTypography
     }
 
     var body: some View {
@@ -229,7 +234,7 @@ struct CourseBlockView: View {
     }
 
     private var usesExpandedCompactTypography: Bool {
-        isCompact && timetableHidesWeekends
+        isCompact && (timetableHidesWeekends || prefersExpandedTypography)
     }
 
     private var compactBaseTextHeight: CGFloat {
@@ -1115,7 +1120,10 @@ struct CustomScheduleEditorSheet: View {
                 note: trimmedNote,
                 startsAt: scheduleStartDate,
                 endsAt: scheduleEndDate,
-                minutesBefore: reminderMinutes
+                minutesBefore: reminderMinutes,
+                createdAt: presentation.importantDateEvent?.createdAt
+                    ?? context.reminder?.createdAt
+                    ?? Date()
             )
             newRecord.cellKey = TimetableCellReminder.cellKey(
                 date: scheduleDate,
@@ -1162,7 +1170,11 @@ struct CustomScheduleEditorSheet: View {
             endsAt: scheduleEndDate,
             location: location,
             note: noteText,
-            minutesBefore: reminderMinutes
+            minutesBefore: reminderMinutes,
+            createdAt: presentation.importantDateEvent?.createdAt
+                ?? context.reminder?.createdAt
+                ?? Date(),
+            updatedAt: Date()
         )
 
         if let index = events.firstIndex(where: { $0.id == event.id }) {
@@ -1324,9 +1336,11 @@ struct CourseDetailSheet: View {
 
     let context: SelectedCourseContext
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
+    @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Query private var allCourses: [Course]
     @Query private var notes: [CourseNote]
     @Query private var occurrenceNotes: [CourseOccurrenceNote]
@@ -1362,7 +1376,7 @@ struct CourseDetailSheet: View {
 
                     CourseDetailRow(title: "教室", value: course.locationText, icon: "mappin.and.ellipse")
                     CourseDetailRow(title: "节次", value: course.durationTextWithTime, icon: "clock")
-                    CourseDetailRow(title: "教师", value: course.teacher.isEmpty ? L10n.text("未填写") : course.teacher, icon: "person")
+                    teacherRow
                     CourseDetailRow(title: "周次", value: course.weeksText, icon: "calendar")
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -1458,6 +1472,29 @@ struct CourseDetailSheet: View {
                 syncLocalState()
             }
             .leafyOperationAlert($operationAlert)
+        }
+    }
+
+    @ViewBuilder
+    private var teacherRow: some View {
+        let teacherName = course.teacher.trimmingCharacters(in: .whitespacesAndNewlines)
+        if teacherName.isEmpty {
+            CourseDetailRow(title: "教师", value: L10n.text("未填写"), icon: "person")
+        } else {
+            Button {
+                dismiss()
+                appNavigation.openTeacherRating(name: teacherName)
+            } label: {
+                CourseDetailRow(title: "教师", value: teacherName, icon: "person")
+                    .overlay(alignment: .trailing) {
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(AppTheme.tertiaryText)
+                            .padding(.trailing, 18)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("打开这位教师的评价")
         }
     }
 

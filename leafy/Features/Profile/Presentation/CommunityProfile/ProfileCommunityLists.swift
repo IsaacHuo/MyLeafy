@@ -636,6 +636,17 @@ struct ProfileCommunityPollCompactCard: View {
                     }
                 }
 
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(poll.options) { option in
+                        CommunityPollOptionProgressRow(
+                            option: option,
+                            totalVotes: poll.totalVoteCount,
+                            isSelected: poll.viewerOptionID == option.id,
+                            isCompact: true
+                        )
+                    }
+                }
+
                 HStack(spacing: 14) {
                     ProfileCommunityPostMetric(icon: "person.2", value: "\(poll.totalVoteCount)")
                     if poll.viewerOptionID != nil {

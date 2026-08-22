@@ -26,7 +26,16 @@ private enum TimetableQuickAccessAction: Equatable, Sendable {
     case resyncTimetable
 }
 
+private struct TimetableThreeDayEntry: Identifiable {
+    let date: Date
+    let week: Int
+    let day: Int
+
+    var id: Date { date }
+}
+
 struct TimetableView: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
@@ -85,6 +94,10 @@ struct TimetableView: View {
     @State private var timetableBackgroundImage: UIImage?
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
     @State private var timetableBackgroundConfiguration = TimetableBackgroundConfiguration.load()
+    @State private var displayMode = TimetableDisplayMode.week
+    @State private var threeDayContainerPage = 1
+    @State private var threeDayScrollTarget: Int? = 1
+    @State private var threeDayIsAwayFromToday = false
 
     @AppStorage("hasSeenTimetableOnboarding") private var hasSeenTimetableOnboarding = false
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
@@ -178,22 +191,23 @@ struct TimetableView: View {
     }
 
     private var selectedTimeScopeSnapshot: TimetableTimeScopeSnapshot {
-        let selectedDate = selectedTimelineDate
-        let config = selectedSemesterContext.flatMap { context in
-            academicYearConfigurations.first { $0.semesterID == context.semesterID }
-        } ?? academicYearConfigurations
-            .filter { $0.semesterStartDate <= selectedDate }
-            .max(by: { $0.semesterStartDate < $1.semesterStartDate })
-            ?? SemesterConfig.current
+        let referenceDate = Date()
+        let config = TimetableTimeScopeConfigurationResolver.configuration(
+            for: referenceDate,
+            configurations: academicYearConfigurations
+        ) ?? SemesterConfig.current
+        let displayedMonthDate = referenceDate < config.semesterStartDate
+            ? config.semesterStartDate
+            : referenceDate
         let days = Calendar.current.dateComponents(
             [.day],
             from: Calendar.current.startOfDay(for: config.semesterStartDate),
-            to: Calendar.current.startOfDay(for: selectedDate)
+            to: Calendar.current.startOfDay(for: referenceDate)
         ).day ?? 0
         return TimetableTimeScopeSnapshot.make(
             currentWeek: max(1, days / 7 + 1),
-            referenceDate: selectedDate,
-            displayedMonthDate: selectedDate,
+            referenceDate: referenceDate,
+            displayedMonthDate: displayedMonthDate,
             language: leafyLanguage,
             semesterConfig: config
         )
@@ -212,6 +226,18 @@ struct TimetableView: View {
 
     private var selectedSemesterWeek: Int {
         selectedSemesterContext?.week ?? SemesterConfig.currentWeek()
+    }
+
+    private var threeDayEntries: [TimetableThreeDayEntry] {
+        TimetableThreeDayWindow().dates.compactMap { date in
+            guard let week = academicYearTimetable.pageIndex(containing: date) else { return nil }
+            let weekday = Calendar.current.component(.weekday, from: date)
+            return TimetableThreeDayEntry(
+                date: Calendar.current.startOfDay(for: date),
+                week: week,
+                day: ((weekday + 5) % 7) + 1
+            )
+        }
     }
 
     private var usesCustomTimetableBackground: Bool {
@@ -354,8 +380,10 @@ struct TimetableView: View {
 
     private var rootBackgroundLifecycle: some View {
         rootBaseLifecycle
-        .onReceive(NotificationCenter.default.publisher(for: .timetableBackgroundSettingsDidChange)) { _ in
-            reloadTimetableBackground()
+        .onReceive(NotificationCenter.default.publisher(for: .timetableBackgroundSettingsDidChange)) { notification in
+            let configuration = notification.userInfo?[TimetableBackgroundStore.configurationUserInfoKey]
+                as? TimetableBackgroundConfiguration
+            reloadTimetableBackground(configuration: configuration)
         }
     }
 
@@ -732,9 +760,9 @@ struct TimetableView: View {
         timetableCellReminderProjections = reminderProjections
     }
 
-    private func reloadTimetableBackground() {
+    private func reloadTimetableBackground(configuration suppliedConfiguration: TimetableBackgroundConfiguration? = nil) {
         timetableBackgroundLoadTask?.cancel()
-        let configuration = TimetableBackgroundConfiguration.load()
+        let configuration = suppliedConfiguration ?? TimetableBackgroundConfiguration.load()
         let previousConfiguration = timetableBackgroundConfiguration
         timetableBackgroundConfiguration = configuration
 
@@ -1149,11 +1177,16 @@ struct TimetableView: View {
         VStack(spacing: AppSpacing.card) {
             GeometryReader { geometry in
                 let gridSnapshot = currentTimetableGridSnapshot()
-                let metrics = layoutMetrics(for: geometry.size, dayCount: gridSnapshot.visibleDays.count)
+                let dayCount = displayMode == .threeDay ? max(threeDayEntries.count, 1) : gridSnapshot.visibleDays.count
+                let metrics = layoutMetrics(for: geometry.size, dayCount: dayCount)
 
                 Group {
-                    switch metrics.mode {
-                    case .weekGrid:
+                    if displayMode == .threeDay {
+                        threeDayTimetable(gridSnapshot: gridSnapshot, metrics: metrics)
+                            .transition(.opacity)
+                    } else {
+                        switch metrics.mode {
+                        case .weekGrid:
                         TimetableScrollContainer(
                             axisWidth: axisWidth,
                             headerHeight: headerHeight,
@@ -1246,17 +1279,134 @@ struct TimetableView: View {
                             transaction.animation = nil
                         }
 
-                    case .agendaList:
-                        timetableAgendaList(gridSnapshot: gridSnapshot)
-                            .onAppear {
-                                handleFirstInteractiveLayout()
-                                scrollToWeek = nil
-                                syncReturnButtonVisibility(for: currentWeek)
-                            }
+                        case .agendaList:
+                            timetableAgendaList(gridSnapshot: gridSnapshot)
+                                .onAppear {
+                                    handleFirstInteractiveLayout()
+                                    scrollToWeek = nil
+                                    syncReturnButtonVisibility(for: currentWeek)
+                                }
+                        }
                     }
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
+        }
+        .simultaneousGesture(timetableMagnificationGesture)
+        .accessibilityValue(displayMode == .threeDay ? "三日放大视图" : "一周课表视图")
+        .accessibilityZoomAction { action in
+            switch action.direction {
+            case .zoomIn:
+                setDisplayMode(.threeDay)
+            case .zoomOut:
+                setDisplayMode(.week)
+            }
+        }
+        .animation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.18), value: displayMode)
+    }
+
+    private var timetableMagnificationGesture: some Gesture {
+        MagnifyGesture(minimumScaleDelta: 0.04)
+            .onEnded { value in
+                if value.magnification >= 1.12 {
+                    setDisplayMode(.threeDay)
+                } else if value.magnification <= 0.88 {
+                    setDisplayMode(.week)
+                }
+            }
+    }
+
+    private func setDisplayMode(_ mode: TimetableDisplayMode) {
+        guard displayMode != mode else { return }
+        displayMode = mode
+        if mode == .threeDay {
+            currentWeek = currentAcademicYearPage
+            scrollToWeek = currentAcademicYearPage
+            isAwayFromCurrentSchedule = false
+            threeDayContainerPage = 1
+            threeDayScrollTarget = 1
+            threeDayIsAwayFromToday = false
+        }
+    }
+
+    private func threeDayTimetable(
+        gridSnapshot: TimetableGridSnapshot,
+        metrics: TimetableLayoutMetrics
+    ) -> some View {
+        let entries = threeDayEntries
+        let contentWidth = TimetableCurrentTimeIndicatorGeometry.width(
+            visibleDayCount: entries.count,
+            metrics: metrics
+        )
+
+        return TimetableScrollContainer(
+            axisWidth: axisWidth,
+            headerHeight: headerHeight,
+            totalWeeks: 1,
+            weekStride: contentWidth + metrics.weekSpacing,
+            dayColumnWidth: metrics.dayColumnWidth,
+            rowHeight: metrics.rowHeight,
+            rowSpacing: metrics.rowSpacing,
+            allowsVerticalScroll: metrics.allowsVerticalScroll,
+            currentWeek: $threeDayContainerPage,
+            scrollToWeek: $threeDayScrollTarget,
+            isAwayFromCurrentWeek: $threeDayIsAwayFromToday,
+            containerID: "three-day-timetable",
+            onFirstInteractiveLayout: handleFirstInteractiveLayout,
+            currentWeekProvider: { 1 },
+            corner: {
+                Text("三日")
+                    .font(.system(size: 12 * leafyControlScale, weight: .semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(width: axisWidth, height: headerHeight)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                            .fill(AppTheme.cardBackground.opacity(0.62))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                            .stroke(AppTheme.separator, lineWidth: 1)
+                    )
+            },
+            header: {
+                HStack(alignment: .top, spacing: metrics.daySpacing) {
+                    ForEach(entries) { entry in
+                        dayHeader(metadata: dayMetadata(day: entry.day, week: entry.week))
+                            .frame(width: metrics.dayColumnWidth, height: headerHeight)
+                    }
+                }
+                .frame(width: contentWidth, height: headerHeight, alignment: .topLeading)
+            },
+            axis: {
+                timeAxis(metrics: metrics)
+            },
+            body: {
+                ZStack(alignment: .topLeading) {
+                    HStack(alignment: .top, spacing: metrics.daySpacing) {
+                        ForEach(entries) { entry in
+                            let metadata = dayMetadata(day: entry.day, week: entry.week)
+                            dayColumnBody(
+                                day: entry.day,
+                                week: entry.week,
+                                width: metrics.dayColumnWidth,
+                                metrics: metrics,
+                                gridSnapshot: gridSnapshot,
+                                metadata: metadata
+                            )
+                        }
+                    }
+
+                    if timetableCurrentTimeIndicatorIsEnabled {
+                        threeDayCurrentTimeIndicator(entries: entries, metrics: metrics)
+                    }
+                }
+                .frame(width: contentWidth, height: metrics.gridHeight, alignment: .topLeading)
+            }
+        )
+        .frame(width: metrics.containerWidth, height: metrics.containerHeight, alignment: .topLeading)
+        .padding(.horizontal, metrics.horizontalPadding)
+        .transaction { transaction in
+            transaction.animation = nil
         }
     }
 
@@ -1370,6 +1520,45 @@ struct TimetableView: View {
         }
         .frame(
             width: timetableContentWidth(metrics: metrics),
+            height: metrics.gridHeight,
+            alignment: .topLeading
+        )
+    }
+
+    private func threeDayCurrentTimeIndicator(
+        entries: [TimetableThreeDayEntry],
+        metrics: TimetableLayoutMetrics
+    ) -> some View {
+        TimelineView(.periodic(from: Date(), by: 60)) { context in
+            if let todayIndex = entries.firstIndex(where: {
+                Calendar.current.isDate($0.date, inSameDayAs: context.date)
+            }),
+               let y = TimetableCurrentTimePosition.yPosition(for: context.date, metrics: metrics) {
+                Rectangle()
+                    .fill(AppTheme.accentEmphasis(for: themeColorPreference))
+                    .frame(
+                        width: metrics.dayColumnWidth,
+                        height: CGFloat(
+                            TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
+                                timetableCurrentTimeIndicatorThickness
+                            )
+                        )
+                    )
+                    .position(
+                        x: CGFloat(todayIndex) * (metrics.dayColumnWidth + metrics.daySpacing)
+                            + metrics.dayColumnWidth * 0.5,
+                        y: y
+                    )
+                    .zIndex(10)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(
+            width: TimetableCurrentTimeIndicatorGeometry.width(
+                visibleDayCount: entries.count,
+                metrics: metrics
+            ),
             height: metrics.gridHeight,
             alignment: .topLeading
         )
@@ -1493,7 +1682,8 @@ struct TimetableView: View {
                     isTodayCourse: metadata.isToday,
                     backgroundPalette: timetableBackgroundCoursePalette,
                     courseCardOpacity: timetableBackgroundConfiguration.courseCardOpacity,
-                    showsContextMenu: false
+                    showsContextMenu: false,
+                    prefersExpandedTypography: displayMode == .threeDay
                 )
                 .position(
                     x: xOffsetForLayout(layout, availableWidth: width, metrics: metrics) + blockWidth * 0.5,
@@ -2500,7 +2690,7 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private var visibleAcademicYears: [TimetableCalendarMenuAcademicYear] {
-        model.academicYears.filter { !$0.semesters.isEmpty }
+        model.timeViewAcademicYears
     }
 
     var body: some View {
