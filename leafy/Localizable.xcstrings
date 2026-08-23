@@ -4738,6 +4738,9 @@
         }
       }
     },
+    "删除后无法恢复。" : {
+
+    },
     "删除后无法恢复。完成后 App 会清除本机数据并返回登录页。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4974,6 +4977,9 @@
           }
         }
       }
+    },
+    "删除这条日程？" : {
+
     },
     "删除这条荣誉记录？" : {
       "localizations" : {
@@ -13280,7 +13286,6 @@
       }
     },
     "永久删除" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -13331,6 +13336,9 @@
           }
         }
       }
+    },
+    "永久删除这条随记？" : {
+
     },
     "没有匹配的帖子" : {
       "localizations" : {

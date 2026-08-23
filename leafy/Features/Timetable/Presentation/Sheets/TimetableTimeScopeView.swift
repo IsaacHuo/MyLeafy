@@ -175,13 +175,22 @@ struct TimetableTimeScopeSnapshot: Equatable {
         let semesterMonth = semesterComponents.month ?? 9
         let academicYearStart = semesterMonth >= 9 ? semesterYear : semesterYear - 1
 
+        let hasKnownVacations = !vacations.isEmpty
         return (1...12).compactMap { month in
             let year = month >= 9 ? academicYearStart : academicYearStart + 1
             guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
                   let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart)
             else { return nil }
-            let isInSemester = semesterRanges.contains { intervalsOverlap(monthStart, monthEnd, $0.start, $0.end) }
-            let vacation = vacations.first { intervalsOverlap(monthStart, monthEnd, $0.start, $0.end) }
+            let knownInSemester = semesterRanges.contains { intervalsOverlap(monthStart, monthEnd, $0.start, $0.end) }
+            let knownVacation = vacations.first { intervalsOverlap(monthStart, monthEnd, $0.start, $0.end) }
+            let fallback = hasKnownVacations ? academicYearFallback(for: month) : nil
+            let isInSemester = knownInSemester
+                || (fallback == .semester && knownVacation == nil)
+            let isInVacation = knownVacation != nil
+                || fallback == .winterBreak
+                || fallback == .summerBreak
+            let vacationCategory = knownVacation?.category
+                ?? (fallback == .winterBreak ? .winterBreak : (fallback == .summerBreak ? .summerBreak : nil))
             return
                 TimetableTimeScopeMonthMark(
                     year: year,
@@ -189,9 +198,28 @@ struct TimetableTimeScopeSnapshot: Equatable {
                     label: "\(month)",
                     isDisplayedMonth: calendar.isDate(monthStart, equalTo: displayedMonthDate, toGranularity: .month),
                     isInSemester: isInSemester,
-                    isInVacation: vacation != nil,
-                    vacationCategory: vacation?.category
+                    isInVacation: isInVacation,
+                    vacationCategory: vacationCategory
                 )
+        }
+    }
+
+    private enum AcademicYearFallback: Equatable {
+        case semester
+        case winterBreak
+        case summerBreak
+    }
+
+    private static func academicYearFallback(for month: Int) -> AcademicYearFallback {
+        switch month {
+        case 1, 2:
+            return .winterBreak
+        case 3, 4, 5, 6:
+            return .semester
+        case 7, 8:
+            return .summerBreak
+        default:
+            return .semester
         }
     }
 
@@ -539,7 +567,10 @@ struct TimetableTimeScopeView: View {
 
             HStack(spacing: 4 * leafyControlScale) {
                 ForEach(fixedYearMonths) { mark in
-                    TimetableTimeScopeMonthMarkView(mark: mark)
+                    TimetableTimeScopeMonthMarkView(
+                        mark: mark,
+                        displayedMonthDate: displayedSnapshot.displayedMonthDate
+                    )
                 }
             }
             .frame(height: 52 * leafyControlScale)
@@ -997,6 +1028,14 @@ struct TimetableTimeScopeMonthMarkView: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
     let mark: TimetableTimeScopeMonthMark
+    let displayedMonthDate: Date
+
+    private var isDisplayed: Bool {
+        guard let monthDate = Calendar.current.date(
+            from: DateComponents(year: mark.year, month: mark.month, day: 1)
+        ) else { return mark.isDisplayedMonth }
+        return Calendar.current.isDate(monthDate, equalTo: displayedMonthDate, toGranularity: .month)
+    }
 
     var body: some View {
         VStack(spacing: 5 * leafyControlScale) {
@@ -1004,13 +1043,13 @@ struct TimetableTimeScopeMonthMarkView: View {
                 .fill(fill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 5 * leafyControlScale, style: .continuous)
-                        .stroke(stroke, lineWidth: mark.isDisplayedMonth ? 1.4 : 1)
+                        .stroke(stroke, lineWidth: isDisplayed ? 1.4 : 1)
                 )
                 .frame(height: 25 * leafyControlScale)
 
             Text(mark.label)
-                .font(.system(size: 9 * leafyControlScale, weight: mark.isDisplayedMonth ? .bold : .medium))
-                .foregroundStyle(mark.isDisplayedMonth ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.tertiaryText)
+                .font(.system(size: 9 * leafyControlScale, weight: isDisplayed ? .bold : .medium))
+                .foregroundStyle(isDisplayed ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.tertiaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
         }
@@ -1032,7 +1071,7 @@ struct TimetableTimeScopeMonthMarkView: View {
     }
 
     private var stroke: Color {
-        mark.isDisplayedMonth ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.separator
+        isDisplayed ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.separator
     }
 
     private var accessibilityText: String {
@@ -1044,7 +1083,7 @@ struct TimetableTimeScopeMonthMarkView: View {
         } else {
             state = "普通月份"
         }
-        let displayed = mark.isDisplayedMonth ? "，当前显示" : ""
+        let displayed = isDisplayed ? "，当前显示" : ""
         return "\(mark.month) 月，\(state)\(displayed)"
     }
 }

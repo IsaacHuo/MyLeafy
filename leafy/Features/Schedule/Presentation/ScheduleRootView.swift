@@ -2210,7 +2210,7 @@ private struct ScheduleMemoComposer: View {
                     .foregroundStyle(AppTheme.tertiaryText)
                     .padding(.leading, 5 + editorLeadingOffset)
                     .padding(.trailing, 5)
-                    .padding(.top, 8 + focusedEditorVerticalOffset)
+                    .padding(.top, 10 + focusedEditorVerticalOffset)
                     .padding(.bottom, 8)
                     .allowsHitTesting(false)
             }
