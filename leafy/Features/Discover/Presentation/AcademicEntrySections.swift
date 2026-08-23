@@ -12,7 +12,7 @@ struct TeachingCultivationSectionView: View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle("学校教学", subtitle: sectionSubtitle)
 
-            ToolEntryCard(title: "成绩查询", subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看课程成绩、绩点等", icon: "chart.bar.doc.horizontal") {
+            ToolEntryCard(title: "成绩查询", subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看个人课程成绩", icon: "chart.bar.doc.horizontal") {
                 openRoute(.grades)
             }
 
@@ -21,8 +21,8 @@ struct TeachingCultivationSectionView: View {
             }
 
             if !isCustomCampus {
-                ToolEntryCard(title: "教学与培养", subtitle: "查看课程、学分、培养目标与课程体系", icon: "graduationcap.fill") {
-                    openRoute(.teachingPlan)
+                ToolEntryCard(title: "教学与培养", subtitle: "查看课程体系与应取学分", icon: "graduationcap.fill") {
+                    openRoute(.trainingProgram)
                 }
 
                 ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {

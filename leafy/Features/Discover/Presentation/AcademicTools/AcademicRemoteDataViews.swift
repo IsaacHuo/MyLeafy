@@ -447,8 +447,8 @@ private struct ExamEditorSheet: View {
 }
 
 enum TeachingCultivationMode: String, CaseIterable, Identifiable {
-    case teachingPlan = "教学计划"
     case trainingProgram = "培养方案"
+    case teachingPlan = "教学计划"
 
     var id: String { rawValue }
 }
@@ -463,15 +463,17 @@ struct TeachingAndCultivationView: View {
     }
 
     var body: some View {
-        Group {
-            switch mode {
-            case .teachingPlan:
-                TeachingPlanView(showsStandaloneNavigation: false)
-            case .trainingProgram:
+        ZStack {
+            if mode == .trainingProgram {
                 TrainingProgramView(showsStandaloneNavigation: false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+            if mode == .teachingPlan {
+                TeachingPlanView(showsStandaloneNavigation: false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: mode)
+        .animation(.easeInOut(duration: 0.4), value: mode)
         .safeAreaInset(edge: .top, spacing: 0) {
             Picker("教学与培养", selection: $mode) {
                 ForEach(TeachingCultivationMode.allCases) { item in
