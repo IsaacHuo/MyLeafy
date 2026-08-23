@@ -27,6 +27,20 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertFalse(tabs.contains(.weekendTravel))
     }
 
+    func testGuestCampusAcademicTabsMatchCustomCampusWithoutCommunity() {
+        let tabs = AcademicPrimaryTab.visibleCases(
+            isCustomCampus: true,
+            isCommunityEnabled: false,
+            campusID: .guest
+        )
+
+        XCTAssertEqual(tabs, [.cultivation, .learning, .sports, .career, .postgraduate])
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.grades, isCustomCampus: true, isCommunityEnabled: false))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.examSchedule, isCustomCampus: true, isCommunityEnabled: false))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.sunshineRun, isCustomCampus: true, isCommunityEnabled: false))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.emptyClassroom, isCustomCampus: true, isCommunityEnabled: false))
+    }
+
     func testAcademicTabsIncludeBJFUSpecificSurfacesWhenAvailable() {
         let bjfuWithoutCommunityTabs = AcademicPrimaryTab.visibleCases(
             isCustomCampus: false,

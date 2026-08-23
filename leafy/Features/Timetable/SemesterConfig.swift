@@ -406,6 +406,9 @@ nonisolated struct SemesterConfig {
 
     @discardableResult
     static func refreshRemoteIfAvailable(force: Bool = false) async -> SemesterRuntimeConfig {
+        if ActiveCampusContext.descriptor.id == .guest {
+            return SemesterConfig.current
+        }
         async let nationalCalendarRefresh: NationalCalendarRuntimeConfig = NationalHolidayCalendar.refreshRemoteIfAvailable(force: force)
         async let timelineRefresh: [SemesterRuntimeConfig] = SemesterRuntimeConfigService.shared.refreshTimelineFromRemoteIfAvailable(force: force)
         let semesterConfig = await SemesterRuntimeConfigService.shared.refreshFromRemoteIfAvailable(force: force)

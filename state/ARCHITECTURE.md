@@ -115,7 +115,9 @@ flowchart TB
 
 ### Auth — `Features/Auth/`
 
-`LoginView`：学校登录（学号/密码/验证码）、演示模式。登录逻辑由 `Services/SchoolNetworkManager*` 提供。
+`LoginView`：三个入口——北林入口（学号/密码/验证码，登录逻辑由 `Services/SchoolNetworkManager*` 提供）、通用学校入口（邮箱注册/登录，`CustomCampusAuthService`）、免登录入口（`guest` 身份，无账号，`SchoolNetworkManager.persistGuestIdentity`）。另有演示模式。
+
+免登录（`guest`）身份：`CampusID.guest` + `CampusIdentityKind.guest`，`isCustom` 为 true 且带独立 scopeKey；数据全部保存在本机，不发起任何后台请求（`SemesterConfig` 远程拉取与 `CommunityPublishCoordinator` 均按能力跳过），无社区能力。
 
 ### Timetable — `Features/Timetable/`（课表）
 
@@ -247,7 +249,8 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 
 以下是不变量，修改代码前必须遵守（与 `docs/` 中的设计细节不同，这些是当前必须成立的事实）：
 
-- 根导航顺序固定为 `课表 / 社区 / 日迹 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。
+- 根导航顺序固定为 `课表 / 社区 / 日迹 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。社区 Tab 按校园 capability 隐藏。
+- 免登录（guest）入口完全本地：不创建任何账号，不连接 Supabase 或我们的后台；学期/校历配置使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
 - 日迹顶部直接提供 `随记 / 日程 / 推送`；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。
 - 随记按校园身份作用域保存在本地（元数据、Markdown 源文、图片、附件、音频、标签、统计）；不进入社区、Widget、日历导出或课表分享图。语音转写设备端完成且不持久化原始输入。学校课程、考试、校历不进入随记或个人日程列表。
 - 课表按单个学年浏览，从秋季学期首日到下一学年开始前一天；暑假最后一周停在学年边界，下一学年通过学年/日期选择进入。学校单学期课表保持 20 周数据集；学期结束与寒暑假区间来自语义校历事件，不用 20 周容器反推。
@@ -273,6 +276,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 ### 校园能力与配置
 
 - `ActiveCampusContext`、校园描述和 capability 决定功能可见性与服务实现（`Core/Campus/`）。页面通过能力查询决定是否展示入口，校园差异不散落字符串判断。
+- 校园描述符：`bjfu`、`custom`（通用学校入口）、`guest`（免登录入口）。`guest` capabilities 仅 `timetable/grades/exams`，无 `community`/`authentication`；`CampusIdentity.isCustom` 对 `guest` 同样成立。
 - 服务端数据始终带校园作用域（`campus_id`），不能只依赖客户端过滤。
 - 学期配置回退顺序：远程 active 配置 → 最近成功缓存 → App 内置默认值。
 

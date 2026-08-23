@@ -53,13 +53,18 @@ struct ProfileView: View {
         ActiveCampusContext.identity?.isCustom == true
     }
 
+    private var isGuestMode: Bool {
+        ActiveCampusContext.identity?.isGuest == true
+    }
+
     private var isReviewDemoAccount: Bool {
         ReviewDemoMode.isEnabled ||
             ReviewDemoDataSeeder.isDemoEduID(ActiveCampusContext.networkManager.authenticatedEduID)
     }
 
     private var canDeleteAccount: Bool {
-        AppAccountDeletionPolicy.canDelete(
+        guard !isGuestMode else { return false }
+        return AppAccountDeletionPolicy.canDelete(
             isReviewDemoMode: ReviewDemoMode.isEnabled,
             eduID: ActiveCampusContext.networkManager.authenticatedEduID
         )
@@ -395,18 +400,27 @@ struct ProfileView: View {
     }
 
     private var logoutButtonTitle: String {
-        isReviewDemoAccount
+        if isGuestMode {
+            return L10n.text("退出免登录模式", language: leafyLanguage)
+        }
+        return isReviewDemoAccount
             ? L10n.text("退出演示模式", language: leafyLanguage)
             : L10n.text("退出登录", language: leafyLanguage)
     }
 
     private var logoutConfirmationTitle: String {
-        isReviewDemoAccount
+        if isGuestMode {
+            return L10n.text("退出免登录模式？", language: leafyLanguage)
+        }
+        return isReviewDemoAccount
             ? L10n.text("退出演示模式？", language: leafyLanguage)
             : L10n.text("确认退出？", language: leafyLanguage)
     }
 
     private var logoutConfirmationMessage: String {
+        if isGuestMode {
+            return L10n.text("退出后返回登录页，本机数据会保留，之后仍可重新进入免登录模式。", language: leafyLanguage)
+        }
         if isReviewDemoAccount {
             return L10n.text("退出后会返回登录页，正式账户与数据不会受到影响。", language: leafyLanguage)
         }

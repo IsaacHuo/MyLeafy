@@ -99,10 +99,50 @@ extension PerformanceRefactorTests {
             portal: .undergraduate,
             kind: .customSupabase
         )
+        let guest = CampusIdentity(
+            campusID: .guest,
+            eduID: "local-guest",
+            displayName: "本地用户",
+            portal: .undergraduate,
+            kind: .guest
+        )
 
         XCTAssertNotEqual(undergraduate.scopeKey, graduate.scopeKey)
         XCTAssertNotEqual(undergraduate.scopeKey, custom.scopeKey)
         XCTAssertNotEqual(graduate.scopeKey, custom.scopeKey)
+        XCTAssertNotEqual(custom.scopeKey, guest.scopeKey)
+    }
+
+    func testGuestIdentityIsCustomAndIsolated() {
+        let guest = CampusIdentity(
+            campusID: .guest,
+            eduID: "local-guest",
+            displayName: "本地用户",
+            portal: .undergraduate,
+            kind: .guest
+        )
+
+        XCTAssertEqual(guest.campusID, .guest)
+        XCTAssertEqual(guest.kind, .guest)
+        XCTAssertTrue(guest.isGuest)
+        XCTAssertTrue(guest.isCustom)
+
+        let custom = CampusIdentity(
+            campusID: .custom,
+            eduID: "00000000-0000-0000-0000-000000000001",
+            displayName: "user@example.com",
+            portal: .undergraduate,
+            kind: .customSupabase
+        )
+        XCTAssertFalse(custom.isGuest)
+        XCTAssertNotEqual(guest.scopeKey, custom.scopeKey)
+
+        let guestDescriptor = CampusDescriptor.guest
+        XCTAssertFalse(guestDescriptor.supports(.community))
+        XCTAssertFalse(guestDescriptor.supports(.authentication))
+        XCTAssertTrue(guestDescriptor.supports(.timetable))
+        XCTAssertTrue(guestDescriptor.supports(.grades))
+        XCTAssertTrue(guestDescriptor.supports(.exams))
     }
 
     func testCampusIdentityActivationOnlyNotifiesWhenScopeChanges() throws {

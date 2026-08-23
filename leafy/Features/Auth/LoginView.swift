@@ -30,6 +30,7 @@ struct LoginView: View {
 
     @State private var isLoggingIn = false
     @State private var isEnteringDemo = false
+    @State private var isEnteringGuest = false
 
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -54,19 +55,16 @@ struct LoginView: View {
 
     private var scaledButtonHeight: CGFloat { buttonHeight * leafyControlScale }
     private var scaledFieldHeight: CGFloat { fieldHeight * leafyControlScale }
-    private var loginCampusOptions: [CampusDescriptor] {
-        let supported = CampusCatalog.production.filter {
-            $0.supports(.authentication)
-        }
-        return supported.isEmpty ? [.bjfu] : supported
-    }
-
     private var selectedCampus: CampusDescriptor {
-        loginCampusOptions.first(where: { $0.id == selectedCampusID }) ?? loginCampusOptions[0]
+        CampusCatalog.production.first(where: { $0.id == selectedCampusID }) ?? .bjfu
     }
 
     private var isCustomCampusSelected: Bool {
         selectedCampus.connectorKind == .custom
+    }
+
+    private var isGuestCampusSelected: Bool {
+        selectedCampus.id == .guest
     }
 
     private var isLoginDisabled: Bool {
@@ -91,7 +89,10 @@ struct LoginView: View {
                         campusPicker
                             .frame(maxWidth: 360)
 
-                        if isCustomCampusSelected {
+                        if isGuestCampusSelected {
+                            guestEntryPanel
+                                .frame(maxWidth: 360)
+                        } else if isCustomCampusSelected {
                             customAuthModePicker
                                 .frame(maxWidth: 360)
                         } else {
@@ -99,15 +100,17 @@ struct LoginView: View {
                                 .frame(maxWidth: 360)
                         }
 
-                        loginForm
-                            .frame(maxWidth: 360)
+                        if !isGuestCampusSelected {
+                            loginForm
+                                .frame(maxWidth: 360)
 
-                        loginButton
-                            .frame(maxWidth: 360, minHeight: scaledButtonHeight)
-
-                        if !isCustomCampusSelected {
-                            demoModeButton
+                            loginButton
                                 .frame(maxWidth: 360, minHeight: scaledButtonHeight)
+
+                            if !isCustomCampusSelected {
+                                demoModeButton
+                                    .frame(maxWidth: 360, minHeight: scaledButtonHeight)
+                            }
                         }
 
                         if let captchaLoadMessage {
@@ -127,7 +130,7 @@ struct LoginView: View {
             .background(LeafyPageBackground())
             .leafyLoginNavigationChrome()
             .task {
-                if !isCustomCampusSelected {
+                if !isCustomCampusSelected, !isGuestCampusSelected {
                     await fetchCaptcha()
                 }
             }
@@ -141,18 +144,18 @@ struct LoginView: View {
                 handlePasswordChange(newValue)
             }
             .onChange(of: selectedPortal) { _, newValue in
-                guard !isCustomCampusSelected else { return }
+                guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
                 schoolNetworkManager.currentPortal = newValue
                 restoreSchoolCredential(for: newValue)
                 Task { await fetchCaptcha() }
             }
             .onChange(of: scenePhase) { _, newPhase in
-                guard !isCustomCampusSelected else { return }
+                guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
                 guard newPhase == .active else { return }
                 startAutomaticCaptchaRefresh()
             }
             .onChange(of: networkPathObserver.pathUpdateID) { _, _ in
-                guard !isCustomCampusSelected else { return }
+                guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
                 guard scenePhase == .active, networkPathObserver.isPathSatisfied else { return }
                 startAutomaticCaptchaRefresh()
             }
@@ -162,7 +165,7 @@ struct LoginView: View {
             }
             .alert(L10n.text("提示", language: leafyLanguage), isPresented: $showAlert) {
                 Button(L10n.text("确定", language: leafyLanguage)) {
-                    if !isCustomCampusSelected {
+                    if !isCustomCampusSelected, !isGuestCampusSelected {
                         Task { await fetchCaptcha() }
                     }
                 }
@@ -179,7 +182,7 @@ struct LoginView: View {
                 .foregroundStyle(AppTheme.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            ForEach(loginCampusOptions) { campus in
+            ForEach(CampusCatalog.production) { campus in
                 Button {
                     selectedCampusID = campus.id
                 } label: {
@@ -224,21 +227,36 @@ struct LoginView: View {
     }
 
     private func loginEntryTitle(for campus: CampusDescriptor) -> String {
-        if campus.connectorKind == .custom {
-            return L10n.text("通用入口", language: leafyLanguage)
+        switch campus.connectorKind {
+        case .custom:
+            return L10n.text("通用学校入口", language: leafyLanguage)
+        case .guest:
+            return L10n.text("免登录入口", language: leafyLanguage)
+        case .bjfu:
+            return campus.displayName
         }
-        return campus.displayName
     }
 
     private func loginEntrySubtitle(for campus: CampusDescriptor) -> String {
-        if campus.connectorKind == .custom {
-            return L10n.text("通用入口，不连接教务系统，进入 App 后手动导入数据。", language: leafyLanguage)
+        switch campus.connectorKind {
+        case .custom:
+            return L10n.text("通用学校入口，使用邮箱注册，进入 App 后手动导入数据。", language: leafyLanguage)
+        case .guest:
+            return L10n.text("无需账号和密码，数据全部保存在本机，不连接任何后台。", language: leafyLanguage)
+        case .bjfu:
+            return L10n.text("已接入教务系统，可使用校园账号登录。", language: leafyLanguage)
         }
-        return L10n.text("已接入教务系统，可使用校园账号登录。", language: leafyLanguage)
     }
 
     private func loginEntryIcon(for campus: CampusDescriptor) -> String {
-        campus.connectorKind == .custom ? "square.and.pencil" : "building.columns"
+        switch campus.connectorKind {
+        case .custom:
+            return "square.and.pencil"
+        case .guest:
+            return "person.crop.circle.badge.checkmark"
+        case .bjfu:
+            return "building.columns"
+        }
     }
 
     private var customAuthModePicker: some View {
@@ -269,7 +287,7 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Text(L10n.text("通用入口不会连接教务系统；课表、成绩和考试安排进入 App 后手动导入，学校社区在社区页申请。", language: leafyLanguage))
+            Text(L10n.text("通用学校入口不会连接教务系统；课表、成绩和考试安排进入 App 后手动导入，学校社区在社区页申请。", language: leafyLanguage))
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -403,6 +421,65 @@ struct LoginView: View {
             }
         }
         .leafyCardStyle()
+    }
+
+    @ViewBuilder
+    private var guestEntryPanel: some View {
+        VStack(spacing: 16 * leafyControlScale) {
+            VStack(alignment: .leading, spacing: 8 * leafyControlScale) {
+                Label(L10n.text("免登录模式", language: leafyLanguage), systemImage: "lock.open.fill")
+                    .font(.system(size: 15 * leafyFontScale, weight: .semibold))
+                    .foregroundStyle(AppTheme.primaryText)
+
+                Text(L10n.text("无需账号和密码。课表、成绩、考试安排、随记与日程都只保存在本机，不连接任何账号或后台；此模式不包含社区。", language: leafyLanguage))
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(16 * leafyControlScale)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .leafyCardStyle()
+
+            if #available(iOS 26.0, *) {
+                Button {
+                    enterGuestMode()
+                } label: {
+                    HStack(spacing: 10) {
+                        if isEnteringGuest {
+                            ProgressView()
+                        }
+
+                        Text(L10n.text("直接进入", language: leafyLanguage))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassProminent)
+                .tint(AppTheme.accent)
+                .disabled(isEnteringGuest)
+                .accessibilityLabel(L10n.text("直接进入免登录模式", language: leafyLanguage))
+                .accessibilityIdentifier("login.guest-enter")
+            } else {
+                Button {
+                    enterGuestMode()
+                } label: {
+                    HStack(spacing: 10) {
+                        if isEnteringGuest {
+                            ProgressView()
+                        }
+
+                        Text(L10n.text("直接进入", language: leafyLanguage))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.accent)
+                .disabled(isEnteringGuest)
+                .accessibilityLabel(L10n.text("直接进入免登录模式", language: leafyLanguage))
+                .accessibilityIdentifier("login.guest-enter")
+            }
+        }
     }
 
     @ViewBuilder
@@ -549,13 +626,15 @@ struct LoginView: View {
         captchaCode = ""
         customSignUpCode = ""
 
-        if isCustomCampusSelected {
+        if isGuestCampusSelected || isCustomCampusSelected {
             prefilledSchoolAccount = nil
             username = ""
             password = ""
             isCaptchaLoading = false
             captchaImage = nil
             sessionKey = ""
+            customSignUpCodeEmail = nil
+            customSignUpCodePassword = nil
         } else {
             customSignUpCodeEmail = nil
             customSignUpCodePassword = nil
@@ -825,6 +904,14 @@ struct LoginView: View {
     }
 
     @MainActor
+    private func enterGuestMode() {
+        guard !isEnteringGuest else { return }
+        isEnteringGuest = true
+        schoolNetworkManager.persistGuestIdentity()
+        isEnteringGuest = false
+    }
+
+    @MainActor
     private func enterDemoMode() {
         isEnteringDemo = true
         ReviewDemoDataSeeder.enter(using: modelContext)
@@ -893,7 +980,7 @@ private enum CustomAuthMode: String, CaseIterable, Identifiable {
     var hint: String {
         switch self {
         case .signIn:
-            return "使用邮箱和密码登录通用入口账号。"
+            return "使用邮箱和密码登录通用学校入口账号。"
         case .signUp:
             return "首次使用需要邮箱、密码和邮件验证码；验证成功后下次可直接用邮箱密码登录。"
         }

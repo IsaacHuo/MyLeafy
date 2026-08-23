@@ -145,7 +145,9 @@ struct LeafyApp: App {
                 languagePreference.syncToAppGroup()
                 syncThemeAppearance()
                 LeafyNotificationCoordinator.shared.configure(appNavigation: appNavigation)
-                CommunityPublishCoordinator.shared.configureAndResume()
+                if ActiveCampusContext.descriptor.supports(.community) {
+                    CommunityPublishCoordinator.shared.configureAndResume()
+                }
                 if ReviewDemoMode.isEnabled {
                     ReviewDemoDataSeeder.seedIfNeeded(using: sharedModelContainer.mainContext)
                 }
@@ -183,7 +185,9 @@ struct LeafyApp: App {
                     refreshWidgetSnapshot()
                 }
                 if newPhase == .active {
-                    CommunityPublishCoordinator.shared.configureAndResume()
+                    if ActiveCampusContext.descriptor.supports(.community) {
+                        CommunityPublishCoordinator.shared.configureAndResume()
+                    }
                     refreshSemesterRuntimeConfig(prefetchTrigger: .foreground)
                     refreshScheduleReportNotifications()
                     ScheduleReportBackgroundRefreshCoordinator.shared.schedule()

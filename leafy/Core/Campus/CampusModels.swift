@@ -11,6 +11,7 @@ nonisolated struct CampusID: RawRepresentable, Codable, Hashable, Sendable {
 
     static let bjfu = CampusID(rawValue: "bjfu")
     static let custom = CampusID(rawValue: "custom")
+    static let guest = CampusID(rawValue: "guest")
 }
 
 nonisolated enum CampusCapability: String, Codable, CaseIterable, Hashable, Sendable {
@@ -30,6 +31,7 @@ nonisolated enum CampusCapability: String, Codable, CaseIterable, Hashable, Send
 nonisolated enum CampusConnectorKind: String, Codable, Hashable, Sendable {
     case bjfu
     case custom
+    case guest
 }
 
 nonisolated struct CampusCoordinate: Codable, Hashable, Sendable {
@@ -94,8 +96,8 @@ nonisolated struct CampusDescriptor: Codable, Hashable, Identifiable, Sendable {
 
     static let custom = CampusDescriptor(
         id: .custom,
-        displayName: "通用入口",
-        shortName: "通用",
+        displayName: "通用学校入口",
+        shortName: "通用学校",
         timeZoneIdentifier: "Asia/Shanghai",
         connectorKind: .custom,
         capabilities: [
@@ -105,8 +107,32 @@ nonisolated struct CampusDescriptor: Codable, Hashable, Identifiable, Sendable {
             .exams,
             .community
         ],
-        networkHint: "通用入口使用本地导入数据，不连接学校教务系统。",
+        networkHint: "通用学校入口使用本地导入数据，不连接学校教务系统。",
         defaultStudentDisplayName: "同学",
+        undergraduateBaseURL: URL(string: "https://myleafy.space")!,
+        graduateBaseURL: URL(string: "https://myleafy.space")!,
+        weatherCoordinate: CampusCoordinate(latitude: 0, longitude: 0),
+        weatherCityCode: "",
+        commonLinks: [],
+        featureFlags: CampusFeatureFlags(
+            campusPickerEnabled: true,
+            crossCampusCommunityEnabled: false
+        )
+    )
+
+    static let guest = CampusDescriptor(
+        id: .guest,
+        displayName: "免登录入口",
+        shortName: "本地",
+        timeZoneIdentifier: "Asia/Shanghai",
+        connectorKind: .guest,
+        capabilities: [
+            .timetable,
+            .grades,
+            .exams
+        ],
+        networkHint: "免登录入口数据全部保存在本机，不连接任何账号或后台。",
+        defaultStudentDisplayName: "本地用户",
         undergraduateBaseURL: URL(string: "https://myleafy.space")!,
         graduateBaseURL: URL(string: "https://myleafy.space")!,
         weatherCoordinate: CampusCoordinate(latitude: 0, longitude: 0),
@@ -122,6 +148,7 @@ nonisolated struct CampusDescriptor: Codable, Hashable, Identifiable, Sendable {
 nonisolated enum CampusIdentityKind: String, Codable, Hashable, Sendable {
     case schoolPortal
     case customSupabase
+    case guest
 }
 
 nonisolated struct CampusIdentity: Codable, Equatable, Hashable, Sendable {
@@ -146,7 +173,11 @@ nonisolated struct CampusIdentity: Codable, Equatable, Hashable, Sendable {
     }
 
     var isCustom: Bool {
-        kind == .customSupabase || campusID == .custom
+        kind == .customSupabase || kind == .guest || campusID == .custom || campusID == .guest
+    }
+
+    var isGuest: Bool {
+        kind == .guest
     }
 
     var scopeKey: String {
@@ -180,8 +211,8 @@ nonisolated struct CampusIdentity: Codable, Equatable, Hashable, Sendable {
 }
 
 nonisolated enum CampusCatalog {
-    static let builtIn: [CampusDescriptor] = [.bjfu, .custom]
-    static let production: [CampusDescriptor] = [.bjfu, .custom]
+    static let builtIn: [CampusDescriptor] = [.bjfu, .custom, .guest]
+    static let production: [CampusDescriptor] = [.bjfu, .custom, .guest]
 
     static var activeCampus: CampusDescriptor {
         let campusID = CampusIdentityStore.currentIdentity()?.campusID ?? .bjfu

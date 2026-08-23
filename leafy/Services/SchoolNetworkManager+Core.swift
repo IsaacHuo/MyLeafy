@@ -218,6 +218,22 @@ extension SchoolNetworkManager {
         isLoggedIn = true
     }
 
+    @MainActor
+    func persistGuestIdentity() {
+        let identity = CampusIdentity(
+            campusID: .guest,
+            eduID: "local-guest",
+            displayName: "本地用户",
+            portal: .undergraduate,
+            kind: .guest
+        )
+        CampusIdentityStore.activate(identity)
+        currentPortal = .undergraduate
+        authenticatedEduID = identity.eduID
+        authenticatedDisplayName = identity.displayName
+        isLoggedIn = true
+    }
+
     func clearAuthenticatedIdentity() {
         authenticatedEduID = nil
         authenticatedDisplayName = nil
