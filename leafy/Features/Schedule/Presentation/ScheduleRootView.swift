@@ -2034,8 +2034,8 @@ private struct ScheduleMemoComposer: View {
                 .frame(maxHeight: presentation == .fullscreen ? .infinity : nil)
         }
         .padding(.horizontal, 8)
-        .padding(.top, hasDraftContent ? 10 : 4)
-        .padding(.bottom, 4)
+        .padding(.top, hasDraftContent ? 10 : (presentation == .compact ? 0 : 4))
+        .padding(.bottom, presentation == .compact ? 0 : 4)
         .frame(height: presentation == .fullscreen ? fullscreenHeight : nil, alignment: .bottom)
         .leafyGlassSurface(
             in: RoundedRectangle(cornerRadius: 28, style: .continuous),
@@ -3016,6 +3016,7 @@ private struct ScheduleMemoTrashView: View {
     @Query private var audioRecords: [ScheduleMemoAudio]
     @State private var confirmsEmpty = false
     @State private var errorMessage: String?
+    @State private var pendingPermanentDelete: ScheduleMemo?
 
     private var trashed: [ScheduleMemo] {
         memos.filter(\.isTrashed).sorted { ($0.trashedAt ?? .distantPast) > ($1.trashedAt ?? .distantPast) }
@@ -3031,10 +3032,11 @@ private struct ScheduleMemoTrashView: View {
                         .lineLimit(4)
                         .padding(.vertical, 5)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                permanentlyDelete(memo)
+                            Button {
+                                pendingPermanentDelete = memo
                             } label: {
                                 Image(systemName: "trash")
+                                    .foregroundStyle(.red)
                             }
                             Button {
                                 restore(memo)
@@ -3057,6 +3059,20 @@ private struct ScheduleMemoTrashView: View {
             Button("永久删除全部", role: .destructive) {
                 for memo in trashed { permanentlyDelete(memo, saves: false) }
                 try? modelContext.save()
+            }
+        } message: { Text("图片和附件也会从本机删除，此操作无法撤销。") }
+        .confirmationDialog("永久删除这条随记？", isPresented: Binding(
+            get: { pendingPermanentDelete != nil },
+            set: { if !$0 { pendingPermanentDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button("永久删除", role: .destructive) {
+                if let memo = pendingPermanentDelete {
+                    permanentlyDelete(memo)
+                }
+                pendingPermanentDelete = nil
+            }
+            Button("取消", role: .cancel) {
+                pendingPermanentDelete = nil
             }
         } message: { Text("图片和附件也会从本机删除，此操作无法撤销。") }
         .alert("删除失败", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {

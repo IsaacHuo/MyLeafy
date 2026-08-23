@@ -235,7 +235,8 @@ struct TimetableView: View {
             referenceDate: referenceDate,
             displayedMonthDate: displayedMonthDate,
             language: leafyLanguage,
-            semesterConfig: config
+            semesterConfig: config,
+            configurations: academicYearConfigurations
         )
     }
 

@@ -33,6 +33,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
         displayedMonthDate requestedDisplayedMonthDate: Date? = nil,
         language: AppLanguagePreference,
         semesterConfig: SemesterRuntimeConfig = SemesterConfig.current,
+        configurations: [SemesterRuntimeConfig]? = nil,
         campusID: CampusID = ActiveCampusContext.descriptor.id,
         calendar baseCalendar: Calendar = .current
     ) -> TimetableTimeScopeSnapshot {
@@ -84,11 +85,8 @@ struct TimetableTimeScopeSnapshot: Equatable {
         let vacationEnd = vacationEvent?.endDate.map { calendar.startOfDay(for: $0) }
         let yearMonths = makeYearMonths(
             displayedMonthDate: displayedMonthDate,
-            semesterStart: semesterStart,
-            semesterEnd: semesterEnd,
-            vacationStart: vacationStart,
-            vacationEnd: vacationEnd,
-            vacationCategory: vacationEvent?.academicCategory,
+            semesterConfig: semesterConfig,
+            configurations: configurations ?? [semesterConfig],
             calendar: calendar
         )
 
@@ -148,16 +146,30 @@ struct TimetableTimeScopeSnapshot: Equatable {
 
     private static func makeYearMonths(
         displayedMonthDate: Date,
-        semesterStart: Date,
-        semesterEnd: Date?,
-        vacationStart: Date?,
-        vacationEnd: Date?,
-        vacationCategory: SchoolCalendarEvent.AcademicCategory?,
+        semesterConfig: SemesterRuntimeConfig,
+        configurations: [SemesterRuntimeConfig],
         calendar: Calendar
     ) -> [TimetableTimeScopeMonthMark] {
-        let semesterEndExclusive = semesterEnd.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
-        let vacationEndExclusive = vacationEnd.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
+        let semesterRanges = configurations.compactMap { config -> (start: Date, end: Date)? in
+            let start = calendar.startOfDay(for: config.semesterStartDate)
+            let semesterEnd = config.calendarEvents
+                .first { $0.academicCategory == .semesterEnd }?
+                .endDate
+                .map { calendar.startOfDay(for: $0) }
+            let end = semesterEnd
+                ?? calendar.date(byAdding: .day, value: config.supportedWeeks * 7, to: start)
+                ?? start
+            return (start, end)
+        }
+        let vacations = configurations
+            .flatMap(\.calendarEvents)
+            .filter(\.isVacation)
+            .compactMap { event -> (start: Date, end: Date, category: SchoolCalendarEvent.AcademicCategory?)? in
+                guard let start = event.startDate, let end = event.endDate else { return nil }
+                return (calendar.startOfDay(for: start), calendar.startOfDay(for: end), event.academicCategory)
+            }
 
+        let semesterStart = calendar.startOfDay(for: semesterConfig.semesterStartDate)
         let semesterComponents = calendar.dateComponents([.year, .month], from: semesterStart)
         let semesterYear = semesterComponents.year ?? calendar.component(.year, from: displayedMonthDate)
         let semesterMonth = semesterComponents.month ?? 9
@@ -168,19 +180,17 @@ struct TimetableTimeScopeSnapshot: Equatable {
             guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
                   let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart)
             else { return nil }
+            let isInSemester = semesterRanges.contains { intervalsOverlap(monthStart, monthEnd, $0.start, $0.end) }
+            let vacation = vacations.first { intervalsOverlap(monthStart, monthEnd, $0.start, $0.end) }
             return
                 TimetableTimeScopeMonthMark(
                     year: year,
                     month: month,
                     label: "\(month)",
                     isDisplayedMonth: calendar.isDate(monthStart, equalTo: displayedMonthDate, toGranularity: .month),
-                    isInSemester: semesterEndExclusive.map {
-                        intervalsOverlap(monthStart, monthEnd, semesterStart, $0)
-                    } ?? calendar.isDate(monthStart, equalTo: semesterStart, toGranularity: .month),
-                    isInVacation: vacationStart.flatMap { vacationStart in
-                        vacationEndExclusive.map { intervalsOverlap(monthStart, monthEnd, vacationStart, $0) }
-                    } ?? false,
-                    vacationCategory: vacationCategory
+                    isInSemester: isInSemester,
+                    isInVacation: vacation != nil,
+                    vacationCategory: vacation?.category
                 )
         }
     }
@@ -291,6 +301,7 @@ struct TimetableTimeScopeView: View {
     @State private var isGatherOverlayVisible = true
     @State private var displayedSnapshot: TimetableTimeScopeSnapshot
     @State private var monthTransitionDirection = 1
+    @State private var fixedYearMonths: [TimetableTimeScopeMonthMark]
 
     init(
         snapshot: TimetableTimeScopeSnapshot,
@@ -299,6 +310,7 @@ struct TimetableTimeScopeView: View {
         self.snapshot = snapshot
         self.presentation = presentation
         _displayedSnapshot = State(initialValue: snapshot)
+        _fixedYearMonths = State(initialValue: snapshot.yearMonths)
     }
 
     var body: some View {
@@ -451,6 +463,14 @@ struct TimetableTimeScopeView: View {
         return L10n.text("%@ 开始", language: leafyLanguage, displayedSnapshot.vacationStartText)
     }
 
+    private var showsWinterBreakLegend: Bool {
+        fixedYearMonths.contains { $0.isInVacation && $0.vacationCategory == .winterBreak }
+    }
+
+    private var showsSummerBreakLegend: Bool {
+        fixedYearMonths.contains { $0.isInVacation && $0.vacationCategory == .summerBreak }
+    }
+
     private func scopeMetricCard(icon: String, title: String, value: String, detail: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 8 * leafyControlScale) {
             HStack(spacing: 7 * leafyControlScale) {
@@ -508,12 +528,17 @@ struct TimetableTimeScopeView: View {
                 Spacer()
                 HStack(spacing: 10 * leafyControlScale) {
                     legendDot(color: AppTheme.accent(for: themeColorPreference), title: "学期")
-                    legendDot(color: vacationTint, title: displayedSnapshot.vacationTitle)
+                    if showsWinterBreakLegend {
+                        legendDot(color: Color.cyan, title: "寒假")
+                    }
+                    if showsSummerBreakLegend {
+                        legendDot(color: Color.yellow, title: "暑假")
+                    }
                 }
             }
 
             HStack(spacing: 4 * leafyControlScale) {
-                ForEach(displayedSnapshot.yearMonths) { mark in
+                ForEach(fixedYearMonths) { mark in
                     TimetableTimeScopeMonthMarkView(mark: mark)
                 }
             }

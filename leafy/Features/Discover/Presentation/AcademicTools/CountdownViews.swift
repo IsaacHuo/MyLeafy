@@ -75,6 +75,7 @@ struct CustomScheduleListView: View {
     @State private var importantDateEvents: [CustomScheduleEvent] = []
     @State private var editorPresentation: CustomScheduleEditorPresentation?
     @State private var operationAlert: LeafyOperationAlert?
+    @State private var pendingDeleteItem: CustomScheduleListItem?
 
     private let presentation: SchedulePrimaryContentPresentation
 
@@ -116,6 +117,22 @@ struct CustomScheduleListView: View {
             reloadImportantDates()
         }
         .leafyOperationAlert($operationAlert)
+        .confirmationDialog("删除这条日程？", isPresented: Binding(
+            get: { pendingDeleteItem != nil },
+            set: { if !$0 { pendingDeleteItem = nil } }
+        ), titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                if let item = pendingDeleteItem {
+                    delete(item)
+                }
+                pendingDeleteItem = nil
+            }
+            Button("取消", role: .cancel) {
+                pendingDeleteItem = nil
+            }
+        } message: {
+            Text("删除后无法恢复。")
+        }
     }
 
     @ViewBuilder
@@ -163,8 +180,8 @@ struct CustomScheduleListView: View {
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            delete(item)
+                        Button {
+                            pendingDeleteItem = item
                         } label: {
                             Label("删除", systemImage: "trash")
                                 .foregroundStyle(.red)
