@@ -19,9 +19,9 @@ struct AcademicRouteDestinationView: View {
         case .comprehensiveQuality:
             ComprehensiveQualityView()
         case .teachingPlan:
-            TeachingPlanView()
+            TeachingAndCultivationView(initialMode: .teachingPlan)
         case .trainingProgram:
-            TrainingProgramView()
+            TeachingAndCultivationView(initialMode: .trainingProgram)
         case .emptyClassroom:
             EmptyClassroomView()
         case .classroomLookup(let building, let room):

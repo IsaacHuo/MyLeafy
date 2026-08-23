@@ -446,6 +446,46 @@ private struct ExamEditorSheet: View {
     }
 }
 
+enum TeachingCultivationMode: String, CaseIterable, Identifiable {
+    case teachingPlan = "教学计划"
+    case trainingProgram = "培养方案"
+
+    var id: String { rawValue }
+}
+
+struct TeachingAndCultivationView: View {
+    @Environment(\.leafyControlScale) private var leafyControlScale
+
+    @State private var mode: TeachingCultivationMode
+
+    init(initialMode: TeachingCultivationMode = .teachingPlan) {
+        _mode = State(initialValue: initialMode)
+    }
+
+    var body: some View {
+        Group {
+            switch mode {
+            case .teachingPlan:
+                TeachingPlanView(showsStandaloneNavigation: false)
+            case .trainingProgram:
+                TrainingProgramView(showsStandaloneNavigation: false)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: mode)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("教学与培养", selection: $mode) {
+                ForEach(TeachingCultivationMode.allCases) { item in
+                    Text(item.rawValue).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, AppSpacing.page)
+            .padding(.vertical, 10 * leafyControlScale)
+            .background(AppTheme.cardBackground)
+        }
+    }
+}
+
 struct TeachingPlanView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     private let networkManager = ActiveCampusContext.networkManager
@@ -454,6 +494,8 @@ struct TeachingPlanView: View {
     @State private var errorMessage: String?
     @State private var collapsedTerms: Set<String> = []
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
+
+    var showsStandaloneNavigation = true
 
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
@@ -495,7 +537,7 @@ struct TeachingPlanView: View {
                 planSection(for: section)
             }
         }
-        .navigationTitle("教学计划")
+        .navigationTitle(showsStandaloneNavigation ? "教学计划" : "教学与培养")
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
@@ -848,6 +890,8 @@ struct TrainingProgramView: View {
     @State private var expandedSectionIDs: Set<String> = []
     @State private var browserItem: TrainingProgramBrowserItem?
 
+    var showsStandaloneNavigation = true
+
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
     }
@@ -936,7 +980,7 @@ struct TrainingProgramView: View {
                 }
             }
         }
-        .navigationTitle("培养方案")
+        .navigationTitle(showsStandaloneNavigation ? "培养方案" : "教学与培养")
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {

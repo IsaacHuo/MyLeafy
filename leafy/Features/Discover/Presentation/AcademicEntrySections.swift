@@ -21,12 +21,8 @@ struct TeachingCultivationSectionView: View {
             }
 
             if !isCustomCampus {
-                ToolEntryCard(title: "教学计划", subtitle: "查看课程、学分和考核方式", icon: "list.clipboard") {
+                ToolEntryCard(title: "教学与培养", subtitle: "查看课程、学分、培养目标与课程体系", icon: "graduationcap.fill") {
                     openRoute(.teachingPlan)
-                }
-
-                ToolEntryCard(title: "培养方案", subtitle: "查看培养目标、课程体系等", icon: "graduationcap.fill") {
-                    openRoute(.trainingProgram)
                 }
 
                 ToolEntryCard(title: "校历与作息", subtitle: "查看学期校历和作息时间", icon: "calendar.badge.clock") {
