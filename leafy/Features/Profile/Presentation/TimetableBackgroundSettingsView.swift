@@ -115,7 +115,6 @@ struct TimetableBackgroundSettingsView: View {
 
     var body: some View {
         List {
-            previewSection
             typeSection
 
             switch selectedKind {
@@ -128,6 +127,7 @@ struct TimetableBackgroundSettingsView: View {
                 solidColorSection
             }
 
+            previewSection
             adjustmentSection
         }
         .leafyInsetGroupedListStyle()

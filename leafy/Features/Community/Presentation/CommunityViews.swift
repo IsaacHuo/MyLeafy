@@ -1472,6 +1472,7 @@ struct CommunitySearchSheet: View {
     @State private var searchText = ""
     @State private var searchRefreshID = UUID()
     @State private var selectedPost: CommunityPost?
+    @FocusState private var isSearchFieldFocused: Bool
 
     private var searchQuery: CommunityFeedQuery {
         CommunityFeedQuery(search: searchText)
@@ -1504,6 +1505,9 @@ struct CommunitySearchSheet: View {
             .background(LeafyPageBackground())
             .navigationTitle("搜索帖子")
             .leafyInlineNavigationTitle()
+            .onAppear {
+                isSearchFieldFocused = true
+            }
             .toolbar {
                 ToolbarItem(placement: .leafyLeading) {
                     Button("关闭") {
@@ -1529,9 +1533,10 @@ struct CommunitySearchSheet: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(AppTheme.tertiaryText)
+                .foregroundStyle(.primary)
 
             TextField("搜索帖子", text: $searchText)
+                .focused($isSearchFieldFocused)
                 .leafyDisableAutocapitalization()
                 .autocorrectionDisabled()
                 .leafyBody()
@@ -1547,10 +1552,10 @@ struct CommunitySearchSheet: View {
                 .accessibilityLabel("清空搜索")
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 16)
         .frame(height: 44)
         .leafyGlassSurface(
-            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous),
+            in: Capsule(),
             isInteractive: true
         )
     }

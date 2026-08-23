@@ -2111,6 +2111,9 @@
         }
       }
     },
+    "%lld°C" : {
+
+    },
     "%lld月" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3855,6 +3858,16 @@
         }
       }
     },
+    "修改账号或密码" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change account or password"
+          }
+        }
+      }
+    },
     "假期" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4850,6 +4863,7 @@
       }
     },
     "删除自定日程" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -4992,6 +5006,7 @@
       }
     },
     "刷新失败，请检查网络后重试" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -5002,6 +5017,7 @@
       }
     },
     "刷新完成" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -5012,61 +5028,12 @@
       }
     },
     "刷新完成，暂无内容" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh complete. No content yet."
-          }
-        }
-      }
-    },
-    "部分内容刷新失败，请重试" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Some content could not be refreshed. Try again."
-          }
-        }
-      }
-    },
-    "显示最新内容并回到顶部" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show the latest content and return to the top"
-          }
-        }
-      }
-    },
-    "有新内容" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New content available"
-          }
-        }
-      }
-    },
-    "已更新 %d 条内容" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Updated %d items"
-          }
-        }
-      }
-    },
-    "已是最新" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You're up to date"
           }
         }
       }
@@ -8043,6 +8010,28 @@
         }
       }
     },
+    "已是最新" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're up to date"
+          }
+        }
+      }
+    },
+    "已更新 %d 条内容" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated %d items"
+          }
+        }
+      }
+    },
     "已标记全部通知为已读。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8655,6 +8644,83 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Current academic login session is unavailable, please connect to the campus network first, then return to the login page to log in again."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续刚才的空教室查询。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. The classroom query will continue after verification."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续刷新培养方案。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. The training program refresh will continue after verification."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续刷新成绩。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. The grade refresh will continue after verification."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续刷新教学计划。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. The teaching plan refresh will continue after verification."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续刷新考试安排。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. The exam refresh will continue after verification."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续刷新课表。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. The schedule refresh will continue after verification."
+          }
+        }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续本次同步。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your academic system session has expired. This sync will continue after verification."
           }
         }
       }
@@ -10725,6 +10791,9 @@
         }
       }
     },
+    "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。" : {
+
+    },
     "日程信息" : {
       "localizations" : {
         "en-US" : {
@@ -10977,6 +11046,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nickname"
+          }
+        }
+      }
+    },
+    "显示最新内容并回到顶部" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the latest content and return to the top"
           }
         }
       }
@@ -11496,17 +11576,8 @@
         }
       }
     },
-    "修改账号或密码" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Change account or password"
-          }
-        }
-      }
-    },
     "暂时无法连接教务系统。请连接 bjfu-wifi 或北林 VPN 后，点击验证码区域重试。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -11653,6 +11724,16 @@
         }
       }
     },
+    "更新时会优先复用当前教务登录状态，失效后再进行验证。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your current academic system session is reused when possible. Verification is requested only after it expires."
+          }
+        }
+      }
+    },
     "更新评分" : {
       "localizations" : {
         "en-US" : {
@@ -11743,6 +11824,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Effectively recorded %lld times; the target is capped and displayed according to the current rules."
+          }
+        }
+      }
+    },
+    "有新内容" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New content available"
           }
         }
       }
@@ -12836,16 +12928,6 @@
         }
       }
     },
-    "正在连接教务系统…" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connecting to the academic system…"
-          }
-        }
-      }
-    },
     "正在同步社区身份" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12980,6 +13062,16 @@
         }
       }
     },
+    "正在连接教务系统…" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to the academic system…"
+          }
+        }
+      }
+    },
     "正文" : {
       "localizations" : {
         "en-US" : {
@@ -13104,16 +13196,6 @@
         }
       }
     },
-    "更新时会优先复用当前教务登录状态，失效后再进行验证。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your current academic system session is reused when possible. Verification is requested only after it expires."
-          }
-        }
-      }
-    },
     "每组目标 %arg 次" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13198,6 +13280,7 @@
       }
     },
     "永久删除" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15285,6 +15368,94 @@
         }
       }
     },
+    "继续刷新成绩" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue grade refresh"
+          }
+        }
+      }
+    },
+    "继续刷新方案" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue program refresh"
+          }
+        }
+      }
+    },
+    "继续刷新考试" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue exam refresh"
+          }
+        }
+      }
+    },
+    "继续刷新计划" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue plan refresh"
+          }
+        }
+      }
+    },
+    "继续刷新课表" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue schedule refresh"
+          }
+        }
+      }
+    },
+    "继续同步" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue sync"
+          }
+        }
+      }
+    },
+    "继续更新数据" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue data update"
+          }
+        }
+      }
+    },
+    "继续查询" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue query"
+          }
+        }
+      }
+    },
     "继续滑动加载更多" : {
       "localizations" : {
         "en-US" : {
@@ -15510,6 +15681,7 @@
       }
     },
     "编辑自定日程" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -18258,6 +18430,9 @@
         }
       }
     },
+    "透明度" : {
+
+    },
     "通用入口" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -18542,6 +18717,17 @@
         }
       }
     },
+    "部分内容刷新失败，请重试" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some content could not be refreshed. Try again."
+          }
+        }
+      }
+    },
     "部分节次教务返回无法确认，请以教务原页或现场为准。" : {
       "localizations" : {
         "en-US" : {
@@ -18646,6 +18832,7 @@
       }
     },
     "重新登录并更新数据" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -19000,16 +19187,6 @@
         }
       }
     },
-    "需要重新验证，请输入新的验证码。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verification is required. Enter the new code."
-          }
-        }
-      }
-    },
     "需要输入完整的 12 位邀请码" : {
       "localizations" : {
         "en-US" : {
@@ -19030,162 +19207,13 @@
         }
       }
     },
-    "当前教务登录状态已失效，验证后会继续刷新课表。" : {
+    "需要重新验证，请输入新的验证码。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your academic system session has expired. The schedule refresh will continue after verification."
-          }
-        }
-      }
-    },
-    "当前教务登录状态已失效，验证后会继续刷新成绩。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your academic system session has expired. The grade refresh will continue after verification."
-          }
-        }
-      }
-    },
-    "当前教务登录状态已失效，验证后会继续刷新考试安排。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your academic system session has expired. The exam refresh will continue after verification."
-          }
-        }
-      }
-    },
-    "当前教务登录状态已失效，验证后会继续刷新教学计划。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your academic system session has expired. The teaching plan refresh will continue after verification."
-          }
-        }
-      }
-    },
-    "当前教务登录状态已失效，验证后会继续刷新培养方案。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your academic system session has expired. The training program refresh will continue after verification."
-          }
-        }
-      }
-    },
-    "当前教务登录状态已失效，验证后会继续刚才的空教室查询。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your academic system session has expired. The classroom query will continue after verification."
-          }
-        }
-      }
-    },
-    "当前教务登录状态已失效，验证后会继续本次同步。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your academic system session has expired. This sync will continue after verification."
-          }
-        }
-      }
-    },
-    "验证后会获取所选日期和节次的空闲教室数据。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Available classroom data for the selected date and periods will load after verification."
-          }
-        }
-      }
-    },
-    "继续刷新课表" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue schedule refresh"
-          }
-        }
-      }
-    },
-    "继续刷新成绩" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue grade refresh"
-          }
-        }
-      }
-    },
-    "继续刷新考试" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue exam refresh"
-          }
-        }
-      }
-    },
-    "继续刷新计划" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue plan refresh"
-          }
-        }
-      }
-    },
-    "继续刷新方案" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue program refresh"
-          }
-        }
-      }
-    },
-    "继续查询" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue query"
-          }
-        }
-      }
-    },
-    "继续更新数据" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue data update"
-          }
-        }
-      }
-    },
-    "继续同步" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue sync"
+            "value" : "Verification is required. Enter the new code."
           }
         }
       }
@@ -19354,6 +19382,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verifying"
+          }
+        }
+      }
+    },
+    "验证后会获取所选日期和节次的空闲教室数据。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available classroom data for the selected date and periods will load after verification."
           }
         }
       }

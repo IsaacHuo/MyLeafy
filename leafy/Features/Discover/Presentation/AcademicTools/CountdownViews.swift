@@ -144,29 +144,65 @@ struct CustomScheduleListView: View {
     }
 
     private var scheduleList: some View {
-        AcademicDetailScrollContainer(
-            performsInitialLayoutRefresh: presentation != .daytraceRoot
-        ) {
+        List {
             if sortedItems.isEmpty {
                 AcademicDetailCard {
                     ContentUnavailableView("暂无自定日程", systemImage: "calendar.badge.plus")
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(listRowInsets)
             } else {
                 ForEach(sortedItems) { item in
-                    AcademicDetailCard {
-                        CustomScheduleListRow(
-                            item: item,
-                            onEdit: { edit(item) },
-                            onDelete: { delete(item) }
-                        )
+                    Button {
+                        edit(item)
+                    } label: {
+                        AcademicDetailCard {
+                            CustomScheduleListRow(item: item)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            delete(item)
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(listRowInsets)
                 }
             }
 
-            AcademicDetailFooterText(
-                text: "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。"
-            )
+            Text("日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。")
+                .font(.footnote)
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(
+                    top: AppSpacing.compact,
+                    leading: AppSpacing.page,
+                    bottom: AppSpacing.compact,
+                    trailing: AppSpacing.page
+                ))
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(LeafyPageBackground())
+        .frame(maxWidth: 840, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private var listRowInsets: EdgeInsets {
+        EdgeInsets(
+            top: AppSpacing.micro,
+            leading: AppSpacing.page,
+            bottom: AppSpacing.micro,
+            trailing: AppSpacing.page
+        )
     }
 
     private func reloadImportantDates() {
@@ -351,8 +387,6 @@ private enum CustomScheduleListItem: Identifiable {
 
 private struct CustomScheduleListRow: View {
     let item: CustomScheduleListItem
-    let onEdit: () -> Void
-    let onDelete: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: AppSpacing.compact) {
@@ -385,27 +419,9 @@ private struct CustomScheduleListRow: View {
 
                     Spacer(minLength: AppSpacing.micro)
 
-                    HStack(spacing: AppSpacing.micro) {
-                        Button(action: onEdit) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppTheme.accentEmphasis)
-                                .frame(width: 34, height: 34)
-                                .background(AppTheme.softFill, in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("编辑自定日程")
-
-                        Button(role: .destructive, action: onDelete) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppTheme.danger)
-                                .frame(width: 34, height: 34)
-                                .background(AppTheme.danger.opacity(0.1), in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("删除自定日程")
-                    }
+                    Text(CountdownEventRow.countdownDescription(for: item.startDate))
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(AppTheme.primaryText)
                 }
 
                 if !detailText.isEmpty {
@@ -414,12 +430,9 @@ private struct CustomScheduleListRow: View {
                         .foregroundStyle(AppTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Text(CountdownEventRow.countdownDescription(for: item.startDate))
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(AppTheme.primaryText)
             }
         }
+        .contentShape(Rectangle())
     }
 
     private var dateText: String {

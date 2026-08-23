@@ -142,7 +142,7 @@ struct CommunityRootView: View {
     @StateObject private var communityFeedViewModel = CommunityFeedViewModel()
     @ObservedObject var notificationBadgeViewModel: CommunityNotificationBadgeViewModel
 
-    @State private var isTopicFilterPresented = false
+    @State private var isTopicFilterPresented = true
     @State private var selectedCommunityCategory: String?
     @State private var isShowingHotPosts = false
     @State private var communityFeedContentFilter: CommunityFeedContentFilter = .all
@@ -422,7 +422,7 @@ struct CommunityRootView: View {
         } label: {
             HStack(spacing: 8 * leafyControlScale) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(AppTheme.tertiaryText)
+                    .foregroundStyle(.primary)
 
                 Text(L10n.text("搜索帖子", language: leafyLanguage))
                     .leafyBody()

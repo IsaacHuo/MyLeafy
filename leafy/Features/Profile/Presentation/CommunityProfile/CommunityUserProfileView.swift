@@ -23,6 +23,7 @@ struct CommunityUserProfileView: View {
     @State private var errorMessage: String?
     @State private var selectedPost: CommunityPost?
     @State private var draftCount = 0
+    @State private var isEditingProfile = false
 
     init(
         profileID: UUID?,
@@ -63,13 +64,14 @@ struct CommunityUserProfileView: View {
         .toolbar {
             if allowsEditing {
                 ToolbarItem(placement: .leafyTrailing) {
-                    NavigationLink {
-                        CommunityProfileEditorView()
-                    } label: {
-                        Text(L10n.text("编辑", language: leafyLanguage))
+                    Button(L10n.text("编辑", language: leafyLanguage)) {
+                        isEditingProfile = true
                     }
                 }
             }
+        }
+        .navigationDestination(isPresented: $isEditingProfile) {
+            CommunityProfileEditorView()
         }
         .task(id: loadTaskID) {
             await load()

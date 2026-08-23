@@ -110,6 +110,8 @@ struct TimetableView: View {
     private var timetableCurrentTimeIndicatorIsEnabled = TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
     @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey)
     private var timetableCurrentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.defaultThickness
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.transparencyKey)
+    private var timetableCurrentTimeIndicatorTransparency = TimetableCurrentTimeIndicatorPreference.defaultTransparency
 
     private static let backgroundLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
@@ -1110,7 +1112,7 @@ struct TimetableView: View {
             Button {
                 isWeatherAdvicePresented = true
             } label: {
-                weatherTextLabel(cachedTimetableWeather.timetableCapsuleText(language: leafyLanguage))
+                weatherCapsuleLabel(cachedTimetableWeather)
             }
             .accessibilityLabel(
                 L10n.text(
@@ -1138,13 +1140,19 @@ struct TimetableView: View {
             .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
     }
 
-    private func weatherTextLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.body)
-            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .layoutPriority(1)
+    private func weatherCapsuleLabel(_ weather: TimetableWeatherSnapshot) -> some View {
+        HStack(spacing: 6 * leafyControlScale) {
+            Image(systemName: weather.symbolName.isEmpty ? "cloud.sun" : weather.symbolName)
+                .font(.system(size: 13 * leafyControlScale, weight: .semibold))
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+
+            Text("\(Int(weather.temperature.rounded()))°C")
+                .font(.body)
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .layoutPriority(1)
     }
 
     private func presentFreeScheduleSheet() {
@@ -1456,10 +1464,32 @@ struct TimetableView: View {
                                     payload,
                                     metrics: metrics,
                                     gridSnapshot: gridSnapshot,
-                                    isInteractionActive: visualState.isInteractionActive,
-                                    currentTimeY: currentTimeY
+                                    isInteractionActive: visualState.isInteractionActive
                                 )
                             }
+                        }
+
+                        if timetableCurrentTimeIndicatorIsEnabled,
+                           let y = currentTimeY {
+                            Rectangle()
+                                .fill(AppTheme.accentEmphasis(for: themeColorPreference))
+                                .opacity(
+                                    1 - TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(
+                                        timetableCurrentTimeIndicatorTransparency
+                                    )
+                                )
+                                .frame(
+                                    width: viewportWidth,
+                                    height: CGFloat(
+                                        TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
+                                            timetableCurrentTimeIndicatorThickness
+                                        )
+                                    )
+                                )
+                                .position(x: viewportWidth * 0.5, y: y)
+                                .zIndex(10)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
                         }
 
                         if visualState.isInteractionActive {
@@ -1485,8 +1515,7 @@ struct TimetableView: View {
         _ payload: TimetableZoomDayRenderPayload,
         metrics: TimetableLayoutMetrics,
         gridSnapshot: TimetableGridSnapshot,
-        isInteractionActive: Bool,
-        currentTimeY: CGFloat?
+        isInteractionActive: Bool
     ) -> some View {
         GeometryReader { proxy in
             if let week = payload.preparedDay.academicWeek,
@@ -1501,25 +1530,6 @@ struct TimetableView: View {
                         metadata: metadata,
                         preparedPayload: payload
                     )
-
-                    if timetableCurrentTimeIndicatorIsEnabled,
-                       metadata.isToday,
-                       let y = currentTimeY {
-                        Rectangle()
-                            .fill(AppTheme.accentEmphasis(for: themeColorPreference))
-                            .frame(
-                                width: proxy.size.width,
-                                height: CGFloat(
-                                    TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
-                                        timetableCurrentTimeIndicatorThickness
-                                    )
-                                )
-                            )
-                            .position(x: proxy.size.width * 0.5, y: y)
-                            .zIndex(10)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
                 }
                 .allowsHitTesting(!isInteractionActive)
             } else {

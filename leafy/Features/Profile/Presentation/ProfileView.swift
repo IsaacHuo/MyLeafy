@@ -885,6 +885,7 @@ private struct PersonalizationSettingsView: View {
     @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system.rawValue
     @AppStorage(TimetableCurrentTimeIndicatorPreference.isEnabledKey) private var currentTimeIndicatorIsEnabled = TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
     @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey) private var currentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.defaultThickness
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.transparencyKey) private var currentTimeIndicatorTransparency = TimetableCurrentTimeIndicatorPreference.defaultTransparency
     @State private var showingCustomThemeColorPicker = false
 
     private var themeColorPreference: AppThemeColorPreference {
@@ -914,6 +915,17 @@ private struct PersonalizationSettingsView: View {
             },
             set: { newValue in
                 currentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.sanitizedThickness(newValue)
+            }
+        )
+    }
+
+    private var currentTimeIndicatorTransparencyBinding: Binding<Double> {
+        Binding(
+            get: {
+                TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(currentTimeIndicatorTransparency)
+            },
+            set: { newValue in
+                currentTimeIndicatorTransparency = TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(newValue)
             }
         )
     }
@@ -1041,6 +1053,22 @@ private struct PersonalizationSettingsView: View {
                         value: currentTimeIndicatorThicknessBinding,
                         in: TimetableCurrentTimeIndicatorPreference.thicknessRange,
                         step: TimetableCurrentTimeIndicatorPreference.thicknessStep
+                    )
+                    .disabled(!currentTimeIndicatorIsEnabled)
+                }
+
+                VStack(alignment: .leading, spacing: AppSpacing.micro) {
+                    HStack {
+                        Text("透明度")
+                        Spacer()
+                        Text("\(Int(TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(currentTimeIndicatorTransparency) * 100))%")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: currentTimeIndicatorTransparencyBinding,
+                        in: TimetableCurrentTimeIndicatorPreference.transparencyRange,
+                        step: TimetableCurrentTimeIndicatorPreference.transparencyStep
                     )
                     .disabled(!currentTimeIndicatorIsEnabled)
                 }

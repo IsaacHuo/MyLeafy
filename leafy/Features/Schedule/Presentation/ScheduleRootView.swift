@@ -3027,14 +3027,21 @@ private struct ScheduleMemoTrashView: View {
                 ContentUnavailableView("回收站为空", systemImage: "trash", description: Text("移入回收站的随记不会自动到期。"))
             } else {
                 ForEach(trashed) { memo in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(memo.body.isEmpty ? (memo.kind == .audio ? "录音随记" : "图片随记") : memo.body).lineLimit(4)
-                        HStack {
-                            Button("恢复") { restore(memo) }.buttonStyle(.bordered)
-                            Button("永久删除", role: .destructive) { permanentlyDelete(memo) }.buttonStyle(.bordered)
+                    Text(memo.body.isEmpty ? (memo.kind == .audio ? "录音随记" : "图片随记") : memo.body)
+                        .lineLimit(4)
+                        .padding(.vertical, 5)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                permanentlyDelete(memo)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            Button {
+                                restore(memo)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward")
+                            }
                         }
-                    }
-                    .padding(.vertical, 5)
                 }
             }
         }

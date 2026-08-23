@@ -99,6 +99,15 @@ nonisolated struct TimetableZoomGeometry: Equatable, Sendable {
             + (anchorCentered - weekAligned) * resolvedProgress
             + horizontalOffset
     }
+
+    func currentWeekTimeLineXRange() -> ClosedRange<CGFloat>? {
+        let weekStartX = laneLeading(ordinal: TimetableZoomRenderWindow.middleWeekStartOrdinal) + contentTranslation
+        let weekEndX = laneLeading(ordinal: TimetableZoomRenderWindow.middleWeekStartOrdinal + 7) + contentTranslation
+        let clippedStart = max(0, min(weekStartX, viewportWidth))
+        let clippedEnd = max(0, min(weekEndX, viewportWidth))
+        guard clippedEnd > clippedStart else { return nil }
+        return clippedStart...clippedEnd
+    }
 }
 
 nonisolated struct TimetableContinuousColumnsLayout: Layout {
@@ -185,7 +194,7 @@ struct TimetableContinuousCenterDateReader<Content: View>: View {
 @MainActor
 @Observable
 final class TimetableContinuousViewportController {
-    private static let fullMagnification: CGFloat = 1.5
+    private static let fullMagnification: CGFloat = 1.8
     private static let projectionHorizon: CGFloat = 0.16
     private static let spring = Spring(response: 0.34, dampingRatio: 0.92)
 
@@ -213,6 +222,7 @@ final class TimetableContinuousViewportController {
     @ObservationIgnored private var displayLink: CADisplayLink?
     @ObservationIgnored private lazy var displayLinkTarget = TimetableDisplayLinkTarget(owner: self)
     @ObservationIgnored private var calendar: Calendar
+    private let boundaryFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
 
     private enum AnimationKind: Equatable {
         case none
@@ -295,6 +305,7 @@ final class TimetableContinuousViewportController {
         }
         gestureStartProgress = zoomProgress
         phase = .pinching
+        boundaryFeedbackGenerator.prepare()
     }
 
     func updateMagnification(_ magnification: CGFloat) {
@@ -304,7 +315,9 @@ final class TimetableContinuousViewportController {
         #endif
         let safeMagnification = max(magnification, 0.001)
         let delta = log(safeMagnification) / log(Self.fullMagnification)
+        let previousProgress = zoomProgress
         zoomProgress = min(max(gestureStartProgress + delta, 0), 1)
+        playBoundaryHapticIfNeeded(from: previousProgress, to: zoomProgress)
     }
 
     func endMagnification(
@@ -326,6 +339,7 @@ final class TimetableContinuousViewportController {
             phase = .idle
             return
         }
+        boundaryFeedbackGenerator.prepare()
         startAnimation(
             kind: .zoom,
             value: Double(zoomProgress),
@@ -420,7 +434,9 @@ final class TimetableContinuousViewportController {
         )
         switch animationKind {
         case .zoom:
+            let previousProgress = zoomProgress
             zoomProgress = min(max(CGFloat(animatedValue), 0), 1)
+            playBoundaryHapticIfNeeded(from: previousProgress, to: zoomProgress)
         case .page:
             horizontalOffset = CGFloat(animatedValue)
         case .none:
@@ -433,7 +449,9 @@ final class TimetableContinuousViewportController {
             stopAnimation()
             switch completedKind {
             case .zoom:
+                let previousProgress = zoomProgress
                 zoomProgress = CGFloat(animationTarget)
+                playBoundaryHapticIfNeeded(from: previousProgress, to: zoomProgress)
                 phase = .idle
             case let .page(direction):
                 completePage(direction: direction)
@@ -504,6 +522,13 @@ final class TimetableContinuousViewportController {
         let weekday = calendar.component(.weekday, from: normalized)
         let offset = (weekday + 5) % 7
         return calendar.date(byAdding: .day, value: -offset, to: normalized) ?? normalized
+    }
+
+    private func playBoundaryHapticIfNeeded(from previous: CGFloat, to new: CGFloat) {
+        let reachedFullWeek = previous > 0.001 && new <= 0.001
+        let reachedThreeDay = previous < 0.999 && new >= 0.999
+        guard reachedFullWeek || reachedThreeDay else { return }
+        boundaryFeedbackGenerator.impactOccurred()
     }
 }
 

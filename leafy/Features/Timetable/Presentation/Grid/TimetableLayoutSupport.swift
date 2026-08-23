@@ -6,13 +6,21 @@ import UniformTypeIdentifiers
 nonisolated enum TimetableCurrentTimeIndicatorPreference {
     static let isEnabledKey = "timetableCurrentTimeIndicatorEnabled"
     static let thicknessKey = "timetableCurrentTimeIndicatorThickness"
+    static let transparencyKey = "timetableCurrentTimeIndicatorTransparency"
     static let defaultIsEnabled = true
     static let defaultThickness = 2.0
+    static let defaultTransparency = 0.5
     static let thicknessRange = 1.0...6.0
     static let thicknessStep = 0.5
+    static let transparencyRange = 0.0...1.0
+    static let transparencyStep = 0.05
 
     static func sanitizedThickness(_ value: Double) -> Double {
         min(max(value, thicknessRange.lowerBound), thicknessRange.upperBound)
+    }
+
+    static func sanitizedTransparency(_ value: Double) -> Double {
+        min(max(value, transparencyRange.lowerBound), transparencyRange.upperBound)
     }
 }
 
