@@ -20,6 +20,27 @@ final class AcademicOperationProgressTests: XCTestCase {
         )
     }
 
+    func testLoginFailureClassifierOnlyRetriesCaptchaFailures() {
+        XCTAssertEqual(
+            SchoolLoginFailureClassifier.classify(
+                SchoolNetworkError.loginFailed("验证码错误")
+            ),
+            .captchaRejected
+        )
+        XCTAssertEqual(
+            SchoolLoginFailureClassifier.classify(
+                SchoolNetworkError.loginFailed("账号或密码错误")
+            ),
+            .credentialsRejected("账号或密码错误")
+        )
+        XCTAssertEqual(
+            SchoolLoginFailureClassifier.classify(
+                SchoolNetworkError.campusNetworkRequired
+            ),
+            .networkUnavailable
+        )
+    }
+
     @MainActor
     func testFastProgressUpdatesKeepCompletedHistory() {
         let controller = AcademicOperationProgressController()
@@ -50,6 +71,25 @@ final class AcademicOperationProgressTests: XCTestCase {
 
         XCTAssertEqual(controller.progress?.steps[0].status, .failed("页面结构异常"))
         XCTAssertEqual(controller.progress?.steps[1].status, .running)
+    }
+
+    @MainActor
+    func testCaptchaAttemptsRemainSeparateProgressSteps() {
+        let controller = AcademicOperationProgressController()
+        let reporter = controller.reporter(for: .grades)
+
+        reporter(.beginAttempt(.recognizingCaptcha, current: 1, total: 3))
+        reporter(.fail(.recognizingCaptcha, "识别结果不可靠"))
+        reporter(.beginAttempt(.refreshingCaptcha, current: 2, total: 3))
+        reporter(.beginAttempt(.recognizingCaptcha, current: 2, total: 3))
+
+        XCTAssertEqual(controller.progress?.steps.map(\.id), [
+            "recognizingCaptcha.1",
+            "refreshingCaptcha.2",
+            "recognizingCaptcha.2"
+        ])
+        XCTAssertEqual(controller.progress?.steps[0].status, .failed("识别结果不可靠"))
+        XCTAssertEqual(controller.progress?.steps[2].status, .running)
     }
 
     @MainActor

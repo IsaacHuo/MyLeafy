@@ -312,16 +312,20 @@ private struct SchoolReauthenticationSheet: View {
         onAuthenticated: @escaping () -> Void
     ) {
         _networkManager = ObservedObject(wrappedValue: networkManager)
-        let credential = presentation.challenge?.credential ?? SchoolLoginCredentialStore.load(
-            campusID: networkManager.campusDescriptor.id,
-            portal: presentation.context.portal
-        )
+        let credential = presentation.challenge?.prefersCredentialEntry == true
+            ? nil
+            : presentation.challenge?.credential ?? SchoolLoginCredentialStore.load(
+                campusID: networkManager.campusDescriptor.id,
+                portal: presentation.context.portal
+            )
         let authenticatedAccount = networkManager.authenticatedEduID ?? ""
         let matchingCredential = credential?.account == authenticatedAccount ? credential : nil
         _account = State(initialValue: matchingCredential?.account ?? authenticatedAccount)
         _password = State(initialValue: matchingCredential?.password ?? "")
         _challenge = State(initialValue: presentation.challenge)
-        _showsCredentialFields = State(initialValue: matchingCredential == nil)
+        _showsCredentialFields = State(
+            initialValue: presentation.challenge?.prefersCredentialEntry == true || matchingCredential == nil
+        )
         _errorMessage = State(initialValue: presentation.initialMessage)
         _prefilledAccount = State(initialValue: matchingCredential?.account)
         self.presentation = presentation

@@ -216,6 +216,47 @@ nonisolated enum UndergraduateCaptchaPolicy {
     }
 }
 
+nonisolated struct CaptchaRecoveryPolicy: Equatable, Sendable {
+    let maximumAttempts: Int
+    let retryDelay: Duration
+
+    static let automatic = CaptchaRecoveryPolicy(
+        maximumAttempts: 3,
+        retryDelay: .milliseconds(300)
+    )
+}
+
+nonisolated enum SchoolLoginFailureClassification: Equatable, Sendable {
+    case captchaRejected
+    case credentialsRejected(String)
+    case networkUnavailable
+    case terminal(String)
+}
+
+nonisolated enum SchoolLoginFailureClassifier {
+    static func classify(_ error: Error) -> SchoolLoginFailureClassification {
+        if case SchoolNetworkError.campusNetworkRequired = error {
+            return .networkUnavailable
+        }
+
+        guard case SchoolNetworkError.loginFailed(let message) = error else {
+            return .terminal(error.localizedDescription)
+        }
+
+        let normalized = message.lowercased()
+        let captchaMarkers = ["验证码", "随机码", "校验码", "verification code", "captcha"]
+        if captchaMarkers.contains(where: normalized.contains) {
+            return .captchaRejected
+        }
+
+        let credentialMarkers = ["密码", "账号", "帐号", "用户名", "用户不存在", "锁定", "冻结"]
+        if credentialMarkers.contains(where: normalized.contains) {
+            return .credentialsRejected(message)
+        }
+        return .terminal(message)
+    }
+}
+
 @MainActor
 protocol SchoolAuthenticationClient: AnyObject {
     var campusDescriptor: CampusDescriptor { get }
@@ -248,6 +289,21 @@ struct SchoolCaptchaChallenge {
     let key: String
     let image: UIImage
     let credential: SchoolLoginCredential?
+    let prefersCredentialEntry: Bool
+
+    init(
+        portal: SchoolPortal,
+        key: String,
+        image: UIImage,
+        credential: SchoolLoginCredential?,
+        prefersCredentialEntry: Bool = false
+    ) {
+        self.portal = portal
+        self.key = key
+        self.image = image
+        self.credential = credential
+        self.prefersCredentialEntry = prefersCredentialEntry
+    }
 }
 
 enum SchoolAuthenticationRecoveryResult {
@@ -275,78 +331,134 @@ struct SchoolAuthenticationService {
     func recover(
         portal: SchoolPortal,
         allowsAutomaticAttempt: Bool,
-        progressReporter: AcademicOperationProgressReporter? = nil
+        progressReporter: AcademicOperationProgressReporter? = nil,
+        policy: CaptchaRecoveryPolicy = .automatic
     ) async throws -> SchoolAuthenticationRecoveryResult {
         progressReporter?(.begin(.connectingAcademicSystem))
-        let challenge: SchoolCaptchaChallenge
-        do {
-            challenge = try await fetchManualChallenge(portal: portal)
-        } catch {
-            if case SchoolNetworkError.campusNetworkRequired = error {
-                return .networkUnavailable
-            }
-            throw error
-        }
-
+        let credential = matchingCredential(portal: portal)
         guard allowsAutomaticAttempt,
               portal == .undergraduate,
-              let credential = challenge.credential else {
-            return .requiresManual(challenge, message: nil)
+              let credential else {
+            return try await manualChallenge(portal: portal)
         }
 
-        let recognition: CaptchaResult
-        do {
-            guard let cgImage = challenge.image.cgImage else {
-                return .requiresManual(challenge, message: nil)
-            }
-            progressReporter?(.begin(.recognizingCaptcha))
-            recognition = try await recognizer.recognize(cgImage)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            return .requiresManual(challenge, message: nil)
-        }
-
-        guard let captcha = UndergraduateCaptchaPolicy.automaticCandidate(from: recognition) else {
-            return .requiresManual(challenge, message: nil)
-        }
-
-        do {
-            progressReporter?(.begin(.authenticating))
-            let didLogin = try await client.performLogin(
-                account: credential.account,
-                password: credential.password,
-                captcha: captcha,
-                key: challenge.key,
-                portal: portal
-            )
-            guard didLogin else {
-                return try await freshManualChallenge(
-                    portal: portal,
-                    message: "需要重新验证，请输入新的验证码。"
+        let maximumAttempts = max(policy.maximumAttempts, 1)
+        for attempt in 1...maximumAttempts {
+            try Task.checkCancellation()
+            if attempt > 1 {
+                try await Task.sleep(for: policy.retryDelay)
+                progressReporter?(
+                    .beginAttempt(.refreshingCaptcha, current: attempt, total: maximumAttempts)
                 )
             }
-            return .authenticated
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            if case SchoolNetworkError.campusNetworkRequired = error {
-                return .networkUnavailable
+
+            let challenge: SchoolCaptchaChallenge
+            do {
+                challenge = try await fetchManualChallenge(portal: portal)
+            } catch {
+                if case SchoolNetworkError.campusNetworkRequired = error {
+                    return .networkUnavailable
+                }
+                throw error
             }
-            return try await freshManualChallenge(
-                portal: portal,
-                message: "需要重新验证，请输入新的验证码。"
-            )
+
+            let captcha: String?
+            do {
+                guard let cgImage = challenge.image.cgImage else {
+                    throw CaptchaRecognitionError.preprocessingFailed
+                }
+                progressReporter?(
+                    .beginAttempt(.recognizingCaptcha, current: attempt, total: maximumAttempts)
+                )
+                let recognition = try await recognizer.recognize(cgImage)
+                captcha = UndergraduateCaptchaPolicy.automaticCandidate(from: recognition)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                captcha = nil
+            }
+
+            guard let captcha else {
+                progressReporter?(.fail(.recognizingCaptcha, "识别结果不可靠"))
+                if attempt == maximumAttempts {
+                    return .requiresManual(
+                        challenge,
+                        message: "自动识别未通过，请手动输入验证码。"
+                    )
+                }
+                continue
+            }
+
+            do {
+                progressReporter?(
+                    .beginAttempt(.authenticating, current: attempt, total: maximumAttempts)
+                )
+                let didLogin = try await client.performLogin(
+                    account: credential.account,
+                    password: credential.password,
+                    captcha: captcha,
+                    key: challenge.key,
+                    portal: portal
+                )
+                if didLogin {
+                    return .authenticated
+                }
+
+                progressReporter?(.fail(.authenticating, "验证码校验失败"))
+                if attempt == maximumAttempts {
+                    return try await freshManualChallenge(
+                        portal: portal,
+                        message: "三次自动验证均未成功，请手动输入验证码。"
+                    )
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                switch SchoolLoginFailureClassifier.classify(error) {
+                case .captchaRejected:
+                    progressReporter?(.fail(.authenticating, "验证码校验失败"))
+                    if attempt == maximumAttempts {
+                        return try await freshManualChallenge(
+                            portal: portal,
+                            message: "三次自动验证均未成功，请手动输入验证码。"
+                        )
+                    }
+                case .credentialsRejected(let message):
+                    progressReporter?(.fail(.authenticating, "账号或密码需要确认"))
+                    return try await freshManualChallenge(
+                        portal: portal,
+                        message: message,
+                        usesStoredCredential: false
+                    )
+                case .networkUnavailable:
+                    return .networkUnavailable
+                case .terminal(let message):
+                    progressReporter?(.fail(.authenticating, message))
+                    return try await freshManualChallenge(
+                        portal: portal,
+                        message: message
+                    )
+                }
+            }
         }
+
+        return try await freshManualChallenge(
+            portal: portal,
+            message: "三次自动验证均未成功，请手动输入验证码。"
+        )
     }
 
-    func fetchManualChallenge(portal: SchoolPortal) async throws -> SchoolCaptchaChallenge {
+    func fetchManualChallenge(
+        portal: SchoolPortal,
+        usesStoredCredential: Bool = true
+    ) async throws -> SchoolCaptchaChallenge {
         let captcha = try await client.fetchCaptcha(for: portal)
         return SchoolCaptchaChallenge(
             portal: portal,
             key: captcha.key,
             image: captcha.image,
-            credential: matchingCredential(portal: portal)
+            credential: usesStoredCredential ? matchingCredential(portal: portal) : nil,
+            prefersCredentialEntry: !usesStoredCredential
         )
     }
 
@@ -367,11 +479,31 @@ struct SchoolAuthenticationService {
 
     private func freshManualChallenge(
         portal: SchoolPortal,
-        message: String
+        message: String,
+        usesStoredCredential: Bool = true
     ) async throws -> SchoolAuthenticationRecoveryResult {
         do {
-            let challenge = try await fetchManualChallenge(portal: portal)
+            let challenge = try await fetchManualChallenge(
+                portal: portal,
+                usesStoredCredential: usesStoredCredential
+            )
             return .requiresManual(challenge, message: message)
+        } catch {
+            if case SchoolNetworkError.campusNetworkRequired = error {
+                return .networkUnavailable
+            }
+            throw error
+        }
+    }
+
+    private func manualChallenge(
+        portal: SchoolPortal
+    ) async throws -> SchoolAuthenticationRecoveryResult {
+        do {
+            return .requiresManual(
+                try await fetchManualChallenge(portal: portal),
+                message: nil
+            )
         } catch {
             if case SchoolNetworkError.campusNetworkRequired = error {
                 return .networkUnavailable

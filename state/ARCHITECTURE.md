@@ -163,7 +163,7 @@ flowchart TB
 ### `leafy/Services/`
 
 - `SchoolNetworkManager.swift` + `+Core/+Auth/+Timetable/+Discover.swift`：强智登录、Cookie 管理、教务请求、页面识别、会话失效。
-- `SchoolAuthenticationService` / `SchoolReauthentication`：用户主动教务操作的 Session-first 恢复协调；本科对同一验证码做三路端侧 Vision 一致性识别，研究生与不可靠结果进入人工验证，校园网不可达只提示连接后重试。
+- `SchoolAuthenticationService` / `SchoolReauthentication`：用户主动教务操作的 Session-first 恢复协调；本科最多执行三轮“刷新验证码 → 三路端侧 Vision 共识 → 登录验证”，只对 OCR 不可靠或明确验证码错误继续，研究生与最终失败进入人工验证，校园网不可达只提示连接后重试。
 - `AcademicOperationProgress`：页面局部的用户主动教务操作进度；记录已完成、进行中和失败步骤，认证层与具体数据用例通过 MainActor reporter 汇入，同一模型不用于后台预取。
 - `SchoolDataSyncService` / `SchoolDataPrefetchCoordinator`：教务数据同步与预取。
 - `SchoolLoginCredentialStore` / `SchoolSessionCredentialStore`：学校凭据与会话存储。
@@ -183,7 +183,7 @@ flowchart TB
 ```text
 SchoolNetworkManager（URLSession 主链路 / WKWebView 课表兼容）
   → 现有 Cookie 直接请求；明确 Session 过期后才进入认证恢复
-  → 本科同图三路 Vision 一致性识别 / 人工验证码 fallback
+  → 本科最多三轮验证码刷新与同图三路 Vision 共识 / 人工验证码 fallback
   → HTMLParser（SwiftSoup → Course/Grade/考试/教室等模型）
   → SwiftData 本地缓存
   → TimetableGridSnapshot 等展示投影 → SwiftUI / Widget
@@ -261,7 +261,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 - 学校课表按 `sourceSemesterID` 分学期替换并保留历史学期；课程备注、课次备注和课程提醒使用学期作用域键，切换最新学期不得删除或串用历史本地记录。
 - 用户主动发起教务请求时必须优先复用当前 URLSession/Cookie，不发送额外的联网 Session 预检。只有服务端明确确认 Session 失效才进入恢复；校园网不可达不得清除 Cookie 或触发验证码。后台预取不主动认证。
 - 无 Session 时通过学校验证码端点是否可访问判断网络条件；校园网不可达只提示连接 `bjfu-wifi` 或北林 VPN 后再次操作，不进入人工验证码 sheet，也不监听网络变化自动重试。
-- 本科自动恢复使用 Keychain 中与当前身份匹配的账号密码和同一 URLSession 获取、提交验证码；验证码字母按学校规则统一为小写，原图、四倍 Lanczos 放大图、四倍放大灰度增强图至少两路得到相同的 `[a-z0-9]{4}`，且支持结果的最低置信度不低于 0.85 时，最多自动提交一次。服务端拒绝该结果后立即获取新验证码转人工，不再执行第二轮 OCR；其他结果冲突、格式或置信度不合格也直接转人工，研究生端不做自动 OCR。
+- 本科自动恢复使用 Keychain 中与当前身份匹配的账号密码；总共最多三轮，每轮重新获取一张验证码及其 Session，并在同一 URLSession 内完成原图、四倍 Lanczos 放大图、四倍放大灰度增强图识别和登录提交。字母统一为小写，至少两路得到相同的 `[a-z0-9]{4}` 且最低置信度不低于 0.85 时才提交。OCR 不可靠不提交登录并刷新下一张；学校明确返回验证码错误时进入下一轮；账号密码、校园网和未知错误立即停止。第三轮仍失败时人工输入，若第三轮已提交则额外获取一张不再 OCR 的人工验证码。研究生端不做自动 OCR。
 - 用户主动教务操作必须展示与实际请求范围一致的步骤历史：课表只显示课表步骤，成绩只显示成绩步骤，“我的”显示全量步骤，教学与培养一次刷新两类数据，空教室只显示身份恢复与当前查询。单步失败不得被后续步骤覆盖；后台预取不展示进度。
 - 多步骤教务同步只有解析、保存或单页面结构异常可以记录失败后继续；一旦学校请求确认校园网不可达，必须立即终止剩余请求、关闭进度卡并提示连接 `bjfu-wifi` 或北林 VPN 后重试，最近成功缓存继续保留。
 - 校园一级领域包括 `自习安排` 与 `学习空间`；`空闲教室` 是 `自习安排` 下的内部工具；专注记录归 `学习空间`。

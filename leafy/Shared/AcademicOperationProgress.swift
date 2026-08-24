@@ -34,6 +34,7 @@ nonisolated enum AcademicOperationKind: String, Equatable, Sendable {
     var allowedStages: Set<AcademicOperationStage> {
         let authentication: Set<AcademicOperationStage> = [
             .connectingAcademicSystem,
+            .refreshingCaptcha,
             .recognizingCaptcha,
             .authenticating
         ]
@@ -74,6 +75,7 @@ nonisolated enum AcademicOperationKind: String, Equatable, Sendable {
 
 nonisolated enum AcademicOperationStage: String, Equatable, Hashable, Sendable {
     case connectingAcademicSystem
+    case refreshingCaptcha
     case recognizingCaptcha
     case authenticating
     case refreshingSemester
@@ -100,6 +102,8 @@ nonisolated enum AcademicOperationStage: String, Equatable, Hashable, Sendable {
         switch self {
         case .connectingAcademicSystem:
             return "正在连接教务系统"
+        case .refreshingCaptcha:
+            return "正在刷新验证码"
         case .recognizingCaptcha:
             return "正在识别验证码"
         case .authenticating:
@@ -153,10 +157,10 @@ nonisolated enum AcademicOperationStepStatus: Equatable, Sendable {
 }
 
 nonisolated struct AcademicOperationStep: Equatable, Identifiable, Sendable {
+    let id: String
     let stage: AcademicOperationStage
+    let detail: String?
     var status: AcademicOperationStepStatus
-
-    var id: AcademicOperationStage { stage }
 }
 
 nonisolated struct AcademicOperationProgress: Equatable, Sendable {
@@ -170,6 +174,7 @@ nonisolated struct AcademicOperationProgress: Equatable, Sendable {
 
 nonisolated enum AcademicOperationProgressEvent: Equatable, Sendable {
     case begin(AcademicOperationStage)
+    case beginAttempt(AcademicOperationStage, current: Int, total: Int)
     case fail(AcademicOperationStage, String)
 }
 
@@ -200,34 +205,76 @@ final class AcademicOperationProgressController {
 
         let stage: AcademicOperationStage
         switch event {
-        case .begin(let eventStage), .fail(let eventStage, _):
+        case .begin(let eventStage),
+             .beginAttempt(let eventStage, _, _),
+             .fail(let eventStage, _):
             stage = eventStage
         }
         guard kind.allowedStages.contains(stage) else { return }
 
         switch event {
         case .begin(let stage):
-            if let runningIndex = progress.steps.lastIndex(where: { $0.status == .running }) {
-                progress.steps[runningIndex].status = .completed
-            }
-            if let existingIndex = progress.steps.firstIndex(where: { $0.stage == stage }) {
-                var step = progress.steps.remove(at: existingIndex)
-                step.status = .running
-                progress.steps.append(step)
-            } else {
-                progress.steps.append(AcademicOperationStep(stage: stage, status: .running))
-            }
+            beginStep(
+                id: stage.rawValue,
+                stage: stage,
+                detail: nil,
+                progress: &progress
+            )
+        case .beginAttempt(let stage, let current, let total):
+            beginStep(
+                id: "\(stage.rawValue).\(current)",
+                stage: stage,
+                detail: "第 \(current)/\(total) 次",
+                progress: &progress
+            )
         case .fail(let stage, let message):
             if let runningIndex = progress.steps.lastIndex(where: { $0.status == .running }) {
                 progress.steps[runningIndex].status = .failed(message)
-            } else if let existingIndex = progress.steps.firstIndex(where: { $0.stage == stage }) {
+            } else if let existingIndex = progress.steps.lastIndex(where: { $0.stage == stage }) {
                 progress.steps[existingIndex].status = .failed(message)
             } else {
-                progress.steps.append(AcademicOperationStep(stage: stage, status: .failed(message)))
+                progress.steps.append(
+                    AcademicOperationStep(
+                        id: stage.rawValue,
+                        stage: stage,
+                        detail: nil,
+                        status: .failed(message)
+                    )
+                )
             }
         }
 
         self.progress = progress
+    }
+
+    private func beginStep(
+        id: String,
+        stage: AcademicOperationStage,
+        detail: String?,
+        progress: inout AcademicOperationProgress
+    ) {
+            if let runningIndex = progress.steps.lastIndex(where: { $0.status == .running }) {
+                progress.steps[runningIndex].status = .completed
+            }
+            if let existingIndex = progress.steps.firstIndex(where: { $0.id == id }) {
+                var step = progress.steps.remove(at: existingIndex)
+                step = AcademicOperationStep(
+                    id: id,
+                    stage: stage,
+                    detail: detail,
+                    status: .running
+                )
+                progress.steps.append(step)
+            } else {
+                progress.steps.append(
+                    AcademicOperationStep(
+                        id: id,
+                        stage: stage,
+                        detail: detail,
+                        status: .running
+                    )
+                )
+            }
     }
 
     func completeCurrentStep() {
@@ -311,6 +358,12 @@ private struct AcademicOperationProgressCard: View {
                 Text(L10n.text(step.stage.message, language: leafyLanguage))
                     .leafySubheadline()
                     .foregroundStyle(AppTheme.primaryText)
+
+                if let detail = step.detail {
+                    Text(detail)
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
 
                 if case .failed(let message) = step.status {
                     Text(message)

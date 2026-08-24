@@ -112,7 +112,8 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         let result = try await service.recover(
             portal: .undergraduate,
             allowsAutomaticAttempt: true,
-            progressReporter: { recorder.events.append($0) }
+            progressReporter: { recorder.events.append($0) },
+            policy: testPolicy
         )
 
         guard case .authenticated = result else {
@@ -123,28 +124,32 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertEqual(recognizer.callCount, 1)
         XCTAssertEqual(recorder.events, [
             .begin(.connectingAcademicSystem),
-            .begin(.recognizingCaptcha),
-            .begin(.authenticating)
+            .beginAttempt(.recognizingCaptcha, current: 1, total: 3),
+            .beginAttempt(.authenticating, current: 1, total: 3)
         ])
     }
 
     @MainActor
-    func testLowConfidenceUsesSameChallengeWithoutSubmittingLogin() async throws {
+    func testThreeUnreliableRecognitionsUseThirdChallengeWithoutSubmittingLogin() async throws {
         let client = FakeSchoolAuthenticationClient()
         let recognizer = FakeCaptchaRecognizer(
             result: CaptchaResult(text: "a7k3", confidence: 0.5, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
-        let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
+        let result = try await service.recover(
+            portal: .undergraduate,
+            allowsAutomaticAttempt: true,
+            policy: testPolicy
+        )
 
         guard case .requiresManual(let challenge, _) = result else {
             return XCTFail("Expected manual verification")
         }
-        XCTAssertEqual(challenge.key, "key-1")
-        XCTAssertEqual(client.fetchCount, 1)
+        XCTAssertEqual(challenge.key, "key-3")
+        XCTAssertEqual(client.fetchCount, 3)
         XCTAssertTrue(client.loginCaptchas.isEmpty)
-        XCTAssertEqual(recognizer.callCount, 1)
+        XCTAssertEqual(recognizer.callCount, 3)
     }
 
     @MainActor
@@ -199,7 +204,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     }
 
     @MainActor
-    func testRejectedAutomaticLoginFetchesFreshManualChallengeWithoutSecondRecognition() async throws {
+    func testThreeRejectedLoginsFetchFreshFourthManualChallenge() async throws {
         let client = FakeSchoolAuthenticationClient()
         client.loginResult = false
         let recognizer = FakeCaptchaRecognizer(
@@ -207,14 +212,95 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
-        let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
+        let result = try await service.recover(
+            portal: .undergraduate,
+            allowsAutomaticAttempt: true,
+            policy: testPolicy
+        )
 
         guard case .requiresManual(let challenge, _) = result else {
             return XCTFail("Expected fresh manual verification")
         }
-        XCTAssertEqual(challenge.key, "key-2")
+        XCTAssertEqual(challenge.key, "key-4")
+        XCTAssertEqual(client.fetchCount, 4)
+        XCTAssertEqual(client.loginCaptchas, ["a7k3", "a7k3", "a7k3"])
+        XCTAssertEqual(recognizer.callCount, 3)
+    }
+
+    @MainActor
+    func testSecondRoundSucceedsAfterFirstRecognitionIsUnreliable() async throws {
+        let client = FakeSchoolAuthenticationClient()
+        let recognizer = FakeCaptchaRecognizer(results: [
+            CaptchaResult(text: "a7k3", confidence: 0.4, supportingVariantCount: 1),
+            CaptchaResult(text: "c113", confidence: 0.99, supportingVariantCount: 2)
+        ])
+        let service = makeService(client: client, recognizer: recognizer, credential: credential())
+
+        let result = try await service.recover(
+            portal: .undergraduate,
+            allowsAutomaticAttempt: true,
+            policy: testPolicy
+        )
+
+        guard case .authenticated = result else {
+            return XCTFail("Expected second-round authentication")
+        }
         XCTAssertEqual(client.fetchCount, 2)
-        XCTAssertEqual(client.loginCaptchas, ["a7k3"])
+        XCTAssertEqual(recognizer.callCount, 2)
+        XCTAssertEqual(client.loginCaptchas, ["c113"])
+    }
+
+    @MainActor
+    func testThirdRoundSucceedsAfterTwoCaptchaRejections() async throws {
+        let client = FakeSchoolAuthenticationClient()
+        client.loginOutcomes = [
+            .failure(SchoolNetworkError.loginFailed("验证码错误")),
+            .failure(SchoolNetworkError.loginFailed("随机码错误")),
+            .success(true)
+        ]
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "22nv", confidence: 0.99, supportingVariantCount: 3)
+        )
+        let service = makeService(client: client, recognizer: recognizer, credential: credential())
+
+        let result = try await service.recover(
+            portal: .undergraduate,
+            allowsAutomaticAttempt: true,
+            policy: testPolicy
+        )
+
+        guard case .authenticated = result else {
+            return XCTFail("Expected third-round authentication")
+        }
+        XCTAssertEqual(client.fetchCount, 3)
+        XCTAssertEqual(recognizer.callCount, 3)
+        XCTAssertEqual(client.loginCaptchas, ["22nv", "22nv", "22nv"])
+    }
+
+    @MainActor
+    func testCredentialFailureStopsAutomaticRetriesAndRevealsCredentials() async throws {
+        let client = FakeSchoolAuthenticationClient()
+        client.loginOutcomes = [
+            .failure(SchoolNetworkError.loginFailed("账号或密码错误"))
+        ]
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "c113", confidence: 0.99, supportingVariantCount: 3)
+        )
+        let service = makeService(client: client, recognizer: recognizer, credential: credential())
+
+        let result = try await service.recover(
+            portal: .undergraduate,
+            allowsAutomaticAttempt: true,
+            policy: testPolicy
+        )
+
+        guard case .requiresManual(let challenge, _) = result else {
+            return XCTFail("Expected manual credentials")
+        }
+        XCTAssertNil(challenge.credential)
+        XCTAssertTrue(challenge.prefersCredentialEntry)
+        XCTAssertEqual(client.fetchCount, 2)
+        XCTAssertEqual(client.loginCaptchas.count, 1)
         XCTAssertEqual(recognizer.callCount, 1)
     }
 
@@ -252,6 +338,10 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         )
     }
 
+    private var testPolicy: CaptchaRecoveryPolicy {
+        CaptchaRecoveryPolicy(maximumAttempts: 3, retryDelay: .zero)
+    }
+
     private func credential(portal: SchoolPortal = .undergraduate) -> SchoolLoginCredential {
         SchoolLoginCredential(
             campusID: .bjfu,
@@ -278,15 +368,25 @@ private nonisolated struct FakeCredentialProvider: SchoolLoginCredentialProvidin
 }
 
 private nonisolated final class FakeCaptchaRecognizer: CaptchaRecognizing, @unchecked Sendable {
-    let result: CaptchaResult
+    private var results: [CaptchaResult]
     private(set) var callCount = 0
 
     init(result: CaptchaResult) {
-        self.result = result
+        results = [result]
+    }
+
+    init(results: [CaptchaResult]) {
+        self.results = results
     }
 
     func recognize(_ image: CGImage) async throws -> CaptchaResult {
         callCount += 1
+        if results.count > 1 {
+            return results.removeFirst()
+        }
+        guard let result = results.first else {
+            throw CaptchaRecognitionError.noText
+        }
         return result
     }
 }
@@ -299,6 +399,7 @@ private final class FakeSchoolAuthenticationClient: SchoolAuthenticationClient {
     var fetchCount = 0
     var loginCaptchas: [String] = []
     var loginResult = true
+    var loginOutcomes: [Result<Bool, Error>] = []
     var fetchError: Error?
 
     func fetchCaptcha(for portal: SchoolPortal) async throws -> (key: String, image: UIImage) {
@@ -317,6 +418,9 @@ private final class FakeSchoolAuthenticationClient: SchoolAuthenticationClient {
         portal: SchoolPortal
     ) async throws -> Bool {
         loginCaptchas.append(captcha)
+        if !loginOutcomes.isEmpty {
+            return try loginOutcomes.removeFirst().get()
+        }
         return loginResult
     }
 
