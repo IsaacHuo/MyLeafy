@@ -100,11 +100,23 @@ nonisolated struct TimetableZoomGeometry: Equatable, Sendable {
             + horizontalOffset
     }
 
-    func currentWeekTimeLineXRange() -> ClosedRange<CGFloat>? {
-        let weekStartX = laneLeading(ordinal: TimetableZoomRenderWindow.middleWeekStartOrdinal) + contentTranslation
-        let weekEndX = laneLeading(ordinal: TimetableZoomRenderWindow.middleWeekStartOrdinal + 7) + contentTranslation
-        let clippedStart = max(0, min(weekStartX, viewportWidth))
-        let clippedEnd = max(0, min(weekEndX, viewportWidth))
+    func currentTimeIndicatorXRange(todayOrdinal: Int?) -> ClosedRange<CGFloat>? {
+        guard let todayOrdinal else { return nil }
+
+        let dayOfWeekIndex = (todayOrdinal % 7 + 7) % 7
+        let weekStartOrdinal = todayOrdinal - dayOfWeekIndex
+        let weekStartX = laneLeading(ordinal: weekStartOrdinal)
+        let weekEndX = laneLeading(ordinal: weekStartOrdinal + 7)
+        let threeDayStartX = laneLeading(ordinal: todayOrdinal - 1)
+        let threeDayEndX = laneLeading(ordinal: todayOrdinal + 2)
+        let startX = weekStartX
+            + (threeDayStartX - weekStartX) * resolvedProgress
+            + contentTranslation
+        let endX = weekEndX
+            + (threeDayEndX - weekEndX) * resolvedProgress
+            + contentTranslation
+        let clippedStart = max(0, min(startX, viewportWidth))
+        let clippedEnd = max(0, min(endX, viewportWidth))
         guard clippedEnd > clippedStart else { return nil }
         return clippedStart...clippedEnd
     }

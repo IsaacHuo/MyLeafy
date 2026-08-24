@@ -245,6 +245,105 @@ extension PerformanceRefactorTests {
         }
     }
 
+    func testCurrentTimeIndicatorUsesCurrentWeekAndTodayCenteredThreeDayWindow() throws {
+        let currentWeek = TimetableZoomGeometry(
+            progress: 0,
+            horizontalOffset: 0,
+            viewportWidth: 700,
+            anchorOrdinal: 9,
+            hidesWeekends: false,
+            gutter: 0
+        )
+        let currentWeekRange = try XCTUnwrap(
+            currentWeek.currentTimeIndicatorXRange(todayOrdinal: 9)
+        )
+        XCTAssertEqual(currentWeekRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(currentWeekRange.upperBound, 700, accuracy: 0.001)
+        XCTAssertNil(currentWeek.currentTimeIndicatorXRange(todayOrdinal: 6))
+
+        let mondayThreeDay = TimetableZoomGeometry(
+            progress: 1,
+            horizontalOffset: 0,
+            viewportWidth: 700,
+            anchorOrdinal: 7,
+            hidesWeekends: false,
+            gutter: 0
+        )
+        let mondayRange = try XCTUnwrap(
+            mondayThreeDay.currentTimeIndicatorXRange(todayOrdinal: 7)
+        )
+        XCTAssertEqual(mondayRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(mondayRange.upperBound, 700, accuracy: 0.001)
+
+        let sundayThreeDay = TimetableZoomGeometry(
+            progress: 1,
+            horizontalOffset: 0,
+            viewportWidth: 700,
+            anchorOrdinal: 13,
+            hidesWeekends: false,
+            gutter: 0
+        )
+        let sundayRange = try XCTUnwrap(
+            sundayThreeDay.currentTimeIndicatorXRange(todayOrdinal: 13)
+        )
+        XCTAssertEqual(sundayRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(sundayRange.upperBound, 700, accuracy: 0.001)
+
+        let hiddenWeekendWeek = TimetableZoomGeometry(
+            progress: 0,
+            horizontalOffset: 0,
+            viewportWidth: 500,
+            anchorOrdinal: 7,
+            hidesWeekends: true,
+            gutter: 0
+        )
+        let hiddenWeekendWeekRange = try XCTUnwrap(
+            hiddenWeekendWeek.currentTimeIndicatorXRange(todayOrdinal: 7)
+        )
+        XCTAssertEqual(hiddenWeekendWeekRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(hiddenWeekendWeekRange.upperBound, 500, accuracy: 0.001)
+
+        let hiddenWeekendMondayThreeDay = TimetableZoomGeometry(
+            progress: 1,
+            horizontalOffset: 0,
+            viewportWidth: 500,
+            anchorOrdinal: 7,
+            hidesWeekends: true,
+            gutter: 0
+        )
+        let hiddenWeekendMondayRange = try XCTUnwrap(
+            hiddenWeekendMondayThreeDay.currentTimeIndicatorXRange(todayOrdinal: 7)
+        )
+        XCTAssertEqual(hiddenWeekendMondayRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(hiddenWeekendMondayRange.upperBound, 500, accuracy: 0.001)
+    }
+
+    func testCurrentTimeIndicatorHidesOutsideTodayWindowAndClipsDuringPaging() throws {
+        let nextThreeDayPage = TimetableZoomGeometry(
+            progress: 1,
+            horizontalOffset: 0,
+            viewportWidth: 390,
+            anchorOrdinal: 10,
+            hidesWeekends: false,
+            gutter: 0
+        )
+        XCTAssertNil(nextThreeDayPage.currentTimeIndicatorXRange(todayOrdinal: 7))
+
+        let pagingAwayFromToday = TimetableZoomGeometry(
+            progress: 1,
+            horizontalOffset: -195,
+            viewportWidth: 390,
+            anchorOrdinal: 7,
+            hidesWeekends: false,
+            gutter: 0
+        )
+        let pagingRange = try XCTUnwrap(
+            pagingAwayFromToday.currentTimeIndicatorXRange(todayOrdinal: 7)
+        )
+        XCTAssertEqual(pagingRange.lowerBound, 0, accuracy: 0.001)
+        XCTAssertEqual(pagingRange.upperBound, 195, accuracy: 0.001)
+    }
+
     @MainActor
     func testContinuousViewportCentersSaturdayAndPagesByThreeDays() throws {
         let (calendar, formatter) = continuousZoomCalendar()

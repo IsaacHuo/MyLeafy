@@ -1402,7 +1402,11 @@ struct TimetableView: View {
         metrics: TimetableLayoutMetrics
     ) -> some View {
         let viewportWidth = max(metrics.containerWidth - axisWidth - AppSpacing.micro, 1)
-        let currentTimeY = TimetableCurrentTimePosition.yPosition(for: Date(), metrics: metrics)
+        let now = Date()
+        let currentTimeY = TimetableCurrentTimePosition.yPosition(for: now, metrics: metrics)
+        let todayOrdinal = continuousRenderWindow.days.first { preparedDay in
+            Calendar.current.isDate(preparedDay.date, inSameDayAs: now)
+        }?.ordinal
 
         return TimetableScrollContainer(
             axisWidth: axisWidth,
@@ -1458,6 +1462,9 @@ struct TimetableView: View {
                     hidesWeekends: timetableHidesWeekends,
                     gutter: metrics.daySpacing
                 ) { visualState in
+                    let currentTimeXRange = visualState.geometry.currentTimeIndicatorXRange(
+                        todayOrdinal: todayOrdinal
+                    )
                     ZStack {
                         TimetableContinuousColumnsLayout(geometry: visualState.geometry) {
                             ForEach(continuousDayPayloads) { payload in
@@ -1471,7 +1478,8 @@ struct TimetableView: View {
                         }
 
                         if timetableCurrentTimeIndicatorIsEnabled,
-                           let y = currentTimeY {
+                           let y = currentTimeY,
+                           let xRange = currentTimeXRange {
                             Rectangle()
                                 .fill(AppTheme.accentEmphasis(for: themeColorPreference))
                                 .opacity(
@@ -1480,14 +1488,14 @@ struct TimetableView: View {
                                     )
                                 )
                                 .frame(
-                                    width: viewportWidth,
+                                    width: xRange.upperBound - xRange.lowerBound,
                                     height: CGFloat(
                                         TimetableCurrentTimeIndicatorPreference.sanitizedThickness(
                                             timetableCurrentTimeIndicatorThickness
                                         )
                                     )
                                 )
-                                .position(x: viewportWidth * 0.5, y: y)
+                                .position(x: (xRange.lowerBound + xRange.upperBound) * 0.5, y: y)
                                 .zIndex(10)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
