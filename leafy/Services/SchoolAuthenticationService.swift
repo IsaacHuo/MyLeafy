@@ -1,4 +1,6 @@
 import CoreGraphics
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import Foundation
 import UIKit
 import Vision
@@ -6,48 +8,167 @@ import Vision
 nonisolated struct CaptchaResult: Equatable, Sendable {
     let text: String
     let confidence: Float
+    let supportingVariantCount: Int
+
+    init(
+        text: String,
+        confidence: Float,
+        supportingVariantCount: Int = 1
+    ) {
+        self.text = text
+        self.confidence = confidence
+        self.supportingVariantCount = supportingVariantCount
+    }
 }
 
 nonisolated protocol CaptchaRecognizing: Sendable {
     func recognize(_ image: CGImage) async throws -> CaptchaResult
 }
 
+nonisolated protocol CaptchaImagePreprocessing: Sendable {
+    func variants(for image: CGImage) throws -> [CGImage]
+}
+
+nonisolated final class CoreImageCaptchaPreprocessor: CaptchaImagePreprocessing, @unchecked Sendable {
+    private let context = CIContext(options: [.cacheIntermediates: false])
+
+    func variants(for image: CGImage) throws -> [CGImage] {
+        let source = CIImage(cgImage: image)
+        let scaled = try renderScaled(source)
+        let enhanced = try renderEnhanced(source)
+        return [image, scaled, enhanced]
+    }
+
+    private func renderScaled(_ source: CIImage) throws -> CGImage {
+        let filter = CIFilter.lanczosScaleTransform()
+        filter.inputImage = source
+        filter.scale = 4
+        filter.aspectRatio = 1
+        guard let output = filter.outputImage,
+              let image = context.createCGImage(output, from: output.extent.integral) else {
+            throw CaptchaRecognitionError.preprocessingFailed
+        }
+        return image
+    }
+
+    private func renderEnhanced(_ source: CIImage) throws -> CGImage {
+        let scaleFilter = CIFilter.lanczosScaleTransform()
+        scaleFilter.inputImage = source
+        scaleFilter.scale = 4
+        scaleFilter.aspectRatio = 1
+        guard let scaled = scaleFilter.outputImage else {
+            throw CaptchaRecognitionError.preprocessingFailed
+        }
+
+        let colorFilter = CIFilter.colorControls()
+        colorFilter.inputImage = scaled
+        colorFilter.saturation = 0
+        colorFilter.contrast = 1.4
+        colorFilter.brightness = 0.02
+        guard let output = colorFilter.outputImage,
+              let image = context.createCGImage(output, from: output.extent.integral) else {
+            throw CaptchaRecognitionError.preprocessingFailed
+        }
+        return image
+    }
+}
+
 nonisolated struct VisionCaptchaRecognizer: CaptchaRecognizing {
+    private let preprocessor: any CaptchaImagePreprocessing
+
+    init(
+        preprocessor: any CaptchaImagePreprocessing = CoreImageCaptchaPreprocessor()
+    ) {
+        self.preprocessor = preprocessor
+    }
+
     func recognize(_ image: CGImage) async throws -> CaptchaResult {
         let sendableImage = SendableCGImage(image)
+        let preprocessor = self.preprocessor
 
         return try await Task.detached(priority: .userInitiated) {
-            var recognitionError: Error?
-            var observations: [VNRecognizedTextObservation] = []
-            let request = VNRecognizeTextRequest { request, error in
-                recognitionError = error
-                observations = request.results as? [VNRecognizedTextObservation] ?? []
-            }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = false
-            request.recognitionLanguages = ["en-US"]
+            let variants = try preprocessor.variants(for: sendableImage.image)
+            var results: [CaptchaResult] = []
 
-            let handler = VNImageRequestHandler(cgImage: sendableImage.image, orientation: .up)
-            try handler.perform([request])
-            if let recognitionError {
-                throw recognitionError
+            for variant in variants {
+                try Task.checkCancellation()
+                do {
+                    results.append(try recognizeSingleImage(variant))
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    continue
+                }
             }
 
-            let candidates = observations.compactMap { observation -> (String, Float, CGFloat)? in
-                guard let candidate = observation.topCandidates(1).first else { return nil }
-                return (candidate.string, candidate.confidence, observation.boundingBox.minX)
-            }
-            .sorted { $0.2 < $1.2 }
-
-            guard !candidates.isEmpty else {
-                throw CaptchaRecognitionError.noText
-            }
-
-            return CaptchaResult(
-                text: candidates.map(\.0).joined(),
-                confidence: candidates.map(\.1).min() ?? 0
-            )
+            return try CaptchaConsensus.aggregate(results)
         }.value
+    }
+
+    private nonisolated func recognizeSingleImage(_ image: CGImage) throws -> CaptchaResult {
+        var recognitionError: Error?
+        var observations: [VNRecognizedTextObservation] = []
+        let request = VNRecognizeTextRequest { request, error in
+            recognitionError = error
+            observations = request.results as? [VNRecognizedTextObservation] ?? []
+        }
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["en-US"]
+
+        let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
+        try handler.perform([request])
+        if let recognitionError {
+            throw recognitionError
+        }
+
+        let candidates = observations.compactMap { observation -> (String, Float, CGFloat)? in
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            return (candidate.string, candidate.confidence, observation.boundingBox.minX)
+        }
+        .sorted { $0.2 < $1.2 }
+
+        guard !candidates.isEmpty else {
+            throw CaptchaRecognitionError.noText
+        }
+
+        return CaptchaResult(
+            text: candidates.map(\.0).joined(),
+            confidence: candidates.map(\.1).min() ?? 0
+        )
+    }
+}
+
+nonisolated enum CaptchaConsensus {
+    static func aggregate(_ results: [CaptchaResult]) throws -> CaptchaResult {
+        guard !results.isEmpty else {
+            throw CaptchaRecognitionError.noText
+        }
+
+        let groups = Dictionary(grouping: results) {
+            UndergraduateCaptchaPolicy.normalized($0.text)
+        }
+        let summaries = groups.map { text, matches in
+            CaptchaResult(
+                text: text,
+                confidence: matches.map(\.confidence).min() ?? 0,
+                supportingVariantCount: matches.count
+            )
+        }
+        .sorted {
+            if $0.supportingVariantCount != $1.supportingVariantCount {
+                return $0.supportingVariantCount > $1.supportingVariantCount
+            }
+            if $0.confidence != $1.confidence {
+                return $0.confidence > $1.confidence
+            }
+            return $0.text < $1.text
+        }
+
+        guard let result = summaries.first else {
+            throw CaptchaRecognitionError.noText
+        }
+        return result
     }
 }
 
@@ -61,17 +182,21 @@ private nonisolated final class SendableCGImage: @unchecked Sendable {
 
 nonisolated enum CaptchaRecognitionError: LocalizedError {
     case noText
+    case preprocessingFailed
 
     var errorDescription: String? {
         switch self {
         case .noText:
             return "未识别到验证码字符"
+        case .preprocessingFailed:
+            return "验证码图像处理失败"
         }
     }
 }
 
 nonisolated enum UndergraduateCaptchaPolicy {
-    static let minimumConfidence: Float = 0.90
+    static let minimumConfidence: Float = 0.85
+    static let minimumSupportingVariantCount = 2
 
     static func normalized(_ text: String) -> String {
         text
@@ -82,6 +207,7 @@ nonisolated enum UndergraduateCaptchaPolicy {
 
     static func automaticCandidate(from result: CaptchaResult) -> String? {
         guard result.confidence >= minimumConfidence else { return nil }
+        guard result.supportingVariantCount >= minimumSupportingVariantCount else { return nil }
         let normalizedText = normalized(result.text)
         guard normalizedText.range(of: #"^[A-Z0-9]{4}$"#, options: .regularExpression) != nil else {
             return nil
@@ -127,6 +253,7 @@ struct SchoolCaptchaChallenge {
 enum SchoolAuthenticationRecoveryResult {
     case authenticated
     case requiresManual(SchoolCaptchaChallenge, message: String?)
+    case networkUnavailable
 }
 
 @MainActor
@@ -149,7 +276,15 @@ struct SchoolAuthenticationService {
         portal: SchoolPortal,
         allowsAutomaticAttempt: Bool
     ) async throws -> SchoolAuthenticationRecoveryResult {
-        let challenge = try await fetchManualChallenge(portal: portal)
+        let challenge: SchoolCaptchaChallenge
+        do {
+            challenge = try await fetchManualChallenge(portal: portal)
+        } catch {
+            if case SchoolNetworkError.campusNetworkRequired = error {
+                return .networkUnavailable
+            }
+            throw error
+        }
 
         guard allowsAutomaticAttempt,
               portal == .undergraduate,
@@ -192,7 +327,7 @@ struct SchoolAuthenticationService {
             throw CancellationError()
         } catch {
             if case SchoolNetworkError.campusNetworkRequired = error {
-                throw error
+                return .networkUnavailable
             }
             return try await freshManualChallenge(
                 portal: portal,
@@ -230,8 +365,15 @@ struct SchoolAuthenticationService {
         portal: SchoolPortal,
         message: String
     ) async throws -> SchoolAuthenticationRecoveryResult {
-        let challenge = try await fetchManualChallenge(portal: portal)
-        return .requiresManual(challenge, message: message)
+        do {
+            let challenge = try await fetchManualChallenge(portal: portal)
+            return .requiresManual(challenge, message: message)
+        } catch {
+            if case SchoolNetworkError.campusNetworkRequired = error {
+                return .networkUnavailable
+            }
+            throw error
+        }
     }
 
     private func matchingCredential(portal: SchoolPortal) -> SchoolLoginCredential? {

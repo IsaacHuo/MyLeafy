@@ -19229,6 +19229,26 @@
         }
       }
     },
+    "需要连接校园网" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campus network required"
+          }
+        }
+      }
+    },
+    "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击同步或刷新。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The academic system is unavailable. Connect to bjfu-wifi or BJFU VPN, then tap sync or refresh again."
+          }
+        }
+      }
+    },
     "需连接校园网" : {
       "localizations" : {
         "en-US" : {

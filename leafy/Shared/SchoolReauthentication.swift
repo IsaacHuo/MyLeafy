@@ -1,6 +1,15 @@
 import SwiftUI
 import UIKit
 
+nonisolated enum SchoolSessionRecoveryPolicy {
+    static func shouldBeginRecovery(
+        hasCachedIdentity: Bool,
+        isLoggedIn: Bool
+    ) -> Bool {
+        hasCachedIdentity && !isLoggedIn
+    }
+}
+
 nonisolated enum SchoolReauthentication {
     static func requiresReauthentication(_ error: Error) -> Bool {
         if case SchoolNetworkError.sessionExpired = error {
@@ -26,7 +35,10 @@ nonisolated enum SchoolReauthentication {
         context: SchoolReauthenticationContext,
         allowsAutomaticAttempt: Bool = true
     ) -> SchoolReauthenticationRequest? {
-        guard networkManager.hasCachedIdentity, !networkManager.isLoggedIn else {
+        guard SchoolSessionRecoveryPolicy.shouldBeginRecovery(
+            hasCachedIdentity: networkManager.hasCachedIdentity,
+            isLoggedIn: networkManager.isLoggedIn
+        ) else {
             return nil
         }
         return SchoolReauthenticationRequest(
@@ -148,6 +160,17 @@ private struct SchoolManualReauthenticationPresentation: Identifiable {
     let initialMessage: String?
 }
 
+private struct SchoolRecoveryNotice: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+
+    static let campusNetworkRequired = SchoolRecoveryNotice(
+        title: "需要连接校园网",
+        message: "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击同步或刷新。"
+    )
+}
+
 private struct SchoolReauthenticationModifier: ViewModifier {
     @Binding var request: SchoolReauthenticationRequest?
     @ObservedObject var networkManager: SchoolNetworkManager
@@ -155,6 +178,7 @@ private struct SchoolReauthenticationModifier: ViewModifier {
 
     @State private var isRecovering = false
     @State private var manualPresentation: SchoolManualReauthenticationPresentation?
+    @State private var networkNotice: SchoolRecoveryNotice?
 
     func body(content: Content) -> some View {
         content
@@ -186,6 +210,13 @@ private struct SchoolReauthenticationModifier: ViewModifier {
                     )
                 }
                 .presentationDetents([.large])
+            }
+            .alert(item: $networkNotice) { notice in
+                Alert(
+                    title: Text(L10n.text(notice.title)),
+                    message: Text(L10n.text(notice.message)),
+                    dismissButton: .default(Text(L10n.text("知道了")))
+                )
             }
             .task(id: request?.id) {
                 guard let activeRequest = request else { return }
@@ -221,12 +252,18 @@ private struct SchoolReauthenticationModifier: ViewModifier {
                     challenge: challenge,
                     initialMessage: message
                 )
+            case .networkUnavailable:
+                networkNotice = .campusNetworkRequired
             }
         } catch is CancellationError {
             return
         } catch {
             guard !Task.isCancelled else { return }
             request = nil
+            if case SchoolNetworkError.campusNetworkRequired = error {
+                networkNotice = .campusNetworkRequired
+                return
+            }
             manualPresentation = SchoolManualReauthenticationPresentation(
                 context: activeRequest.context,
                 challenge: nil,
@@ -236,9 +273,6 @@ private struct SchoolReauthenticationModifier: ViewModifier {
     }
 
     private func recoveryErrorMessage(_ error: Error) -> String {
-        if case SchoolNetworkError.campusNetworkRequired = error {
-            return "暂时无法连接教务系统。请连接 bjfu-wifi 或北林 VPN 后，点击验证码区域重试。"
-        }
         return error.localizedDescription
     }
 }

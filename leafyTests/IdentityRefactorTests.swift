@@ -15,7 +15,7 @@ extension PerformanceRefactorTests {
         XCTAssertFalse(SchoolReauthentication.requiresReauthentication(SchoolNetworkError.featureUnavailable("未开放")))
 
         XCTAssertTrue(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.sessionExpired))
-        XCTAssertTrue(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.campusNetworkRequired))
+        XCTAssertFalse(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.campusNetworkRequired))
         XCTAssertFalse(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.featureUnavailable("未开放")))
     }
 

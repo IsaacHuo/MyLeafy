@@ -3,10 +3,35 @@ import UIKit
 @testable import Leafy
 
 final class SchoolAuthenticationRecoveryTests: XCTestCase {
+    func testSessionRecoveryPolicySkipsFirstLoginAndValidSession() {
+        XCTAssertFalse(
+            SchoolSessionRecoveryPolicy.shouldBeginRecovery(
+                hasCachedIdentity: false,
+                isLoggedIn: false
+            )
+        )
+        XCTAssertFalse(
+            SchoolSessionRecoveryPolicy.shouldBeginRecovery(
+                hasCachedIdentity: true,
+                isLoggedIn: true
+            )
+        )
+        XCTAssertTrue(
+            SchoolSessionRecoveryPolicy.shouldBeginRecovery(
+                hasCachedIdentity: true,
+                isLoggedIn: false
+            )
+        )
+    }
+
     func testUndergraduateCaptchaPolicyNormalizesAndAcceptsReliableCode() {
         XCTAssertEqual(
             UndergraduateCaptchaPolicy.automaticCandidate(
-                from: CaptchaResult(text: " a7\nk3 ", confidence: 0.96)
+                from: CaptchaResult(
+                    text: " a7\nk3 ",
+                    confidence: 0.86,
+                    supportingVariantCount: 2
+                )
             ),
             "A7K3"
         )
@@ -15,25 +40,72 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testUndergraduateCaptchaPolicyRejectsLowConfidenceAndInvalidFormats() {
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
-                from: CaptchaResult(text: "A7K3", confidence: 0.899)
+                from: CaptchaResult(
+                    text: "A7K3",
+                    confidence: 0.849,
+                    supportingVariantCount: 3
+                )
             )
         )
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
-                from: CaptchaResult(text: "A?K3", confidence: 0.99)
+                from: CaptchaResult(
+                    text: "A7K3",
+                    confidence: 0.99,
+                    supportingVariantCount: 1
+                )
             )
         )
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
-                from: CaptchaResult(text: "A7K", confidence: 0.99)
+                from: CaptchaResult(
+                    text: "A?K3",
+                    confidence: 0.99,
+                    supportingVariantCount: 3
+                )
             )
         )
+        XCTAssertNil(
+            UndergraduateCaptchaPolicy.automaticCandidate(
+                from: CaptchaResult(
+                    text: "A7K",
+                    confidence: 0.99,
+                    supportingVariantCount: 3
+                )
+            )
+        )
+    }
+
+    func testCaptchaConsensusUsesMatchingVariantsAndMinimumConfidence() throws {
+        let result = try CaptchaConsensus.aggregate([
+            CaptchaResult(text: "A7K3", confidence: 0.94),
+            CaptchaResult(text: " a7 k3 ", confidence: 0.87),
+            CaptchaResult(text: "A7X3", confidence: 0.99)
+        ])
+
+        XCTAssertEqual(result.text, "A7K3")
+        XCTAssertEqual(result.confidence, 0.87)
+        XCTAssertEqual(result.supportingVariantCount, 2)
+        XCTAssertEqual(UndergraduateCaptchaPolicy.automaticCandidate(from: result), "A7K3")
+    }
+
+    func testCaptchaConsensusRejectsThreeConflictingVariants() throws {
+        let result = try CaptchaConsensus.aggregate([
+            CaptchaResult(text: "A7K3", confidence: 0.99),
+            CaptchaResult(text: "A7X3", confidence: 0.98),
+            CaptchaResult(text: "A7Y3", confidence: 0.97)
+        ])
+
+        XCTAssertEqual(result.supportingVariantCount, 1)
+        XCTAssertNil(UndergraduateCaptchaPolicy.automaticCandidate(from: result))
     }
 
     @MainActor
     func testReliableUndergraduateCaptchaAuthenticatesAutomaticallyOnce() async throws {
         let client = FakeSchoolAuthenticationClient()
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "A7K3", confidence: 0.96))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "A7K3", confidence: 0.90, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
         let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
@@ -49,7 +121,9 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     @MainActor
     func testLowConfidenceUsesSameChallengeWithoutSubmittingLogin() async throws {
         let client = FakeSchoolAuthenticationClient()
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "A7K3", confidence: 0.5))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "A7K3", confidence: 0.5, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
         let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
@@ -66,7 +140,9 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     @MainActor
     func testMissingCredentialSkipsRecognitionAndUsesManualFallback() async throws {
         let client = FakeSchoolAuthenticationClient()
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "A7K3", confidence: 0.99))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: nil)
 
         let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
@@ -81,7 +157,9 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     @MainActor
     func testGraduateRecoveryNeverRunsRecognition() async throws {
         let client = FakeSchoolAuthenticationClient()
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "1234", confidence: 0.99))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "1234", confidence: 0.99, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential(portal: .graduate))
 
         let result = try await service.recover(portal: .graduate, allowsAutomaticAttempt: true)
@@ -96,7 +174,9 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     @MainActor
     func testConsumedAutomaticBudgetSkipsRecognition() async throws {
         let client = FakeSchoolAuthenticationClient()
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "A7K3", confidence: 0.99))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
         let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: false)
@@ -112,7 +192,9 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testRejectedAutomaticLoginFetchesFreshManualChallengeWithoutSecondRecognition() async throws {
         let client = FakeSchoolAuthenticationClient()
         client.loginResult = false
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "A7K3", confidence: 0.99))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
         let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
@@ -130,14 +212,18 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testNetworkFailureDoesNotAttemptRecognitionOrLogin() async {
         let client = FakeSchoolAuthenticationClient()
         client.fetchError = SchoolNetworkError.campusNetworkRequired
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "A7K3", confidence: 0.99))
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
         do {
-            _ = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
-            XCTFail("Expected network error")
+            let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
+            guard case .networkUnavailable = result else {
+                return XCTFail("Expected network-unavailable recovery result")
+            }
         } catch {
-            XCTAssertTrue(error is SchoolNetworkError)
+            XCTFail("Expected a recovery result, got \(error)")
         }
         XCTAssertEqual(recognizer.callCount, 0)
         XCTAssertTrue(client.loginCaptchas.isEmpty)
