@@ -2,6 +2,24 @@ import XCTest
 @testable import Leafy
 
 final class AcademicOperationProgressTests: XCTestCase {
+    func testCampusNetworkFailureStopsMultiStepSync() {
+        XCTAssertTrue(
+            SchoolDataSyncContinuationPolicy.shouldStop(
+                after: SchoolNetworkError.campusNetworkRequired
+            )
+        )
+        XCTAssertFalse(
+            SchoolDataSyncContinuationPolicy.shouldStop(
+                after: SchoolNetworkError.featureUnavailable("页面结构异常")
+            )
+        )
+        XCTAssertFalse(
+            SchoolDataSyncContinuationPolicy.shouldStop(
+                after: SchoolNetworkError.sessionExpired
+            )
+        )
+    }
+
     @MainActor
     func testFastProgressUpdatesKeepCompletedHistory() {
         let controller = AcademicOperationProgressController()
@@ -94,6 +112,21 @@ final class AcademicOperationProgressTests: XCTestCase {
         guard case .needsReauthentication = outcome else {
             return XCTFail("Expected reauthentication")
         }
+        XCTAssertEqual(client.teachingPlanFetchCount, 1)
+        XCTAssertEqual(client.trainingProgramFetchCount, 0)
+    }
+
+    @MainActor
+    func testTeachingCultivationStopsAfterCampusNetworkFailure() async {
+        let client = FakeTeachingCultivationClient()
+        client.teachingPlanError = SchoolNetworkError.campusNetworkRequired
+
+        let outcome = await TeachingCultivationRefreshUseCase(networkManager: client).refresh()
+
+        guard case .failure(let message) = outcome else {
+            return XCTFail("Expected network failure")
+        }
+        XCTAssertFalse(message.isEmpty)
         XCTAssertEqual(client.teachingPlanFetchCount, 1)
         XCTAssertEqual(client.trainingProgramFetchCount, 0)
     }

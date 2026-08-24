@@ -196,20 +196,20 @@ nonisolated enum CaptchaRecognitionError: LocalizedError {
 
 nonisolated enum UndergraduateCaptchaPolicy {
     static let minimumConfidence: Float = 0.85
-    static let minimumSupportingVariantCount = 2
+    static let minimumSupportingVariantCount = 3
 
     static func normalized(_ text: String) -> String {
         text
             .components(separatedBy: .whitespacesAndNewlines)
             .joined()
-            .uppercased()
+            .lowercased()
     }
 
     static func automaticCandidate(from result: CaptchaResult) -> String? {
         guard result.confidence >= minimumConfidence else { return nil }
         guard result.supportingVariantCount >= minimumSupportingVariantCount else { return nil }
         let normalizedText = normalized(result.text)
-        guard normalizedText.range(of: #"^[A-Z0-9]{4}$"#, options: .regularExpression) != nil else {
+        guard normalizedText.range(of: #"^[a-z0-9]{4}$"#, options: .regularExpression) != nil else {
             return nil
         }
         return normalizedText

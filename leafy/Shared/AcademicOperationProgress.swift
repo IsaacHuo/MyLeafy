@@ -295,7 +295,7 @@ private struct AcademicOperationProgressCard: View {
             }
             .frame(maxHeight: 420 * leafyControlScale)
         }
-        .frame(maxWidth: 340 * leafyControlScale, alignment: .leading)
+        .frame(maxWidth: 220 * leafyControlScale, alignment: .leading)
         .padding(AppSpacing.card)
         .leafyCardStyle()
         .accessibilityElement(children: .combine)

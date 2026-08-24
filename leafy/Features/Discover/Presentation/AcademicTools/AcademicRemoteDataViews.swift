@@ -515,6 +515,13 @@ struct TeachingCultivationRefreshUseCase {
             successes.append(L10n.text("教学计划已更新"))
         } catch {
             progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
+            if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                return .failure(
+                    L10n.text(
+                        "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击同步或刷新。"
+                    )
+                )
+            }
             if SchoolReauthentication.requiresReauthentication(error) {
                 return .needsReauthentication
             }
@@ -531,6 +538,13 @@ struct TeachingCultivationRefreshUseCase {
             successes.append(L10n.text("培养方案已更新"))
         } catch {
             progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
+            if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                return .failure(
+                    L10n.text(
+                        "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击同步或刷新。"
+                    )
+                )
+            }
             if SchoolReauthentication.requiresReauthentication(error) {
                 return .needsReauthentication
             }

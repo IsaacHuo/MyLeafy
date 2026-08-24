@@ -1,6 +1,15 @@
 import Foundation
 import SwiftData
 
+nonisolated enum SchoolDataSyncContinuationPolicy {
+    static func shouldStop(after error: Error) -> Bool {
+        if case SchoolNetworkError.campusNetworkRequired = error {
+            return true
+        }
+        return false
+    }
+}
+
 enum SchoolDataSyncOutcome: Equatable {
     case success(String)
     case partialSuccess(String)
@@ -115,6 +124,10 @@ enum SchoolDataSyncService {
             }
         } catch {
             modelContext.rollback()
+            if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                progressReporter?(.fail(.fetchingTimetable, error.localizedDescription))
+                return campusNetworkFailure(language: language)
+            }
             if requiresReauthentication(error, userInitiated: userInitiated) {
                 progressReporter?(.fail(.fetchingTimetable, error.localizedDescription))
                 return .needsReauthentication(.schoolDataSync)
@@ -141,6 +154,10 @@ enum SchoolDataSyncService {
                 }
                 parsedGrades = parsed
             } catch {
+                if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                    progressReporter?(.fail(.fetchingGrades, error.localizedDescription))
+                    return campusNetworkFailure(language: language)
+                }
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     progressReporter?(.fail(.fetchingGrades, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
@@ -161,6 +178,10 @@ enum SchoolDataSyncService {
                 successfulOperationCount += 1
                 results.append(L10n.text("排名 %d 条", language: language, parsed.count))
             } catch {
+                if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                    progressReporter?(.fail(.fetchingRankings, error.localizedDescription))
+                    return campusNetworkFailure(language: language)
+                }
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     progressReporter?(.fail(.fetchingRankings, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
@@ -179,6 +200,10 @@ enum SchoolDataSyncService {
                 successfulOperationCount += 1
                 results.append(L10n.text("考试 %d 条", language: language, parsed.count))
             } catch {
+                if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                    progressReporter?(.fail(.fetchingExams, error.localizedDescription))
+                    return campusNetworkFailure(language: language)
+                }
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     progressReporter?(.fail(.fetchingExams, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
@@ -197,6 +222,10 @@ enum SchoolDataSyncService {
                 successfulOperationCount += 1
                 results.append(L10n.text("教学计划 %d 学期", language: language, parsed.count))
             } catch {
+                if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                    progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
+                    return campusNetworkFailure(language: language)
+                }
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
@@ -215,6 +244,10 @@ enum SchoolDataSyncService {
                 successfulOperationCount += 1
                 results.append(L10n.text("培养方案 %d 类", language: language, document.creditRequirements.count))
             } catch {
+                if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
+                    progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
+                    return campusNetworkFailure(language: language)
+                }
                 if requiresReauthentication(error, userInitiated: userInitiated) {
                     progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
@@ -332,6 +365,17 @@ enum SchoolDataSyncService {
         userInitiated
             ? SchoolReauthentication.shouldPromptForUserInitiatedAccess(error)
             : SchoolReauthentication.requiresReauthentication(error)
+    }
+
+    private static func campusNetworkFailure(
+        language: AppLanguagePreference
+    ) -> SchoolDataSyncOutcome {
+        .failure(
+            L10n.text(
+                "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击同步或刷新。",
+                language: language
+            )
+        )
     }
 
     private static func fetch<T: PersistentModel>(_ model: T.Type, from modelContext: ModelContext) -> [T] {

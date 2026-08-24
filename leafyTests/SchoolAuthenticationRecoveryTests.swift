@@ -30,10 +30,10 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
                 from: CaptchaResult(
                     text: " a7\nk3 ",
                     confidence: 0.86,
-                    supportingVariantCount: 2
+                    supportingVariantCount: 3
                 )
             ),
-            "A7K3"
+            "a7k3"
         )
     }
 
@@ -41,7 +41,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
                 from: CaptchaResult(
-                    text: "A7K3",
+                    text: "a7k3",
                     confidence: 0.849,
                     supportingVariantCount: 3
                 )
@@ -50,7 +50,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
                 from: CaptchaResult(
-                    text: "A7K3",
+                    text: "a7k3",
                     confidence: 0.99,
                     supportingVariantCount: 1
                 )
@@ -59,7 +59,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
                 from: CaptchaResult(
-                    text: "A?K3",
+                    text: "a?k3",
                     confidence: 0.99,
                     supportingVariantCount: 3
                 )
@@ -68,7 +68,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertNil(
             UndergraduateCaptchaPolicy.automaticCandidate(
                 from: CaptchaResult(
-                    text: "A7K",
+                    text: "a7k",
                     confidence: 0.99,
                     supportingVariantCount: 3
                 )
@@ -78,22 +78,22 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
 
     func testCaptchaConsensusUsesMatchingVariantsAndMinimumConfidence() throws {
         let result = try CaptchaConsensus.aggregate([
-            CaptchaResult(text: "A7K3", confidence: 0.94),
+            CaptchaResult(text: "a7k3", confidence: 0.94),
             CaptchaResult(text: " a7 k3 ", confidence: 0.87),
-            CaptchaResult(text: "A7X3", confidence: 0.99)
+            CaptchaResult(text: "a7x3", confidence: 0.99)
         ])
 
-        XCTAssertEqual(result.text, "A7K3")
+        XCTAssertEqual(result.text, "a7k3")
         XCTAssertEqual(result.confidence, 0.87)
         XCTAssertEqual(result.supportingVariantCount, 2)
-        XCTAssertEqual(UndergraduateCaptchaPolicy.automaticCandidate(from: result), "A7K3")
+        XCTAssertNil(UndergraduateCaptchaPolicy.automaticCandidate(from: result))
     }
 
     func testCaptchaConsensusRejectsThreeConflictingVariants() throws {
         let result = try CaptchaConsensus.aggregate([
-            CaptchaResult(text: "A7K3", confidence: 0.99),
-            CaptchaResult(text: "A7X3", confidence: 0.98),
-            CaptchaResult(text: "A7Y3", confidence: 0.97)
+            CaptchaResult(text: "a7k3", confidence: 0.99),
+            CaptchaResult(text: "a7x3", confidence: 0.98),
+            CaptchaResult(text: "a7y3", confidence: 0.97)
         ])
 
         XCTAssertEqual(result.supportingVariantCount, 1)
@@ -104,7 +104,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testReliableUndergraduateCaptchaAuthenticatesAutomaticallyOnce() async throws {
         let client = FakeSchoolAuthenticationClient()
         let recognizer = FakeCaptchaRecognizer(
-            result: CaptchaResult(text: "A7K3", confidence: 0.90, supportingVariantCount: 3)
+            result: CaptchaResult(text: "a7k3", confidence: 0.90, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
         let recorder = AuthenticationProgressRecorder()
@@ -119,7 +119,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
             return XCTFail("Expected automatic authentication")
         }
         XCTAssertEqual(client.fetchCount, 1)
-        XCTAssertEqual(client.loginCaptchas, ["A7K3"])
+        XCTAssertEqual(client.loginCaptchas, ["a7k3"])
         XCTAssertEqual(recognizer.callCount, 1)
         XCTAssertEqual(recorder.events, [
             .begin(.connectingAcademicSystem),
@@ -132,7 +132,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testLowConfidenceUsesSameChallengeWithoutSubmittingLogin() async throws {
         let client = FakeSchoolAuthenticationClient()
         let recognizer = FakeCaptchaRecognizer(
-            result: CaptchaResult(text: "A7K3", confidence: 0.5, supportingVariantCount: 3)
+            result: CaptchaResult(text: "a7k3", confidence: 0.5, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
@@ -151,7 +151,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testMissingCredentialSkipsRecognitionAndUsesManualFallback() async throws {
         let client = FakeSchoolAuthenticationClient()
         let recognizer = FakeCaptchaRecognizer(
-            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+            result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: nil)
 
@@ -185,7 +185,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testConsumedAutomaticBudgetSkipsRecognition() async throws {
         let client = FakeSchoolAuthenticationClient()
         let recognizer = FakeCaptchaRecognizer(
-            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+            result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
@@ -203,7 +203,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         let client = FakeSchoolAuthenticationClient()
         client.loginResult = false
         let recognizer = FakeCaptchaRecognizer(
-            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+            result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
@@ -214,7 +214,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         }
         XCTAssertEqual(challenge.key, "key-2")
         XCTAssertEqual(client.fetchCount, 2)
-        XCTAssertEqual(client.loginCaptchas, ["A7K3"])
+        XCTAssertEqual(client.loginCaptchas, ["a7k3"])
         XCTAssertEqual(recognizer.callCount, 1)
     }
 
@@ -223,7 +223,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         let client = FakeSchoolAuthenticationClient()
         client.fetchError = SchoolNetworkError.campusNetworkRequired
         let recognizer = FakeCaptchaRecognizer(
-            result: CaptchaResult(text: "A7K3", confidence: 0.99, supportingVariantCount: 3)
+            result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
 
