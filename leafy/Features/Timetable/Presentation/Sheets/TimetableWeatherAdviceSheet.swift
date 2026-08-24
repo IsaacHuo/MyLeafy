@@ -169,7 +169,9 @@ struct TimetableWeatherAdviceSheet: View {
         snapshot: TimetableWeatherSnapshot,
         hours: [TimetableHourlyWeather]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 16 * leafyControlScale) {
+        let minimumApparentTemperature = hours.map(\.apparentTemperature).min()
+
+        return VStack(alignment: .leading, spacing: 16 * leafyControlScale) {
             HStack(alignment: .center, spacing: 14 * leafyControlScale) {
                 Image(systemName: snapshot.symbolName.isEmpty ? "cloud.sun" : snapshot.symbolName)
                     .symbolRenderingMode(.multicolor)
@@ -183,6 +185,20 @@ struct TimetableWeatherAdviceSheet: View {
                             .monospacedDigit()
                             .foregroundStyle(AppTheme.primaryText)
 
+                        if let minimumApparentTemperature {
+                            Text("\(Int(minimumApparentTemperature.rounded()))°")
+                                .font(.system(size: 30 * leafyControlScale, weight: .medium, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(AppTheme.secondaryText)
+                                .accessibilityLabel(
+                                    L10n.text(
+                                        "最低体感温度 %@",
+                                        language: leafyLanguage,
+                                        "\(Int(minimumApparentTemperature.rounded()))°"
+                                    )
+                                )
+                        }
+
                         Text(snapshot.localizedCondition(language: leafyLanguage))
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.secondaryText)
@@ -194,21 +210,6 @@ struct TimetableWeatherAdviceSheet: View {
                 }
 
                 Spacer(minLength: 0)
-            }
-
-            if let rangeText = apparentTemperatureRangeText(for: hours) {
-                Text(rangeText)
-                    .leafySubheadline()
-                    .monospacedDigit()
-                    .foregroundStyle(AppTheme.primaryText)
-            }
-
-            HStack(spacing: 6 * leafyControlScale) {
-                Image(systemName: "clock")
-                    .accessibilityHidden(true)
-                Text("\(snapshot.observedAt.formatted(date: .omitted, time: .shortened)) 更新")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.tertiaryText)
             }
         }
         .padding(18 * leafyControlScale)

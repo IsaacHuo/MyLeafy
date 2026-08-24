@@ -4313,6 +4313,16 @@
         }
       }
     },
+    "最低体感温度 %@" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lowest feels-like temperature %@"
+          }
+        }
+      }
+    },
     "最终确认删除？" : {
       "extractionState" : "stale",
       "localizations" : {
