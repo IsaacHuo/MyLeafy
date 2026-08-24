@@ -86,7 +86,7 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertEqual(result.text, "a7k3")
         XCTAssertEqual(result.confidence, 0.87)
         XCTAssertEqual(result.supportingVariantCount, 2)
-        XCTAssertNil(UndergraduateCaptchaPolicy.automaticCandidate(from: result))
+        XCTAssertEqual(UndergraduateCaptchaPolicy.automaticCandidate(from: result), "a7k3")
     }
 
     func testCaptchaConsensusRejectsThreeConflictingVariants() throws {

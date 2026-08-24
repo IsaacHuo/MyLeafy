@@ -196,7 +196,7 @@ nonisolated enum CaptchaRecognitionError: LocalizedError {
 
 nonisolated enum UndergraduateCaptchaPolicy {
     static let minimumConfidence: Float = 0.85
-    static let minimumSupportingVariantCount = 3
+    static let minimumSupportingVariantCount = 2
 
     static func normalized(_ text: String) -> String {
         text
