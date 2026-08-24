@@ -1121,7 +1121,7 @@ struct TimetableView: View {
             }
             .accessibilityLabel(
                 L10n.text(
-                    "天气建议，%@",
+                    "天气建议，体感温度 %@",
                     language: leafyLanguage,
                     cachedTimetableWeather.timetableCapsuleText(language: leafyLanguage)
                 )
@@ -1151,8 +1151,9 @@ struct TimetableView: View {
                 .font(.system(size: 13 * leafyControlScale, weight: .semibold))
                 .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
 
-            Text("\(Int(weather.temperature.rounded()))°C")
+            Text("\(Int(weather.apparentTemperature.rounded()))°C")
                 .font(.body)
+                .monospacedDigit()
                 .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
         }
         .lineLimit(1)

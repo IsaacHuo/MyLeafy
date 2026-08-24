@@ -19,6 +19,33 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         XCTAssertEqual(cache.currentWeather(maxAge: 60), expected)
     }
 
+    func testUserDefaultsWeatherCacheRoundTripsApparentTemperature() throws {
+        let suiteName = "TimetableWeatherAdviceTests.apparent-temperature-cache"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let expected = makeSnapshot(hours: [
+            makeHour(
+                date: classStartDate,
+                temperature: 12,
+                apparentTemperature: 7,
+                condition: "多云"
+            )
+        ])
+        let cache = UserDefaultsTimetableWeatherCache(
+            userDefaults: defaults,
+            key: "weather-cache"
+        )
+
+        cache.save(expected)
+
+        let restored = cache.currentWeather(maxAge: 60)
+        XCTAssertEqual(restored?.apparentTemperature, 7)
+        XCTAssertEqual(restored?.hourlyForecast.first?.apparentTemperature, 7)
+        XCTAssertEqual(restored, expected)
+    }
+
     @MainActor
     func testWeatherKitTimetableWeatherServiceFallsBackToFreshCache() async throws {
         let cached = makeSnapshot(hours: [makeHour(date: classStartDate, temperature: 18, condition: "晴")])
@@ -72,12 +99,12 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         }
     }
 
-    func testTimetableCapsuleTextRoundsTemperatureAndUsesCelsiusUnit() {
+    func testTimetableCapsuleTextRoundsApparentTemperatureAndUsesCelsiusUnit() {
         let mild = makeSnapshot(hours: [
-            makeHour(date: classStartDate, temperature: 23.4, condition: "多云")
+            makeHour(date: classStartDate, temperature: 19, apparentTemperature: 23.4, condition: "多云")
         ])
         let cold = makeSnapshot(hours: [
-            makeHour(date: classStartDate, temperature: -2.6, condition: "雪")
+            makeHour(date: classStartDate, temperature: 2, apparentTemperature: -2.6, condition: "雪")
         ])
 
         XCTAssertEqual(mild.timetableCapsuleText(language: .zhHans), "23°C 多云")
@@ -195,26 +222,60 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         let now = classStartDate.addingTimeInterval(-30 * 60)
         let item = TimetableWeatherScheduleItem(title: "早八", kind: .course, startsAt: classStartDate, endsAt: classEndDate)
         let snapshot = makeSnapshot(hours: [
-            makeHour(date: classStartDate, temperature: 5, condition: "晴", symbolName: "sun.max")
+            makeHour(
+                date: classStartDate,
+                temperature: 12,
+                apparentTemperature: 5,
+                condition: "晴",
+                symbolName: "sun.max"
+            )
         ])
 
-        let summary = TimetableWeatherAdviceBuilder.makeSummary(snapshot: snapshot, scheduleItems: [item], now: now)
+        let summary = TimetableWeatherAdviceBuilder.makeSummary(
+            snapshot: snapshot,
+            scheduleItems: [item],
+            now: now,
+            language: .zhHans
+        )
 
         XCTAssertTrue(summary.suggestions.contains { $0.id == "cold" })
+        XCTAssertTrue(summary.suggestions.contains { $0.detail.contains("体感温度约为 5°") })
+
+        let englishSummary = TimetableWeatherAdviceBuilder.makeSummary(
+            snapshot: snapshot,
+            scheduleItems: [item],
+            now: now,
+            language: .enUS
+        )
+        XCTAssertTrue(englishSummary.suggestions.contains { $0.detail.contains("feel like about 5°") })
     }
 
     func testHeatAndUVSuggestionsCanAppearTogether() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
         let item = TimetableWeatherScheduleItem(title: "植物学", kind: .course, startsAt: classStartDate, endsAt: classEndDate)
         let snapshot = makeSnapshot(hours: [
-            makeHour(date: classStartDate, temperature: 32, condition: "晴", symbolName: "sun.max", uvIndex: 8, isDaylight: true)
+            makeHour(
+                date: classStartDate,
+                temperature: 28,
+                apparentTemperature: 32,
+                condition: "晴",
+                symbolName: "sun.max",
+                uvIndex: 8,
+                isDaylight: true
+            )
         ])
 
-        let summary = TimetableWeatherAdviceBuilder.makeSummary(snapshot: snapshot, scheduleItems: [item], now: now)
+        let summary = TimetableWeatherAdviceBuilder.makeSummary(
+            snapshot: snapshot,
+            scheduleItems: [item],
+            now: now,
+            language: .zhHans
+        )
         let ids = summary.suggestions.map(\.id)
 
         XCTAssertTrue(ids.contains("heat"))
         XCTAssertTrue(ids.contains("uv"))
+        XCTAssertTrue(summary.suggestions.contains { $0.detail.contains("体感温度约为 32°") })
     }
 
     func testNoFutureScheduleUsesEmptyDaySuggestion() {
@@ -258,6 +319,7 @@ final class TimetableWeatherAdviceTests: XCTestCase {
     private func makeSnapshot(hours: [TimetableHourlyWeather]) -> TimetableWeatherSnapshot {
         TimetableWeatherSnapshot(
             temperature: hours.first?.temperature ?? 22,
+            apparentTemperature: hours.first?.apparentTemperature ?? 22,
             condition: hours.first?.condition ?? "晴",
             symbolName: hours.first?.symbolName ?? "sun.max",
             observedAt: hours.first?.date ?? classStartDate,
@@ -269,6 +331,7 @@ final class TimetableWeatherAdviceTests: XCTestCase {
     private func makeHour(
         date: Date,
         temperature: Double,
+        apparentTemperature: Double? = nil,
         condition: String,
         symbolName: String = "cloud.sun",
         precipitationChance: Double = 0,
@@ -278,6 +341,7 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         TimetableHourlyWeather(
             date: date,
             temperature: temperature,
+            apparentTemperature: apparentTemperature ?? temperature,
             condition: condition,
             symbolName: symbolName,
             precipitationChance: precipitationChance,

@@ -876,6 +876,26 @@
         }
       }
     },
+    "%@前后体感温度约为 %d°，建议及时补水，减少长时间户外停留。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It will feel like about %2$d° around %1$@. Stay hydrated and avoid prolonged time outdoors."
+          }
+        }
+      }
+    },
+    "%@前后体感温度约为 %d°，建议适当增加衣物。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It will feel like about %2$d° around %1$@. Consider wearing an extra layer."
+          }
+        }
+      }
+    },
     "%arg" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3439,6 +3459,26 @@
         }
       }
     },
+    "体感温度（°C）" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feels like (°C)"
+          }
+        }
+      }
+    },
+    "体感温度趋势" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feels-like temperature"
+          }
+        }
+      }
+    },
     "体测记录" : {
       "localizations" : {
         "en-US" : {
@@ -4265,6 +4305,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirm final deletion?"
+          }
+        }
+      }
+    },
+    "最高" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High"
+          }
+        }
+      }
+    },
+    "最高 / 最低" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High / low"
+          }
+        }
+      }
+    },
+    "最低" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low"
           }
         }
       }
@@ -6615,6 +6685,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Weather advice, %@"
+          }
+        }
+      }
+    },
+    "天气建议，体感温度 %@" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weather advice, feels like %@"
           }
         }
       }
@@ -11972,6 +12052,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Precipitation probability in the next 12 hours"
+          }
+        }
+      }
+    },
+    "未来 24 小时" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next 24 hours"
+          }
+        }
+      }
+    },
+    "未来 24 小时体感温度趋势" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feels-like temperature trend over the next 24 hours"
+          }
+        }
+      }
+    },
+    "未来 24 小时最高 %@" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highest in the next 24 hours: %@"
+          }
+        }
+      }
+    },
+    "未来 24 小时：最高 %@，最低 %@" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next 24 hours: high %@, low %@"
+          }
+        }
+      }
+    },
+    "未来 24 小时降水概率" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precipitation probability over the next 24 hours"
           }
         }
       }
@@ -19776,6 +19906,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The verification email could not be sent. Try again later."
+          }
+        }
+      }
+    },
+    "逐小时降水概率表示对应时段发生降水的可能性。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hourly precipitation probability is the chance of precipitation during each period."
           }
         }
       }

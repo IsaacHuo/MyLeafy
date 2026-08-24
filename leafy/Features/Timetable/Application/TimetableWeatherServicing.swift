@@ -5,6 +5,7 @@ import WeatherKit
 nonisolated struct TimetableHourlyWeather: Codable, Equatable, Sendable {
     let date: Date
     let temperature: Double
+    let apparentTemperature: Double
     let condition: String
     let symbolName: String
     let precipitationChance: Double
@@ -28,6 +29,7 @@ nonisolated struct TimetableWeatherAttribution: Codable, Equatable, Sendable {
 
 nonisolated struct TimetableWeatherSnapshot: Codable, Equatable, Sendable {
     let temperature: Double
+    let apparentTemperature: Double
     let condition: String
     let symbolName: String
     let observedAt: Date
@@ -43,7 +45,7 @@ nonisolated struct TimetableWeatherSnapshot: Codable, Equatable, Sendable {
     }
 
     func timetableCapsuleText(language: AppLanguagePreference) -> String {
-        "\(Int(temperature.rounded()))°C \(localizedCondition(language: language))"
+        "\(Int(apparentTemperature.rounded()))°C \(localizedCondition(language: language))"
     }
 
     func localizedCondition(language: AppLanguagePreference) -> String {
@@ -206,6 +208,7 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
     ) -> TimetableWeatherSnapshot {
         TimetableWeatherSnapshot(
             temperature: current.temperature.converted(to: .celsius).value,
+            apparentTemperature: current.apparentTemperature.converted(to: .celsius).value,
             condition: localizedCondition(rawValue: current.condition.rawValue, symbolName: current.symbolName),
             symbolName: current.symbolName,
             observedAt: current.date,
@@ -213,6 +216,7 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
                 TimetableHourlyWeather(
                     date: hour.date,
                     temperature: hour.temperature.converted(to: .celsius).value,
+                    apparentTemperature: hour.apparentTemperature.converted(to: .celsius).value,
                     condition: localizedCondition(rawValue: hour.condition.rawValue, symbolName: hour.symbolName),
                     symbolName: hour.symbolName,
                     precipitationChance: hour.precipitationChance,
@@ -256,7 +260,7 @@ nonisolated struct UserDefaultsTimetableWeatherCache: TimetableWeatherCaching {
 
     init(
         userDefaults: UserDefaults = .standard,
-        key: String = "timetableWeather.cache.v1"
+        key: String = "timetableWeather.cache.v2"
     ) {
         self.userDefaults = userDefaults
         self.key = key

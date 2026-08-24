@@ -111,7 +111,8 @@ nonisolated enum TimetableWeatherAdviceBuilder {
         snapshot: TimetableWeatherSnapshot,
         scheduleItems: [TimetableWeatherScheduleItem],
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        language: AppLanguagePreference = .current
     ) -> TimetableWeatherAdviceSummary {
         let scopedHours = weatherHoursForAdvice(
             snapshot: snapshot,
@@ -125,7 +126,11 @@ nonisolated enum TimetableWeatherAdviceBuilder {
             suggestions.append(rainSuggestion)
         }
 
-        if let temperatureSuggestion = temperatureSuggestion(hours: scopedHours, scheduleItems: scheduleItems) {
+        if let temperatureSuggestion = temperatureSuggestion(
+            hours: scopedHours,
+            scheduleItems: scheduleItems,
+            language: language
+        ) {
             suggestions.append(temperatureSuggestion)
         }
 
@@ -192,30 +197,41 @@ nonisolated enum TimetableWeatherAdviceBuilder {
 
     private static func temperatureSuggestion(
         hours: [TimetableHourlyWeather],
-        scheduleItems: [TimetableWeatherScheduleItem]
+        scheduleItems: [TimetableWeatherScheduleItem],
+        language: AppLanguagePreference
     ) -> TimetableWeatherSuggestion? {
-        guard let coldest = hours.min(by: { $0.temperature < $1.temperature }),
-              let hottest = hours.max(by: { $0.temperature < $1.temperature }) else {
+        guard let coldest = hours.min(by: { $0.apparentTemperature < $1.apparentTemperature }),
+              let hottest = hours.max(by: { $0.apparentTemperature < $1.apparentTemperature }) else {
             return nil
         }
 
-        if coldest.temperature <= 8 {
+        if coldest.apparentTemperature <= 8 {
             let target = scheduleItems.first { overlaps(hour: coldest, item: $0) }?.displayTitle ?? "外出"
             return TimetableWeatherSuggestion(
                 id: "cold",
                 systemImage: "thermometer.low",
                 title: "注意保暖",
-                detail: "\(target)前后气温约为 \(Int(coldest.temperature.rounded()))°，建议适当增加衣物。"
+                detail: L10n.text(
+                    "%@前后体感温度约为 %d°，建议适当增加衣物。",
+                    language: language,
+                    target,
+                    Int(coldest.apparentTemperature.rounded())
+                )
             )
         }
 
-        if hottest.temperature >= 30 {
+        if hottest.apparentTemperature >= 30 {
             let target = scheduleItems.first { overlaps(hour: hottest, item: $0) }?.displayTitle ?? "外出"
             return TimetableWeatherSuggestion(
                 id: "heat",
                 systemImage: "drop",
                 title: "注意防暑",
-                detail: "\(target)前后气温约为 \(Int(hottest.temperature.rounded()))°，建议及时补水，减少长时间户外停留。"
+                detail: L10n.text(
+                    "%@前后体感温度约为 %d°，建议及时补水，减少长时间户外停留。",
+                    language: language,
+                    target,
+                    Int(hottest.apparentTemperature.rounded())
+                )
             )
         }
 

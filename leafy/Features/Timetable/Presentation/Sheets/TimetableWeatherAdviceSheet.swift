@@ -147,9 +147,15 @@ struct TimetableWeatherAdviceSheet: View {
         snapshot: TimetableWeatherSnapshot,
         summary: TimetableWeatherAdviceSummary
     ) -> some View {
+        let hours = snapshot.upcomingHourlyForecast(limit: 24)
+
         VStack(alignment: .leading, spacing: AppSpacing.card) {
-            weatherSummaryCard(snapshot: snapshot, suggestions: summary.suggestions)
-            hourlyForecastSection(snapshot.upcomingHourlyForecast())
+            weatherSummaryCard(snapshot: snapshot, hours: hours)
+            hourlyForecastSection(hours)
+
+            if !summary.suggestions.isEmpty {
+                suggestionsSection(summary.suggestions)
+            }
 
             if !summary.scheduleItems.isEmpty {
                 scheduleSection(summary.scheduleItems)
@@ -161,100 +167,148 @@ struct TimetableWeatherAdviceSheet: View {
 
     private func weatherSummaryCard(
         snapshot: TimetableWeatherSnapshot,
-        suggestions: [TimetableWeatherSuggestion]
+        hours: [TimetableHourlyWeather]
     ) -> some View {
         VStack(alignment: .leading, spacing: 16 * leafyControlScale) {
-            HStack(alignment: .center, spacing: 10 * leafyControlScale) {
+            HStack(alignment: .center, spacing: 14 * leafyControlScale) {
                 Image(systemName: snapshot.symbolName.isEmpty ? "cloud.sun" : snapshot.symbolName)
                     .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 25 * leafyControlScale, weight: .medium))
-                    .frame(width: 32 * leafyControlScale, height: 32 * leafyControlScale)
+                    .font(.system(size: 38 * leafyControlScale, weight: .medium))
+                    .frame(width: 48 * leafyControlScale, height: 48 * leafyControlScale)
 
-                Text("\(Int(snapshot.temperature.rounded()))°")
-                    .font(.system(size: 26 * leafyControlScale, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.primaryText)
+                VStack(alignment: .leading, spacing: 3 * leafyControlScale) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8 * leafyControlScale) {
+                        Text("\(Int(snapshot.apparentTemperature.rounded()))°")
+                            .font(.system(size: 38 * leafyControlScale, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(AppTheme.primaryText)
 
-                Text(snapshot.localizedCondition(language: leafyLanguage))
-                    .leafyHeadline()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(1)
+                        Text(snapshot.localizedCondition(language: leafyLanguage))
+                            .leafyHeadline()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+
+                    Text("体感温度（°C）")
+                        .leafyBody()
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
 
                 Spacer(minLength: 0)
+            }
 
+            if let rangeText = apparentTemperatureRangeText(for: hours) {
+                Text(rangeText)
+                    .leafySubheadline()
+                    .monospacedDigit()
+                    .foregroundStyle(AppTheme.primaryText)
+            }
+
+            HStack(spacing: 6 * leafyControlScale) {
+                Image(systemName: "clock")
+                    .accessibilityHidden(true)
                 Text("\(snapshot.observedAt.formatted(date: .omitted, time: .shortened)) 更新")
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
-                    .lineLimit(1)
             }
+        }
+        .padding(18 * leafyControlScale)
+        .leafyCardStyle()
+        .accessibilityElement(children: .combine)
+    }
 
-            if !suggestions.isEmpty {
+    private func hourlyForecastSection(_ hours: [TimetableHourlyWeather]) -> some View {
+        VStack(alignment: .leading, spacing: 22 * leafyControlScale) {
+            Text("未来 24 小时")
+                .leafyHeadline()
+                .foregroundStyle(AppTheme.primaryText)
+
+            if !hours.isEmpty {
+                apparentTemperatureChart(hours)
+
                 Divider()
 
-                Text("今天建议")
-                    .leafyHeadline()
-                    .foregroundStyle(AppTheme.primaryText)
-
-                VStack(spacing: 10 * leafyControlScale) {
-                    ForEach(suggestions) { suggestion in
-                        WeatherSuggestionRow(suggestion: suggestion)
-                    }
-                }
+                precipitationChart(hours)
+            } else {
+                Text("暂无逐小时预报")
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4 * leafyControlScale)
             }
         }
         .padding(18 * leafyControlScale)
         .leafyCardStyle()
     }
 
-    private func hourlyForecastSection(_ hours: [TimetableHourlyWeather]) -> some View {
-        VStack(alignment: .leading, spacing: 12 * leafyControlScale) {
-            Text("未来 12 小时")
-                .leafyHeadline()
-                .foregroundStyle(AppTheme.primaryText)
-
-            if !hours.isEmpty {
-                temperatureChartCard(hours)
-                precipitationChartCard(hours)
-            } else {
-                Text("暂无逐小时预报")
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16 * leafyControlScale)
-                    .background(
-                        AppTheme.softFill,
-                        in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                    )
-            }
-        }
-    }
-
-    private func temperatureChartCard(_ hours: [TimetableHourlyWeather]) -> some View {
+    private func apparentTemperatureChart(_ hours: [TimetableHourlyWeather]) -> some View {
         let axis = temperatureAxis(for: hours)
+        let minimum = hours.min { $0.apparentTemperature < $1.apparentTemperature }
+        let maximum = hours.max { $0.apparentTemperature < $1.apparentTemperature }
+        let sharesExtremePoint = minimum?.date == maximum?.date
+        let timeValues = timeAxisValues(for: hours)
 
-        return VStack(alignment: .leading, spacing: 8 * leafyControlScale) {
-            Text("气温")
+        return VStack(alignment: .leading, spacing: 10 * leafyControlScale) {
+            Text("体感温度趋势")
                 .leafySubheadline()
                 .foregroundStyle(AppTheme.primaryText)
 
             Chart(hours, id: \.date) { hour in
+                AreaMark(
+                    x: .value("时间", hour.date),
+                    yStart: .value("温度下界", axis.domain.lowerBound),
+                    yEnd: .value("体感温度", hour.apparentTemperature)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AppTheme.warning.opacity(0.38), AppTheme.warning.opacity(0.05)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(.catmullRom)
+
                 LineMark(
                     x: .value("时间", hour.date),
-                    y: .value("温度", hour.temperature)
+                    y: .value("体感温度", hour.apparentTemperature)
                 )
                 .foregroundStyle(AppTheme.warning)
                 .interpolationMethod(.catmullRom)
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                if hour.date != hours.first?.date, hour.date != hours.last?.date {
+                if let maximum, hour.date == maximum.date {
                     PointMark(
                         x: .value("时间", hour.date),
-                        y: .value("温度", hour.temperature)
+                        y: .value("体感温度", hour.apparentTemperature)
                     )
                     .foregroundStyle(AppTheme.warning)
+                    .symbolSize(52)
+                    .annotation(position: .top, spacing: 5 * leafyControlScale) {
+                        Text(L10n.text(
+                            sharesExtremePoint ? "最高 / 最低" : "最高",
+                            language: leafyLanguage
+                        ))
+                            .microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
+
+                if let minimum, !sharesExtremePoint, hour.date == minimum.date {
+                    PointMark(
+                        x: .value("时间", hour.date),
+                        y: .value("体感温度", hour.apparentTemperature)
+                    )
+                    .foregroundStyle(AppTheme.warning)
+                    .symbolSize(52)
+                    .annotation(position: .top, spacing: 5 * leafyControlScale) {
+                        Text("最低")
+                            .microCaption()
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
                 }
             }
             .chartYScale(domain: axis.domain)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                AxisMarks(values: timeValues) { value in
                     AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.45))
                     AxisValueLabel {
                         if let date = value.as(Date.self) {
@@ -264,7 +318,7 @@ struct TimetableWeatherAdviceSheet: View {
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: axis.values) { value in
+                AxisMarks(position: .trailing, values: axis.values) { value in
                     AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.55))
                     AxisValueLabel {
                         if let temperature = value.as(Double.self) {
@@ -273,37 +327,54 @@ struct TimetableWeatherAdviceSheet: View {
                     }
                 }
             }
-            .frame(height: 120 * leafyControlScale)
-            .accessibilityLabel("未来 12 小时气温趋势")
+            .frame(height: 190 * leafyControlScale)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("未来 24 小时体感温度趋势")
+            .accessibilityValue(apparentTemperatureRangeText(for: hours) ?? "")
         }
-        .padding(14 * leafyControlScale)
-        .background(
-            AppTheme.warning.opacity(colorScheme == .dark ? 0.18 : 0.12),
-            in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                .stroke(AppTheme.warning.opacity(0.2), lineWidth: 1)
-        )
     }
 
-    private func precipitationChartCard(_ hours: [TimetableHourlyWeather]) -> some View {
-        VStack(alignment: .leading, spacing: 8 * leafyControlScale) {
+    private func precipitationChart(_ hours: [TimetableHourlyWeather]) -> some View {
+        let maximumChance = hours.map(\.precipitationChance).max() ?? 0
+        let maximumText = maximumPrecipitationText(maximumChance)
+        let timeValues = timeAxisValues(for: hours)
+
+        return VStack(alignment: .leading, spacing: 10 * leafyControlScale) {
             Text("降水概率")
                 .leafySubheadline()
                 .foregroundStyle(AppTheme.primaryText)
 
+            Text(maximumText)
+                .leafyBody()
+                .monospacedDigit()
+                .foregroundStyle(AppTheme.secondaryText)
+
             Chart(hours, id: \.date) { hour in
-                BarMark(
+                AreaMark(
+                    x: .value("时间", hour.date),
+                    yStart: .value("概率下界", 0.0),
+                    yEnd: .value("降水概率", hour.precipitationChance)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.34), Color.blue.opacity(0.06)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(.catmullRom)
+
+                LineMark(
                     x: .value("时间", hour.date),
                     y: .value("降水概率", hour.precipitationChance)
                 )
-                .foregroundStyle(Color.blue.opacity(0.72))
-                .cornerRadius(3)
+                .foregroundStyle(Color.blue)
+                .interpolationMethod(.catmullRom)
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
             }
             .chartYScale(domain: 0...1)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                AxisMarks(values: timeValues) { value in
                     AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.45))
                     AxisValueLabel {
                         if let date = value.as(Date.self) {
@@ -313,7 +384,7 @@ struct TimetableWeatherAdviceSheet: View {
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: [0, 0.5, 1]) { value in
+                AxisMarks(position: .trailing, values: [0, 0.2, 0.4, 0.6, 0.8, 1]) { value in
                     AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.55))
                     AxisValueLabel {
                         if let chance = value.as(Double.self) {
@@ -322,18 +393,31 @@ struct TimetableWeatherAdviceSheet: View {
                     }
                 }
             }
-            .frame(height: 104 * leafyControlScale)
-            .accessibilityLabel("未来 12 小时降水概率")
+            .frame(height: 180 * leafyControlScale)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("未来 24 小时降水概率")
+            .accessibilityValue(maximumText)
+
+            Text("逐小时降水概率表示对应时段发生降水的可能性。")
+                .microCaption()
+                .foregroundStyle(AppTheme.tertiaryText)
         }
-        .padding(14 * leafyControlScale)
-        .background(
-            Color.blue.opacity(colorScheme == .dark ? 0.16 : 0.09),
-            in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
-                .stroke(Color.blue.opacity(0.18), lineWidth: 1)
-        )
+    }
+
+    private func suggestionsSection(_ suggestions: [TimetableWeatherSuggestion]) -> some View {
+        VStack(alignment: .leading, spacing: 12 * leafyControlScale) {
+            Text("今天建议")
+                .leafyHeadline()
+                .foregroundStyle(AppTheme.primaryText)
+
+            VStack(spacing: 10 * leafyControlScale) {
+                ForEach(suggestions) { suggestion in
+                    WeatherSuggestionRow(suggestion: suggestion)
+                }
+            }
+        }
+        .padding(18 * leafyControlScale)
+        .leafyCardStyle()
     }
 
     private func scheduleSection(_ items: [TimetableWeatherScheduleItem]) -> some View {
@@ -402,13 +486,45 @@ struct TimetableWeatherAdviceSheet: View {
         domain: ClosedRange<Double>,
         values: [Double]
     ) {
-        let temperatures = hours.map(\.temperature)
+        let temperatures = hours.map(\.apparentTemperature)
         let lowerBound = min(-10, floor((temperatures.min() ?? -10) / 10) * 10)
         let upperBound = max(40, ceil((temperatures.max() ?? 40) / 10) * 10)
         return (
             domain: lowerBound...upperBound,
             values: Array(stride(from: lowerBound, through: upperBound, by: 10))
         )
+    }
+
+    private func apparentTemperatureRangeText(for hours: [TimetableHourlyWeather]) -> String? {
+        guard let minimum = hours.map(\.apparentTemperature).min(),
+              let maximum = hours.map(\.apparentTemperature).max() else {
+            return nil
+        }
+
+        return L10n.text(
+            "未来 24 小时：最高 %@，最低 %@",
+            language: leafyLanguage,
+            "\(Int(maximum.rounded()))°",
+            "\(Int(minimum.rounded()))°"
+        )
+    }
+
+    private func maximumPrecipitationText(_ chance: Double) -> String {
+        L10n.text(
+            "未来 24 小时最高 %@",
+            language: leafyLanguage,
+            chance.formatted(.percent.precision(.fractionLength(0)))
+        )
+    }
+
+    private func timeAxisValues(for hours: [TimetableHourlyWeather]) -> [Date] {
+        guard hours.count > 1 else { return hours.map(\.date) }
+
+        let lastIndex = hours.count - 1
+        let indices = (0..<4).map { position in
+            Int((Double(position) * Double(lastIndex) / 3).rounded())
+        }
+        return Array(Set(indices)).sorted().map { hours[$0].date }
     }
 
     @MainActor
@@ -460,7 +576,8 @@ struct TimetableWeatherAdviceSheet: View {
         )
         let summary = TimetableWeatherAdviceBuilder.makeSummary(
             snapshot: snapshot,
-            scheduleItems: scheduleItems
+            scheduleItems: scheduleItems,
+            language: leafyLanguage
         )
         weatherPreview = snapshot
         loadState = .loaded(snapshot, summary)

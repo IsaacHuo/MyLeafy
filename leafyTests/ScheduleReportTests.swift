@@ -299,6 +299,7 @@ final class ScheduleReportTests: XCTestCase {
         let input = ScheduleReportInput(courses: [], exams: [], countdowns: [], cellReminders: [])
         let weather = TimetableWeatherSnapshot(
             temperature: 20,
+            apparentTemperature: 18,
             condition: "多云",
             symbolName: "cloud",
             observedAt: now,
@@ -306,6 +307,7 @@ final class ScheduleReportTests: XCTestCase {
                 TimetableHourlyWeather(
                     date: try makeDateTime("2026-03-09 09:00"),
                     temperature: 22,
+                    apparentTemperature: 20,
                     condition: "多云",
                     symbolName: "cloud",
                     precipitationChance: 0,
