@@ -19249,6 +19249,281 @@
         }
       }
     },
+    "同步课表" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync schedule" }
+        }
+      }
+    },
+    "同步教务数据" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync academic data" }
+        }
+      }
+    },
+    "同步成绩" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync grades" }
+        }
+      }
+    },
+    "同步教学与培养" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync teaching and training" }
+        }
+      }
+    },
+    "同步考试安排" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync exams" }
+        }
+      }
+    },
+    "同步官方排名" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync official rankings" }
+        }
+      }
+    },
+    "查询教室" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Query classrooms" }
+        }
+      }
+    },
+    "更新校园热力图" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Update campus heatmap" }
+        }
+      }
+    },
+    "正在连接教务系统" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Connecting to the academic system" }
+        }
+      }
+    },
+    "正在识别验证码" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Recognizing the verification code" }
+        }
+      }
+    },
+    "正在验证登录" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Verifying login" }
+        }
+      }
+    },
+    "正在更新学期信息" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Updating semester information" }
+        }
+      }
+    },
+    "正在拉取课表" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Fetching schedule" }
+        }
+      }
+    },
+    "正在处理课表" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Processing schedule" }
+        }
+      }
+    },
+    "正在保存课表" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Saving schedule" }
+        }
+      }
+    },
+    "正在拉取成绩" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Fetching grades" }
+        }
+      }
+    },
+    "正在处理成绩" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Processing grades" }
+        }
+      }
+    },
+    "正在保存成绩" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Saving grades" }
+        }
+      }
+    },
+    "正在拉取官方排名" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Fetching official rankings" }
+        }
+      }
+    },
+    "正在处理考试安排" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Processing exams" }
+        }
+      }
+    },
+    "正在处理教学计划" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Processing teaching plan" }
+        }
+      }
+    },
+    "正在处理培养方案" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Processing training program" }
+        }
+      }
+    },
+    "正在保存同步结果" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Saving sync results" }
+        }
+      }
+    },
+    "正在查询空教室" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Querying available classrooms" }
+        }
+      }
+    },
+    "正在查询教室占用" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Querying classroom occupancy" }
+        }
+      }
+    },
+    "正在生成校园热力图" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Generating campus heatmap" }
+        }
+      }
+    },
+    "查询完成" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Query complete" }
+        }
+      }
+    },
+    "部分完成" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Partially completed" }
+        }
+      }
+    },
+    "同步完成，成绩已是最新，共 %d 条。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync complete. Grades are up to date with %d records." }
+        }
+      }
+    },
+    "同步完成，获取到 %d 条成绩。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : { "state" : "translated", "value" : "Sync complete. Fetched %d grade records." }
+        }
+      }
+    },
+    "教学计划已更新" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Teaching plan updated" } }
+      }
+    },
+    "培养方案已更新" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Training program updated" } }
+      }
+    },
+    "教学计划失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Teaching plan failed: %@" } }
+      }
+    },
+    "培养方案失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Training program failed: %@" } }
+      }
+    },
+    "课表失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Schedule failed: %@" } }
+      }
+    },
+    "成绩失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Grades failed: %@" } }
+      }
+    },
+    "排名失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Rankings failed: %@" } }
+      }
+    },
+    "考试失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Exams failed: %@" } }
+      }
+    },
+    "成绩保存失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Unable to save grades: %@" } }
+      }
+    },
+    "部分完成：%@。%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Partially completed: %@. %@" } }
+      }
+    },
+    "同步失败：%@" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Sync failed: %@" } }
+      }
+    },
+    "同步完成，已刷新演示教学计划和培养方案。" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Sync complete. Demo teaching plan and training program refreshed." } }
+      }
+    },
+    "当前教务登录状态已失效，验证后会继续同步教学计划和培养方案。" : {
+      "localizations" : {
+        "en-US" : { "stringUnit" : { "state" : "translated", "value" : "Your academic system session has expired. Teaching plan and training program sync will continue after verification." } }
+      }
+    },
     "需连接校园网" : {
       "localizations" : {
         "en-US" : {

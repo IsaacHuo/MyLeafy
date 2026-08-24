@@ -58,7 +58,8 @@ enum SchoolDataSyncService {
     static func syncAll(
         modelContext: ModelContext,
         language: AppLanguagePreference,
-        userInitiated: Bool = false
+        userInitiated: Bool = false,
+        progressReporter: AcademicOperationProgressReporter? = nil
     ) async -> SchoolDataSyncOutcome {
         let networkManager = ActiveCampusContext.networkManager
 
@@ -80,6 +81,7 @@ enum SchoolDataSyncService {
             return .needsReauthentication(.schoolDataSync)
         }
 
+        progressReporter?(.begin(.refreshingSemester))
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: true)
 
         var results: [String] = []
@@ -94,8 +96,11 @@ enum SchoolDataSyncService {
         var trainingProgramToSave: TrainingProgramDocument?
 
         do {
+            progressReporter?(.begin(.fetchingTimetable))
             let html = try await networkManager.fetchTimetable()
+            progressReporter?(.begin(.processingTimetable))
             let parsed = try HTMLParser.parseTimetableResult(html: html).records.map { $0.makeCourse() }
+            progressReporter?(.begin(.savingTimetable))
             try persistTimetable(
                 parsed,
                 semesterID: semesterConfig.semesterID,
@@ -111,16 +116,20 @@ enum SchoolDataSyncService {
         } catch {
             modelContext.rollback()
             if requiresReauthentication(error, userInitiated: userInitiated) {
+                progressReporter?(.fail(.fetchingTimetable, error.localizedDescription))
                 return .needsReauthentication(.schoolDataSync)
             }
+            progressReporter?(.fail(.fetchingTimetable, error.localizedDescription))
             TimetableCacheMetadata.lastFailureMessage = error.localizedDescription
             failedOperationCount += 1
-            results.append(L10n.text("课表失败", language: language))
+            results.append(L10n.text("课表失败：%@", language: language, error.localizedDescription))
         }
 
         if networkManager.currentPortal == .undergraduate {
             do {
+                progressReporter?(.begin(.fetchingGrades))
                 let html = try await networkManager.fetchGrades()
+                progressReporter?(.begin(.processingGrades))
                 let parsed = try HTMLParser.parseGrades(html: html)
                 let rankings = (try? HTMLParser.parseGradeRankings(html: html)) ?? []
                 let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html)
@@ -133,13 +142,16 @@ enum SchoolDataSyncService {
                 parsedGrades = parsed
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
+                    progressReporter?(.fail(.fetchingGrades, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
                 }
+                progressReporter?(.fail(.fetchingGrades, error.localizedDescription))
                 failedOperationCount += 1
-                results.append(L10n.text("成绩失败", language: language))
+                results.append(L10n.text("成绩失败：%@", language: language, error.localizedDescription))
             }
 
             do {
+                progressReporter?(.begin(.fetchingRankings))
                 let html = try await networkManager.fetchGradeRankings()
                 let parsed = try HTMLParser.parseGradeRankings(html: html)
                 gradeRankingsToSave = parsed
@@ -150,55 +162,70 @@ enum SchoolDataSyncService {
                 results.append(L10n.text("排名 %d 条", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
+                    progressReporter?(.fail(.fetchingRankings, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
                 }
+                progressReporter?(.fail(.fetchingRankings, error.localizedDescription))
                 failedOperationCount += 1
-                results.append(L10n.text("排名未开放", language: language))
+                results.append(L10n.text("排名失败：%@", language: language, error.localizedDescription))
             }
 
             do {
+                progressReporter?(.begin(.fetchingExams))
                 let html = try await networkManager.fetchExamSchedule()
+                progressReporter?(.begin(.processingExams))
                 let parsed = try HTMLParser.parseExams(html: html)
                 examScheduleToSave = parsed
                 successfulOperationCount += 1
                 results.append(L10n.text("考试 %d 条", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
+                    progressReporter?(.fail(.fetchingExams, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
                 }
+                progressReporter?(.fail(.fetchingExams, error.localizedDescription))
                 failedOperationCount += 1
-                results.append(L10n.text("考试失败", language: language))
+                results.append(L10n.text("考试失败：%@", language: language, error.localizedDescription))
             }
 
             do {
+                progressReporter?(.begin(.fetchingTeachingPlan))
                 let html = try await networkManager.fetchTeachingPlan()
+                progressReporter?(.begin(.processingTeachingPlan))
                 let parsed = try HTMLParser.parseTeachingPlan(html: html)
                 teachingPlanToSave = parsed
                 successfulOperationCount += 1
                 results.append(L10n.text("教学计划 %d 学期", language: language, parsed.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
+                    progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
                 }
+                progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
                 failedOperationCount += 1
-                results.append(L10n.text("教学计划失败", language: language))
+                results.append(L10n.text("教学计划失败：%@", language: language, error.localizedDescription))
             }
 
             do {
+                progressReporter?(.begin(.fetchingTrainingProgram))
                 let html = try await networkManager.fetchGraduationRequirements()
+                progressReporter?(.begin(.processingTrainingProgram))
                 let document = try HTMLParser.parseTrainingProgram(html: html)
                 trainingProgramToSave = document
                 successfulOperationCount += 1
                 results.append(L10n.text("培养方案 %d 类", language: language, document.creditRequirements.count))
             } catch {
                 if requiresReauthentication(error, userInitiated: userInitiated) {
+                    progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
                     return .needsReauthentication(.schoolDataSync)
                 }
+                progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
                 failedOperationCount += 1
-                results.append(L10n.text("培养方案失败", language: language))
+                results.append(L10n.text("培养方案失败：%@", language: language, error.localizedDescription))
             }
         }
 
+        progressReporter?(.begin(.savingResults))
         if let parsedGrades {
             do {
                 try persistGrades(parsedGrades, modelContext: modelContext)
@@ -208,8 +235,9 @@ enum SchoolDataSyncService {
                 results.append(L10n.text("成绩 %d 条", language: language, parsedGrades.count))
             } catch {
                 modelContext.rollback()
+                progressReporter?(.fail(.savingResults, error.localizedDescription))
                 failedOperationCount += 1
-                results.append(L10n.text("成绩保存失败", language: language))
+                results.append(L10n.text("成绩保存失败：%@", language: language, error.localizedDescription))
             }
         }
 

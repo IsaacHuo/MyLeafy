@@ -2090,6 +2090,7 @@ private struct CacheAndSyncView: View {
     @Query private var scheduleMemoAudioRecords: [ScheduleMemoAudio]
 
     @State private var isSyncing = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var isClearing = false
     @State private var message: String?
     @State private var cacheSummary = ProfileCacheSummary.empty
@@ -2176,10 +2177,13 @@ private struct CacheAndSyncView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .allAcademicData,
+            progressController: progressController
         ) { _ in
             Task { await syncAll(allowsAutomaticRecovery: false) }
         }
+        .academicOperationProgress(progressController)
         .leafyOperationAlert($operationAlert)
         .onAppear(perform: refreshCacheSummary)
         .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { _ in
@@ -2266,6 +2270,9 @@ private struct CacheAndSyncView: View {
             return
         }
 
+        if !isCustomCampus, !ReviewDemoMode.isEnabled {
+            progressController.begin(.allAcademicData)
+        }
         isSyncing = true
         defer {
             isSyncing = false
@@ -2275,13 +2282,23 @@ private struct CacheAndSyncView: View {
         switch await SchoolDataSyncService.syncAll(
             modelContext: modelContext,
             language: leafyLanguage,
-            userInitiated: true
+            userInitiated: true,
+            progressReporter: isCustomCampus || ReviewDemoMode.isEnabled
+                ? nil
+                : progressController.reporter(for: .allAcademicData)
         ) {
         case .success(let syncMessage):
-            message = syncMessage
-        case .partialSuccess(let syncMessage), .failure(let syncMessage):
+            progressController.completeCurrentStep()
+            progressController.clear()
+            operationAlert = .success(syncMessage)
+        case .partialSuccess(let syncMessage):
+            progressController.clear()
+            operationAlert = .partial(syncMessage)
+        case .failure(let syncMessage):
+            progressController.clear()
             operationAlert = .failure(syncMessage)
         case .needsLogin:
+            progressController.clear()
             operationAlert = .failure(L10n.text("请先连接校园网登录教务系统。", language: leafyLanguage))
         case .needsReauthentication(let context):
             reauthenticationRequest = SchoolReauthenticationRequest(

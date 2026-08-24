@@ -4,6 +4,44 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
+struct GradeRefreshSummary: Equatable {
+    let gradeCount: Int
+    let hasChanges: Bool
+
+    @MainActor
+    static func compare(existing: [Grade], incoming: [Grade]) -> GradeRefreshSummary {
+        GradeRefreshSummary(
+            gradeCount: incoming.count,
+            hasChanges: semanticRecords(existing) != semanticRecords(incoming)
+        )
+    }
+
+    @MainActor
+    private static func semanticRecords(_ grades: [Grade]) -> [Record] {
+        grades.map(Record.init(grade:)).sorted {
+            [$0.term, $0.courseName, $0.credit, $0.score, $0.type].joined(separator: "\u{1F}")
+                < [$1.term, $1.courseName, $1.credit, $1.score, $1.type].joined(separator: "\u{1F}")
+        }
+    }
+
+    private struct Record: Equatable {
+        let term: String
+        let courseName: String
+        let credit: String
+        let score: String
+        let type: String
+
+        @MainActor
+        init(grade: Grade) {
+            term = grade.term.trimmingCharacters(in: .whitespacesAndNewlines)
+            courseName = grade.courseName.trimmingCharacters(in: .whitespacesAndNewlines)
+            credit = grade.credit.trimmingCharacters(in: .whitespacesAndNewlines)
+            score = grade.score.trimmingCharacters(in: .whitespacesAndNewlines)
+            type = grade.type.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+}
+
 struct ManualGradeDraft: Equatable {
     var term: String = ""
     var courseName: String = ""
@@ -124,6 +162,7 @@ struct GradesView: View {
     let openAnalytics: (() -> Void)?
 
     @State private var isFetching = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
@@ -227,7 +266,9 @@ struct GradesView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .grades,
+            progressController: progressController
         ) { _ in
             Task {
                 await fetchGrades(
@@ -236,6 +277,7 @@ struct GradesView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
         .onAppear {
             creditSummary = SchoolDataCache.loadGradeCreditSummary()
             refreshGradePresentationIfNeeded()
@@ -455,6 +497,13 @@ struct GradesView: View {
             return
         }
 
+        let progressReporter: AcademicOperationProgressReporter? = userInitiated
+            ? progressController.reporter(for: .grades)
+            : nil
+        if userInitiated {
+            progressController.begin(.grades)
+        }
+
         if userInitiated,
            let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
@@ -474,6 +523,7 @@ struct GradesView: View {
                     allowsAutomaticAttempt: allowsAutomaticRecovery
                 )
             } else {
+                progressController.clear()
                 alertMessage = networkManager.hasCachedIdentity
                     ? L10n.text("本地身份已识别，但刷新成绩需要连接校园网并重新建立教务登录态。", language: leafyLanguage)
                     : L10n.text("请先连接校园网登录教务系统。", language: leafyLanguage)
@@ -484,12 +534,16 @@ struct GradesView: View {
         await MainActor.run { isFetching = true }
 
         do {
+            progressReporter?(.begin(.fetchingGrades))
             let htmlData = try await networkManager.fetchGrades()
+            progressReporter?(.begin(.processingGrades))
             let newGrades = try HTMLParser.parseGrades(html: htmlData)
             let newRankings = (try? HTMLParser.parseGradeRankings(html: htmlData)) ?? []
             let parsedCreditSummary = try? HTMLParser.parseGradeCreditSummary(html: htmlData)
 
             try await MainActor.run {
+                let refreshSummary = GradeRefreshSummary.compare(existing: grades, incoming: newGrades)
+                progressReporter?(.begin(.savingGrades))
                 try SchoolDataSyncService.persistGrades(newGrades, modelContext: modelContext)
                 SchoolDataCache.markGradeDetailsSynced()
                 SchoolDataRefreshNotifier.post(.grades)
@@ -500,26 +554,40 @@ struct GradesView: View {
                     creditSummary = parsedCreditSummary
                     SchoolDataCache.saveGradeCreditSummary(parsedCreditSummary)
                 }
-                if userInitiated, newGrades.isEmpty {
-                    alertMessage = L10n.text("同步完成，学校当前没有返回成绩记录。", language: leafyLanguage)
+                if userInitiated {
+                    alertMessage = gradeRefreshMessage(for: refreshSummary)
                     showAlert = true
                 }
                 isFetching = false
+                progressController.completeCurrentStep()
+                progressController.clear()
             }
         } catch {
             await MainActor.run {
                 isFetching = false
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
+                    progressReporter?(.fail(.fetchingGrades, error.localizedDescription))
                     reauthenticationRequest = SchoolReauthenticationRequest(
                         context: .grades,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else {
+                    progressController.clear()
                     alertMessage = L10n.text("获取成绩失败：%@", language: leafyLanguage, error.localizedDescription)
                     showAlert = true
                 }
             }
         }
+    }
+
+    private func gradeRefreshMessage(for summary: GradeRefreshSummary) -> String {
+        if summary.gradeCount == 0 {
+            return L10n.text("同步完成，学校当前没有返回成绩记录。", language: leafyLanguage)
+        }
+        if !summary.hasChanges {
+            return L10n.text("同步完成，成绩已是最新，共 %d 条。", language: leafyLanguage, summary.gradeCount)
+        }
+        return L10n.text("同步完成，获取到 %d 条成绩。", language: leafyLanguage, summary.gradeCount)
     }
 
     @MainActor
@@ -858,6 +926,7 @@ struct GradeAnalyticsDetailView: View {
     @State private var rankings: [GradeRankingRecord] = SchoolDataCache.loadGradeRankings()
     @State private var rankingMessage = L10n.text("正在查询官方排名")
     @State private var isLoadingRankings = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var creditSummary: GradeCreditSummary? = SchoolDataCache.loadGradeCreditSummary()
     private let networkManager = ActiveCampusContext.networkManager
     @State private var courseSort: GradeCourseSort = .lowScore
@@ -865,6 +934,7 @@ struct GradeAnalyticsDetailView: View {
     @State private var sharePreviewImage: UIImage?
     @State private var csvShareItem: GradeCSVShareItem?
     @State private var exportErrorMessage: String?
+    @State private var operationAlert: LeafyOperationAlert?
     @State private var presentationSnapshot = GradePresentationSnapshot.empty
     @State private var presentationSignature = GradePresentationSignature()
 
@@ -989,7 +1059,9 @@ struct GradeAnalyticsDetailView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .rankings,
+            progressController: progressController
         ) { _ in
             Task {
                 await refreshRankings(
@@ -998,6 +1070,8 @@ struct GradeAnalyticsDetailView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
+        .leafyOperationAlert($operationAlert)
         .task {
             await loadSupplementalData()
         }
@@ -1240,6 +1314,9 @@ struct GradeAnalyticsDetailView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
+        if userInitiated {
+            progressController.begin(.rankings)
+        }
         if userInitiated,
            let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
@@ -1262,6 +1339,8 @@ struct GradeAnalyticsDetailView: View {
                         context: .grades,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
+                } else if userInitiated {
+                    progressController.clear()
                 }
             }
             return
@@ -1295,6 +1374,10 @@ struct GradeAnalyticsDetailView: View {
         }
 
         do {
+            let progressReporter: AcademicOperationProgressReporter? = userInitiated
+                ? progressController.reporter(for: .rankings)
+                : nil
+            progressReporter?(.begin(.fetchingRankings))
             let html = try await networkManager.fetchGradeRankings()
             let parsed = try HTMLParser.parseGradeRankings(html: html)
             let parsedCreditSummary = try? HTMLParser.parseGradeCreditSummary(html: html)
@@ -1314,16 +1397,32 @@ struct GradeAnalyticsDetailView: View {
                 }
                 refreshPresentationSnapshotIfNeeded()
                 isLoadingRankings = false
+                if userInitiated {
+                    progressController.completeCurrentStep()
+                    progressController.clear()
+                    operationAlert = .success(
+                        parsed.isEmpty
+                            ? "查询完成，学校当前没有返回官方排名。"
+                            : "查询完成，获取到 \(parsed.count) 条官方排名。"
+                    )
+                }
             }
         } catch {
             await MainActor.run {
                 rankingMessage = error.localizedDescription.isEmpty ? L10n.text("教务暂未开放成绩排名。", language: leafyLanguage) : error.localizedDescription
                 isLoadingRankings = false
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
+                    progressController.record(
+                        .fail(.fetchingRankings, error.localizedDescription),
+                        for: .rankings
+                    )
                     reauthenticationRequest = SchoolReauthenticationRequest(
                         context: .grades,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
+                } else if userInitiated {
+                    progressController.clear()
+                    operationAlert = .failure("查询官方排名失败：\(error.localizedDescription)")
                 }
             }
         }

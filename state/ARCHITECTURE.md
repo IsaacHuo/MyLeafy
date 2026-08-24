@@ -164,6 +164,7 @@ flowchart TB
 
 - `SchoolNetworkManager.swift` + `+Core/+Auth/+Timetable/+Discover.swift`：强智登录、Cookie 管理、教务请求、页面识别、会话失效。
 - `SchoolAuthenticationService` / `SchoolReauthentication`：用户主动教务操作的 Session-first 恢复协调；本科对同一验证码做三路端侧 Vision 一致性识别，研究生与不可靠结果进入人工验证，校园网不可达只提示连接后重试。
+- `AcademicOperationProgress`：页面局部的用户主动教务操作进度；记录已完成、进行中和失败步骤，认证层与具体数据用例通过 MainActor reporter 汇入，同一模型不用于后台预取。
 - `SchoolDataSyncService` / `SchoolDataPrefetchCoordinator`：教务数据同步与预取。
 - `SchoolLoginCredentialStore` / `SchoolSessionCredentialStore`：学校凭据与会话存储。
 - `TimetableWebViewBootstrapper`：课表 HTTP 路径失败后的 `WKWebView` 兼容路径。
@@ -260,6 +261,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 - 用户主动发起教务请求时必须优先复用当前 URLSession/Cookie，不发送额外的联网 Session 预检。只有服务端明确确认 Session 失效才进入恢复；校园网不可达不得清除 Cookie 或触发验证码。后台预取不主动认证。
 - 无 Session 时通过学校验证码端点是否可访问判断网络条件；校园网不可达只提示连接 `bjfu-wifi` 或北林 VPN 后再次操作，不进入人工验证码 sheet，也不监听网络变化自动重试。
 - 本科自动恢复使用 Keychain 中与当前身份匹配的账号密码和同一 URLSession 获取、提交验证码；原图、四倍 Lanczos 放大图、四倍放大灰度增强图至少两路得到相同四位大写字母数字，且每路置信度不低于 0.85 时，最多自动提交一次。结果冲突、格式或置信度不合格、识别、登录或重试失败均转人工；研究生端不做自动 OCR。
+- 用户主动教务操作必须展示与实际请求范围一致的步骤历史：课表只显示课表步骤，成绩只显示成绩步骤，“我的”显示全量步骤，教学与培养一次刷新两类数据，空教室只显示身份恢复与当前查询。单步失败不得被后续步骤覆盖；后台预取不展示进度。
 - 校园一级领域包括 `自习安排` 与 `学习空间`；`空闲教室` 是 `自习安排` 下的内部工具；专注记录归 `学习空间`。
 - 校园热力图不内置全学期占用数据：用户显式登录并按需更新所选日期和节次；每个校园账号只保留最近一次成功更新的数据；文案使用“更新数据 / 上次更新”。
 - 一个 `(campus_id, edu_id)` 对应一个长期 community profile；多个可替换的设备 Auth 会话可链接同一 profile，一个 Auth 会话最多映射一个 profile。学校登录自动继承匹配的社区资料；已验证绑定邮箱仅用于通知，不参与登录或社区恢复。

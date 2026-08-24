@@ -274,8 +274,10 @@ struct SchoolAuthenticationService {
 
     func recover(
         portal: SchoolPortal,
-        allowsAutomaticAttempt: Bool
+        allowsAutomaticAttempt: Bool,
+        progressReporter: AcademicOperationProgressReporter? = nil
     ) async throws -> SchoolAuthenticationRecoveryResult {
+        progressReporter?(.begin(.connectingAcademicSystem))
         let challenge: SchoolCaptchaChallenge
         do {
             challenge = try await fetchManualChallenge(portal: portal)
@@ -297,6 +299,7 @@ struct SchoolAuthenticationService {
             guard let cgImage = challenge.image.cgImage else {
                 return .requiresManual(challenge, message: nil)
             }
+            progressReporter?(.begin(.recognizingCaptcha))
             recognition = try await recognizer.recognize(cgImage)
         } catch is CancellationError {
             throw CancellationError()
@@ -309,6 +312,7 @@ struct SchoolAuthenticationService {
         }
 
         do {
+            progressReporter?(.begin(.authenticating))
             let didLogin = try await client.performLogin(
                 account: credential.account,
                 password: credential.password,

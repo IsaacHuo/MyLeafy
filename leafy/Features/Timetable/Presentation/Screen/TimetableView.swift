@@ -57,6 +57,7 @@ struct TimetableView: View {
 
     @ObservedObject private var networkManager = ActiveCampusContext.networkManager
     @State private var isFetching = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
@@ -528,7 +529,9 @@ struct TimetableView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .timetable,
+            progressController: progressController
         ) { _ in
             Task {
                 await fetchAndParseTimetable(
@@ -537,6 +540,7 @@ struct TimetableView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
     }
 
     private var onboardingAlertBinding: Binding<Bool> {
@@ -2538,6 +2542,13 @@ struct TimetableView: View {
             return
         }
 
+        let progressReporter: AcademicOperationProgressReporter? = userInitiated
+            ? progressController.reporter(for: .timetable)
+            : nil
+        if userInitiated {
+            progressController.begin(.timetable)
+        }
+
         if userInitiated,
            let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
@@ -2557,6 +2568,7 @@ struct TimetableView: View {
                     allowsAutomaticAttempt: allowsAutomaticRecovery
                 )
             } else {
+                progressController.clear()
                 alertMessage = networkManager.hasCachedIdentity
                     ? L10n.text("本地身份已识别，但刷新课表需要连接校园网并重新建立教务登录态。", language: leafyLanguage)
                     : L10n.text("请先连接校园网登录教务系统。", language: leafyLanguage)
@@ -2565,6 +2577,7 @@ struct TimetableView: View {
             return
         }
         await MainActor.run { isFetching = true }
+        progressReporter?(.begin(.refreshingSemester))
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: userInitiated)
         await MainActor.run {
             applySemesterRuntimeConfig(semesterConfig)
@@ -2572,10 +2585,12 @@ struct TimetableView: View {
 
         do {
             let refreshUseCase = TimetableRefreshUseCase(repository: dependencies.schoolTimetableRepository)
+            progressReporter?(.begin(.fetchingTimetable))
             let htmlData = try await refreshUseCase.fetchHTML()
             let parsedCourseRecords: [ParsedCourseRecord]
 
             do {
+                progressReporter?(.begin(.processingTimetable))
                 parsedCourseRecords = try await TimetableRefreshUseCase.parseRecords(html: htmlData)
             } catch {
                 let debugSummary = persistParserDebugHTML(htmlData)
@@ -2587,6 +2602,7 @@ struct TimetableView: View {
             }
 
             try await MainActor.run {
+                progressReporter?(.begin(.savingTimetable))
                 let refreshSummary = TimetableRefreshSummary.compare(
                     records: parsedCourseRecords,
                     existingCourses: courses,
@@ -2626,6 +2642,8 @@ struct TimetableView: View {
                 lastSyncAt = TimetableCacheMetadata.lastSyncAt
                 lastFailureMessage = nil
                 isFetching = false
+                progressController.completeCurrentStep()
+                progressController.clear()
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
                 if userInitiated {
@@ -2645,6 +2663,7 @@ struct TimetableView: View {
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else {
+                    progressController.clear()
                     alertMessage = courses.isEmpty
                         ? L10n.text("获取课表失败：%@", language: leafyLanguage, error.localizedDescription)
                         : L10n.text("获取课表失败，已继续显示本地缓存：%@", language: leafyLanguage, error.localizedDescription)

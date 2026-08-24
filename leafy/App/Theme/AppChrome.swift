@@ -216,6 +216,7 @@ struct LeafyGlassGroup<Content: View>: View {
 struct LeafyOperationAlert: Identifiable {
     enum Kind {
         case success
+        case partial
         case failure
     }
 
@@ -229,6 +230,8 @@ struct LeafyOperationAlert: Identifiable {
         switch kind {
         case .success:
             return L10n.text("操作成功")
+        case .partial:
+            return L10n.text("部分完成")
         case .failure:
             return L10n.text("操作失败")
         }
@@ -240,6 +243,10 @@ struct LeafyOperationAlert: Identifiable {
 
     static func failure(_ message: String, buttonTitle: String? = nil, action: (() -> Void)? = nil) -> LeafyOperationAlert {
         LeafyOperationAlert(kind: .failure, message: message, buttonTitle: buttonTitle, action: action)
+    }
+
+    static func partial(_ message: String, buttonTitle: String? = nil, action: (() -> Void)? = nil) -> LeafyOperationAlert {
+        LeafyOperationAlert(kind: .partial, message: message, buttonTitle: buttonTitle, action: action)
     }
 }
 
@@ -335,7 +342,7 @@ private extension LeafyOperationAlert {
         switch kind {
         case .success:
             return "好"
-        case .failure:
+        case .partial, .failure:
             return "知道了"
         }
     }

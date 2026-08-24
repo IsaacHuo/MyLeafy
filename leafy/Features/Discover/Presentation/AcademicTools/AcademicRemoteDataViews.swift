@@ -12,6 +12,7 @@ struct ExamScheduleView: View {
     private let networkManager = ActiveCampusContext.networkManager
     @State private var exams: [ExamArrangement] = []
     @State private var isLoading = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var errorMessage: String?
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var isExamImportPresented = false
@@ -134,7 +135,9 @@ struct ExamScheduleView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .exams,
+            progressController: progressController
         ) { _ in
             Task {
                 await loadExams(
@@ -143,6 +146,7 @@ struct ExamScheduleView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
         .leafyOperationAlert($operationAlert)
     }
 
@@ -173,6 +177,13 @@ struct ExamScheduleView: View {
             return
         }
 
+        let progressReporter: AcademicOperationProgressReporter? = userInitiated
+            ? progressController.reporter(for: .exams)
+            : nil
+        if userInitiated {
+            progressController.begin(.exams)
+        }
+
         if userInitiated,
            let request = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
@@ -192,10 +203,13 @@ struct ExamScheduleView: View {
                         context: .examSchedule,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
-                } else if exams.isEmpty {
-                    errorMessage = networkManager.hasCachedIdentity
-                        ? "本地身份已识别，但刷新考试安排需要连接校园网并重新建立教务登录态。"
-                        : "请先连接校园网登录教务系统。"
+                } else {
+                    progressController.clear()
+                    if exams.isEmpty {
+                        errorMessage = networkManager.hasCachedIdentity
+                            ? "本地身份已识别，但刷新考试安排需要连接校园网并重新建立教务登录态。"
+                            : "请先连接校园网登录教务系统。"
+                    }
                 }
             }
             return
@@ -208,19 +222,32 @@ struct ExamScheduleView: View {
         defer { Task { @MainActor in isLoading = false } }
 
         do {
+            progressReporter?(.begin(.fetchingExams))
             let html = try await networkManager.fetchExamSchedule()
+            progressReporter?(.begin(.processingExams))
             let parsed = try HTMLParser.parseExams(html: html)
             await MainActor.run {
                 exams = SchoolDataCache.saveRemoteExamSchedule(parsed)
+                if userInitiated {
+                    progressController.completeCurrentStep()
+                    progressController.clear()
+                    operationAlert = .success(
+                        parsed.isEmpty
+                            ? "同步完成，学校当前没有返回考试安排。"
+                            : "同步完成，获取到 \(parsed.count) 条考试安排。"
+                    )
+                }
             }
         } catch {
             await MainActor.run {
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
+                    progressReporter?(.fail(.fetchingExams, error.localizedDescription))
                     reauthenticationRequest = SchoolReauthenticationRequest(
                         context: .examSchedule,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else {
+                    progressController.clear()
                     errorMessage = "加载考试安排失败：\(error.localizedDescription)"
                 }
                 if exams.isEmpty {
@@ -453,10 +480,92 @@ enum TeachingCultivationMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum TeachingCultivationRefreshOutcome: Equatable {
+    case success(String)
+    case partial(String)
+    case failure(String)
+    case needsReauthentication
+}
+
+@MainActor
+struct TeachingCultivationRefreshUseCase {
+    let networkManager: any CampusAcademicProviding
+
+    init() {
+        networkManager = ActiveCampusContext.networkManager
+    }
+
+    init(networkManager: any CampusAcademicProviding) {
+        self.networkManager = networkManager
+    }
+
+    func refresh(
+        progressReporter: AcademicOperationProgressReporter? = nil
+    ) async -> TeachingCultivationRefreshOutcome {
+        var successes: [String] = []
+        var failures: [String] = []
+
+        do {
+            progressReporter?(.begin(.fetchingTeachingPlan))
+            let html = try await networkManager.fetchTeachingPlan()
+            progressReporter?(.begin(.processingTeachingPlan))
+            let parsed = try HTMLParser.parseTeachingPlan(html: html)
+            SchoolDataCache.saveTeachingPlan(parsed, notifies: false)
+            SchoolDataRefreshNotifier.post(.teachingPlan)
+            successes.append(L10n.text("教学计划已更新"))
+        } catch {
+            progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
+            if SchoolReauthentication.requiresReauthentication(error) {
+                return .needsReauthentication
+            }
+            failures.append(L10n.text("教学计划失败：%@", error.localizedDescription))
+        }
+
+        do {
+            progressReporter?(.begin(.fetchingTrainingProgram))
+            let html = try await networkManager.fetchGraduationRequirements()
+            progressReporter?(.begin(.processingTrainingProgram))
+            let parsed = try HTMLParser.parseTrainingProgram(html: html)
+            SchoolDataCache.saveTrainingProgram(parsed, notifies: false)
+            SchoolDataRefreshNotifier.post(.trainingProgram)
+            successes.append(L10n.text("培养方案已更新"))
+        } catch {
+            progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
+            if SchoolReauthentication.requiresReauthentication(error) {
+                return .needsReauthentication
+            }
+            failures.append(L10n.text("培养方案失败：%@", error.localizedDescription))
+        }
+
+        if failures.isEmpty {
+            return .success(L10n.text("同步完成：%@。", successes.joined(separator: L10n.text("，"))))
+        }
+        if !successes.isEmpty {
+            return .partial(
+                L10n.text(
+                    "部分完成：%@。%@",
+                    successes.joined(separator: L10n.text("，")),
+                    failures.joined(separator: L10n.text("；"))
+                )
+            )
+        }
+        return .failure(L10n.text("同步失败：%@", failures.joined(separator: L10n.text("；"))))
+    }
+}
+
 struct TeachingAndCultivationView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
 
     @State private var mode: TeachingCultivationMode
+    @State private var isRefreshing = false
+    @State private var reauthenticationRequest: SchoolReauthenticationRequest?
+    @State private var operationAlert: LeafyOperationAlert?
+    @State private var progressController = AcademicOperationProgressController()
+    private let networkManager = ActiveCampusContext.networkManager
+
+    private var isCustomCampus: Bool {
+        ActiveCampusContext.identity?.isCustom == true
+    }
 
     init(initialMode: TeachingCultivationMode = .teachingPlan) {
         _mode = State(initialValue: initialMode)
@@ -485,6 +594,86 @@ struct TeachingAndCultivationView: View {
             .padding(.vertical, 10 * leafyControlScale)
             .background(AppTheme.cardBackground)
         }
+        .navigationTitle("教学与培养")
+        .leafyInlineNavigationTitle()
+        .toolbar {
+            ToolbarItem(placement: .leafyTrailing) {
+                if !isCustomCampus {
+                    Button {
+                        Task { await refreshAll() }
+                    } label: {
+                        if isRefreshing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isRefreshing)
+                    .accessibilityLabel("同步教学计划和培养方案")
+                }
+            }
+        }
+        .schoolReauthenticationSheet(
+            request: $reauthenticationRequest,
+            networkManager: networkManager,
+            operationKind: .teachingAndCultivation,
+            progressController: progressController
+        ) { _ in
+            Task { await refreshAll(allowsAutomaticRecovery: false) }
+        }
+        .academicOperationProgress(progressController)
+        .leafyOperationAlert($operationAlert)
+    }
+
+    @MainActor
+    private func refreshAll(allowsAutomaticRecovery: Bool = true) async {
+        guard !isRefreshing else { return }
+
+        if ReviewDemoMode.isEnabled {
+            ReviewDemoDataSeeder.refreshSchoolCaches()
+            SchoolDataRefreshNotifier.post([.teachingPlan, .trainingProgram])
+            operationAlert = .success(L10n.text("同步完成，已刷新演示教学计划和培养方案。"))
+            return
+        }
+
+        progressController.begin(.teachingAndCultivation)
+        if let request = SchoolReauthentication.preflightRequest(
+            networkManager: networkManager,
+            context: .teachingAndCultivation,
+            allowsAutomaticAttempt: allowsAutomaticRecovery
+        ) {
+            reauthenticationRequest = request
+            return
+        }
+
+        guard networkManager.isLoggedIn else {
+            progressController.clear()
+            operationAlert = .failure("请先连接校园网登录教务系统。")
+            return
+        }
+
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        switch await TeachingCultivationRefreshUseCase().refresh(
+            progressReporter: progressController.reporter(for: .teachingAndCultivation)
+        ) {
+        case .success(let message):
+            progressController.completeCurrentStep()
+            progressController.clear()
+            operationAlert = .success(message)
+        case .partial(let message):
+            progressController.clear()
+            operationAlert = .partial(message)
+        case .failure(let message):
+            progressController.clear()
+            operationAlert = .failure(message)
+        case .needsReauthentication:
+            reauthenticationRequest = SchoolReauthenticationRequest(
+                context: .teachingAndCultivation,
+                allowsAutomaticAttempt: allowsAutomaticRecovery
+            )
+        }
     }
 }
 
@@ -493,6 +682,7 @@ struct TeachingPlanView: View {
     private let networkManager = ActiveCampusContext.networkManager
     @State private var sections: [TeachingPlanSection] = SchoolDataCache.loadTeachingPlan()
     @State private var isLoading = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var errorMessage: String?
     @State private var collapsedTerms: Set<String> = []
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
@@ -543,7 +733,7 @@ struct TeachingPlanView: View {
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
-                if !isCustomCampus {
+                if !isCustomCampus, showsStandaloneNavigation {
                     Button {
                         Task { await loadPlan(force: true, userInitiated: true) }
                     } label: {
@@ -565,7 +755,9 @@ struct TeachingPlanView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .teachingAndCultivation,
+            progressController: progressController
         ) { _ in
             Task {
                 await loadPlan(
@@ -575,6 +767,7 @@ struct TeachingPlanView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
     }
 
     private func planStatusCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -664,6 +857,13 @@ struct TeachingPlanView: View {
     ) async {
         guard !isLoading else { return }
 
+        let progressReporter: AcademicOperationProgressReporter? = userInitiated
+            ? progressController.reporter(for: .teachingAndCultivation)
+            : nil
+        if userInitiated {
+            progressController.begin(.teachingAndCultivation)
+        }
+
         let cachedSections = SchoolDataCache.loadTeachingPlan()
         if ReviewDemoMode.isEnabled {
             ReviewDemoDataSeeder.refreshSchoolCaches()
@@ -711,6 +911,7 @@ struct TeachingPlanView: View {
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else if force || sections.isEmpty {
+                    progressController.clear()
                     errorMessage = networkManager.hasCachedIdentity
                         ? "本地身份已识别，但同步教学计划需要连接校园网并重新建立教务登录态。"
                         : "请先连接校园网登录教务系统。"
@@ -726,21 +927,27 @@ struct TeachingPlanView: View {
         defer { Task { @MainActor in isLoading = false } }
 
         do {
+            progressReporter?(.begin(.fetchingTeachingPlan))
             let html = try await networkManager.fetchTeachingPlan()
+            progressReporter?(.begin(.processingTeachingPlan))
             let parsed = try HTMLParser.parseTeachingPlan(html: html)
             await MainActor.run {
                 sections = parsed
                 SchoolDataCache.saveTeachingPlan(parsed)
+                progressController.completeCurrentStep()
+                progressController.clear()
             }
         } catch {
             await MainActor.run {
                 sections = SchoolDataCache.loadTeachingPlan()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
+                    progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
                     reauthenticationRequest = SchoolReauthenticationRequest(
                         context: .teachingPlan,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else if sections.isEmpty || force {
+                    progressController.clear()
                     errorMessage = "加载教学计划失败：\(error.localizedDescription)"
                 }
             }
@@ -887,6 +1094,7 @@ struct TrainingProgramView: View {
     @State private var requirements: [GraduationCreditRequirement] = SchoolDataCache.loadGraduationRequirements()
     @State private var creditSummary: GradeCreditSummary? = SchoolDataCache.loadGradeCreditSummary()
     @State private var isLoading = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var errorMessage: String?
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var expandedSectionIDs: Set<String> = []
@@ -986,7 +1194,7 @@ struct TrainingProgramView: View {
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
-                if !isCustomCampus {
+                if !isCustomCampus, showsStandaloneNavigation {
                     Button {
                         Task { await loadProgram(force: true, userInitiated: true) }
                     } label: {
@@ -1015,7 +1223,9 @@ struct TrainingProgramView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .teachingAndCultivation,
+            progressController: progressController
         ) { _ in
             Task {
                 await loadProgram(
@@ -1025,6 +1235,7 @@ struct TrainingProgramView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
     }
 
     private func programHeader(_ document: TrainingProgramDocument) -> some View {
@@ -1179,6 +1390,13 @@ struct TrainingProgramView: View {
     ) async {
         guard !isLoading else { return }
 
+        let progressReporter: AcademicOperationProgressReporter? = userInitiated
+            ? progressController.reporter(for: .teachingAndCultivation)
+            : nil
+        if userInitiated {
+            progressController.begin(.teachingAndCultivation)
+        }
+
         let cachedDocument = SchoolDataCache.loadTrainingProgram()
         let cachedRequirements = cachedDocument?.creditRequirements ?? SchoolDataCache.loadGraduationRequirements()
         if ReviewDemoMode.isEnabled {
@@ -1232,6 +1450,7 @@ struct TrainingProgramView: View {
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else if force || (document == nil && requirements.isEmpty) {
+                    progressController.clear()
                     errorMessage = networkManager.hasCachedIdentity
                         ? "本地身份已识别，但同步培养方案需要连接校园网并重新建立教务登录态。"
                         : "请先连接校园网登录教务系统。"
@@ -1247,12 +1466,16 @@ struct TrainingProgramView: View {
         defer { Task { @MainActor in isLoading = false } }
 
         do {
+            progressReporter?(.begin(.fetchingTrainingProgram))
             let html = try await networkManager.fetchGraduationRequirements()
+            progressReporter?(.begin(.processingTrainingProgram))
             let parsed = try HTMLParser.parseTrainingProgram(html: html)
             await MainActor.run {
                 document = parsed
                 requirements = parsed.creditRequirements
                 SchoolDataCache.saveTrainingProgram(parsed)
+                progressController.completeCurrentStep()
+                progressController.clear()
             }
         } catch {
             await MainActor.run {
@@ -1260,11 +1483,13 @@ struct TrainingProgramView: View {
                 document = fallbackDocument
                 requirements = fallbackDocument?.creditRequirements ?? SchoolDataCache.loadGraduationRequirements()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
+                    progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
                     reauthenticationRequest = SchoolReauthenticationRequest(
                         context: .trainingProgram,
                         allowsAutomaticAttempt: allowsAutomaticRecovery
                     )
                 } else if (document == nil && requirements.isEmpty) || force {
+                    progressController.clear()
                     errorMessage = "加载培养方案失败：\(error.localizedDescription)"
                 }
             }
@@ -1376,6 +1601,7 @@ struct EmptyClassroomView: View {
     @State private var didAutoSubmit = false
     @State private var operationAlert: LeafyOperationAlert?
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
+    @State private var progressController = AcademicOperationProgressController()
 
     private let autoSubmitInitialQuery: Bool
     private var safeStartPeriod: Int { min(max(startPeriod, 1), 12) }
@@ -1567,7 +1793,9 @@ struct EmptyClassroomView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .emptyClassrooms,
+            progressController: progressController
         ) { _ in
             Task {
                 await submitQuery(
@@ -1576,6 +1804,7 @@ struct EmptyClassroomView: View {
                 )
             }
         }
+        .academicOperationProgress(progressController)
         .leafyOperationAlert($operationAlert)
     }
 
@@ -1666,8 +1895,13 @@ struct EmptyClassroomView: View {
     ) async {
         guard !isLoading else { return }
         guard !isCustomCampus else {
+            progressController.clear()
             errorMessage = nil
             return
+        }
+
+        if userInitiated {
+            progressController.begin(.emptyClassrooms)
         }
 
         if userInitiated,
@@ -1687,6 +1921,12 @@ struct EmptyClassroomView: View {
             errorMessage = nil
             rooms = []
             usage = []
+            if userInitiated {
+                progressController.record(
+                    .begin(mode == .byPeriod ? .queryingEmptyClassrooms : .queryingClassroomUsage),
+                    for: .emptyClassrooms
+                )
+            }
         }
         defer { Task { @MainActor in isLoading = false } }
 
@@ -1701,10 +1941,29 @@ struct EmptyClassroomView: View {
             expandedBuildingIDs = []
             errorMessage = outcome.errorMessage
             if outcome.requiresReauthentication {
+                progressController.record(
+                    .fail(
+                        mode == .byPeriod ? .queryingEmptyClassrooms : .queryingClassroomUsage,
+                        outcome.errorMessage ?? "登录状态已失效"
+                    ),
+                    for: .emptyClassrooms
+                )
                 reauthenticationRequest = SchoolReauthenticationRequest(
                     context: .emptyClassrooms,
                     allowsAutomaticAttempt: allowsAutomaticRecovery
                 )
+            }
+        }
+
+        if userInitiated, !outcome.requiresReauthentication {
+            if outcome.errorMessage == nil {
+                await MainActor.run {
+                    progressController.record(.begin(.queryCompleted), for: .emptyClassrooms)
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            await MainActor.run {
+                progressController.clear()
             }
         }
     }

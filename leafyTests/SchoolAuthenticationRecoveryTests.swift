@@ -107,8 +107,13 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
             result: CaptchaResult(text: "A7K3", confidence: 0.90, supportingVariantCount: 3)
         )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
+        let recorder = AuthenticationProgressRecorder()
 
-        let result = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true)
+        let result = try await service.recover(
+            portal: .undergraduate,
+            allowsAutomaticAttempt: true,
+            progressReporter: { recorder.events.append($0) }
+        )
 
         guard case .authenticated = result else {
             return XCTFail("Expected automatic authentication")
@@ -116,6 +121,11 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
         XCTAssertEqual(client.fetchCount, 1)
         XCTAssertEqual(client.loginCaptchas, ["A7K3"])
         XCTAssertEqual(recognizer.callCount, 1)
+        XCTAssertEqual(recorder.events, [
+            .begin(.connectingAcademicSystem),
+            .begin(.recognizingCaptcha),
+            .begin(.authenticating)
+        ])
     }
 
     @MainActor
@@ -251,6 +261,11 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
             savedAt: Date()
         )
     }
+}
+
+@MainActor
+private final class AuthenticationProgressRecorder {
+    var events: [AcademicOperationProgressEvent] = []
 }
 
 private nonisolated struct FakeCredentialProvider: SchoolLoginCredentialProviding {

@@ -12,6 +12,7 @@ struct CampusHeatmapView: View {
     @State private var storedData: CachedCampusHeatmapData?
     @State private var errorMessage: String?
     @State private var isLoading = false
+    @State private var progressController = AcademicOperationProgressController()
     @State private var didLoadStoredData = false
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var mapPosition = MapCameraPosition.region(Self.defaultRegion)
@@ -115,10 +116,13 @@ struct CampusHeatmapView: View {
         }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
-            networkManager: networkManager
+            networkManager: networkManager,
+            operationKind: .campusHeatmap,
+            progressController: progressController
         ) { _ in
             Task { await updateData(allowsAutomaticRecovery: false) }
         }
+        .academicOperationProgress(progressController)
     }
 
     private var queryModeControl: some View {
@@ -362,9 +366,19 @@ struct CampusHeatmapView: View {
 
     private func updateData(allowsAutomaticRecovery: Bool = true) async {
         guard !isLoading else { return }
+        progressController.begin(.campusHeatmap)
+        if let request = SchoolReauthentication.preflightRequest(
+            networkManager: networkManager,
+            context: .campusHeatmap,
+            allowsAutomaticAttempt: allowsAutomaticRecovery
+        ) {
+            reauthenticationRequest = request
+            return
+        }
         await MainActor.run {
             isLoading = true
             errorMessage = nil
+            progressController.record(.begin(.queryingEmptyClassrooms), for: .campusHeatmap)
         }
         defer { Task { @MainActor in isLoading = false } }
 
@@ -374,10 +388,24 @@ struct CampusHeatmapView: View {
             storedData = outcome.storedData
             errorMessage = outcome.errorMessage
             if outcome.requiresReauthentication {
+                progressController.record(
+                    .fail(.queryingEmptyClassrooms, outcome.errorMessage ?? "登录状态已失效"),
+                    for: .campusHeatmap
+                )
                 reauthenticationRequest = SchoolReauthenticationRequest(
                     context: .campusHeatmap,
                     allowsAutomaticAttempt: allowsAutomaticRecovery
                 )
+            } else if outcome.errorMessage == nil {
+                progressController.record(.begin(.generatingHeatmap), for: .campusHeatmap)
+                progressController.completeCurrentStep()
+                progressController.record(.begin(.queryCompleted), for: .campusHeatmap)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    progressController.clear()
+                }
+            } else {
+                progressController.clear()
             }
         }
     }

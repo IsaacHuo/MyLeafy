@@ -91,6 +91,13 @@ struct SchoolReauthenticationContext: Equatable {
         submitTitle: "继续刷新方案"
     )
 
+    static let teachingAndCultivation = SchoolReauthenticationContext(
+        portal: .undergraduate,
+        title: "重新登录教务",
+        message: "当前教务登录状态已失效，验证后会继续同步教学计划和培养方案。",
+        submitTitle: "继续同步"
+    )
+
     static let emptyClassrooms = SchoolReauthenticationContext(
         portal: .undergraduate,
         title: "重新登录教务",
@@ -141,12 +148,16 @@ extension View {
     func schoolReauthenticationSheet(
         request: Binding<SchoolReauthenticationRequest?>,
         networkManager: SchoolNetworkManager,
+        operationKind: AcademicOperationKind,
+        progressController: AcademicOperationProgressController,
         onAuthenticated: @escaping (SchoolReauthenticationCompletion) -> Void
     ) -> some View {
         modifier(
             SchoolReauthenticationModifier(
                 request: request,
                 networkManager: networkManager,
+                operationKind: operationKind,
+                progressController: progressController,
                 onAuthenticated: onAuthenticated
             )
         )
@@ -174,28 +185,15 @@ private struct SchoolRecoveryNotice: Identifiable {
 private struct SchoolReauthenticationModifier: ViewModifier {
     @Binding var request: SchoolReauthenticationRequest?
     @ObservedObject var networkManager: SchoolNetworkManager
+    let operationKind: AcademicOperationKind
+    let progressController: AcademicOperationProgressController
     let onAuthenticated: (SchoolReauthenticationCompletion) -> Void
 
-    @State private var isRecovering = false
     @State private var manualPresentation: SchoolManualReauthenticationPresentation?
     @State private var networkNotice: SchoolRecoveryNotice?
 
     func body(content: Content) -> some View {
         content
-            .overlay {
-                if isRecovering {
-                    ZStack {
-                        Color.black.opacity(0.08)
-                            .ignoresSafeArea()
-
-                        ProgressView("正在连接教务系统…")
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 18)
-                            .leafyCardStyle()
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
             .leafySheet(item: $manualPresentation) { presentation in
                 SchoolReauthenticationSheet(
                     networkManager: networkManager,
@@ -226,14 +224,13 @@ private struct SchoolReauthenticationModifier: ViewModifier {
 
     @MainActor
     private func recover(_ activeRequest: SchoolReauthenticationRequest) async {
-        isRecovering = true
-        defer { isRecovering = false }
-
+        progressController.begin(operationKind)
         let service = SchoolAuthenticationService(client: networkManager)
         do {
             let result = try await service.recover(
                 portal: activeRequest.context.portal,
-                allowsAutomaticAttempt: activeRequest.allowsAutomaticAttempt
+                allowsAutomaticAttempt: activeRequest.allowsAutomaticAttempt,
+                progressReporter: progressController.reporter(for: operationKind)
             )
             guard !Task.isCancelled else { return }
             request = nil
@@ -247,12 +244,14 @@ private struct SchoolReauthenticationModifier: ViewModifier {
                     )
                 )
             case .requiresManual(let challenge, let message):
+                progressController.clear()
                 manualPresentation = SchoolManualReauthenticationPresentation(
                     context: activeRequest.context,
                     challenge: challenge,
                     initialMessage: message
                 )
             case .networkUnavailable:
+                progressController.clear()
                 networkNotice = .campusNetworkRequired
             }
         } catch is CancellationError {
@@ -260,6 +259,7 @@ private struct SchoolReauthenticationModifier: ViewModifier {
         } catch {
             guard !Task.isCancelled else { return }
             request = nil
+            progressController.clear()
             if case SchoolNetworkError.campusNetworkRequired = error {
                 networkNotice = .campusNetworkRequired
                 return
