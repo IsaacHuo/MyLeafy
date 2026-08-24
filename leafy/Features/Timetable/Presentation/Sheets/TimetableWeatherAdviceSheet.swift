@@ -149,7 +149,7 @@ struct TimetableWeatherAdviceSheet: View {
     ) -> some View {
         let hours = snapshot.upcomingHourlyForecast(limit: 24)
 
-        VStack(alignment: .leading, spacing: AppSpacing.card) {
+        return VStack(alignment: .leading, spacing: AppSpacing.card) {
             weatherSummaryCard(snapshot: snapshot, hours: hours)
             hourlyForecastSection(hours)
 
