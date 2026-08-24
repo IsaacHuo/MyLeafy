@@ -241,7 +241,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 
 ## 10. Supabase 与 Web/运营后台边界
 
-- `supabase/`：83 个 migration、19 个 Edge Functions、`schema-ledger.md`（关键 schema 不变量与迁移顺序的事实来源）、模板与测试。
+- `supabase/`：84 个 migration、19 个 Edge Functions、`schema-ledger.md`（关键 schema 不变量与迁移顺序的事实来源）、模板与测试。
 - 主要函数组：社区初始化与 Feed（`community-bootstrap-user`、`community-feed`）、校园服务（`campus-request`、`campus-weather`）、分享（`share-preview`）、媒体验证与清理、管理（`admin-*`）。
 - `site/`：官网（React + Vite）+ React-admin 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。
 - 高权限操作必须经过服务端认证、授权、参数校验与审计；iOS/前端只用 publishable key。
@@ -256,8 +256,9 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 - 随记按校园身份作用域保存在本地（元数据、Markdown 源文、图片、附件、音频、标签、统计）；不进入社区、Widget、日历导出或课表分享图。语音转写设备端完成且不持久化原始输入。学校课程、考试、校历不进入随记或个人日程列表。
 - 课表按单个学年浏览，从秋季学期首日到下一学年开始前一天；暑假最后一周停在学年边界，下一学年通过学年/日期选择进入。学校单学期课表保持 20 周数据集；学期结束与寒暑假区间来自语义校历事件，不用 20 周容器反推。
 - 课表周态与三日态使用同一棵 `TimetableContinuousColumnsLayout` 日期列树，由 `TimetableContinuousViewportController.zoomProgress` 连续驱动，不切换容器、不用 `scrollTo` 居中。本周以今天为三日中心，其他周以周二为中心；三日分页每次移动三个自然日，缩回当前中心日期所属周。隐藏周末只把周态周末 lane 收到零宽，三日态仍展示真实周末。21 日渲染窗口及课程、考试、日程 payload 在交互期间冻结，Header、网格和卡片共用 `TimetableZoomGeometry`。
-- 时间视图不展示已废弃的 2025–2026 春季入口，但底层历史学期配置仍保留；非教学期优先选择最近即将开始的学期。年度缩略固定按 1–12 月自然顺序，1–8 月映射学年结束年、9–12 月映射学年起始年；学期颜色优先于寒暑假颜色。
-- 远程学期运行配置（`semester_runtime_configs`）选择本科 `semester_id` / 研究生 `graduate_timetable_term_code`、首周日期与语义时间线，无需发布 App 版本。
+- 时间视图主要展示最新秋季学期，并通过“过往学期与假期”按学年回看历史课程；当前历史范围为 2025–2026 春季学期与随后暑假，均可按周选择。年度缩略固定按 1–12 月自然顺序，1–8 月映射学年结束年、9–12 月映射学年起始年；学期颜色优先于寒暑假颜色。
+- 远程学期运行配置（`semester_runtime_configs`）选择本科 `semester_id` / 研究生 `graduate_timetable_term_code`、首周日期与语义时间线，无需发布 App 版本。`is_active` 表示学校已允许拉取的目标学期，可早于正式开学日人工切换；正式周次仍只由 `semester_start_date` 计算。
+- 学校课表按 `sourceSemesterID` 分学期替换并保留历史学期；课程备注、课次备注和课程提醒使用学期作用域键，切换最新学期不得删除或串用历史本地记录。
 - 用户主动发起教务请求时必须优先复用当前 URLSession/Cookie，不发送额外的联网 Session 预检。只有服务端明确确认 Session 失效才进入恢复；校园网不可达不得清除 Cookie 或触发验证码。后台预取不主动认证。
 - 无 Session 时通过学校验证码端点是否可访问判断网络条件；校园网不可达只提示连接 `bjfu-wifi` 或北林 VPN 后再次操作，不进入人工验证码 sheet，也不监听网络变化自动重试。
 - 本科自动恢复使用 Keychain 中与当前身份匹配的账号密码和同一 URLSession 获取、提交验证码；验证码字母按学校规则统一为小写，原图、四倍 Lanczos 放大图、四倍放大灰度增强图至少两路得到相同的 `[a-z0-9]{4}`，且支持结果的最低置信度不低于 0.85 时，最多自动提交一次。服务端拒绝该结果后立即获取新验证码转人工，不再执行第二轮 OCR；其他结果冲突、格式或置信度不合格也直接转人工，研究生端不做自动 OCR。

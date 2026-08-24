@@ -1226,6 +1226,10 @@ private extension URL {
 
 extension Course {
     var stableCourseKey: String {
+        "\(sourceSemesterID)|\(legacyStableCourseKey)"
+    }
+
+    var legacyStableCourseKey: String {
         [
             courseName.normalizedCourseKeyComponent,
             teacher.normalizedCourseKeyComponent,
@@ -1239,7 +1243,6 @@ extension Course {
     func occurrenceKey(week: Int) -> String {
         CourseOccurrenceNote.occurrenceKey(
             courseKey: stableCourseKey,
-            semesterID: sourceSemesterID,
             week: week
         )
     }

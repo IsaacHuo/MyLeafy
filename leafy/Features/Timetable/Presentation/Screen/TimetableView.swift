@@ -118,6 +118,10 @@ struct TimetableView: View {
         subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
         category: "TimetableBackground"
     )
+    private static let dataLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.isaachuo.leafy",
+        category: "TimetableData"
+    )
     private var totalWeeks: Int { academicYearTimetable.weeks.count }
     private var timelineStartDate: Date {
         academicYearTimetable.weeks.first?.weekStartDate ?? Calendar.current.startOfDay(for: Date())
@@ -561,6 +565,18 @@ struct TimetableView: View {
     private func initializeTimetableIfNeeded() async {
         guard !hasInitializedTimetable else { return }
         hasInitializedTimetable = true
+        do {
+            try TimetableLocalDataSemesterMigration.migrateIfNeeded(
+                courses: courses,
+                courseNotes: courseNotes,
+                occurrenceNotes: occurrenceNotes,
+                reminderSettings: courseReminderSettings,
+                cellReminders: cellReminders,
+                modelContext: modelContext
+            )
+        } catch {
+            Self.dataLogger.error("Failed to migrate historical timetable data: \(error.localizedDescription, privacy: .public)")
+        }
         syncAcademicYearDataProjections()
         syncTimetableScheduleProjectionSnapshot()
         syncTimetableGridSnapshot()
@@ -2587,14 +2603,14 @@ struct TimetableView: View {
         do {
             let refreshUseCase = TimetableRefreshUseCase(repository: dependencies.schoolTimetableRepository)
             progressReporter?(.begin(.fetchingTimetable))
-            let htmlData = try await refreshUseCase.fetchHTML()
+            let document = try await refreshUseCase.fetchDocument()
             let parsedCourseRecords: [ParsedCourseRecord]
 
             do {
                 progressReporter?(.begin(.processingTimetable))
-                parsedCourseRecords = try await TimetableRefreshUseCase.parseRecords(html: htmlData)
+                parsedCourseRecords = try await TimetableRefreshUseCase.parseRecords(html: document.html)
             } catch {
-                let debugSummary = persistParserDebugHTML(htmlData)
+                let debugSummary = persistParserDebugHTML(document.html)
                 throw NSError(
                     domain: "leafy.timetable",
                     code: 1,
@@ -2607,34 +2623,21 @@ struct TimetableView: View {
                 let refreshSummary = TimetableRefreshSummary.compare(
                     records: parsedCourseRecords,
                     existingCourses: courses,
-                    semesterID: semesterConfig.semesterID
+                    semesterID: document.verifiedSemesterID
                 )
-                let newCourses = parsedCourseRecords.map {
-                    $0.makeCourse(semesterID: semesterConfig.semesterID)
-                }
+                let newCourses = try refreshUseCase.persist(
+                    records: parsedCourseRecords,
+                    existingCourses: courses,
+                    modelContext: modelContext,
+                    semesterID: document.verifiedSemesterID
+                )
                 let sharedCourses = newCourses.map(SharedTimetableCourse.init(course:))
-
-                for course in courses where
-                    course.sourceSemesterID == semesterConfig.semesterID
-                    || !courseIntersectsCurrentAcademicYear(course) {
-                    modelContext.delete(course)
-                }
-                for course in newCourses {
-                    modelContext.insert(course)
-                }
-
-                do {
-                    try modelContext.save()
-                } catch {
-                    modelContext.rollback()
-                    throw error
-                }
 
                 timetableGridSnapshotCache.invalidate()
                 timetableGridSnapshot = nil
                 TimetableCacheMetadata.lastSyncAt = Date()
                 TimetableCacheMetadata.lastFailureMessage = nil
-                TimetableCacheMetadata.lastSyncedSemesterID = semesterConfig.semesterID
+                TimetableCacheMetadata.lastSyncedSemesterID = document.verifiedSemesterID
                 AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
                 SchoolDataRefreshNotifier.post(.timetable)
                 Task {
@@ -2745,6 +2748,7 @@ private struct TimetableWeekPickerPanel: View {
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @Environment(\.leafyLanguage) private var leafyLanguage
     @State private var expandedSemesterIDs: Set<String>
+    @State private var expandedVacationIDs: Set<String>
 
     private let columns = Array(
         repeating: GridItem(.flexible(minimum: 64), spacing: AppSpacing.compact),
@@ -2764,10 +2768,15 @@ private struct TimetableWeekPickerPanel: View {
         self.overviewSnapshot = overviewSnapshot
         self.onSelect = onSelect
         _expandedSemesterIDs = State(initialValue: model.defaultExpandedSemesterIDs)
+        _expandedVacationIDs = State(initialValue: Set([model.currentVacationID].compactMap { $0 }))
     }
 
     private var visibleAcademicYears: [TimetableCalendarMenuAcademicYear] {
         model.timeViewAcademicYears
+    }
+
+    private var historyAcademicYears: [TimetableCalendarMenuAcademicYear] {
+        model.historyTimeViewAcademicYears
     }
 
     var body: some View {
@@ -2775,7 +2784,29 @@ private struct TimetableWeekPickerPanel: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
                     ForEach(visibleAcademicYears) { academicYear in
-                        academicYearSection(academicYear)
+                        primaryAcademicYearSection(academicYear)
+                    }
+
+                    if !historyAcademicYears.isEmpty {
+                        NavigationLink {
+                            historyPicker
+                        } label: {
+                            HStack(spacing: AppSpacing.compact) {
+                                Label("过往学期与假期", systemImage: "clock.arrow.circlepath")
+                                    .leafyHeadline()
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(AppTheme.tertiaryText)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .leafyCardStyle()
+                        .accessibilityHint("查看以前的学期课表和假期周")
                     }
 
                     if let message = model.unavailableFutureConfigurationMessage {
@@ -2805,12 +2836,40 @@ private struct TimetableWeekPickerPanel: View {
         }
     }
 
-    private func academicYearSection(_ academicYear: TimetableCalendarMenuAcademicYear) -> some View {
+    private func primaryAcademicYearSection(_ academicYear: TimetableCalendarMenuAcademicYear) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.micro) {
             ForEach(academicYear.semesters) { semester in
                 semesterSection(semester)
             }
         }
+    }
+
+    private var historyPicker: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                ForEach(historyAcademicYears) { academicYear in
+                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                        Text("\(academicYear.academicYear) 学年")
+                            .leafyHeadline()
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .padding(.horizontal, 4)
+
+                        ForEach(academicYear.stages) { stage in
+                            switch stage {
+                            case let .semester(semester):
+                                semesterSection(semester)
+                            case let .vacation(vacation):
+                                vacationSection(vacation)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(AppSpacing.page)
+        }
+        .background(LeafyPageBackground())
+        .navigationTitle("过往学期与假期")
+        .leafyInlineNavigationTitle()
     }
 
     private func semesterSection(_ semester: TimetableCalendarMenuSemester) -> some View {
@@ -2900,38 +2959,83 @@ private struct TimetableWeekPickerPanel: View {
         .accessibilityHint("跳转到这一周")
     }
 
-    private func vacationButton(_ vacation: TimetableCalendarMenuVacation) -> some View {
-        let isSelected = isSameWeek(vacation.targetDate, selectedDate)
-        let isCurrent = vacation.id == model.currentVacationID
-        let tint = AppTheme.accent(for: themeColorPreference)
-
-        return Button {
-            onSelect(vacation.targetDate)
-        } label: {
-            HStack {
-                Label(vacation.title, systemImage: "sun.max")
-                    .leafyBody()
-                Spacer()
-                if isCurrent {
-                    Text("本周")
-                        .microCaption()
+    private func vacationSection(_ vacation: TimetableCalendarMenuVacation) -> some View {
+        DisclosureGroup(
+            isExpanded: Binding(
+                get: { expandedVacationIDs.contains(vacation.id) },
+                set: { isExpanded in
+                    if isExpanded {
+                        expandedVacationIDs.insert(vacation.id)
+                    } else {
+                        expandedVacationIDs.remove(vacation.id)
+                    }
                 }
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.body.weight(.semibold))
+            )
+        ) {
+            LazyVGrid(columns: columns, spacing: AppSpacing.compact) {
+                ForEach(vacation.weeks) { week in
+                    vacationWeekButton(week, vacation: vacation)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.horizontal, 14)
-            .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
-            .background(
-                isSelected ? tint : AppTheme.fill,
-                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-            )
+            .padding(.top, AppSpacing.compact)
+        } label: {
+            HStack(spacing: AppSpacing.compact) {
+                Label(vacation.title, systemImage: "sun.max")
+                    .leafyHeadline()
+                if vacation.id == model.currentVacationID {
+                    Text("当前假期")
+                        .microCaption()
+                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                }
+                Spacer(minLength: AppSpacing.compact)
+            }
+            .frame(minHeight: 44)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .leafyCardStyle()
+    }
+
+    private func vacationWeekButton(
+        _ week: TimetableCalendarMenuVacationWeek,
+        vacation: TimetableCalendarMenuVacation
+    ) -> some View {
+        let isSelected = isSameWeek(week.targetDate, selectedDate)
+        let isCurrent = isSameWeek(week.targetDate, referenceDate)
+        let tint = AppTheme.accent(for: themeColorPreference)
+        let label = vacationWeekRangeText(week)
+
+        return Button {
+            onSelect(week.targetDate)
+        } label: {
+            Text(label)
+                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
+                .background(
+                    isSelected ? tint : AppTheme.fill,
+                    in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                )
+                .overlay {
+                    if isCurrent && !isSelected {
+                        RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                            .stroke(tint, lineWidth: 1.5)
+                    }
+                }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(vacation.title)\(isCurrent ? "，本周" : "")\(isSelected ? "，已选择" : "")")
-        .accessibilityHint("跳转到\(vacation.title)")
+        .accessibilityLabel("\(vacation.title)，\(label)\(isCurrent ? "，本周" : "")\(isSelected ? "，已选择" : "")")
+        .accessibilityHint("跳转到这一周")
+    }
+
+    private func vacationWeekRangeText(_ week: TimetableCalendarMenuVacationWeek) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = leafyLanguage.locale
+        formatter.dateFormat = "M/d"
+        return "\(formatter.string(from: week.startDate))–\(formatter.string(from: week.endDate))"
     }
 
     private func isSameWeek(_ lhs: Date, _ rhs: Date) -> Bool {

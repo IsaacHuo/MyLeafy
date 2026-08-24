@@ -1,14 +1,14 @@
 import Foundation
 
 protocol SchoolTimetableRepository: Sendable {
-    func fetchTimetableHTML() async throws -> String
+    func fetchTimetableDocument() async throws -> FetchedTimetableDocument
 }
 
 struct LiveSchoolTimetableRepository: SchoolTimetableRepository {
     nonisolated init() {}
 
     @MainActor
-    func fetchTimetableHTML() async throws -> String {
+    func fetchTimetableDocument() async throws -> FetchedTimetableDocument {
         try await Self.activeManagerForRefresh().fetchTimetable()
     }
 

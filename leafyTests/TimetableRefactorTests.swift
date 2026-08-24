@@ -759,6 +759,119 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
+    func testCourseLocalDataKeysAreScopedToSemester() {
+        let spring = Course(
+            courseName: "森林生态学",
+            teacher: "王老师",
+            room: "205",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1],
+            sourceSemesterID: "2025-2026-2"
+        )
+        let fall = Course(
+            courseName: "森林生态学",
+            teacher: "王老师",
+            room: "205",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1],
+            sourceSemesterID: "2026-2027-1"
+        )
+
+        XCTAssertEqual(spring.legacyStableCourseKey, fall.legacyStableCourseKey)
+        XCTAssertNotEqual(spring.stableCourseKey, fall.stableCourseKey)
+        XCTAssertTrue(spring.stableCourseKey.hasPrefix("2025-2026-2|"))
+        XCTAssertTrue(fall.stableCourseKey.hasPrefix("2026-2027-1|"))
+        XCTAssertNotEqual(spring.occurrenceKey(week: 1), fall.occurrenceKey(week: 1))
+    }
+
+    @MainActor
+    func testHistoricalCourseDatesUseSourceSemester() throws {
+        let spring = Course(
+            courseName: "森林生态学",
+            teacher: "王老师",
+            room: "205",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1],
+            sourceSemesterID: "2025-2026-2"
+        )
+        let start = try XCTUnwrap(TimetablePeriodSchedule.startDate(for: spring, week: 1))
+
+        XCTAssertEqual(DateFormatters.queryDate.string(from: start), "2026-03-09")
+    }
+
+    @MainActor
+    func testHistoricalLocalDataMigrationScopesLegacyRecords() throws {
+        let schema = Schema([
+            Course.self,
+            CourseNote.self,
+            CourseOccurrenceNote.self,
+            CourseReminderSetting.self,
+            TimetableCellReminder.self
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = container.mainContext
+        let course = Course(
+            courseName: "森林生态学",
+            teacher: "王老师",
+            room: "205",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1],
+            sourceSemesterID: "2025-2026-2"
+        )
+        let note = CourseNote(courseKey: course.legacyStableCourseKey, text: "旧学期备注")
+        let occurrence = CourseOccurrenceNote(
+            courseKey: course.legacyStableCourseKey,
+            occurrenceKey: CourseOccurrenceNote.occurrenceKey(
+                courseKey: course.legacyStableCourseKey,
+                week: 1
+            ),
+            week: 1,
+            dayOfWeek: 1,
+            text: "第一周备注"
+        )
+        let setting = CourseReminderSetting(courseKey: course.legacyStableCourseKey, minutesBefore: 20)
+        let cellReminder = TimetableCellReminder(
+            week: 1,
+            dayOfWeek: 1,
+            period: 1,
+            title: "旧学期日程"
+        )
+        context.insert(course)
+        context.insert(note)
+        context.insert(occurrence)
+        context.insert(setting)
+        context.insert(cellReminder)
+
+        let suiteName = "TimetableLocalDataSemesterMigrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        try TimetableLocalDataSemesterMigration.migrateIfNeeded(
+            courses: [course],
+            courseNotes: [note],
+            occurrenceNotes: [occurrence],
+            reminderSettings: [setting],
+            cellReminders: [cellReminder],
+            modelContext: context,
+            defaults: defaults
+        )
+
+        XCTAssertEqual(note.courseKey, course.stableCourseKey)
+        XCTAssertEqual(occurrence.courseKey, course.stableCourseKey)
+        XCTAssertEqual(occurrence.occurrenceKey, course.occurrenceKey(week: 1))
+        XCTAssertEqual(setting.courseKey, course.stableCourseKey)
+        XCTAssertEqual(
+            cellReminder.startsAt.map(DateFormatters.queryDate.string(from:)),
+            "2026-03-09"
+        )
+    }
+
+    @MainActor
     func testSchoolNetworkRequestsBypassLocalCache() throws {
         let manager = SchoolNetworkManager.shared
         let url = try XCTUnwrap(URL(string: "http://newjwxt.bjfu.edu.cn/jsxsd/xskb/xskb_list.do"))
@@ -1039,7 +1152,6 @@ extension PerformanceRefactorTests {
         XCTAssertThrowsError(
             try SchoolNetworkManager.shared.validateTimetableSemester(
                 html: html,
-                responseURL: nil,
                 expectedSemesterID: "2026-2027-1"
             )
         ) { error in
@@ -1049,6 +1161,46 @@ extension PerformanceRefactorTests {
             XCTAssertEqual(expected, "2026-2027-1")
             XCTAssertEqual(actual, "2025-2026-2")
         }
+    }
+
+    @MainActor
+    func testTimetableSemesterValidationRejectsMissingResponseProof() {
+        let html = """
+        <html><body><div id="kbcontent_1_1"></div></body></html>
+        """
+
+        XCTAssertThrowsError(
+            try SchoolNetworkManager.shared.validateTimetableSemester(
+                html: html,
+                expectedSemesterID: "2026-2027-1"
+            )
+        ) { error in
+            guard case SchoolNetworkError.timetableSemesterUnverified(let expected) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(expected, "2026-2027-1")
+        }
+    }
+
+    @MainActor
+    func testVerifiedTimetableDocumentUsesResponseSemester() throws {
+        let html = """
+        <html>
+          <body>
+            <input name="xnxq01id" value="2026-2027-1">
+            <div id="kbcontent_1_1"></div>
+          </body>
+        </html>
+        """
+
+        let document = try SchoolNetworkManager.shared.verifiedTimetableDocument(
+            html: html,
+            expectedSemesterID: "2026-2027-1"
+        )
+
+        XCTAssertEqual(document.requestedSemesterID, "2026-2027-1")
+        XCTAssertEqual(document.verifiedSemesterID, "2026-2027-1")
+        XCTAssertEqual(document.verificationSource, .responseDocument)
     }
 
     func testExamParserAcceptsBackendShape() throws {

@@ -220,7 +220,6 @@ struct TimetableCourseRenderValue: Identifiable, Hashable {
         let semesterWeek = semesterWeek(for: displayWeek) ?? displayWeek
         return CourseOccurrenceNote.occurrenceKey(
             courseKey: stableCourseKey,
-            semesterID: sourceSemesterID,
             week: semesterWeek
         )
     }

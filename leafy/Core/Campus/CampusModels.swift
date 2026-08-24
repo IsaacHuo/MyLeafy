@@ -310,7 +310,7 @@ protocol CampusAuthenticationProviding: AnyObject {
 
 @MainActor
 protocol CampusTimetableProviding: AnyObject {
-    func fetchTimetable() async throws -> String
+    func fetchTimetable() async throws -> FetchedTimetableDocument
     func fetchGrades() async throws -> String
 }
 

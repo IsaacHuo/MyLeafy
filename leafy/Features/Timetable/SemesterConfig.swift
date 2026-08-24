@@ -29,6 +29,16 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
     }
 
     static let builtIn = SemesterRuntimeConfig(
+        semesterID: "2026-2027-1",
+        semesterStartDateString: "2026-09-07",
+        supportedWeeks: 20,
+        graduateTimetableTermCode: "47",
+        calendarEvents: firstSemester2026CalendarEvents,
+        updatedAt: nil,
+        isActive: true
+    )
+
+    static let previousSpring = SemesterRuntimeConfig(
         semesterID: "2025-2026-2",
         semesterStartDateString: "2026-03-09",
         supportedWeeks: 20,
@@ -39,20 +49,12 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
             SchoolCalendarEvent(id: "bjfu-summer-break-2026", title: "暑假", startDateString: "2026-07-27", endDateString: "2026-09-06", kind: .holiday, academicCategory: .summerBreak)
         ],
         updatedAt: nil,
-        isActive: true
+        isActive: false
     )
 
     static let builtInTimeline: [SemesterRuntimeConfig] = [
-        builtIn,
-        SemesterRuntimeConfig(
-            semesterID: "2026-2027-1",
-            semesterStartDateString: "2026-09-07",
-            supportedWeeks: 20,
-            graduateTimetableTermCode: "47",
-            calendarEvents: firstSemester2026CalendarEvents,
-            updatedAt: nil,
-            isActive: false
-        )
+        previousSpring,
+        builtIn
     ]
 
     static let firstSemester2026CalendarEvents: [SchoolCalendarEvent] = [

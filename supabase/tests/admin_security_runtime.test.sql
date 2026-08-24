@@ -319,16 +319,16 @@ select ok(
 );
 
 select ok(
-  not (public.admin_upsert_semester_runtime_config(
+  (public.admin_upsert_semester_runtime_config(
     null, 'bjfu', 'task2-semester-future', date '2099-01-01', 20, 'task2-future', '[]'::jsonb, true, null
   )).is_active,
-  'semester RPC preserves the existing future-activation guard'
+  'semester RPC can activate a future-start configuration after school data becomes available'
 );
 
 select is(
   (select count(*) from public.semester_runtime_configs where campus_id = 'bjfu' and is_active),
   1::bigint,
-  'future semester writes preserve the per-campus active-row invariant'
+  'early semester activation preserves the per-campus active-row invariant'
 );
 
 select ok(

@@ -91,7 +91,7 @@ enum SchoolDataSyncService {
         }
 
         progressReporter?(.begin(.refreshingSemester))
-        let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: true)
+        _ = await SemesterConfig.refreshRemoteIfAvailable(force: true)
 
         var results: [String] = []
         var successfulOperationCount = 0
@@ -106,13 +106,13 @@ enum SchoolDataSyncService {
 
         do {
             progressReporter?(.begin(.fetchingTimetable))
-            let html = try await networkManager.fetchTimetable()
+            let document = try await networkManager.fetchTimetable()
             progressReporter?(.begin(.processingTimetable))
-            let parsed = try HTMLParser.parseTimetableResult(html: html).records.map { $0.makeCourse() }
+            let records = try HTMLParser.parseTimetableResult(html: document.html).records
             progressReporter?(.begin(.savingTimetable))
-            try persistTimetable(
-                parsed,
-                semesterID: semesterConfig.semesterID,
+            let parsed = try persistTimetable(
+                records,
+                semesterID: document.verifiedSemesterID,
                 modelContext: modelContext
             )
             successfulOperationCount += 1
@@ -315,24 +315,16 @@ enum SchoolDataSyncService {
     }
 
     private static func persistTimetable(
-        _ courses: [Course],
+        _ records: [ParsedCourseRecord],
         semesterID: String,
         modelContext: ModelContext
-    ) throws {
-        let configurations = SemesterConfig.timelineConfigurations
-        let academicYearTimetable = AcademicYearTimetable(
-            configurations: configurations,
-            semanticEvents: configurations.flatMap(\.calendarEvents)
+    ) throws -> [Course] {
+        let courses = try TimetableRefreshUseCase().persist(
+            records: records,
+            existingCourses: fetch(Course.self, from: modelContext),
+            modelContext: modelContext,
+            semesterID: semesterID
         )
-        for course in fetch(Course.self, from: modelContext) where
-            course.sourceSemesterID == semesterID
-            || !academicYearTimetable.courseIntersectsTimeline(course) {
-            modelContext.delete(course)
-        }
-        for course in courses {
-            modelContext.insert(course)
-        }
-        try modelContext.save()
 
         let now = Date()
         TimetableCacheMetadata.lastSyncAt = now
@@ -341,6 +333,7 @@ enum SchoolDataSyncService {
         AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: now)
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         SchoolDataRefreshNotifier.post(.timetable)
+        return courses
     }
 
     static func persistGrades(_ grades: [Grade], modelContext: ModelContext) throws {

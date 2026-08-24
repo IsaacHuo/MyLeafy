@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -59,32 +60,40 @@ nonisolated enum TimetablePeriodSchedule {
     }
 
     static func startDate(for course: Course, week: Int) -> Date? {
-        guard let firstPeriod = course.duration.min(),
-              let slot = slot(for: firstPeriod)
-        else {
-            return nil
-        }
+        guard let firstPeriod = course.duration.min() else { return nil }
+        return startDate(for: course, week: week, period: firstPeriod)
+    }
 
-        let dayOffset = (week - 1) * 7 + (course.dayOfWeek - 1)
-        let calendar = Calendar.current
-        guard let date = calendar.date(byAdding: .day, value: dayOffset, to: SemesterConfig.startOfSemesterDate) else {
-            return nil
-        }
-
-        return calendar.date(
-            bySettingHour: slot.startHour,
-            minute: slot.startMinute,
-            second: 0,
-            of: date
+    static func startDate(for course: Course, week: Int, period: Int) -> Date? {
+        guard let semesterStartDate = semesterStartDate(for: course) else { return nil }
+        return startDate(
+            semesterStartDate: semesterStartDate,
+            week: week,
+            dayOfWeek: course.dayOfWeek,
+            period: period
         )
     }
 
     static func startDate(week: Int, dayOfWeek: Int, period: Int) -> Date? {
+        startDate(
+            semesterStartDate: SemesterConfig.startOfSemesterDate,
+            week: week,
+            dayOfWeek: dayOfWeek,
+            period: period
+        )
+    }
+
+    static func startDate(
+        semesterStartDate: Date,
+        week: Int,
+        dayOfWeek: Int,
+        period: Int
+    ) -> Date? {
         guard let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
         let calendar = Calendar.current
-        guard let date = calendar.date(byAdding: .day, value: dayOffset, to: SemesterConfig.startOfSemesterDate) else {
+        guard let date = calendar.date(byAdding: .day, value: dayOffset, to: semesterStartDate) else {
             return nil
         }
 
@@ -97,11 +106,25 @@ nonisolated enum TimetablePeriodSchedule {
     }
 
     static func endDate(week: Int, dayOfWeek: Int, period: Int) -> Date? {
+        endDate(
+            semesterStartDate: SemesterConfig.startOfSemesterDate,
+            week: week,
+            dayOfWeek: dayOfWeek,
+            period: period
+        )
+    }
+
+    static func endDate(
+        semesterStartDate: Date,
+        week: Int,
+        dayOfWeek: Int,
+        period: Int
+    ) -> Date? {
         guard let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
         let calendar = Calendar.current
-        guard let date = calendar.date(byAdding: .day, value: dayOffset, to: SemesterConfig.startOfSemesterDate) else {
+        guard let date = calendar.date(byAdding: .day, value: dayOffset, to: semesterStartDate) else {
             return nil
         }
 
@@ -115,23 +138,19 @@ nonisolated enum TimetablePeriodSchedule {
 
     static func endDate(for course: Course, week: Int) -> Date? {
         guard let lastPeriod = course.duration.max(),
-              let slot = slot(for: lastPeriod)
-        else {
-            return nil
-        }
-
-        let dayOffset = (week - 1) * 7 + (course.dayOfWeek - 1)
-        let calendar = Calendar.current
-        guard let date = calendar.date(byAdding: .day, value: dayOffset, to: SemesterConfig.startOfSemesterDate) else {
-            return nil
-        }
-
-        return calendar.date(
-            bySettingHour: slot.endHour,
-            minute: slot.endMinute,
-            second: 0,
-            of: date
+              let semesterStartDate = semesterStartDate(for: course) else { return nil }
+        return endDate(
+            semesterStartDate: semesterStartDate,
+            week: week,
+            dayOfWeek: course.dayOfWeek,
+            period: lastPeriod
         )
+    }
+
+    private static func semesterStartDate(for course: Course) -> Date? {
+        SemesterConfig.timelineConfigurations.first {
+            $0.semesterID == course.sourceSemesterID
+        }?.semesterStartDate
     }
 
     private static func minutesSinceStartOfDay(for date: Date) -> Int {
@@ -203,6 +222,75 @@ enum TimetableCacheMetadata {
         CampusScopedDefaults.key(key)
     }
 
+}
+
+@MainActor
+enum TimetableLocalDataSemesterMigration {
+    private static let migrationKey = "timetable.localDataSemesterScope.v1"
+    private static let legacySemesterID = "2025-2026-2"
+
+    static func migrateIfNeeded(
+        courses: [Course],
+        courseNotes: [CourseNote],
+        occurrenceNotes: [CourseOccurrenceNote],
+        reminderSettings: [CourseReminderSetting],
+        cellReminders: [TimetableCellReminder],
+        modelContext: ModelContext,
+        defaults: UserDefaults = .standard
+    ) throws {
+        let key = CampusScopedDefaults.key(migrationKey, defaults: defaults)
+        guard !defaults.bool(forKey: key) else { return }
+
+        let legacyCourses = courses.filter { $0.sourceSemesterID == legacySemesterID }
+        let scopedKeyByLegacyKey = Dictionary(
+            legacyCourses.map { ($0.legacyStableCourseKey, $0.stableCourseKey) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        for note in courseNotes {
+            if let scopedKey = scopedKeyByLegacyKey[note.courseKey] {
+                note.courseKey = scopedKey
+            }
+        }
+
+        for note in occurrenceNotes {
+            if let scopedKey = scopedKeyByLegacyKey[note.courseKey] {
+                note.courseKey = scopedKey
+                note.occurrenceKey = CourseOccurrenceNote.occurrenceKey(
+                    courseKey: scopedKey,
+                    week: note.week
+                )
+            }
+        }
+
+        for setting in reminderSettings {
+            if let scopedKey = scopedKeyByLegacyKey[setting.courseKey] {
+                setting.courseKey = scopedKey
+            }
+        }
+
+        if let springConfig = SemesterConfig.timelineConfigurations.first(where: {
+            $0.semesterID == legacySemesterID
+        }) {
+            for reminder in cellReminders where reminder.startsAt == nil {
+                reminder.startsAt = TimetablePeriodSchedule.startDate(
+                    semesterStartDate: springConfig.semesterStartDate,
+                    week: reminder.week,
+                    dayOfWeek: reminder.dayOfWeek,
+                    period: reminder.displayStartPeriod
+                )
+                reminder.endsAt = TimetablePeriodSchedule.endDate(
+                    semesterStartDate: springConfig.semesterStartDate,
+                    week: reminder.week,
+                    dayOfWeek: reminder.dayOfWeek,
+                    period: reminder.displayEndPeriod
+                )
+            }
+        }
+
+        try modelContext.save()
+        defaults.set(true, forKey: key)
+    }
 }
 
 enum TimetableAdaptiveMode: Equatable {
@@ -445,11 +533,7 @@ enum TimetableNotificationManager {
         guard let period = resolvedAnchorPeriod(anchorPeriod, for: course) else {
             return nil
         }
-        return TimetablePeriodSchedule.startDate(
-            week: week,
-            dayOfWeek: course.dayOfWeek,
-            period: period
-        )
+        return TimetablePeriodSchedule.startDate(for: course, week: week, period: period)
     }
 
     static func reminderTriggerDate(for course: Course, week: Int, minutesBefore: Int, anchorPeriod: Int?) -> Date? {

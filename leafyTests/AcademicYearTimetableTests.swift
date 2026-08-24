@@ -210,7 +210,7 @@ final class AcademicYearTimetableTests: XCTestCase {
         XCTAssertEqual(firstSemester.semesterID, fall.semesterID)
     }
 
-    func testTimeViewHidesObsoleteSpringWithoutRemovingUnderlyingConfiguration() throws {
+    func testTimeViewKeepsSpringInHistoryWhileFeaturingUpcomingFall() throws {
         let spring = configuration(id: "2025-2026-2", start: "2026-03-09")
         let fall = configuration(id: "2026-2027-1", start: "2026-09-07")
         let timetable = AcademicYearTimetable(
@@ -228,6 +228,11 @@ final class AcademicYearTimetableTests: XCTestCase {
         XCTAssertTrue(menu.academicYears.flatMap(\.semesters).contains { $0.semesterID == spring.semesterID })
         XCTAssertFalse(menu.timeViewAcademicYears.flatMap(\.semesters).contains { $0.semesterID == spring.semesterID })
         XCTAssertEqual(menu.timeViewAcademicYears.flatMap(\.semesters).map(\.semesterID), [fall.semesterID])
+        XCTAssertEqual(menu.historyTimeViewAcademicYears.map(\.academicYear), ["2025–2026"])
+        XCTAssertEqual(
+            menu.historyTimeViewAcademicYears.flatMap(\.semesters).map(\.semesterID),
+            [spring.semesterID]
+        )
     }
 
     func testTimeScopeResolverSelectsUpcomingFallDuringSummer() {
@@ -346,6 +351,12 @@ final class AcademicYearTimetableTests: XCTestCase {
         let vacation = try XCTUnwrap(vacations.first)
         XCTAssertEqual(vacation.title, "暑假")
         XCTAssertEqual(vacation.page, timetable.pageIndex(containing: referenceDate))
+        XCTAssertEqual(vacation.weeks.count, 6)
+        XCTAssertEqual(vacation.weeks.first?.startDate, date("2026-07-27"))
+        XCTAssertEqual(vacation.weeks.last?.endDate, date("2026-09-06"))
+        guard case .vacation = try XCTUnwrap(academicYear.stages.first) else {
+            return XCTFail("Expected summer vacation before the spring semester in history")
+        }
     }
 
     func testVacationTargetUsesFirstIntersectingWeekEvenWhenTeachingPhaseWins() throws {

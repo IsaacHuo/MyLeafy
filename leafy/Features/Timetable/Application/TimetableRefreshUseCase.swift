@@ -94,8 +94,8 @@ struct TimetableRefreshUseCase {
         self.repository = repository
     }
 
-    func fetchHTML() async throws -> String {
-        try await repository.fetchTimetableHTML()
+    func fetchDocument() async throws -> FetchedTimetableDocument {
+        try await repository.fetchTimetableDocument()
     }
 
     static func parseRecords(html: String) async throws -> [ParsedCourseRecord] {
@@ -105,17 +105,19 @@ struct TimetableRefreshUseCase {
     }
 
     @MainActor
+    @discardableResult
     func persist(
         records: [ParsedCourseRecord],
         existingCourses: [Course],
         modelContext: ModelContext,
         semesterID: String = SemesterConfig.currentSemesterID
-    ) throws {
+    ) throws -> [Course] {
         for course in existingCourses where course.sourceSemesterID == semesterID {
             modelContext.delete(course)
         }
 
-        for course in records.map({ $0.makeCourse(semesterID: semesterID) }) {
+        let newCourses = records.map { $0.makeCourse(semesterID: semesterID) }
+        for course in newCourses {
             modelContext.insert(course)
         }
 
@@ -125,6 +127,7 @@ struct TimetableRefreshUseCase {
             modelContext.rollback()
             throw error
         }
+        return newCourses
     }
 
     static func nearestAvailableWeek(from parsedCourses: [ParsedCourseRecord], preferredWeek: Int) -> Int? {

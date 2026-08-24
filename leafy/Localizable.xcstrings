@@ -11,6 +11,46 @@
         }
       }
     },
+    "当前假期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current Break"
+          }
+        }
+      }
+    },
+    "查看以前的学期课表和假期周" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View past semester schedules and break weeks"
+          }
+        }
+      }
+    },
+    "过往学期与假期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Past Semesters & Breaks"
+          }
+        }
+      }
+    },
+    "教务返回的课表无法确认属于 %@，已保留本地缓存。请稍后重试。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The timetable returned by the academic system could not be verified as %@. Your local cache was preserved. Please try again later."
+          }
+        }
+      }
+    },
     " (本周)" : {
       "extractionState" : "stale",
       "localizations" : {

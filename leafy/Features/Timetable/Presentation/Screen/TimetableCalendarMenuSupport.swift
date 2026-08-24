@@ -6,16 +6,22 @@ nonisolated struct TimetableCalendarMenuModel {
     let currentVacationID: String?
     let defaultExpandedSemesterIDs: Set<String>
     let unavailableFutureConfigurationMessage: String?
+    let primaryTimeViewAcademicYearID: String?
 
     var timeViewAcademicYears: [TimetableCalendarMenuAcademicYear] {
         academicYears.compactMap { academicYear in
-            let stages = academicYear.stages.filter { $0.semesterID != "2025-2026-2" }
-            guard stages.contains(where: { $0.semesterID != nil }) else { return nil }
+            guard academicYear.academicYear == primaryTimeViewAcademicYearID else { return nil }
+            let stages = academicYear.stages.filter { $0.semesterID != nil }
+            guard !stages.isEmpty else { return nil }
             return TimetableCalendarMenuAcademicYear(
                 academicYear: academicYear.academicYear,
                 stages: stages
             )
         }
+    }
+
+    var historyTimeViewAcademicYears: [TimetableCalendarMenuAcademicYear] {
+        academicYears.filter { $0.academicYear != primaryTimeViewAcademicYearID }
     }
 
     init(
@@ -27,6 +33,12 @@ nonisolated struct TimetableCalendarMenuModel {
         let referencePhase = timetable.phase(for: referenceDate)
         let referenceDay = calendar.startOfDay(for: referenceDate)
         let sortedConfigurations = configurations.sorted { $0.semesterStartDate < $1.semesterStartDate }
+        let primaryConfiguration = sortedConfigurations.first {
+            calendar.startOfDay(for: $0.semesterStartDate) >= referenceDay
+        } ?? sortedConfigurations.last
+        primaryTimeViewAcademicYearID = primaryConfiguration.map {
+            Self.academicYearTitle(semesterID: $0.semesterID)
+        }
         let resolvedCurrentSemesterID: String?
         if case let .teaching(semesterID, _) = referencePhase {
             resolvedCurrentSemesterID = semesterID
@@ -105,7 +117,12 @@ nonisolated struct TimetableCalendarMenuModel {
                             title: Self.vacationTitle(category: category),
                             page: target.page,
                             targetDate: target.date,
-                            startDate: startDate
+                            startDate: startDate,
+                            weeks: Self.vacationWeeks(
+                                for: event,
+                                configurations: sortedConfigurations,
+                                calendar: calendar
+                            )
                         )
                     )
                 )
@@ -215,6 +232,50 @@ nonisolated struct TimetableCalendarMenuModel {
         guard let page = targetTimetable.pageIndex(containing: targetDate) else { return nil }
         return (page, targetDate)
     }
+
+    private static func vacationWeeks(
+        for event: SchoolCalendarEvent,
+        configurations: [SemesterRuntimeConfig],
+        calendar: Calendar
+    ) -> [TimetableCalendarMenuVacationWeek] {
+        guard let eventStart = event.startDate,
+              let eventEnd = event.endDate else { return [] }
+        let start = calendar.startOfDay(for: eventStart)
+        let end = calendar.startOfDay(for: eventEnd)
+        let weekday = calendar.component(.weekday, from: start)
+        let daysSinceMonday = (weekday + 5) % 7
+        guard var weekStart = calendar.date(byAdding: .day, value: -daysSinceMonday, to: start) else {
+            return []
+        }
+
+        var weeks: [TimetableCalendarMenuVacationWeek] = []
+        while weekStart <= end {
+            let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+            let clippedStart = max(weekStart, start)
+            let clippedEnd = min(weekEnd, end)
+            let targetTimetable = AcademicYearTimetable(
+                configurations: configurations,
+                semanticEvents: configurations.flatMap(\.calendarEvents),
+                referenceDate: clippedStart,
+                calendar: calendar
+            )
+            if let page = targetTimetable.pageIndex(containing: clippedStart) {
+                weeks.append(
+                    TimetableCalendarMenuVacationWeek(
+                        page: page,
+                        targetDate: clippedStart,
+                        startDate: clippedStart,
+                        endDate: clippedEnd
+                    )
+                )
+            }
+            guard let nextWeek = calendar.date(byAdding: .day, value: 7, to: weekStart) else {
+                break
+            }
+            weekStart = nextWeek
+        }
+        return weeks
+    }
 }
 
 nonisolated struct TimetableCalendarMenuAcademicYear: Identifiable {
@@ -283,4 +344,14 @@ nonisolated struct TimetableCalendarMenuVacation: Identifiable {
     let page: Int
     let targetDate: Date
     let startDate: Date
+    let weeks: [TimetableCalendarMenuVacationWeek]
+}
+
+nonisolated struct TimetableCalendarMenuVacationWeek: Identifiable {
+    let page: Int
+    let targetDate: Date
+    let startDate: Date
+    let endDate: Date
+
+    var id: String { "\(startDate.timeIntervalSinceReferenceDate)" }
 }
