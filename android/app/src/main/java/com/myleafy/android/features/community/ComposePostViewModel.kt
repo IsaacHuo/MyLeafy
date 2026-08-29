@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class ComposePostUiState(
     val title: String = "",
@@ -23,6 +24,9 @@ data class ComposePostUiState(
 class ComposePostViewModel(
     private val repository: CommunityRepository,
 ) : ViewModel() {
+
+    private val postId = UUID.randomUUID().toString()
+    private val requestId = UUID.randomUUID().toString()
 
     private val _uiState = MutableStateFlow(ComposePostUiState())
     val uiState: StateFlow<ComposePostUiState> = _uiState.asStateFlow()
@@ -54,6 +58,8 @@ class ComposePostViewModel(
         viewModelScope.launch {
             val result = runCatching {
                 repository.createPost(
+                    postId = postId,
+                    requestId = requestId,
                     title = state.title.trim(),
                     body = state.body.trim(),
                     category = state.category.trim().takeIf { it.isNotBlank() },
@@ -65,7 +71,7 @@ class ComposePostViewModel(
                 onFailure = {
                     _uiState.value.copy(
                         isSubmitting = false,
-                        errorMessage = it.message ?: "发布失败",
+                        errorMessage = it.toCommunityMessage("发布失败"),
                     )
                 },
             )

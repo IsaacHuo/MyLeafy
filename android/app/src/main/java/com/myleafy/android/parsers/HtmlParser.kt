@@ -16,6 +16,12 @@ interface HtmlParser {
     /** 解析成绩页面。 */
     fun parseGrades(html: String): List<ParsedGradeRecord>
 
+    /** 解析成绩页中的学校官方班级/专业排名。无排名结构时抛出解析错误。 */
+    fun parseGradeRankings(html: String): List<ParsedGradeRanking>
+
+    /** 解析成绩页中的学校官方 GPA、学分积与均分。 */
+    fun parseGradeSummary(html: String): ParsedGradeSummary
+
     /** 解析考试安排页面。 */
     fun parseExams(html: String): List<ParsedExamRecord>
 
@@ -42,6 +48,20 @@ data class ParsedGradeRecord(
     val credit: String,
     val score: String,
     val type: String,
+)
+
+data class ParsedGradeRanking(
+    val term: String,
+    val rankingRange: String,
+    val rank: Int,
+    val totalCount: Int?,
+    val metricText: String,
+)
+
+data class ParsedGradeSummary(
+    val officialGpa: Double?,
+    val officialWeightedAverage: Double?,
+    val officialCreditPoint: Double?,
 )
 
 /** 考试安排记录。 */

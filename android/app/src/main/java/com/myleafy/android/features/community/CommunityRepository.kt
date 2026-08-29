@@ -1,6 +1,7 @@
 package com.myleafy.android.features.community
 
 import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.shared.model.CommentDto
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadPageDto
@@ -31,10 +32,19 @@ interface CommunityRepository {
     suspend fun togglePostLike(postId: String): PostDto
 
     /** 发帖（文本，暂无图片/附件）。 */
-    suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto
+    suspend fun createPost(
+        postId: String,
+        requestId: String,
+        title: String,
+        body: String,
+        category: String?,
+        isAnonymous: Boolean,
+    ): PostDto
 
     /** 评论（最多两层：parentCommentId 为根评论 id）。 */
     suspend fun createComment(
+        commentId: String,
+        requestId: String,
         postId: String,
         body: String,
         parentCommentId: String?,
@@ -45,6 +55,7 @@ interface CommunityRepository {
 /** 线上仓储：匿名 Auth + community-feed + postgrest RPC。 */
 class LiveCommunityRepository(
     private val service: CommunityService?,
+    private val sessionState: SchoolSessionState,
 ) : CommunityRepository {
 
     override val isAvailable: Boolean = true
@@ -53,7 +64,18 @@ class LiveCommunityRepository(
     private fun requireService(): CommunityService =
         service ?: throw IllegalStateException("Supabase 未配置，请在 secrets.properties 填写 anon key")
 
+    private suspend fun requireCommunityProfile() {
+        val identity = sessionState.identity
+            ?: throw IllegalStateException("请先登录教务，再使用社区互动功能")
+        requireService().bootstrapCommunityUser(
+            eduId = identity.eduId,
+            displayName = identity.displayName ?: identity.eduId,
+            campusId = identity.campusId.rawValue,
+        )
+    }
+
     override fun feed(query: FeedQuery): Flow<List<PostDto>> = flow {
+        requireCommunityProfile()
         emit(requireService().fetchFeed(query))
     }
 
@@ -64,18 +86,41 @@ class LiveCommunityRepository(
         return groupCommentThreads(page.comments)
     }
 
-    override suspend fun togglePostLike(postId: String): PostDto =
-        requireService().togglePostLike(postId)
+    override suspend fun togglePostLike(postId: String): PostDto {
+        requireCommunityProfile()
+        return requireService().togglePostLike(postId)
+    }
 
-    override suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto =
-        requireService().createPost(title, body, category, isAnonymous)
+    override suspend fun createPost(
+        postId: String,
+        requestId: String,
+        title: String,
+        body: String,
+        category: String?,
+        isAnonymous: Boolean,
+    ): PostDto {
+        requireCommunityProfile()
+        return requireService().createPost(postId, requestId, title, body, category, isAnonymous)
+    }
 
     override suspend fun createComment(
+        commentId: String,
+        requestId: String,
         postId: String,
         body: String,
         parentCommentId: String?,
         replyToCommentId: String?,
-    ): CommentDto = requireService().createComment(postId, body, parentCommentId, replyToCommentId)
+    ): CommentDto {
+        requireCommunityProfile()
+        return requireService().createComment(
+            commentId,
+            requestId,
+            postId,
+            body,
+            parentCommentId,
+            replyToCommentId,
+        )
+    }
 }
 
 /** 占位实现（如无 Supabase 配置时兜底）。 */
@@ -91,10 +136,19 @@ class PlaceholderCommunityRepository : CommunityRepository {
     override suspend fun togglePostLike(postId: String): PostDto =
         throw NotImplementedError("社区功能未接入")
 
-    override suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto =
+    override suspend fun createPost(
+        postId: String,
+        requestId: String,
+        title: String,
+        body: String,
+        category: String?,
+        isAnonymous: Boolean,
+    ): PostDto =
         throw NotImplementedError("社区功能未接入")
 
     override suspend fun createComment(
+        commentId: String,
+        requestId: String,
         postId: String,
         body: String,
         parentCommentId: String?,

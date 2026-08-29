@@ -17,17 +17,21 @@ import androidx.room.TypeConverters
     entities = [
         CourseEntity::class,
         GradeEntity::class,
+        GradeRankingEntity::class,
+        GradeSummaryEntity::class,
         ExamEntity::class,
         ScheduleMemoEntity::class,
         ScheduleEventEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun gradeDao(): GradeDao
+    abstract fun gradeRankingDao(): GradeRankingDao
+    abstract fun gradeSummaryDao(): GradeSummaryDao
     abstract fun examDao(): ExamDao
     abstract fun scheduleMemoDao(): ScheduleMemoDao
     abstract fun scheduleEventDao(): ScheduleEventDao

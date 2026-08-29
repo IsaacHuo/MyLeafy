@@ -2,6 +2,7 @@ package com.myleafy.android.core.network.okhttp
 
 import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.CampusIdentity
+import com.myleafy.android.core.network.AcademicResult
 import com.myleafy.android.core.network.CourseRecord
 import com.myleafy.android.core.network.SchoolCookies
 import com.myleafy.android.core.network.SchoolEncoding
@@ -211,7 +212,9 @@ class OkHttpSchoolNetworkClient(
         }
     }
 
-    override suspend fun fetchGrades(): List<ParsedGradeRecord> = withContext(Dispatchers.IO) {
+    override suspend fun fetchGrades(): List<ParsedGradeRecord> = fetchAcademicResults().grades
+
+    override suspend fun fetchAcademicResults(): AcademicResult = withContext(Dispatchers.IO) {
         val request = requestBuilder(
             "/jsxsd/kscj/cjcx_list",
             referer = "${baseUrl}/jsxsd/framework/xsMain.jsp",
@@ -222,11 +225,16 @@ class OkHttpSchoolNetworkClient(
         if (SchoolPageDetector.isLoginPage(html)) {
             throw SchoolNetworkError.SessionExpired
         }
-        return@withContext try {
+        val grades = try {
             parser.parseGrades(html)
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.GradeDataUnavailable
         }
+        AcademicResult(
+            grades = grades,
+            rankings = runCatching { parser.parseGradeRankings(html) }.getOrNull(),
+            summary = runCatching { parser.parseGradeSummary(html) }.getOrNull(),
+        )
     }
 
     override suspend fun fetchExams(semesterId: String): List<ParsedExamRecord> = withContext(Dispatchers.IO) {

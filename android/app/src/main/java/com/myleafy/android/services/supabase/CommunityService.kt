@@ -13,9 +13,10 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
-import java.util.UUID
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -50,29 +51,31 @@ class CommunityService(private val client: SupabaseClient) {
     /** 拉取社区 Feed（community-feed Edge Function，GET）。 */
     suspend fun fetchFeed(query: FeedQuery): List<PostDto> {
         ensureAnonymousSession()
-        val path = buildString {
-            append("community-feed")
-            append("?limit=").append(query.limit)
-            append("&campus_id=").append(query.campus_id)
-            query.mode?.let { append("&mode=").append(it) }
-            query.days?.let { append("&days=").append(it) }
-            query.category?.let { append("&category=").append(it) }
-            query.search?.let { append("&search=").append(it) }
-        }
-        val response = client.functions.invoke(path) {
+        val response = client.functions.invoke("community-feed") {
             this.method = HttpMethod.Get
+            url.parameters.append("limit", query.limit.toString())
+            url.parameters.append("campus_id", query.campus_id)
+            query.mode?.let { url.parameters.append("mode", it) }
+            query.days?.let { url.parameters.append("days", it.toString()) }
+            query.category?.let { url.parameters.append("category", it) }
+            query.search?.let { url.parameters.append("search", it) }
         }
-        return json.decodeFromString<FeedResponse>(response.bodyAsText()).posts
+        val body = response.bodyAsText()
+        val root = json.parseToJsonElement(body) as? JsonObject
+            ?: throw IllegalStateException("社区 Feed 返回了非对象响应")
+        if (root["posts"] !is JsonArray) {
+            throw IllegalStateException("社区 Feed 响应缺少 posts，字段：${root.keys.sorted().joinToString()}")
+        }
+        return json.decodeFromString<FeedResponse>(body).posts
     }
 
-    /** 按 id 获取帖子（posts 表，RLS 限定同校园已发布）。 */
+    /** 按 id 获取完整帖子摘要（含作者与当前用户点赞状态）。 */
     suspend fun fetchPost(postId: String): PostDto? {
         ensureAnonymousSession()
-        return client.postgrest.from("posts")
-            .select {
-                filter { eq("id", postId) }
-            }
-            .decodeSingleOrNull()
+        return client.postgrest.rpc(
+            "community_post_summary_v1",
+            buildJsonObject { put("p_post_id", postId) },
+        ).decodeAs<PostDto?>()
     }
 
     /** 拉取评论线程（list_community_comment_threads_v1）。 */
@@ -99,15 +102,23 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 发帖（create_community_post_v4，p_id 为客户端幂等 UUID，暂不支持图片/附件）。 */
-    suspend fun createPost(title: String, body: String, category: String?, isAnonymous: Boolean): PostDto {
+    suspend fun createPost(
+        postId: String,
+        requestId: String,
+        title: String,
+        body: String,
+        category: String?,
+        isAnonymous: Boolean,
+    ): PostDto {
         ensureAnonymousSession()
         return client.postgrest.rpc(
             "create_community_post_v4",
             buildJsonObject {
-                put("p_id", UUID.randomUUID().toString())
+                put("p_id", postId)
+                put("p_request_id", requestId)
                 put("p_title", title)
                 put("p_body", body)
-                if (category != null) put("p_category", category)
+                if (category != null) put("p_category", category) else put("p_category", JsonNull)
                 put("p_is_anonymous", isAnonymous)
                 put("p_image_count", 0)
                 put("p_attachment_count", 0)
@@ -117,6 +128,8 @@ class CommunityService(private val client: SupabaseClient) {
 
     /** 评论（create_community_comment_v2，p_id 为客户端幂等 UUID；评论最多两层）。 */
     suspend fun createComment(
+        commentId: String,
+        requestId: String,
         postId: String,
         body: String,
         parentCommentId: String?,
@@ -127,11 +140,20 @@ class CommunityService(private val client: SupabaseClient) {
         return client.postgrest.rpc(
             "create_community_comment_v2",
             buildJsonObject {
-                put("p_id", UUID.randomUUID().toString())
+                put("p_id", commentId)
+                put("p_request_id", requestId)
                 put("p_post_id", postId)
                 put("p_body", body)
-                if (parentCommentId != null) put("p_parent_comment_id", parentCommentId)
-                if (replyToCommentId != null) put("p_reply_to_comment_id", replyToCommentId)
+                if (parentCommentId != null) {
+                    put("p_parent_comment_id", parentCommentId)
+                } else {
+                    put("p_parent_comment_id", JsonNull)
+                }
+                if (replyToCommentId != null) {
+                    put("p_reply_to_comment_id", replyToCommentId)
+                } else {
+                    put("p_reply_to_comment_id", JsonNull)
+                }
                 put("p_is_anonymous", isAnonymous)
             },
         ).decodeAs()

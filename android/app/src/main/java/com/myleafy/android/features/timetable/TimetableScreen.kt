@@ -161,8 +161,12 @@ fun TimetableScreen(
 
                     if (state.courses.isEmpty()) {
                         LeafyEmptyState(
-                            title = "暂无课表数据",
-                            message = "连接可访问学校教务的网络并完成登录后，可以主动同步课表。现阶段也可以先浏览其他页面框架。",
+                            title = if (state.hasConfirmedSchoolSync) "学校暂未公布课表" else "暂无课表数据",
+                            message = if (state.hasConfirmedSchoolSync) {
+                                "教务已连接，学校暂未公布或尚未安排 ${state.semesterId} 课表。成绩、排名等其他数据仍可正常使用。"
+                            } else {
+                                "连接可访问学校教务的网络并完成登录后，可以主动同步课表。"
+                            },
                             icon = Icons.Outlined.CloudSync,
                         )
                     } else {
@@ -179,7 +183,11 @@ fun TimetableScreen(
 @Composable
 private fun TimetableSyncBanner(syncState: TimetableSyncState, onConsume: () -> Unit) {
     val message = when (syncState) {
-        is TimetableSyncState.Success -> "同步成功：${syncState.count} 门课程"
+        is TimetableSyncState.Success -> if (syncState.count == 0) {
+            "教务已连接；学校暂未公布或尚未安排本学期课表"
+        } else {
+            "同步成功：${syncState.count} 门课程"
+        }
         is TimetableSyncState.Error -> "同步失败：${syncState.message}"
         else -> null
     }

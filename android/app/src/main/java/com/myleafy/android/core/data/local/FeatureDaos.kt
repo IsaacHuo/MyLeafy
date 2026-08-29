@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface GradeDao {
+    @Query("SELECT * FROM grades ORDER BY term DESC, courseName")
+    fun all(): Flow<List<GradeEntity>>
+
     @Query("SELECT * FROM grades WHERE term = :term ORDER BY courseName")
     fun gradesForTerm(term: String): Flow<List<GradeEntity>>
 
@@ -19,6 +22,27 @@ interface GradeDao {
 
     @Query("DELETE FROM grades")
     suspend fun clearAll()
+}
+
+@Dao
+interface GradeRankingDao {
+    @Query("SELECT * FROM grade_rankings ORDER BY term DESC, rankingRange")
+    fun all(): Flow<List<GradeRankingEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(rankings: List<GradeRankingEntity>)
+
+    @Query("DELETE FROM grade_rankings")
+    suspend fun clearAll()
+}
+
+@Dao
+interface GradeSummaryDao {
+    @Query("SELECT * FROM grade_summaries WHERE id = 'official' LIMIT 1")
+    fun official(): Flow<GradeSummaryEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(summary: GradeSummaryEntity)
 }
 
 @Dao

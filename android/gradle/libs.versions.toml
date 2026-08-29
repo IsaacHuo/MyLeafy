@@ -62,8 +62,8 @@ supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 supabase-functions = { group = "io.github.jan-tennert.supabase", name = "functions-kt" }
-# CIO 引擎：不依赖 okhttp，避免与教务 okhttp 4.12 冲突
-ktor-client-cio = { group = "io.ktor", name = "ktor-client-cio", version.ref = "ktor" }
+# Android 引擎使用平台 TLS 栈，兼容 Android 16 的主机名感知证书校验。
+ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 [plugins]

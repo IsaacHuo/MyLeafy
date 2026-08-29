@@ -22,7 +22,7 @@ data class SemesterRuntimeConfig(
             supportedWeeks > 0
 
     companion object {
-        val builtIn = SemesterRuntimeConfig(
+        val previousSpring = SemesterRuntimeConfig(
             semesterId = "2025-2026-2",
             semesterStartDate = LocalDate.of(2026, 3, 9),
             supportedWeeks = 20,
@@ -53,21 +53,69 @@ data class SemesterRuntimeConfig(
                 ),
             ),
             updatedAt = null,
+            isActive = false,
+        )
+
+        val builtIn = SemesterRuntimeConfig(
+            semesterId = "2026-2027-1",
+            semesterStartDate = LocalDate.of(2026, 9, 7),
+            supportedWeeks = 20,
+            graduateTimetableTermCode = "47",
+            calendarEvents = listOf(
+                SchoolCalendarEvent(
+                    id = "bjfu-midautumn-2026",
+                    title = "中秋节",
+                    startDate = LocalDate.of(2026, 9, 25),
+                    endDate = LocalDate.of(2026, 9, 27),
+                    kind = SchoolCalendarEvent.Kind.HOLIDAY,
+                    academicCategory = SchoolCalendarEvent.AcademicCategory.PUBLIC_HOLIDAY,
+                ),
+                SchoolCalendarEvent(
+                    id = "bjfu-national-day-2026",
+                    title = "国庆节",
+                    startDate = LocalDate.of(2026, 10, 1),
+                    endDate = LocalDate.of(2026, 10, 7),
+                    kind = SchoolCalendarEvent.Kind.HOLIDAY,
+                    academicCategory = SchoolCalendarEvent.AcademicCategory.PUBLIC_HOLIDAY,
+                ),
+                SchoolCalendarEvent(
+                    id = "bjfu-anniversary-74-2026",
+                    title = "建校74周年校庆日",
+                    startDate = LocalDate.of(2026, 10, 16),
+                    endDate = LocalDate.of(2026, 10, 16),
+                    kind = SchoolCalendarEvent.Kind.HOLIDAY,
+                    academicCategory = SchoolCalendarEvent.AcademicCategory.IMPORTANT_DATE,
+                ),
+                SchoolCalendarEvent(
+                    id = "bjfu-new-year-2027",
+                    title = "元旦",
+                    startDate = LocalDate.of(2027, 1, 1),
+                    endDate = LocalDate.of(2027, 1, 3),
+                    kind = SchoolCalendarEvent.Kind.HOLIDAY,
+                    academicCategory = SchoolCalendarEvent.AcademicCategory.PUBLIC_HOLIDAY,
+                ),
+                SchoolCalendarEvent(
+                    id = "bjfu-first-semester-end-2027",
+                    title = "第一学期结束",
+                    startDate = LocalDate.of(2027, 1, 15),
+                    endDate = LocalDate.of(2027, 1, 15),
+                    kind = SchoolCalendarEvent.Kind.HOLIDAY,
+                    academicCategory = SchoolCalendarEvent.AcademicCategory.SEMESTER_END,
+                ),
+                SchoolCalendarEvent(
+                    id = "bjfu-winter-break-2027",
+                    title = "寒假",
+                    startDate = LocalDate.of(2027, 1, 16),
+                    endDate = LocalDate.of(2027, 2, 27),
+                    kind = SchoolCalendarEvent.Kind.HOLIDAY,
+                    academicCategory = SchoolCalendarEvent.AcademicCategory.WINTER_BREAK,
+                ),
+            ),
+            updatedAt = null,
             isActive = true,
         )
 
-        val builtInTimeline: List<SemesterRuntimeConfig> = listOf(
-            builtIn,
-            SemesterRuntimeConfig(
-                semesterId = "2026-2027-1",
-                semesterStartDate = LocalDate.of(2026, 9, 7),
-                supportedWeeks = 20,
-                graduateTimetableTermCode = "47",
-                calendarEvents = emptyList(),
-                updatedAt = null,
-                isActive = false,
-            ),
-        )
+        val builtInTimeline: List<SemesterRuntimeConfig> = listOf(previousSpring, builtIn)
     }
 }
 

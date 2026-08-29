@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -21,6 +22,7 @@ sealed interface TimetableUiState {
         val semesterId: String,
         val week: Int,
         val courses: List<CourseEntity>,
+        val hasConfirmedSchoolSync: Boolean,
     ) : TimetableUiState
 
     data class Error(val message: String) : TimetableUiState
@@ -45,13 +47,17 @@ class TimetableViewModel(
 
     private val _syncState = MutableStateFlow<TimetableSyncState>(TimetableSyncState.Idle)
     val syncState: StateFlow<TimetableSyncState> = _syncState.asStateFlow()
+    private val hasConfirmedSchoolSync = MutableStateFlow(false)
 
-    private val mapped: Flow<TimetableUiState> = repository.coursesForSemester(semesterId)
-        .map { courses ->
+    private val mapped: Flow<TimetableUiState> = combine(
+        repository.coursesForSemester(semesterId),
+        hasConfirmedSchoolSync,
+    ) { courses, confirmed ->
             TimetableUiState.Loaded(
                 semesterId = semesterId,
                 week = SemesterConfig.currentWeek(LocalDate.now()),
                 courses = courses,
+                hasConfirmedSchoolSync = confirmed,
             )
         }
 
@@ -70,6 +76,7 @@ class TimetableViewModel(
             val result = runCatching { repository.refresh(semesterId) }
             _syncState.value = result.fold(
                 onSuccess = {
+                    hasConfirmedSchoolSync.value = true
                     val count = (uiState.value as? TimetableUiState.Loaded)?.courses?.size ?: 0
                     TimetableSyncState.Success(count)
                 },

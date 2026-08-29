@@ -42,6 +42,44 @@ class JsoupHtmlParserTest {
     }
 
     @Test
+    fun parsesStrongSystemTimetableWithOpaqueContentIds() {
+        val html = """
+            <html><body><table id="kbtable">
+              <tr><th></th><th>星期一</th><th>星期二</th></tr>
+              <tr><th>第一二节</th>
+                <td>
+                  <div class="kbcontent1">森林生态学<br><font>1-2(周)</font><br><font>二教205</font></div>
+                  <div id="opaque-1-1-2" class="kbcontent">森林生态学(必修)<br><font>王老师</font><br><font>1-2(周)</font><br><font>二教205</font></div>
+                </td>
+                <td><div class="kbcontent1"></div><div id="opaque-1-2-2" class="kbcontent"></div></td>
+              </tr>
+              <tr><th>实验实习安排</th><td colspan="2"></td></tr>
+            </table></body></html>
+        """.trimIndent()
+
+        val records = parser.parseTimetable(html)
+
+        assertEquals(1, records.size)
+        assertEquals("森林生态学(必修)", records.single().courseName)
+        assertEquals("王老师", records.single().teacher)
+        assertEquals(1, records.single().dayOfWeek)
+        assertEquals(listOf(1, 2), records.single().weeks)
+        assertEquals(listOf(1, 2), records.single().duration)
+    }
+
+    @Test
+    fun recognizesPublishedEmptyTimetableMessage() {
+        val html = """
+            <html><body>
+              <table id="kbtable"><tr><th></th><th>星期一</th></tr><tr><th>实验实习安排</th><td></td></tr></table>
+              <script>alert('课表暂未公布，不能查看课表！');</script>
+            </body></html>
+        """.trimIndent()
+
+        assertTrue(parser.parseTimetable(html).isEmpty())
+    }
+
+    @Test
     fun recognizesEmptyGraduateTimetableAsEmptyList() {
         assertTrue(parser.parseTimetable(fixture("timetable_graduate_empty.json")).isEmpty())
     }
@@ -90,6 +128,28 @@ class JsoupHtmlParserTest {
         assertEquals("88", math.score)
         assertEquals("5", math.credit)
         assertEquals("必修 · 公共基础", math.type)
+    }
+
+    @Test
+    fun parsesOfficialGradeRankingsAndSummary() {
+        val html = """
+            <html><body>
+              <p>平均学分绩点：3.42，学分积为 271.5，班级排名第 8 名，专业排名第 20 名，专业总人数 120 人。</p>
+              <table id="rankings">
+                <tr><th>学年</th><th>学分积</th><th>班级排名</th><th>专业排名</th></tr>
+                <tr><td>2025-2026</td><td>82.5</td><td>5</td><td>16</td></tr>
+              </table>
+            </body></html>
+        """.trimIndent()
+
+        val rankings = parser.parseGradeRankings(html)
+        val summary = parser.parseGradeSummary(html)
+
+        assertEquals(4, rankings.size)
+        assertEquals(8, rankings.first { it.term == "全部学期" && it.rankingRange == "班级排名" }.rank)
+        assertEquals(120, rankings.first { it.term == "全部学期" && it.rankingRange == "专业排名" }.totalCount)
+        assertEquals(3.42, summary.officialGpa)
+        assertEquals(271.5, summary.officialCreditPoint)
     }
 
     @Test

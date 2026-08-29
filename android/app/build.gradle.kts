@@ -104,7 +104,7 @@ dependencies {
     implementation(libs.supabase.auth)
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.functions)
-    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.android)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)

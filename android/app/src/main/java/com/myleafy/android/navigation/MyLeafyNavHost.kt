@@ -25,6 +25,8 @@ import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.campus.CampusCalendarScreen
 import com.myleafy.android.features.campus.ClassroomScreen
+import com.myleafy.android.features.campus.ExamsScreen
+import com.myleafy.android.features.campus.GradesScreen
 import com.myleafy.android.features.community.CommunityScreen
 import com.myleafy.android.features.community.ComposePostScreen
 import com.myleafy.android.features.community.PostDetailScreen
@@ -41,6 +43,8 @@ object Routes {
     const val COMMUNITY_POST_DETAIL = "community/post/{postId}"
     const val COMMUNITY_COMPOSE = "community/compose"
     const val CLASSROOM = "campus/classroom"
+    const val GRADES = "campus/grades"
+    const val EXAMS = "campus/exams"
     const val DEEP_LINK_COMMUNITY_POST = "myleafy://community-post?id={postId}"
     const val DEEP_LINK_TIMETABLE_INVITE = "myleafy://timetable-invite?code={code}"
 
@@ -144,12 +148,20 @@ fun MyLeafyNavHost(navController: NavHostController) {
             }
             composable(RootTab.CAMPUS.route) {
                 CampusScreen(
+                    onGradesClick = { navController.navigate(Routes.GRADES) },
+                    onExamsClick = { navController.navigate(Routes.EXAMS) },
                     onClassroomClick = { navController.navigate(Routes.CLASSROOM) },
                     onFeatureClick = { navController.navigate(it.route) },
                 )
             }
             composable(Routes.CLASSROOM) {
                 ClassroomScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.GRADES) {
+                GradesScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.EXAMS) {
+                ExamsScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = RootTab.PROFILE.route,

@@ -14,9 +14,9 @@ enum class CommunityAccessStatus { GENERAL, PENDING, APPROVED, REJECTED }
 @Serializable
 data class ProfileDto(
     val id: String,
-    val edu_id: String,
-    val campus_id: String,
-    val nickname: String,
+    val edu_id: String = "",
+    val campus_id: String = "",
+    val nickname: String = "北林同学",
     val display_name: String? = null,
     val avatar_url: String? = null,
     val bio: String? = null,

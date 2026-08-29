@@ -35,6 +35,7 @@ import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadDto
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyStatusBanner
 
 @Composable
 fun PostDetailScreen(
@@ -124,6 +125,11 @@ fun PostDetailScreen(
                         Text(text = "评论", style = MaterialTheme.typography.titleSmall)
                         Spacer(modifier = Modifier.height(8.dp))
 
+                        state.mutationError?.let {
+                            LeafyStatusBanner(message = it, isError = true)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(
                                 value = commentInput,
@@ -136,11 +142,10 @@ fun PostDetailScreen(
                             Button(
                                 onClick = {
                                     viewModel.createComment(body = commentInput)
-                                    commentInput = ""
                                 },
-                                enabled = commentInput.isNotBlank(),
+                                enabled = commentInput.isNotBlank() && !state.isCommentPending,
                             ) {
-                                Text("发送")
+                                Text(if (state.isCommentPending) "发送中" else "发送")
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))

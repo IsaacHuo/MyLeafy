@@ -6,6 +6,9 @@ import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.network.SchoolNetworkClient
 import com.myleafy.android.core.network.SchoolSessionState
+import com.myleafy.android.core.network.CampusIdentity
+import com.myleafy.android.core.network.SchoolPortal
+import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.okhttp.OkHttpSchoolNetworkClient
 import com.myleafy.android.core.prefs.SettingsStore
 import com.myleafy.android.parsers.HtmlParser
@@ -63,6 +66,18 @@ class AppContainer(context: Context) {
     // 教务会话状态：身份驱动 Cookie 作用域（M2.2 登录成功后写入）
     val schoolSessionState = SchoolSessionState()
 
+    init {
+        schoolLoginCredentialStore.loadMostRecent(CampusID.bjfu.rawValue)?.let { cached ->
+            schoolSessionState.identity = CampusIdentity(
+                campusId = CampusID.bjfu,
+                eduId = cached.account,
+                displayName = null,
+                portal = SchoolPortal.UNDERGRADUATE,
+                kind = CampusIdentity.IdentityKind.SCHOOL_PORTAL,
+            )
+        }
+    }
+
     // 教务 HTML 解析器（jsoup，M2.3）
     val htmlParser: HtmlParser = JsoupHtmlParser()
 
@@ -80,12 +95,18 @@ class AppContainer(context: Context) {
     val scheduleRepository: ScheduleRepository =
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao())
     val academicRepository: AcademicRepository =
-        LiveAcademicRepository(schoolNetworkClient, database.gradeDao(), database.examDao())
+        LiveAcademicRepository(
+            schoolNetworkClient,
+            database.gradeDao(),
+            database.gradeRankingDao(),
+            database.gradeSummaryDao(),
+            database.examDao(),
+        )
     val classroomRepository: ClassroomRepository = LiveClassroomRepository(schoolNetworkClient)
 
     // 社区（Supabase，阶段 4）：未配置 anon key 时 service 为 null，Feed 如实报错
     val communityService: CommunityService? = SupabaseClientProvider.create()?.let { CommunityService(it) }
-    val communityRepository: CommunityRepository = LiveCommunityRepository(communityService)
+    val communityRepository: CommunityRepository = LiveCommunityRepository(communityService, schoolSessionState)
 
     val profileRepository: ProfileRepository = LiveProfileRepository(communityService, schoolSessionState)
     val authRepository: AuthRepository = SchoolAuthRepository(

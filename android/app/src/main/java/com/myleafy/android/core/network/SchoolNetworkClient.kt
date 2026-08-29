@@ -3,6 +3,8 @@ package com.myleafy.android.core.network
 import com.myleafy.android.parsers.EmptyClassroom
 import com.myleafy.android.parsers.ParsedExamRecord
 import com.myleafy.android.parsers.ParsedGradeRecord
+import com.myleafy.android.parsers.ParsedGradeRanking
+import com.myleafy.android.parsers.ParsedGradeSummary
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -34,6 +36,9 @@ interface SchoolNetworkClient {
     /** 抓取并解析成绩（强智 /jsxsd/kscj/cjcx_list）。 */
     suspend fun fetchGrades(): List<ParsedGradeRecord>
 
+    /** 单次成绩页请求同时解析成绩、官方排名与官方汇总。 */
+    suspend fun fetchAcademicResults(): AcademicResult
+
     /** 抓取并解析考试安排（强智 /jsxsd/xsks/xsksap_list）。 */
     suspend fun fetchExams(semesterId: String): List<ParsedExamRecord>
 
@@ -59,4 +64,10 @@ data class CourseRecord(
     val dayOfWeek: Int,
     val weeks: List<Int>,
     val duration: List<Int>,
+)
+
+data class AcademicResult(
+    val grades: List<ParsedGradeRecord>,
+    val rankings: List<ParsedGradeRanking>?,
+    val summary: ParsedGradeSummary?,
 )

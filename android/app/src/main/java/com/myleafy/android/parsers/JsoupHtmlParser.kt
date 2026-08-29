@@ -25,16 +25,18 @@ class JsoupHtmlParser : HtmlParser {
         val document = Jsoup.parse(html)
 
         val contentElements = document.select("[id^=kbcontent_], .kbcontent")
-        if (contentElements.isNotEmpty()) {
-            val records = parseTimetableContentElements(contentElements)
+        val placedContentElements = contentElements.filter { parseDayAndDuration(it) != null }
+        if (placedContentElements.isNotEmpty()) {
+            val records = parseTimetableContentElements(placedContentElements)
             if (records.isNotEmpty()) return records
-            val containsCourseContent = contentElements.any { it.text().trim().isNotEmpty() }
+            val containsCourseContent = placedContentElements.any { it.text().trim().isNotEmpty() }
             if (containsCourseContent) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "课表")
             return emptyList()
         }
 
         val timetableTable = document.select("#kbtable").firstOrNull()
         if (timetableTable != null) {
+            if (isExplicitlyEmptyTimetable(html)) return emptyList()
             val records = parseTimetableTable(timetableTable)
             if (records.isNotEmpty()) return records
             val rows = timetableTable.select("tr")
@@ -48,7 +50,16 @@ class JsoupHtmlParser : HtmlParser {
             return emptyList()
         }
 
+        if (contentElements.any { it.text().trim().isNotEmpty() }) {
+            throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "课表")
+        }
+
         throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "课表")
+    }
+
+    private fun isExplicitlyEmptyTimetable(pageText: String): Boolean {
+        val compact = pageText.replace(Regex("\\s+"), "")
+        return explicitEmptyTimetableMarkers.any(compact::contains)
     }
 
     /**
@@ -363,6 +374,100 @@ class JsoupHtmlParser : HtmlParser {
         return parsed
     }
 
+    override fun parseGradeRankings(html: String): List<ParsedGradeRanking> {
+        val document = Jsoup.parse(html)
+        val pageText = document.text().replace(Regex("\\s+"), " ").trim()
+        val records = mutableListOf<ParsedGradeRanking>()
+        var majorTotal: Int? = null
+
+        Regex(
+            "学分积为\\s*([0-9.]+).*?班级排名第\\s*(\\d+)\\s*名.*?" +
+                "专业排名第\\s*(\\d+)\\s*名.*?专业总人数\\s*(\\d+)\\s*人",
+        ).find(pageText)?.let { match ->
+            val creditPoint = match.groupValues[1]
+            val classRank = match.groupValues[2].toIntOrNull()
+            val majorRank = match.groupValues[3].toIntOrNull()
+            majorTotal = match.groupValues[4].toIntOrNull()
+            if (classRank != null) {
+                records += ParsedGradeRanking(
+                    term = "全部学期",
+                    rankingRange = "班级排名",
+                    rank = classRank,
+                    totalCount = null,
+                    metricText = "总排名 · 学分积 $creditPoint",
+                )
+            }
+            if (majorRank != null) {
+                records += ParsedGradeRanking(
+                    term = "全部学期",
+                    rankingRange = "专业排名",
+                    rank = majorRank,
+                    totalCount = majorTotal,
+                    metricText = "总排名 · 学分积 $creditPoint",
+                )
+            }
+        }
+
+        for (table in candidateDataTables(document)) {
+            val rows = table.select("tr")
+            val headerRowIndex = rows.indexOfFirst { row ->
+                val header = row.select("th,td").joinToString(" ") { normalizedTableCellText(it) }
+                header.contains("学年") && header.contains("学分积") &&
+                    header.contains("班级排名") && header.contains("专业排名")
+            }
+            if (headerRowIndex < 0) continue
+            val headers = rows[headerRowIndex].select("th,td").map(::normalizedTableCellText)
+            val termIndex = headers.indexOfFirst { it.contains("学年") }
+            val creditPointIndex = headers.indexOfFirst { it.contains("学分积") }
+            val classRankIndex = headers.indexOfFirst { it.contains("班级排名") }
+            val majorRankIndex = headers.indexOfFirst { it.contains("专业排名") }
+
+            for (row in rows.drop(headerRowIndex + 1)) {
+                val cells = row.select("td").map(::normalizedTableCellText)
+                if (cells.isEmpty() || termIndex !in cells.indices) continue
+                val term = cells[termIndex].ifBlank { "未知学年" }
+                val creditPoint = cells.getOrNull(creditPointIndex).orEmpty()
+                val metric = creditPoint.takeIf(String::isNotBlank)?.let { "学分积 $it" } ?: "学期段排名明细"
+                cells.getOrNull(classRankIndex)?.firstInteger()?.let { rank ->
+                    records += ParsedGradeRanking(term, "班级排名", rank, null, metric)
+                }
+                cells.getOrNull(majorRankIndex)?.firstInteger()?.let { rank ->
+                    records += ParsedGradeRanking(term, "专业排名", rank, majorTotal, metric)
+                }
+            }
+        }
+
+        if (records.isEmpty()) {
+            throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "成绩排名")
+        }
+        return records.distinctBy { "${it.term}|${it.rankingRange}|${it.rank}|${it.metricText}" }
+            .sortedWith(compareByDescending<ParsedGradeRanking> { it.term }.thenBy { it.rankingRange })
+    }
+
+    override fun parseGradeSummary(html: String): ParsedGradeSummary {
+        val pageText = Jsoup.parse(html).text().replace(Regex("\\s+"), " ").trim()
+        val summary = ParsedGradeSummary(
+            officialGpa = parseOfficialDecimal(
+                pageText,
+                labels = listOf("平均学分绩点", "平均绩点", "学分绩点", "绩点", "GPA"),
+                maxValue = 5.0,
+            ),
+            officialWeightedAverage = parseOfficialDecimal(
+                pageText,
+                labels = listOf("加权平均分", "加权均分", "平均成绩", "平均分"),
+                maxValue = 100.0,
+            ),
+            officialCreditPoint = parseOfficialDecimal(pageText, labels = listOf("学分积"), maxValue = null),
+        )
+        if (summary.officialGpa == null &&
+            summary.officialWeightedAverage == null &&
+            summary.officialCreditPoint == null
+        ) {
+            throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "成绩汇总")
+        }
+        return summary
+    }
+
     // MARK: - 考试安排
 
     override fun parseExams(html: String): List<ParsedExamRecord> {
@@ -582,6 +687,23 @@ class JsoupHtmlParser : HtmlParser {
         return Regex(CREDIT_PATTERN).find(normalized)?.value?.toDoubleOrNull()
     }
 
+    private fun String.firstInteger(): Int? = Regex("\\d+").find(this)?.value?.toIntOrNull()
+
+    private fun parseOfficialDecimal(text: String, labels: List<String>, maxValue: Double?): Double? {
+        for (label in labels) {
+            val escaped = Regex.escape(label)
+            val patterns = listOf(
+                Regex("$escaped\\s*(?:为|是|:|：)?\\s*([0-9]+(?:\\.[0-9]+)?)"),
+                Regex("$escaped[^0-9]{0,12}([0-9]+(?:\\.[0-9]+)?)"),
+            )
+            for (pattern in patterns) {
+                val value = pattern.find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull() ?: continue
+                if (value >= 0 && (maxValue == null || value <= maxValue)) return value
+            }
+        }
+        return null
+    }
+
     private data class CourseData(
         val courseName: String,
         val teacher: String,
@@ -638,6 +760,12 @@ class JsoupHtmlParser : HtmlParser {
         const val SHORT_DATE_PATTERN = "(\\d{1,2})[月/-](\\d{1,2})日?"
         const val TIME_RANGE_PATTERN = "(\\d{1,2})[:：](\\d{2})\\s*(?:~|～|—|–|-|至|到)\\s*(\\d{1,2})[:：](\\d{2})"
         const val CLASSROOM_ROW_PATTERN = "^([^\\(\\d]+?)(\\d+[A-Za-z]?)(?:\\((\\d+)\\s*/\\s*(\\d+)\\))?$"
+
+        val explicitEmptyTimetableMarkers = listOf(
+            "课表暂未公布",
+            "暂无课表",
+            "没有找到符合条件的课表",
+        )
 
         val classroomBuildingMap = mapOf(
             "A" to (10 to "学研A座"),

@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Class
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Card
@@ -45,6 +47,8 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun CampusScreen(
+    onGradesClick: () -> Unit = {},
+    onExamsClick: () -> Unit = {},
     onClassroomClick: () -> Unit = {},
     onFeatureClick: (FeatureDestination) -> Unit = {},
     viewModel: CampusViewModel = viewModel(
@@ -99,6 +103,8 @@ fun CampusScreen(
                     state = state,
                     syncState = syncState,
                     onConsumeSync = viewModel::consumeSyncResult,
+                    onGradesClick = onGradesClick,
+                    onExamsClick = onExamsClick,
                     onClassroomClick = onClassroomClick,
                     onFeatureClick = onFeatureClick,
                     modifier = Modifier.fillMaxSize().padding(contentPadding),
@@ -113,6 +119,8 @@ private fun CampusDashboard(
     state: CampusUiState.Loaded,
     syncState: CampusSyncState,
     onConsumeSync: () -> Unit,
+    onGradesClick: () -> Unit,
+    onExamsClick: () -> Unit,
     onClassroomClick: () -> Unit,
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
@@ -125,10 +133,24 @@ private fun CampusDashboard(
         item {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "校园服务", style = MaterialTheme.typography.titleLarge)
+                    Text(text = "学业概览", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        text = "学校数据仅在用户主动同步后更新；未连接校园网时保留最近一次成功缓存。",
+                        text = buildString {
+                            append("${state.grades.size} 门成绩")
+                            state.gradeSummary?.officialGpa?.let { append(" · GPA %.2f".format(it)) }
+                            state.rankings.firstOrNull {
+                                it.term == "全部学期" && it.rankingRange == "专业排名"
+                            }?.let { ranking ->
+                                append(" · 专业 ${ranking.rank}")
+                                ranking.totalCount?.let { append("/$it") }
+                            }
+                        },
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "数据来自学校教务；同步失败时保留最近一次成功结果。",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -136,7 +158,13 @@ private fun CampusDashboard(
         }
 
         val syncMessage = when (syncState) {
-            is CampusSyncState.Success -> "同步成功：${syncState.grades} 条成绩，${syncState.exams} 场考试"
+            is CampusSyncState.Success -> buildString {
+                append("同步完成")
+                syncState.grades?.let { append("：$it 条成绩") }
+                syncState.rankings?.let { append("，$it 条排名") }
+                syncState.exams?.let { append("，$it 场考试") }
+                if (syncState.warnings.isNotEmpty()) append("；${syncState.warnings.joinToString("；")}")
+            }
             is CampusSyncState.Error -> "同步失败：${syncState.message}"
             else -> null
         }
@@ -151,6 +179,22 @@ private fun CampusDashboard(
         }
 
         item { LeafySectionHeader(title = "常用工具") }
+        item {
+            LeafyFeatureCard(
+                title = "成绩与排名",
+                description = "成绩明细、官方 GPA 与班级/专业排名",
+                icon = Icons.Outlined.Assessment,
+                onClick = onGradesClick,
+            )
+        }
+        item {
+            LeafyFeatureCard(
+                title = "考试安排",
+                description = "查看学校发布的考试时间与地点",
+                icon = Icons.Outlined.EventNote,
+                onClick = onExamsClick,
+            )
+        }
         item {
             LeafyFeatureCard(
                 title = "空闲教室",
@@ -186,20 +230,20 @@ private fun CampusDashboard(
 
         item {
             LeafySectionHeader(
-                title = "成绩",
-                supportingText = "${state.terms.size} 个学期 · 当前缓存 ${state.grades.size} 条",
+                title = "最近成绩",
+                supportingText = "${state.terms.size} 个学期 · 点击成绩与排名查看全部",
             )
         }
         if (state.grades.isEmpty()) {
             item {
                 LeafyEmptyState(
                     title = "暂无成绩缓存",
-                    message = "成绩依赖学校教务环境，本轮不要求联网验收。",
+                    message = "登录教务后点右上角同步；学校无记录时这里保持为空。",
                     icon = Icons.Outlined.School,
                 )
             }
         } else {
-            items(state.grades, key = { it.id }) { grade -> GradeRow(grade) }
+            items(state.grades.take(3), key = { it.id }) { grade -> GradeRow(grade) }
         }
 
         item {
@@ -218,13 +262,13 @@ private fun CampusDashboard(
                 )
             }
         } else {
-            items(state.exams, key = { it.id }) { exam -> ExamRow(exam) }
+            items(state.exams.take(3), key = { it.id }) { exam -> ExamRow(exam) }
         }
     }
 }
 
 @Composable
-private fun GradeRow(grade: GradeEntity) {
+internal fun GradeRow(grade: GradeEntity) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -245,7 +289,7 @@ private fun GradeRow(grade: GradeEntity) {
 }
 
 @Composable
-private fun ExamRow(exam: ExamEntity) {
+internal fun ExamRow(exam: ExamEntity) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = exam.name, style = MaterialTheme.typography.titleSmall)
