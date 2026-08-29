@@ -1,6 +1,7 @@
 package com.myleafy.android.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -9,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -21,13 +23,18 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
+import com.myleafy.android.features.campus.CampusCalendarScreen
 import com.myleafy.android.features.campus.ClassroomScreen
 import com.myleafy.android.features.community.CommunityScreen
 import com.myleafy.android.features.community.ComposePostScreen
 import com.myleafy.android.features.community.PostDetailScreen
 import com.myleafy.android.features.profile.ProfileScreen
+import com.myleafy.android.features.profile.AboutMyLeafyScreen
+import com.myleafy.android.features.profile.HelpCenterScreen
+import com.myleafy.android.features.profile.PermissionsInfoScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
 import com.myleafy.android.features.timetable.TimetableScreen
+import com.myleafy.android.ui.components.FeaturePlaceholder
 
 object Routes {
     const val LOGIN = "login"
@@ -48,33 +55,39 @@ object Routes {
 fun MyLeafyNavHost(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+    val rootRoutes = RootTab.entries.mapTo(mutableSetOf()) { it.route }
+    val showsBottomBar = currentDestination?.route in rootRoutes
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar {
-                RootTab.entries.forEach { tab ->
-                    val selected = currentDestination
-                        ?.hierarchy
-                        ?.any { it.route == tab.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (showsBottomBar) {
+                NavigationBar {
+                    RootTab.entries.forEach { tab ->
+                        val selected = currentDestination
+                            ?.hierarchy
+                            ?.any { it.route == tab.route } == true
+                        NavigationBarItem(
+                            modifier = Modifier.testTag("root-tab-${tab.route}"),
+                            selected = selected,
+                            onClick = {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                contentDescription = stringResource(tab.labelRes),
-                            )
-                        },
-                        label = { Text(stringResource(tab.labelRes)) },
-                    )
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) tab.selectedIcon else tab.icon,
+                                    contentDescription = stringResource(tab.labelRes),
+                                )
+                            },
+                            label = { Text(stringResource(tab.labelRes)) },
+                        )
+                    }
                 }
             }
         },
@@ -84,7 +97,13 @@ fun MyLeafyNavHost(navController: NavHostController) {
             startDestination = RootTab.TIMETABLE.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(RootTab.TIMETABLE.route) { TimetableScreen() }
+            composable(RootTab.TIMETABLE.route) {
+                TimetableScreen(
+                    onShareClick = { navController.navigate(FeatureDestination.TIMETABLE_SHARE.route) },
+                    onExportClick = { navController.navigate(FeatureDestination.TIMETABLE_EXPORT.route) },
+                    onAddScheduleClick = { navController.navigate(FeatureDestination.TIMETABLE_ADD_SCHEDULE.route) },
+                )
+            }
             composable(RootTab.COMMUNITY.route) {
                 CommunityScreen(
                     onPostClick = { postId ->
@@ -92,6 +111,10 @@ fun MyLeafyNavHost(navController: NavHostController) {
                     },
                     onComposeClick = {
                         navController.navigate(Routes.COMMUNITY_COMPOSE)
+                    },
+                    onSearchClick = { navController.navigate(FeatureDestination.COMMUNITY_SEARCH.route) },
+                    onNotificationsClick = {
+                        navController.navigate(FeatureDestination.COMMUNITY_NOTIFICATIONS.route)
                     },
                 )
             }
@@ -116,10 +139,13 @@ fun MyLeafyNavHost(navController: NavHostController) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(RootTab.SCHEDULE.route) { ScheduleScreen() }
+            composable(RootTab.SCHEDULE.route) {
+                ScheduleScreen(onFeatureClick = { navController.navigate(it.route) })
+            }
             composable(RootTab.CAMPUS.route) {
                 CampusScreen(
                     onClassroomClick = { navController.navigate(Routes.CLASSROOM) },
+                    onFeatureClick = { navController.navigate(it.route) },
                 )
             }
             composable(Routes.CLASSROOM) {
@@ -131,10 +157,35 @@ fun MyLeafyNavHost(navController: NavHostController) {
                     navDeepLink { uriPattern = Routes.DEEP_LINK_TIMETABLE_INVITE },
                 ),
             ) {
-                ProfileScreen(onLoginClick = { navController.navigate(Routes.LOGIN) })
+                ProfileScreen(
+                    onLoginClick = { navController.navigate(Routes.LOGIN) },
+                    onFeatureClick = { navController.navigate(it.route) },
+                )
             }
             composable(Routes.LOGIN) {
                 LoginScreen(onBack = { navController.popBackStack() })
+            }
+            FeatureDestination.entries.forEach { destination ->
+                composable(destination.route) {
+                    when (destination) {
+                        FeatureDestination.CAMPUS_CALENDAR -> CampusCalendarScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.PROFILE_HELP -> HelpCenterScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.PROFILE_PERMISSIONS -> PermissionsInfoScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.PROFILE_ABOUT -> AboutMyLeafyScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        else -> FeaturePlaceholder(
+                            destination = destination,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                }
             }
         }
     }

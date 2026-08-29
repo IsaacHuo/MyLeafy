@@ -126,7 +126,9 @@ class SchoolAuthFlowTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path == "/Logon.do?method=logon&flag=sess" ->
-                    MockResponse().setBody("SECRETCODE#12345")
+                    MockResponse()
+                        .addHeader("Set-Cookie", "JSESSIONID=pre-auth; Path=/; HttpOnly")
+                        .setBody("SECRETCODE#12345")
                 request.path == "/verifycode.servlet" ->
                     MockResponse().setBody("CAPTCHA-IMG")
                 else -> MockResponse().setResponseCode(404)
@@ -135,6 +137,46 @@ class SchoolAuthFlowTest {
 
         val bytes = client.fetchUndergraduateCaptcha()
         assertEquals("CAPTCHA-IMG", String(bytes))
+        val keyRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        val captchaRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(keyRequest)
+        assertEquals("JSESSIONID=pre-auth", captchaRequest?.getHeader("Cookie"))
+    }
+
+    @Test
+    fun loginReusesCaptchaSessionCookie() = runBlocking {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/Logon.do?method=logon&flag=sess" ->
+                    MockResponse()
+                        .addHeader("Set-Cookie", "JSESSIONID=pre-auth; Path=/; HttpOnly")
+                        .setBody("SECRETCODE#12345")
+                request.path == "/verifycode.servlet" ->
+                    MockResponse().setBody("CAPTCHA-IMG")
+                request.path == "/Logon.do?method=logon" ->
+                    MockResponse().setBody("<html>退出系统</html>")
+                request.path == "/jsxsd/framework/xsMain.jsp" ->
+                    MockResponse().setBody("<html>学生课表</html>")
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+
+        client.fetchUndergraduateCaptcha()
+        client.loginUndergraduate("2012", "pw", "1234")
+
+        server.takeRequest(5, TimeUnit.SECONDS)
+        val captchaRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        val refreshedKeyRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        val loginRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        assertEquals("JSESSIONID=pre-auth", captchaRequest?.getHeader("Cookie"))
+        assertEquals("JSESSIONID=pre-auth", refreshedKeyRequest?.getHeader("Cookie"))
+        assertEquals("JSESSIONID=pre-auth", loginRequest?.getHeader("Cookie"))
+        assertTrue(session.isLoggedIn)
+        val identity = checkNotNull(session.identity)
+        assertEquals(
+            mapOf("JSESSIONID" to "pre-auth"),
+            store.load(identity.scopeKey, identity.portal.rawValue),
+        )
     }
 
     private fun authenticDispatcher(): Dispatcher = object : Dispatcher() {

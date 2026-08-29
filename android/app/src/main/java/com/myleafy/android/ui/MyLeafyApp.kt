@@ -15,9 +15,13 @@ import com.myleafy.android.navigation.MyLeafyNavHost
 fun MyLeafyApp(deepLinkIntent: Intent? = null) {
     val navController = rememberNavController()
 
-    LaunchedEffect(deepLinkIntent) {
-        deepLinkIntent?.let { navController.handleDeepLink(it) }
-    }
-
     MyLeafyNavHost(navController = navController)
+
+    // 普通 Launcher Intent 没有 data，不应进入深链分发。把 effect 放在
+    // NavHost 之后也确保导航图已经安装，避免冷启动时访问空 topGraph。
+    LaunchedEffect(deepLinkIntent?.data) {
+        if (deepLinkIntent?.data != null) {
+            navController.handleDeepLink(deepLinkIntent)
+        }
+    }
 }

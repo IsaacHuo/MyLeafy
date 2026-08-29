@@ -1,19 +1,14 @@
 package com.myleafy.android.features.community
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.ui.components.LeafySecondaryScaffold
 
 @Composable
 fun ComposePostScreen(
@@ -44,18 +40,13 @@ fun ComposePostScreen(
         LaunchedEffect(Unit) { onPublished() }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-            }
-            Text(text = "发帖", style = MaterialTheme.typography.headlineSmall)
-        }
-        Spacer(modifier = Modifier.height(12.dp))
+    LeafySecondaryScaffold(title = "发帖", onBack = onBack, modifier = modifier) { contentModifier ->
+        Column(
+            modifier = contentModifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
             value = uiState.title,
@@ -82,17 +73,17 @@ fun ComposePostScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = uiState.isAnonymous,
-                onCheckedChange = { viewModel.toggleAnonymous() },
-            )
-            Text(
-                text = "匿名发布",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = uiState.isAnonymous,
+                    onCheckedChange = { viewModel.toggleAnonymous() },
+                )
+                Text(
+                    text = "匿名发布",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         Spacer(modifier = Modifier.height(12.dp))
 
         val errorMessage = uiState.errorMessage
@@ -105,15 +96,16 @@ fun ComposePostScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Button(
-            onClick = viewModel::submit,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isSubmitting,
-        ) {
-            if (uiState.isSubmitting) {
-                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-            } else {
-                Text("发布")
+            Button(
+                onClick = viewModel::submit,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isSubmitting,
+            ) {
+                if (uiState.isSubmitting) {
+                    CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("发布")
+                }
             }
         }
     }

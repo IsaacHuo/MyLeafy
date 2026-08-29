@@ -19,12 +19,14 @@ import okhttp3.Response
 class SchoolCookieInterceptor(
     private val cookieStore: SchoolSessionCookieStore,
     private val identityProvider: () -> CampusIdentity?,
+    private val transientCookiesProvider: () -> Map<String, String>,
+    private val transientCookiesSaver: (Map<String, String>) -> Unit,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val identity = identityProvider()
         val cookies = if (identity == null) {
-            emptyMap()
+            transientCookiesProvider()
         } else {
             cookieStore.load(identity.scopeKey, identity.portal.rawValue)
         }
@@ -40,12 +42,13 @@ class SchoolCookieInterceptor(
         val response = chain.proceed(request)
 
         val setCookieHeaders = response.headers.values("Set-Cookie")
-        if (setCookieHeaders.isNotEmpty() && identity != null) {
-            cookieStore.save(
-                SchoolCookies.mergeSetCookie(cookies, setCookieHeaders),
-                identity.scopeKey,
-                identity.portal.rawValue,
-            )
+        if (setCookieHeaders.isNotEmpty()) {
+            val merged = SchoolCookies.mergeSetCookie(cookies, setCookieHeaders)
+            if (identity == null) {
+                transientCookiesSaver(merged)
+            } else {
+                cookieStore.save(merged, identity.scopeKey, identity.portal.rawValue)
+            }
         }
         return response
     }

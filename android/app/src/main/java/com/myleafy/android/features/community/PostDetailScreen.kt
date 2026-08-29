@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Button
@@ -35,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadDto
+import com.myleafy.android.ui.components.LeafySecondaryScaffold
 
 @Composable
 fun PostDetailScreen(
@@ -50,18 +50,13 @@ fun PostDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-            }
-            Text(text = "帖子详情", style = MaterialTheme.typography.headlineSmall)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
+    LeafySecondaryScaffold(title = "帖子详情", onBack = onBack, modifier = modifier) { contentModifier ->
+        Column(
+            modifier = contentModifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
         when (val state = uiState) {
             is PostDetailUiState.Loading -> {
@@ -164,6 +159,7 @@ fun PostDetailScreen(
                         CommentThreadRow(thread)
                     }
                 }
+            }
             }
         }
     }

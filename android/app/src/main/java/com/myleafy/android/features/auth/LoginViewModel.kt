@@ -1,5 +1,6 @@
 package com.myleafy.android.features.auth
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,14 +35,23 @@ class LoginViewModel(
     }
 
     fun refreshCaptcha() {
-        _uiState.value = _uiState.value.copy(isCaptchaLoading = true, captchaBytes = null)
+        _uiState.value = _uiState.value.copy(
+            isCaptchaLoading = true,
+            captchaBytes = null,
+            errorMessage = null,
+        )
         viewModelScope.launch {
-            val bytes = runCatching { repository.fetchUndergraduateCaptcha() }
-                .getOrNull()
+            val result = runCatching { repository.fetchUndergraduateCaptcha() }
+            val failure = result.exceptionOrNull()
+            if (failure != null) {
+                Log.e(TAG, "Failed to fetch undergraduate captcha", failure)
+            }
             _uiState.value = _uiState.value.copy(
                 isCaptchaLoading = false,
-                captchaBytes = bytes,
-                errorMessage = if (bytes == null) "验证码获取失败，请检查校园网" else _uiState.value.errorMessage,
+                captchaBytes = result.getOrNull(),
+                errorMessage = failure?.let {
+                    "验证码获取失败：${it.message ?: "请检查校园网与代理设置"}"
+                },
             )
         }
     }
@@ -75,5 +85,9 @@ class LoginViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    private companion object {
+        const val TAG = "LoginViewModel"
     }
 }

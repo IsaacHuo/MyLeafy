@@ -22,6 +22,9 @@
 阶段 1.5 交付：全部功能的基础架构（UiState 状态机 / Repository / Room / DTO / 登录路由 / 深链）已搭好，教务网络与 Supabase 仍未接入（占位实现如实展示“未接入”文案）。
 **阶段 2（M2.1-M2.5）已完成：** OkHttp 教务客户端与 Cookie 契约 → 强智登录（encodeKey/验证码/会话验证）→ 课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库 → 周课表网格渲染 → 成绩/考试抓取 + 校园页。`assembleDebug` + `testDebugUnitTest`（67 用例）通过。
 **阶段 4 社区（M4.1-M4.3）已完成：** supabase-kt 客户端层（auth/postgrest/functions，匿名 Auth + bootstrap + feed）→ 帖子详情 + 评论线程 + 点赞 → 文本发帖 + 评论。`assembleDebug` + `testDebugUnitTest`（70 用例）通过。
+**Android 原生 UI 壳已完成一轮收敛：** 5 个根 Tab 使用 Material 3 根页面；底栏仅在根目的地显示，二级页面统一返回栏；`FeatureDestination` 为待接入能力提供明确占位。帮助中心、权限说明、关于与内置校历为完整静态页面。所有业务列表只展示真实数据，不写入演示内容；校园网相关能力允许以空状态完成 UI 验收。
+
+**API 36 设备验收（2026-08-29）：** Pixel 8 / Android 16 模拟器已通过 5 Tab 与二级返回导航测试、空库首启、随记新增/重启持久化/删除，并完成真实本科验证码和登录。实测同时修正了两项运行缺陷：登录前匿名 Cookie 现在跨 key/验证码/提交复用，认证后才持久化；阻塞 OkHttp 教务调用统一在 `Dispatchers.IO` 执行。当前 `xskb_list.do` 的真实响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，按契约报数据不可用并保留缓存；iOS 表单/WebView bootstrap 回退仍属后续教务专项。
 
 ## A. 迁移清单（Migration Inventory）
 
@@ -209,6 +212,7 @@ android/
 2. 每个请求显式 `Cookie` 头：名值对按名称排序、`"; "` 拼接（`SchoolCookies.headerValue` 已实现并测试）。
 3. 每个响应解析 `Set-Cookie`（只取 name=value）合并回字典（`SchoolCookies.mergeSetCookie` 已实现并测试）。
 4. 会话失效或退出时清空字典，但保留本地身份以便离线读取缓存。
+5. Android 登录前使用进程内匿名 Cookie 字典保存验证码会话；认证成功前不写入 Keystore，成功后整体迁移到身份作用域。
 
 ### 登录流程
 
@@ -303,6 +307,7 @@ Gradle 已预留 `versionCode / versionName / applicationId / signingConfig（re
 - **阶段 4 社区（M4.1-M4.3）：已完成。** supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论/点赞、文本发帖与评论。
 - **阶段 5 校园与我的**：空教室、我的社区资料（bootstrap 展示）、评价目录、共享课表。
 - **阶段 3 日迹强化**：Markdown 编辑、统计（本机可测）、分享卡片。
+- **UI 后续收尾**：逐步把 `FeatureDestination` 占位替换为真实实现；校园网依赖页面单独做真机/可访问教务网络验收，静态说明页保持可离线使用。
 - **发布工程**：WorkManager 后台刷新、Widget（Glance）、通知、release 签名与 CI。
 
 每阶段验收：`./gradlew assembleDebug` 通过；能单测的纯逻辑加测试；行为/边界变化同步更新本文、`state/` 与 `contracts/`。

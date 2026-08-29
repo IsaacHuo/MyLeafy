@@ -17,8 +17,11 @@ import com.myleafy.android.parsers.HtmlParser
 import com.myleafy.android.parsers.HtmlParseError
 import com.myleafy.android.parsers.ParsedExamRecord
 import com.myleafy.android.parsers.ParsedGradeRecord
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -42,9 +45,22 @@ class OkHttpSchoolNetworkClient(
     private val parser: HtmlParser,
 ) : SchoolNetworkClient {
 
+    /** 登录前的验证码会话。成功认证后才迁移到按身份隔离的持久化 Cookie。 */
+    private val preAuthenticationCookies = ConcurrentHashMap<String, String>()
+
     private val client: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(CookieJar.NO_COOKIES)
-        .addInterceptor(SchoolCookieInterceptor(cookieStore) { sessionState.identity })
+        .addInterceptor(
+            SchoolCookieInterceptor(
+                cookieStore = cookieStore,
+                identityProvider = { sessionState.identity },
+                transientCookiesProvider = { preAuthenticationCookies.toMap() },
+                transientCookiesSaver = { cookies ->
+                    preAuthenticationCookies.clear()
+                    preAuthenticationCookies.putAll(cookies)
+                },
+            ),
+        )
         .cache(null)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
@@ -73,15 +89,23 @@ class OkHttpSchoolNetworkClient(
     /** 执行请求并解析响应 Set-Cookie。 */
     internal fun execute(request: Request): Response = client.newCall(request).execute()
 
-    override suspend fun fetchUndergraduateCaptcha(): ByteArray {
+    override suspend fun fetchUndergraduateCaptcha(): ByteArray = withContext(Dispatchers.IO) {
         clearSession()
         fetchLoginKey()
         val request = requestBuilder("/verifycode.servlet").get().build()
-        return execute(request).use { it.body?.bytes() ?: byteArrayOf() }
+        return@withContext execute(request).use { it.body?.bytes() ?: byteArrayOf() }
     }
 
-    override suspend fun loginUndergraduate(account: String, password: String, captcha: String) {
-        clearSession()
+    override suspend fun loginUndergraduate(
+        account: String,
+        password: String,
+        captcha: String,
+    ) = withContext(Dispatchers.IO) {
+        // 验证码与登录提交必须复用同一个匿名 JSESSIONID。若调用方未先取验证码，
+        // 才建立一个新的登录会话，以继续支持仓库层和测试中的直接登录调用。
+        if (preAuthenticationCookies.isEmpty()) {
+            clearSession()
+        }
         val key = fetchLoginKey()
         val encoded = SchoolLoginEncoder.encodeKey(key, account, password)
         if (encoded.isEmpty()) {
@@ -107,13 +131,18 @@ class OkHttpSchoolNetworkClient(
         }
         val loginResponseAuthenticated = SchoolPageDetector.isAuthenticatedResponse(responseUrl, html)
 
-        // 提交身份与登录 Cookie，供会话验证请求携带
+        // 提交身份与登录 Cookie，供会话验证请求携带。登录前 Cookie（尤其
+        // JSESSIONID）在匿名阶段只驻留内存，认证成功前不会写入 Keystore。
+        val authenticatedCookies = SchoolCookies.mergeSetCookie(
+            preAuthenticationCookies.toMap(),
+            loginSetCookies,
+        )
         val identity = undergraduateIdentity(account)
         sessionState.identity = identity
-        if (loginSetCookies.isNotEmpty()) {
-            val merged = SchoolCookies.mergeSetCookie(loadCookies(), loginSetCookies)
-            cookieStore.save(merged, identity.scopeKey, identity.portal.rawValue)
+        if (authenticatedCookies.isNotEmpty()) {
+            cookieStore.save(authenticatedCookies, identity.scopeKey, identity.portal.rawValue)
         }
+        preAuthenticationCookies.clear()
 
         val sessionAuthenticated = verifyAuthenticatedSession().isSuccess
         val success = loginResponseAuthenticated && sessionAuthenticated || sessionAuthenticated
@@ -126,7 +155,7 @@ class OkHttpSchoolNetworkClient(
         sessionState.markLoggedIn(identity)
     }
 
-    override suspend fun verifyAuthenticatedSession(): Result<Unit> {
+    override suspend fun verifyAuthenticatedSession(): Result<Unit> = withContext(Dispatchers.IO) {
         val retryCount = 1
         for (attempt in 0..retryCount) {
             try {
@@ -136,14 +165,14 @@ class OkHttpSchoolNetworkClient(
                 val responseUrl = response.request.url.toString()
                 response.close()
                 if (SchoolPageDetector.isAuthenticatedResponse(responseUrl, html)) {
-                    return Result.success(Unit)
+                    return@withContext Result.success(Unit)
                 }
             } catch (_: Exception) {
                 // 重试
             }
             if (attempt < retryCount) delay(300)
         }
-        return Result.failure(SchoolNetworkError.SessionExpired)
+        Result.failure(SchoolNetworkError.SessionExpired)
     }
 
     override suspend fun fetchGraduatePublicKey(): String = notYet("研究生登录（RSA）")
@@ -152,7 +181,7 @@ class OkHttpSchoolNetworkClient(
         notYet("研究生登录（AES）")
     }
 
-    override suspend fun fetchTimetable(semesterId: String): List<CourseRecord> {
+    override suspend fun fetchTimetable(semesterId: String): List<CourseRecord> = withContext(Dispatchers.IO) {
         val request = requestBuilder(
             "/jsxsd/xskb/xskb_list.do?xnxq01id=$semesterId",
             referer = "${baseUrl}/Logon.do?method=logon",
@@ -168,7 +197,7 @@ class OkHttpSchoolNetworkClient(
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.TimetableDataUnavailable
         }
-        return records.map { r ->
+        return@withContext records.map { r ->
             CourseRecord(
                 courseName = r.courseName,
                 teacher = r.teacher,
@@ -182,7 +211,7 @@ class OkHttpSchoolNetworkClient(
         }
     }
 
-    override suspend fun fetchGrades(): List<ParsedGradeRecord> {
+    override suspend fun fetchGrades(): List<ParsedGradeRecord> = withContext(Dispatchers.IO) {
         val request = requestBuilder(
             "/jsxsd/kscj/cjcx_list",
             referer = "${baseUrl}/jsxsd/framework/xsMain.jsp",
@@ -193,14 +222,14 @@ class OkHttpSchoolNetworkClient(
         if (SchoolPageDetector.isLoginPage(html)) {
             throw SchoolNetworkError.SessionExpired
         }
-        return try {
+        return@withContext try {
             parser.parseGrades(html)
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.GradeDataUnavailable
         }
     }
 
-    override suspend fun fetchExams(semesterId: String): List<ParsedExamRecord> {
+    override suspend fun fetchExams(semesterId: String): List<ParsedExamRecord> = withContext(Dispatchers.IO) {
         val bodyText = "xqlbmc=&xnxqid=${SchoolLoginEncoder.formUrlEncode(semesterId)}&xqlb="
         val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
         val request = requestBuilder(
@@ -213,7 +242,7 @@ class OkHttpSchoolNetworkClient(
         if (SchoolPageDetector.isLoginPage(html)) {
             throw SchoolNetworkError.SessionExpired
         }
-        return try {
+        return@withContext try {
             parser.parseExams(html)
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.ExamDataUnavailable
@@ -226,7 +255,7 @@ class OkHttpSchoolNetworkClient(
         day: Int,
         startPeriod: Int,
         endPeriod: Int,
-    ): List<EmptyClassroom> {
+    ): List<EmptyClassroom> = withContext(Dispatchers.IO) {
         val path = buildString {
             append("/jsxsd/kbxx/jsjy_query2")
             append("?xnxqh=").append(semesterId)
@@ -243,7 +272,7 @@ class OkHttpSchoolNetworkClient(
         if (SchoolPageDetector.isLoginPage(html)) {
             throw SchoolNetworkError.SessionExpired
         }
-        return try {
+        return@withContext try {
             parser.parseEmptyClassrooms(html)
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.ClassroomDataUnavailable
@@ -255,6 +284,7 @@ class OkHttpSchoolNetworkClient(
         if (identity != null) {
             cookieStore.delete(identity.scopeKey, identity.portal.rawValue)
         }
+        preAuthenticationCookies.clear()
         sessionState.clear()
     }
 
@@ -268,7 +298,7 @@ class OkHttpSchoolNetworkClient(
     }
 
     private fun loadCookies(): Map<String, String> {
-        val identity = sessionState.identity ?: return emptyMap()
+        val identity = sessionState.identity ?: return preAuthenticationCookies.toMap()
         return cookieStore.load(identity.scopeKey, identity.portal.rawValue)
     }
 

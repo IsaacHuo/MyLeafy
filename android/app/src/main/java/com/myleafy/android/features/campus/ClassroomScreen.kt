@@ -10,14 +10,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.SemesterConfig
+import com.myleafy.android.ui.components.LeafySecondaryScaffold
 
 @Composable
 fun ClassroomScreen(
@@ -47,18 +44,13 @@ fun ClassroomScreen(
     var week by rememberSaveable { mutableIntStateOf(viewModel.currentWeek) }
     var day by rememberSaveable { mutableIntStateOf(1) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-            }
-            Text(text = "空闲教室", style = MaterialTheme.typography.headlineSmall)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
+    LeafySecondaryScaffold(title = "空闲教室", onBack = onBack, modifier = modifier) { contentModifier ->
+        Column(
+            modifier = contentModifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+        ) {
+            Spacer(modifier = Modifier.height(8.dp))
 
         Text(text = "周次", style = MaterialTheme.typography.labelMedium)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -149,6 +141,7 @@ fun ClassroomScreen(
                         }
                     }
                 }
+            }
             }
         }
     }

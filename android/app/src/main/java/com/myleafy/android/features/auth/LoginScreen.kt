@@ -12,12 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -32,9 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.ui.components.LeafySecondaryScaffold
 
 /**
  * 学校登录页（M2.2：强智登录）。验证码自动获取、点击刷新；
@@ -59,18 +57,13 @@ fun LoginScreen(
         LaunchedEffect(Unit) { onBack() }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-            }
-            Text(text = "学校登录", style = MaterialTheme.typography.headlineSmall)
-        }
-        Spacer(modifier = Modifier.height(24.dp))
+    LeafySecondaryScaffold(title = "学校登录", onBack = onBack, modifier = modifier) { contentModifier ->
+        Column(
+            modifier = contentModifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+        ) {
+            Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
             value = account,
@@ -86,6 +79,7 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("密码") },
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
         )
         Spacer(modifier = Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -115,18 +109,19 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Button(
-            onClick = { viewModel.submit(account, password, captcha) },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isSubmitting,
-        ) {
-            if (uiState.isSubmitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.height(20.dp),
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Text("登录")
+            Button(
+                onClick = { viewModel.submit(account, password, captcha) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isSubmitting,
+            ) {
+                if (uiState.isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text("登录")
+                }
             }
         }
     }
