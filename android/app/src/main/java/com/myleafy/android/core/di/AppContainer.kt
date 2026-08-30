@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
+import com.myleafy.android.core.campus.ActiveAppScopeStore
+import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolNetworkClient
 import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.core.network.CampusIdentity
@@ -48,9 +50,9 @@ class AppContainer(context: Context) {
         AppDatabase::class.java,
         "myleafy.db",
     )
-        // 本地数据库早期阶段无正式数据，schema 变更允许直接重建。
-        // 正式发布前应移除并迁移为受控 migration。
-        .fallbackToDestructiveMigration(dropAllTables = true)
+        // Android 尚未发布，仅已知的预发布 schema 1–3 可破坏性重建。
+        // 未来版本缺少 migration 时必须直接失败，不能静默丢数据。
+        .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
         .build()
 
     val courseDao: CourseDao get() = database.courseDao()
@@ -64,7 +66,8 @@ class AppContainer(context: Context) {
         KeystoreSchoolSessionCookieStore(secureStorage)
 
     // 教务会话状态：身份驱动 Cookie 作用域（M2.2 登录成功后写入）
-    val schoolSessionState = SchoolSessionState()
+    val activeAppScopeStore = ActiveAppScopeStore()
+    val schoolSessionState = SchoolSessionState(activeAppScopeStore)
 
     init {
         schoolLoginCredentialStore.loadMostRecent(CampusID.bjfu.rawValue)?.let { cached ->
@@ -91,9 +94,9 @@ class AppContainer(context: Context) {
     )
 
     val timetableRepository: TimetableRepository =
-        LiveTimetableRepository(schoolNetworkClient, database.courseDao())
+        LiveTimetableRepository(schoolNetworkClient, database.courseDao(), activeAppScopeStore)
     val scheduleRepository: ScheduleRepository =
-        RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao())
+        RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao(), activeAppScopeStore)
     val academicRepository: AcademicRepository =
         LiveAcademicRepository(
             schoolNetworkClient,
@@ -101,14 +104,25 @@ class AppContainer(context: Context) {
             database.gradeRankingDao(),
             database.gradeSummaryDao(),
             database.examDao(),
+            activeAppScopeStore,
         )
     val classroomRepository: ClassroomRepository = LiveClassroomRepository(schoolNetworkClient)
 
-    // 社区（Supabase，阶段 4）：未配置 anon key 时 service 为 null，Feed 如实报错
-    val communityService: CommunityService? = SupabaseClientProvider.create()?.let { CommunityService(it) }
-    val communityRepository: CommunityRepository = LiveCommunityRepository(communityService, schoolSessionState)
+    // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化 Supabase。
+    private var cachedCommunityService: CommunityService? = null
 
-    val profileRepository: ProfileRepository = LiveProfileRepository(communityService, schoolSessionState)
+    private fun communityServiceForActiveScope(): CommunityService? {
+        val scope = activeAppScopeStore.current
+        if (scope.isGuest || !scope.supports(CampusCapabilities.COMMUNITY)) return null
+        return cachedCommunityService
+            ?: SupabaseClientProvider.create()?.let(::CommunityService)?.also { cachedCommunityService = it }
+    }
+
+    val communityRepository: CommunityRepository =
+        LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
+
+    val profileRepository: ProfileRepository =
+        LiveProfileRepository(::communityServiceForActiveScope, schoolSessionState)
     val authRepository: AuthRepository = SchoolAuthRepository(
         client = schoolNetworkClient,
         sessionState = schoolSessionState,

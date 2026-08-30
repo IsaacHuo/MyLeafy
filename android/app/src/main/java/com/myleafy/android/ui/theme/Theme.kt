@@ -45,6 +45,7 @@ fun MyLeafyTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = MyLeafyTypography,
+        shapes = MyLeafyShapes,
         content = content,
     )
 }

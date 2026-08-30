@@ -1,5 +1,7 @@
 package com.myleafy.android.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.Icon
@@ -8,7 +10,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -21,6 +25,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.myleafy.android.core.campus.ActiveAppScopeStore
+import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.campus.CampusCalendarScreen
@@ -37,6 +44,7 @@ import com.myleafy.android.features.profile.PermissionsInfoScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
 import com.myleafy.android.features.timetable.TimetableScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
+import com.myleafy.android.ui.components.LeafyEmptyState
 
 object Routes {
     const val LOGIN = "login"
@@ -56,18 +64,33 @@ object Routes {
  * 5 个固定 Tab + 登录路由；社区/共享课表深链挂靠对应 Tab。
  */
 @Composable
-fun MyLeafyNavHost(navController: NavHostController) {
+fun MyLeafyNavHost(
+    navController: NavHostController,
+    activeAppScopeStore: ActiveAppScopeStore,
+) {
+    val activeScope by activeAppScopeStore.scope.collectAsStateWithLifecycle()
+    val canUseCommunity = activeScope.supports(CampusCapabilities.COMMUNITY)
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val rootRoutes = RootTab.entries.mapTo(mutableSetOf()) { it.route }
     val showsBottomBar = currentDestination?.route in rootRoutes
+    val visibleRootTabs = RootTab.entries.filter { it != RootTab.COMMUNITY || canUseCommunity }
+
+    LaunchedEffect(canUseCommunity, currentDestination?.route) {
+        if (!canUseCommunity && currentDestination?.route == RootTab.COMMUNITY.route) {
+            navController.navigate(RootTab.TIMETABLE.route) {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showsBottomBar) {
                 NavigationBar {
-                    RootTab.entries.forEach { tab ->
+                    visibleRootTabs.forEach { tab ->
                         val selected = currentDestination
                             ?.hierarchy
                             ?.any { it.route == tab.route } == true
@@ -109,26 +132,34 @@ fun MyLeafyNavHost(navController: NavHostController) {
                 )
             }
             composable(RootTab.COMMUNITY.route) {
-                CommunityScreen(
-                    onPostClick = { postId ->
-                        navController.navigate(Routes.communityPostDetail(postId))
-                    },
-                    onComposeClick = {
-                        navController.navigate(Routes.COMMUNITY_COMPOSE)
-                    },
-                    onSearchClick = { navController.navigate(FeatureDestination.COMMUNITY_SEARCH.route) },
-                    onNotificationsClick = {
-                        navController.navigate(FeatureDestination.COMMUNITY_NOTIFICATIONS.route)
-                    },
-                )
+                if (canUseCommunity) {
+                    CommunityScreen(
+                        onPostClick = { postId ->
+                            navController.navigate(Routes.communityPostDetail(postId))
+                        },
+                        onComposeClick = {
+                            navController.navigate(Routes.COMMUNITY_COMPOSE)
+                        },
+                        onSearchClick = { navController.navigate(FeatureDestination.COMMUNITY_SEARCH.route) },
+                        onNotificationsClick = {
+                            navController.navigate(FeatureDestination.COMMUNITY_NOTIFICATIONS.route)
+                        },
+                    )
+                } else {
+                    CommunityUnavailableContent()
+                }
             }
             composable(Routes.COMMUNITY_COMPOSE) {
-                ComposePostScreen(
-                    onBack = { navController.popBackStack() },
-                    onPublished = {
-                        navController.popBackStack()
-                    },
-                )
+                if (canUseCommunity) {
+                    ComposePostScreen(
+                        onBack = { navController.popBackStack() },
+                        onPublished = {
+                            navController.popBackStack()
+                        },
+                    )
+                } else {
+                    CommunityUnavailableContent()
+                }
             }
             composable(
                 route = Routes.COMMUNITY_POST_DETAIL,
@@ -138,10 +169,14 @@ fun MyLeafyNavHost(navController: NavHostController) {
                 ),
             ) { entry ->
                 val postId = entry.arguments?.getString("postId").orEmpty()
-                PostDetailScreen(
-                    postId = postId,
-                    onBack = { navController.popBackStack() },
-                )
+                if (canUseCommunity) {
+                    PostDetailScreen(
+                        postId = postId,
+                        onBack = { navController.popBackStack() },
+                    )
+                } else {
+                    CommunityUnavailableContent()
+                }
             }
             composable(RootTab.SCHEDULE.route) {
                 ScheduleScreen(onFeatureClick = { navController.navigate(it.route) })
@@ -200,5 +235,15 @@ fun MyLeafyNavHost(navController: NavHostController) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CommunityUnavailableContent() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        LeafyEmptyState(
+            title = "社区暂不可用",
+            message = "登录支持社区的校园身份后即可进入。",
+        )
     }
 }

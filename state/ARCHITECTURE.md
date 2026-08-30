@@ -2,7 +2,7 @@
 
 本文基于当前 `main` 代码整理，描述 **MyLeafy 现在实际的结构**。它不是未来方案：尚未实现的架构应进入 `docs/`。若本文与代码冲突，以代码为准，并请按 `state/README.md` 的维护原则更新本文。
 
-Last verified: 2026-08-29
+Last verified: 2026-08-30
 
 ## 1. 系统组成
 
@@ -227,9 +227,11 @@ React-admin（site/src/admin）
 - 根 Tab：`TabView`，顺序 `课表 / 社区 / 日迹 / 校园 / 我的`，默认课表；社区按校园 capability 隐藏（`ContentView.swift`，iOS 26 用系统 `Tab` API，低版本用 `tabItem`）。
 - 层级详情使用 `NavigationStack`；轻量编辑/筛选/详情使用 sheet。
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
-- Android 使用 `MyLeafyNavHost` + `RootTab` 固定呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；底部 `NavigationBar` 只在根目的地显示并保存各 Tab 状态。
+- Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；社区入口按活动身份 capability 隐藏，底部 `NavigationBar` 只在根目的地显示并保存各 Tab 状态。
 - Android 二级真实页面与 `FeatureDestination` 占位页面统一使用返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；帮助中心、权限说明、关于与内置校历是可离线使用的完整静态页面。
 - Android 启动阶段不强制登录；学校登录从“我的”进入。Room、教务和 Supabase 页面只展示各自真实数据，未登录、未配置或校园网不可达时进入明确的 Empty/Error 状态。
+- Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 标志和 capabilities；Room v4 的全部实体使用 `(scopeKey, id)` 复合主键，DAO 查询、替换和删除必须显式携带当前 scope。仅预发布 schema 1–3 允许破坏性重建，未来缺 migration 时直接失败。
+- Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时不初始化客户端，社区根入口和社区深链内容均被门控。
 - Android 本科验证码阶段使用只驻留内存的匿名 Cookie；key、验证码与登录提交复用同一会话，认证成功后才按 `CampusIdentity.scopeKey` 迁移到 Keystore。同步 OkHttp 请求由客户端统一切换到 `Dispatchers.IO`，Compose ViewModel 不执行阻塞网络 I/O。
 - Android 当前仅实现直接 HTML 课表解析；学校返回未识别页面时 fail-fast 为 `TimetableDataUnavailable` 并保留 Room 最近成功缓存，不把未知页面当空课表。iOS 的表单/WebView bootstrap 回退尚未迁移。
 - 深链支持 `leafy://` 与 `https://myleafy.space/` 白名单路由，解析器验证 host、路径、UUID 或邀请码格式。
@@ -311,7 +313,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 | 范围 | 位置 |
 |---|---|
 | iOS 单元/契约测试 | `leafyTests/`（XCTest，Domain/Application/Presentation 分层覆盖） |
-| Android 单元/导航测试 | `android/app/src/test/`（JVM 契约）与 `android/app/src/androidTest/`（Compose 根导航烟雾测试） |
+| Android 单元/导航测试 | `android/app/src/test/`（JVM 契约）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 变化时执行 assemble、JVM tests 与 lint |
 | 教务解析回归 | 固定 HTML 样本测试 |
 | Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |
 | Edge Functions | Deno typecheck / 单元 / 契约测试 |

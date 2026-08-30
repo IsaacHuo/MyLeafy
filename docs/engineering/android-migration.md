@@ -13,16 +13,18 @@
 | SDK | compileSdk 36 / targetSdk 36 / **minSdk 29**（Android 10+） |
 | JDK | 构建用 JDK 17（Android Studio 内嵌 JBR 亦可） |
 | 包 | `com.myleafy.android`，versionCode 1，versionName 0.1.0 |
-| 结构 | 单 `:app` module；本地 Room 库 `myleafy.db`（v2） |
-| 数据层 | Room v2：Course / Grade / Exam / ScheduleMemo / ScheduleEvent；DataStore Preferences（非敏感设置） |
-| 导航 | 5 个固定根 Tab + `login` 路由 + 深链（`myleafy://community-post` / `timetable-invite`） |
-| 验证 | `./gradlew :app:assembleDebug` ✓；`./gradlew :app:testDebugUnitTest` ✓（23 用例，含学期/节次纯逻辑） |
+| 结构 | 单 `:app` module；本地 Room 库 `myleafy.db`（v4） |
+| 数据层 | Room v4：Course / Grade / GradeRanking / GradeSummary / Exam / ScheduleMemo / ScheduleEvent，全部按 `scopeKey` 隔离；DataStore Preferences（非敏感设置） |
+| 导航 | 5 个根 Tab（社区按 capability 隐藏）+ `login` 路由 + 深链（`myleafy://community-post` / `timetable-invite`） |
+| 验证 | Android CI 与本地包装器执行 `assembleDebug` / `testDebugUnitTest` / `lintDebug`；API 36 执行 scoped Room 与 Compose 导航测试 |
 
 阶段 1 交付：可编译、可运行、5 Tab 可导航、架构（Compose → ViewModel → Repository → DataSource）正确的工程骨架。
 阶段 1.5 交付：全部功能的基础架构（UiState 状态机 / Repository / Room / DTO / 登录路由 / 深链）已搭好，教务网络与 Supabase 仍未接入（占位实现如实展示“未接入”文案）。
 **阶段 2（M2.1-M2.5）已完成：** OkHttp 教务客户端与 Cookie 契约 → 强智登录（encodeKey/验证码/会话验证）→ 课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库 → 周课表网格渲染 → 成绩/考试抓取 + 校园页。`assembleDebug` + `testDebugUnitTest`（67 用例）通过。
 **阶段 4 社区（M4.1-M4.3）已完成：** supabase-kt 客户端层（auth/postgrest/functions，匿名 Auth + bootstrap + feed）→ 帖子详情 + 评论线程 + 点赞 → 文本发帖 + 评论。`assembleDebug` + `testDebugUnitTest`（70 用例）通过。
 **Android 原生 UI 壳已完成一轮收敛：** 5 个根 Tab 使用 Material 3 根页面；底栏仅在根目的地显示，二级页面统一返回栏；`FeatureDestination` 为待接入能力提供明确占位。帮助中心、权限说明、关于与内置校历为完整静态页面。所有业务列表只展示真实数据，不写入演示内容；校园网相关能力允许以空状态完成 UI 验收。
+
+**核心对齐基础层（2026-08-30）：** Android launcher 图标由 iOS `AppIcon.png` 唯一母版生成 legacy/adaptive/monochrome 资源；Material 3 统一使用 12/16/24dp 品牌圆角。`ActiveAppScopeStore` 统一身份、guest 与 capability，Room v4 的全部本地实体以 `(scopeKey, id)` 隔离，仓储随活动作用域切换；Supabase 仅在身份具备社区 capability 时延迟初始化。Android 尚未发布，因此 schema 1–3 允许破坏性重建，此后缺 migration 必须失败。
 
 **API 36 设备验收（2026-08-29）：** Pixel 8 / Android 16 模拟器已通过 5 Tab 与二级返回导航测试、空库首启、随记新增/重启持久化/删除，并完成真实本科验证码和登录。实测同时修正了两项运行缺陷：登录前匿名 Cookie 现在跨 key/验证码/提交复用，认证后才持久化；阻塞 OkHttp 教务调用统一在 `Dispatchers.IO` 执行。当前 `xskb_list.do` 的真实响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，按契约报数据不可用并保留缓存；iOS 表单/WebView bootstrap 回退仍属后续教务专项。
 
@@ -134,8 +136,8 @@ android/
             │   ├── campus/            # 成绩/考试 Room 缓存 + 占位页
             │   └── profile/           # 本地身份 + 社区资料占位
             ├── core/
-            │   ├── campus/            # CampusID/Capability/Descriptor/ActiveCampusContext
-            │   ├── data/local/        # Room v2：Course/Grade/Exam/ScheduleMemo/ScheduleEvent
+            │   ├── campus/            # CampusID/Capability/Descriptor/ActiveAppScopeStore
+            │   ├── data/local/        # Room v4：全部实体按 scopeKey 隔离
             │   ├── di/                # AppContainer + appViewModelFactory
             │   ├── network/           # 教务客户端接口/Cookie 契约/错误/身份 scopeKey
             │   ├── prefs/             # SettingsStore（DataStore：身份/主题/语言）

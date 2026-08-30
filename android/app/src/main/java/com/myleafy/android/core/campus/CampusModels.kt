@@ -34,6 +34,7 @@ data class CampusID(val rawValue: String) {
     companion object {
         val bjfu = CampusID("bjfu")
         val custom = CampusID("custom")
+        val guest = CampusID("guest")
     }
 }
 
@@ -75,6 +76,27 @@ data class CampusDescriptor(
             undergraduateBaseUrl = "https://myleafy.space",
             graduateBaseUrl = null,
         )
+
+        val guest = CampusDescriptor(
+            id = CampusID.guest,
+            displayName = "免登录入口",
+            shortName = "访客",
+            connectorKind = "guest",
+            capabilities = setOf(
+                CampusCapabilities.TIMETABLE,
+                CampusCapabilities.GRADES,
+                CampusCapabilities.EXAMS,
+            ),
+            undergraduateBaseUrl = "",
+            graduateBaseUrl = null,
+        )
+
+        fun forCampus(campusId: CampusID): CampusDescriptor = when (campusId) {
+            CampusID.bjfu -> bjfu
+            CampusID.custom -> custom
+            CampusID.guest -> guest
+            else -> error("Unsupported campus: ${campusId.rawValue}")
+        }
     }
 }
 

@@ -11,6 +11,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.myleafy.android.MainActivity
+import com.myleafy.android.MyLeafyApplication
+import com.myleafy.android.core.campus.CampusID
+import com.myleafy.android.core.network.CampusIdentity
+import com.myleafy.android.core.network.SchoolPortal
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,6 +28,7 @@ class RootNavigationSmokeTest {
 
     @Test
     fun allRootTabsAreReachableAndSelected() {
+        activateCommunityScope()
         RootTab.entries.forEach { tab ->
             composeRule.onNodeWithTag("root-tab-${tab.route}").performClick()
             composeRule.onNodeWithTag("root-tab-${tab.route}").assertIsSelected()
@@ -31,6 +37,7 @@ class RootNavigationSmokeTest {
 
     @Test
     fun secondaryDestinationHidesBottomBarAndBackRestoresIt() {
+        activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-community").performClick()
         composeRule.onNodeWithContentDescription("搜索社区").performClick()
 
@@ -54,5 +61,34 @@ class RootNavigationSmokeTest {
         composeRule.onNodeWithTag("help-content")
             .performScrollToNode(hasText("数据安全边界"))
         composeRule.onNodeWithText("数据安全边界").assertIsDisplayed()
+    }
+
+    @Test
+    fun communityTabIsHiddenWithoutCapability() {
+        val application = composeRule.activity.application as MyLeafyApplication
+        application.container.activeAppScopeStore.clear()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("root-tab-community").assertDoesNotExist()
+    }
+
+    @After
+    fun clearActiveScope() {
+        val application = composeRule.activity.application as MyLeafyApplication
+        application.container.activeAppScopeStore.clear()
+    }
+
+    private fun activateCommunityScope() {
+        val application = composeRule.activity.application as MyLeafyApplication
+        application.container.activeAppScopeStore.activate(
+            CampusIdentity(
+                campusId = CampusID.bjfu,
+                eduId = "android-test-user",
+                displayName = null,
+                portal = SchoolPortal.UNDERGRADUATE,
+                kind = CampusIdentity.IdentityKind.SCHOOL_PORTAL,
+            ),
+        )
+        composeRule.waitForIdle()
     }
 }

@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 /**
- * MyLeafy 本地数据库（v2）。
+ * MyLeafy 本地数据库。
  *
  * 阶段 1.5 完整注册各功能本地模型：
  * - 教务副本（学校为权威）：Course / Grade / Exam
@@ -23,7 +23,7 @@ import androidx.room.TypeConverters
         ScheduleMemoEntity::class,
         ScheduleEventEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

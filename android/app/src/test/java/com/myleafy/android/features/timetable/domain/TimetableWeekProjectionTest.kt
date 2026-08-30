@@ -9,6 +9,7 @@ import org.junit.Test
 class TimetableWeekProjectionTest {
 
     private fun course(name: String, day: Int, weeks: List<Int>, duration: List<Int>) = CourseEntity(
+        scopeKey = "test-scope",
         id = UUID.randomUUID().toString(),
         sourceSemesterID = "2025-2026-2",
         courseName = name,

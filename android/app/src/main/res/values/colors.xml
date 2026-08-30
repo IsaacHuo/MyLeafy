@@ -3,5 +3,5 @@
     <!-- 默认品牌色：鼠尾草绿（与 iOS AppTheme.green 一致） -->
     <color name="leafy_green">#9DC183</color>
     <color name="leafy_green_soft">#ECF4E7</color>
-    <color name="ic_launcher_background">#ECF4E7</color>
+    <color name="ic_launcher_background">#FBFDF5</color>
 </resources>

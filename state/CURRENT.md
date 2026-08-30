@@ -1,10 +1,10 @@
 # Current State
 
-Last verified: 2026-08-29
+Last verified: 2026-08-30
 
 ## Current Focus
 
-- **Android 原生 UI 骨架**：5 个根 Tab 使用 Material 3 信息架构，二级页面统一导航；先完成不依赖校园网的本地与静态页面，教务联网能力允许保持诚实空状态。
+- **Android 核心体验对齐**：基础分支已统一品牌图标、Material 3 圆角层级、身份作用域与 Android CI；下一步重做周课表和个人日程闭环。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑与投稿、本机语音转写与统计分享图。
 - **国际化收尾**：已完成英文本地化并加入 App 内语言偏好（跟随系统 / 简体中文 / English，同步到 Widget 与 Share 扩展）；正在打磨英文课表与校园文案。
 - **课表与时间语义**：`2026-2027-1` 已作为最新拉取学期，首周仍为 9 月 7 日；按学年浏览、20 周单学期数据集、学年边界滑动与刷新反馈，历史春季课表和暑假可从时间视图按周回看。
@@ -16,7 +16,8 @@ Last verified: 2026-08-29
 - **免登录入口（guest）**：登录页新增「免登录入口」，无账号密码、数据全部存本机、不连接任何后台（跳过学期配置远程拉取与社区后台任务）、无社区 Tab；行为与通用学校入口一致（本地导入课表/成绩/考试，学期用内置 1–20 周默认容器）。登录页与校园描述中「通用入口」改名为「通用学校入口」。
 - **教务会话渐进恢复**：用户主动更新课表、成绩、考试、教学计划、培养方案和空闲教室时优先复用现有 Session；本科 Session 明确过期后最多刷新并识别三张验证码，每张使用原图、放大、灰度增强三路 Vision 共识，OCR 不可靠或学校明确返回验证码错误时继续下一轮，第三轮后转人工；账号密码、未知错误或校园网不可达立即停止，研究生端保持人工验证码恢复。
 - **教务操作过程反馈**：用户主动同步时按实际范围展示连接、验证码识别、登录验证及数据拉取/处理/保存步骤；课表、成绩、全量、教学与培养、考试、排名和教室查询互不扩大请求范围，后台预取保持静默。
-- **Android 工程骨架（阶段 1 / 1.5）**：`android/` 为可编译可运行的 Compose 单模块工程（Gradle 8.14.5 / AGP 8.13.2 / Kotlin 2.2.21 / minSdk 29）；5 个根 Tab 真实导航，全功能基础架构已搭好（UiState 状态机 / Repository / Room v2 / DTO / DataStore / 登录路由 / 深链），日迹为真实可用的本地 CRUD。
+- **Android 工程骨架（阶段 1 / 1.5）**：`android/` 为可编译可运行的 Compose 单模块工程（Gradle 8.14.5 / AGP 8.13.2 / Kotlin 2.2.21 / minSdk 29）；根 Tab 真实导航，全功能基础架构已搭好（UiState 状态机 / Repository / Room v4 / DTO / DataStore / 登录路由 / 深链），日迹为真实可用的本地 CRUD。
+- **Android 对齐基础层**：启动图标从 iOS 唯一母版生成 legacy/adaptive/monochrome 资源；Compose 使用 12/16/24dp 品牌圆角层级；`ActiveAppScope` 统一校园身份、capability 与 Room `scopeKey`，所有本地表和 DAO 已按身份隔离，guest/无社区能力身份不会初始化 Supabase；新增 Android assemble/JVM tests/lint CI。
 - **Android 阶段 2（教务，M2.1-M2.5）**：OkHttp 教务客户端 + Cookie 契约、强智登录（encodeKey/验证码/会话验证）、课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库、周课表网格、成绩/考试抓取与校园页。
 - **Android 阶段 4（社区，M4.1-M4.3）**：supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论线程/点赞、文本发帖与评论。
 - **Android 阶段 5 部分（M5.1-M5.2）**：我的页社区资料（bootstrap）、空闲教室查询。

@@ -4,8 +4,10 @@ import com.myleafy.android.core.data.local.ScheduleEventDao
 import com.myleafy.android.core.data.local.ScheduleEventEntity
 import com.myleafy.android.core.data.local.ScheduleMemoDao
 import com.myleafy.android.core.data.local.ScheduleMemoEntity
+import com.myleafy.android.core.campus.ActiveAppScopeStore
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 
 /**
  * 日迹仓储（随记 + 个人日程）。本地为权威来源，Room 持久化；
@@ -24,16 +26,20 @@ interface ScheduleRepository {
 class RoomScheduleRepository(
     private val memoDao: ScheduleMemoDao,
     private val eventDao: ScheduleEventDao,
+    private val activeAppScopeStore: ActiveAppScopeStore,
 ) : ScheduleRepository {
 
-    override fun memos(): Flow<List<ScheduleMemoEntity>> = memoDao.activeMemos()
+    override fun memos(): Flow<List<ScheduleMemoEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { memoDao.activeMemos(it.scopeKey) }
 
-    override fun events(): Flow<List<ScheduleEventEntity>> = eventDao.all()
+    override fun events(): Flow<List<ScheduleEventEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { eventDao.all(it.scopeKey) }
 
     override suspend fun addMemo(body: String, title: String?, tags: List<String>) {
         val now = System.currentTimeMillis()
         memoDao.upsert(
             ScheduleMemoEntity(
+                scopeKey = activeAppScopeStore.current.scopeKey,
                 id = UUID.randomUUID().toString(),
                 body = body,
                 kind = "quickMemo",
@@ -50,12 +56,18 @@ class RoomScheduleRepository(
     }
 
     override suspend fun deleteMemo(id: String) {
-        memoDao.softDelete(id, trashedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
+        memoDao.softDelete(
+            scopeKey = activeAppScopeStore.current.scopeKey,
+            id = id,
+            trashedAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+        )
     }
 
     override suspend fun addEvent(title: String, startsAt: Long, endsAt: Long?, location: String?, note: String?) {
         eventDao.upsert(
             ScheduleEventEntity(
+                scopeKey = activeAppScopeStore.current.scopeKey,
                 id = UUID.randomUUID().toString(),
                 title = title,
                 startsAt = startsAt,
@@ -67,5 +79,5 @@ class RoomScheduleRepository(
         )
     }
 
-    override suspend fun deleteEvent(id: String) = eventDao.delete(id)
+    override suspend fun deleteEvent(id: String) = eventDao.delete(activeAppScopeStore.current.scopeKey, id)
 }

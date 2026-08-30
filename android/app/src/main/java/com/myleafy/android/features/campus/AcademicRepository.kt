@@ -8,9 +8,10 @@ import com.myleafy.android.core.data.local.GradeRankingDao
 import com.myleafy.android.core.data.local.GradeRankingEntity
 import com.myleafy.android.core.data.local.GradeSummaryDao
 import com.myleafy.android.core.data.local.GradeSummaryEntity
+import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.network.SchoolNetworkClient
-import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 
 /**
  * 校园学业仓储（成绩/考试）。学校教务为权威来源，Room 为本地缓存副本。
@@ -43,21 +44,29 @@ class LiveAcademicRepository(
     private val gradeRankingDao: GradeRankingDao,
     private val gradeSummaryDao: GradeSummaryDao,
     private val examDao: ExamDao,
+    private val activeAppScopeStore: ActiveAppScopeStore,
 ) : AcademicRepository {
 
-    override fun grades(): Flow<List<GradeEntity>> = gradeDao.all()
+    override fun grades(): Flow<List<GradeEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { gradeDao.all(it.scopeKey) }
 
-    override fun gradesForTerm(term: String): Flow<List<GradeEntity>> = gradeDao.gradesForTerm(term)
+    override fun gradesForTerm(term: String): Flow<List<GradeEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { gradeDao.gradesForTerm(it.scopeKey, term) }
 
-    override fun terms(): Flow<List<String>> = gradeDao.availableTerms()
+    override fun terms(): Flow<List<String>> =
+        activeAppScopeStore.scope.flatMapLatest { gradeDao.availableTerms(it.scopeKey) }
 
-    override fun rankings(): Flow<List<GradeRankingEntity>> = gradeRankingDao.all()
+    override fun rankings(): Flow<List<GradeRankingEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { gradeRankingDao.all(it.scopeKey) }
 
-    override fun gradeSummary(): Flow<GradeSummaryEntity?> = gradeSummaryDao.official()
+    override fun gradeSummary(): Flow<GradeSummaryEntity?> =
+        activeAppScopeStore.scope.flatMapLatest { gradeSummaryDao.official(it.scopeKey) }
 
-    override fun exams(): Flow<List<ExamEntity>> = examDao.all()
+    override fun exams(): Flow<List<ExamEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { examDao.all(it.scopeKey) }
 
     override suspend fun refresh(semesterId: String): AcademicRefreshResult {
+        val scopeKey = activeAppScopeStore.current.scopeKey
         val failures = mutableListOf<String>()
         var gradeCount: Int? = null
         var rankingCount: Int? = null
@@ -65,10 +74,11 @@ class LiveAcademicRepository(
 
         runCatching { client.fetchAcademicResults() }
             .onSuccess { result ->
-                gradeDao.clearAll()
+                gradeDao.clearAll(scopeKey)
                 gradeDao.upsertAll(
                     result.grades.map { g ->
                 GradeEntity(
+                    scopeKey = scopeKey,
                     id = "${g.term}|${g.courseName}|${g.credit}|${g.type}",
                     term = g.term,
                     courseName = g.courseName,
@@ -81,10 +91,11 @@ class LiveAcademicRepository(
                 gradeCount = result.grades.size
 
                 result.rankings?.let { rankings ->
-                    gradeRankingDao.clearAll()
+                    gradeRankingDao.clearAll(scopeKey)
                     gradeRankingDao.upsertAll(
                         rankings.map { ranking ->
                             GradeRankingEntity(
+                                scopeKey = scopeKey,
                                 id = "${ranking.term}|${ranking.rankingRange}|${ranking.rank}|${ranking.metricText}",
                                 term = ranking.term,
                                 rankingRange = ranking.rankingRange,
@@ -99,6 +110,7 @@ class LiveAcademicRepository(
                 result.summary?.let { summary ->
                     gradeSummaryDao.upsert(
                         GradeSummaryEntity(
+                            scopeKey = scopeKey,
                             officialGpa = summary.officialGpa,
                             officialWeightedAverage = summary.officialWeightedAverage,
                             officialCreditPoint = summary.officialCreditPoint,
@@ -110,10 +122,11 @@ class LiveAcademicRepository(
 
         runCatching { client.fetchExams(semesterId) }
             .onSuccess { exams ->
-                examDao.clearAll()
+                examDao.clearAll(scopeKey)
                 examDao.upsertAll(
                     exams.map { e ->
                         ExamEntity(
+                            scopeKey = scopeKey,
                             id = e.id,
                             courseId = e.courseId,
                             name = e.name,

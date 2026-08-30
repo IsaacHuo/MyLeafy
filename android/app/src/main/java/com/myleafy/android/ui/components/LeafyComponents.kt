@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
@@ -116,7 +115,7 @@ fun LeafyFeatureCard(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.medium,
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -125,7 +124,7 @@ fun LeafyFeatureCard(
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.small,
             ) {
                 Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                     Icon(imageVector = icon, contentDescription = null)
@@ -163,7 +162,7 @@ fun LeafyEmptyState(
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             contentColor = MaterialTheme.colorScheme.primary,
-            shape = RoundedCornerShape(20.dp),
+            shape = MaterialTheme.shapes.large,
         ) {
             Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
                 Icon(imageVector = icon, contentDescription = null)
@@ -191,7 +190,7 @@ fun LeafyStatusBanner(
         modifier = modifier.fillMaxWidth(),
         color = container,
         contentColor = content,
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
     ) {
         Text(text = message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(12.dp))
     }

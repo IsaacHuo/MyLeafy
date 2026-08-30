@@ -20,7 +20,7 @@ interface ProfileRepository {
  * (edu_id, campus_id) 引导/继承社区 profile。
  */
 class LiveProfileRepository(
-    private val service: CommunityService?,
+    private val serviceProvider: () -> CommunityService?,
     private val sessionState: SchoolSessionState,
 ) : ProfileRepository {
 
@@ -28,7 +28,7 @@ class LiveProfileRepository(
 
     override suspend fun fetchProfile(): ProfileDto? {
         val identity = sessionState.identity ?: return null
-        val resolved = service ?: return null
+        val resolved = serviceProvider() ?: return null
         val result = resolved.bootstrapCommunityUser(
             eduId = identity.eduId,
             displayName = identity.displayName ?: identity.eduId,

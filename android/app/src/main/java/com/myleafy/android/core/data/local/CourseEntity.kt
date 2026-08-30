@@ -1,7 +1,6 @@
 package com.myleafy.android.core.data.local
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 
 /**
  * 课程本地实体（Room）。字段语义与 iOS `Course`（SwiftData）一致：
@@ -9,9 +8,10 @@ import androidx.room.PrimaryKey
  *
  * 权威来源仍是学校教务，Room 只是本地副本。
  */
-@Entity(tableName = "courses")
+@Entity(tableName = "courses", primaryKeys = ["scopeKey", "id"])
 data class CourseEntity(
-    @PrimaryKey val id: String,
+    val scopeKey: String,
+    val id: String,
     val sourceSemesterID: String,
     val courseName: String,
     val teacher: String,

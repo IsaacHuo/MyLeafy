@@ -1,6 +1,8 @@
 package com.myleafy.android.features.community
 
 import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.core.campus.ActiveAppScopeStore
+import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolSessionState
 import com.myleafy.android.shared.model.CommentDto
 import com.myleafy.android.shared.model.CommentThread
@@ -54,15 +56,17 @@ interface CommunityRepository {
 
 /** 线上仓储：匿名 Auth + community-feed + postgrest RPC。 */
 class LiveCommunityRepository(
-    private val service: CommunityService?,
+    private val serviceProvider: () -> CommunityService?,
     private val sessionState: SchoolSessionState,
+    private val activeAppScopeStore: ActiveAppScopeStore,
 ) : CommunityRepository {
 
-    override val isAvailable: Boolean = true
+    override val isAvailable: Boolean
+        get() = activeAppScopeStore.current.supports(CampusCapabilities.COMMUNITY)
     override val isPlaceholder: Boolean = false
 
     private fun requireService(): CommunityService =
-        service ?: throw IllegalStateException("Supabase 未配置，请在 secrets.properties 填写 anon key")
+        serviceProvider() ?: throw IllegalStateException("当前身份不可使用社区，或 Supabase 未配置")
 
     private suspend fun requireCommunityProfile() {
         val identity = sessionState.identity

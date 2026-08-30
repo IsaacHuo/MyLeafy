@@ -2,9 +2,11 @@ package com.myleafy.android.features.timetable
 
 import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.data.local.CourseEntity
+import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.network.SchoolNetworkClient
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 
 /**
  * 课表仓储接口。学校教务是权威来源，Room 是本地副本；
@@ -21,15 +23,20 @@ interface TimetableRepository {
 class LiveTimetableRepository(
     private val client: SchoolNetworkClient,
     private val courseDao: CourseDao,
+    private val activeAppScopeStore: ActiveAppScopeStore,
 ) : TimetableRepository {
 
     override fun coursesForSemester(semesterId: String): Flow<List<CourseEntity>> =
-        courseDao.coursesForSemester(semesterId)
+        activeAppScopeStore.scope.flatMapLatest { scope ->
+            courseDao.coursesForSemester(scope.scopeKey, semesterId)
+        }
 
     override suspend fun refresh(semesterId: String) {
+        val scopeKey = activeAppScopeStore.current.scopeKey
         val records = client.fetchTimetable(semesterId)
         val entities = records.map { r ->
             CourseEntity(
+                scopeKey = scopeKey,
                 id = UUID.randomUUID().toString(),
                 sourceSemesterID = semesterId,
                 courseName = r.courseName,
@@ -42,7 +49,7 @@ class LiveTimetableRepository(
                 duration = r.duration,
             )
         }
-        courseDao.clearForSemester(semesterId)
+        courseDao.clearForSemester(scopeKey, semesterId)
         courseDao.upsertAll(entities)
     }
 }
