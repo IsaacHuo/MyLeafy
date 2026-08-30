@@ -26,6 +26,7 @@ androidxTestRunner = "1.6.2"
 supabaseKt = "3.6.0"
 ktor = "3.4.3"
 kotlinxSerialization = "1.11.0"
+kotlinxCoroutines = "1.10.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -66,6 +67,7 @@ supabase-functions = { group = "io.github.jan-tennert.supabase", name = "functio
 # Android 引擎使用平台 TLS 栈，兼容 Android 16 的主机名感知证书校验。
 ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

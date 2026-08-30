@@ -19,12 +19,12 @@ enum class FeatureDestination(
     COMMUNITY_SEARCH(
         route = "community/search",
         title = "搜索社区",
-        description = "帖子、话题与用户搜索将在后续阶段接入。",
+        description = "搜索当前校园的帖子标题和正文。",
     ),
     COMMUNITY_NOTIFICATIONS(
         route = "community/notifications",
         title = "社区通知",
-        description = "通知列表与实时提醒将在后续阶段接入。",
+        description = "查看社区互动通知并管理已读状态。",
     ),
     SCHEDULE_TAGS(
         route = "schedule/tags",

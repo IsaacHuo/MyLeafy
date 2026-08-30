@@ -3,14 +3,17 @@ package com.myleafy.android.services.supabase
 import com.myleafy.android.shared.model.BootstrapResponse
 import com.myleafy.android.shared.model.CommentDto
 import com.myleafy.android.shared.model.CommentThreadPageDto
+import com.myleafy.android.shared.model.CommunityBlockDto
 import com.myleafy.android.shared.model.FeedQuery
 import com.myleafy.android.shared.model.FeedResponse
+import com.myleafy.android.shared.model.NotificationDto
 import com.myleafy.android.shared.model.PostDto
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
+import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
 import kotlinx.serialization.json.Json
@@ -99,6 +102,108 @@ class CommunityService(private val client: SupabaseClient) {
             "toggle_post_like_v1",
             buildJsonObject { put("p_post_id", postId) },
         ).decodeAs()
+    }
+
+    /** 收藏/取消收藏（服务端返回与详情一致的更新后摘要）。 */
+    suspend fun togglePostFavorite(postId: String): PostDto {
+        ensureAnonymousSession()
+        return client.postgrest.rpc(
+            "toggle_post_favorite_v1",
+            buildJsonObject { put("p_post_id", postId) },
+        ).decodeAs()
+    }
+
+    /** RLS 只允许读取当前 profile 的通知；屏蔽关系用于过滤历史通知。 */
+    suspend fun fetchNotifications(profileId: String, limit: Int = 50): List<NotificationDto> {
+        ensureAnonymousSession()
+        val blockedIds = client.postgrest["community_blocks"]
+            .select {
+                filter { eq("blocker_id", profileId) }
+            }
+            .decodeList<CommunityBlockDto>()
+            .mapTo(mutableSetOf()) { it.blocked_id }
+        return client.postgrest["community_notifications"]
+            .select {
+                filter { eq("recipient_id", profileId) }
+                order("created_at", Order.DESCENDING)
+                limit(limit.toLong())
+            }
+            .decodeList<NotificationDto>()
+            .filter { it.dismissed_at == null && (it.actor_id == null || it.actor_id !in blockedIds) }
+    }
+
+    suspend fun markNotificationRead(notificationId: String) {
+        ensureAnonymousSession()
+        client.postgrest["community_notifications"].update({ set("is_read", true) }) {
+            filter { eq("id", notificationId) }
+        }
+    }
+
+    suspend fun markAllNotificationsRead(profileId: String) {
+        ensureAnonymousSession()
+        client.postgrest["community_notifications"].update({ set("is_read", true) }) {
+            filter {
+                eq("recipient_id", profileId)
+                eq("is_read", false)
+                exact("dismissed_at", null)
+            }
+        }
+    }
+
+    suspend fun deletePost(postId: String) {
+        ensureAnonymousSession()
+        client.postgrest.rpc(
+            "soft_delete_own_post",
+            buildJsonObject { put("target_post_id", postId) },
+        )
+    }
+
+    suspend fun deleteComment(commentId: String) {
+        ensureAnonymousSession()
+        client.postgrest.rpc(
+            "soft_delete_own_comment",
+            buildJsonObject { put("target_comment_id", commentId) },
+        )
+    }
+
+    suspend fun reportPost(postId: String, reason: String, detail: String?) {
+        reportContent("post", postId = postId, commentId = null, reason = reason, detail = detail)
+    }
+
+    suspend fun reportComment(commentId: String, reason: String, detail: String?) {
+        reportContent("comment", postId = null, commentId = commentId, reason = reason, detail = detail)
+    }
+
+    private suspend fun reportContent(
+        targetType: String,
+        postId: String?,
+        commentId: String?,
+        reason: String,
+        detail: String?,
+    ) {
+        ensureAnonymousSession()
+        client.postgrest.rpc(
+            "report_community_content",
+            buildJsonObject {
+                put("p_target_type", targetType)
+                if (postId != null) put("p_post_id", postId) else put("p_post_id", JsonNull)
+                if (commentId != null) put("p_comment_id", commentId) else put("p_comment_id", JsonNull)
+                put("p_reported_user_id", JsonNull)
+                put("p_reason", reason)
+                if (detail != null) put("p_detail", detail) else put("p_detail", JsonNull)
+            },
+        )
+    }
+
+    suspend fun blockUser(userId: String, reason: String?) {
+        ensureAnonymousSession()
+        client.postgrest.rpc(
+            "block_community_user",
+            buildJsonObject {
+                put("p_blocked_id", userId)
+                if (reason != null) put("p_reason", reason) else put("p_reason", JsonNull)
+            },
+        )
     }
 
     /** 发帖（create_community_post_v4，p_id 为客户端幂等 UUID，暂不支持图片/附件）。 */

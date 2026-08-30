@@ -15,9 +15,14 @@ sealed interface PostDetailUiState {
     data class Loaded(
         val post: PostDto,
         val threads: List<CommentThread>,
+        val currentProfileId: String,
         val isLikePending: Boolean = false,
+        val isFavoritePending: Boolean = false,
         val isCommentPending: Boolean = false,
+        val pendingModerationTarget: String? = null,
         val mutationError: String? = null,
+        val mutationMessage: String? = null,
+        val shouldClose: Boolean = false,
     ) : PostDetailUiState
 
     data class Error(val message: String) : PostDetailUiState
@@ -52,13 +57,16 @@ class PostDetailViewModel(
         _uiState.value = PostDetailUiState.Loading
         viewModelScope.launch {
             val result = runCatching {
+                val profile = repository.currentProfile()
                 val post = repository.post(postId)
                     ?: throw IllegalStateException("帖子不存在或不可见")
                 val threads = repository.commentThreads(postId, limit = 20)
-                post to threads
+                Triple(post, threads, profile.id)
             }
             _uiState.value = result.fold(
-                onSuccess = { (post, threads) -> PostDetailUiState.Loaded(post, threads) },
+                onSuccess = { (post, threads, profileId) ->
+                    PostDetailUiState.Loaded(post, threads, profileId)
+                },
                 onFailure = { PostDetailUiState.Error(it.toCommunityMessage("加载失败")) },
             )
         }
@@ -66,12 +74,12 @@ class PostDetailViewModel(
 
     fun toggleLike() {
         val current = _uiState.value as? PostDetailUiState.Loaded ?: return
-        if (current.isLikePending) return
+        if (current.isLikePending || current.isFavoritePending || current.pendingModerationTarget != null) return
         _uiState.value = current.copy(isLikePending = true)
         viewModelScope.launch {
             val result = runCatching { repository.togglePostLike(postId) }
             _uiState.value = result.fold(
-                onSuccess = { updated -> PostDetailUiState.Loaded(updated, current.threads) },
+                onSuccess = { updated -> current.copy(post = updated, isLikePending = false) },
                 onFailure = {
                     current.copy(
                         isLikePending = false,
@@ -82,9 +90,28 @@ class PostDetailViewModel(
         }
     }
 
+    fun toggleFavorite() {
+        val current = _uiState.value as? PostDetailUiState.Loaded ?: return
+        if (current.isFavoritePending || current.isLikePending || current.pendingModerationTarget != null) return
+        _uiState.value = current.copy(isFavoritePending = true, mutationError = null)
+        viewModelScope.launch {
+            runCatching { repository.togglePostFavorite(postId) }.fold(
+                onSuccess = { updated ->
+                    _uiState.value = current.copy(post = updated, isFavoritePending = false)
+                },
+                onFailure = { error ->
+                    _uiState.value = current.copy(
+                        isFavoritePending = false,
+                        mutationError = error.toCommunityMessage("收藏失败"),
+                    )
+                },
+            )
+        }
+    }
+
     fun createComment(body: String, parentCommentId: String? = null, replyToCommentId: String? = null) {
         val current = _uiState.value as? PostDetailUiState.Loaded ?: return
-        if (body.isBlank() || current.isCommentPending) return
+        if (body.isBlank() || current.isCommentPending || current.pendingModerationTarget != null) return
         val trimmedBody = body.trim()
         val request = pendingComment
             ?.takeIf {
@@ -124,5 +151,68 @@ class PostDetailViewModel(
                 },
             )
         }
+    }
+
+    fun deletePost() = moderate("post:$postId", "删除帖子失败") {
+        repository.deletePost(postId)
+        _uiState.value = (_uiState.value as PostDetailUiState.Loaded).copy(shouldClose = true)
+    }
+
+    fun deleteComment(commentId: String) = moderate("comment:$commentId", "删除评论失败") {
+        repository.deleteComment(commentId)
+        val current = _uiState.value as PostDetailUiState.Loaded
+        val threads = repository.commentThreads(postId, limit = 20)
+        _uiState.value = current.copy(
+            threads = threads,
+            pendingModerationTarget = null,
+            mutationMessage = "评论已删除",
+        )
+    }
+
+    fun reportPost(reason: String) = moderate("post:$postId", "举报失败") {
+        repository.reportPost(postId, reason)
+        moderationSucceeded("举报已提交")
+    }
+
+    fun reportComment(commentId: String, reason: String) = moderate("comment:$commentId", "举报失败") {
+        repository.reportComment(commentId, reason)
+        moderationSucceeded("举报已提交")
+    }
+
+    fun blockUser(userId: String) = moderate("user:$userId", "屏蔽失败") {
+        repository.blockUser(userId, "用户主动屏蔽")
+        _uiState.value = (_uiState.value as PostDetailUiState.Loaded).copy(shouldClose = true)
+    }
+
+    fun clearMessage() {
+        val current = _uiState.value as? PostDetailUiState.Loaded ?: return
+        _uiState.value = current.copy(mutationError = null, mutationMessage = null)
+    }
+
+    private fun moderate(target: String, fallback: String, action: suspend () -> Unit) {
+        val current = _uiState.value as? PostDetailUiState.Loaded ?: return
+        if (current.pendingModerationTarget != null) return
+        _uiState.value = current.copy(
+            pendingModerationTarget = target,
+            mutationError = null,
+            mutationMessage = null,
+        )
+        viewModelScope.launch {
+            runCatching { action() }.onFailure { error ->
+                val latest = _uiState.value as? PostDetailUiState.Loaded ?: current
+                _uiState.value = latest.copy(
+                    pendingModerationTarget = null,
+                    mutationError = error.toCommunityMessage(fallback),
+                )
+            }
+        }
+    }
+
+    private fun moderationSucceeded(message: String) {
+        val current = _uiState.value as PostDetailUiState.Loaded
+        _uiState.value = current.copy(
+            pendingModerationTarget = null,
+            mutationMessage = message,
+        )
     }
 }

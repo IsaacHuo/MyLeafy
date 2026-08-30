@@ -41,7 +41,7 @@ class RootNavigationSmokeTest {
         composeRule.onNodeWithTag("root-tab-community").performClick()
         composeRule.onNodeWithContentDescription("搜索社区").performClick()
 
-        composeRule.onNodeWithText("界面框架已就绪").assertIsDisplayed()
+        composeRule.onNodeWithText("搜索社区").assertIsDisplayed()
         composeRule.onNodeWithTag("root-tab-community").assertDoesNotExist()
 
         composeRule.runOnUiThread {

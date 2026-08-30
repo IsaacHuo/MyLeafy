@@ -82,8 +82,16 @@ data class NotificationDto(
     val title: String = "",
     val body: String? = null,
     val is_read: Boolean = false,
+    val dismissed_at: String? = null,
     val created_at: String = "",
     val actor: ProfileDto? = null,
+)
+
+/** 当前用户创建的屏蔽关系；只用于客户端过滤已有通知。 */
+@Serializable
+data class CommunityBlockDto(
+    val blocker_id: String,
+    val blocked_id: String,
 )
 
 /** Feed 查询契约（community-feed Edge Function 参数）。 */

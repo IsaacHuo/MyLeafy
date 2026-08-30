@@ -21,14 +21,16 @@
 阶段 1 交付：可编译、可运行、5 Tab 可导航、架构（Compose → ViewModel → Repository → DataSource）正确的工程骨架。
 阶段 1.5 交付：全部功能的基础架构（UiState 状态机 / Repository / Room / DTO / 登录路由 / 深链）已搭好，教务网络与 Supabase 仍未接入（占位实现如实展示“未接入”文案）。
 **阶段 2（M2.1-M2.5）已完成：** OkHttp 教务客户端与 Cookie 契约 → 强智登录（encodeKey/验证码/会话验证）→ 课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库 → 周课表网格渲染 → 成绩/考试抓取 + 校园页。`assembleDebug` + `testDebugUnitTest`（67 用例）通过。
-**阶段 4 社区（M4.1-M4.3）已完成：** supabase-kt 客户端层（auth/postgrest/functions，匿名 Auth + bootstrap + feed）→ 帖子详情 + 评论线程 + 点赞 → 文本发帖 + 评论。`assembleDebug` + `testDebugUnitTest`（70 用例）通过。
+**阶段 4 社区核心体验已完成：** supabase-kt 客户端层（auth/postgrest/functions，匿名 Auth + bootstrap + feed）→ 帖子详情 + 评论线程 + 点赞 → 文本发帖 + 评论；继续接入分类、近七日热门、稳定下拉刷新、搜索、通知未读/已读、收藏、本人内容软删除、举报与屏蔽。UI 只调用仓储，数据和治理仍由现有 RLS / Edge Function / RPC 契约约束。
 **Android 原生 UI 壳已完成一轮收敛：** 5 个根 Tab 使用 Material 3 根页面；底栏仅在根目的地显示，二级页面统一返回栏；`FeatureDestination` 为待接入能力提供明确占位。帮助中心、权限说明、关于与内置校历为完整静态页面。所有业务列表只展示真实数据，不写入演示内容；校园网相关能力允许以空状态完成 UI 验收。
 
 **核心对齐基础层（2026-08-30）：** Android launcher 图标由 iOS `AppIcon.png` 唯一母版生成 legacy/adaptive/monochrome 资源；Material 3 统一使用 12/16/24dp 品牌圆角。`ActiveAppScopeStore` 统一身份、guest 与 capability，Room v4 的全部本地实体以 `(scopeKey, id)` 隔离，仓储随活动作用域切换；Supabase 仅在身份具备社区 capability 时延迟初始化。Android 尚未发布，因此 schema 1–3 允许破坏性重建，此后缺 migration 必须失败。
 
 **课表与个人日程对齐（2026-08-30）：** `TimetableGridProjection` 统一投影课程、考试与个人日程的 day/period span/lane/stable ID，稳定 Compose `Layout` 渲染 7 天 × 13 节紧凑圆角网格；周卡只保留左右切换，“回到本周/同步课表”位于右上角菜单。课表和日迹共用 scoped Room 日程并支持增删改、重启持久化；课程周次与学期范围内个人日程以 `Asia/Shanghai` 导出 RFC 5545 ICS，通过受限 FileProvider 和 Android Sharesheet 分享，不申请日历写入权限。
 
-**API 36 设备验收（2026-08-30）：** Pixel 8 / Android 16 模拟器已通过 10 个 instrumentation 用例（根导航、scoped Room 重开、课表格子/课程块点击、日程编辑/删除确认）。真实旅程完成空白格新增日程、强制结束后持久化、日迹共享显示与 ICS Sharesheet；guest 隐藏社区，校园 capability 身份的导航测试确认社区可达。此前真实本科验证码和登录修复继续有效。当前 `xskb_list.do` 的真实响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，按契约报数据不可用并保留缓存；iOS 表单/WebView bootstrap 回退仍属后续教务专项。
+**社区核心体验对齐（2026-08-30）：** `CommunityViewModel` 以不可变状态区分初次加载、刷新、可信空结果和保留旧内容的失败；普通 Feed 支持分类/搜索，热门严格使用服务端支持的独立 `mode=hot&days=7`。真实通知页按 recipient RLS 读取并支持单条/全部已读与帖子导航；详情页收藏、软删除、举报和屏蔽均经 `CommunityRepository` 调用现有 RPC。自定义校园必须已批准，互动前必须完成资料；guest 仍不初始化 Supabase。
+
+**API 36 设备验收（2026-08-30）：** Pixel 8 / Android 16 模拟器已通过 12 个 instrumentation 用例（根导航、scoped Room 重开、课表格子/课程块点击、日程编辑/删除确认、社区筛选点击与失败保留旧内容）。真实旅程完成空白格新增日程、强制结束后持久化、日迹共享显示与 ICS Sharesheet；guest 隐藏社区，校园 capability 身份的导航测试确认社区及真实搜索二级页可达。此前真实本科验证码和登录修复继续有效。当前 `xskb_list.do` 的真实响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，按契约报数据不可用并保留缓存；iOS 表单/WebView bootstrap 回退仍属后续教务专项。
 
 ## A. 迁移清单（Migration Inventory）
 
@@ -308,7 +310,7 @@ Gradle 已预留 `versionCode / versionName / applicationId / signingConfig（re
 ## 后续阶段路线
 
 - **阶段 2 教务接入（M2.1-M2.5）：已完成。** OkHttp 客户端（登录/Cookie/编码）、jsoup 解析器与 Fixture 回归、Room 落库、课表网格渲染、登录页、成绩/考试抓取与展示。
-- **阶段 4 社区（M4.1-M4.3）：已完成。** supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论/点赞、文本发帖与评论。
+- **阶段 4 社区核心体验：已完成。** supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论/点赞、文本发帖与评论、搜索、分类/热门、通知、收藏、本人内容软删除、举报和屏蔽。
 - **阶段 5 校园与我的**：空教室、我的社区资料（bootstrap 展示）、评价目录、共享课表。
 - **阶段 3 日迹基础闭环：已完成。** 随记编辑/软删除、个人日程增删改、课表共享数据源与 ICS；复杂 Markdown、图片/语音、统计和分享卡片留到增强阶段。
 - **UI 后续收尾**：逐步把 `FeatureDestination` 占位替换为真实实现；校园网依赖页面单独做真机/可访问教务网络验收，静态说明页保持可离线使用。

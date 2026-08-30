@@ -35,6 +35,8 @@ import com.myleafy.android.features.campus.ClassroomScreen
 import com.myleafy.android.features.campus.ExamsScreen
 import com.myleafy.android.features.campus.GradesScreen
 import com.myleafy.android.features.community.CommunityScreen
+import com.myleafy.android.features.community.CommunitySearchScreen
+import com.myleafy.android.features.community.CommunityNotificationsScreen
 import com.myleafy.android.features.community.ComposePostScreen
 import com.myleafy.android.features.community.PostDetailScreen
 import com.myleafy.android.features.profile.ProfileScreen
@@ -213,6 +215,18 @@ fun MyLeafyNavHost(
             FeatureDestination.entries.forEach { destination ->
                 composable(destination.route) {
                     when (destination) {
+                        FeatureDestination.COMMUNITY_SEARCH -> CommunitySearchScreen(
+                            onBack = { navController.popBackStack() },
+                            onPostClick = { postId ->
+                                navController.navigate(Routes.communityPostDetail(postId))
+                            },
+                        )
+                        FeatureDestination.COMMUNITY_NOTIFICATIONS -> CommunityNotificationsScreen(
+                            onBack = { navController.popBackStack() },
+                            onPostClick = { postId ->
+                                navController.navigate(Routes.communityPostDetail(postId))
+                            },
+                        )
                         FeatureDestination.CAMPUS_CALENDAR -> CampusCalendarScreen(
                             onBack = { navController.popBackStack() },
                         )

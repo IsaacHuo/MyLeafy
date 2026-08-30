@@ -10,6 +10,7 @@ internal fun Throwable.toCommunityMessage(fallback: String): String {
         "CANNOT_LIKE_OWN_POST" in raw -> "不能点赞自己发布的帖子"
         "COMMUNITY_POST_NOT_FOUND" in raw -> "帖子不存在或当前不可见"
         "RATE_LIMIT" in raw || "rate limit" in raw.lowercase() -> "操作过于频繁，请稍后再试"
-        else -> fallback
+        raw.isBlank() -> fallback
+        else -> "$fallback：$raw"
     }
 }
