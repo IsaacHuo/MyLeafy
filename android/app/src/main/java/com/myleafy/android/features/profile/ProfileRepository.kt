@@ -13,6 +13,8 @@ interface ProfileRepository {
 
     /** 按学校身份引导/继承社区资料；未登录或无配置返回 null。 */
     suspend fun fetchProfile(): ProfileDto?
+
+    suspend fun updateProfile(nickname: String, bio: String?, major: String?, grade: String?): ProfileDto
 }
 
 /**
@@ -22,6 +24,7 @@ interface ProfileRepository {
 class LiveProfileRepository(
     private val serviceProvider: () -> CommunityService?,
     private val sessionState: SchoolSessionState,
+    private val onProfileUpdated: (ProfileDto) -> Unit = {},
 ) : ProfileRepository {
 
     override val isPlaceholder: Boolean = false
@@ -36,10 +39,33 @@ class LiveProfileRepository(
         )
         return result.profile
     }
+
+    override suspend fun updateProfile(
+        nickname: String,
+        bio: String?,
+        major: String?,
+        grade: String?,
+    ): ProfileDto {
+        val identity = sessionState.identity ?: error("请先登录学校账号")
+        val service = serviceProvider() ?: error("当前身份不可使用社区，或 Supabase 未配置")
+        val profile = service.bootstrapCommunityUser(
+            eduId = identity.eduId,
+            displayName = identity.displayName ?: identity.eduId,
+            campusId = identity.campusId.rawValue,
+        ).profile
+        return service.updateProfile(profile.id, nickname, bio, major, grade)
+            .also(onProfileUpdated)
+    }
 }
 
 /** 占位实现（无 Supabase 配置或未登录时兜底）。 */
 class PlaceholderProfileRepository : ProfileRepository {
     override val isPlaceholder: Boolean = true
     override suspend fun fetchProfile(): ProfileDto? = null
+    override suspend fun updateProfile(
+        nickname: String,
+        bio: String?,
+        major: String?,
+        grade: String?,
+    ): ProfileDto = throw NotImplementedError("社区资料未接入")
 }

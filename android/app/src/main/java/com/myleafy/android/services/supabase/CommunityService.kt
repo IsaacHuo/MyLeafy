@@ -22,6 +22,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.Instant
 
 /** 社区服务：匿名 Auth、身份引导（bootstrap）、Feed。 */
 class CommunityService(private val client: SupabaseClient) {
@@ -49,6 +50,39 @@ class CommunityService(private val client: SupabaseClient) {
             },
         )
         return json.decodeFromString(response.bodyAsText())
+    }
+
+    /** 只更新允许用户编辑的资料字段；身份、校园和准入字段始终由服务端维护。 */
+    suspend fun updateProfile(
+        profileId: String,
+        nickname: String,
+        bio: String?,
+        major: String?,
+        grade: String?,
+    ): com.myleafy.android.shared.model.ProfileDto {
+        ensureAnonymousSession()
+        val normalizedNickname = nickname.trim()
+        require(normalizedNickname.isNotEmpty()) { "昵称不能为空" }
+        val now = Instant.now().toString()
+        return client.postgrest["profiles"].update(
+            buildJsonObject {
+                put("nickname", normalizedNickname)
+                put("bio", bio.normalizedOrNull())
+                put("major", major.normalizedOrNull())
+                put("grade", grade.normalizedOrNull())
+                put("profile_edited_at", now)
+                put("is_profile_complete", true)
+                put("updated_at", now)
+            },
+        ) {
+            filter { eq("id", profileId) }
+            select()
+            single()
+        }.decodeAs()
+    }
+
+    suspend fun signOut() {
+        if (client.auth.currentSessionOrNull() != null) client.auth.signOut()
     }
 
     /** 拉取社区 Feed（community-feed Edge Function，GET）。 */
@@ -263,4 +297,9 @@ class CommunityService(private val client: SupabaseClient) {
             },
         ).decodeAs()
     }
+
+    private fun String?.normalizedOrNull(): kotlinx.serialization.json.JsonElement =
+        this?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { kotlinx.serialization.json.JsonPrimitive(it) }
+            ?: JsonNull
 }

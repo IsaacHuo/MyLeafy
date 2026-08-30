@@ -39,4 +39,11 @@ class SchoolAuthRepository(
             )
             settingsStore.setCampus(CampusID.bjfu.rawValue, account)
         }
+
+    override suspend fun logout() {
+        val campusId = sessionState.identity?.campusId?.rawValue ?: CampusID.bjfu.rawValue
+        client.clearSession()
+        credentialStore.delete(campusId)
+        settingsStore.clearIdentity()
+    }
 }

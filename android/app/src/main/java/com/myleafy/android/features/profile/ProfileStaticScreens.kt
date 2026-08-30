@@ -161,6 +161,40 @@ fun PermissionsInfoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun FeedbackScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    LeafySecondaryScaffold(title = "反馈与支持", onBack = onBack, modifier = modifier) { contentModifier ->
+        LazyColumn(
+            modifier = contentModifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                InfoCard(
+                    InfoBlock(
+                        "提交反馈前",
+                        "请说明所用校园、功能入口、复现步骤和错误提示。涉及教务问题时不要发送密码、Cookie、验证码或完整学号。",
+                    ),
+                )
+            }
+            item {
+                ExternalLinkButton(
+                    label = "发送支持邮件",
+                    uri = "mailto:support@myleafy.space?subject=MyLeafy%20Android%20反馈",
+                    icon = Icons.Outlined.Email,
+                )
+            }
+            item {
+                ExternalLinkButton(
+                    label = "打开在线支持",
+                    uri = "https://myleafy.space/support",
+                    icon = Icons.Outlined.Language,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun AboutMyLeafyScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LeafySecondaryScaffold(title = "关于 MyLeafy", onBack = onBack, modifier = modifier) { contentModifier ->
         LazyColumn(

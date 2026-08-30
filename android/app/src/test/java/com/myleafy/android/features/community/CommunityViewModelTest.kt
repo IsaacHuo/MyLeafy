@@ -141,6 +141,8 @@ private class FakeCommunityRepository : CommunityRepository {
     }
 
     override suspend fun currentProfile() = ProfileDto(id = "viewer")
+    override fun cacheCurrentProfile(profile: ProfileDto) = Unit
+    override fun clearProfileCache() = Unit
     override suspend fun post(postId: String): PostDto? = currentPost
     override suspend fun commentThreads(postId: String, limit: Int): List<CommentThread> = emptyList()
     override suspend fun togglePostLike(postId: String): PostDto = error("unused")

@@ -30,6 +30,10 @@ interface CommunityRepository {
 
     suspend fun currentProfile(): ProfileDto
 
+    fun cacheCurrentProfile(profile: ProfileDto)
+
+    fun clearProfileCache()
+
     /** 按 id 获取帖子；不存在返回 null。 */
     suspend fun post(postId: String): PostDto?
 
@@ -131,6 +135,14 @@ class LiveCommunityRepository(
     }
 
     override suspend fun currentProfile(): ProfileDto = requireCommunityProfile()
+
+    override fun cacheCurrentProfile(profile: ProfileDto) {
+        cachedProfile = activeAppScopeStore.current.scopeKey to profile
+    }
+
+    override fun clearProfileCache() {
+        cachedProfile = null
+    }
 
     override suspend fun post(postId: String): PostDto? {
         requireCommunityProfile()
@@ -236,6 +248,8 @@ class PlaceholderCommunityRepository : CommunityRepository {
     override fun feed(query: FeedQuery): Flow<List<PostDto>> = flow { emit(emptyList()) }
 
     override suspend fun currentProfile(): ProfileDto = throw NotImplementedError("社区功能未接入")
+    override fun cacheCurrentProfile(profile: ProfileDto) = Unit
+    override fun clearProfileCache() = Unit
 
     override suspend fun post(postId: String): PostDto? = null
 

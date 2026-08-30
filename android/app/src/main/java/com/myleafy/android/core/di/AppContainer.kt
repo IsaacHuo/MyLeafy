@@ -118,15 +118,28 @@ class AppContainer(context: Context) {
             ?: SupabaseClientProvider.create()?.let(::CommunityService)?.also { cachedCommunityService = it }
     }
 
-    val communityRepository: CommunityRepository =
+    private val liveCommunityRepository =
         LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
+    val communityRepository: CommunityRepository = liveCommunityRepository
 
     val profileRepository: ProfileRepository =
-        LiveProfileRepository(::communityServiceForActiveScope, schoolSessionState)
+        LiveProfileRepository(
+            ::communityServiceForActiveScope,
+            schoolSessionState,
+            onProfileUpdated = liveCommunityRepository::cacheCurrentProfile,
+        )
     val authRepository: AuthRepository = SchoolAuthRepository(
         client = schoolNetworkClient,
         sessionState = schoolSessionState,
         credentialStore = schoolLoginCredentialStore,
         settingsStore = settingsStore,
     )
+
+    suspend fun signOut() {
+        val communitySignOut = runCatching { cachedCommunityService?.signOut() }
+        authRepository.logout()
+        liveCommunityRepository.clearProfileCache()
+        cachedCommunityService = null
+        communitySignOut.getOrThrow()
+    }
 }

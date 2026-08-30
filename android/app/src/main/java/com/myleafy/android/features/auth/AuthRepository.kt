@@ -11,6 +11,8 @@ interface AuthRepository {
 
     /** 返回 Result.failure 表示登录失败；Success 表示登录成功（已建立会话）。 */
     suspend fun loginUndergraduate(account: String, password: String, captcha: String): Result<Unit>
+
+    suspend fun logout()
 }
 
 class PlaceholderAuthRepository : AuthRepository {
@@ -21,4 +23,6 @@ class PlaceholderAuthRepository : AuthRepository {
 
     override suspend fun loginUndergraduate(account: String, password: String, captcha: String): Result<Unit> =
         Result.failure(IllegalStateException("教务登录将在 M2.2 接入"))
+
+    override suspend fun logout() = Unit
 }

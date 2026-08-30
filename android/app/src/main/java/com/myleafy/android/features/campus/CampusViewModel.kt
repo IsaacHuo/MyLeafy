@@ -41,6 +41,8 @@ sealed interface CampusSyncState {
     data class Error(val message: String) : CampusSyncState
 }
 
+enum class AcademicSyncScope { ALL, GRADES_AND_RANKINGS, EXAMS }
+
 /**
  * 校园 ViewModel（成绩/考试入口）。教务为权威来源，Room 为缓存。
  */
@@ -86,11 +88,17 @@ class CampusViewModel(
             initialValue = CampusUiState.Loading,
         )
 
-    fun refresh() {
+    fun refresh(scope: AcademicSyncScope = AcademicSyncScope.ALL) {
         if (_syncState.value is CampusSyncState.Syncing) return
         _syncState.value = CampusSyncState.Syncing
         viewModelScope.launch {
-            val result = runCatching { repository.refresh(semesterId) }
+            val result = runCatching {
+                when (scope) {
+                    AcademicSyncScope.ALL -> repository.refresh(semesterId)
+                    AcademicSyncScope.GRADES_AND_RANKINGS -> repository.refreshGradesAndRankings()
+                    AcademicSyncScope.EXAMS -> repository.refreshExams(semesterId)
+                }
+            }
             _syncState.value = result.fold(
                 onSuccess = { refresh ->
                     if (!refresh.hasAnySuccess && refresh.failures.isNotEmpty()) {

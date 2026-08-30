@@ -14,6 +14,8 @@ data class Settings(
     val campusId: String = "bjfu",
     val eduId: String? = null,
     val themeColor: String = "green",
+    val themeMode: String = "system",
+    val textScale: String = "system",
     val language: String = "system",
 )
 
@@ -28,6 +30,8 @@ class SettingsStore(private val context: Context) {
             campusId = prefs[Keys.CAMPUS_ID] ?: DEFAULT_CAMPUS_ID,
             eduId = prefs[Keys.EDU_ID],
             themeColor = prefs[Keys.THEME_COLOR] ?: "green",
+            themeMode = prefs[Keys.THEME_MODE] ?: "system",
+            textScale = prefs[Keys.TEXT_SCALE] ?: "system",
             language = prefs[Keys.LANGUAGE] ?: "system",
         )
     }
@@ -41,6 +45,16 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setThemeColor(themeColor: String) {
         context.settingsDataStore.edit { prefs -> prefs[Keys.THEME_COLOR] = themeColor }
+    }
+
+    suspend fun setThemeMode(themeMode: String) {
+        require(themeMode in setOf("system", "light", "dark")) { "Unsupported theme mode" }
+        context.settingsDataStore.edit { prefs -> prefs[Keys.THEME_MODE] = themeMode }
+    }
+
+    suspend fun setTextScale(textScale: String) {
+        require(textScale in setOf("system", "large")) { "Unsupported text scale" }
+        context.settingsDataStore.edit { prefs -> prefs[Keys.TEXT_SCALE] = textScale }
     }
 
     suspend fun setLanguage(language: String) {
@@ -57,6 +71,8 @@ class SettingsStore(private val context: Context) {
         val CAMPUS_ID = stringPreferencesKey("campus_id")
         val EDU_ID = stringPreferencesKey("edu_id")
         val THEME_COLOR = stringPreferencesKey("theme_color")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val TEXT_SCALE = stringPreferencesKey("text_scale")
         val LANGUAGE = stringPreferencesKey("language")
     }
 

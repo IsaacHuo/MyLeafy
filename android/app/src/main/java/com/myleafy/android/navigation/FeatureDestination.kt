@@ -86,6 +86,11 @@ enum class FeatureDestination(
         title = "帮助中心",
         description = "使用指南、常见问题与数据安全说明正在整理。",
     ),
+    PROFILE_FEEDBACK(
+        route = "profile/feedback",
+        title = "反馈与支持",
+        description = "通过邮件或在线支持渠道提交问题与建议。",
+    ),
     PROFILE_ABOUT(
         route = "profile/about",
         title = "关于 MyLeafy",

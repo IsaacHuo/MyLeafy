@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.myleafy.android.MainActivity
@@ -61,6 +62,21 @@ class RootNavigationSmokeTest {
         composeRule.onNodeWithTag("help-content")
             .performScrollToNode(hasText("数据安全边界"))
         composeRule.onNodeWithText("数据安全边界").assertIsDisplayed()
+    }
+
+    @Test
+    fun profilePreferencesAndSyncAreRealSecondaryPages() {
+        composeRule.onNodeWithTag("root-tab-profile").performClick()
+        composeRule.onNodeWithText("个性化").performScrollTo().performClick()
+        composeRule.onNodeWithText("跟随系统").assertIsDisplayed()
+        composeRule.onNodeWithTag("root-tab-profile").assertDoesNotExist()
+
+        composeRule.runOnUiThread {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.onNodeWithText("缓存与同步").performScrollTo().performClick()
+        composeRule.onNodeWithText("学校数据").assertIsDisplayed()
+        composeRule.onNodeWithText("本机数据").assertIsDisplayed()
     }
 
     @Test

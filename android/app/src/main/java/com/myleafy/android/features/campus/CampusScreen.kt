@@ -15,7 +15,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Class
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Card
@@ -27,12 +26,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.data.local.ExamEntity
 import com.myleafy.android.core.data.local.GradeEntity
 import com.myleafy.android.core.di.appViewModelFactory
@@ -61,8 +60,8 @@ fun CampusScreen(
     ),
     modifier: Modifier = Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val syncState by viewModel.syncState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = modifier,
@@ -178,7 +177,12 @@ private fun CampusDashboard(
             }
         }
 
-        item { LeafySectionHeader(title = "常用工具") }
+        item {
+            LeafySectionHeader(
+                title = "学校教学",
+                supportingText = "教务数据与学期安排",
+            )
+        }
         item {
             LeafyFeatureCard(
                 title = "成绩与排名",
@@ -191,16 +195,8 @@ private fun CampusDashboard(
             LeafyFeatureCard(
                 title = "考试安排",
                 description = "查看学校发布的考试时间与地点",
-                icon = Icons.Outlined.EventNote,
+                icon = Icons.Outlined.CalendarMonth,
                 onClick = onExamsClick,
-            )
-        }
-        item {
-            LeafyFeatureCard(
-                title = "空闲教室",
-                description = "按周次和星期查询可用教室",
-                icon = Icons.Outlined.Class,
-                onClick = onClassroomClick,
             )
         }
         item {
@@ -217,6 +213,28 @@ private fun CampusDashboard(
                 description = "学期、教学周与重要日期",
                 icon = Icons.Outlined.CalendarMonth,
                 onClick = { onFeatureClick(FeatureDestination.CAMPUS_CALENDAR) },
+            )
+        }
+        item {
+            LeafySectionHeader(
+                title = "自习安排",
+                supportingText = "查询当前可用的学习地点",
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        item {
+            LeafyFeatureCard(
+                title = "空闲教室",
+                description = "按周次和星期查询可用教室",
+                icon = Icons.Outlined.Class,
+                onClick = onClassroomClick,
+            )
+        }
+        item {
+            LeafySectionHeader(
+                title = "学习空间",
+                supportingText = "学习资料、项目与专注能力",
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
         item {

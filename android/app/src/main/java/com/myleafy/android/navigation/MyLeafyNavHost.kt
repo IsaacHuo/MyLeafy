@@ -41,8 +41,12 @@ import com.myleafy.android.features.community.ComposePostScreen
 import com.myleafy.android.features.community.PostDetailScreen
 import com.myleafy.android.features.profile.ProfileScreen
 import com.myleafy.android.features.profile.AboutMyLeafyScreen
+import com.myleafy.android.features.profile.FeedbackScreen
 import com.myleafy.android.features.profile.HelpCenterScreen
 import com.myleafy.android.features.profile.PermissionsInfoScreen
+import com.myleafy.android.features.profile.ProfileEditScreen
+import com.myleafy.android.features.profile.ProfilePreferencesScreen
+import com.myleafy.android.features.profile.ProfileSyncScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
 import com.myleafy.android.features.timetable.TimetableScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
@@ -55,6 +59,7 @@ object Routes {
     const val CLASSROOM = "campus/classroom"
     const val GRADES = "campus/grades"
     const val EXAMS = "campus/exams"
+    const val PROFILE_EDIT = "profile/edit"
     const val DEEP_LINK_COMMUNITY_POST = "myleafy://community-post?id={postId}"
     const val DEEP_LINK_TIMETABLE_INVITE = "myleafy://timetable-invite?code={code}"
 
@@ -206,7 +211,14 @@ fun MyLeafyNavHost(
             ) {
                 ProfileScreen(
                     onLoginClick = { navController.navigate(Routes.LOGIN) },
+                    onEditProfileClick = { navController.navigate(Routes.PROFILE_EDIT) },
                     onFeatureClick = { navController.navigate(it.route) },
+                )
+            }
+            composable(Routes.PROFILE_EDIT) {
+                ProfileEditScreen(
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
                 )
             }
             composable(Routes.LOGIN) {
@@ -233,7 +245,16 @@ fun MyLeafyNavHost(
                         FeatureDestination.PROFILE_HELP -> HelpCenterScreen(
                             onBack = { navController.popBackStack() },
                         )
+                        FeatureDestination.PROFILE_FEEDBACK -> FeedbackScreen(
+                            onBack = { navController.popBackStack() },
+                        )
                         FeatureDestination.PROFILE_PERMISSIONS -> PermissionsInfoScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.PROFILE_PERSONALIZATION -> ProfilePreferencesScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.PROFILE_SYNC -> ProfileSyncScreen(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_ABOUT -> AboutMyLeafyScreen(

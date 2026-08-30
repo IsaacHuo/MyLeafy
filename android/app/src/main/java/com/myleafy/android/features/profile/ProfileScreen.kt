@@ -14,21 +14,31 @@ import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Feedback
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.navigation.FeatureDestination
 import com.myleafy.android.shared.model.ProfileDto
@@ -40,18 +50,40 @@ import com.myleafy.android.ui.components.LeafyStatusBanner
 @Composable
 fun ProfileScreen(
     onLoginClick: () -> Unit = {},
+    onEditProfileClick: () -> Unit = {},
     onFeatureClick: (FeatureDestination) -> Unit = {},
     viewModel: ProfileViewModel = viewModel(
         factory = appViewModelFactory { container ->
             ProfileViewModel(
                 repository = container.profileRepository,
                 settings = container.settingsStore,
+                signOut = container::signOut,
             )
         },
     ),
     modifier: Modifier = Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isSigningOut by viewModel.isSigningOut.collectAsStateWithLifecycle()
+    var confirmLogout by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshProfile()
+        onPauseOrDispose { }
+    }
+    if (confirmLogout) {
+        AlertDialog(
+            onDismissRequest = { confirmLogout = false },
+            title = { Text("退出登录") },
+            text = { Text("将清理学校和社区会话及本机保存的登录凭据；课表、日程、随记和学业缓存会按当前身份保留。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLogout = false
+                    viewModel.logout()
+                }) { Text("退出") }
+            },
+            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("取消") } },
+        )
+    }
 
     Scaffold(
         modifier = modifier,
@@ -73,7 +105,12 @@ fun ProfileScreen(
                             CircularProgressIndicator()
                         }
                     }
-                    is ProfileUiState.Community -> ProfileCard(state.campusId, state.eduId, state.profile)
+                    is ProfileUiState.Community -> ProfileCard(
+                        state.campusId,
+                        state.eduId,
+                        state.profile,
+                        onEditProfileClick,
+                    )
                     is ProfileUiState.Error -> {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             LocalIdentityCard(state.campusId, state.eduId)
@@ -126,6 +163,14 @@ fun ProfileScreen(
                     onClick = { onFeatureClick(FeatureDestination.PROFILE_PERMISSIONS) },
                 )
             }
+            item {
+                LeafyFeatureCard(
+                    title = "反馈与支持",
+                    description = "提交问题、建议或联系项目支持",
+                    icon = Icons.Outlined.Feedback,
+                    onClick = { onFeatureClick(FeatureDestination.PROFILE_FEEDBACK) },
+                )
+            }
 
             item { LeafySectionHeader(title = "项目", modifier = Modifier.padding(top = 8.dp)) }
             item {
@@ -135,6 +180,24 @@ fun ProfileScreen(
                     icon = Icons.Outlined.Info,
                     onClick = { onFeatureClick(FeatureDestination.PROFILE_ABOUT) },
                 )
+            }
+            val hasIdentity = when (val state = uiState) {
+                is ProfileUiState.Community -> true
+                is ProfileUiState.Local -> !state.eduId.isNullOrBlank()
+                is ProfileUiState.Error -> !state.eduId.isNullOrBlank()
+                ProfileUiState.ProfileLoading -> true
+            }
+            if (hasIdentity) {
+                item {
+                    OutlinedButton(
+                        onClick = { confirmLogout = true },
+                        enabled = !isSigningOut,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
+                        Text(if (isSigningOut) "正在退出…" else "退出登录", modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
             }
         }
     }
@@ -170,7 +233,7 @@ private fun LocalIdentityCard(campusId: String, eduId: String?) {
 }
 
 @Composable
-private fun ProfileCard(campusId: String, eduId: String, profile: ProfileDto) {
+private fun ProfileCard(campusId: String, eduId: String, profile: ProfileDto, onEdit: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
@@ -187,6 +250,30 @@ private fun ProfileCard(campusId: String, eduId: String, profile: ProfileDto) {
             if (!profile.bio.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(text = profile.bio, style = MaterialTheme.typography.bodyMedium)
+            }
+            val studyInfo = listOfNotNull(profile.major, profile.grade)
+                .filter { it.isNotBlank() }
+                .joinToString(" · ")
+            if (studyInfo.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = studyInfo,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!profile.is_profile_complete) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "完善社区资料后可参与发布与互动",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
+                androidx.compose.material3.Icon(Icons.Outlined.Edit, contentDescription = null)
+                Text("编辑资料", modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

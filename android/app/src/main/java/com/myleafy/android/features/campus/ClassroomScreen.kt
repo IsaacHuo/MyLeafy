@@ -2,12 +2,12 @@ package com.myleafy.android.features.campus
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -17,15 +17,14 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
@@ -40,7 +39,7 @@ fun ClassroomScreen(
     ),
     modifier: Modifier = Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var week by rememberSaveable { mutableIntStateOf(viewModel.currentWeek) }
     var day by rememberSaveable { mutableIntStateOf(1) }
 
@@ -48,10 +47,9 @@ fun ClassroomScreen(
         Column(
             modifier = contentModifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
-
         Text(text = "周次", style = MaterialTheme.typography.labelMedium)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items((1..SemesterConfig.supportedWeeks).toList()) { candidate ->
@@ -127,8 +125,8 @@ fun ClassroomScreen(
                                 style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                             )
-                            Row {
-                                rooms.forEach { room ->
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(rooms, key = { it.room }) { room ->
                                     Card(modifier = Modifier.padding(end = 6.dp, bottom = 6.dp)) {
                                         Text(
                                             text = room.room,

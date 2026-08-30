@@ -27,6 +27,8 @@ interface AcademicRepository {
 
     /** 从教务抓取成绩、官方排名/汇总与考试；各范围独立保留最近成功缓存。 */
     suspend fun refresh(semesterId: String): AcademicRefreshResult
+    suspend fun refreshGradesAndRankings(): AcademicRefreshResult
+    suspend fun refreshExams(semesterId: String): AcademicRefreshResult
 }
 
 data class AcademicRefreshResult(
@@ -68,11 +70,21 @@ class LiveAcademicRepository(
         activeAppScopeStore.scope.flatMapLatest { examDao.all(it.scopeKey) }
 
     override suspend fun refresh(semesterId: String): AcademicRefreshResult {
+        val grades = refreshGradesAndRankings()
+        val exams = refreshExams(semesterId)
+        return AcademicRefreshResult(
+            grades = grades.grades,
+            rankings = grades.rankings,
+            exams = exams.exams,
+            failures = grades.failures + exams.failures,
+        )
+    }
+
+    override suspend fun refreshGradesAndRankings(): AcademicRefreshResult {
         val scopeKey = activeAppScopeStore.current.scopeKey
         val failures = mutableListOf<String>()
         var gradeCount: Int? = null
         var rankingCount: Int? = null
-        var examCount: Int? = null
 
         runCatching { client.fetchAcademicResults() }
             .onSuccess { result ->
@@ -122,6 +134,19 @@ class LiveAcademicRepository(
             }
             .onFailure { failures += "成绩与排名：${it.message ?: "拉取失败"}" }
 
+        return AcademicRefreshResult(
+            grades = gradeCount,
+            rankings = rankingCount,
+            exams = null,
+            failures = failures,
+        )
+    }
+
+    override suspend fun refreshExams(semesterId: String): AcademicRefreshResult {
+        val scopeKey = activeAppScopeStore.current.scopeKey
+        val failures = mutableListOf<String>()
+        var examCount: Int? = null
+
         runCatching { client.fetchExams(semesterId) }
             .onSuccess { exams ->
                 examDao.clearAll(scopeKey)
@@ -143,6 +168,11 @@ class LiveAcademicRepository(
             }
             .onFailure { failures += "考试安排：${it.message ?: "拉取失败"}" }
 
-        return AcademicRefreshResult(gradeCount, rankingCount, examCount, failures)
+        return AcademicRefreshResult(
+            grades = null,
+            rankings = null,
+            exams = examCount,
+            failures = failures,
+        )
     }
 }

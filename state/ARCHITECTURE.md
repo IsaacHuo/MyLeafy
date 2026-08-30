@@ -11,7 +11,7 @@ Last verified: 2026-08-30
 | 运行单元 | 部署位置 | 职责 |
 |---|---|---|
 | MyLeafy iOS App | 用户设备 | 学校登录、教务数据获取、本地持久化、用户交互与普通 Supabase 业务 |
-| MyLeafy Android App | 用户设备 | 同 iOS 的产品行为，Android 原生实现（Kotlin/Compose/Room/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录、周课表/个人日程/ICS、成绩/考试、社区 Feed/搜索/通知/详情治理/发帖、我的资料与空闲教室 |
+| MyLeafy Android App | 用户设备 | 同 iOS 的产品行为，Android 原生实现（Kotlin/Compose/Room/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录、周课表/个人日程/ICS、成绩/考试、社区 Feed/搜索/通知/详情治理/发帖、资料编辑/偏好/同步中心/退出和空闲教室 |
 | 学校教务系统 | 学校基础设施 | 身份、课表、成绩、考试、教学计划等权威教务数据（非稳定 API） |
 | Supabase | 托管云服务 | Auth、PostgreSQL、RLS、Storage、Realtime、Edge Functions |
 | 官网与运营后台 | Cloudflare Pages | 公开页面、分享落地页、管理界面与管理 API 代理 |
@@ -228,7 +228,7 @@ React-admin（site/src/admin）
 - 层级详情使用 `NavigationStack`；轻量编辑/筛选/详情使用 sheet。
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
 - Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；社区入口按活动身份 capability 隐藏，底部 `NavigationBar` 只在根目的地显示并保存各 Tab 状态。
-- Android 二级真实页面与 `FeatureDestination` 占位页面统一使用返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；帮助中心、权限说明、关于与内置校历是可离线使用的完整静态页面。
+- Android 二级真实页面与 `FeatureDestination` 占位页面统一使用 48dp 紧凑返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；资料编辑、缓存同步、个性化、帮助中心、权限说明、反馈、关于与内置校历均为真实页面。
 - Android 启动阶段不强制登录；学校登录从“我的”进入。Room、教务和 Supabase 页面只展示各自真实数据，未登录、未配置或校园网不可达时进入明确的 Empty/Error 状态。
 - Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 标志和 capabilities；Room v4 的全部实体使用 `(scopeKey, id)` 复合主键，DAO 查询、替换和删除必须显式携带当前 scope。仅预发布 schema 1–3 允许破坏性重建，未来缺 migration 时直接失败。
 - Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时不初始化客户端，社区根入口和社区深链内容均被门控。
@@ -237,6 +237,8 @@ React-admin（site/src/admin）
 - Android 当前仅实现直接 HTML 课表解析；学校返回未识别页面时 fail-fast 为 `TimetableDataUnavailable` 并保留 Room 最近成功缓存，不把未知页面当空课表。iOS 的表单/WebView bootstrap 回退尚未迁移。
 - Android `TimetableGridProjection` 是课表几何的单一纯 Domain 投影：按所选周把课程、考试和 scoped Room 个人日程映射为 day/period span/lane/stable ID；稳定 Compose `Layout` 只消费投影，不在重组中重复过滤排序。正常手机宽度同屏显示 7 天 × 13 节，极窄屏和大字体保留滚动兜底。
 - Android 课表与日迹日程列表共用 `ScheduleEventEntity`/`ScheduleRepository`；新增、编辑与删除按活动 `scopeKey` 持久化。ICS 导出按学期首日展开课程周次，并包含学期范围内个人日程，固定 `Asia/Shanghai`，文件仅暴露给 Android FileProvider Sharesheet。
+- Android 校园学业仓储将成绩/排名与考试拆成独立刷新边界；详情页和缓存中心的单项同步只能调用对应边界，失败保留各自最近成功 Room 缓存。校园根页按学校教学、自习安排和学习空间分组。
+- Android `SettingsStore` 持久化 system/light/dark 主题与系统/更大文字偏好，`MainActivity` 在根 Composition 应用；资料更新只写 Supabase `profiles` 中允许用户编辑的昵称、简介、专业和年级字段。退出登录必须清理学校 Cookie、Keystore 保存凭据、DataStore 身份和 Supabase 匿名会话，同时保留 scoped Room 本地数据。
 - 深链支持 `leafy://` 与 `https://myleafy.space/` 白名单路由，解析器验证 host、路径、UUID 或邀请码格式。
 
 ## 9. 扩展
