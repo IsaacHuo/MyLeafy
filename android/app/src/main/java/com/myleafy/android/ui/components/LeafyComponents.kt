@@ -41,12 +41,13 @@ fun LeafyRootTopBar(
         title = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
         },
         actions = actions,
         modifier = modifier,
+        expandedHeight = CompactTopBarHeight,
     )
 }
 
@@ -73,12 +74,15 @@ fun LeafySecondaryScaffold(
                     }
                 },
                 actions = actions,
+                expandedHeight = CompactTopBarHeight,
             )
         },
     ) { padding ->
         content(Modifier.padding(padding))
     }
 }
+
+private val CompactTopBarHeight = 48.dp
 
 @Composable
 fun LeafySectionHeader(

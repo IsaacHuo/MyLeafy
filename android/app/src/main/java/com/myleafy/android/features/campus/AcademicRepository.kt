@@ -12,6 +12,7 @@ import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.network.SchoolNetworkClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
  * 校园学业仓储（成绩/考试）。学校教务为权威来源，Room 为本地缓存副本。
@@ -38,6 +39,7 @@ data class AcademicRefreshResult(
 }
 
 /** 线上仓储：教务抓取（OkHttp + jsoup）→ 解析 → Room 落库。 */
+@OptIn(ExperimentalCoroutinesApi::class)
 class LiveAcademicRepository(
     private val client: SchoolNetworkClient,
     private val gradeDao: GradeDao,

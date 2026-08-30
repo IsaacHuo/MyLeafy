@@ -11,7 +11,7 @@ Last verified: 2026-08-30
 | 运行单元 | 部署位置 | 职责 |
 |---|---|---|
 | MyLeafy iOS App | 用户设备 | 学校登录、教务数据获取、本地持久化、用户交互与普通 Supabase 业务 |
-| MyLeafy Android App | 用户设备 | 同 iOS 的产品行为，Android 原生实现（Kotlin/Compose/Room/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录/课表/成绩/考试、社区 Feed/详情/评论/发帖、我的资料与空闲教室 |
+| MyLeafy Android App | 用户设备 | 同 iOS 的产品行为，Android 原生实现（Kotlin/Compose/Room/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录、周课表/个人日程/ICS、成绩/考试、社区 Feed/详情/评论/发帖、我的资料与空闲教室 |
 | 学校教务系统 | 学校基础设施 | 身份、课表、成绩、考试、教学计划等权威教务数据（非稳定 API） |
 | Supabase | 托管云服务 | Auth、PostgreSQL、RLS、Storage、Realtime、Edge Functions |
 | 官网与运营后台 | Cloudflare Pages | 公开页面、分享落地页、管理界面与管理 API 代理 |
@@ -234,6 +234,8 @@ React-admin（site/src/admin）
 - Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时不初始化客户端，社区根入口和社区深链内容均被门控。
 - Android 本科验证码阶段使用只驻留内存的匿名 Cookie；key、验证码与登录提交复用同一会话，认证成功后才按 `CampusIdentity.scopeKey` 迁移到 Keystore。同步 OkHttp 请求由客户端统一切换到 `Dispatchers.IO`，Compose ViewModel 不执行阻塞网络 I/O。
 - Android 当前仅实现直接 HTML 课表解析；学校返回未识别页面时 fail-fast 为 `TimetableDataUnavailable` 并保留 Room 最近成功缓存，不把未知页面当空课表。iOS 的表单/WebView bootstrap 回退尚未迁移。
+- Android `TimetableGridProjection` 是课表几何的单一纯 Domain 投影：按所选周把课程、考试和 scoped Room 个人日程映射为 day/period span/lane/stable ID；稳定 Compose `Layout` 只消费投影，不在重组中重复过滤排序。正常手机宽度同屏显示 7 天 × 13 节，极窄屏和大字体保留滚动兜底。
+- Android 课表与日迹日程列表共用 `ScheduleEventEntity`/`ScheduleRepository`；新增、编辑与删除按活动 `scopeKey` 持久化。ICS 导出按学期首日展开课程周次，并包含学期范围内个人日程，固定 `Asia/Shanghai`，文件仅暴露给 Android FileProvider Sharesheet。
 - 深链支持 `leafy://` 与 `https://myleafy.space/` 白名单路由，解析器验证 host、路径、UUID 或邀请码格式。
 
 ## 9. 扩展
@@ -259,6 +261,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 
 - 根导航顺序固定为 `课表 / 社区 / 日迹 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。社区 Tab 按校园 capability 隐藏。
 - 免登录（guest）入口完全本地：不创建任何账号，不连接 Supabase 或我们的后台；学期/校历配置使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
+- Android 的 guest/无社区 capability 身份只显示 `课表 / 日迹 / 校园 / 我的`，不得初始化 Supabase 或社区任务；具备 capability 的校园身份恢复 `社区` Tab。Android 个人日程同时呈现在课表与日迹列表，可导出 ICS，但不申请系统日历写入权限。
 - 日迹顶部直接提供 `随记 / 日程 / 推送`；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。
 - 随记按校园身份作用域保存在本地（元数据、Markdown 源文、图片、附件、音频、标签、统计）；不进入社区、Widget、日历导出或课表分享图。语音转写设备端完成且不持久化原始输入。学校课程、考试、校历不进入随记或个人日程列表。
 - 课表按单个学年浏览，从秋季学期首日到下一学年开始前一天；暑假最后一周停在学年边界，下一学年通过学年/日期选择进入。学校单学期课表保持 20 周数据集；学期结束与寒暑假区间来自语义校历事件，不用 20 周容器反推。

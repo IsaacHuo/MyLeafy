@@ -1,78 +1,111 @@
 package com.myleafy.android.features.timetable
 
-import androidx.compose.foundation.layout.Arrangement
+import android.content.ClipData
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.FileProvider
+import com.myleafy.android.core.data.local.CourseEntity
+import com.myleafy.android.core.data.local.ExamEntity
+import com.myleafy.android.core.data.local.ScheduleEventEntity
 import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.features.schedule.ScheduleEventDraft
+import com.myleafy.android.features.schedule.ScheduleEventEditorSheet
 import com.myleafy.android.features.timetable.domain.SemesterConfig
+import com.myleafy.android.features.timetable.domain.TimetableGridItem
+import com.myleafy.android.features.timetable.domain.TimetableGridItemType
+import com.myleafy.android.features.timetable.domain.TimetableGridProjection
+import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
+import com.myleafy.android.features.timetable.presentation.CourseDetailsDialog
+import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
-import com.myleafy.android.features.timetable.presentation.WeekSelector
-import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.io.File
 import kotlinx.coroutines.delay
 
 @Composable
 fun TimetableScreen(
     onShareClick: () -> Unit = {},
-    onExportClick: () -> Unit = {},
-    onAddScheduleClick: () -> Unit = {},
     viewModel: TimetableViewModel = viewModel(
         factory = appViewModelFactory { container ->
             TimetableViewModel(
                 repository = container.timetableRepository,
+                academicRepository = container.academicRepository,
+                scheduleRepository = container.scheduleRepository,
                 semesterId = SemesterConfig.currentSemesterId,
             )
         },
     ),
     modifier: Modifier = Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val syncState by viewModel.syncState.collectAsState()
-    var selectedWeek by rememberSaveable { mutableIntStateOf(0) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val mutationState by viewModel.scheduleMutationState.collectAsStateWithLifecycle()
+    val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var editorDraft by rememberSaveable(stateSaver = scheduleDraftSaver) {
+        mutableStateOf<ScheduleEventDraft?>(null)
+    }
+    var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedExam by rememberSaveable { mutableStateOf<Int?>(null) }
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             LeafyRootTopBar(
                 title = "课表",
                 actions = {
-                    IconButton(onClick = onAddScheduleClick) {
+                    IconButton(
+                        onClick = {
+                            val state = uiState as? TimetableUiState.Loaded ?: return@IconButton
+                            editorDraft = defaultDraft(state)
+                        },
+                    ) {
                         Icon(Icons.Filled.Add, contentDescription = "添加日程")
                     }
                     Box {
@@ -80,6 +113,29 @@ fun TimetableScreen(
                             Icon(Icons.Filled.MoreVert, contentDescription = "课表操作")
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text("回到本周") },
+                                leadingIcon = { Icon(Icons.Outlined.Today, contentDescription = null) },
+                                enabled = (uiState as? TimetableUiState.Loaded)?.let {
+                                    it.selectedWeek != it.currentWeek
+                                } == true,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.goToCurrentWeek()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(if (syncState is TimetableSyncState.Syncing) "同步中…" else "同步课表")
+                                },
+                                leadingIcon = { Icon(Icons.Outlined.CloudSync, contentDescription = null) },
+                                enabled = uiState is TimetableUiState.Loaded &&
+                                    syncState !is TimetableSyncState.Syncing,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.refresh()
+                                },
+                            )
                             DropdownMenuItem(
                                 text = { Text("共享课表") },
                                 leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
@@ -89,11 +145,12 @@ fun TimetableScreen(
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("导出课表") },
+                                text = { Text("导出 ICS") },
                                 leadingIcon = { Icon(Icons.Outlined.FileUpload, contentDescription = null) },
+                                enabled = exportState !is TimetableExportState.Exporting,
                                 onClick = {
                                     menuExpanded = false
-                                    onExportClick()
+                                    viewModel.exportCalendar(File(context.cacheDir, "calendar-exports"))
                                 },
                             )
                         }
@@ -102,81 +159,138 @@ fun TimetableScreen(
             )
         },
     ) { contentPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding)
-                .padding(horizontal = 16.dp),
-        ) {
-            when (val state = uiState) {
-                is TimetableUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                }
-
-                is TimetableUiState.Error -> {
-                    LeafyStatusBanner(message = state.message, isError = true)
-                }
-
-                is TimetableUiState.Loaded -> {
-                    LaunchedEffect(state) {
-                        if (selectedWeek == 0) selectedWeek = state.week
-                    }
-
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = "第 ${state.week} 周", style = MaterialTheme.typography.titleLarge)
-                                Text(
-                                    text = "${state.semesterId} · ${state.courses.size} 门课程已缓存",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            FilledTonalButton(
-                                onClick = viewModel::refresh,
-                                enabled = syncState !is TimetableSyncState.Syncing,
-                            ) {
-                                if (syncState is TimetableSyncState.Syncing) {
-                                    CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                                } else {
-                                    Icon(Icons.Outlined.CloudSync, contentDescription = null)
-                                    Text("同步", modifier = Modifier.padding(start = 6.dp))
-                                }
-                            }
+        when (val state = uiState) {
+            TimetableUiState.Loading -> Box(
+                modifier = Modifier.fillMaxSize().padding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) { CircularProgressIndicator() }
+            is TimetableUiState.Error -> LeafyStatusBanner(
+                message = state.message,
+                isError = true,
+                modifier = Modifier.padding(contentPadding).padding(16.dp),
+            )
+            is TimetableUiState.Loaded -> TimetableScreenContent(
+                state = state,
+                syncState = syncState,
+                onPreviousWeek = viewModel::previousWeek,
+                onNextWeek = viewModel::nextWeek,
+                onEmptyCellClick = { date, period -> editorDraft = draftForCell(date, period) },
+                onItemClick = { item ->
+                    when (item.type) {
+                        TimetableGridItemType.COURSE -> selectedCourse = item.sourceId
+                        TimetableGridItemType.EXAM -> selectedExam = item.sourceId.toIntOrNull()
+                        TimetableGridItemType.SCHEDULE -> {
+                            editorDraft = state.scheduleEvents.firstOrNull { it.id == item.sourceId }?.toDraft()
                         }
                     }
+                },
+                onConsumeSync = viewModel::consumeSyncResult,
+                modifier = Modifier.padding(contentPadding),
+            )
+        }
+    }
 
-                    TimetableSyncBanner(syncState = syncState, onConsume = viewModel::consumeSyncResult)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    WeekSelector(
-                        week = selectedWeek.coerceAtLeast(1),
-                        totalWeeks = SemesterConfig.supportedWeeks,
-                        onWeekSelected = { selectedWeek = it },
+    LaunchedEffect(exportState) {
+        when (val state = exportState) {
+            is TimetableExportState.Ready -> {
+                val result = runCatching {
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        state.file,
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (state.courses.isEmpty()) {
-                        LeafyEmptyState(
-                            title = if (state.hasConfirmedSchoolSync) "学校暂未公布课表" else "暂无课表数据",
-                            message = if (state.hasConfirmedSchoolSync) {
-                                "教务已连接，学校暂未公布或尚未安排 ${state.semesterId} 课表。成绩、排名等其他数据仍可正常使用。"
-                            } else {
-                                "连接可访问学校教务的网络并完成登录后，可以主动同步课表。"
-                            },
-                            icon = Icons.Outlined.CloudSync,
-                        )
-                    } else {
-                        Box(modifier = Modifier.weight(1f)) {
-                            TimetableGrid(courses = state.courses, week = selectedWeek.coerceAtLeast(1))
-                        }
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/calendar"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri("MyLeafy 课表", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
+                    context.startActivity(Intent.createChooser(shareIntent, "分享课表 ICS"))
+                }
+                if (result.isFailure) {
+                    snackbarHostState.showSnackbar(result.exceptionOrNull()?.message ?: "无法打开系统分享")
+                }
+                viewModel.consumeExportResult()
+            }
+            is TimetableExportState.Error -> {
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.consumeExportResult()
+            }
+            else -> Unit
+        }
+    }
+
+    val loaded = uiState as? TimetableUiState.Loaded
+    selectedCourse?.let { id ->
+        loaded?.courses?.firstOrNull { it.id == id }?.let { course ->
+            CourseDetailsDialog(course = course, onDismiss = { selectedCourse = null })
+        }
+    }
+    selectedExam?.let { id ->
+        loaded?.exams?.firstOrNull { it.id == id }?.let { exam ->
+            ExamDetailsDialog(exam = exam, onDismiss = { selectedExam = null })
+        }
+    }
+    editorDraft?.let { initial ->
+        ScheduleEventEditorSheet(
+            initial = initial,
+            mutationState = mutationState,
+            onSave = viewModel::saveScheduleEvent,
+            onDelete = initial.id?.let { { id -> viewModel.deleteScheduleEvent(id) } },
+            onConsumeMutation = viewModel::consumeScheduleMutation,
+            onDismiss = {
+                viewModel.consumeScheduleMutation()
+                editorDraft = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun TimetableScreenContent(
+    state: TimetableUiState.Loaded,
+    syncState: TimetableSyncState,
+    onPreviousWeek: () -> Unit,
+    onNextWeek: () -> Unit,
+    onEmptyCellClick: (LocalDate, Int) -> Unit,
+    onItemClick: (TimetableGridItem) -> Unit,
+    onConsumeSync: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onPreviousWeek, enabled = state.selectedWeek > 1) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
+                }
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("第 ${state.selectedWeek} 周", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = formatWeekRange(state.weekRange.startDate),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(
+                    onClick = onNextWeek,
+                    enabled = state.selectedWeek < SemesterConfig.supportedWeeks,
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
                 }
             }
         }
+        TimetableSyncBanner(syncState = syncState, onConsume = onConsumeSync)
+        TimetableGrid(
+            snapshot = state.grid,
+            onEmptyCellClick = onEmptyCellClick,
+            onItemClick = onItemClick,
+            modifier = Modifier.weight(1f),
+            today = LocalDate.now(TimetableGridProjection.campusZone),
+            currentTime = LocalTime.now(TimetableGridProjection.campusZone),
+        )
     }
 }
 
@@ -195,7 +309,7 @@ private fun TimetableSyncBanner(syncState: TimetableSyncState, onConsume: () -> 
         LeafyStatusBanner(
             message = message,
             isError = syncState is TimetableSyncState.Error,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 6.dp),
         )
         LaunchedEffect(syncState) {
             delay(3_000)
@@ -203,3 +317,83 @@ private fun TimetableSyncBanner(syncState: TimetableSyncState, onConsume: () -> 
         }
     }
 }
+
+private fun defaultDraft(state: TimetableUiState.Loaded): ScheduleEventDraft {
+    val today = LocalDate.now(TimetableGridProjection.campusZone)
+    val date = if (!today.isBefore(state.weekRange.startDate) && today.isBefore(state.weekRange.endDateExclusive)) {
+        today
+    } else {
+        state.weekRange.startDate
+    }
+    val period = if (date == today) {
+        TimetablePeriodSchedule.defaultStudyPeriod(
+            LocalTime.now(TimetableGridProjection.campusZone).let { it.hour * 60 + it.minute },
+        )
+    } else {
+        1
+    }
+    return draftForCell(date, period)
+}
+
+private fun draftForCell(date: LocalDate, period: Int): ScheduleEventDraft {
+    val slot = TimetablePeriodSchedule.slot(period) ?: TimetablePeriodSchedule.slots.first()
+    return ScheduleEventDraft(
+        title = "",
+        date = date,
+        startsAt = LocalTime.of(slot.startHour, slot.startMinute),
+        endsAt = LocalTime.of(slot.endHour, slot.endMinute),
+        location = "",
+        note = "",
+    )
+}
+
+private fun ScheduleEventEntity.toDraft(): ScheduleEventDraft {
+    val start = Instant.ofEpochMilli(startsAt).atZone(TimetableGridProjection.campusZone)
+    val end = endsAt
+        ?.takeIf { it > startsAt }
+        ?.let { Instant.ofEpochMilli(it).atZone(TimetableGridProjection.campusZone) }
+        ?: start.plusMinutes(45)
+    return ScheduleEventDraft(
+        id = id,
+        title = title,
+        date = start.toLocalDate(),
+        startsAt = start.toLocalTime(),
+        endsAt = end.toLocalTime(),
+        location = location.orEmpty(),
+        note = note.orEmpty(),
+    )
+}
+
+private fun formatWeekRange(start: LocalDate): String {
+    val end = start.plusDays(6)
+    return "${start.format(shortDateFormatter)}–${end.format(shortDateFormatter)}"
+}
+
+private val shortDateFormatter = DateTimeFormatter.ofPattern("M月d日")
+
+private val scheduleDraftSaver = androidx.compose.runtime.saveable.Saver<ScheduleEventDraft?, List<String>>(
+    save = { draft ->
+        draft?.let {
+            listOf(
+                it.id.orEmpty(),
+                it.title,
+                it.date.toString(),
+                it.startsAt.toString(),
+                it.endsAt.toString(),
+                it.location,
+                it.note,
+            )
+        }
+    },
+    restore = { values ->
+        ScheduleEventDraft(
+            id = values[0].ifBlank { null },
+            title = values[1],
+            date = LocalDate.parse(values[2]),
+            startsAt = LocalTime.parse(values[3]),
+            endsAt = LocalTime.parse(values[4]),
+            location = values[5],
+            note = values[6],
+        )
+    },
+)

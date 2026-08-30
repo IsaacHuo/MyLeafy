@@ -4,7 +4,7 @@ Last verified: 2026-08-30
 
 ## Current Focus
 
-- **Android 核心体验对齐**：基础分支已统一品牌图标、Material 3 圆角层级、身份作用域与 Android CI；下一步重做周课表和个人日程闭环。
+- **Android 核心体验对齐**：品牌/身份基础层与课表/个人日程闭环已完成；当前周课表可同屏呈现 7 天 × 13 节、课程/考试/个人日程冲突 lane、日程增删改和 ICS 分享，下一步补齐社区核心体验。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑与投稿、本机语音转写与统计分享图。
 - **国际化收尾**：已完成英文本地化并加入 App 内语言偏好（跟随系统 / 简体中文 / English，同步到 Widget 与 Share 扩展）；正在打磨英文课表与校园文案。
 - **课表与时间语义**：`2026-2027-1` 已作为最新拉取学期，首周仍为 9 月 7 日；按学年浏览、20 周单学期数据集、学年边界滑动与刷新反馈，历史春季课表和暑假可从时间视图按周回看。
@@ -18,11 +18,12 @@ Last verified: 2026-08-30
 - **教务操作过程反馈**：用户主动同步时按实际范围展示连接、验证码识别、登录验证及数据拉取/处理/保存步骤；课表、成绩、全量、教学与培养、考试、排名和教室查询互不扩大请求范围，后台预取保持静默。
 - **Android 工程骨架（阶段 1 / 1.5）**：`android/` 为可编译可运行的 Compose 单模块工程（Gradle 8.14.5 / AGP 8.13.2 / Kotlin 2.2.21 / minSdk 29）；根 Tab 真实导航，全功能基础架构已搭好（UiState 状态机 / Repository / Room v4 / DTO / DataStore / 登录路由 / 深链），日迹为真实可用的本地 CRUD。
 - **Android 对齐基础层**：启动图标从 iOS 唯一母版生成 legacy/adaptive/monochrome 资源；Compose 使用 12/16/24dp 品牌圆角层级；`ActiveAppScope` 统一校园身份、capability 与 Room `scopeKey`，所有本地表和 DAO 已按身份隔离，guest/无社区能力身份不会初始化 Supabase；新增 Android assemble/JVM tests/lint CI。
+- **Android 课表与日程对齐**：稳定 Compose `Layout` 渲染 7 天 × 13 节圆角网格，`TimetableGridProjection` 预计算课程/考试/个人日程跨度与冲突 lane；周切换保留在紧凑周卡，“回到本周/同步”收入口菜单。课表和日迹共用 scoped Room 日程，支持新增、编辑、删除、重启持久化；所选学期课程与范围内个人日程可按 `Asia/Shanghai` 导出 RFC 5545 ICS，并通过 FileProvider/系统 Sharesheet 分享。
 - **Android 阶段 2（教务，M2.1-M2.5）**：OkHttp 教务客户端 + Cookie 契约、强智登录（encodeKey/验证码/会话验证）、课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库、周课表网格、成绩/考试抓取与校园页。
 - **Android 阶段 4（社区，M4.1-M4.3）**：supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论线程/点赞、文本发帖与评论。
 - **Android 阶段 5 部分（M5.1-M5.2）**：我的页社区资料（bootstrap）、空闲教室查询。
 - **Android UI 壳收敛**：底栏只显示在 5 个根页面，常用二级功能由 `FeatureDestination` 统一路由；帮助中心、权限说明、关于与内置校历已完成静态内容，页面不注入演示数据，日迹空库仍可创建第一条随记。
-- **Android API 36 设备验收**：`MyLeafy_API_36`（Pixel 8 / Android 16）已完成冷启动、5 个根页面截图、Compose 导航烟雾测试，以及随记新增、重启持久化和删除验证；本轮按范围不做深色模式与大字体验收。
+- **Android API 36 设备验收**：`MyLeafy_API_36`（Pixel 8 / Android 16）已通过 10 个 instrumentation 用例（根导航、scoped Room 重开、课表/日程 Compose 交互）；真实旅程验证个人日程保存、强制结束后持久化、日迹共享数据源和 ICS Sharesheet。guest 模式保持四个本地 Tab，社区仅在校园身份具备 capability 时显示。
 - **Android 本科登录实测修复**：登录前验证码会话 Cookie 以内存态跨 key/验证码/提交复用，认证成功后才迁移到 Keystore；所有同步 OkHttp 教务入口改在 `Dispatchers.IO` 执行。2026-08-29 已用真实校园网络完成验证码和登录验证。
 - 教务网络（研究生 RSA/AES）与部分校园工具（共享课表、评价目录）、日迹强化、发布工程（Widget/WorkManager/签名）仍待接入。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
 - 教务全量同步区分完整成功、部分成功与失败；课表、成绩、考试、教学计划与空闲教室只在确认目标结构或可信空结果后更新缓存，异常页面继续保留最近成功数据。
@@ -60,7 +61,7 @@ Last verified: 2026-08-30
 
 按 `docs/product/roadmap.md` 的近期重点推进，不承诺固定时间表：
 
-- 按 `docs/engineering/android-migration.md` 继续推进 Android 日迹强化、校园/我的剩余入口与发布工程；校园网依赖能力在可访问学校环境中单独验收。
+- 按 `docs/engineering/android-migration.md` 继续推进 Android 社区核心体验、校园/我的剩余入口与发布工程；校园网依赖能力在可访问学校环境中单独验收。
 - 提高教务解析稳定性与解析回归测试覆盖。
 - 统一不同校园的数据适配协议与能力配置。
 - 连接课表、日程与学习空间的时间语义。

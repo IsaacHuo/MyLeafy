@@ -16,16 +16,6 @@ enum class FeatureDestination(
         title = "共享课表",
         description = "邀请同学查看课表的 Android 版本正在接入。",
     ),
-    TIMETABLE_EXPORT(
-        route = "timetable/export",
-        title = "导出课表",
-        description = "日历与文件导出能力将在后续阶段提供。",
-    ),
-    TIMETABLE_ADD_SCHEDULE(
-        route = "timetable/add-schedule",
-        title = "添加日程",
-        description = "课表与个人日程的联动编辑器正在建设。",
-    ),
     COMMUNITY_SEARCH(
         route = "community/search",
         title = "搜索社区",

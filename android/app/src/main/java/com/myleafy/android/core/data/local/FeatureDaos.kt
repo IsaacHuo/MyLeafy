@@ -80,6 +80,22 @@ interface ScheduleEventDao {
     @Query("SELECT * FROM schedule_events WHERE scopeKey = :scopeKey ORDER BY startsAt ASC")
     fun all(scopeKey: String): Flow<List<ScheduleEventEntity>>
 
+    @Query(
+        """SELECT * FROM schedule_events
+        WHERE scopeKey = :scopeKey
+          AND startsAt < :endExclusive
+          AND COALESCE(endsAt, startsAt + 1) > :startInclusive
+        ORDER BY startsAt ASC""",
+    )
+    fun inRange(
+        scopeKey: String,
+        startInclusive: Long,
+        endExclusive: Long,
+    ): Flow<List<ScheduleEventEntity>>
+
+    @Query("SELECT * FROM schedule_events WHERE scopeKey = :scopeKey AND id = :id LIMIT 1")
+    suspend fun byId(scopeKey: String, id: String): ScheduleEventEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(event: ScheduleEventEntity)
 

@@ -8,6 +8,7 @@ import com.myleafy.android.core.campus.ActiveAppScopeStore
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
  * 日迹仓储（随记 + 个人日程）。本地为权威来源，Room 持久化；
@@ -16,13 +17,24 @@ import kotlinx.coroutines.flow.flatMapLatest
 interface ScheduleRepository {
     fun memos(): Flow<List<ScheduleMemoEntity>>
     fun events(): Flow<List<ScheduleEventEntity>>
+    fun eventsInRange(startInclusive: Long, endExclusive: Long): Flow<List<ScheduleEventEntity>>
 
-    suspend fun addMemo(body: String, title: String?, tags: List<String>)
+    suspend fun memo(id: String): ScheduleMemoEntity?
+    suspend fun event(id: String): ScheduleEventEntity?
+    suspend fun saveMemo(id: String?, body: String, title: String?, tags: List<String>): String
     suspend fun deleteMemo(id: String)
-    suspend fun addEvent(title: String, startsAt: Long, endsAt: Long?, location: String?, note: String?)
+    suspend fun saveEvent(
+        id: String?,
+        title: String,
+        startsAt: Long,
+        endsAt: Long,
+        location: String?,
+        note: String?,
+    ): String
     suspend fun deleteEvent(id: String)
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RoomScheduleRepository(
     private val memoDao: ScheduleMemoDao,
     private val eventDao: ScheduleEventDao,
@@ -35,24 +47,39 @@ class RoomScheduleRepository(
     override fun events(): Flow<List<ScheduleEventEntity>> =
         activeAppScopeStore.scope.flatMapLatest { eventDao.all(it.scopeKey) }
 
-    override suspend fun addMemo(body: String, title: String?, tags: List<String>) {
+    override fun eventsInRange(startInclusive: Long, endExclusive: Long): Flow<List<ScheduleEventEntity>> =
+        activeAppScopeStore.scope.flatMapLatest {
+            eventDao.inRange(it.scopeKey, startInclusive, endExclusive)
+        }
+
+    override suspend fun memo(id: String): ScheduleMemoEntity? =
+        memoDao.memoById(activeAppScopeStore.current.scopeKey, id)
+
+    override suspend fun event(id: String): ScheduleEventEntity? =
+        eventDao.byId(activeAppScopeStore.current.scopeKey, id)
+
+    override suspend fun saveMemo(id: String?, body: String, title: String?, tags: List<String>): String {
         val now = System.currentTimeMillis()
+        val scopeKey = activeAppScopeStore.current.scopeKey
+        val resolvedId = id ?: UUID.randomUUID().toString()
+        val existing = id?.let { memoDao.memoById(scopeKey, it) }
         memoDao.upsert(
             ScheduleMemoEntity(
-                scopeKey = activeAppScopeStore.current.scopeKey,
-                id = UUID.randomUUID().toString(),
+                scopeKey = scopeKey,
+                id = resolvedId,
                 body = body,
-                kind = "quickMemo",
+                kind = existing?.kind ?: "quickMemo",
                 title = title?.takeIf { it.isNotBlank() },
                 tags = tags.joinToString("\n"),
-                createdAt = now,
+                createdAt = existing?.createdAt ?: now,
                 updatedAt = now,
-                pinnedAt = null,
+                pinnedAt = existing?.pinnedAt,
                 trashedAt = null,
-                linkedScheduleKind = null,
-                linkedScheduleId = null,
+                linkedScheduleKind = existing?.linkedScheduleKind,
+                linkedScheduleId = existing?.linkedScheduleId,
             ),
         )
+        return resolvedId
     }
 
     override suspend fun deleteMemo(id: String) {
@@ -64,19 +91,30 @@ class RoomScheduleRepository(
         )
     }
 
-    override suspend fun addEvent(title: String, startsAt: Long, endsAt: Long?, location: String?, note: String?) {
+    override suspend fun saveEvent(
+        id: String?,
+        title: String,
+        startsAt: Long,
+        endsAt: Long,
+        location: String?,
+        note: String?,
+    ): String {
+        require(endsAt > startsAt) { "结束时间必须晚于开始时间" }
+        val resolvedId = id ?: UUID.randomUUID().toString()
+        val existing = id?.let { eventDao.byId(activeAppScopeStore.current.scopeKey, it) }
         eventDao.upsert(
             ScheduleEventEntity(
                 scopeKey = activeAppScopeStore.current.scopeKey,
-                id = UUID.randomUUID().toString(),
+                id = resolvedId,
                 title = title,
                 startsAt = startsAt,
                 endsAt = endsAt,
                 location = location?.takeIf { it.isNotBlank() },
                 note = note?.takeIf { it.isNotBlank() },
-                minutesBefore = 0,
+                minutesBefore = existing?.minutesBefore ?: 0,
             ),
         )
+        return resolvedId
     }
 
     override suspend fun deleteEvent(id: String) = eventDao.delete(activeAppScopeStore.current.scopeKey, id)

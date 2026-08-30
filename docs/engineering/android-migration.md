@@ -26,7 +26,9 @@
 
 **核心对齐基础层（2026-08-30）：** Android launcher 图标由 iOS `AppIcon.png` 唯一母版生成 legacy/adaptive/monochrome 资源；Material 3 统一使用 12/16/24dp 品牌圆角。`ActiveAppScopeStore` 统一身份、guest 与 capability，Room v4 的全部本地实体以 `(scopeKey, id)` 隔离，仓储随活动作用域切换；Supabase 仅在身份具备社区 capability 时延迟初始化。Android 尚未发布，因此 schema 1–3 允许破坏性重建，此后缺 migration 必须失败。
 
-**API 36 设备验收（2026-08-29）：** Pixel 8 / Android 16 模拟器已通过 5 Tab 与二级返回导航测试、空库首启、随记新增/重启持久化/删除，并完成真实本科验证码和登录。实测同时修正了两项运行缺陷：登录前匿名 Cookie 现在跨 key/验证码/提交复用，认证后才持久化；阻塞 OkHttp 教务调用统一在 `Dispatchers.IO` 执行。当前 `xskb_list.do` 的真实响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，按契约报数据不可用并保留缓存；iOS 表单/WebView bootstrap 回退仍属后续教务专项。
+**课表与个人日程对齐（2026-08-30）：** `TimetableGridProjection` 统一投影课程、考试与个人日程的 day/period span/lane/stable ID，稳定 Compose `Layout` 渲染 7 天 × 13 节紧凑圆角网格；周卡只保留左右切换，“回到本周/同步课表”位于右上角菜单。课表和日迹共用 scoped Room 日程并支持增删改、重启持久化；课程周次与学期范围内个人日程以 `Asia/Shanghai` 导出 RFC 5545 ICS，通过受限 FileProvider 和 Android Sharesheet 分享，不申请日历写入权限。
+
+**API 36 设备验收（2026-08-30）：** Pixel 8 / Android 16 模拟器已通过 10 个 instrumentation 用例（根导航、scoped Room 重开、课表格子/课程块点击、日程编辑/删除确认）。真实旅程完成空白格新增日程、强制结束后持久化、日迹共享显示与 ICS Sharesheet；guest 隐藏社区，校园 capability 身份的导航测试确认社区可达。此前真实本科验证码和登录修复继续有效。当前 `xskb_list.do` 的真实响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，按契约报数据不可用并保留缓存；iOS 表单/WebView bootstrap 回退仍属后续教务专项。
 
 ## A. 迁移清单（Migration Inventory）
 
@@ -44,7 +46,7 @@
 
 ### 需要重写（逻辑保留、形态重做）
 
-- 课表投影（`TimetableGridSnapshot` / `WeeklyTimetableProjection` / 重叠课程布局）→ Compose `LazyLayout` 自绘网格 + 预计算投影。
+- 课表投影（`TimetableGridSnapshot` / 重叠课程布局）→ 纯 Domain `TimetableGridProjection` + 稳定 Compose `Layout` 网格，不使用实验性 Grid/LazyLayout API。
 - 日迹随记/统计/语音转写/分享图 → Android 原生能力（MediaStore、SpeechRecognizer、Canvas 生成）。
 - Widget、分享扩展、导入扩展 → Android Widget / Glance、系统分享，后续阶段。
 - 社区发布队列（重试幂等）→ 保留语义，用 WorkManager + Room 重做。
@@ -151,7 +153,7 @@ android/
 
 - 每个功能都有独立 `sealed UiState`（Loading / Loaded / Empty / Error），满足「新功能必须定义 Loading、Empty、Error 与恢复行为」不变量。
 - 依赖方向：Compose UI → ViewModel → Repository → Room/DataStore/占位；无 UseCase 泛滥、无 Base 类。
-- 日迹（Schedule）为真实可用的本地功能：随记新增/软删除、个人日程读写，Room 持久化。
+- 日迹（Schedule）为真实可用的本地功能：随记新增/编辑/软删除与标签保存；个人日程新增/编辑/删除，和课表共用 Room 持久化数据源。
 - 登录路由 `login` 已接入 NavHost；Profile 页提供入口，阶段 2 替换为强智登录协议。
 - 深链 `myleafy://community-post?id=…` 与 `myleafy://timetable-invite?code=…` 挂靠社区/我的 Tab（对应 iOS 深链路由白名单）。
 - 占位仓储（Community/Auth/Profile）通过 `isPlaceholder` 标识在 UI 如实展示“未接入”，不静默返回假数据。
@@ -160,13 +162,13 @@ android/
 ### 架构决策
 
 - 依赖方向固定：`Compose UI → ViewModel → Repository → DataSource`；无 UseCase 泛滥、无 Base 类。
-- 阶段 1 固定 5 Tab（课表/社区/日迹/校园/我的），不做 capability 门控；社区门控逻辑保留在 `CampusDescriptor`，后续接入。
+- 根导航逻辑顺序为课表/社区/日迹/校园/我的；社区按 `ActiveAppScope` capability 门控，guest/无能力身份不显示社区且不初始化 Supabase。
 - 本地数据分类：教务副本（Course/Grade/Exam，学校权威）与用户数据（ScheduleMemo/ScheduleEvent，本地权威）分实体注册，社区数据以 Supabase 为权威不落 Room。
-- Room 早期采用 `fallbackToDestructiveMigration(dropAllTables = true)`；正式发布前改为受控 migration。
+- Android 未发布测试数据只允许 schema 1–3 破坏性重建；其他缺失 migration 必须直接失败，不能静默清库。
 
 ## 数据模型映射表（DTO / Entity）
 
-「Swift Type / Android Type / 关键字段 / 本地持久化 / 跨平台共享」详见下表。**纯 UI 投影不进入 Android 数据模型**（如 `TimetableGridSnapshot`、`WeeklyTimetableProjection`、`GradeAnalytics`、`ScheduleMemoStatistics`）。
+「Swift Type / Android Type / 关键字段 / 本地持久化 / 跨平台共享」详见下表。**纯 UI/Domain 投影不进入 Android 数据模型**（如 `TimetableGridSnapshot`、`TimetableGridProjection`、`GradeAnalytics`、`ScheduleMemoStatistics`）。
 
 ### 教务本地数据
 
@@ -308,7 +310,7 @@ Gradle 已预留 `versionCode / versionName / applicationId / signingConfig（re
 - **阶段 2 教务接入（M2.1-M2.5）：已完成。** OkHttp 客户端（登录/Cookie/编码）、jsoup 解析器与 Fixture 回归、Room 落库、课表网格渲染、登录页、成绩/考试抓取与展示。
 - **阶段 4 社区（M4.1-M4.3）：已完成。** supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论/点赞、文本发帖与评论。
 - **阶段 5 校园与我的**：空教室、我的社区资料（bootstrap 展示）、评价目录、共享课表。
-- **阶段 3 日迹强化**：Markdown 编辑、统计（本机可测）、分享卡片。
+- **阶段 3 日迹基础闭环：已完成。** 随记编辑/软删除、个人日程增删改、课表共享数据源与 ICS；复杂 Markdown、图片/语音、统计和分享卡片留到增强阶段。
 - **UI 后续收尾**：逐步把 `FeatureDestination` 占位替换为真实实现；校园网依赖页面单独做真机/可访问教务网络验收，静态说明页保持可离线使用。
 - **发布工程**：WorkManager 后台刷新、Widget（Glance）、通知、release 签名与 CI。
 

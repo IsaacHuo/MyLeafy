@@ -127,8 +127,6 @@ fun MyLeafyNavHost(
             composable(RootTab.TIMETABLE.route) {
                 TimetableScreen(
                     onShareClick = { navController.navigate(FeatureDestination.TIMETABLE_SHARE.route) },
-                    onExportClick = { navController.navigate(FeatureDestination.TIMETABLE_EXPORT.route) },
-                    onAddScheduleClick = { navController.navigate(FeatureDestination.TIMETABLE_ADD_SCHEDULE.route) },
                 )
             }
             composable(RootTab.COMMUNITY.route) {

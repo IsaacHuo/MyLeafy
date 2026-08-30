@@ -7,6 +7,7 @@ import com.myleafy.android.core.network.SchoolNetworkClient
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
  * 课表仓储接口。学校教务是权威来源，Room 是本地副本；
@@ -20,6 +21,7 @@ interface TimetableRepository {
 }
 
 /** 线上仓储：教务抓取（OkHttp + jsoup）→ 解析 → Room 落库。 */
+@OptIn(ExperimentalCoroutinesApi::class)
 class LiveTimetableRepository(
     private val client: SchoolNetworkClient,
     private val courseDao: CourseDao,
@@ -37,7 +39,19 @@ class LiveTimetableRepository(
         val entities = records.map { r ->
             CourseEntity(
                 scopeKey = scopeKey,
-                id = UUID.randomUUID().toString(),
+                id = UUID.nameUUIDFromBytes(
+                    listOf(
+                        semesterId,
+                        r.courseName,
+                        r.teacher,
+                        r.classInfo,
+                        r.location,
+                        r.room,
+                        r.dayOfWeek.toString(),
+                        r.weeks.joinToString(","),
+                        r.duration.joinToString(","),
+                    ).joinToString("|").toByteArray(Charsets.UTF_8),
+                ).toString(),
                 sourceSemesterID = semesterId,
                 courseName = r.courseName,
                 teacher = r.teacher,
