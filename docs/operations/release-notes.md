@@ -10,10 +10,14 @@ Android 使用独立的 `Cut Android Release` workflow 和 `android-vX.Y.Z` tag�
 
 | 项目 | 内容 |
 |---|---|
-| 状态 | 待 `Cut Android Release` 完成 |
+| 状态 | 已正式发布（2026-08-31） |
 | 最低系统 | Android 10（API 29） |
 | Git tag | `android-v1.0.1` |
+| 发布源码 | `ad7915c7f71278c9c10e8320c2f959c8cbd9aa91` |
+| GitHub Release | [`MyLeafy Android 1.0.1`](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.0.1) |
 | 产物 | 签名 APK、SHA-256、构建信息 |
+| APK SHA-256 | `de264f79890849f85b6aa716233e6ab03920b4db39cc055971aa41ae1a134ea5` |
+| 真机验收 | Xiaomi 24069RA21C / Android 16：保留身份与本地数据覆盖安装、冷启动及社区加载通过 |
 
 此热修复保留登录失败原因，并为社区 TLS 连接被当前网络拦截的情况提供安全、可操作的提示；不会关闭证书主机名校验。
 
