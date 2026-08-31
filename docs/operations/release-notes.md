@@ -6,6 +6,17 @@ iOS 发布通过 GitHub Actions 的 `Cut iOS Release` workflow（`workflow_dispa
 
 Android 使用独立的 `Cut Android Release` workflow 和 `android-vX.Y.Z` tag。该流程先执行 JVM tests、lint 和 release assemble，再校验 APK 签名，最后发布 APK、SHA-256 与构建信息；不会构建或修改 iOS 归档。
 
+## Android 1.0.1
+
+| 项目 | 内容 |
+|---|---|
+| 状态 | 待 `Cut Android Release` 完成 |
+| 最低系统 | Android 10（API 29） |
+| Git tag | `android-v1.0.1` |
+| 产物 | 签名 APK、SHA-256、构建信息 |
+
+此热修复保留登录失败原因，并为社区 TLS 连接被当前网络拦截的情况提供安全、可操作的提示；不会关闭证书主机名校验。
+
 ## 未发布
 
 - 根导航为课表、社区、日迹、校园、我的；日迹顶部提供随记、日程、推送。

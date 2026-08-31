@@ -11,11 +11,18 @@ import kotlinx.coroutines.launch
 data class LoginUiState(
     val hasCachedIdentity: Boolean = false,
     val isSubmitting: Boolean = false,
-    val errorMessage: String? = null,
+    val loginErrorMessage: String? = null,
+    val captchaErrorMessage: String? = null,
     val loginSucceeded: Boolean = false,
     val captchaBytes: ByteArray? = null,
     val isCaptchaLoading: Boolean = false,
-)
+) {
+    val errorMessage: String?
+        get() = listOfNotNull(loginErrorMessage, captchaErrorMessage)
+            .distinct()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n")
+}
 
 /**
  * 登录 ViewModel（M2.2 接入强智登录）。
@@ -38,7 +45,7 @@ class LoginViewModel(
         _uiState.value = _uiState.value.copy(
             isCaptchaLoading = true,
             captchaBytes = null,
-            errorMessage = null,
+            captchaErrorMessage = null,
         )
         viewModelScope.launch {
             val result = runCatching { repository.fetchUndergraduateCaptcha() }
@@ -49,7 +56,7 @@ class LoginViewModel(
             _uiState.value = _uiState.value.copy(
                 isCaptchaLoading = false,
                 captchaBytes = result.getOrNull(),
-                errorMessage = failure?.let {
+                captchaErrorMessage = failure?.let {
                     "验证码获取失败：${it.message ?: "请检查校园网与代理设置"}"
                 },
             )
@@ -58,10 +65,16 @@ class LoginViewModel(
 
     fun submit(account: String, password: String, captcha: String) {
         if (account.isBlank() || password.isBlank() || captcha.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "请填写完整的学号、密码与验证码")
+            _uiState.value = _uiState.value.copy(
+                loginErrorMessage = "请填写完整的学号、密码与验证码",
+            )
             return
         }
-        _uiState.value = _uiState.value.copy(isSubmitting = true, errorMessage = null)
+        _uiState.value = _uiState.value.copy(
+            isSubmitting = true,
+            loginErrorMessage = null,
+            captchaErrorMessage = null,
+        )
         viewModelScope.launch {
             val result = repository.loginUndergraduate(
                 account = account.trim(),
@@ -75,7 +88,7 @@ class LoginViewModel(
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
                         isSubmitting = false,
-                        errorMessage = it.message ?: "登录失败",
+                        loginErrorMessage = it.message ?: "登录失败",
                     )
                     refreshCaptcha()
                 },
@@ -84,7 +97,10 @@ class LoginViewModel(
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
+        _uiState.value = _uiState.value.copy(
+            loginErrorMessage = null,
+            captchaErrorMessage = null,
+        )
     }
 
     private companion object {

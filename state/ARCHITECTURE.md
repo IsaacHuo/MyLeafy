@@ -233,7 +233,8 @@ React-admin（site/src/admin）
 - Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 标志和 capabilities；Room v4 的全部实体使用 `(scopeKey, id)` 复合主键，DAO 查询、替换和删除必须显式携带当前 scope。仅预发布 schema 1–3 允许破坏性重建，未来缺 migration 时直接失败。
 - Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时不初始化客户端，社区根入口和社区深链内容均被门控。
 - Android 社区数据以 Supabase 为权威且不落 Room：`CommunityRepository` 统一执行 profile bootstrap、资料完整度和自定义校园准入检查；UI 不直接操作 PostgREST。Feed 查询支持普通分类/搜索与独立的近七日热门模式，下拉刷新失败时 ViewModel 保留最近成功列表。通知通过 recipient RLS 表查询/更新，收藏、本人内容软删除、举报与屏蔽只调用既有 RPC；屏蔽关系同时过滤已有通知。
-- Android 本科验证码阶段使用只驻留内存的匿名 Cookie；key、验证码与登录提交复用同一会话，认证成功后才按 `CampusIdentity.scopeKey` 迁移到 Keystore。同步 OkHttp 请求由客户端统一切换到 `Dispatchers.IO`，Compose ViewModel 不执行阻塞网络 I/O。
+- Android 本科验证码阶段使用只驻留内存的匿名 Cookie；key、验证码与登录提交复用同一会话，认证成功后才按 `CampusIdentity.scopeKey` 迁移到 Keystore。登录失败原因与验证码加载错误是独立 UI 状态，自动刷新验证码不得清空登录错误。同步 OkHttp 请求由客户端统一切换到 `Dispatchers.IO`，Compose ViewModel 不执行阻塞网络 I/O。
+- Android 教务和社区网络必须保留平台 TLS 证书与主机名校验；校园网、代理或 VPN 返回目标域名以外的证书时 fail closed，并向用户提示切换网络，不得加入 trust-all 或 hostname verifier 绕过。
 - Android 当前仅实现直接 HTML 课表解析；学校返回未识别页面时 fail-fast 为 `TimetableDataUnavailable` 并保留 Room 最近成功缓存，不把未知页面当空课表。iOS 的表单/WebView bootstrap 回退尚未迁移。
 - Android `TimetableGridProjection` 是课表几何的单一纯 Domain 投影：按所选周把课程、考试和 scoped Room 个人日程映射为 day/period span/lane/stable ID；稳定 Compose `Layout` 只消费投影，不在重组中重复过滤排序。正常手机宽度同屏显示 7 天 × 13 节，极窄屏和大字体保留滚动兜底。
 - Android 课表与日迹日程列表共用 `ScheduleEventEntity`/`ScheduleRepository`；新增、编辑与删除按活动 `scopeKey` 持久化。ICS 导出按学期首日展开课程周次，并包含学期范围内个人日程，固定 `Asia/Shanghai`，文件仅暴露给 Android FileProvider Sharesheet。

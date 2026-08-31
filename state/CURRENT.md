@@ -4,7 +4,7 @@ Last verified: 2026-08-31
 
 ## Current Focus
 
-- **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.0 已通过独立 GitHub Release 正式发布，APK、SHA-256 与构建信息均已按发布源码复核，并在 Xiaomi 24069RA21C / Android 16 完成安装、启动与根页面渲染验收。
+- **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.0 已正式发布并在 Xiaomi 24069RA21C / Android 16 完成安装验收。1.0.1 登录/社区网络提示热修复已通过本地测试、assemble 和 lint，待签名发布与真机覆盖安装。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑与投稿、本机语音转写与统计分享图。
 - **国际化收尾**：已完成英文本地化并加入 App 内语言偏好（跟随系统 / 简体中文 / English，同步到 Widget 与 Share 扩展）；正在打磨英文课表与校园文案。
 - **课表与时间语义**：`2026-2027-1` 已作为最新拉取学期，首周仍为 9 月 7 日；按学年浏览、20 周单学期数据集、学年边界滑动与刷新反馈，历史春季课表和暑假可从时间视图按周回看。
@@ -30,6 +30,7 @@ Last verified: 2026-08-31
 - **Android UI 壳收敛**：底栏只显示在 5 个根页面，常用二级功能由 `FeatureDestination` 统一路由；帮助中心、权限说明、关于与内置校历已完成静态内容，页面不注入演示数据，日迹空库仍可创建第一条随记。
 - **Android API 36 设备验收**：`MyLeafy_API_36`（Pixel 8 / Android 16）已通过 12 个 instrumentation 用例（根导航、scoped Room 重开、课表/日程与社区 Compose 交互）；真实旅程验证个人日程保存、强制结束后持久化、日迹共享数据源和 ICS Sharesheet。guest 模式保持四个本地 Tab，社区仅在校园身份具备 capability 时显示。
 - **Android 本科登录实测修复**：登录前验证码会话 Cookie 以内存态跨 key/验证码/提交复用，认证成功后才迁移到 Keystore；所有同步 OkHttp 教务入口改在 `Dispatchers.IO` 执行。2026-08-29 已用真实校园网络完成验证码和登录验证。
+- **Android 1.0.1 登录与社区网络提示热修复**：登录失败原因和验证码加载错误分开持有，自动刷新验证码不再清空学校返回的失败原因。真机确认 `bjfu-wifi` 会为 Supabase 连接返回 `*.bjfu.edu.cn` 证书；客户端继续拒绝主机名不匹配，并改为提示切换网络或检查代理/VPN。切换网络后同一身份的社区 Feed 已恢复，调查记录见 `logs/2026-08-31-android-campus-wifi-tls-interception.md`。
 - 教务网络（研究生 RSA/AES）与部分校园工具（共享课表、评价目录）、日迹强化、发布工程（Widget/WorkManager）仍待接入；Android 1.0.0 已发布并完成小米真机安装验收。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
 - 教务全量同步区分完整成功、部分成功与失败；课表、成绩、考试、教学计划与空闲教室只在确认目标结构或可信空结果后更新缓存，异常页面继续保留最近成功数据。
 - 社区投票局部错误、帖子/评论重试幂等、日迹长列表投影、Dynamic Type、VoiceOver 与核心英文文案完成一轮可靠性收敛。
@@ -58,6 +59,7 @@ Last verified: 2026-08-31
 - **教务系统不稳定**：HTML、登录流程或网络策略变化可能使解析暂时失效（持续风险，见 `docs/product/overview.md` §7）。
 - **Android 本科课表结构变化**：真实登录后的 `xskb_list.do` 当前返回 `200`，但页面不含 Android 解析器支持的 `kbcontent/kbtable` 结构，App 会如实报“课表数据不可用”并保留缓存；后续需迁移 iOS 的表单解析 / WebView bootstrap 回退。
 - **模拟器与全局代理**：Clash 等全局代理可能接管模拟器 NAT，使教务 HTTP 返回 `502`，而宿主机直连仍为 `200`；验收时需为学校域名/IP 配置直连，不能在 App 中硬编码个人代理。
+- **校园 Wi-Fi TLS 拦截**：2026-08-31 真机确认 `bjfu-wifi` 对 Supabase HTTPS 连接返回校园域名证书，Android 必须拒绝该连接；切换网络后社区恢复。不得通过关闭 TLS 主机名校验绕过，详见 `logs/2026-08-31-android-campus-wifi-tls-interception.md`。
 - **身份绑定强度**：教务身份由已修改的客户端提交，服务端无法独立证明来源；高价值权益需要可信服务端验证。
 - **目录数据依赖人工维护**：教师/课程等目录需模板导入或后台审核。
 - **MyLeafy AI 已移除**：历史审核复盘（`docs/operations/app-store/2.9-build-22-review.md`）中的 AI 相关描述不代表当前产品。
