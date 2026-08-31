@@ -4,7 +4,7 @@ Last verified: 2026-08-31
 
 ## Current Focus
 
-- **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.0 已通过独立 GitHub Release 正式发布，APK、SHA-256 与构建信息均已按发布源码复核。小米真机已连接，等待系统侧允许“USB 安装”后完成安装验收。
+- **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.0 已通过独立 GitHub Release 正式发布，APK、SHA-256 与构建信息均已按发布源码复核，并在 Xiaomi 24069RA21C / Android 16 完成安装、启动与根页面渲染验收。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑与投稿、本机语音转写与统计分享图。
 - **国际化收尾**：已完成英文本地化并加入 App 内语言偏好（跟随系统 / 简体中文 / English，同步到 Widget 与 Share 扩展）；正在打磨英文课表与校园文案。
 - **课表与时间语义**：`2026-2027-1` 已作为最新拉取学期，首周仍为 9 月 7 日；按学年浏览、20 周单学期数据集、学年边界滑动与刷新反馈，历史春季课表和暑假可从时间视图按周回看。
@@ -23,13 +23,14 @@ Last verified: 2026-08-31
 - **Android 校园与“我的”对齐**：校园工具按学校教学/自习安排/学习空间分组，成绩/排名与考试支持互不扩大的单项同步，空闲教室结果可在窄屏滚动；社区资料可编辑昵称、简介、专业和年级。DataStore 主题与文字偏好即时应用，缓存中心区分教务副本和本机权威数据；退出登录清理学校 Cookie、保存凭据与 Supabase 匿名会话，但保留对应身份的 scoped Room 数据。帮助、权限、反馈与关于均为真实入口。
 - **Android 发布加固**：Android 版本升级为 1.0.0；release task 缺少独立签名或 Supabase 公开配置时直接失败。`Cut Android Release` 会执行 JVM tests、lint 和 signed assemble，使用 `apksigner` 校验后发布 APK、SHA-256 与源码 commit/签名报告；Android tag 使用独立的 `android-vX.Y.Z` 命名，不改变 iOS `vX.Y` 发布流程。
 - **Android 1.0.0 正式发布**：2026-08-31 从源码 `24da9e18d36a3a8b759c368700f79553a39a2f08` 发布 immutable tag `android-v1.0.0`；Release 包含签名 APK、SHA-256 和构建信息，下载后复核包名、版本、源码 commit、文件散列及发布证书均一致。Android Release 不包含 iOS 二进制。
+- **Android 1.0.0 小米真机验收**：Release APK 已安装到 Xiaomi 24069RA21C（Android 16），系统报告 `com.myleafy.android` / versionCode 1 / versionName 1.0.0；`MainActivity` 启动成功、进程存活且课表根页完整渲染。未绑定学校身份时按 capability 隐藏社区，登录学校账号后显示五个根 Tab。
 - **Android 阶段 2（教务，M2.1-M2.5）**：OkHttp 教务客户端 + Cookie 契约、强智登录（encodeKey/验证码/会话验证）、课表抓取 + jsoup 解析（contracts fixtures 回归）+ Room 落库、周课表网格、成绩/考试抓取与校园页。
 - **Android 阶段 4（社区）**：supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论线程/点赞、文本发帖与评论，以及搜索、分类/热门、通知、收藏、本人内容软删除、举报和屏蔽。
 - **Android 阶段 5 部分（M5.1-M5.2）**：我的页社区资料（bootstrap）、空闲教室查询。
 - **Android UI 壳收敛**：底栏只显示在 5 个根页面，常用二级功能由 `FeatureDestination` 统一路由；帮助中心、权限说明、关于与内置校历已完成静态内容，页面不注入演示数据，日迹空库仍可创建第一条随记。
 - **Android API 36 设备验收**：`MyLeafy_API_36`（Pixel 8 / Android 16）已通过 12 个 instrumentation 用例（根导航、scoped Room 重开、课表/日程与社区 Compose 交互）；真实旅程验证个人日程保存、强制结束后持久化、日迹共享数据源和 ICS Sharesheet。guest 模式保持四个本地 Tab，社区仅在校园身份具备 capability 时显示。
 - **Android 本科登录实测修复**：登录前验证码会话 Cookie 以内存态跨 key/验证码/提交复用，认证成功后才迁移到 Keystore；所有同步 OkHttp 教务入口改在 `Dispatchers.IO` 执行。2026-08-29 已用真实校园网络完成验证码和登录验证。
-- 教务网络（研究生 RSA/AES）与部分校园工具（共享课表、评价目录）、日迹强化、发布工程（Widget/WorkManager）仍待接入；Android 1.0.0 已发布，小米真机安装仍需设备侧允许“USB 安装”。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
+- 教务网络（研究生 RSA/AES）与部分校园工具（共享课表、评价目录）、日迹强化、发布工程（Widget/WorkManager）仍待接入；Android 1.0.0 已发布并完成小米真机安装验收。迁移方案与教务协议记录见 `docs/engineering/android-migration.md`，解析回归样本见 `contracts/jwxt/`。iOS 代码未改动。
 - 教务全量同步区分完整成功、部分成功与失败；课表、成绩、考试、教学计划与空闲教室只在确认目标结构或可信空结果后更新缓存，异常页面继续保留最近成功数据。
 - 社区投票局部错误、帖子/评论重试幂等、日迹长列表投影、Dynamic Type、VoiceOver 与核心英文文案完成一轮可靠性收敛。
 - iOS 社区 Feed 在活跃 Tab 内订阅校园范围的帖子/投票变更并后台预取；新内容由顶部入口显式应用，下拉刷新区分更新、最新、空结果、部分失败与失败。
@@ -65,7 +66,7 @@ Last verified: 2026-08-31
 
 按 `docs/product/roadmap.md` 的近期重点推进，不承诺固定时间表：
 
-- 在小米真机允许“USB 安装”后完成 Android 1.0.0 安装与启动验收；校园网依赖能力在可访问学校环境中单独验收。
+- 在可访问学校环境中单独验收登录、教务同步及社区 capability 旅程。
 - 提高教务解析稳定性与解析回归测试覆盖。
 - 统一不同校园的数据适配协议与能力配置。
 - 连接课表、日程与学习空间的时间语义。

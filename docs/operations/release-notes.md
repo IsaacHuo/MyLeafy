@@ -31,6 +31,7 @@ Android 使用独立的 `Cut Android Release` workflow 和 `android-vX.Y.Z` tag�
 | GitHub Release | [`MyLeafy Android 1.0.0`](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.0.0) |
 | 产物 | 签名 APK、SHA-256、构建信息 |
 | APK SHA-256 | `099c77d5a5e63fbc2f5e9aac21353062f85c6038112e9dee7dda8bca978435b5` |
+| 真机验收 | Xiaomi 24069RA21C / Android 16：安装、冷启动与根页面渲染通过 |
 
 用户可见更新说明见 [`android-release-notes.md`](android-release-notes.md)。Android Release 不包含 iOS 二进制。
 
