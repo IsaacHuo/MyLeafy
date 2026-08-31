@@ -24,10 +24,13 @@ Android 使用独立的 `Cut Android Release` workflow 和 `android-vX.Y.Z` tag�
 
 | 项目 | 内容 |
 |---|---|
-| 状态 | 待 `Cut Android Release` 完成 |
+| 状态 | 已正式发布（2026-08-31） |
 | 最低系统 | Android 10（API 29） |
 | Git tag | `android-v1.0.0` |
+| 发布源码 | `24da9e18d36a3a8b759c368700f79553a39a2f08` |
+| GitHub Release | [`MyLeafy Android 1.0.0`](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.0.0) |
 | 产物 | 签名 APK、SHA-256、构建信息 |
+| APK SHA-256 | `099c77d5a5e63fbc2f5e9aac21353062f85c6038112e9dee7dda8bca978435b5` |
 
 用户可见更新说明见 [`android-release-notes.md`](android-release-notes.md)。Android Release 不包含 iOS 二进制。
 
