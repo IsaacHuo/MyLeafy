@@ -13,6 +13,28 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+val releaseSigning = mapOf(
+    "storeFile" to System.getenv("MYLEAFY_RELEASE_STORE_FILE"),
+    "storePassword" to System.getenv("MYLEAFY_RELEASE_STORE_PASSWORD"),
+    "keyAlias" to System.getenv("MYLEAFY_RELEASE_KEY_ALIAS"),
+    "keyPassword" to System.getenv("MYLEAFY_RELEASE_KEY_PASSWORD"),
+)
+val isReleaseSigningConfigured = releaseSigning.values.all { !it.isNullOrBlank() }
+val requestsReleaseBuild = gradle.startParameter.taskNames.any { task ->
+    task.contains("Release", ignoreCase = true)
+}
+if (requestsReleaseBuild) {
+    require(isReleaseSigningConfigured) {
+        "Release build requires MYLEAFY_RELEASE_STORE_FILE, STORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD."
+    }
+    require(!localProperties.getProperty("SUPABASE_URL").isNullOrBlank()) {
+        "Release build requires SUPABASE_URL in android/secrets.properties."
+    }
+    require(!localProperties.getProperty("SUPABASE_ANON_KEY").isNullOrBlank()) {
+        "Release build requires SUPABASE_ANON_KEY in android/secrets.properties."
+    }
+}
+
 android {
     namespace = "com.myleafy.android"
     compileSdk = 36
@@ -22,7 +44,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(
@@ -37,9 +59,23 @@ android {
         )
     }
 
+    signingConfigs {
+        create("release") {
+            if (isReleaseSigningConfigured) {
+                storeFile = file(requireNotNull(releaseSigning["storeFile"]))
+                storePassword = releaseSigning["storePassword"]
+                keyAlias = releaseSigning["keyAlias"]
+                keyPassword = releaseSigning["keyPassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (isReleaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

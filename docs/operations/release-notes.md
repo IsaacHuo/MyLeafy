@@ -2,7 +2,9 @@
 
 本文是 MyLeafy 正式版本、源码锚点和用户可见更新摘要的唯一记录入口。App Store 实际使用过的短文案与根据 Git 历史补录的版本摘要分开标注；特定审核过程见 [`app-store/`](app-store/)。正式 tag 创建后不得移动、覆盖或强制更新。
 
-发布通过 GitHub Actions 的 `Cut iOS Release` workflow（`workflow_dispatch`）完成：它会用当前 `main` 构建未签名的 `.xcarchive`，在 `main` 上创建 `vX.Y` tag，并生成一个挂载归档的 draft Release。确认草稿内容后手动发布即可；App Store 提交流程仍为人工操作。
+iOS 发布通过 GitHub Actions 的 `Cut iOS Release` workflow（`workflow_dispatch`）完成：它会用当前 `main` 构建未签名的 `.xcarchive`，在 `main` 上创建 `vX.Y` tag，并生成一个挂载归档的 draft Release。确认草稿内容后手动发布即可；App Store 提交流程仍为人工操作。
+
+Android 使用独立的 `Cut Android Release` workflow 和 `android-vX.Y.Z` tag。该流程先执行 JVM tests、lint 和 release assemble，再校验 APK 签名，最后发布 APK、SHA-256 与构建信息；不会构建或修改 iOS 归档。
 
 ## 未发布
 
@@ -17,6 +19,17 @@
 - 课表双指缩放改为同一日期列布局内的可逆连续形变：本周让今天居中，其他周从周一至周三进入；三日视图支持每次三个自然日的左右分页并缩回当前页面所属周。时间视图年度缩略恢复 1–12 月自然顺序，照片背景替换后立即刷新并默认完整显示。
 - 课程教师可直达评价页；投票卡片无需先投票即可查看各选项比例；阳光长跑采用 2026–2027 第一学期日期和假期周。
 - 新建个人日程会以同一条记录同时显示在日程列表和随记流，并按真实创建时间参与随记搜索与排序。
+
+## Android 1.0.0
+
+| 项目 | 内容 |
+|---|---|
+| 状态 | 待 `Cut Android Release` 完成 |
+| 最低系统 | Android 10（API 29） |
+| Git tag | `android-v1.0.0` |
+| 产物 | 签名 APK、SHA-256、构建信息 |
+
+用户可见更新说明见 [`android-release-notes.md`](android-release-notes.md)。Android Release 不包含 iOS 二进制。
 
 ## 2.9
 

@@ -303,9 +303,9 @@ Android **不新建后端**，继续使用现有 Supabase。阶段 2 建立客�
 - 教务 Cookie 与登录凭据经 Keystore AES-GCM 加密落盘（`SecureStorage`）。
 - 日志默认脱敏：不记录密码、Cookie、验证码、完整 token；网络调试留存 HTML 快照需脱敏（学号、长数字串）。
 
-## 发布预留
+## Android 发布
 
-Gradle 已预留 `versionCode / versionName / applicationId / signingConfig（release）`。阶段 1 不写真实 key；未来流程：Git Tag → GitHub Actions → Gradle Release Build → APK Signing → GitHub Release。
+Android 1.0.0 使用独立的 `android-vX.Y.Z` tag 与 `Cut Android Release` workflow，不复用 iOS `vX.Y` tag。release Gradle task 必须从环境变量读取 Android 专用签名，并从 git-ignored `secrets.properties` 读取公开 Supabase 配置；缺少任一项直接失败。Actions 完成 JVM tests、lint、signed assemble 和 `apksigner` 校验后，将 APK、SHA-256 与包含源码 commit/证书报告的 build-info 一并发布。release key 和密码只存本机受保护目录与 GitHub secrets，不进入 Git。
 
 ## 后续阶段路线
 
@@ -314,6 +314,6 @@ Gradle 已预留 `versionCode / versionName / applicationId / signingConfig（re
 - **阶段 5 校园与我的：核心闭环已完成。** 空教室、成绩/排名与考试独立同步、领域分组；社区资料 bootstrap 与昵称/简介/专业/年级编辑；主题/文字偏好、缓存与单项同步中心、安全退出、帮助/权限/反馈/关于。评价目录、共享课表成员与邀请码留到后续阶段。
 - **阶段 3 日迹基础闭环：已完成。** 随记编辑/软删除、个人日程增删改、课表共享数据源与 ICS；复杂 Markdown、图片/语音、统计和分享卡片留到增强阶段。
 - **UI 后续收尾**：逐步把 `FeatureDestination` 占位替换为真实实现；校园网依赖页面单独做真机/可访问教务网络验收，静态说明页保持可离线使用。
-- **发布工程**：WorkManager 后台刷新、Widget（Glance）、通知、release 签名与 CI。
+- **发布工程**：release 签名与 GitHub Release 已接入；WorkManager 后台刷新、Widget（Glance）和系统通知留到后续版本。
 
 每阶段验收：`./gradlew assembleDebug` 通过；能单测的纯逻辑加测试；行为/边界变化同步更新本文、`state/` 与 `contracts/`。

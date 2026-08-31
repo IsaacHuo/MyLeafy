@@ -320,6 +320,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 |---|---|
 | iOS 单元/契约测试 | `leafyTests/`（XCTest，Domain/Application/Presentation 分层覆盖） |
 | Android 单元/导航测试 | `android/app/src/test/`（JVM 契约）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 变化时执行 assemble、JVM tests 与 lint |
+| Android 发布 | `.github/workflows/android-release.yml` 仅通过 `workflow_dispatch` 发布 `android-vX.Y.Z`；从 GitHub secrets 恢复 Android 专用签名与公开 Supabase 配置，先执行 tests/lint/assemble，再用 `apksigner` 验证并附带 APK、SHA-256 和 build-info。iOS `vX.Y` tag 与归档流程保持独立 |
 | 教务解析回归 | 固定 HTML 样本测试 |
 | Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |
 | Edge Functions | Deno typecheck / 单元 / 契约测试 |
