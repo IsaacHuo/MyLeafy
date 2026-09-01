@@ -1,6 +1,5 @@
 package com.myleafy.android.features.community
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,12 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,8 +37,12 @@ import com.myleafy.android.shared.model.FeedQuery
 import com.myleafy.android.shared.model.NotificationDto
 import com.myleafy.android.shared.model.PostDto
 import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.components.LeafyErrorState
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafySurfaces
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -102,7 +103,7 @@ fun CommunitySearchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LeafySecondaryScaffold(title = "搜索社区", onBack = onBack) { contentModifier ->
-        Column(modifier = contentModifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Column(modifier = contentModifier.fillMaxSize().padding(horizontal = LeafySpacing.card)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = state.query,
@@ -115,9 +116,9 @@ fun CommunitySearchScreen(
                     Icon(Icons.Outlined.Search, contentDescription = "搜索")
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(LeafySpacing.compact))
             when {
-                state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                state.isLoading -> LeafyLoadingState(message = "正在搜索校园动态")
                 state.error != null -> LeafyStatusBanner(message = state.error.orEmpty(), isError = true)
                 !state.hasSearched -> LeafyEmptyState(
                     title = "查找校园动态",
@@ -131,7 +132,7 @@ fun CommunitySearchScreen(
                     icon = Icons.Outlined.Search,
                     modifier = Modifier.fillMaxSize(),
                 )
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
                     items(state.posts, key = { it.id }) { post ->
                         CommunityPostCard(post, onClick = { onPostClick(post.id) })
                     }
@@ -240,17 +241,16 @@ fun CommunityNotificationsScreen(
         },
     ) { contentModifier ->
         when {
-            state.isLoading -> Column(
+            state.isLoading -> LeafyLoadingState(
                 modifier = contentModifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) { CircularProgressIndicator(modifier = Modifier.padding(top = 24.dp)) }
-            state.notifications.isEmpty() && state.error != null -> Column(
-                modifier = contentModifier.fillMaxSize().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                LeafyStatusBanner(message = state.error.orEmpty(), isError = true)
-                Button(onClick = viewModel::load) { Text("重试") }
-            }
+                message = "正在加载社区通知",
+            )
+            state.notifications.isEmpty() && state.error != null -> LeafyErrorState(
+                title = "通知暂时无法加载",
+                message = state.error.orEmpty(),
+                modifier = contentModifier.fillMaxSize(),
+                action = { Button(onClick = viewModel::load) { Text("重试") } },
+            )
             state.notifications.isEmpty() -> LeafyEmptyState(
                 title = "暂时没有通知",
                 message = "评论、点赞等社区互动会出现在这里。",
@@ -258,8 +258,8 @@ fun CommunityNotificationsScreen(
                 modifier = contentModifier.fillMaxSize(),
             )
             else -> LazyColumn(
-                modifier = contentModifier.fillMaxSize().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = contentModifier.fillMaxSize().padding(horizontal = LeafySpacing.card),
+                verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
             ) {
                 state.error?.let { message -> item { LeafyStatusBanner(message = message, isError = true) } }
                 items(state.notifications, key = { it.id }) { notification ->
@@ -275,15 +275,16 @@ fun CommunityNotificationsScreen(
 
 @Composable
 private fun NotificationCard(notification: NotificationDto, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(
-            enabled = notification.post_id != null,
-            onClick = onClick,
-        ),
+    Surface(
+        onClick = onClick,
+        enabled = notification.post_id != null,
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.leafySurfaces.content,
+        shape = MaterialTheme.shapes.medium,
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+        Row(modifier = Modifier.padding(LeafySpacing.card), verticalAlignment = Alignment.Top) {
             if (!notification.is_read) {
-                Text("●", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 10.dp))
+                Text("●", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = LeafySpacing.compact))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -292,7 +293,7 @@ private fun NotificationCard(notification: NotificationDto, onClick: () -> Unit)
                     fontWeight = if (notification.is_read) FontWeight.Normal else FontWeight.SemiBold,
                 )
                 notification.body?.takeIf { it.isNotBlank() }?.let {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(LeafySpacing.tiny))
                     Text(
                         it,
                         style = MaterialTheme.typography.bodyMedium,

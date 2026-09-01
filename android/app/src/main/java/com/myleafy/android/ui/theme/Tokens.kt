@@ -38,6 +38,7 @@ object LeafyComponentSize {
     val settingsIconContainer = 48.dp
     val contentMaxWidth = 720.dp
     val formMaxWidth = 420.dp
+    val floatingActionClearance = 96.dp
 }
 
 object LeafyMotion {

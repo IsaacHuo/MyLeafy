@@ -19,8 +19,6 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -37,14 +35,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadDto
+import com.myleafy.android.ui.components.LeafyContentSurface
+import com.myleafy.android.ui.components.LeafyErrorState
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.theme.LeafySpacing
 
 private enum class ConfirmationKind { DELETE_POST, DELETE_COMMENT, REPORT_POST, REPORT_COMMENT, BLOCK_USER }
 private data class PendingConfirmation(val kind: ConfirmationKind, val targetId: String)
@@ -99,18 +100,17 @@ fun PostDetailScreen(
 
     LeafySecondaryScaffold(title = "帖子详情", onBack = onBack, modifier = modifier) { contentModifier ->
         when (val state = uiState) {
-            is PostDetailUiState.Loading -> Column(
+            is PostDetailUiState.Loading -> LeafyLoadingState(
                 modifier = contentModifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) { CircularProgressIndicator(modifier = Modifier.padding(top = 24.dp)) }
+                message = "正在加载帖子",
+            )
 
-            is PostDetailUiState.Error -> Column(
-                modifier = contentModifier.fillMaxSize().padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                LeafyStatusBanner(message = state.message, isError = true)
-                Button(onClick = viewModel::load) { Text("重试") }
-            }
+            is PostDetailUiState.Error -> LeafyErrorState(
+                title = "帖子暂时无法加载",
+                message = state.message,
+                modifier = contentModifier.fillMaxSize(),
+                action = { Button(onClick = viewModel::load) { Text("重试") } },
+            )
 
             is PostDetailUiState.Loaded -> PostDetailContent(
                 state = state,
@@ -137,12 +137,12 @@ private fun PostDetailContent(
 ) {
     var commentInput by remember { mutableStateOf("") }
     LazyColumn(
-        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxSize().padding(horizontal = LeafySpacing.card),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(LeafySpacing.card)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = if (state.post.is_anonymous) "匿名" else state.post.author?.nickname ?: "北林同学",
@@ -158,11 +158,11 @@ private fun PostDetailContent(
                             onConfirm = onConfirm,
                         )
                     }
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(LeafySpacing.micro))
                     Text(state.post.title, style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(LeafySpacing.micro))
                     Text(state.post.body, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(LeafySpacing.compact))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
                             onClick = onLike,
@@ -198,9 +198,12 @@ private fun PostDetailContent(
         }
         state.mutationMessage?.let { message ->
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(
+                            horizontal = LeafySpacing.card,
+                            vertical = LeafySpacing.compact,
+                        ),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(message, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
@@ -211,7 +214,7 @@ private fun PostDetailContent(
         }
         item {
             Text("评论", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(LeafySpacing.micro))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = commentInput,
@@ -220,7 +223,7 @@ private fun PostDetailContent(
                     placeholder = { Text("写评论…") },
                     singleLine = true,
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(LeafySpacing.micro))
                 Button(
                     onClick = {
                         onComment(commentInput, null, null)
@@ -240,7 +243,7 @@ private fun PostDetailContent(
                 onConfirm = onConfirm,
             )
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(LeafySpacing.card)) }
     }
 }
 
@@ -284,12 +287,12 @@ private fun CommentThreadCard(
     menusEnabled: Boolean,
     onConfirm: (PendingConfirmation) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(LeafySpacing.compact)) {
             CommentLine(thread.root, currentProfileId, menusEnabled, onConfirm)
             thread.replies.forEach { reply ->
-                Row(modifier = Modifier.padding(start = 20.dp, top = 8.dp)) {
-                    Text("↳", color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(end = 4.dp))
+                Row(modifier = Modifier.padding(start = LeafySpacing.page, top = LeafySpacing.micro)) {
+                    Text("↳", color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(end = LeafySpacing.tiny))
                     CommentLine(reply, currentProfileId, menusEnabled, onConfirm)
                 }
             }
