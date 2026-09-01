@@ -182,7 +182,7 @@ fun LeafyToolRow(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().heightIn(min = 72.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.toolRowMinHeight),
         color = MaterialTheme.leafySurfaces.content,
         shape = MaterialTheme.shapes.medium,
     ) {
@@ -222,7 +222,7 @@ fun LeafySettingsRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = LeafyComponentSize.settingsRowMinHeight)
                 .padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.micro),
             verticalAlignment = Alignment.CenterVertically,
         ) {

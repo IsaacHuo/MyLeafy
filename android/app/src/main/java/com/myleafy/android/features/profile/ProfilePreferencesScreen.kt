@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,7 +25,9 @@ import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.core.prefs.Settings
 import com.myleafy.android.core.prefs.SettingsStore
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyContentSurface
 import com.myleafy.android.ui.components.LeafySectionHeader
+import com.myleafy.android.ui.theme.LeafySpacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -61,8 +62,8 @@ fun ProfilePreferencesScreen(
             modifier = contentModifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             LeafySectionHeader("主题", supportingText = "设置会立即应用，并在下次启动时保留。")
             PreferenceCard {
@@ -85,10 +86,10 @@ fun ProfilePreferencesScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Card(modifier = Modifier.fillMaxWidth()) {
+            LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     "课表背景与更复杂的显示密度属于增强阶段，当前不提供无效开关。",
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(LeafySpacing.card),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -99,10 +100,10 @@ fun ProfilePreferencesScreen(
 
 @Composable
 private fun PreferenceCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
             content = content,
         )
     }
@@ -116,7 +117,7 @@ private fun ChoiceRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
         choices.forEach { (value, label) ->
             FilterChip(

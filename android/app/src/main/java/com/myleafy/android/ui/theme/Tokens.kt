@@ -36,6 +36,8 @@ object LeafyComponentSize {
     val topBar = 56.dp
     val minimumTouchTarget = 48.dp
     val settingsIconContainer = 48.dp
+    val settingsRowMinHeight = 64.dp
+    val toolRowMinHeight = 72.dp
     val contentMaxWidth = 720.dp
     val formMaxWidth = 420.dp
     val floatingActionClearance = 96.dp

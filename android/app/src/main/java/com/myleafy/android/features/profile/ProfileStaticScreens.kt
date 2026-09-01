@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +33,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.myleafy.android.BuildConfig
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyContentSurface
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafySpacing
 
 private data class InfoBlock(val title: String, val body: String)
 
@@ -71,8 +74,8 @@ fun HelpCenterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             modifier = contentModifier
                 .fillMaxSize()
                 .testTag("help-content"),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
                 Text(
@@ -106,8 +109,8 @@ fun PermissionsInfoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LeafySecondaryScaffold(title = "系统权限", onBack = onBack, modifier = modifier) { contentModifier ->
         LazyColumn(
             modifier = contentModifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
                 InfoCard(
@@ -150,10 +153,11 @@ fun PermissionsInfoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         )
                         context.startActivity(intent)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+                    shape = LeafyButtonDefaults.shape,
                 ) {
                     Icon(Icons.Outlined.Security, contentDescription = null)
-                    Text("打开 Android 应用设置", modifier = Modifier.padding(start = 8.dp))
+                    Text("打开 Android 应用设置", modifier = Modifier.padding(start = LeafySpacing.micro))
                 }
             }
         }
@@ -165,8 +169,8 @@ fun FeedbackScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LeafySecondaryScaffold(title = "反馈与支持", onBack = onBack, modifier = modifier) { contentModifier ->
         LazyColumn(
             modifier = contentModifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
                 InfoCard(
@@ -199,24 +203,24 @@ fun AboutMyLeafyScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LeafySecondaryScaffold(title = "关于 MyLeafy", onBack = onBack, modifier = modifier) { contentModifier ->
         LazyColumn(
             modifier = contentModifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(LeafySpacing.page)) {
                         Text(
                             text = "MyLeafy",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(LeafySpacing.micro))
                         Text(
                             text = "面向高校学习与校园生活的原生应用，将课表、学业数据、个人记录和校园社区组织在一个清晰的工作流中。",
                             style = MaterialTheme.typography.bodyLarge,
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = LeafySpacing.card))
                         Text(
                             text = "Android ${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
                             style = MaterialTheme.typography.labelLarge,
@@ -264,10 +268,10 @@ fun AboutMyLeafyScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
 @Composable
 private fun InfoCard(block: InfoBlock) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = block.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(LeafySpacing.micro))
             Text(
                 text = block.body,
                 style = MaterialTheme.typography.bodyMedium,
@@ -286,11 +290,12 @@ private fun ExternalLinkButton(
     val context = LocalContext.current
     OutlinedButton(
         onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+        shape = LeafyButtonDefaults.shape,
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             Icon(icon, contentDescription = null)
-            Text(label, modifier = Modifier.padding(start = 12.dp).weight(1f))
+            Text(label, modifier = Modifier.padding(start = LeafySpacing.compact).weight(1f))
             Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
         }
     }

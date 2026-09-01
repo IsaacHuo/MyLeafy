@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,7 +28,12 @@ import com.myleafy.android.features.schedule.ScheduleRepository
 import com.myleafy.android.features.timetable.TimetableRepository
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyContentSurface
 import com.myleafy.android.ui.components.LeafySectionHeader
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafySpacing
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -128,8 +132,8 @@ fun ProfileSyncScreen(
     LeafySecondaryScaffold(title = "缓存与同步", onBack = onBack) { contentModifier ->
         LazyColumn(
             modifier = contentModifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item { LeafySectionHeader("学校数据", supportingText = "每个按钮只请求对应范围，失败时保留最近成功缓存。") }
             item { SyncCard("课表", "当前学期 ${summary.courses} 门课程", states[SyncKind.TIMETABLE], { viewModel.sync(SyncKind.TIMETABLE) }) }
@@ -137,8 +141,11 @@ fun ProfileSyncScreen(
             item { SyncCard("考试安排", "本地 ${summary.exams} 场考试", states[SyncKind.EXAMS], { viewModel.sync(SyncKind.EXAMS) }) }
             item { LeafySectionHeader("本机数据", supportingText = "随记与个人日程以本机为权威，不会在这里上传。") }
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(LeafySpacing.card),
+                        verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+                    ) {
                         Text("${summary.memos} 条随记", style = MaterialTheme.typography.titleMedium)
                         Text("${summary.schedules} 个个人日程", style = MaterialTheme.typography.titleMedium)
                         Text("退出登录会保留这些身份作用域数据。", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -151,11 +158,11 @@ fun ProfileSyncScreen(
 
 @Composable
 private fun SyncCard(title: String, summary: String, state: SyncItemState?, onSync: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
@@ -166,9 +173,14 @@ private fun SyncCard(title: String, summary: String, state: SyncItemState?, onSy
                     else -> Unit
                 }
             }
-            Button(onClick = onSync, enabled = state !is SyncItemState.Running) {
+            Button(
+                onClick = onSync,
+                enabled = state !is SyncItemState.Running,
+                modifier = Modifier.leafyMinimumTouchTarget(),
+                shape = LeafyButtonDefaults.shape,
+            ) {
                 if (state is SyncItemState.Running) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = 2.dp)
                 }
                 else Text("同步")
             }

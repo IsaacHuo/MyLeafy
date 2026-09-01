@@ -1,12 +1,14 @@
 package com.myleafy.android.features.profile
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
@@ -17,14 +19,15 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedButton
@@ -42,10 +45,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.navigation.FeatureDestination
 import com.myleafy.android.shared.model.ProfileDto
-import com.myleafy.android.ui.components.LeafyFeatureCard
+import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyContentSurface
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafySectionHeader
+import com.myleafy.android.ui.components.LeafySettingsRow
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafyComponentSize
+import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafySurfaces
+import androidx.compose.ui.graphics.vector.ImageVector
 
 @Composable
 fun ProfileScreen(
@@ -87,23 +99,19 @@ fun ProfileScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.leafySurfaces.page,
         topBar = { LeafyRootTopBar(title = "我的") },
     ) { contentPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(contentPadding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
                 when (val state = uiState) {
                     is ProfileUiState.Local -> LocalProfileCard(state, onLoginClick)
                     is ProfileUiState.ProfileLoading -> {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                        LeafyLoadingState(modifier = Modifier.fillMaxWidth())
                     }
                     is ProfileUiState.Community -> ProfileCard(
                         state.campusId,
@@ -112,7 +120,7 @@ fun ProfileScreen(
                         onEditProfileClick,
                     )
                     is ProfileUiState.Error -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                             LocalIdentityCard(state.campusId, state.eduId)
                             LeafyStatusBanner(message = state.message, isError = true)
                         }
@@ -120,66 +128,64 @@ fun ProfileScreen(
                 }
             }
 
-            item { LeafySectionHeader(title = "课表与偏好", modifier = Modifier.padding(top = 8.dp)) }
+            item { LeafySectionHeader(title = "数据与偏好") }
             item {
-                LeafyFeatureCard(
-                    title = "缓存与同步",
-                    description = "检查本地数据与学校同步状态",
-                    icon = Icons.Outlined.CloudSync,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_SYNC) },
-                )
-            }
-            item {
-                LeafyFeatureCard(
-                    title = "共享课表",
-                    description = "邀请同学查看课程安排",
-                    icon = Icons.Outlined.People,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
-                )
-            }
-            item {
-                LeafyFeatureCard(
-                    title = "个性化",
-                    description = "主题、显示与课表背景",
-                    icon = Icons.Outlined.AutoAwesome,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_PERSONALIZATION) },
-                )
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                    ProfileDestinationRow(
+                        title = "缓存与同步",
+                        description = "检查本地数据与学校同步状态",
+                        icon = Icons.Outlined.CloudSync,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_SYNC) },
+                    )
+                    ProfileDestinationRow(
+                        title = "共享课表",
+                        description = "邀请同学查看课程安排",
+                        icon = Icons.Outlined.People,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
+                    )
+                    ProfileDestinationRow(
+                        title = "个性化",
+                        description = "主题、显示与课表背景",
+                        icon = Icons.Outlined.AutoAwesome,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_PERSONALIZATION) },
+                    )
+                }
             }
 
-            item { LeafySectionHeader(title = "帮助与安全", modifier = Modifier.padding(top = 8.dp)) }
+            item { LeafySectionHeader(title = "帮助与安全") }
             item {
-                LeafyFeatureCard(
-                    title = "帮助中心",
-                    description = "使用指南、常见问题与数据安全",
-                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_HELP) },
-                )
-            }
-            item {
-                LeafyFeatureCard(
-                    title = "系统权限",
-                    description = "了解权限用途并打开 Android 设置",
-                    icon = Icons.Outlined.Lock,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_PERMISSIONS) },
-                )
-            }
-            item {
-                LeafyFeatureCard(
-                    title = "反馈与支持",
-                    description = "提交问题、建议或联系项目支持",
-                    icon = Icons.Outlined.Feedback,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_FEEDBACK) },
-                )
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                    ProfileDestinationRow(
+                        title = "帮助中心",
+                        description = "使用指南、常见问题与数据安全",
+                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_HELP) },
+                    )
+                    ProfileDestinationRow(
+                        title = "系统权限",
+                        description = "了解权限用途并打开 Android 设置",
+                        icon = Icons.Outlined.Lock,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_PERMISSIONS) },
+                    )
+                    ProfileDestinationRow(
+                        title = "反馈与支持",
+                        description = "提交问题、建议或联系项目支持",
+                        icon = Icons.Outlined.Feedback,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_FEEDBACK) },
+                    )
+                }
             }
 
-            item { LeafySectionHeader(title = "项目", modifier = Modifier.padding(top = 8.dp)) }
+            item { LeafySectionHeader(title = "项目") }
             item {
-                LeafyFeatureCard(
-                    title = "关于 MyLeafy",
-                    description = "项目、版本、开源与支持信息",
-                    icon = Icons.Outlined.Info,
-                    onClick = { onFeatureClick(FeatureDestination.PROFILE_ABOUT) },
-                )
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                    ProfileDestinationRow(
+                        title = "关于 MyLeafy",
+                        description = "项目、版本、开源与支持信息",
+                        icon = Icons.Outlined.Info,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_ABOUT) },
+                    )
+                }
             }
             val hasIdentity = when (val state = uiState) {
                 is ProfileUiState.Community -> true
@@ -192,10 +198,14 @@ fun ProfileScreen(
                     OutlinedButton(
                         onClick = { confirmLogout = true },
                         enabled = !isSigningOut,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+                        shape = LeafyButtonDefaults.shape,
                     ) {
                         androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
-                        Text(if (isSigningOut) "正在退出…" else "退出登录", modifier = Modifier.padding(start = 8.dp))
+                        Text(
+                            if (isSigningOut) "正在退出…" else "退出登录",
+                            modifier = Modifier.padding(start = LeafySpacing.micro),
+                        )
                     }
                 }
             }
@@ -205,12 +215,16 @@ fun ProfileScreen(
 
 @Composable
 private fun LocalProfileCard(state: ProfileUiState.Local, onLoginClick: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
         LocalIdentityCard(state.campusId, state.eduId)
         if (state.eduId.isNullOrBlank()) {
-            Button(onClick = onLoginClick, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onLoginClick,
+                modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+                shape = LeafyButtonDefaults.shape,
+            ) {
                 androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Login, contentDescription = null)
-                Text("登录学校账号", modifier = Modifier.padding(start = 8.dp))
+                Text("登录学校账号", modifier = Modifier.padding(start = LeafySpacing.micro))
             }
         }
     }
@@ -218,10 +232,10 @@ private fun LocalProfileCard(state: ProfileUiState.Local, onLoginClick: () -> Un
 
 @Composable
 private fun LocalIdentityCard(campusId: String, eduId: String?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(20.dp)) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(LeafySpacing.page)) {
             Text(text = "MyLeafy", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(LeafySpacing.micro))
             Text(text = "校园 $campusId", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = if (eduId.isNullOrBlank()) "尚未绑定学校身份" else "学号 $eduId",
@@ -234,28 +248,28 @@ private fun LocalIdentityCard(campusId: String, eduId: String?) {
 
 @Composable
 private fun ProfileCard(campusId: String, eduId: String, profile: ProfileDto, onEdit: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(20.dp)) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(LeafySpacing.page)) {
             Text(
                 text = profile.nickname.ifBlank { profile.display_name ?: "未命名" },
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(LeafySpacing.micro))
             Text(
                 text = "校园 $campusId · 学号 $eduId",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!profile.bio.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(LeafySpacing.compact))
                 Text(text = profile.bio, style = MaterialTheme.typography.bodyMedium)
             }
             val studyInfo = listOfNotNull(profile.major, profile.grade)
                 .filter { it.isNotBlank() }
                 .joinToString(" · ")
             if (studyInfo.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(LeafySpacing.micro))
                 Text(
                     text = studyInfo,
                     style = MaterialTheme.typography.bodyMedium,
@@ -263,18 +277,56 @@ private fun ProfileCard(campusId: String, eduId: String, profile: ProfileDto, on
                 )
             }
             if (!profile.is_profile_complete) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(LeafySpacing.micro))
                 Text(
                     text = "完善社区资料后可参与发布与互动",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
+            Spacer(modifier = Modifier.height(LeafySpacing.compact))
+            OutlinedButton(
+                onClick = onEdit,
+                modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+                shape = LeafyButtonDefaults.shape,
+            ) {
                 androidx.compose.material3.Icon(Icons.Outlined.Edit, contentDescription = null)
-                Text("编辑资料", modifier = Modifier.padding(start = 8.dp))
+                Text("编辑资料", modifier = Modifier.padding(start = LeafySpacing.micro))
             }
         }
     }
+}
+
+@Composable
+private fun ProfileDestinationRow(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    LeafySettingsRow(
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleSmall) },
+        supportingContent = {
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        leadingContent = {
+            Surface(
+                modifier = Modifier.size(LeafyComponentSize.settingsIconContainer),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.leafySurfaces.accentSoft,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(LeafyIconSize.standard))
+                }
+            }
+        },
+        trailingContent = {
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
+        },
+        onClick = onClick,
+    )
 }

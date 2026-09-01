@@ -1,10 +1,13 @@
 package com.myleafy.android.features.profile
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
@@ -25,7 +28,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafyComponentSize
+import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafySpacing
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,18 +118,18 @@ fun ProfileEditScreen(
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
     LeafySecondaryScaffold(title = "编辑社区资料", onBack = onBack) { contentModifier ->
         if (state.isLoading) {
-            Column(
-                modifier = contentModifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) { CircularProgressIndicator(modifier = Modifier.padding(top = 24.dp)) }
+            LeafyLoadingState(modifier = contentModifier.fillMaxSize())
         } else {
-            Column(
-                modifier = contentModifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            Box(modifier = contentModifier.fillMaxSize().imePadding()) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .widthIn(max = LeafyComponentSize.formMaxWidth)
+                        .verticalScroll(rememberScrollState())
+                        .padding(LeafySpacing.page),
+                    verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+                ) {
                 state.error?.let { LeafyStatusBanner(it, isError = true) }
                 OutlinedTextField(
                     value = state.nickname,
@@ -158,11 +167,15 @@ fun ProfileEditScreen(
                 Button(
                     onClick = viewModel::save,
                     enabled = state.nickname.isNotBlank() && !state.isSaving,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+                    shape = LeafyButtonDefaults.shape,
                 ) {
-                    if (state.isSaving) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    if (state.isSaving) {
+                        CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = 2.dp)
+                    }
                     else Text("保存资料")
                 }
+            }
             }
         }
     }
