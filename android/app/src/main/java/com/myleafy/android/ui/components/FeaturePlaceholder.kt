@@ -18,7 +18,7 @@ fun FeaturePlaceholder(
     modifier: Modifier = Modifier,
 ) {
     LeafySecondaryScaffold(title = destination.title, onBack = onBack, modifier = modifier) { contentModifier ->
-        Column(modifier = contentModifier.fillMaxSize().padding(20.dp)) {
+        Column(modifier = contentModifier.fillMaxSize().padding(com.myleafy.android.ui.theme.LeafySpacing.page)) {
             LeafyEmptyState(
                 title = "界面框架已就绪",
                 message = destination.description,

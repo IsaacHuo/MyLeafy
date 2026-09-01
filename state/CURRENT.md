@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-08-31
+Last verified: 2026-09-01
 
 ## Current Focus
 
@@ -12,6 +12,8 @@ Last verified: 2026-08-31
 - **工程收敛**：Presentation → Application → Domain → Data 分层重构，移除已被当前实现取代的兼容入口与旧类型。
 
 ## Recently Completed
+
+- **Android 对照式 UI 精修**：Compose Design System 补齐系统字体 Typography、Spacing、Elevation、IconSize、Motion、Surface 与课程色板，浅深色 Material 3 语义角色不再回落默认紫色；根导航接入官方 Adaptive Navigation Suite，Compact 使用 Bottom Navigation、Medium/Expanded 使用 Navigation Rail，保持 `RootTab`、状态恢复、深链和 capability 门控不变。课表、社区、日迹、校园、“我的”、登录及已实现二级页已迁移到统一 TopBar、Surface、状态组件、Sheet 与 48dp 触控基线，减少 Card 套 Card 和零散视觉常量。
 
 - **免登录入口（guest）**：登录页新增「免登录入口」，无账号密码、数据全部存本机、不连接任何后台（跳过学期配置远程拉取与社区后台任务）、无社区 Tab；行为与通用学校入口一致（本地导入课表/成绩/考试，学期用内置 1–20 周默认容器）。登录页与校园描述中「通用入口」改名为「通用学校入口」。
 - **教务会话渐进恢复**：用户主动更新课表、成绩、考试、教学计划、培养方案和空闲教室时优先复用现有 Session；本科 Session 明确过期后最多刷新并识别三张验证码，每张使用原图、放大、灰度增强三路 Vision 共识，OCR 不可靠或学校明确返回验证码错误时继续下一轮，第三轮后转人工；账号密码、未知错误或校园网不可达立即停止，研究生端保持人工验证码恢复。

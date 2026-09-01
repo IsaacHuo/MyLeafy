@@ -1,6 +1,6 @@
 # MyLeafy UI 风格规范
 
-本文定义 MyLeafy iOS 界面的视觉语言、设计令牌、组件使用、页面模式和可访问性要求。规范以当前 SwiftUI 实现为准，主要代码位于 `leafy/App/Theme/AppTheme.swift` 与 `leafy/App/Theme/AppChrome.swift`。
+本文定义 MyLeafy 跨平台界面的视觉语言、设计令牌、组件使用、页面模式和可访问性要求。品牌基准以当前 iOS SwiftUI 实现为准；Android 使用 Compose/Material 3 的原生交互表达同一套信息层级，不机械复制 iOS chrome。
 
 页面职责和流程见[App 产品设计](app-design.md)。
 
@@ -121,6 +121,24 @@ flowchart TB
 - 每个列表项都做悬浮卡片。
 - 在卡片内部继续嵌套视觉权重相同的卡片。
 
+### 2.6 Android Token 映射
+
+Android 的权威实现位于 `android/app/src/main/java/com/myleafy/android/ui/theme/`：
+
+| 跨平台语义 | Android Compose |
+|---|---|
+| 字体 32/26/20/18/16/14/11 | `LeafyTypography`，使用系统字体并叠加系统 `fontScale` 与 App 文字偏好 |
+| 间距 8/12/16/20/24 | `LeafySpacing.micro/compact/card/page/section` |
+| 图标与触控 | `LeafyIconSize`；所有自定义可点击控件至少 48 × 48dp |
+| 表面 | `leafySurfaces.page/grouped/content/elevated/modal/accentSoft` |
+| 高度 | `LeafyElevation.flat/resting/floating/modal`；深色模式主要使用 tonal surface |
+| 动效 | `LeafyMotion.quick/standard/emphasized` 与统一 easing；只用于可解释的状态变化 |
+| 课程颜色 | `leafyCourseColors`；继续使用稳定 hash，颜色不作为唯一状态编码 |
+
+共享布局位于 `ui/components/LeafyComponents.kt`，统一 Root/Secondary TopBar、ContentSurface、ToolRow、SettingsRow、Loading/Empty/Error、Snackbar 与 Sheet。组件根节点必须应用调用方传入的 `Modifier`；leading/trailing/actions/content 使用 slot，业务政策留在功能页。
+
+Android 根目的地使用 Material 3 Adaptive Navigation Suite：Compact 显示 Bottom Navigation，Medium/Expanded 显示 Navigation Rail；`RootTab` 顺序、状态恢复、深链和 capability 过滤不随窗口宽度变化。根导航壳拥有导航区域 Insets，各页面拥有状态栏/TopBar Insets，表单和 Sheet 拥有 IME Insets；已应用的 padding 必须消费，避免重复。
+
 ## 3. 字体与文本
 
 MyLeafy 当前统一使用系统字体，不依赖自定义品牌字体。字体通过 `leafyFontScale` 适配用户选择的显示密度。
@@ -210,6 +228,8 @@ Glass 只用于工具栏、浮动控件、胶囊或少量导航表面。不要�
 
 `LeafyGlassIconButton` 用于顶部或浮动工具动作。单独的图标按钮必须有 accessibility label，且最小触控面积不小于 44 × 44 pt；视觉图形可以小于触控区域。
 
+Android 对应最小触控面积为 48 × 48dp，使用 `LeafyActionIconButton` 或 `leafyMinimumTouchTarget()`。
+
 请求进行中时：
 
 - 禁止重复提交。
@@ -250,6 +270,8 @@ Glass 只用于工具栏、浮动控件、胶囊或少量导航表面。不要�
 - 每项使用短标题和 SF Symbol。
 - iOS 26 使用系统 Tab API 与视觉行为；低版本使用兼容的 `tabItem` 实现。
 - 底部 Tab 不叠加透明度伪淡入或自定义导航层。
+
+Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigation Rail 是同一组根目的地的不同 chrome，不新增或重排 Tab。
 
 日迹内部顶部使用 `随记 / 日程 / 推送`。该分区切换无白色选中衬底，外层导航继续使用 Liquid Glass。随记卡片采用系统白色表面；Tag 使用白字主题色胶囊，筛选后显示当前 Tag 和“全部随记”入口。图片预览保留左侧间距。校园侧栏内容切换保留淡化过渡。
 

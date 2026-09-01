@@ -24,7 +24,7 @@ fun CourseDetailsDialog(course: CourseEntity, onDismiss: () -> Unit) {
                 DetailLine("教师", course.teacher.ifBlank { "未提供" })
                 DetailLine("班级", course.classInfo.ifBlank { "未提供" })
                 DetailLine("地点", listOf(course.location, course.room).filter(String::isNotBlank).joinToString(" ").ifBlank { "未提供" })
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = com.myleafy.android.ui.theme.LeafySpacing.micro))
                 DetailLine("周次", course.weeks.sorted().joinToString("、") { "第${it}周" })
                 DetailLine("节次", course.duration.sorted().joinToString("、") { "第${it}节" })
             }
@@ -52,5 +52,9 @@ fun ExamDetailsDialog(exam: ExamEntity, onDismiss: () -> Unit) {
 @Composable
 private fun DetailLine(label: String, value: String) {
     Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-    Text(text = value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
+    Text(
+        text = value,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(bottom = com.myleafy.android.ui.theme.LeafySpacing.micro),
+    )
 }

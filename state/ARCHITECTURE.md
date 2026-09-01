@@ -86,7 +86,7 @@ leafy/
 ├── Parsers/                # SwiftSoup 教务 HTML 解析
 ├── Shared/                 # 跨功能模型、平台兼容、扩展共享数据
 └── WidgetSupport/          # Widget 展示数据构建
-android/                    # Android 原生客户端（单 app module，Material 3 根导航与功能分层）
+android/                    # Android 原生客户端（单 app module，Compose Design System、Material 3 Adaptive 根导航与功能分层）
 ```
 
 ## 4. 分层与依赖方向
@@ -227,8 +227,9 @@ React-admin（site/src/admin）
 - 根 Tab：`TabView`，顺序 `课表 / 社区 / 日迹 / 校园 / 我的`，默认课表；社区按校园 capability 隐藏（`ContentView.swift`，iOS 26 用系统 `Tab` API，低版本用 `tabItem`）。
 - 层级详情使用 `NavigationStack`；轻量编辑/筛选/详情使用 sheet。
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
-- Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；社区入口按活动身份 capability 隐藏，底部 `NavigationBar` 只在根目的地显示并保存各 Tab 状态。
+- Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；社区入口按活动身份 capability 隐藏。根目的地由 Material 3 Adaptive Navigation Suite 按窗口宽度呈现 Compact Bottom Navigation 或 Medium/Expanded Navigation Rail，二级目的地隐藏根导航；两种 chrome 复用同一目的地集合、选择状态与状态恢复。
 - Android 二级真实页面与 `FeatureDestination` 占位页面统一使用 48dp 紧凑返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；资料编辑、缓存同步、个性化、帮助中心、权限说明、反馈、关于与内置校历均为真实页面。
+- Android `MyLeafyTheme` 是 Compose 视觉语义的单一入口：`LeafyTypography`、`LeafySpacing`、`LeafyElevation`、`LeafyIconSize`、`LeafyMotion`、`LeafySurfaceColors` 与 `LeafyCourseColors` 由共享组件消费。根壳拥有导航区域 Insets，页面 Scaffold 拥有状态栏/TopBar Insets，编辑表单与 Sheet 拥有 IME Insets；应用 padding 后必须消费，避免系统栏遮挡或重复留白。
 - Android 启动阶段不强制登录；学校登录从“我的”进入。Room、教务和 Supabase 页面只展示各自真实数据，未登录、未配置或校园网不可达时进入明确的 Empty/Error 状态。
 - Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 标志和 capabilities；Room v4 的全部实体使用 `(scopeKey, id)` 复合主键，DAO 查询、替换和删除必须显式携带当前 scope。仅预发布 schema 1–3 允许破坏性重建，未来缺 migration 时直接失败。
 - Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时不初始化客户端，社区根入口和社区深链内容均被门控。
@@ -266,6 +267,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 - 根导航顺序固定为 `课表 / 社区 / 日迹 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。社区 Tab 按校园 capability 隐藏。
 - 免登录（guest）入口完全本地：不创建任何账号，不连接 Supabase 或我们的后台；学期/校历配置使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
 - Android 的 guest/无社区 capability 身份只显示 `课表 / 日迹 / 校园 / 我的`，不得初始化 Supabase 或社区任务；具备 capability 的校园身份恢复 `社区` Tab。Android 个人日程同时呈现在课表与日迹列表，可导出 ICS，但不申请系统日历写入权限。
+- Android 窗口宽度只能改变根导航和校园领域选择的 chrome；不得改变 `RootTab` 顺序、默认目的地、深链、返回栈、状态恢复、capability 过滤或任何业务数据请求。
 - 日迹顶部直接提供 `随记 / 日程 / 推送`；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。
 - 随记按校园身份作用域保存在本地（元数据、Markdown 源文、图片、附件、音频、标签、统计）；不进入社区、Widget、日历导出或课表分享图。语音转写设备端完成且不持久化原始输入。学校课程、考试、校历不进入随记或个人日程列表。
 - 课表按单个学年浏览，从秋季学期首日到下一学年开始前一天；暑假最后一周停在学年边界，下一学年通过学年/日期选择进入。学校单学期课表保持 20 周数据集；学期结束与寒暑假区间来自语义校历事件，不用 20 周容器反推。
