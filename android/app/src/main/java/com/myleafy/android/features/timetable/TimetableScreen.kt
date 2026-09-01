@@ -17,15 +17,12 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Today
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.FileProvider
@@ -56,8 +52,12 @@ import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.features.timetable.presentation.CourseDetailsDialog
 import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
+import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyRootTopBar
+import com.myleafy.android.ui.components.LeafySnackbarHost
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -95,21 +95,22 @@ fun TimetableScreen(
 
     Scaffold(
         modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.leafySurfaces.page,
+        snackbarHost = { LeafySnackbarHost(snackbarHostState) },
         topBar = {
             LeafyRootTopBar(
                 title = "课表",
                 actions = {
-                    IconButton(
+                    LeafyActionIconButton(
                         onClick = {
-                            val state = uiState as? TimetableUiState.Loaded ?: return@IconButton
+                            val state = uiState as? TimetableUiState.Loaded ?: return@LeafyActionIconButton
                             editorDraft = defaultDraft(state)
                         },
                     ) {
                         Icon(Icons.Filled.Add, contentDescription = "添加日程")
                     }
                     Box {
-                        IconButton(onClick = { menuExpanded = true }) {
+                        LeafyActionIconButton(onClick = { menuExpanded = true }) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "课表操作")
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -167,7 +168,7 @@ fun TimetableScreen(
             is TimetableUiState.Error -> LeafyStatusBanner(
                 message = state.message,
                 isError = true,
-                modifier = Modifier.padding(contentPadding).padding(16.dp),
+                modifier = Modifier.padding(contentPadding).padding(LeafySpacing.card),
             )
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
@@ -257,29 +258,36 @@ private fun TimetableScreenContent(
     onConsumeSync: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = LeafySpacing.tiny),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LeafyActionIconButton(onClick = onPreviousWeek, enabled = state.selectedWeek > 1) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
+            }
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (state.selectedWeek == state.currentWeek) {
+                        "本周 · 第 ${state.selectedWeek} 周"
+                    } else {
+                        "第 ${state.selectedWeek} 周"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text(
+                    text = formatWeekRange(state.weekRange.startDate),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            LeafyActionIconButton(
+                onClick = onNextWeek,
+                enabled = state.selectedWeek < SemesterConfig.supportedWeeks,
             ) {
-                IconButton(onClick = onPreviousWeek, enabled = state.selectedWeek > 1) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
-                }
-                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("第 ${state.selectedWeek} 周", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = formatWeekRange(state.weekRange.startDate),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(
-                    onClick = onNextWeek,
-                    enabled = state.selectedWeek < SemesterConfig.supportedWeeks,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
-                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
             }
         }
         TimetableSyncBanner(syncState = syncState, onConsume = onConsumeSync)
@@ -309,7 +317,7 @@ private fun TimetableSyncBanner(syncState: TimetableSyncState, onConsume: () -> 
         LeafyStatusBanner(
             message = message,
             isError = syncState is TimetableSyncState.Error,
-            modifier = Modifier.padding(top = 6.dp),
+            modifier = Modifier.padding(top = LeafySpacing.tiny),
         )
         LaunchedEffect(syncState) {
             delay(3_000)

@@ -2,9 +2,14 @@ package com.myleafy.android.features.timetable.presentation
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.domain.TimetableGridItemType
 import com.myleafy.android.features.timetable.domain.TimetableGridSnapshot
@@ -57,7 +62,32 @@ class TimetableGridInteractionTest {
         composeRule.onNodeWithTag("timetable-item-course:forest:1").performClick()
         composeRule.runOnIdle { assertEquals(course, clickedItem) }
 
-        composeRule.onNodeWithTag("timetable-cell-2026-09-07-3").performClick()
+        composeRule.onNodeWithTag("timetable-cell-2026-09-07-3")
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
         composeRule.runOnIdle { assertEquals(weekStart to 3, clickedCell) }
+    }
+
+    @Test
+    fun currentWeekExposesAReadableCurrentTimeIndicator() {
+        val weekStart = LocalDate.of(2026, 9, 7)
+        composeRule.setContent {
+            MyLeafyTheme(darkTheme = true) {
+                TimetableGrid(
+                    snapshot = TimetableGridSnapshot(
+                        weekRange = TimetableWeekRange(week = 1, startDate = weekStart),
+                        items = emptyList(),
+                    ),
+                    onEmptyCellClick = { _, _ -> },
+                    onItemClick = {},
+                    modifier = Modifier.fillMaxSize(),
+                    today = weekStart.plusDays(1),
+                    currentTime = LocalTime.of(9, 10),
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("timetable-current-time").assertIsDisplayed()
+        composeRule.onNode(hasContentDescription("当前时间")).assertIsDisplayed()
     }
 }

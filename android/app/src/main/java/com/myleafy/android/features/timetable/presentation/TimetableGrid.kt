@@ -1,6 +1,5 @@
 package com.myleafy.android.features.timetable.presentation
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.semantics.contentDescription
@@ -36,26 +35,22 @@ import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.domain.TimetableGridItemType
 import com.myleafy.android.features.timetable.domain.TimetableGridSnapshot
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
+import com.myleafy.android.ui.theme.LeafyElevation
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafyCourseColors
+import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-private val AxisWidth = 44.dp
-private val MinimumDayWidth = 46.dp
-private val HeaderHeight = 40.dp
-private val PeriodRowHeight = 48.dp
-private val GridGap = 1.dp
-
-private val coursePalette = listOf(
-    Color(0xFF5F8F4F),
-    Color(0xFF6B9360),
-    Color(0xFF568C73),
-    Color(0xFF4F8987),
-    Color(0xFF527F92),
-    Color(0xFF6D7FA0),
-    Color(0xFF7C7299),
-)
+// High-density timetable geometry is deliberately local rather than shared UI spacing.
+private val AxisWidth = 48.dp
+private val MinimumDayWidth = 52.dp
+private val HeaderHeight = 56.dp
+private val PeriodRowHeight = 56.dp
+private val GridGap = 2.dp
+private val GridCellShape = RoundedCornerShape(8.dp)
 
 fun stableCourseColorIndex(name: String, colorCount: Int): Int {
     if (name.isEmpty() || colorCount <= 0) return 0
@@ -156,6 +151,8 @@ private fun TimetableGridLayout(
                         .layoutId(GridSlot.Timeline(timeline.day, timeline.rowPosition))
                         .zIndex(2f)
                         .height(2.dp)
+                        .testTag("timetable-current-time")
+                        .semantics { contentDescription = "当前时间" }
                         .background(MaterialTheme.colorScheme.error),
                 )
             }
@@ -230,21 +227,23 @@ private fun TimetableGridLayout(
 @Composable
 private fun DayHeader(date: LocalDate, isToday: Boolean, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.padding(2.dp),
-        shape = MaterialTheme.shapes.small,
-        color = if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        modifier = modifier.padding(LeafySpacing.tiny),
+        shape = GridCellShape,
+        color = if (isToday) MaterialTheme.leafySurfaces.accentSoft else MaterialTheme.leafySurfaces.page,
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         ) {
             Text(
                 text = dayLabels[date.dayOfWeek.value - 1],
                 style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 2.dp),
             )
             Text(
-                text = date.format(DateTimeFormatter.ofPattern("M/d")),
+                text = if (isToday) "今天 · ${date.format(DateTimeFormatter.ofPattern("M/d"))}" else {
+                    date.format(DateTimeFormatter.ofPattern("M/d"))
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isToday) {
                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -260,7 +259,7 @@ private fun DayHeader(date: LocalDate, isToday: Boolean, modifier: Modifier = Mo
 private fun PeriodAxis(period: Int, modifier: Modifier = Modifier) {
     val slot = TimetablePeriodSchedule.slot(period)
     Column(
-        modifier = modifier.padding(top = 3.dp, end = 4.dp),
+        modifier = modifier.padding(top = LeafySpacing.tiny, end = LeafySpacing.tiny),
         horizontalAlignment = Alignment.End,
     ) {
         Text(text = period.toString(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
@@ -285,13 +284,12 @@ private fun EmptyGridCell(
         modifier = modifier.testTag("timetable-cell-${date}-$period").semantics {
             contentDescription = "${date.monthValue}月${date.dayOfMonth}日 第${period}节，添加日程"
         },
-        shape = MaterialTheme.shapes.small,
+        shape = GridCellShape,
         color = if (isToday) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.18f)
+            MaterialTheme.leafySurfaces.accentSoft.copy(alpha = 0.6f)
         } else {
-            MaterialTheme.colorScheme.surfaceContainerLowest
+            MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.62f)
         },
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
     ) {}
 }
 
@@ -301,24 +299,27 @@ private fun TimetableItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = when (item.type) {
-        TimetableGridItemType.COURSE -> coursePalette[
-            stableCourseColorIndex(item.title, coursePalette.size)
-        ]
-        TimetableGridItemType.EXAM -> MaterialTheme.colorScheme.tertiary
-        TimetableGridItemType.SCHEDULE -> MaterialTheme.colorScheme.secondary
+    val courseColors = MaterialTheme.leafyCourseColors
+    val (containerColor, contentColor) = when (item.type) {
+        TimetableGridItemType.COURSE -> courseColors.containers[
+            stableCourseColorIndex(item.title, courseColors.containers.size)
+        ] to courseColors.content
+        TimetableGridItemType.EXAM -> MaterialTheme.colorScheme.tertiaryContainer to
+            MaterialTheme.colorScheme.onTertiaryContainer
+        TimetableGridItemType.SCHEDULE -> MaterialTheme.colorScheme.secondaryContainer to
+            MaterialTheme.colorScheme.onSecondaryContainer
     }
     Surface(
         onClick = onClick,
         modifier = modifier.testTag("timetable-item-${item.stableId}").semantics(mergeDescendants = true) {
             contentDescription = "${item.title}，第${item.startPeriod}至${item.endPeriod}节"
         },
-        shape = MaterialTheme.shapes.small,
+        shape = GridCellShape,
         color = containerColor,
-        contentColor = Color.White,
-        shadowElevation = 1.dp,
+        contentColor = contentColor,
+        shadowElevation = LeafyElevation.flat,
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(3.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(LeafySpacing.tiny)) {
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.labelMedium,
@@ -330,7 +331,7 @@ private fun TimetableItemCard(
                 Text(
                     text = it,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = contentColor.copy(alpha = 0.78f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
