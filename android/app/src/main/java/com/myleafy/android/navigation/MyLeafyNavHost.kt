@@ -2,13 +2,9 @@ package com.myleafy.android.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,44 +88,11 @@ fun MyLeafyNavHost(
         }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            if (showsBottomBar) {
-                NavigationBar {
-                    visibleRootTabs.forEach { tab ->
-                        val selected = currentDestination
-                            ?.hierarchy
-                            ?.any { it.route == tab.route } == true
-                        NavigationBarItem(
-                            modifier = Modifier.testTag("root-tab-${tab.route}"),
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                    contentDescription = stringResource(tab.labelRes),
-                                )
-                            },
-                            label = { Text(stringResource(tab.labelRes)) },
-                        )
-                    }
-                }
-            }
-        },
-    ) { innerPadding ->
+    val navigationContent: @Composable () -> Unit = {
         NavHost(
             navController = navController,
             startDestination = RootTab.TIMETABLE.route,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
         ) {
             composable(RootTab.TIMETABLE.route) {
                 TimetableScreen(
@@ -267,6 +230,43 @@ fun MyLeafyNavHost(
                     }
                 }
             }
+        }
+    }
+
+    if (showsBottomBar) {
+        NavigationSuiteScaffold(
+            navigationSuiteItems = {
+                visibleRootTabs.forEach { tab ->
+                    val selected = currentDestination
+                        ?.hierarchy
+                        ?.any { it.route == tab.route } == true
+                    item(
+                        modifier = Modifier.testTag("root-tab-${tab.route}"),
+                        selected = selected,
+                        onClick = {
+                            navController.navigate(tab.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = if (selected) tab.selectedIcon else tab.icon,
+                                contentDescription = stringResource(tab.labelRes),
+                            )
+                        },
+                        label = { Text(stringResource(tab.labelRes)) },
+                    )
+                }
+            },
+            content = navigationContent,
+        )
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            navigationContent()
         }
     }
 }
