@@ -1,10 +1,8 @@
 package com.myleafy.android.features.schedule
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -22,7 +20,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.myleafy.android.ui.components.LeafySheetContent
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafySurfaces
 
 data class MemoDraft(
     val id: String? = null,
@@ -55,18 +56,19 @@ fun MemoEditorSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.leafySurfaces.modal,
+    ) {
+        LeafySheetContent(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            titleContent = {
+                Text(
+                    text = if (initial.id == null) "新建随记" else "编辑随记",
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+            },
         ) {
-            Text(
-                text = if (initial.id == null) "新建随记" else "编辑随记",
-                style = MaterialTheme.typography.headlineSmall,
-            )
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -95,8 +97,8 @@ fun MemoEditorSheet(
                 Text(it.message, color = MaterialTheme.colorScheme.error)
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
             ) {
                 if (initial.id != null && onDelete != null) {
                     TextButton(onClick = { confirmsDelete = true }, enabled = !isSaving) {
@@ -117,7 +119,7 @@ fun MemoEditorSheet(
                         )
                     },
                     enabled = !isEmpty && !isSaving,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).leafyMinimumTouchTarget(),
                 ) { Text(if (isSaving) "保存中…" else "保存") }
             }
         }

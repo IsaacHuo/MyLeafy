@@ -1,5 +1,10 @@
 package com.myleafy.android.features.schedule
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,15 +27,13 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,9 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.data.local.ScheduleEventEntity
@@ -49,9 +50,15 @@ import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.TimetableGridProjection
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.navigation.FeatureDestination
+import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafyMotion
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -78,12 +85,13 @@ fun ScheduleScreen(
     var eventDraft by remember { mutableStateOf<ScheduleEventDraft?>(null) }
     Scaffold(
         modifier = modifier,
+        containerColor = MaterialTheme.leafySurfaces.page,
         topBar = {
             LeafyRootTopBar(
                 title = "日迹",
                 actions = {
                     if (selectedSection != ScheduleSection.REPORTS) {
-                        IconButton(
+                        LeafyActionIconButton(
                             onClick = {
                                 if (selectedSection == ScheduleSection.MEMOS) {
                                     memoDraft = MemoDraft()
@@ -94,7 +102,7 @@ fun ScheduleScreen(
                         ) { Icon(Icons.Filled.Add, contentDescription = "新建${selectedSection.label}") }
                     }
                     Box {
-                        IconButton(onClick = { menuExpanded = true }) {
+                        LeafyActionIconButton(onClick = { menuExpanded = true }) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "日迹菜单")
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -117,9 +125,9 @@ fun ScheduleScreen(
         },
     ) { contentPadding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = LeafySpacing.card),
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                 ScheduleSection.entries.forEach { section ->
                     FilterChip(
                         selected = selectedSection == section,
@@ -129,12 +137,12 @@ fun ScheduleScreen(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(LeafySpacing.micro))
             when (val state = uiState) {
-                ScheduleUiState.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                ScheduleUiState.Loading -> LeafyLoadingState(message = "正在加载日迹")
                 is ScheduleUiState.Error -> LeafyStatusBanner(message = state.message, isError = true)
-                ScheduleUiState.Empty -> ScheduleContent(
-                    section = selectedSection,
+                ScheduleUiState.Empty -> AnimatedScheduleContent(
+                    selectedSection = selectedSection,
                     memos = emptyList(),
                     events = emptyList(),
                     onNewMemo = { memoDraft = MemoDraft() },
@@ -143,8 +151,8 @@ fun ScheduleScreen(
                     onEventClick = {},
                     onFeatureClick = onFeatureClick,
                 )
-                is ScheduleUiState.Loaded -> ScheduleContent(
-                    section = selectedSection,
+                is ScheduleUiState.Loaded -> AnimatedScheduleContent(
+                    selectedSection = selectedSection,
                     memos = state.memos,
                     events = state.events,
                     onNewMemo = { memoDraft = MemoDraft() },
@@ -186,6 +194,39 @@ fun ScheduleScreen(
 }
 
 @Composable
+private fun AnimatedScheduleContent(
+    selectedSection: ScheduleSection,
+    memos: List<ScheduleMemoEntity>,
+    events: List<ScheduleEventEntity>,
+    onNewMemo: () -> Unit,
+    onMemoClick: (ScheduleMemoEntity) -> Unit,
+    onNewEvent: () -> Unit,
+    onEventClick: (ScheduleEventEntity) -> Unit,
+    onFeatureClick: (FeatureDestination) -> Unit,
+) {
+    AnimatedContent(
+        targetState = selectedSection,
+        transitionSpec = {
+            fadeIn(tween(LeafyMotion.quick, easing = LeafyMotion.easing)) togetherWith
+                fadeOut(tween(LeafyMotion.quick, easing = LeafyMotion.easing))
+        },
+        contentKey = { it },
+        label = "schedule-section",
+    ) { section ->
+        ScheduleContent(
+            section = section,
+            memos = memos,
+            events = events,
+            onNewMemo = onNewMemo,
+            onMemoClick = onMemoClick,
+            onNewEvent = onNewEvent,
+            onEventClick = onEventClick,
+            onFeatureClick = onFeatureClick,
+        )
+    }
+}
+
+@Composable
 private fun ScheduleMenuItem(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -212,13 +253,13 @@ private fun ScheduleContent(
     when (section) {
         ScheduleSection.MEMOS -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
-                Button(onClick = onNewMemo, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onNewMemo, modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget()) {
                     Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("新建随记", modifier = Modifier.padding(start = 6.dp))
+                    Text("新建随记", modifier = Modifier.padding(start = LeafySpacing.micro))
                 }
             }
             if (memos.isEmpty()) {
@@ -238,13 +279,13 @@ private fun ScheduleContent(
 
         ScheduleSection.EVENTS -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
-                Button(onClick = onNewEvent, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onNewEvent, modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget()) {
                     Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("添加个人日程", modifier = Modifier.padding(start = 6.dp))
+                    Text("添加个人日程", modifier = Modifier.padding(start = LeafySpacing.micro))
                 }
             }
             if (events.isEmpty()) {
@@ -277,8 +318,13 @@ private fun ScheduleContent(
 
 @Composable
 private fun MemoRow(memo: ScheduleMemoEntity, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.leafySurfaces.content,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = memo.title ?: memo.body, style = MaterialTheme.typography.titleSmall)
             if (memo.title != null && memo.body.isNotBlank()) {
                 Text(
@@ -301,8 +347,13 @@ private fun MemoRow(memo: ScheduleMemoEntity, onClick: () -> Unit) {
 
 @Composable
 private fun EventRow(event: ScheduleEventEntity, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.leafySurfaces.content,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = event.title, style = MaterialTheme.typography.titleSmall)
             Text(
                 text = formatEventTime(event) + (event.location?.let { " · $it" } ?: ""),

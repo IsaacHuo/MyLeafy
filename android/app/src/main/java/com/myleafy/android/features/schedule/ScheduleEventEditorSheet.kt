@@ -3,10 +3,8 @@ package com.myleafy.android.features.schedule
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -30,7 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
+import com.myleafy.android.ui.components.LeafySheetContent
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -67,18 +68,19 @@ fun ScheduleEventEditorSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.leafySurfaces.modal,
+    ) {
+        LeafySheetContent(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            titleContent = {
+                Text(
                 text = if (initial.id == null) "添加个人日程" else "编辑个人日程",
                 style = MaterialTheme.typography.headlineSmall,
-            )
+                )
+            },
+        ) {
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -100,7 +102,7 @@ fun ScheduleEventEditorSheet(
             ) {
                 Text("日期  ${date.format(dateFormatter)}")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                 OutlinedButton(
                     onClick = {
                         TimePickerDialog(
@@ -148,8 +150,8 @@ fun ScheduleEventEditorSheet(
                 Text(text = it.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
             ) {
                 if (initial.id != null && onDelete != null) {
                     TextButton(onClick = { confirmsDelete = true }, enabled = !isSaving) {
@@ -171,7 +173,7 @@ fun ScheduleEventEditorSheet(
                         )
                     },
                     enabled = localValidation == null && !isSaving,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).leafyMinimumTouchTarget(),
                 ) {
                     Text(if (isSaving) "保存中…" else "保存")
                 }
