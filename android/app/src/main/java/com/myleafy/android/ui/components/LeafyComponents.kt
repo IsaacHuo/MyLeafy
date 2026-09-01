@@ -440,6 +440,8 @@ fun LeafySheetContent(
 }
 
 object LeafyButtonDefaults {
+    val shape
+        @Composable get() = MaterialTheme.shapes.medium
     val contentPadding
         @Composable get() = ButtonDefaults.ContentPadding
     val elevation

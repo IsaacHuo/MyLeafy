@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,12 +15,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,10 +34,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.SemesterConfig
+import com.myleafy.android.ui.components.LeafyActionIconButton
+import com.myleafy.android.ui.components.LeafyContentSurface
 import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.components.LeafyErrorState
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.theme.LeafyElevation
+import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafySpacing
 import kotlinx.coroutines.delay
 
 @Composable
@@ -57,9 +64,11 @@ fun GradesScreen(
     ) { modifier ->
         when (val state = uiState) {
             CampusUiState.Loading -> LoadingAcademicState(modifier)
-            is CampusUiState.Error -> Column(modifier.padding(16.dp)) {
-                LeafyStatusBanner(state.message, isError = true)
-            }
+            is CampusUiState.Error -> LeafyErrorState(
+                title = "成绩数据暂不可用",
+                message = state.message,
+                modifier = modifier,
+            )
             is CampusUiState.Loaded -> GradesContent(state, modifier)
         }
     }
@@ -82,13 +91,15 @@ fun ExamsScreen(
     ) { modifier ->
         when (val state = uiState) {
             CampusUiState.Loading -> LoadingAcademicState(modifier)
-            is CampusUiState.Error -> Column(modifier.padding(16.dp)) {
-                LeafyStatusBanner(state.message, isError = true)
-            }
+            is CampusUiState.Error -> LeafyErrorState(
+                title = "考试数据暂不可用",
+                message = state.message,
+                modifier = modifier,
+            )
             is CampusUiState.Loaded -> LazyColumn(
                 modifier = modifier,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+                verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
             ) {
                 item {
                     Text(
@@ -121,12 +132,15 @@ private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(LeafySpacing.card),
+                    verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+                ) {
                     Text("学校官方概览", style = MaterialTheme.typography.titleMedium)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -156,9 +170,14 @@ private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
             }
         } else {
             items(overallRankings, key = { it.id }) { ranking ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = LeafyElevation.flat,
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -184,7 +203,7 @@ private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
             ) {
                 (listOf("全部") + state.terms).forEach { term ->
                     FilterChip(
@@ -230,9 +249,12 @@ private fun AcademicDetailScaffold(
         title = title,
         onBack = onBack,
         actions = {
-            IconButton(onClick = onRefresh, enabled = syncState !is CampusSyncState.Syncing) {
+            LeafyActionIconButton(onClick = onRefresh, enabled = syncState !is CampusSyncState.Syncing) {
                 if (syncState is CampusSyncState.Syncing) {
-                    CircularProgressIndicator(modifier = Modifier.padding(8.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(LeafyIconSize.standard),
+                        strokeWidth = 2.dp,
+                    )
                 } else {
                     Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                 }
@@ -245,7 +267,7 @@ private fun AcademicDetailScaffold(
                 LeafyStatusBanner(
                     message = message,
                     isError = syncState is CampusSyncState.Error,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.micro),
                 )
                 LaunchedEffect(syncState) {
                     delay(4_000)
@@ -271,9 +293,7 @@ private fun syncMessage(state: CampusSyncState): String? = when (state) {
 
 @Composable
 private fun LoadingAcademicState(modifier: Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator(modifier = Modifier.padding(top = 40.dp))
-    }
+    LeafyLoadingState(modifier = modifier)
 }
 
 @Composable

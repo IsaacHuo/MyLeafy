@@ -8,15 +8,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyContentSurface
+import com.myleafy.android.ui.theme.LeafySpacing
 import java.time.format.DateTimeFormatter
 
 private val calendarDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
@@ -27,8 +27,8 @@ fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     LeafySecondaryScaffold(title = "校历", onBack = onBack, modifier = modifier) { contentModifier ->
         LazyColumn(
             modifier = contentModifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
+            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
                 Text(
@@ -44,8 +44,8 @@ fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
             configurations.forEach { config ->
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
+                    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(LeafySpacing.card)) {
                             Text(
                                 text = config.semesterId,
                                 style = MaterialTheme.typography.titleMedium,
@@ -57,7 +57,7 @@ fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             if (config.calendarEvents.isEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(LeafySpacing.micro))
                                 Text(
                                     text = "暂无内置重要日期",
                                     style = MaterialTheme.typography.bodySmall,
@@ -65,7 +65,7 @@ fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                 )
                             } else {
                                 config.calendarEvents.forEach { event ->
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(LeafySpacing.compact))
                                     Text(text = event.title, style = MaterialTheme.typography.titleSmall)
                                     Text(
                                         text = if (event.startDate == event.endDate) {

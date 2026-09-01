@@ -4,17 +4,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +30,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
+import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.components.LeafyErrorState
+import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafySpacing
 
 @Composable
 fun ClassroomScreen(
@@ -48,10 +56,10 @@ fun ClassroomScreen(
             modifier = contentModifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.compact),
         ) {
         Text(text = "周次", style = MaterialTheme.typography.labelMedium)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
             items((1..SemesterConfig.supportedWeeks).toList()) { candidate ->
                 FilterChip(
                     selected = candidate == week,
@@ -60,9 +68,9 @@ fun ClassroomScreen(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(LeafySpacing.micro))
         Text(text = "星期", style = MaterialTheme.typography.labelMedium)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
             items(listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日").withIndex().toList()) { (index, label) ->
                 FilterChip(
                     selected = (index + 1) == day,
@@ -71,19 +79,21 @@ fun ClassroomScreen(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(LeafySpacing.compact))
 
         Button(
             onClick = { viewModel.query(week, day, startPeriod = 1, endPeriod = 12) },
             enabled = uiState !is ClassroomUiState.Loading,
+            modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+            shape = LeafyButtonDefaults.shape,
         ) {
             if (uiState is ClassroomUiState.Loading) {
-                CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.compact), strokeWidth = 2.dp)
             } else {
                 Text("查询全天空闲教室")
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(LeafySpacing.compact))
 
         when (val state = uiState) {
             is ClassroomUiState.Idle -> {
@@ -97,19 +107,17 @@ fun ClassroomScreen(
             is ClassroomUiState.Loading -> Unit
 
             is ClassroomUiState.Error -> {
-                Text(
-                    text = state.message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+                LeafyErrorState(
+                    title = "查询失败",
+                    message = state.message,
                 )
             }
 
             is ClassroomUiState.Loaded -> {
                 if (state.rooms.isEmpty()) {
-                    Text(
-                        text = "该时段没有空闲教室",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline,
+                    LeafyEmptyState(
+                        title = "没有空闲教室",
+                        message = "学校在所选周次与星期未返回可用教室。",
                     )
                 } else {
                     Column {
@@ -117,21 +125,28 @@ fun ClassroomScreen(
                             text = "共 ${state.rooms.size} 间",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 8.dp),
+                            modifier = Modifier.padding(bottom = LeafySpacing.micro),
                         )
                         state.rooms.groupBy { it.building }.forEach { (building, rooms) ->
                             Text(
                                 text = building,
                                 style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                                modifier = Modifier.padding(top = LeafySpacing.tiny, bottom = LeafySpacing.tiny),
                             )
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                                 items(rooms, key = { it.room }) { room ->
-                                    Card(modifier = Modifier.padding(end = 6.dp, bottom = 6.dp)) {
+                                    Surface(
+                                        modifier = Modifier.padding(bottom = LeafySpacing.micro),
+                                        shape = MaterialTheme.shapes.medium,
+                                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    ) {
                                         Text(
                                             text = room.room,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            modifier = Modifier.padding(
+                                                horizontal = LeafySpacing.compact,
+                                                vertical = LeafySpacing.micro,
+                                            ),
                                         )
                                     }
                                 }
