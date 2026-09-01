@@ -5,7 +5,17 @@ set local search_path = public, extensions;
 set local request.jwt.claim.role = 'authenticated';
 set local request.jwt.claim.sub = 'a1000000-0000-0000-0000-000000000001';
 
-select plan(35);
+select plan(36);
+
+select ok(
+  to_regprocedure('public.create_community_comment_v2(uuid,uuid,text,boolean,uuid)') is not null
+    and has_function_privilege(
+      'authenticated',
+      'public.create_community_comment_v2(uuid,uuid,text,boolean,uuid)',
+      'EXECUTE'
+    ),
+  'authenticated clients can call the five-argument top-level comment compatibility overload'
+);
 
 insert into auth.users (id) values
   ('a1000000-0000-0000-0000-000000000001'),
@@ -371,13 +381,11 @@ select is(
     'a4000000-0000-0000-0000-000000000004',
     'a3000000-0000-0000-0000-000000000003',
     '网络超时重试',
-    null,
-    null,
     false,
     'b4000000-0000-0000-0000-000000000001'
   )).id,
   'a4000000-0000-0000-0000-000000000004'::uuid,
-  'an idempotent comment request returns its created comment'
+  'the five-argument top-level comment overload returns its created comment'
 );
 
 select is(

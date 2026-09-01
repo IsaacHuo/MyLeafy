@@ -2,7 +2,7 @@
 
 本文基于当前 `main` 代码整理，描述 **MyLeafy 现在实际的结构**。它不是未来方案：尚未实现的架构应进入 `docs/`。若本文与代码冲突，以代码为准，并请按 `state/README.md` 的维护原则更新本文。
 
-Last verified: 2026-08-30
+Last verified: 2026-09-01
 
 ## 1. 系统组成
 
@@ -254,7 +254,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 
 ## 10. Supabase 与 Web/运营后台边界
 
-- `supabase/`：84 个 migration、19 个 Edge Functions、`schema-ledger.md`（关键 schema 不变量与迁移顺序的事实来源）、模板与测试。
+- `supabase/`：86 个 migration、18 个 Edge Functions、`schema-ledger.md`（关键 schema 不变量与迁移顺序的事实来源）、模板与测试。
 - 主要函数组：社区初始化与 Feed（`community-bootstrap-user`、`community-feed`）、校园服务（`campus-request`、`campus-weather`）、分享（`share-preview`）、媒体验证与清理、管理（`admin-*`）。
 - `site/`：官网（React + Vite）+ React-admin 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。
 - 高权限操作必须经过服务端认证、授权、参数校验与审计；iOS/前端只用 publishable key。
@@ -282,7 +282,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 - 校园热力图不内置全学期占用数据：用户显式登录并按需更新所选日期和节次；每个校园账号只保留最近一次成功更新的数据；文案使用“更新数据 / 上次更新”。
 - 一个 `(campus_id, edu_id)` 对应一个长期 community profile；多个可替换的设备 Auth 会话可链接同一 profile，一个 Auth 会话最多映射一个 profile。学校登录自动继承匹配的社区资料；已验证绑定邮箱仅用于通知，不参与登录或社区恢复。
 - 社区 Feed 以 `community-feed` 响应为权威；Realtime 仅触发校园范围的后台预取，不直接增量拼装列表。预取结果在用户点击“有新内容”后应用；用户下拉刷新必须反馈更新、最新、可信空结果、部分失败或失败，并在失败时保留最近成功数据。
-- 帖子与评论通过校验 RPC 创建，并以 community actor + 客户端 request ID 幂等重放；发帖队列在重试中复用稳定 UUID，评论内容与回复目标未变化时复用 request ID，超时重试不重复落库或通知。举报从不自动隐藏内容；图片帖使用短期单次服务端验证凭证，图片与附件全部完整且数量匹配后原子发布。评论最多两层。
+- 帖子与评论通过校验 RPC 创建，并以 community actor + 客户端 request ID 幂等重放；PostgREST 命名参数必须显式编码可空字段，服务端保留顶层评论省略回复目标、帖子省略空分类的精确兼容重载。发帖队列在重试中复用稳定 UUID，评论内容与回复目标未变化时复用 request ID，超时重试不重复落库或通知。举报从不自动隐藏内容；图片帖使用短期单次服务端验证凭证，图片与附件全部完整且数量匹配后原子发布。评论最多两层。
 - 共享课表是一次性邀请码 + 只读授权；明文邀请码短暂展示，数据库保存 hash；不上传成绩、备注、提醒。
 - 课表背景、个性化设置保存在本机，不进入分享图或 Widget。
 - 照片背景未显式选择显示模式时默认完整显示；启用状态下替换照片通过最终配置通知立即刷新课表根背景层。

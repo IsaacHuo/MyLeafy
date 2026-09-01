@@ -1229,7 +1229,10 @@ extension CommunityService {
             return .edgeFunctionRejected("投票已不存在或不可见。")
         }
 
-        return .edgeFunctionRejected("\(fallback)：\(message)")
+        CommunityDiagnostics.log.error(
+            "Community mutation failed: \(fallback, privacy: .public); \(message, privacy: .private(mask: .hash))"
+        )
+        return .edgeFunctionRejected("\(fallback)，请稍后重试。")
     }
 }
 
@@ -1837,6 +1840,25 @@ nonisolated struct CommunityNotificationRPCParams: Encodable, Sendable {
         case title = "p_title"
         case body = "p_body"
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(recipientID, forKey: .recipientID)
+        try container.encode(actorID, forKey: .actorID)
+        try container.encode(postID, forKey: .postID)
+        if let commentID {
+            try container.encode(commentID, forKey: .commentID)
+        } else {
+            try container.encodeNil(forKey: .commentID)
+        }
+        try container.encode(type, forKey: .type)
+        try container.encode(title, forKey: .title)
+        if let body {
+            try container.encode(body, forKey: .body)
+        } else {
+            try container.encodeNil(forKey: .body)
+        }
+    }
 }
 
 nonisolated struct SiteAnnouncementReadInsert: Encodable, Sendable {
@@ -1935,7 +1957,7 @@ nonisolated struct DishRatingInsert: Encodable, Sendable {
 
 nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
     let id: UUID
-    let requestID: UUID?
+    let requestID: UUID
     let title: String
     let body: String
     let category: String?
@@ -1952,6 +1974,22 @@ nonisolated struct CommunityCreatePostV4RPCParams: Encodable, Sendable {
         case isAnonymous = "p_is_anonymous"
         case imageCount = "p_image_count"
         case attachmentCount = "p_attachment_count"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(requestID, forKey: .requestID)
+        try container.encode(title, forKey: .title)
+        try container.encode(body, forKey: .body)
+        if let category {
+            try container.encode(category, forKey: .category)
+        } else {
+            try container.encodeNil(forKey: .category)
+        }
+        try container.encode(isAnonymous, forKey: .isAnonymous)
+        try container.encode(imageCount, forKey: .imageCount)
+        try container.encode(attachmentCount, forKey: .attachmentCount)
     }
 }
 
@@ -2139,7 +2177,7 @@ nonisolated struct CommunityCommentRecord: Decodable, Sendable {
 
 nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
     let id: UUID
-    let requestID: UUID?
+    let requestID: UUID
     let postID: UUID
     let body: String
     let parentCommentID: UUID?
@@ -2154,6 +2192,25 @@ nonisolated struct CommunityCreateCommentV2RPCParams: Encodable, Sendable {
         case parentCommentID = "p_parent_comment_id"
         case replyToCommentID = "p_reply_to_comment_id"
         case isAnonymous = "p_is_anonymous"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(requestID, forKey: .requestID)
+        try container.encode(postID, forKey: .postID)
+        try container.encode(body, forKey: .body)
+        if let parentCommentID {
+            try container.encode(parentCommentID, forKey: .parentCommentID)
+        } else {
+            try container.encodeNil(forKey: .parentCommentID)
+        }
+        if let replyToCommentID {
+            try container.encode(replyToCommentID, forKey: .replyToCommentID)
+        } else {
+            try container.encodeNil(forKey: .replyToCommentID)
+        }
+        try container.encode(isAnonymous, forKey: .isAnonymous)
     }
 }
 

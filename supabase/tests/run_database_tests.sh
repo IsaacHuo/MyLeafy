@@ -13,3 +13,4 @@ trap cleanup EXIT
 
 cp "${source_migration}" "${replay_fixture}"
 supabase test db "$@"
+bash "${repo_root}/supabase/tests/run_postgrest_contract_tests.sh"

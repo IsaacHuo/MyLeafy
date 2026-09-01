@@ -1,6 +1,6 @@
 # MyLeafy Supabase Schema Ledger
 
-Last updated: 2026-08-17
+Last updated: 2026-09-01
 
 This ledger records the deployed schema facts that the app relies on. It is not
 a replacement for migrations, and existing migration history should not be
@@ -26,6 +26,9 @@ contract.
 - Keep the shipped 7-argument `create_community_post_v4` and 6-argument
   `create_community_comment_v2` signatures executable. New clients use the
   request-ID overloads advertised by the matching `*_idempotent` capabilities.
+  The 5-argument comment overload accepts top-level comment payloads that omit
+  null reply targets and forwards them to the request-ID implementation. The
+  7-argument post overload likewise accepts an omitted null category.
 - Return backend failures through `{ error, errorEnvelope }`, where
   `errorEnvelope` has `{ code, message, retryable, details? }`.
 - Use `public.backend_capabilities_v1()` for feature availability. Clients
@@ -70,7 +73,7 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 
 | Domain | RPCs |
 | --- | --- |
-| `community-social` | `create_community_post_v4` (7-argument compatibility and 8-argument idempotent overloads), `create_community_comment_v2` (6-argument compatibility and 7-argument idempotent overloads), `attach_community_post_image_v1`, `attach_community_post_attachment_v1`, `abort_community_post_upload_v1`, `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_community_comment_like_v1`, `toggle_post_favorite_v1` |
+| `community-social` | `create_community_post_v4` (7-argument shipped compatibility, 7-argument null-category compatibility, and 8-argument idempotent overloads), `create_community_comment_v2` (5-argument top-level compatibility, 6-argument shipped compatibility, and 7-argument idempotent overloads), `attach_community_post_image_v1`, `attach_community_post_attachment_v1`, `abort_community_post_upload_v1`, `community_feed_v1`, `community_hot_posts_v1`, `community_profile_stats_v1`, `community_post_summary_v1`, `toggle_post_like_v1`, `toggle_community_comment_like_v1`, `toggle_post_favorite_v1` |
 | `community-social` polls | `my_authored_community_polls_v1`, `my_voted_community_polls_v1`, `request_delete_community_poll_v1`, `delete_own_community_poll_v1` |
 | `timetable-sharing` | `can_view_timetable_snapshot`, `create_timetable_invite`, `accept_timetable_invite`, `revoke_timetable_share`, `stop_timetable_sharing`, `leave_timetable_share` |
 | `campus-runtime` | `current_profile_campus_id`, `can_use_profile`, `submit_campus_membership_request`, `approve_campus_membership_request`, `reject_campus_membership_request`, `leafy_semester_effective_date`, `reconcile_semester_runtime_active_config`, `admin_upsert_semester_runtime_config`, `admin_upsert_national_calendar_runtime_config` |
@@ -86,8 +89,13 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `admin-list-announcements`
 - `admin-publish-announcement`
 - `admin-update-announcement`
+- `community-attachment-download`
 - `community-bootstrap-user`
+- `community-delete-account`
 - `community-feed`
+- `community-media-cleanup`
+- `community-validate-attachment`
+- `community-validate-upload`
 - `campus-request`
 - `campus-weather`
 - `share-preview`
@@ -147,8 +155,15 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260701090000_backend_capabilities_v1.sql`
 - `20260702022000_campus_ai_weekly_subscription.sql`
 - `20260704090000_campus_email_lookup.sql`
+- `20260710120000_drop_campus_email_lookup.sql`
 - `20260710121000_admin_security_runtime.sql`
+- `20260713090000_campus_ai_tool_gateway.sql`
+- `20260713171000_campus_ai_tool_gateway_public_rpc.sql`
 - `20260713190000_fix_next_semester_week_capacity.sql`
+- `20260715143000_campus_ai_free_daily_weekly_v2.sql`
+- `20260716062000_campus_ai_edge_rpc_wrappers.sql`
+- `20260717120000_bjfu_2026_2027_first_semester_calendar.sql`
+- `20260718190000_campus_ai_expire_stale_reservations.sql`
 - `20260722090000_community_identity_hardening.sql`
 - `20260722092000_community_mutation_hardening.sql`
 - `20260722094000_campus_ai_entitlement_monotonicity.sql`
@@ -157,10 +172,22 @@ The RPC also exposes an `rpcs` object for versioned RPC availability and an
 - `20260722160000_admin_backend_hardening.sql`
 - `20260725190000_community_post_upload_closure.sql`
 - `20260725203000_admin_database_lint_closure.sql`
+- `20260725220000_community_threads_attachments_outbox.sql`
+- `20260726120000_community_upload_capability_manifest.sql`
+- `20260728090000_community_banners.sql`
+- `20260728230000_timetable_invite_expiry_cleanup.sql`
+- `20260729110000_community_account_deletion.sql`
+- `20260729133000_restore_community_private_schema_usage.sql`
+- `20260801120000_allow_installation_demo_account_deletion.sql`
 - `20260803120000_retire_managed_campus_ai.sql`
 - `20260807123000_retire_campus_ai_tools.sql`
+- `20260807140000_calendar_year_timetable.sql`
 - `20260812120000_remove_obsolete_community_publish_rpc.sql`
 - `20260817120000_community_create_request_idempotency.sql`
+- `20260822120000_community_feed_realtime.sql`
+- `20260824120000_manual_early_semester_activation.sql`
+- `20260901123000_community_comment_top_level_rpc_compatibility.sql`
+- `20260901130500_rpc_named_payload_hardening.sql`
 
 The retired migrations remain in history so an empty database can reproduce the
 old schema before forward-only retirement migrations remove its quota,
