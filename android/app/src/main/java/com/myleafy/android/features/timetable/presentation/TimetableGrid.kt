@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,6 +29,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.domain.TimetableGridItemType
@@ -45,12 +45,17 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 // High-density timetable geometry is deliberately local rather than shared UI spacing.
-private val AxisWidth = 48.dp
-private val MinimumDayWidth = 52.dp
-private val HeaderHeight = 56.dp
-private val PeriodRowHeight = 56.dp
+private val AxisWidth = 40.dp
+private val MinimumDayWidth = 46.dp
+private val HeaderHeight = 44.dp
+private val MaximumPeriodRowHeight = 56.dp
 private val GridGap = 2.dp
 private val GridCellShape = RoundedCornerShape(8.dp)
+private const val PeriodCount = 13
+// Axis metadata is intentionally denser than general UI typography so all
+// thirteen start times remain readable without competing with course titles.
+private val AxisTimeFontSize = 9.sp
+private val AxisTimeLineHeight = 11.sp
 
 fun stableCourseColorIndex(name: String, colorCount: Int): Int {
     if (name.isEmpty() || colorCount <= 0) return 0
@@ -69,16 +74,18 @@ fun TimetableGrid(
     currentTime: LocalTime = LocalTime.now(),
 ) {
     val horizontalScroll = rememberScrollState()
-    val verticalScroll = rememberScrollState()
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize().testTag("timetable-grid")) {
         val minimumWidth = AxisWidth + MinimumDayWidth * 7
         val contentWidth = maxOf(maxWidth, minimumWidth)
-        val contentHeight = HeaderHeight + PeriodRowHeight * 13
+        // The timetable is a single viewport: rows compress to the available height
+        // instead of turning the whole grid into a vertically scrolling surface.
+        val periodRowHeight = ((maxHeight - HeaderHeight).coerceAtLeast(PeriodCount.dp) / PeriodCount)
+            .coerceAtMost(MaximumPeriodRowHeight)
+        val contentHeight = HeaderHeight + periodRowHeight * PeriodCount
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .horizontalScroll(horizontalScroll)
-                .verticalScroll(verticalScroll),
+                .horizontalScroll(horizontalScroll),
             contentAlignment = Alignment.TopCenter,
         ) {
             TimetableGridLayout(
@@ -87,6 +94,8 @@ fun TimetableGrid(
                 currentTime = currentTime,
                 onEmptyCellClick = onEmptyCellClick,
                 onItemClick = onItemClick,
+                headerHeight = HeaderHeight,
+                periodRowHeight = periodRowHeight,
                 modifier = Modifier.width(contentWidth).height(contentHeight),
             )
         }
@@ -100,6 +109,8 @@ private fun TimetableGridLayout(
     currentTime: LocalTime,
     onEmptyCellClick: (LocalDate, Int) -> Unit,
     onItemClick: (TimetableGridItem) -> Unit,
+    headerHeight: Dp,
+    periodRowHeight: Dp,
     modifier: Modifier,
 ) {
     val todayIndex = remember(snapshot.weekRange, today) {
@@ -120,7 +131,7 @@ private fun TimetableGridLayout(
                     modifier = Modifier.layoutId(GridSlot.Header(day)),
                 )
             }
-            for (period in 1..13) {
+            for (period in 1..PeriodCount) {
                 PeriodAxis(
                     period = period,
                     modifier = Modifier.layoutId(GridSlot.Axis(period)),
@@ -161,15 +172,15 @@ private fun TimetableGridLayout(
         val width = constraints.maxWidth
         val height = constraints.maxHeight
         val axisWidth = AxisWidth.roundToPx()
-        val headerHeight = HeaderHeight.roundToPx()
-        val rowHeight = PeriodRowHeight.roundToPx()
+        val headerHeightPx = headerHeight.roundToPx()
+        val rowHeight = periodRowHeight.roundToPx()
         val gap = GridGap.roundToPx()
         val dayWidth = (width - axisWidth) / 7f
 
         val placements = measurables.map { measurable ->
             val slot = measurable.layoutId as GridSlot
             val childConstraints = when (slot) {
-                is GridSlot.Header -> Constraints.fixed(dayWidth.roundToInt(), headerHeight)
+                is GridSlot.Header -> Constraints.fixed(dayWidth.roundToInt(), headerHeightPx)
                 is GridSlot.Axis -> Constraints.fixed(axisWidth, rowHeight)
                 is GridSlot.Cell -> Constraints.fixed(
                     (dayWidth.roundToInt() - gap * 2).coerceAtLeast(1),
@@ -201,21 +212,21 @@ private fun TimetableGridLayout(
                     }
                     is GridSlot.Axis -> {
                         x = 0
-                        y = headerHeight + (slot.period - 1) * rowHeight
+                        y = headerHeightPx + (slot.period - 1) * rowHeight
                     }
                     is GridSlot.Cell -> {
                         x = axisWidth + (slot.day * dayWidth).roundToInt() + gap
-                        y = headerHeight + (slot.period - 1) * rowHeight + gap
+                        y = headerHeightPx + (slot.period - 1) * rowHeight + gap
                     }
                     is GridSlot.Item -> {
                         val laneWidth = dayWidth / slot.item.laneCount
                         x = axisWidth + (slot.item.dayIndex * dayWidth).roundToInt() +
                             (slot.item.lane * laneWidth).roundToInt() + gap
-                        y = headerHeight + (slot.item.startPeriod - 1) * rowHeight + gap
+                        y = headerHeightPx + (slot.item.startPeriod - 1) * rowHeight + gap
                     }
                     is GridSlot.Timeline -> {
                         x = axisWidth + (slot.day * dayWidth).roundToInt() + gap
-                        y = headerHeight + (slot.rowPosition * rowHeight).roundToInt()
+                        y = headerHeightPx + (slot.rowPosition * rowHeight).roundToInt()
                     }
                 }
                 placeable.placeRelative(x, y)
@@ -227,7 +238,7 @@ private fun TimetableGridLayout(
 @Composable
 private fun DayHeader(date: LocalDate, isToday: Boolean, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.padding(LeafySpacing.tiny),
+        modifier = modifier.padding(vertical = LeafySpacing.tiny),
         shape = GridCellShape,
         color = if (isToday) MaterialTheme.leafySurfaces.accentSoft else MaterialTheme.leafySurfaces.page,
     ) {
@@ -237,19 +248,19 @@ private fun DayHeader(date: LocalDate, isToday: Boolean, modifier: Modifier = Mo
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
         ) {
             Text(
-                text = dayLabels[date.dayOfWeek.value - 1],
+                text = if (isToday) "今天" else dayLabels[date.dayOfWeek.value - 1],
                 style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
             )
             Text(
-                text = if (isToday) "今天 · ${date.format(DateTimeFormatter.ofPattern("M/d"))}" else {
-                    date.format(DateTimeFormatter.ofPattern("M/d"))
-                },
+                text = date.format(DateTimeFormatter.ofPattern("M/d")),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isToday) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
+                maxLines = 1,
             )
         }
     }
@@ -262,10 +273,17 @@ private fun PeriodAxis(period: Int, modifier: Modifier = Modifier) {
         modifier = modifier.padding(top = LeafySpacing.tiny, end = LeafySpacing.tiny),
         horizontalAlignment = Alignment.End,
     ) {
-        Text(text = period.toString(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = period.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
         Text(
             text = slot?.startText.orEmpty(),
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = AxisTimeFontSize,
+                lineHeight = AxisTimeLineHeight,
+            ),
             color = MaterialTheme.colorScheme.outline,
         )
     }

@@ -2,9 +2,11 @@ package com.myleafy.android.features.timetable.presentation
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -62,9 +64,11 @@ class TimetableGridInteractionTest {
         composeRule.runOnIdle { assertEquals(course, clickedItem) }
 
         composeRule.onNodeWithTag("timetable-cell-2026-09-07-3")
-            .assertHeightIsAtLeast(48.dp)
             .performClick()
         composeRule.runOnIdle { assertEquals(weekStart to 3, clickedCell) }
+
+        composeRule.onNodeWithTag("timetable-grid")
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.VerticalScrollAxisRange))
     }
 
     @Test

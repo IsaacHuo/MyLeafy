@@ -268,7 +268,11 @@ private fun TimetableScreenContent(
             LeafyActionIconButton(onClick = onPreviousWeek, enabled = state.selectedWeek > 1) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
             }
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = if (state.selectedWeek == state.currentWeek) {
                         "本周 · 第 ${state.selectedWeek} 周"
@@ -276,11 +280,13 @@ private fun TimetableScreenContent(
                         "第 ${state.selectedWeek} 周"
                     },
                     style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
                 )
                 Text(
-                    text = formatWeekRange(state.weekRange.startDate),
+                    text = " · ${formatWeekRange(state.weekRange.startDate)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
             LeafyActionIconButton(
