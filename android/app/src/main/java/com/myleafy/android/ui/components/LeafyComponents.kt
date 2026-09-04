@@ -56,8 +56,22 @@ fun LeafyRootTopBar(
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    LeafyRootTopBar(
+        titleContent = { Text(text = title, style = MaterialTheme.typography.headlineSmall) },
+        modifier = modifier,
+        actions = actions,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LeafyRootTopBar(
+    titleContent: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
     TopAppBar(
-        title = { Text(text = title, style = MaterialTheme.typography.headlineSmall) },
+        title = titleContent,
         actions = actions,
         modifier = modifier,
         expandedHeight = LeafyComponentSize.topBar,

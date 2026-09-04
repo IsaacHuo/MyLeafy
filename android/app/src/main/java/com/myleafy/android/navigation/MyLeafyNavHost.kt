@@ -3,6 +3,7 @@ package com.myleafy.android.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
@@ -26,10 +27,15 @@ import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
+import com.myleafy.android.features.campus.CatalogRatingsScreen
 import com.myleafy.android.features.campus.CampusCalendarScreen
 import com.myleafy.android.features.campus.ClassroomScreen
 import com.myleafy.android.features.campus.ExamsScreen
 import com.myleafy.android.features.campus.GradesScreen
+import com.myleafy.android.features.campus.FitnessTestScreen
+import com.myleafy.android.features.campus.MedicalScreen
+import com.myleafy.android.features.campus.SunshineRunScreen
+import com.myleafy.android.features.campus.VenueOpeningsScreen
 import com.myleafy.android.features.community.CommunityScreen
 import com.myleafy.android.features.community.CommunitySearchScreen
 import com.myleafy.android.features.community.CommunityNotificationsScreen
@@ -43,8 +49,10 @@ import com.myleafy.android.features.profile.PermissionsInfoScreen
 import com.myleafy.android.features.profile.ProfileEditScreen
 import com.myleafy.android.features.profile.ProfilePreferencesScreen
 import com.myleafy.android.features.profile.ProfileSyncScreen
+import com.myleafy.android.features.profile.TimetableBackgroundScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
 import com.myleafy.android.features.timetable.TimetableScreen
+import com.myleafy.android.features.timetable.sharing.TimetableSharingScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
 import com.myleafy.android.ui.components.LeafyEmptyState
 
@@ -56,6 +64,8 @@ object Routes {
     const val GRADES = "campus/grades"
     const val EXAMS = "campus/exams"
     const val PROFILE_EDIT = "profile/edit"
+    const val SCHEDULE_NOTIFICATION = "schedule/notification?eventId={eventId}&mode={mode}"
+    const val TIMETABLE_SHARE_INVITE = "timetable/share/invite?code={code}"
     const val DEEP_LINK_COMMUNITY_POST = "myleafy://community-post?id={postId}"
     const val DEEP_LINK_TIMETABLE_INVITE = "myleafy://timetable-invite?code={code}"
 
@@ -77,16 +87,7 @@ fun MyLeafyNavHost(
     val currentDestination = backStackEntry?.destination
     val rootRoutes = RootTab.entries.mapTo(mutableSetOf()) { it.route }
     val showsBottomBar = currentDestination?.route in rootRoutes
-    val visibleRootTabs = RootTab.entries.filter { it != RootTab.COMMUNITY || canUseCommunity }
-
-    LaunchedEffect(canUseCommunity, currentDestination?.route) {
-        if (!canUseCommunity && currentDestination?.route == RootTab.COMMUNITY.route) {
-            navController.navigate(RootTab.TIMETABLE.route) {
-                popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
-                launchSingleTop = true
-            }
-        }
-    }
+    val visibleRootTabs = RootTab.entries
 
     val navigationContent: @Composable () -> Unit = {
         NavHost(
@@ -114,7 +115,10 @@ fun MyLeafyNavHost(
                         },
                     )
                 } else {
-                    CommunityUnavailableContent()
+                    CommunityUnavailableContent(
+                        isSignedOut = activeScope.campusId == null,
+                        onLoginClick = { navController.navigate(Routes.LOGIN) },
+                    )
                 }
             }
             composable(Routes.COMMUNITY_COMPOSE) {
@@ -126,7 +130,10 @@ fun MyLeafyNavHost(
                         },
                     )
                 } else {
-                    CommunityUnavailableContent()
+                    CommunityUnavailableContent(
+                        isSignedOut = activeScope.campusId == null,
+                        onLoginClick = { navController.navigate(Routes.LOGIN) },
+                    )
                 }
             }
             composable(
@@ -143,11 +150,27 @@ fun MyLeafyNavHost(
                         onBack = { navController.popBackStack() },
                     )
                 } else {
-                    CommunityUnavailableContent()
+                    CommunityUnavailableContent(
+                        isSignedOut = activeScope.campusId == null,
+                        onLoginClick = { navController.navigate(Routes.LOGIN) },
+                    )
                 }
             }
             composable(RootTab.SCHEDULE.route) {
                 ScheduleScreen(onFeatureClick = { navController.navigate(it.route) })
+            }
+            composable(
+                route = Routes.SCHEDULE_NOTIFICATION,
+                arguments = listOf(
+                    navArgument("eventId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("mode") { type = NavType.StringType; defaultValue = "reports" },
+                ),
+            ) { entry ->
+                ScheduleScreen(
+                    onFeatureClick = { navController.navigate(it.route) },
+                    initialSection = entry.arguments?.getString("mode"),
+                    initialEventId = entry.arguments?.getString("eventId"),
+                )
             }
             composable(RootTab.CAMPUS.route) {
                 CampusScreen(
@@ -166,12 +189,7 @@ fun MyLeafyNavHost(
             composable(Routes.EXAMS) {
                 ExamsScreen(onBack = { navController.popBackStack() })
             }
-            composable(
-                route = RootTab.PROFILE.route,
-                deepLinks = listOf(
-                    navDeepLink { uriPattern = Routes.DEEP_LINK_TIMETABLE_INVITE },
-                ),
-            ) {
+            composable(RootTab.PROFILE.route) {
                 ProfileScreen(
                     onLoginClick = { navController.navigate(Routes.LOGIN) },
                     onEditProfileClick = { navController.navigate(Routes.PROFILE_EDIT) },
@@ -186,6 +204,19 @@ fun MyLeafyNavHost(
             }
             composable(Routes.LOGIN) {
                 LoginScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.TIMETABLE_SHARE_INVITE,
+                arguments = listOf(navArgument("code") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }),
+                deepLinks = listOf(navDeepLink { uriPattern = Routes.DEEP_LINK_TIMETABLE_INVITE }),
+            ) { entry ->
+                TimetableSharingScreen(
+                    onBack = { navController.popBackStack() },
+                    initialCode = entry.arguments?.getString("code"),
+                )
             }
             FeatureDestination.entries.forEach { destination ->
                 composable(destination.route) {
@@ -205,6 +236,24 @@ fun MyLeafyNavHost(
                         FeatureDestination.CAMPUS_CALENDAR -> CampusCalendarScreen(
                             onBack = { navController.popBackStack() },
                         )
+                        FeatureDestination.CAMPUS_SUNSHINE_RUN -> SunshineRunScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.CAMPUS_FITNESS_TEST -> FitnessTestScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.CAMPUS_VENUES -> VenueOpeningsScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.CAMPUS_MEDICAL -> MedicalScreen(
+                            onBack = { navController.popBackStack() },
+                            available = activeScope.supports(CampusCapabilities.MEDICAL_SERVICES),
+                        )
+                        FeatureDestination.CAMPUS_RATINGS -> CatalogRatingsScreen(
+                            onBack = { navController.popBackStack() },
+                            available = activeScope.supports(CampusCapabilities.COMMUNITY) &&
+                                activeScope.supports(CampusCapabilities.CATALOG_RATINGS),
+                        )
                         FeatureDestination.PROFILE_HELP -> HelpCenterScreen(
                             onBack = { navController.popBackStack() },
                         )
@@ -221,6 +270,14 @@ fun MyLeafyNavHost(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_ABOUT -> AboutMyLeafyScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.TIMETABLE_BACKGROUND -> TimetableBackgroundScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.TIMETABLE_SHARE,
+                        FeatureDestination.PROFILE_SHARING,
+                        -> TimetableSharingScreen(
                             onBack = { navController.popBackStack() },
                         )
                         else -> FeaturePlaceholder(
@@ -272,11 +329,23 @@ fun MyLeafyNavHost(
 }
 
 @Composable
-private fun CommunityUnavailableContent() {
+private fun CommunityUnavailableContent(
+    isSignedOut: Boolean,
+    onLoginClick: () -> Unit,
+) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         LeafyEmptyState(
             title = "社区暂不可用",
-            message = "登录支持社区的校园身份后即可进入。",
+            message = if (isSignedOut) {
+                "登录支持社区的校园身份后即可进入。"
+            } else {
+                "当前校园入口暂不提供社区服务。"
+            },
+            action = if (isSignedOut) {
+                { Button(onClick = onLoginClick) { Text("登录学校账号") } }
+            } else {
+                null
+            },
         )
     }
 }

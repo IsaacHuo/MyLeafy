@@ -56,10 +56,30 @@ enum class FeatureDestination(
         title = "校历",
         description = "学期事件、节假日与校历浏览将在后续阶段接入。",
     ),
-    CAMPUS_LEARNING_SPACE(
-        route = "campus/learning-space",
-        title = "学习空间",
-        description = "学习项目、资料与专注记录将在后续阶段接入。",
+    CAMPUS_SUNSHINE_RUN(
+        route = "campus/sports/sunshine-run",
+        title = "阳光长跑",
+        description = "记录跑步并按教学周查看完成进度。",
+    ),
+    CAMPUS_FITNESS_TEST(
+        route = "campus/sports/fitness-test",
+        title = "体测记录",
+        description = "记录、筛选并观察各体测项目变化。",
+    ),
+    CAMPUS_VENUES(
+        route = "campus/sports/venues",
+        title = "场馆开放",
+        description = "查看北林场馆的静态开放、预约与收费说明。",
+    ),
+    CAMPUS_MEDICAL(
+        route = "campus/medical",
+        title = "医疗事项",
+        description = "查看医疗政策、报销指引并管理本机台账。",
+    ),
+    CAMPUS_RATINGS(
+        route = "campus/ratings",
+        title = "评价相关",
+        description = "评教、评课与评菜依赖社区身份和评价服务。",
     ),
     PROFILE_SYNC(
         route = "profile/sync",
@@ -75,6 +95,11 @@ enum class FeatureDestination(
         route = "profile/personalization",
         title = "个性化",
         description = "主题、密度与课表背景设置将在后续阶段接入。",
+    ),
+    TIMETABLE_BACKGROUND(
+        route = "profile/timetable-background",
+        title = "课表背景",
+        description = "设置照片或纯色背景以及课表可读性参数。",
     ),
     PROFILE_PERMISSIONS(
         route = "profile/permissions",

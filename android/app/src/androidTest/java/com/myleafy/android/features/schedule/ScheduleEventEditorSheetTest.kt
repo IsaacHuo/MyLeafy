@@ -2,10 +2,12 @@ package com.myleafy.android.features.schedule
 
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.semantics.SemanticsActions
 import com.myleafy.android.ui.theme.MyLeafyTheme
 import java.time.LocalDate
 import java.time.LocalTime
@@ -62,7 +64,8 @@ class ScheduleEventEditorSheetTest {
 
         composeRule.onNodeWithText("删除").performClick()
         composeRule.onNodeWithText("删除这条日程？").assertExists()
-        composeRule.onNodeWithContentDescription("确认删除日程").performClick()
+        composeRule.onNodeWithTag("confirm-delete-schedule")
+            .performSemanticsAction(SemanticsActions.OnClick)
         composeRule.runOnIdle { assertEquals("event-1", deletedId) }
     }
 

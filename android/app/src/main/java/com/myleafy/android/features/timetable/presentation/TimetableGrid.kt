@@ -1,7 +1,11 @@
 package com.myleafy.android.features.timetable.presentation
 
+import android.graphics.BitmapFactory
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -10,16 +14,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -31,6 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.myleafy.android.core.prefs.TimetableBackgroundSettings
 import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.domain.TimetableGridItemType
 import com.myleafy.android.features.timetable.domain.TimetableGridSnapshot
@@ -43,10 +55,11 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // High-density timetable geometry is deliberately local rather than shared UI spacing.
 private val AxisWidth = 40.dp
-private val MinimumDayWidth = 46.dp
 private val HeaderHeight = 44.dp
 private val MaximumPeriodRowHeight = 56.dp
 private val GridGap = 2.dp
@@ -72,11 +85,12 @@ fun TimetableGrid(
     modifier: Modifier = Modifier,
     today: LocalDate = LocalDate.now(),
     currentTime: LocalTime = LocalTime.now(),
+    showWeekends: Boolean = true,
+    background: TimetableBackgroundSettings = TimetableBackgroundSettings(),
 ) {
-    val horizontalScroll = rememberScrollState()
     BoxWithConstraints(modifier = modifier.fillMaxSize().testTag("timetable-grid")) {
-        val minimumWidth = AxisWidth + MinimumDayWidth * 7
-        val contentWidth = maxOf(maxWidth, minimumWidth)
+        val visibleDayCount = if (showWeekends) 7 else 5
+        val contentWidth = maxWidth
         // The timetable is a single viewport: rows compress to the available height
         // instead of turning the whole grid into a vertically scrolling surface.
         val periodRowHeight = ((maxHeight - HeaderHeight).coerceAtLeast(PeriodCount.dp) / PeriodCount)
@@ -84,10 +98,10 @@ fun TimetableGrid(
         val contentHeight = HeaderHeight + periodRowHeight * PeriodCount
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .horizontalScroll(horizontalScroll),
+                .fillMaxSize(),
             contentAlignment = Alignment.TopCenter,
         ) {
+            TimetableBackground(background, Modifier.fillMaxSize())
             TimetableGridLayout(
                 snapshot = snapshot,
                 today = today,
@@ -96,7 +110,64 @@ fun TimetableGrid(
                 onItemClick = onItemClick,
                 headerHeight = HeaderHeight,
                 periodRowHeight = periodRowHeight,
+                visibleDayCount = visibleDayCount,
+                background = background,
                 modifier = Modifier.width(contentWidth).height(contentHeight),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimetableBackground(settings: TimetableBackgroundSettings, modifier: Modifier = Modifier) {
+    if (!settings.enabled) return
+    val pageColor = MaterialTheme.leafySurfaces.page
+    Box(modifier = modifier) {
+        if (settings.kind == "color") {
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    parseBackgroundColor(settings.colorHex).copy(alpha = settings.visibilityPercent / 100f),
+                ),
+            )
+        } else {
+            val selectedPath = if (Build.VERSION.SDK_INT < 31 && settings.blurRadius > 0) {
+                settings.blurredPhotoPath ?: settings.photoPath
+            } else {
+                settings.photoPath
+            }
+            val bitmap by produceState<android.graphics.Bitmap?>(null, selectedPath) {
+                value = withContext(Dispatchers.IO) { selectedPath?.let(BitmapFactory::decodeFile) }
+            }
+            DisposableEffect(bitmap) {
+                onDispose { bitmap?.takeUnless { it.isRecycled }?.recycle() }
+            }
+            bitmap?.let { image ->
+                Image(
+                    bitmap = image.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = if (settings.contentScale == "fit") ContentScale.Fit else ContentScale.Crop,
+                    alpha = settings.visibilityPercent / 100f,
+                    modifier = Modifier.fillMaxSize().then(
+                        if (Build.VERSION.SDK_INT >= 31 && settings.blurRadius > 0) {
+                            Modifier.graphicsLayer {
+                                renderEffect = RenderEffect.createBlurEffect(
+                                    settings.blurRadius.toFloat(),
+                                    settings.blurRadius.toFloat(),
+                                    Shader.TileMode.CLAMP,
+                                ).asComposeRenderEffect()
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ),
+                )
+            }
+        }
+        if (settings.overlayPercent > 0) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    pageColor.copy(alpha = settings.overlayPercent / 100f),
+                ),
             )
         }
     }
@@ -111,10 +182,12 @@ private fun TimetableGridLayout(
     onItemClick: (TimetableGridItem) -> Unit,
     headerHeight: Dp,
     periodRowHeight: Dp,
+    visibleDayCount: Int,
+    background: TimetableBackgroundSettings,
     modifier: Modifier,
 ) {
     val todayIndex = remember(snapshot.weekRange, today) {
-        (0..6).firstOrNull { snapshot.weekRange.startDate.plusDays(it.toLong()) == today }
+        (0 until visibleDayCount).firstOrNull { snapshot.weekRange.startDate.plusDays(it.toLong()) == today }
     }
     val timeline = remember(snapshot.weekRange, today, currentTime) {
         todayIndex?.let { day -> currentTimeline(day, currentTime) }
@@ -123,11 +196,12 @@ private fun TimetableGridLayout(
     Layout(
         modifier = modifier,
         content = {
-            for (day in 0..6) {
+            for (day in 0 until visibleDayCount) {
                 val date = snapshot.weekRange.startDate.plusDays(day.toLong())
                 DayHeader(
                     date = date,
                     isToday = day == todayIndex,
+                    hasBackground = background.enabled,
                     modifier = Modifier.layoutId(GridSlot.Header(day)),
                 )
             }
@@ -136,21 +210,23 @@ private fun TimetableGridLayout(
                     period = period,
                     modifier = Modifier.layoutId(GridSlot.Axis(period)),
                 )
-                for (day in 0..6) {
+                for (day in 0 until visibleDayCount) {
                     val date = snapshot.weekRange.startDate.plusDays(day.toLong())
                     EmptyGridCell(
                         isToday = day == todayIndex,
                         date = date,
                         period = period,
                         onClick = { onEmptyCellClick(date, period) },
+                        hasBackground = background.enabled,
                         modifier = Modifier.layoutId(GridSlot.Cell(day, period)),
                     )
                 }
             }
-            snapshot.items.forEach { item ->
+            snapshot.items.filter { it.dayIndex < visibleDayCount }.forEach { item ->
                 TimetableItemCard(
                     item = item,
                     onClick = { onItemClick(item) },
+                    opacity = if (background.enabled) background.courseOpacityPercent / 100f else 1f,
                     modifier = Modifier
                         .layoutId(GridSlot.Item(item))
                         .zIndex(1f),
@@ -175,7 +251,7 @@ private fun TimetableGridLayout(
         val headerHeightPx = headerHeight.roundToPx()
         val rowHeight = periodRowHeight.roundToPx()
         val gap = GridGap.roundToPx()
-        val dayWidth = (width - axisWidth) / 7f
+        val dayWidth = (width - axisWidth) / visibleDayCount.toFloat()
 
         val placements = measurables.map { measurable ->
             val slot = measurable.layoutId as GridSlot
@@ -236,11 +312,20 @@ private fun TimetableGridLayout(
 }
 
 @Composable
-private fun DayHeader(date: LocalDate, isToday: Boolean, modifier: Modifier = Modifier) {
+private fun DayHeader(
+    date: LocalDate,
+    isToday: Boolean,
+    hasBackground: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Surface(
         modifier = modifier.padding(vertical = LeafySpacing.tiny),
         shape = GridCellShape,
-        color = if (isToday) MaterialTheme.leafySurfaces.accentSoft else MaterialTheme.leafySurfaces.page,
+        color = if (isToday) {
+            MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.82f else 1f)
+        } else {
+            MaterialTheme.leafySurfaces.page.copy(alpha = if (hasBackground) 0.64f else 1f)
+        },
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -295,6 +380,7 @@ private fun EmptyGridCell(
     date: LocalDate,
     period: Int,
     onClick: () -> Unit,
+    hasBackground: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -304,9 +390,9 @@ private fun EmptyGridCell(
         },
         shape = GridCellShape,
         color = if (isToday) {
-            MaterialTheme.leafySurfaces.accentSoft.copy(alpha = 0.6f)
+            MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.48f else 0.6f)
         } else {
-            MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.62f)
+            MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasBackground) 0.42f else 0.62f)
         },
     ) {}
 }
@@ -315,6 +401,7 @@ private fun EmptyGridCell(
 private fun TimetableItemCard(
     item: TimetableGridItem,
     onClick: () -> Unit,
+    opacity: Float,
     modifier: Modifier = Modifier,
 ) {
     val courseColors = MaterialTheme.leafyCourseColors
@@ -333,7 +420,7 @@ private fun TimetableItemCard(
             contentDescription = "${item.title}，第${item.startPeriod}至${item.endPeriod}节"
         },
         shape = GridCellShape,
-        color = containerColor,
+        color = containerColor.copy(alpha = opacity.coerceIn(0.35f, 1f)),
         contentColor = contentColor,
         shadowElevation = LeafyElevation.flat,
     ) {
@@ -380,3 +467,7 @@ private sealed interface GridSlot {
 }
 
 private val dayLabels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+
+private fun parseBackgroundColor(value: String): Color = runCatching {
+    Color(android.graphics.Color.parseColor(value))
+}.getOrDefault(Color(0xFFDDE9DF))

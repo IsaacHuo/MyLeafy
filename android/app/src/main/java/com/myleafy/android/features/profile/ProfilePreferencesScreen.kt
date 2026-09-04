@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -46,6 +47,10 @@ class ProfilePreferencesViewModel(private val settingsStore: SettingsStore) : Vi
 
     fun setTextScale(value: String) {
         viewModelScope.launch { settingsStore.setTextScale(value) }
+    }
+
+    fun setHideWeekends(value: Boolean) {
+        viewModelScope.launch { settingsStore.setHideWeekends(value) }
     }
 }
 
@@ -86,13 +91,26 @@ fun ProfilePreferencesScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "课表背景与更复杂的显示密度属于增强阶段，当前不提供无效开关。",
-                    modifier = Modifier.padding(LeafySpacing.card),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            LeafySectionHeader("课表", supportingText = "课表内容仍保留七日数据，只改变周视图的可见列。")
+            PreferenceCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("隐藏周末", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "开启后课表只显示周一至周五",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = settings.hideWeekends,
+                        onCheckedChange = viewModel::setHideWeekends,
+                    )
+                }
             }
         }
     }

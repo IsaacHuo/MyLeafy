@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -144,8 +145,14 @@ fun ProfileScreen(
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
                     )
                     ProfileDestinationRow(
+                        title = "课表背景",
+                        description = "照片、纯色、模糊与课程块透明度",
+                        icon = Icons.Outlined.Wallpaper,
+                        onClick = { onFeatureClick(FeatureDestination.TIMETABLE_BACKGROUND) },
+                    )
+                    ProfileDestinationRow(
                         title = "个性化",
-                        description = "主题、显示与课表背景",
+                        description = "主题、文字与课表列数",
                         icon = Icons.Outlined.AutoAwesome,
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_PERSONALIZATION) },
                     )

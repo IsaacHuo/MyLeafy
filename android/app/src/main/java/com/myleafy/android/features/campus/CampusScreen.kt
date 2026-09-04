@@ -20,7 +20,11 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Class
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Assessment
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
+import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.LocalHospital
+import androidx.compose.material.icons.outlined.RateReview
+import androidx.compose.material.icons.outlined.SportsBasketball
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -194,7 +198,9 @@ private fun CampusDashboard(
 private enum class CampusDomain(val label: String, val supportingText: String) {
     Teaching("学校教学", "成绩、考试与学期安排"),
     SelfStudy("自习安排", "查询当前可用的学习地点"),
-    Learning("学习空间", "资料、项目与专注能力"),
+    Sports("体育相关", "长跑、体测与场馆信息"),
+    Medical("医疗事项", "政策、报销指引与本机台账"),
+    Ratings("评价相关", "评教、评课与评菜"),
 }
 
 @Composable
@@ -270,33 +276,6 @@ private fun CampusDomainContent(
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
         if (domain == CampusDomain.Teaching) {
-            item {
-                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(LeafySpacing.card)) {
-                        Text(text = "学业概览", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            text = buildString {
-                                append("${state.grades.size} 门成绩")
-                                state.gradeSummary?.officialGpa?.let { append(" · GPA %.2f".format(it)) }
-                                state.rankings.firstOrNull {
-                                    it.term == "全部学期" && it.rankingRange == "专业排名"
-                                }?.let { ranking ->
-                                    append(" · 专业 ${ranking.rank}")
-                                    ranking.totalCount?.let { append("/$it") }
-                                }
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = "数据来自学校教务；同步失败时保留最近一次成功结果。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
             val syncMessage = when (syncState) {
                 is CampusSyncState.Success -> buildString {
                     append("同步完成")
@@ -364,52 +343,50 @@ private fun CampusDomainContent(
                 )
             }
         }
-        if (domain == CampusDomain.Learning) {
+        if (domain == CampusDomain.Sports) {
             item {
                 LeafyFeatureCard(
-                    title = "学习空间",
-                    description = "学习资料、项目与专注记录",
-                    icon = Icons.AutoMirrored.Outlined.MenuBook,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_LEARNING_SPACE) },
+                    title = "阳光长跑",
+                    description = "本机记录、两周进度和自定义规则",
+                    icon = Icons.AutoMirrored.Outlined.DirectionsRun,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_SUNSHINE_RUN) },
+                )
+            }
+            item {
+                LeafyFeatureCard(
+                    title = "体测记录",
+                    description = "按项目记录数值、备注并观察趋势",
+                    icon = Icons.Outlined.FitnessCenter,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_FITNESS_TEST) },
+                )
+            }
+            item {
+                LeafyFeatureCard(
+                    title = "场馆开放",
+                    description = "北林静态开放时间、预约、收费与备注",
+                    icon = Icons.Outlined.SportsBasketball,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_VENUES) },
                 )
             }
         }
-
-        if (domain == CampusDomain.Teaching) {
+        if (domain == CampusDomain.Medical) {
             item {
-                LeafySectionHeader(
-                    title = "最近成绩",
-                    supportingText = "${state.terms.size} 个学期 · 点击成绩与排名查看全部",
+                LeafyFeatureCard(
+                    title = "医疗政策与报销台账",
+                    description = "按就诊情景查看材料，并在本机管理报销记录",
+                    icon = Icons.Outlined.LocalHospital,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_MEDICAL) },
                 )
             }
-            if (state.grades.isEmpty()) {
-                item {
-                    LeafyEmptyState(
-                        title = "暂无成绩缓存",
-                        message = "登录教务后点右上角同步；学校无记录时这里保持为空。",
-                        icon = Icons.Outlined.School,
-                    )
-                }
-            } else {
-                items(state.grades.take(3), key = { it.id }) { grade -> GradeRow(grade) }
-            }
-
+        }
+        if (domain == CampusDomain.Ratings) {
             item {
-                LeafySectionHeader(
-                    title = "考试安排",
-                    supportingText = "当前缓存 ${state.exams.size} 场",
+                LeafyFeatureCard(
+                    title = "评教、评课、评菜",
+                    description = "需要社区身份与校园评价服务支持",
+                    icon = Icons.Outlined.RateReview,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_RATINGS) },
                 )
-            }
-            if (state.exams.isEmpty()) {
-                item {
-                    LeafyEmptyState(
-                        title = "暂无考试安排",
-                        message = "同步成功后的真实考试数据会显示在这里。",
-                        icon = Icons.Outlined.CalendarMonth,
-                    )
-                }
-            } else {
-                items(state.exams.take(3), key = { it.id }) { exam -> ExamRow(exam) }
             }
         }
     }

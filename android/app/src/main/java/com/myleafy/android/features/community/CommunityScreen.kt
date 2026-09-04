@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -111,6 +110,9 @@ fun CommunityContent(
             LeafyRootTopBar(
                 title = "社区",
                 actions = {
+                    LeafyActionIconButton(onClick = onSearchClick) {
+                        Icon(Icons.Outlined.Search, contentDescription = "搜索社区")
+                    }
                     LeafyActionIconButton(onClick = onNotificationsClick) {
                         BadgedBox(
                             badge = {
@@ -158,7 +160,6 @@ fun CommunityContent(
                 ),
                 verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
             ) {
-                item { CommunitySearchEntry(onClick = onSearchClick) }
                 item {
                     CommunityFilters(
                         selection = state.selection,
@@ -197,26 +198,6 @@ fun CommunityContent(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun CommunitySearchEntry(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.minimumTouchTarget),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.compact),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-        ) {
-            Icon(Icons.Outlined.Search, contentDescription = null)
-            Text("搜索校园动态", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

@@ -106,6 +106,9 @@ android {
         getByName("test") {
             resources.srcDir(rootProject.file("../contracts"))
         }
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
+        }
     }
 }
 
@@ -137,6 +140,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime)
 
     implementation(libs.okhttp)
     implementation(libs.jsoup)
@@ -156,4 +160,5 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.work.testing)
 }

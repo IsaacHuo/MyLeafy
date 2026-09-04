@@ -18,10 +18,11 @@ object CampusCapabilities {
     val WEATHER = "weather"
     val SHARED_TIMETABLE = "sharedTimetable"
     val MEDICAL_SERVICES = "medicalServices"
+    val CATALOG_RATINGS = "catalogRatings"
 
     val all: Set<String> = setOf(
         AUTHENTICATION, TIMETABLE, GRADES, EXAMS, TEACHING_PLAN, TRAINING_PROGRAM,
-        CLASSROOMS, COMMUNITY, WEATHER, SHARED_TIMETABLE, MEDICAL_SERVICES,
+        CLASSROOMS, COMMUNITY, WEATHER, SHARED_TIMETABLE, MEDICAL_SERVICES, CATALOG_RATINGS,
     )
 }
 

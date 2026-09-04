@@ -1,13 +1,26 @@
 package com.myleafy.android.features.timetable
 
+import android.Manifest
+import android.app.Activity
 import android.content.ClipData
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -17,24 +30,40 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.AcUnit
+import androidx.compose.material.icons.outlined.Thunderstorm
+import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.FileProvider
@@ -52,6 +81,8 @@ import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.features.timetable.presentation.CourseDetailsDialog
 import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
+import com.myleafy.android.features.timetable.weather.WeatherCondition
+import com.myleafy.android.features.timetable.weather.WeatherUiState
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafySnackbarHost
@@ -64,6 +95,9 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.io.File
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun TimetableScreen(
@@ -74,6 +108,9 @@ fun TimetableScreen(
                 repository = container.timetableRepository,
                 academicRepository = container.academicRepository,
                 scheduleRepository = container.scheduleRepository,
+                settingsStore = container.settingsStore,
+                weatherRepository = container.weatherRepository,
+                onScheduleEventsChanged = container.scheduleNotificationScheduler::requestReconcile,
                 semesterId = SemesterConfig.currentSemesterId,
             )
         },
@@ -84,7 +121,9 @@ fun TimetableScreen(
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val mutationState by viewModel.scheduleMutationState.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
+    val weatherState by viewModel.weatherState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val activity = context.findActivity()
     val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var editorDraft by rememberSaveable(stateSaver = scheduleDraftSaver) {
@@ -92,6 +131,44 @@ fun TimetableScreen(
     }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedExam by rememberSaveable { mutableStateOf<Int?>(null) }
+    var showWeatherPermissionDialog by rememberSaveable { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.refreshWeather(forceRefresh = true)
+        } else {
+            coroutineScope.launch {
+                val permanentlyDenied = activity?.let {
+                    !ActivityCompat.shouldShowRequestPermissionRationale(
+                        it,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                    )
+                } == true
+                val result = snackbarHostState.showSnackbar(
+                    message = if (permanentlyDenied) "粗略位置权限已关闭，可在系统设置中重新开启" else "未授权位置，课表仍可正常使用",
+                    actionLabel = if (permanentlyDenied) "设置" else null,
+                )
+                if (permanentlyDenied && result == SnackbarResult.ActionPerformed) {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}"),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.refreshWeather()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -99,7 +176,26 @@ fun TimetableScreen(
         snackbarHost = { LeafySnackbarHost(snackbarHostState) },
         topBar = {
             LeafyRootTopBar(
-                title = "课表",
+                titleContent = {
+                    TimetableWeatherTitle(
+                        state = weatherState,
+                        hasPermission = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        ) == PackageManager.PERMISSION_GRANTED,
+                        onClick = {
+                            if (ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                viewModel.refreshWeather(forceRefresh = true)
+                            } else {
+                                showWeatherPermissionDialog = true
+                            }
+                        },
+                    )
+                },
                 actions = {
                     LeafyActionIconButton(
                         onClick = {
@@ -173,8 +269,7 @@ fun TimetableScreen(
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
                 syncState = syncState,
-                onPreviousWeek = viewModel::previousWeek,
-                onNextWeek = viewModel::nextWeek,
+                onSelectWeek = viewModel::selectWeek,
                 onEmptyCellClick = { date, period -> editorDraft = draftForCell(date, period) },
                 onItemClick = { item ->
                     when (item.type) {
@@ -245,19 +340,97 @@ fun TimetableScreen(
             },
         )
     }
+    if (showWeatherPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showWeatherPermissionDialog = false },
+            title = { Text("显示当地天气") },
+            text = { Text("MyLeafy 只使用设备提供的粗略位置直接请求 Open-Meteo；位置不会上传到 MyLeafy 或 Supabase，也不会影响课表使用。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showWeatherPermissionDialog = false
+                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                }) { Text("继续") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWeatherPermissionDialog = false }) { Text("取消") }
+            },
+        )
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+@Composable
+private fun TimetableWeatherTitle(
+    state: WeatherUiState,
+    hasPermission: Boolean,
+    onClick: () -> Unit,
+) {
+    val loaded = state as? WeatherUiState.Loaded
+    val label = when (state) {
+        WeatherUiState.Idle -> if (hasPermission) "天气" else "获取天气"
+        WeatherUiState.Loading -> "天气…"
+        is WeatherUiState.Loaded -> buildString {
+            append(state.snapshot.condition.label)
+            append(' ')
+            append(state.snapshot.temperatureCelsius.roundToInt())
+            append('°')
+            if (state.snapshot.isStale) append(" · 旧")
+        }
+        is WeatherUiState.Error -> "天气不可用"
+    }
+    val icon = when (loaded?.snapshot?.condition) {
+        WeatherCondition.CLEAR -> Icons.Outlined.WbSunny
+        WeatherCondition.SNOW -> Icons.Outlined.AcUnit
+        WeatherCondition.THUNDERSTORM -> Icons.Outlined.Thunderstorm
+        WeatherCondition.DRIZZLE, WeatherCondition.RAIN -> Icons.Outlined.WaterDrop
+        else -> Icons.Outlined.Cloud
+    }
+    Row(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "天气，$label" }
+            .padding(horizontal = LeafySpacing.micro),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(LeafySpacing.tiny),
+    ) {
+        Icon(icon, contentDescription = null)
+        Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+    }
 }
 
 @Composable
 private fun TimetableScreenContent(
     state: TimetableUiState.Loaded,
     syncState: TimetableSyncState,
-    onPreviousWeek: () -> Unit,
-    onNextWeek: () -> Unit,
+    onSelectWeek: (Int) -> Unit,
     onEmptyCellClick: (LocalDate, Int) -> Unit,
     onItemClick: (TimetableGridItem) -> Unit,
     onConsumeSync: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val pagerState = rememberPagerState(
+        initialPage = (state.selectedWeek - 1).coerceIn(0, state.supportedWeeks - 1),
+        pageCount = { state.supportedWeeks },
+    )
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page -> onSelectWeek(page + 1) }
+    }
+    LaunchedEffect(state.selectedWeek) {
+        val targetPage = (state.selectedWeek - 1).coerceIn(0, state.supportedWeeks - 1)
+        if (pagerState.settledPage != targetPage) pagerState.animateScrollToPage(targetPage)
+    }
+
+    val visiblePage = state.pages[pagerState.currentPage]
     Column(modifier = modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
         Row(
             modifier = Modifier
@@ -265,7 +438,12 @@ private fun TimetableScreenContent(
                 .padding(vertical = LeafySpacing.tiny),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LeafyActionIconButton(onClick = onPreviousWeek, enabled = state.selectedWeek > 1) {
+            LeafyActionIconButton(
+                onClick = {
+                    coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                },
+                enabled = pagerState.currentPage > 0,
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
             }
             Row(
@@ -274,37 +452,50 @@ private fun TimetableScreenContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (state.selectedWeek == state.currentWeek) {
-                        "本周 · 第 ${state.selectedWeek} 周"
+                    text = if (visiblePage.week == state.currentWeek) {
+                        "本周 · 第 ${visiblePage.week} 周"
                     } else {
-                        "第 ${state.selectedWeek} 周"
+                        "第 ${visiblePage.week} 周"
                     },
                     style = MaterialTheme.typography.titleLarge,
                     maxLines = 1,
                 )
                 Text(
-                    text = " · ${formatWeekRange(state.weekRange.startDate)}",
+                    text = " · ${formatWeekRange(visiblePage.weekRange.startDate)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
             }
             LeafyActionIconButton(
-                onClick = onNextWeek,
-                enabled = state.selectedWeek < SemesterConfig.supportedWeeks,
+                onClick = {
+                    coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                },
+                enabled = pagerState.currentPage < state.supportedWeeks - 1,
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
             }
         }
         TimetableSyncBanner(syncState = syncState, onConsume = onConsumeSync)
-        TimetableGrid(
-            snapshot = state.grid,
-            onEmptyCellClick = onEmptyCellClick,
-            onItemClick = onItemClick,
-            modifier = Modifier.weight(1f),
-            today = LocalDate.now(TimetableGridProjection.campusZone),
-            currentTime = LocalTime.now(TimetableGridProjection.campusZone),
-        )
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clipToBounds(),
+            key = { state.pages[it].week },
+        ) { page ->
+            TimetableGrid(
+                snapshot = state.pages[page].grid,
+                onEmptyCellClick = onEmptyCellClick,
+                onItemClick = onItemClick,
+                modifier = Modifier.fillMaxSize(),
+                today = LocalDate.now(TimetableGridProjection.campusZone),
+                currentTime = LocalTime.now(TimetableGridProjection.campusZone),
+                showWeekends = state.showWeekends,
+                background = state.background,
+            )
+        }
     }
 }
 

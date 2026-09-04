@@ -137,7 +137,7 @@ Android 的权威实现位于 `android/app/src/main/java/com/myleafy/android/ui/
 
 共享布局位于 `ui/components/LeafyComponents.kt`，统一 Root/Secondary TopBar、ContentSurface、ToolRow、SettingsRow、Loading/Empty/Error、Snackbar 与 Sheet。组件根节点必须应用调用方传入的 `Modifier`；leading/trailing/actions/content 使用 slot，业务政策留在功能页。
 
-Android 根目的地使用 Material 3 Adaptive Navigation Suite：Compact 显示 Bottom Navigation，Medium/Expanded 显示 Navigation Rail；`RootTab` 顺序、状态恢复、深链和 capability 过滤不随窗口宽度变化。根导航壳拥有导航区域 Insets，各页面拥有状态栏/TopBar Insets，表单和 Sheet 拥有 IME Insets；已应用的 padding 必须消费，避免重复。
+Android 根目的地使用 Material 3 Adaptive Navigation Suite：Compact 显示 Bottom Navigation，Medium/Expanded 显示 Navigation Rail；`RootTab` 顺序、状态恢复和深链不随窗口宽度变化。Android 始终展示“社区”入口，未登录或校园不支持时在内容页解释门槛，实际社区请求仍由 capability 门控。根导航壳拥有导航区域 Insets，各页面拥有状态栏/TopBar Insets，表单和 Sheet 拥有 IME Insets；已应用的 padding 必须消费，避免重复。
 
 ## 3. 字体与文本
 
@@ -271,7 +271,7 @@ Android 对应最小触控面积为 48 × 48dp，使用 `LeafyActionIconButton` 
 - iOS 26 使用系统 Tab API 与视觉行为；低版本使用兼容的 `tabItem` 实现。
 - 底部 Tab 不叠加透明度伪淡入或自定义导航层。
 
-Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigation Rail 是同一组根目的地的不同 chrome，不新增或重排 Tab。
+Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigation Rail 是同一组根目的地的不同 chrome，不新增或重排 Tab；“社区”始终可发现，访问条件在页面内表达。
 
 日迹内部顶部使用 `随记 / 日程 / 推送`。该分区切换无白色选中衬底，外层导航继续使用 Liquid Glass。随记卡片采用系统白色表面；Tag 使用白字主题色胶囊，筛选后显示当前 Tag 和“全部随记”入口。图片预览保留左侧间距。校园侧栏内容切换保留淡化过渡。
 
@@ -334,6 +334,9 @@ Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigatio
 - 重叠课程不能遮挡。
 - 背景图片必须自动控制对比度或提供遮罩。
 - 课程详情在 sheet 中显示完整信息和次级操作。
+- Android 使用 20 页 `HorizontalPager` 原生横滑切周，箭头与“回到本周”只作为等价入口；13 节课在单屏内完整呈现，不允许网格纵向滚动。
+- Android 周次与日期范围共用一行，时间轴使用较小字体同时显示节次与开始时间；隐藏周末只改变列数，不删除七日课程数据。
+- Android 根标题可显示用户主动授权后的当地天气；定位只使用粗略位置直接请求天气服务，拒绝权限不得阻塞课表。
 
 ### 9.3 社区
 

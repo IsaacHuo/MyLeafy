@@ -32,6 +32,7 @@ sealed interface ScheduleUiState {
  */
 class ScheduleViewModel(
     private val repository: ScheduleRepository,
+    private val onEventsChanged: () -> Unit = {},
 ) : ViewModel() {
 
     private val _mutationState = MutableStateFlow<ScheduleMutationState>(ScheduleMutationState.Idle)
@@ -107,7 +108,10 @@ class ScheduleViewModel(
                     note = draft.note.trim(),
                 )
             }.fold(
-                onSuccess = { _mutationState.value = ScheduleMutationState.Success },
+                onSuccess = {
+                    onEventsChanged()
+                    _mutationState.value = ScheduleMutationState.Success
+                },
                 onFailure = { _mutationState.value = ScheduleMutationState.Error(it.message ?: "日程保存失败") },
             )
         }
@@ -117,7 +121,10 @@ class ScheduleViewModel(
         _mutationState.value = ScheduleMutationState.Saving
         viewModelScope.launch {
             runCatching { repository.deleteEvent(id) }.fold(
-                onSuccess = { _mutationState.value = ScheduleMutationState.Success },
+                onSuccess = {
+                    onEventsChanged()
+                    _mutationState.value = ScheduleMutationState.Success
+                },
                 onFailure = { _mutationState.value = ScheduleMutationState.Error(it.message ?: "日程删除失败") },
             )
         }

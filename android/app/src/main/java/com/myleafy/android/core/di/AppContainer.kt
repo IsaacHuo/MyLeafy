@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
+import com.myleafy.android.core.data.local.MIGRATION_4_5
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolNetworkClient
@@ -24,6 +25,8 @@ import com.myleafy.android.features.auth.AuthRepository
 import com.myleafy.android.features.auth.SchoolAuthRepository
 import com.myleafy.android.features.campus.AcademicRepository
 import com.myleafy.android.features.campus.ClassroomRepository
+import com.myleafy.android.features.campus.CampusLifeRepository
+import com.myleafy.android.features.campus.CatalogRatingRepository
 import com.myleafy.android.features.campus.LiveAcademicRepository
 import com.myleafy.android.features.campus.LiveClassroomRepository
 import com.myleafy.android.features.community.CommunityRepository
@@ -32,8 +35,13 @@ import com.myleafy.android.features.profile.LiveProfileRepository
 import com.myleafy.android.features.profile.ProfileRepository
 import com.myleafy.android.features.schedule.RoomScheduleRepository
 import com.myleafy.android.features.schedule.ScheduleRepository
+import com.myleafy.android.features.schedule.notifications.ScheduleNotificationRepository
+import com.myleafy.android.features.schedule.notifications.ScheduleNotificationScheduler
 import com.myleafy.android.features.timetable.LiveTimetableRepository
 import com.myleafy.android.features.timetable.TimetableRepository
+import com.myleafy.android.features.timetable.weather.WeatherRepository
+import com.myleafy.android.features.timetable.background.TimetableBackgroundRepository
+import com.myleafy.android.features.timetable.sharing.TimetableSharingRepository
 import com.myleafy.android.services.supabase.CommunityService
 import com.myleafy.android.services.supabase.SupabaseClientProvider
 
@@ -53,11 +61,14 @@ class AppContainer(context: Context) {
         // Android 尚未发布，仅已知的预发布 schema 1–3 可破坏性重建。
         // 未来版本缺少 migration 时必须直接失败，不能静默丢数据。
         .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
+        .addMigrations(MIGRATION_4_5)
         .build()
 
     val courseDao: CourseDao get() = database.courseDao()
 
     val settingsStore: SettingsStore = SettingsStore(context)
+    val weatherRepository: WeatherRepository = WeatherRepository(context.applicationContext)
+    val timetableBackgroundRepository = TimetableBackgroundRepository(context.applicationContext, settingsStore)
 
     val secureStorage: SecureStorage = SecureStorage(context)
     val schoolLoginCredentialStore: SchoolLoginCredentialStore =
@@ -97,6 +108,10 @@ class AppContainer(context: Context) {
         LiveTimetableRepository(schoolNetworkClient, database.courseDao(), activeAppScopeStore)
     val scheduleRepository: ScheduleRepository =
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao(), activeAppScopeStore)
+    val scheduleNotificationRepository = ScheduleNotificationRepository(
+        database.scheduleNotificationDao(),
+        activeAppScopeStore,
+    )
     val academicRepository: AcademicRepository =
         LiveAcademicRepository(
             schoolNetworkClient,
@@ -107,6 +122,19 @@ class AppContainer(context: Context) {
             activeAppScopeStore,
         )
     val classroomRepository: ClassroomRepository = LiveClassroomRepository(schoolNetworkClient)
+    val campusLifeRepository = CampusLifeRepository(
+        context.applicationContext,
+        database.sportsDao(),
+        database.medicalDao(),
+        activeAppScopeStore,
+    )
+    val scheduleNotificationScheduler = ScheduleNotificationScheduler(
+        context.applicationContext,
+        scheduleNotificationRepository,
+        timetableRepository,
+        academicRepository,
+        scheduleRepository,
+    )
 
     // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化 Supabase。
     private var cachedCommunityService: CommunityService? = null
@@ -121,6 +149,17 @@ class AppContainer(context: Context) {
     private val liveCommunityRepository =
         LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
     val communityRepository: CommunityRepository = liveCommunityRepository
+    val catalogRatingRepository = CatalogRatingRepository(
+        serviceProvider = { communityServiceForActiveScope()?.catalogRatings },
+        communityRepository = communityRepository,
+        scopeStore = activeAppScopeStore,
+    )
+    val timetableSharingRepository = TimetableSharingRepository(
+        serviceProvider = { communityServiceForActiveScope()?.timetableSharing },
+        communityRepository = communityRepository,
+        timetableRepository = timetableRepository,
+        scopeStore = activeAppScopeStore,
+    )
 
     val profileRepository: ProfileRepository =
         LiveProfileRepository(

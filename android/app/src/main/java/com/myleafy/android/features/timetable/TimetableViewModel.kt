@@ -19,6 +19,10 @@ import com.myleafy.android.features.timetable.domain.TimetableWeekRange
 import com.myleafy.android.features.timetable.export.CalendarExportCourse
 import com.myleafy.android.features.timetable.export.CalendarExportScheduleEvent
 import com.myleafy.android.features.timetable.export.TimetableCalendarExporter
+import com.myleafy.android.core.prefs.SettingsStore
+import com.myleafy.android.core.prefs.TimetableBackgroundSettings
+import com.myleafy.android.features.timetable.weather.WeatherRepository
+import com.myleafy.android.features.timetable.weather.WeatherUiState
 import java.io.File
 import java.time.LocalDate
 import java.time.LocalTime
@@ -49,12 +53,22 @@ sealed interface TimetableUiState {
         val exams: List<ExamEntity>,
         val scheduleEvents: List<ScheduleEventEntity>,
         val grid: TimetableGridSnapshot,
+        val supportedWeeks: Int,
+        val pages: List<TimetableWeekPage>,
+        val showWeekends: Boolean,
+        val background: TimetableBackgroundSettings,
     ) : TimetableUiState {
         val week: Int get() = selectedWeek
     }
 
     data class Error(val message: String) : TimetableUiState
 }
+
+data class TimetableWeekPage(
+    val week: Int,
+    val weekRange: TimetableWeekRange,
+    val grid: TimetableGridSnapshot,
+)
 
 sealed interface TimetableSyncState {
     data object Idle : TimetableSyncState
@@ -74,6 +88,9 @@ class TimetableViewModel(
     private val repository: TimetableRepository,
     private val academicRepository: AcademicRepository,
     private val scheduleRepository: ScheduleRepository,
+    private val settingsStore: SettingsStore,
+    private val weatherRepository: WeatherRepository,
+    private val onScheduleEventsChanged: () -> Unit = {},
     private val semesterId: String = SemesterConfig.currentSemesterId,
     private val calendarExporter: TimetableCalendarExporter = TimetableCalendarExporter(),
 ) : ViewModel() {
@@ -90,31 +107,49 @@ class TimetableViewModel(
     val scheduleMutationState: StateFlow<ScheduleMutationState> = _scheduleMutationState.asStateFlow()
     private val _exportState = MutableStateFlow<TimetableExportState>(TimetableExportState.Idle)
     val exportState: StateFlow<TimetableExportState> = _exportState.asStateFlow()
+    private val _weatherState = MutableStateFlow<WeatherUiState>(WeatherUiState.Idle)
+    val weatherState: StateFlow<WeatherUiState> = _weatherState.asStateFlow()
 
     private val mapped: Flow<TimetableUiState> = combine(
         repository.coursesForSemester(semesterId),
         academicRepository.exams(),
         scheduleRepository.events(),
         selectedWeek,
-    ) { courses, exams, scheduleEvents, week ->
-        val weekRange = TimetableWeekRange(
-            week = week,
-            startDate = semesterConfig.semesterStartDate.plusWeeks((week - 1).toLong()),
-        )
+        settingsStore.settings,
+    ) { courses, exams, scheduleEvents, week, settings ->
+        val gridCourses = courses.map { it.toGridCourse() }
+        val gridExams = exams.mapNotNull { it.toGridExamOrNull() }
+        val gridEvents = scheduleEvents.map { it.toGridScheduleEvent() }
+        val pages = (1..semesterConfig.supportedWeeks).map { pageWeek ->
+            val pageRange = TimetableWeekRange(
+                week = pageWeek,
+                startDate = semesterConfig.semesterStartDate.plusWeeks((pageWeek - 1).toLong()),
+            )
+            TimetableWeekPage(
+                week = pageWeek,
+                weekRange = pageRange,
+                grid = TimetableGridProjection.project(
+                    courses = gridCourses,
+                    exams = gridExams,
+                    scheduleEvents = gridEvents,
+                    weekRange = pageRange,
+                ),
+            )
+        }
+        val selectedPage = pages[week - 1]
         TimetableUiState.Loaded(
             semesterId = semesterId,
             currentWeek = weekForDate(today),
             selectedWeek = week,
-            weekRange = weekRange,
+            weekRange = selectedPage.weekRange,
             courses = courses,
             exams = exams,
             scheduleEvents = scheduleEvents,
-            grid = TimetableGridProjection.project(
-                courses = courses.map { it.toGridCourse() },
-                exams = exams.mapNotNull { it.toGridExamOrNull() },
-                scheduleEvents = scheduleEvents.map { it.toGridScheduleEvent() },
-                weekRange = weekRange,
-            ),
+            grid = selectedPage.grid,
+            supportedWeeks = semesterConfig.supportedWeeks,
+            pages = pages,
+            showWeekends = !settings.hideWeekends,
+            background = settings.timetableBackground,
         )
     }
 
@@ -182,7 +217,10 @@ class TimetableViewModel(
                     note = draft.note.trim(),
                 )
             }.fold(
-                onSuccess = { _scheduleMutationState.value = ScheduleMutationState.Success },
+                onSuccess = {
+                    onScheduleEventsChanged()
+                    _scheduleMutationState.value = ScheduleMutationState.Success
+                },
                 onFailure = {
                     _scheduleMutationState.value = ScheduleMutationState.Error(it.message ?: "日程保存失败")
                 },
@@ -195,7 +233,10 @@ class TimetableViewModel(
         _scheduleMutationState.value = ScheduleMutationState.Saving
         viewModelScope.launch {
             runCatching { scheduleRepository.deleteEvent(id) }.fold(
-                onSuccess = { _scheduleMutationState.value = ScheduleMutationState.Success },
+                onSuccess = {
+                    onScheduleEventsChanged()
+                    _scheduleMutationState.value = ScheduleMutationState.Success
+                },
                 onFailure = {
                     _scheduleMutationState.value = ScheduleMutationState.Error(it.message ?: "日程删除失败")
                 },
@@ -259,6 +300,17 @@ class TimetableViewModel(
 
     fun consumeExportResult() {
         _exportState.value = TimetableExportState.Idle
+    }
+
+    fun refreshWeather(forceRefresh: Boolean = false) {
+        if (_weatherState.value is WeatherUiState.Loading || !weatherRepository.hasLocationPermission()) return
+        _weatherState.value = WeatherUiState.Loading
+        viewModelScope.launch {
+            _weatherState.value = runCatching { weatherRepository.currentWeather(forceRefresh) }.fold(
+                onSuccess = { WeatherUiState.Loaded(it) },
+                onFailure = { WeatherUiState.Error(it.message ?: "天气暂不可用") },
+            )
+        }
     }
 
     fun consumeSyncResult() {

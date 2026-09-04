@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.rememberNavController
 import com.myleafy.android.MyLeafyApplication
 import com.myleafy.android.navigation.MyLeafyNavHost
+import com.myleafy.android.features.schedule.notifications.NotificationDeliveryWorker
 
 /**
  * 根组合入口。阶段 1 固定 5 个 Tab 的导航壳；
@@ -28,6 +29,21 @@ fun MyLeafyApp(deepLinkIntent: Intent? = null) {
     LaunchedEffect(deepLinkIntent?.data) {
         if (deepLinkIntent?.data != null) {
             navController.handleDeepLink(deepLinkIntent)
+        }
+    }
+    LaunchedEffect(
+        deepLinkIntent?.getStringExtra(NotificationDeliveryWorker.EXTRA_NOTIFICATION_ROUTE),
+        deepLinkIntent?.getStringExtra(NotificationDeliveryWorker.KEY_EVENT_ID),
+        deepLinkIntent?.getStringExtra(NotificationDeliveryWorker.EXTRA_NOTIFICATION_MODE),
+    ) {
+        if (deepLinkIntent?.getStringExtra(NotificationDeliveryWorker.EXTRA_NOTIFICATION_ROUTE) == "schedule") {
+            val eventId = android.net.Uri.encode(
+                deepLinkIntent.getStringExtra(NotificationDeliveryWorker.KEY_EVENT_ID).orEmpty(),
+            )
+            val mode = android.net.Uri.encode(
+                deepLinkIntent.getStringExtra(NotificationDeliveryWorker.EXTRA_NOTIFICATION_MODE) ?: "reports",
+            )
+            navController.navigate("schedule/notification?eventId=$eventId&mode=$mode")
         }
     }
 }

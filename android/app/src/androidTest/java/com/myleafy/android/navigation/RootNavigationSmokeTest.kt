@@ -80,12 +80,14 @@ class RootNavigationSmokeTest {
     }
 
     @Test
-    fun communityTabIsHiddenWithoutCapability() {
+    fun communityTabRemainsVisibleWithoutCapabilityButShowsGuardedState() {
         val application = composeRule.activity.application as MyLeafyApplication
         application.container.activeAppScopeStore.clear()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("root-tab-community").assertDoesNotExist()
+        composeRule.onNodeWithTag("root-tab-community").assertExists().performClick()
+        composeRule.onNodeWithText("社区暂不可用").assertIsDisplayed()
+        composeRule.onNodeWithText("登录学校账号").assertIsDisplayed()
     }
 
     @After

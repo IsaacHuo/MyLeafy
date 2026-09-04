@@ -1,5 +1,10 @@
 package com.myleafy.android.features.schedule
 
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -30,18 +35,26 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.data.local.ScheduleEventEntity
@@ -49,6 +62,10 @@ import com.myleafy.android.core.data.local.ScheduleMemoEntity
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.TimetableGridProjection
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
+import com.myleafy.android.features.schedule.notifications.ScheduleReportMode
+import com.myleafy.android.features.schedule.notifications.ScheduleReportSetting
+import com.myleafy.android.features.schedule.notifications.ScheduleReportsUiState
+import com.myleafy.android.features.schedule.notifications.ScheduleReportsViewModel
 import com.myleafy.android.navigation.FeatureDestination
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyEmptyState
@@ -72,17 +89,70 @@ private enum class ScheduleSection(val label: String) {
 @Composable
 fun ScheduleScreen(
     onFeatureClick: (FeatureDestination) -> Unit = {},
+    initialSection: String? = null,
+    initialEventId: String? = null,
     viewModel: ScheduleViewModel = viewModel(
-        factory = appViewModelFactory { container -> ScheduleViewModel(container.scheduleRepository) },
+        factory = appViewModelFactory { container ->
+            ScheduleViewModel(
+                container.scheduleRepository,
+                container.scheduleNotificationScheduler::requestReconcile,
+            )
+        },
+    ),
+    reportsViewModel: ScheduleReportsViewModel = viewModel(
+        factory = appViewModelFactory { container ->
+            ScheduleReportsViewModel(
+                container.scheduleNotificationRepository,
+                container.scheduleNotificationScheduler,
+            )
+        },
     ),
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val mutationState by viewModel.mutationState.collectAsStateWithLifecycle()
-    var selectedSection by rememberSaveable { mutableStateOf(ScheduleSection.MEMOS) }
+    val reportsState by reportsViewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var selectedSection by rememberSaveable {
+        mutableStateOf(if (initialSection == "reports") ScheduleSection.REPORTS else ScheduleSection.EVENTS)
+    }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var memoDraft by remember { mutableStateOf<MemoDraft?>(null) }
     var eventDraft by remember { mutableStateOf<ScheduleEventDraft?>(null) }
+    var pendingNotificationMode by remember { mutableStateOf<ScheduleReportSetting?>(null) }
+    var notificationPermissionDenied by rememberSaveable { mutableStateOf(false) }
+    var consumedInitialEvent by rememberSaveable(initialEventId) { mutableStateOf(false) }
+    LaunchedEffect(initialEventId, uiState) {
+        if (!consumedInitialEvent && !initialEventId.isNullOrBlank()) {
+            val event = (uiState as? ScheduleUiState.Loaded)?.events?.firstOrNull { it.id == initialEventId }
+            if (event != null) {
+                selectedSection = ScheduleSection.EVENTS
+                eventDraft = event.toDraft()
+                consumedInitialEvent = true
+            }
+        }
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val pending = pendingNotificationMode
+        pendingNotificationMode = null
+        notificationPermissionDenied = !granted
+        if (granted && pending != null) {
+            reportsViewModel.setMode(pending.mode, true, pending.hour, pending.minute)
+        }
+    }
+    val enableReport: (ScheduleReportSetting) -> Unit = { setting ->
+        val hasPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            reportsViewModel.setMode(setting.mode, true, setting.hour, setting.minute)
+        } else {
+            pendingNotificationMode = setting
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.leafySurfaces.page,
@@ -127,12 +197,17 @@ fun ScheduleScreen(
         Column(
             modifier = Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = LeafySpacing.card),
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                ScheduleSection.entries.forEach { section ->
-                    FilterChip(
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ScheduleSection.entries.forEachIndexed { index, section ->
+                    SegmentedButton(
                         selected = selectedSection == section,
                         onClick = { selectedSection = section },
-                        label = { Text(section.label) },
+                        shape = SegmentedButtonDefaults.itemShape(index, ScheduleSection.entries.size),
+                        label = {
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text(section.label, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -150,6 +225,14 @@ fun ScheduleScreen(
                     onNewEvent = { eventDraft = defaultScheduleDraft() },
                     onEventClick = {},
                     onFeatureClick = onFeatureClick,
+                    reportsState = reportsState,
+                    notificationPermissionDenied = notificationPermissionDenied,
+                    onToggleReport = { setting, enabled ->
+                        if (enabled) enableReport(setting) else {
+                            reportsViewModel.setMode(setting.mode, false, setting.hour, setting.minute)
+                        }
+                    },
+                    onSetEventReminder = reportsViewModel::setEventReminder,
                 )
                 is ScheduleUiState.Loaded -> AnimatedScheduleContent(
                     selectedSection = selectedSection,
@@ -160,6 +243,14 @@ fun ScheduleScreen(
                     onNewEvent = { eventDraft = defaultScheduleDraft() },
                     onEventClick = { eventDraft = it.toDraft() },
                     onFeatureClick = onFeatureClick,
+                    reportsState = reportsState,
+                    notificationPermissionDenied = notificationPermissionDenied,
+                    onToggleReport = { setting, enabled ->
+                        if (enabled) enableReport(setting) else {
+                            reportsViewModel.setMode(setting.mode, false, setting.hour, setting.minute)
+                        }
+                    },
+                    onSetEventReminder = reportsViewModel::setEventReminder,
                 )
             }
         }
@@ -203,6 +294,10 @@ private fun AnimatedScheduleContent(
     onNewEvent: () -> Unit,
     onEventClick: (ScheduleEventEntity) -> Unit,
     onFeatureClick: (FeatureDestination) -> Unit,
+    reportsState: ScheduleReportsUiState,
+    notificationPermissionDenied: Boolean,
+    onToggleReport: (ScheduleReportSetting, Boolean) -> Unit,
+    onSetEventReminder: (String, Boolean, Int) -> Unit,
 ) {
     AnimatedContent(
         targetState = selectedSection,
@@ -222,6 +317,10 @@ private fun AnimatedScheduleContent(
             onNewEvent = onNewEvent,
             onEventClick = onEventClick,
             onFeatureClick = onFeatureClick,
+            reportsState = reportsState,
+            notificationPermissionDenied = notificationPermissionDenied,
+            onToggleReport = onToggleReport,
+            onSetEventReminder = onSetEventReminder,
         )
     }
 }
@@ -249,6 +348,10 @@ private fun ScheduleContent(
     onNewEvent: () -> Unit,
     onEventClick: (ScheduleEventEntity) -> Unit,
     onFeatureClick: (FeatureDestination) -> Unit,
+    reportsState: ScheduleReportsUiState,
+    notificationPermissionDenied: Boolean,
+    onToggleReport: (ScheduleReportSetting, Boolean) -> Unit,
+    onSetEventReminder: (String, Boolean, Int) -> Unit,
 ) {
     when (section) {
         ScheduleSection.MEMOS -> LazyColumn(
@@ -303,17 +406,124 @@ private fun ScheduleContent(
             }
         }
 
-        ScheduleSection.REPORTS -> LeafyEmptyState(
-            title = "日程推送尚未接入",
-            message = "系统通知按计划延期；本阶段先保证日程编辑、持久化与课表联动。",
-            icon = Icons.Outlined.Notifications,
-            action = {
-                Button(onClick = { onFeatureClick(FeatureDestination.SCHEDULE_REPORTS) }) {
-                    Text("查看功能说明")
-                }
-            },
+        ScheduleSection.REPORTS -> ScheduleReportsContent(
+            state = reportsState,
+            events = events,
+            notificationPermissionDenied = notificationPermissionDenied,
+            onToggleReport = onToggleReport,
+            onSetEventReminder = onSetEventReminder,
         )
     }
+}
+
+@Composable
+private fun ScheduleReportsContent(
+    state: ScheduleReportsUiState,
+    events: List<ScheduleEventEntity>,
+    notificationPermissionDenied: Boolean,
+    onToggleReport: (ScheduleReportSetting, Boolean) -> Unit,
+    onSetEventReminder: (String, Boolean, Int) -> Unit,
+) {
+    val reminders = state.reminders.associateBy { it.eventId }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = LeafySpacing.page),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+    ) {
+        item {
+            LeafyStatusBanner(
+                message = "使用 Android 系统节能调度，省电模式下通知可能稍有延迟。",
+                isError = false,
+            )
+        }
+        if (notificationPermissionDenied) {
+            item { LeafyStatusBanner(message = "通知权限未授予，推送保持关闭。", isError = true) }
+        }
+        items(state.settings, key = { it.mode.name }) { setting ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.leafySurfaces.content,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(setting.mode.title, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            reportDescription(setting.mode),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "%02d:%02d".format(setting.hour, setting.minute),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Switch(
+                        checked = setting.enabled,
+                        onCheckedChange = { onToggleReport(setting, it) },
+                    )
+                }
+            }
+        }
+        item {
+            Text("个人日程提醒", style = MaterialTheme.typography.titleLarge)
+        }
+        if (events.isEmpty()) {
+            item {
+                LeafyEmptyState(
+                    title = "还没有可提醒的日程",
+                    message = "在“日程”中添加事项后，可在这里设置提前提醒。",
+                    icon = Icons.Outlined.Notifications,
+                )
+            }
+        } else {
+            items(events.filter { it.startsAt > System.currentTimeMillis() }, key = { it.id }) { event ->
+                val reminder = reminders[event.id]
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = LeafySpacing.tiny),
+                    verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(event.title, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                Instant.ofEpochMilli(event.startsAt).atZone(TimetableGridProjection.campusZone)
+                                    .format(DateTimeFormatter.ofPattern("M月d日 HH:mm")),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = reminder?.enabled == true,
+                            onCheckedChange = { onSetEventReminder(event.id, it, reminder?.leadMinutes ?: 30) },
+                        )
+                    }
+                    if (reminder?.enabled == true) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
+                            listOf(10 to "10 分", 30 to "30 分", 60 to "1 小时", 1_440 to "1 天").forEach { option ->
+                                FilterChip(
+                                    selected = reminder.leadMinutes == option.first,
+                                    onClick = { onSetEventReminder(event.id, true, option.first) },
+                                    label = { Text(option.second) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun reportDescription(mode: ScheduleReportMode): String = when (mode) {
+    ScheduleReportMode.MORNING -> "每天汇总今天的课程、考试和个人日程"
+    ScheduleReportMode.EVENING -> "每天汇总明天的课程、考试和个人日程"
+    ScheduleReportMode.EXAM -> "在考试前 7、3、1 天提醒"
 }
 
 @Composable

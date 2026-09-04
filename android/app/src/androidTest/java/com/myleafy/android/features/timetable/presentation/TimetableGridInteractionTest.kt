@@ -93,4 +93,26 @@ class TimetableGridInteractionTest {
         composeRule.onNodeWithTag("timetable-current-time").assertIsDisplayed()
         composeRule.onNode(hasContentDescription("当前时间")).assertIsDisplayed()
     }
+
+    @Test
+    fun hidingWeekendsUsesFiveColumnsWithoutDeletingWeekdayCells() {
+        val weekStart = LocalDate.of(2026, 9, 7)
+        composeRule.setContent {
+            MyLeafyTheme(darkTheme = false) {
+                TimetableGrid(
+                    snapshot = TimetableGridSnapshot(
+                        weekRange = TimetableWeekRange(week = 1, startDate = weekStart),
+                        items = emptyList(),
+                    ),
+                    onEmptyCellClick = { _, _ -> },
+                    onItemClick = {},
+                    modifier = Modifier.fillMaxSize(),
+                    showWeekends = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("timetable-cell-2026-09-11-1").assertExists()
+        composeRule.onNodeWithTag("timetable-cell-2026-09-12-1").assertDoesNotExist()
+    }
 }

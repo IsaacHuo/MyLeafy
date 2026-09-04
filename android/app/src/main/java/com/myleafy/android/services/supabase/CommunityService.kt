@@ -27,6 +27,9 @@ import java.time.Instant
 /** 社区服务：匿名 Auth、身份引导（bootstrap）、Feed。 */
 class CommunityService(private val client: SupabaseClient) {
 
+    val catalogRatings: CatalogRatingService by lazy { CatalogRatingService(client) }
+    val timetableSharing: TimetableSharingService by lazy { TimetableSharingService(client) }
+
     private val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true

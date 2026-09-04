@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import com.myleafy.android.ui.components.LeafySheetContent
 import com.myleafy.android.ui.components.leafyMinimumTouchTarget
 import com.myleafy.android.ui.theme.LeafySpacing
@@ -192,7 +193,9 @@ fun ScheduleEventEditorSheet(
                         confirmsDelete = false
                         onDelete(initial.id)
                     },
-                    modifier = Modifier.semantics { contentDescription = "确认删除日程" },
+                    modifier = Modifier
+                        .testTag("confirm-delete-schedule")
+                        .semantics { contentDescription = "确认删除日程" },
                 ) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
