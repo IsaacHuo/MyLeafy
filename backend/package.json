@@ -1,0 +1,33 @@
+{
+  "name": "@myleafy/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env staging",
+    "typecheck": "tsc --noEmit -p tsconfig.tools.json",
+    "test": "vitest run",
+    "inventory": "tsx scripts/inventory.ts",
+    "schema:replay": "tsx scripts/replay-source.ts",
+    "schema:convert": "tsx scripts/convert-schema.ts",
+    "deploy:staging": "wrangler deploy --env staging",
+    "types": "wrangler types --env staging"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "better-auth": "1.7.2",
+    "hono": "4.13.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/workers-types": "5.20260905.1",
+    "@types/node": "26.4.1",
+    "@types/pg": "8.23.1",
+    "embedded-postgres": "17.6.0-beta.15",
+    "pg": "8.23.0",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10",
+    "wrangler": "4.110.0"
+  }
+}

@@ -1,0 +1,3456 @@
+{
+  "private_community_attachment_upload_receipts": {
+    "source": "private.community_attachment_upload_receipts",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "auth_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "profile_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "object_path",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "content_type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "file_extension",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "byte_size",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "sha256",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "consumed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "private_community_comment_like_requests": {
+    "source": "private.community_comment_like_requests",
+    "primaryKey": [
+      "request_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "request_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "comment_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "like_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "viewer_has_liked",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "private_community_create_requests": {
+    "source": "private.community_create_requests",
+    "primaryKey": [
+      "actor_id",
+      "request_id"
+    ],
+    "columns": [
+      {
+        "name": "actor_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "request_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "mutation_kind",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "resource_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "request_payload",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "private_community_identity_link_conflicts": {
+    "source": "private.community_identity_link_conflicts",
+    "primaryKey": [
+      "auth_user_id",
+      "profile_id",
+      "archived_at"
+    ],
+    "columns": [
+      {
+        "name": "auth_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "profile_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "edu_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "last_seen_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "retained_auth_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "resolution_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "archived_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "private_community_upload_receipts": {
+    "source": "private.community_upload_receipts",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "auth_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "profile_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "full_path",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "thumbnail_path",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "full_sha256",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "thumbnail_sha256",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "full_size",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "thumbnail_size",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "full_width",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "full_height",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "thumbnail_width",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "thumbnail_height",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "consumed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "admin_accounts": {
+    "source": "public.admin_accounts",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "username",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "password_hash",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "role",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "active",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "last_login_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "admin_audit_logs": {
+    "source": "public.admin_audit_logs",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "admin_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "action",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "target_type",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "target_id",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "params",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "ip_address",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "user_agent",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "request_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "outcome",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "duration_ms",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "error_code",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "admin_login_attempts": {
+    "source": "public.admin_login_attempts",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "username",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "normalized_username",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      },
+      {
+        "name": "ip_address",
+        "type": "inet",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "succeeded",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "error_code",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "attempted_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "admin_sessions": {
+    "source": "public.admin_sessions",
+    "primaryKey": [
+      "token_hash"
+    ],
+    "columns": [
+      {
+        "name": "token_hash",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "admin_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "revoked_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "last_seen_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "admin_users": {
+    "source": "public.admin_users",
+    "primaryKey": [
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "campus_membership_requests": {
+    "source": "public.campus_membership_requests",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "requester_profile_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "requester_auth_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "school_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "normalized_school_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "approved_campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "admin_note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "request_type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "requested_campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "from_campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "campus_weather_cache": {
+    "source": "public.campus_weather_cache",
+    "primaryKey": [
+      "cache_key"
+    ],
+    "columns": [
+      {
+        "name": "cache_key",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "temperature",
+        "type": "double precision",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "condition_key",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "observed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "source",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "campuses": {
+    "source": "public.campuses",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "short_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "connector_kind",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "normalized_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "is_community_enabled",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "is_system",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "catalog_suggestions": {
+    "source": "public.catalog_suggestions",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "suggestion_type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "unit",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "category",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "credit",
+        "type": "numeric",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "approved_teacher_id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "approved_course_id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "admin_note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "teacher_name",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "search_text",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "initial_stars",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "approved_dish_id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "comment_likes": {
+    "source": "public.comment_likes",
+    "primaryKey": [
+      "comment_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "comment_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "comments": {
+    "source": "public.comments",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "author_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "body",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "is_anonymous",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "moderated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderation_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "parent_comment_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reply_to_comment_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "like_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_banners": {
+    "source": "public.community_banners",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "revision",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "subtitle",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "image_path",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "destination_kind",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "destination_value",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "published_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_blocks": {
+    "source": "public.community_blocks",
+    "primaryKey": [
+      "blocker_id",
+      "blocked_id"
+    ],
+    "columns": [
+      {
+        "name": "blocker_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "blocked_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_notification_settings": {
+    "source": "public.community_notification_settings",
+    "primaryKey": [
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "muted_all",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_notifications": {
+    "source": "public.community_notifications",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "recipient_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "actor_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "comment_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "body",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "is_read",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "dismissed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "community_poll_options": {
+    "source": "public.community_poll_options",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "poll_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "text",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "sort_order",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "vote_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_poll_votes": {
+    "source": "public.community_poll_votes",
+    "primaryKey": [
+      "poll_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "poll_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "option_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_polls": {
+    "source": "public.community_polls",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "author_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "question",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "detail",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "total_vote_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "closes_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderation_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "deletion_status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "deletion_requested_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "deletion_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "deletion_reviewed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "deletion_reviewed_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "deletion_review_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_post_pins": {
+    "source": "public.community_post_pins",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "scope",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "category",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "priority",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "starts_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "ends_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "community_reports": {
+    "source": "public.community_reports",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "reporter_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "reported_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "target_type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "comment_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "detail",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "resolved_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "resolved_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "resolution_note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "community_terms_acceptances": {
+    "source": "public.community_terms_acceptances",
+    "primaryKey": [
+      "user_id",
+      "terms_version"
+    ],
+    "columns": [
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "terms_version",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "accepted_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "course_catalog": {
+    "source": "public.course_catalog",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "unit",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "category",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "credit",
+        "type": "numeric",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "search_text",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      },
+      {
+        "name": "rating_average",
+        "type": "numeric",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_1_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_2_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_3_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_4_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_5_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "course_ratings": {
+    "source": "public.course_ratings",
+    "primaryKey": [
+      "course_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "course_id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "stars",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "dish_catalog": {
+    "source": "public.dish_catalog",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "location",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "search_text",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      },
+      {
+        "name": "rating_average",
+        "type": "numeric",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_1_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_2_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_3_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_4_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_5_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "dish_ratings": {
+    "source": "public.dish_ratings",
+    "primaryKey": [
+      "dish_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "dish_id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "stars",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "feedback_submissions": {
+    "source": "public.feedback_submissions",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "issue_type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "body",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "contact",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "device_info",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "admin_note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "national_calendar_runtime_configs": {
+    "source": "public.national_calendar_runtime_configs",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "year",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "holidays",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "solar_terms",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "is_active",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "post_attachments": {
+    "source": "public.post_attachments",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "content_type",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "file_extension",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "byte_size",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "sha256",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "sort_order",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "post_favorites": {
+    "source": "public.post_favorites",
+    "primaryKey": [
+      "post_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "post_images": {
+    "source": "public.post_images",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "sort_order",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "width",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "height",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "thumbnail_path",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "thumbnail_width",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "thumbnail_height",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "full_width",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "full_height",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "post_likes": {
+    "source": "public.post_likes",
+    "primaryKey": [
+      "post_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "post_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "postgraduate_source_suggestions": {
+    "source": "public.postgraduate_source_suggestions",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "source_url",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "school",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "unit",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "major",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "exam_year",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "source_kind",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "approved_source_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "admin_note",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "reviewed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "search_text",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      }
+    ]
+  },
+  "postgraduate_sources": {
+    "source": "public.postgraduate_sources",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "summary",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "source_url",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "source_kind",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "trust_level",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "school",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "unit",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "major",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "exam_year",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "published_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "verified_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "search_text",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      }
+    ]
+  },
+  "posts": {
+    "source": "public.posts",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "author_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "body",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "category",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "is_anonymous",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "comment_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "moderated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "moderation_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "like_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "expected_image_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "image_upload_completed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "expected_attachment_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "attachment_upload_completed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "media_purge_after",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "media_purged_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "media_cleanup_hold",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "profile_auth_links": {
+    "source": "public.profile_auth_links",
+    "primaryKey": [
+      "auth_user_id"
+    ],
+    "columns": [
+      {
+        "name": "auth_user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "profile_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "edu_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "last_seen_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "profiles": {
+    "source": "public.profiles",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "edu_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "nickname",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "display_name",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "avatar_path",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "bio",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "is_profile_complete",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "major",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "grade",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "bound_email",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "pending_bound_email",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "email_verification_sent_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "profile_edited_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "muted_until",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "muted_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "muted_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "muted_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "shows_edu_verification_badge",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "cover_path",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "community_campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "community_access_status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "community_school_name",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "community_rejection_reason",
+        "type": "text",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "community_request_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "semester_runtime_configs": {
+    "source": "public.semester_runtime_configs",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "semester_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "semester_start_date",
+        "type": "date",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "supported_weeks",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "graduate_timetable_term_code",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "calendar_events",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "is_active",
+        "type": "boolean",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "site_announcement_reads": {
+    "source": "public.site_announcement_reads",
+    "primaryKey": [
+      "announcement_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "announcement_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "read_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "dismissed_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      }
+    ]
+  },
+  "site_announcements": {
+    "source": "public.site_announcements",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "body",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "level",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "published_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "teacher_ratings": {
+    "source": "public.teacher_ratings",
+    "primaryKey": [
+      "teacher_id",
+      "user_id"
+    ],
+    "columns": [
+      {
+        "name": "teacher_id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "user_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "stars",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "teachers": {
+    "source": "public.teachers",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "unit",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "search_text",
+        "type": "text",
+        "generated": true,
+        "nullable": true
+      },
+      {
+        "name": "rating_average",
+        "type": "numeric",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_1_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_2_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_3_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_4_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "rating_5_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "timetable_invites": {
+    "source": "public.timetable_invites",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "owner_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "semester_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "code_hash",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "accepted_by",
+        "type": "uuid",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "accepted_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "timetable_share_members": {
+    "source": "public.timetable_share_members",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "owner_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "viewer_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "revoked_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": true
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  },
+  "timetable_snapshots": {
+    "source": "public.timetable_snapshots",
+    "primaryKey": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "owner_id",
+        "type": "uuid",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "semester_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "courses",
+        "type": "jsonb",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "course_count",
+        "type": "integer",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "published_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone",
+        "generated": false,
+        "nullable": false
+      },
+      {
+        "name": "campus_id",
+        "type": "text",
+        "generated": false,
+        "nullable": false
+      }
+    ]
+  }
+}

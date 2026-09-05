@@ -1,0 +1,1865 @@
+{
+  "source": "Repository call sites; production drift must be verified separately",
+  "migrations": [
+    "20260423_community_v1.sql",
+    "20260424000000_community_notifications.sql",
+    "20260424000100_community_profile_completion.sql",
+    "20260424000200_remove_profile_edit_lock.sql",
+    "20260424000300_teacher_ratings.sql",
+    "20260425000100_posts_soft_delete_policy.sql",
+    "20260425000200_posts_soft_delete_rpc.sql",
+    "20260425000300_prevent_post_self_likes.sql",
+    "20260425000400_site_announcements.sql",
+    "20260426000100_allow_profile_edits.sql",
+    "20260426000200_community_profile_auth_links.sql",
+    "20260427000100_post_upload_limits.sql",
+    "20260428000100_notifications_feedback_and_comments.sql",
+    "20260428000200_admin_console.sql",
+    "20260428000300_admin_console_pgcrypto_search_path.sql",
+    "20260508000100_admin_analytics.sql",
+    "20260508000200_guideline_1_2_moderation.sql",
+    "20260511000100_shared_timetables.sql",
+    "20260511000200_shared_timetable_digest_search_path.sql",
+    "20260511000300_shared_timetable_accept_ambiguity.sql",
+    "20260512000100_community_notification_realtime.sql",
+    "20260514000100_explicit_data_api_grants.sql",
+    "20260514000200_restore_revoke_community_terms_rpc.sql",
+    "20260514000300_post_favorites.sql",
+    "20260516123040_course_ratings.sql",
+    "20260517020512_catalog_suggestions.sql",
+    "20260524140954_catalog_suggestion_teacher_name.sql",
+    "20260524221717_community_post_pins.sql",
+    "20260525023043_community_feed_optimization.sql",
+    "20260525032702_community_feed_hardening.sql",
+    "20260526144759_campus_weather_cache.sql",
+    "20260528024930_community_polls_v1.sql",
+    "20260528045814_community_poll_lifecycle_v2.sql",
+    "20260528130839_semester_runtime_configs.sql",
+    "20260529133034_postgraduate_sources.sql",
+    "20260605005826_campus_scope_v1.sql",
+    "20260605010100_next_semester_runtime_config.sql",
+    "20260605075924_reactivate_current_semester_runtime_config.sql",
+    "20260605080459_semester_runtime_auto_reconcile_guard.sql",
+    "20260611075655_community_profile_homepage.sql",
+    "20260611141354_community_profile_stats_v1.sql",
+    "20260612042443_community_profile_cover_path.sql",
+    "20260612074957_community_single_pin_category_limit.sql",
+    "20260615124522_image_posts_publish_after_upload_report_hide.sql",
+    "20260615165000_national_calendar_runtime_configs.sql",
+    "20260618132620_school_community_access_v1.sql",
+    "20260623102832_grant_school_community_admin_access.sql",
+    "20260623113617_community_school_membership_flow.sql",
+    "20260625053303_campus_ai_usage_events.sql",
+    "20260627125947_campus_ai_managed_entitlements.sql",
+    "20260701090000_backend_capabilities_v1.sql",
+    "20260702022000_campus_ai_weekly_subscription.sql",
+    "20260704090000_campus_email_lookup.sql",
+    "20260710120000_drop_campus_email_lookup.sql",
+    "20260710121000_admin_security_runtime.sql",
+    "20260713090000_campus_ai_tool_gateway.sql",
+    "20260713171000_campus_ai_tool_gateway_public_rpc.sql",
+    "20260713190000_fix_next_semester_week_capacity.sql",
+    "20260715143000_campus_ai_free_daily_weekly_v2.sql",
+    "20260716062000_campus_ai_edge_rpc_wrappers.sql",
+    "20260717120000_bjfu_2026_2027_first_semester_calendar.sql",
+    "20260718190000_campus_ai_expire_stale_reservations.sql",
+    "20260722090000_community_identity_hardening.sql",
+    "20260722092000_community_mutation_hardening.sql",
+    "20260722094000_campus_ai_entitlement_monotonicity.sql",
+    "20260722100000_community_upload_receipts.sql",
+    "20260722113000_community_school_identity_inheritance.sql",
+    "20260722160000_admin_backend_hardening.sql",
+    "20260725190000_community_post_upload_closure.sql",
+    "20260725203000_admin_database_lint_closure.sql",
+    "20260725220000_community_threads_attachments_outbox.sql",
+    "20260726120000_community_upload_capability_manifest.sql",
+    "20260728090000_community_banners.sql",
+    "20260728230000_timetable_invite_expiry_cleanup.sql",
+    "20260729110000_community_account_deletion.sql",
+    "20260729133000_restore_community_private_schema_usage.sql",
+    "20260801120000_allow_installation_demo_account_deletion.sql",
+    "20260803120000_retire_managed_campus_ai.sql",
+    "20260807123000_retire_campus_ai_tools.sql",
+    "20260807140000_calendar_year_timetable.sql",
+    "20260812120000_remove_obsolete_community_publish_rpc.sql",
+    "20260817120000_community_create_request_idempotency.sql",
+    "20260822120000_community_feed_realtime.sql",
+    "20260824120000_manual_early_semester_activation.sql",
+    "20260901123000_community_comment_top_level_rpc_compatibility.sql",
+    "20260901130500_rpc_named_payload_hardening.sql"
+  ],
+  "edgeFunctions": [
+    "admin-community",
+    "admin-export",
+    "admin-list-announcements",
+    "admin-login",
+    "admin-logout",
+    "admin-me",
+    "admin-publish-announcement",
+    "admin-update-announcement",
+    "campus-request",
+    "campus-weather",
+    "community-attachment-download",
+    "community-bootstrap-user",
+    "community-delete-account",
+    "community-feed",
+    "community-media-cleanup",
+    "community-validate-attachment",
+    "community-validate-upload",
+    "share-preview"
+  ],
+  "calls": [
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityBannerService.swift",
+      "line": 10,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityBannerService.swift",
+      "line": 23,
+      "kind": "from",
+      "name": "community-banner-assets"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
+      "line": 30,
+      "kind": "from",
+      "name": "feedback_submissions"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
+      "line": 91,
+      "kind": "from",
+      "name": "catalog_suggestions"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 51,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 72,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 95,
+      "kind": "from",
+      "name": "post_likes"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 107,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 128,
+      "kind": "from",
+      "name": "post_favorites"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 140,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 202,
+      "kind": "rpc",
+      "name": "create_community_post_v4"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 223,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 244,
+      "kind": "invoke",
+      "name": "community-validate-upload"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 256,
+      "kind": "rpc",
+      "name": "attach_community_post_image_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 277,
+      "kind": "invoke",
+      "name": "community-validate-attachment"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 289,
+      "kind": "rpc",
+      "name": "attach_community_post_attachment_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 303,
+      "kind": "rpc",
+      "name": "abort_community_post_upload_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 318,
+      "kind": "invoke",
+      "name": "community-attachment-download"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 15,
+      "kind": "invoke",
+      "name": "community-delete-account"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 100,
+      "kind": "rpc",
+      "name": "community_campuses_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 173,
+      "kind": "invoke",
+      "name": "campus-request"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 194,
+      "kind": "rpc",
+      "name": "community_profile_stats_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 245,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 305,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 354,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 379,
+      "kind": "from",
+      "name": "community_terms_acceptances"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 397,
+      "kind": "rpc",
+      "name": "accept_community_terms"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 411,
+      "kind": "rpc",
+      "name": "revoke_community_terms"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 18,
+      "kind": "from",
+      "name": "community_notifications"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 55,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 101,
+      "kind": "from",
+      "name": "community_notifications"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 133,
+      "kind": "from",
+      "name": "community_notification_settings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 167,
+      "kind": "from",
+      "name": "community_notification_settings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 186,
+      "kind": "from",
+      "name": "community_notifications"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 205,
+      "kind": "from",
+      "name": "community_notifications"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 229,
+      "kind": "from",
+      "name": "site_announcement_reads"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 257,
+      "kind": "from",
+      "name": "community_notifications"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 277,
+      "kind": "from",
+      "name": "site_announcement_reads"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 301,
+      "kind": "from",
+      "name": "site_announcement_reads"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 16,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 37,
+      "kind": "rpc",
+      "name": "my_authored_community_polls_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 54,
+      "kind": "rpc",
+      "name": "my_voted_community_polls_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 78,
+      "kind": "rpc",
+      "name": "create_community_poll_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 100,
+      "kind": "rpc",
+      "name": "vote_community_poll_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 121,
+      "kind": "rpc",
+      "name": "request_delete_community_poll_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 11,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 36,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 60,
+      "kind": "rpc",
+      "name": "list_community_comment_threads_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 162,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 216,
+      "kind": "rpc",
+      "name": "create_community_comment_v2"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 262,
+      "kind": "rpc",
+      "name": "toggle_community_comment_like_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 290,
+      "kind": "rpc",
+      "name": "toggle_post_like_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 317,
+      "kind": "rpc",
+      "name": "toggle_post_favorite_v1"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 338,
+      "kind": "rpc",
+      "name": "soft_delete_own_comment"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 394,
+      "kind": "rpc",
+      "name": "block_community_user"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 408,
+      "kind": "rpc",
+      "name": "unblock_community_user"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 22,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 34,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 56,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 95,
+      "kind": "from",
+      "name": "teacher_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 101,
+      "kind": "from",
+      "name": "teacher_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 110,
+      "kind": "from",
+      "name": "teacher_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 137,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 150,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 162,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 174,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 196,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 236,
+      "kind": "from",
+      "name": "course_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 242,
+      "kind": "from",
+      "name": "course_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 251,
+      "kind": "from",
+      "name": "course_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 277,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 310,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 350,
+      "kind": "from",
+      "name": "dish_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 356,
+      "kind": "from",
+      "name": "dish_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 365,
+      "kind": "from",
+      "name": "dish_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 385,
+      "kind": "from",
+      "name": "teacher_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 403,
+      "kind": "from",
+      "name": "dish_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 421,
+      "kind": "from",
+      "name": "course_ratings"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 148,
+      "kind": "rpc",
+      "name": "create_community_notification"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 174,
+      "kind": "rpc",
+      "name": "report_community_content"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 191,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 207,
+      "kind": "rpc",
+      "name": "soft_delete_own_post"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 281,
+      "kind": "invoke",
+      "name": "community-validate-upload"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 398,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 417,
+      "kind": "from",
+      "name": "community_post_pins"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 452,
+      "kind": "from",
+      "name": "community_post_pins"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 477,
+      "kind": "from",
+      "name": "profile_auth_links"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 489,
+      "kind": "from",
+      "name": "profile_auth_links"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 736,
+      "kind": "from",
+      "name": "community_poll_options"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 779,
+      "kind": "from",
+      "name": "community_poll_votes"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 791,
+      "kind": "from",
+      "name": "post_images"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 862,
+      "kind": "from",
+      "name": "post_likes"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 884,
+      "kind": "from",
+      "name": "post_attachments"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 914,
+      "kind": "from",
+      "name": "post_favorites"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 924,
+      "kind": "from",
+      "name": "community_blocks"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 963,
+      "kind": "from",
+      "name": "site_announcement_reads"
+    },
+    {
+      "file": "leafy/Features/Timetable/SemesterConfig.swift",
+      "line": 261,
+      "kind": "from",
+      "name": "semester_runtime_configs"
+    },
+    {
+      "file": "leafy/Features/Timetable/SemesterConfig.swift",
+      "line": 280,
+      "kind": "from",
+      "name": "semester_runtime_configs"
+    },
+    {
+      "file": "leafy/Features/Timetable/SemesterConfig.swift",
+      "line": 859,
+      "kind": "from",
+      "name": "national_calendar_runtime_configs"
+    },
+    {
+      "file": "leafy/Services/Supabase/PostgraduateInfoService.swift",
+      "line": 15,
+      "kind": "from",
+      "name": "postgraduate_sources"
+    },
+    {
+      "file": "leafy/Services/Supabase/SupabaseBackendClient.swift",
+      "line": 102,
+      "kind": "rpc",
+      "name": "backend_capabilities_v1"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 73,
+      "kind": "from",
+      "name": "timetable_snapshots"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 97,
+      "kind": "from",
+      "name": "timetable_snapshots"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 121,
+      "kind": "from",
+      "name": "timetable_snapshots"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 144,
+      "kind": "from",
+      "name": "timetable_snapshots"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 165,
+      "kind": "from",
+      "name": "timetable_share_members"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 186,
+      "kind": "from",
+      "name": "timetable_invites"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 211,
+      "kind": "rpc",
+      "name": "create_timetable_invite"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 240,
+      "kind": "rpc",
+      "name": "accept_timetable_invite"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 260,
+      "kind": "rpc",
+      "name": "revoke_timetable_share"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 277,
+      "kind": "rpc",
+      "name": "stop_timetable_sharing"
+    },
+    {
+      "file": "leafy/Services/Supabase/TimetableSharingService.swift",
+      "line": 291,
+      "kind": "rpc",
+      "name": "leave_timetable_share"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 47,
+      "kind": "invoke",
+      "name": "community-bootstrap-user"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 94,
+      "kind": "invoke",
+      "name": "community-feed"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 115,
+      "kind": "rpc",
+      "name": "community_post_summary_v1"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 124,
+      "kind": "rpc",
+      "name": "list_community_comment_threads_v1"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 138,
+      "kind": "rpc",
+      "name": "toggle_post_like_v1"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 147,
+      "kind": "rpc",
+      "name": "toggle_post_favorite_v1"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 192,
+      "kind": "rpc",
+      "name": "soft_delete_own_post"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 200,
+      "kind": "rpc",
+      "name": "soft_delete_own_comment"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 222,
+      "kind": "rpc",
+      "name": "report_community_content"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 237,
+      "kind": "rpc",
+      "name": "block_community_user"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 256,
+      "kind": "rpc",
+      "name": "create_community_post_v4"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 282,
+      "kind": "rpc",
+      "name": "create_community_comment_v2"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/TimetableSharingService.kt",
+      "line": 64,
+      "kind": "rpc",
+      "name": "backend_capabilities_v1"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/TimetableSharingService.kt",
+      "line": 140,
+      "kind": "rpc",
+      "name": "create_timetable_invite"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/TimetableSharingService.kt",
+      "line": 154,
+      "kind": "rpc",
+      "name": "accept_timetable_invite"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/TimetableSharingService.kt",
+      "line": 162,
+      "kind": "rpc",
+      "name": "revoke_timetable_share"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/TimetableSharingService.kt",
+      "line": 173,
+      "kind": "rpc",
+      "name": "stop_timetable_sharing"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/TimetableSharingService.kt",
+      "line": 178,
+      "kind": "rpc",
+      "name": "leave_timetable_share"
+    },
+    {
+      "file": "supabase/functions/admin-community/admin-community.contract.test.ts",
+      "line": 83,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/admin-community.contract.test.ts",
+      "line": 84,
+      "kind": "rpc",
+      "name": "publish_community_banner"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 298,
+      "kind": "from",
+      "name": "feedback_submissions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 498,
+      "kind": "from",
+      "name": "feedback_submissions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 531,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 561,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 643,
+      "kind": "from",
+      "name": "admin_audit_logs"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 663,
+      "kind": "from",
+      "name": "campuses"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 684,
+      "kind": "from",
+      "name": "campus_membership_requests"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 727,
+      "kind": "rpc",
+      "name": "admin_approve_campus_request_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 748,
+      "kind": "rpc",
+      "name": "reject_campus_membership_request"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 764,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 813,
+      "kind": "rpc",
+      "name": "community_feed_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 837,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 856,
+      "kind": "rpc",
+      "name": "admin_retry_pending_post_publish_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 877,
+      "kind": "rpc",
+      "name": "admin_moderate_posts_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 894,
+      "kind": "rpc",
+      "name": "admin_moderate_posts_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 912,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 959,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 980,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 996,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1022,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1053,
+      "kind": "from",
+      "name": "community_polls"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1070,
+      "kind": "from",
+      "name": "community_post_pins"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1130,
+      "kind": "rpc",
+      "name": "admin_pin_post_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1153,
+      "kind": "from",
+      "name": "community_post_pins"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1185,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1237,
+      "kind": "from",
+      "name": "community_reports"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1297,
+      "kind": "from",
+      "name": "community_reports"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1340,
+      "kind": "rpc",
+      "name": "admin_resolve_moderation_report_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1359,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1375,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1406,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1426,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1478,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1513,
+      "kind": "from",
+      "name": "admin_audit_logs"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1538,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1560,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1582,
+      "kind": "from",
+      "name": "feedback_submissions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1631,
+      "kind": "from",
+      "name": "feedback_submissions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1652,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1680,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1699,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1713,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1739,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1824,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1843,
+      "kind": "rpc",
+      "name": "publish_community_banner"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1867,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1886,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1915,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1925,
+      "kind": "rpc",
+      "name": "publish_community_banner"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1936,
+      "kind": "from",
+      "name": "community_banners"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1951,
+      "kind": "from",
+      "name": "postgraduate_sources"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1991,
+      "kind": "from",
+      "name": "postgraduate_sources"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1995,
+      "kind": "from",
+      "name": "postgraduate_sources"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2010,
+      "kind": "from",
+      "name": "postgraduate_sources"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2026,
+      "kind": "from",
+      "name": "postgraduate_source_suggestions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2065,
+      "kind": "rpc",
+      "name": "admin_approve_postgraduate_suggestion_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2085,
+      "kind": "from",
+      "name": "postgraduate_source_suggestions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2109,
+      "kind": "from",
+      "name": "postgraduate_source_suggestions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2127,
+      "kind": "from",
+      "name": "catalog_suggestions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2165,
+      "kind": "rpc",
+      "name": "admin_approve_catalog_suggestion_v1"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2185,
+      "kind": "from",
+      "name": "catalog_suggestions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2209,
+      "kind": "from",
+      "name": "catalog_suggestions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2227,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2269,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2270,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2284,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2300,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2354,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2355,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2369,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2385,
+      "kind": "from",
+      "name": "semester_runtime_configs"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2416,
+      "kind": "rpc",
+      "name": "admin_upsert_semester_runtime_config"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2434,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2481,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2482,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2496,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2512,
+      "kind": "from",
+      "name": "teacher_ratings"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2571,
+      "kind": "from",
+      "name": "dish_ratings"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2631,
+      "kind": "from",
+      "name": "teacher_ratings"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2650,
+      "kind": "from",
+      "name": "dish_ratings"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2668,
+      "kind": "from",
+      "name": "admin_accounts"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2729,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2766,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2780,
+      "kind": "from",
+      "name": "national_calendar_runtime_configs"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2794,
+      "kind": "rpc",
+      "name": "admin_upsert_national_calendar_runtime_config"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2846,
+      "kind": "rpc",
+      "name": "admin_create_account"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2863,
+      "kind": "rpc",
+      "name": "admin_update_account"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2882,
+      "kind": "rpc",
+      "name": "admin_update_account"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 2898,
+      "kind": "from",
+      "name": "admin_audit_logs"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3046,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3075,
+      "kind": "from",
+      "name": "admin_accounts"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3093,
+      "kind": "from",
+      "name": "teachers"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3111,
+      "kind": "from",
+      "name": "course_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3129,
+      "kind": "from",
+      "name": "dish_catalog"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3147,
+      "kind": "from",
+      "name": "postgraduate_sources"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3165,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3183,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3201,
+      "kind": "from",
+      "name": "comments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3219,
+      "kind": "from",
+      "name": "post_images"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3234,
+      "kind": "from",
+      "name": "community-images"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3262,
+      "kind": "from",
+      "name": "post_attachments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3277,
+      "kind": "from",
+      "name": "community-attachments"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3328,
+      "kind": "from",
+      "name": "community_poll_options"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3353,
+      "kind": "from",
+      "name": "post_likes"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3374,
+      "kind": "from",
+      "name": "community_post_pins"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3451,
+      "kind": "from",
+      "name": "community_reports"
+    },
+    {
+      "file": "supabase/functions/admin-list-announcements/index.ts",
+      "line": 23,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/admin-login/index.ts",
+      "line": 44,
+      "kind": "rpc",
+      "name": "admin_begin_login_attempt"
+    },
+    {
+      "file": "supabase/functions/admin-login/index.ts",
+      "line": 63,
+      "kind": "rpc",
+      "name": "admin_login"
+    },
+    {
+      "file": "supabase/functions/admin-login/index.ts",
+      "line": 71,
+      "kind": "rpc",
+      "name": "admin_finish_login_attempt"
+    },
+    {
+      "file": "supabase/functions/admin-login/index.ts",
+      "line": 92,
+      "kind": "rpc",
+      "name": "admin_finish_login_attempt"
+    },
+    {
+      "file": "supabase/functions/admin-login/index.ts",
+      "line": 100,
+      "kind": "rpc",
+      "name": "admin_finish_login_attempt"
+    },
+    {
+      "file": "supabase/functions/admin-logout/index.ts",
+      "line": 30,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/admin-publish-announcement/index.ts",
+      "line": 65,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/admin-update-announcement/index.ts",
+      "line": 42,
+      "kind": "from",
+      "name": "site_announcements"
+    },
+    {
+      "file": "supabase/functions/campus-request/index.ts",
+      "line": 53,
+      "kind": "rpc",
+      "name": "current_campus_membership_request"
+    },
+    {
+      "file": "supabase/functions/campus-request/index.ts",
+      "line": 68,
+      "kind": "rpc",
+      "name": "select_community_campus"
+    },
+    {
+      "file": "supabase/functions/campus-request/index.ts",
+      "line": 85,
+      "kind": "rpc",
+      "name": "submit_community_school_change_request"
+    },
+    {
+      "file": "supabase/functions/campus-request/index.ts",
+      "line": 104,
+      "kind": "rpc",
+      "name": "submit_campus_membership_request"
+    },
+    {
+      "file": "supabase/functions/campus-request/index.ts",
+      "line": 169,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/campus-weather/index.ts",
+      "line": 232,
+      "kind": "from",
+      "name": "campus_weather_cache"
+    },
+    {
+      "file": "supabase/functions/campus-weather/index.ts",
+      "line": 251,
+      "kind": "from",
+      "name": "campus_weather_cache"
+    },
+    {
+      "file": "supabase/functions/community-attachment-download/index.ts",
+      "line": 28,
+      "kind": "from",
+      "name": "profile_auth_links"
+    },
+    {
+      "file": "supabase/functions/community-attachment-download/index.ts",
+      "line": 35,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/community-attachment-download/index.ts",
+      "line": 36,
+      "kind": "from",
+      "name": "post_attachments"
+    },
+    {
+      "file": "supabase/functions/community-attachment-download/index.ts",
+      "line": 43,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/community-attachment-download/index.ts",
+      "line": 52,
+      "kind": "from",
+      "name": "community-attachments"
+    },
+    {
+      "file": "supabase/functions/community-bootstrap-user/index.ts",
+      "line": 63,
+      "kind": "rpc",
+      "name": "edge_claim_community_identity"
+    },
+    {
+      "file": "supabase/functions/community-bootstrap-user/index.ts",
+      "line": 88,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/community-delete-account/index.ts",
+      "line": 203,
+      "kind": "from",
+      "name": "profile_auth_links"
+    },
+    {
+      "file": "supabase/functions/community-delete-account/index.ts",
+      "line": 233,
+      "kind": "rpc",
+      "name": "edge_delete_community_account"
+    },
+    {
+      "file": "supabase/functions/community-feed/index.ts",
+      "line": 45,
+      "kind": "rpc",
+      "name": "community_hot_posts_v1"
+    },
+    {
+      "file": "supabase/functions/community-feed/index.ts",
+      "line": 50,
+      "kind": "rpc",
+      "name": "community_feed_v1"
+    },
+    {
+      "file": "supabase/functions/community-feed/index.ts",
+      "line": 83,
+      "kind": "rpc",
+      "name": "current_profile_campus_id"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 35,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 46,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 65,
+      "kind": "from",
+      "name": "community_reports"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 82,
+      "kind": "from",
+      "name": "post_images"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 83,
+      "kind": "from",
+      "name": "post_attachments"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 100,
+      "kind": "from",
+      "name": "community-images"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 104,
+      "kind": "from",
+      "name": "community-attachments"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 109,
+      "kind": "from",
+      "name": "post_images"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 110,
+      "kind": "from",
+      "name": "post_attachments"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 116,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/community-validate-attachment/index.ts",
+      "line": 51,
+      "kind": "from",
+      "name": "profile_auth_links"
+    },
+    {
+      "file": "supabase/functions/community-validate-attachment/index.ts",
+      "line": 64,
+      "kind": "rpc",
+      "name": "edge_record_community_attachment_validation_v1"
+    },
+    {
+      "file": "supabase/functions/community-validate-attachment/index.ts",
+      "line": 97,
+      "kind": "from",
+      "name": "community-attachments"
+    },
+    {
+      "file": "supabase/functions/community-validate-upload/index.ts",
+      "line": 39,
+      "kind": "from",
+      "name": "profile_auth_links"
+    },
+    {
+      "file": "supabase/functions/community-validate-upload/index.ts",
+      "line": 77,
+      "kind": "rpc",
+      "name": "edge_record_community_upload_validation"
+    },
+    {
+      "file": "supabase/functions/community-validate-upload/index.ts",
+      "line": 105,
+      "kind": "from",
+      "name": "community-images"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 71,
+      "kind": "from",
+      "name": "posts"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 88,
+      "kind": "from",
+      "name": "post_attachments"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 122,
+      "kind": "from",
+      "name": "timetable_invites"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 165,
+      "kind": "from",
+      "name": "profiles"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 184,
+      "kind": "from",
+      "name": "timetable_snapshots"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-announcements.ts",
+      "line": 53,
+      "kind": "from",
+      "name": "admin_users"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 179,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 194,
+      "kind": "from",
+      "name": "admin_accounts"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 209,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 238,
+      "kind": "from",
+      "name": "admin_audit_logs"
+    }
+  ]
+}

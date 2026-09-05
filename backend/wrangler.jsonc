@@ -1,0 +1,61 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "myleafy-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-05",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "account_id": "be7d850d4b5046381fb909251b4df675",
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "staging": {
+      "name": "myleafy-api-staging",
+      "workers_dev": true,
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "API_ORIGIN": "https://myleafy-api-staging.2210286979.workers.dev",
+        "SITE_ORIGIN": "http://localhost:5173"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "myleafy-staging",
+          "database_id": "83b8baf4-ac31-4d01-b87d-b358d215c9c0",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "myleafy-staging-files"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "SIGNALS",
+            "class_name": "ChangeSignals"
+          }
+        ]
+      },
+      "migrations": [
+        {
+          "tag": "v1",
+          "new_sqlite_classes": [
+            "ChangeSignals"
+          ]
+        }
+      ],
+      "triggers": {
+        "crons": [
+          "17 * * * *",
+          "20 17 * * *",
+          "35 18 * * *"
+        ]
+      }
+    }
+  }
+}
