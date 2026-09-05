@@ -2,8 +2,10 @@ import { betterAuth } from 'better-auth';
 import { authSchema } from './auth-schema';
 import { ApiError } from './http';
 
-export type Secrets = { AUTH_SECRET?:string; EMAIL_API_KEY?:string; EMAIL_FROM?:string; TEST_EMAIL_RECIPIENT?:string; LEGACY_SUPABASE_URL?:string; LEGACY_SUPABASE_PUBLISHABLE_KEY?:string; SCHOOL_VERIFIER_URL?:string; SCHOOL_VERIFIER_SECRET?:string; MEDIA_SIGNING_SECRET?:string };
-export type BackendEnv=Env & Secrets;
+export type Secrets = { AUTH_SECRET?:string; EMAIL_API_KEY?:string; EMAIL_FROM?:string; TEST_EMAIL_RECIPIENT?:string; LEGACY_SUPABASE_URL?:string; LEGACY_SUPABASE_PUBLISHABLE_KEY?:string; MEDIA_SIGNING_SECRET?:string };
+export type BackendEnv=Omit<Env,'ENVIRONMENT'|'API_ORIGIN'|'SITE_ORIGIN'> & Secrets & {
+  ENVIRONMENT:'staging'|'production'; API_ORIGIN:string; SITE_ORIGIN:string;
+};
 export function auth(env:BackendEnv){
   if(!env.AUTH_SECRET||env.AUTH_SECRET.length<32)throw new ApiError(503,'auth_unavailable','Authentication is not configured');
   return betterAuth({
@@ -19,7 +21,7 @@ export function auth(env:BackendEnv){
 }
 export type Actor={authId:string;profileId:string;campusId:string|null;identityCampus:string;sessionId:string;sessionExpires:number};
 export async function actor(env:BackendEnv,request:Request):Promise<Actor>{
-  const session=await auth(env).api.getSession({headers:request.headers});
+  const session=await auth(env).api.getSession({headers:request.headers,query:{disableRefresh:true}});
   if(!session)throw new ApiError(401,'unauthenticated','Please sign in');
   const link=await env.DB.prepare(`SELECT p.id AS profile_id,p.campus_id AS identity_campus,
     CASE WHEN p.campus_id='bjfu' THEN 'bjfu' ELSE p.community_campus_id END AS campus_id,

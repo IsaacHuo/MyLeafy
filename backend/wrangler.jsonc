@@ -8,7 +8,11 @@
   ],
   "account_id": "be7d850d4b5046381fb909251b4df675",
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
   },
   "env": {
     "staging": {
@@ -51,6 +55,7 @@
       ],
       "triggers": {
         "crons": [
+          "* * * * *",
           "17 * * * *",
           "20 17 * * *",
           "35 18 * * *"

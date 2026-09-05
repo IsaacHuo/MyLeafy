@@ -34,7 +34,7 @@ export function integer(value:unknown,min:number,max:number,defaultValue?:number
 }
 export async function sha256(data:string|Uint8Array):Promise<string>{
   const bytes=typeof data==='string'?new TextEncoder().encode(data):data;
-  const hash=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+  const hash=await crypto.subtle.digest('SHA-256',new Uint8Array(bytes));return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
 }
 export function canonical(value:unknown):string{
   if(value===null||typeof value!=='object')return JSON.stringify(value);

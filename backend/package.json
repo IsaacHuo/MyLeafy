@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --env staging",
-    "typecheck": "tsc --noEmit -p tsconfig.tools.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tools.json",
+    "test:migration": "node --test tests/migration.test.mjs",
     "test": "vitest run",
     "inventory": "tsx scripts/inventory.ts",
     "schema:replay": "tsx scripts/replay-source.ts",

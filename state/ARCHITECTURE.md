@@ -255,6 +255,8 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 
 ## 10. Supabase 与 Web/运营后台边界
 
+- **迁移分支的 Cloudflare 实现**：`backend/` 提供 Hono/Better Auth Worker、D1 schema、R2 文件权限和 Durable Objects 变更信号，已部署到独立 staging；其 API、迁移工具和验证边界见 `docs/engineering/cloudflare-migration.md`。它尚未接管生产权威数据。iOS `Services/Cloudflare/MyLeafyBackendClient.swift` 是待接入的独立传输层，现有 Supabase 调用仍保留。
+
 - `supabase/`：86 个 migration、18 个 Edge Functions、`schema-ledger.md`（关键 schema 不变量与迁移顺序的事实来源）、模板与测试。
 - 主要函数组：社区初始化与 Feed（`community-bootstrap-user`、`community-feed`）、校园服务（`campus-request`、`campus-weather`）、分享（`share-preview`）、媒体验证与清理、管理（`admin-*`）。
 - `site/`：官网（React + Vite）+ React-admin 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。

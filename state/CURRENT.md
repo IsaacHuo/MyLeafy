@@ -51,6 +51,8 @@ Last verified: 2026-09-05
 
 ## In Progress
 
+- **Cloudflare 后台迁移**：迁移分支已实现 Worker/D1/R2 的部分业务、认证、媒体与迁移工具，并部署 staging 完成首轮合成数据冒烟。生产仍使用 Supabase；iOS 新传输层尚未接入页面，Android/管理端/分享页及完整反向恢复尚待完成。生产 Data API 和 CLI 数据库连接当前超时，真实数据与文件未迁移。实施边界和操作步骤见 `docs/engineering/cloudflare-migration.md`。
+
 - 未发布版本（见 `docs/operations/release-notes.md` “未发布”一节）：
   - 日迹卡片白色系统表面、Tag 白字主题色胶囊与“全部随记”筛选；
   - 记录日迹本机统计分享图（仅聚合数据）；

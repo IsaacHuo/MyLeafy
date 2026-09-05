@@ -1,5 +1,5 @@
 {
-  "source": "Repository call sites; production drift must be verified separately",
+  "source": "Repository call sites including dynamic calls, Auth and the admin registry. Production drift must be verified separately.",
   "migrations": [
     "20260423_community_v1.sql",
     "20260424000000_community_notifications.sql",
@@ -122,18 +122,6 @@
       "name": "community-banner-assets"
     },
     {
-      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
-      "line": 30,
-      "kind": "from",
-      "name": "feedback_submissions"
-    },
-    {
-      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
-      "line": 91,
-      "kind": "from",
-      "name": "catalog_suggestions"
-    },
-    {
       "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
       "line": 51,
       "kind": "from",
@@ -216,6 +204,18 @@
       "line": 318,
       "kind": "invoke",
       "name": "community-attachment-download"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
+      "line": 30,
+      "kind": "from",
+      "name": "feedback_submissions"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
+      "line": 91,
+      "kind": "from",
+      "name": "catalog_suggestions"
     },
     {
       "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
@@ -888,6 +888,36 @@
       "line": 178,
       "kind": "rpc",
       "name": "leave_timetable_share"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-announcements.ts",
+      "line": 53,
+      "kind": "from",
+      "name": "admin_users"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 179,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 194,
+      "kind": "from",
+      "name": "admin_accounts"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 209,
+      "kind": "from",
+      "name": "admin_sessions"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 238,
+      "kind": "from",
+      "name": "admin_audit_logs"
     },
     {
       "file": "supabase/functions/admin-community/admin-community.contract.test.ts",
@@ -1830,36 +1860,813 @@
       "line": 184,
       "kind": "from",
       "name": "timetable_snapshots"
+    }
+  ],
+  "dynamicCalls": [
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 30,
+      "kind": "invoke",
+      "expression": "config.feedFunctionName"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 56,
+      "kind": "invoke",
+      "expression": "config.bootstrapFunctionName"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 223,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 237,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 253,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 267,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 625,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 828,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 998,
+      "kind": "from",
+      "expression": "Self.storageBucket"
+    },
+    {
+      "file": "leafy/Features/Discover/Application/WeatherServicing.swift",
+      "line": 92,
+      "kind": "invoke",
+      "expression": "config.weatherFunctionName"
+    },
+    {
+      "file": "leafy/Services/TimetableWebViewBootstrapper.swift",
+      "line": 114,
+      "kind": "from",
+      "expression": "document.querySelectorAll('iframe"
+    },
+    {
+      "file": "leafy/Services/TimetableWebViewBootstrapper.swift",
+      "line": 134,
+      "kind": "from",
+      "expression": "document.querySelectorAll('iframe"
+    },
+    {
+      "file": "leafy/Services/TimetableWebViewBootstrapper.swift",
+      "line": 158,
+      "kind": "from",
+      "expression": "document.querySelectorAll('li"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/features/schedule/notifications/ScheduleNotifications.kt",
+      "line": 309,
+      "kind": "from",
+      "expression": "applicationContext"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/ui/components/LeafyComponents.kt",
+      "line": 227,
+      "kind": "invoke",
+      "expression": ")"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/ui/components/LeafyComponents.kt",
+      "line": 263,
+      "kind": "invoke",
+      "expression": ")"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/ui/components/LeafyComponents.kt",
+      "line": 390,
+      "kind": "invoke",
+      "expression": ")"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/ui/components/LeafyComponents.kt",
+      "line": 462,
+      "kind": "invoke",
+      "expression": ")"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-core.ts",
+      "line": 494,
+      "kind": "from",
+      "expression": "new Uint8Array(buffer"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-permissions.ts",
+      "line": 103,
+      "kind": "from",
+      "expression": "merged"
+    },
+    {
+      "file": "supabase/functions/_shared/admin-permissions.ts",
+      "line": 103,
+      "kind": "from",
+      "expression": "actions"
+    },
+    {
+      "file": "supabase/functions/admin-community/admin-community.contract.test.ts",
+      "line": 7,
+      "kind": "from",
+      "expression": "source.matchAll(/^\\s{2}([A-Za-z0-9]+"
+    },
+    {
+      "file": "supabase/functions/admin-community/admin-community.contract.test.ts",
+      "line": 17,
+      "kind": "from",
+      "expression": "source.matchAll(/^\\s{2}([A-Za-z0-9]+"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 488,
+      "kind": "rpc",
+      "expression": "functionName"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1762,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1799,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1838,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1901,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 1907,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3410,
+      "kind": "from",
+      "expression": "table"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3425,
+      "kind": "from",
+      "expression": "table"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3645,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3674,
+      "kind": "from",
+      "expression": "communityBannerBucket"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3720,
+      "kind": "from",
+      "expression": "binary"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3985,
+      "kind": "from",
+      "expression": "table"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 3997,
+      "kind": "from",
+      "expression": "table"
+    },
+    {
+      "file": "supabase/functions/admin-community/index.ts",
+      "line": 4148,
+      "kind": "from",
+      "expression": "new Set(values.filter(Boolean"
+    },
+    {
+      "file": "supabase/functions/admin-export/index.ts",
+      "line": 115,
+      "kind": "from",
+      "expression": "effective.table"
+    },
+    {
+      "file": "supabase/functions/admin-export/index.ts",
+      "line": 165,
+      "kind": "from",
+      "expression": "table"
+    },
+    {
+      "file": "supabase/functions/admin-export/index.ts",
+      "line": 173,
+      "kind": "from",
+      "expression": "new Set(values.filter((value"
+    },
+    {
+      "file": "supabase/functions/community-delete-account/index.ts",
+      "line": 216,
+      "kind": "from",
+      "expression": "bucket"
+    },
+    {
+      "file": "supabase/functions/community-delete-account/index.ts",
+      "line": 229,
+      "kind": "from",
+      "expression": "bucket"
+    },
+    {
+      "file": "supabase/functions/community-media-cleanup/index.ts",
+      "line": 135,
+      "kind": "from",
+      "expression": "bucket"
+    },
+    {
+      "file": "supabase/functions/community-validate-attachment/index.ts",
+      "line": 121,
+      "kind": "from",
+      "expression": "new Uint8Array(digest"
+    },
+    {
+      "file": "supabase/functions/community-validate-upload/index.ts",
+      "line": 118,
+      "kind": "from",
+      "expression": "new Uint8Array(digest"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 264,
+      "kind": "from",
+      "expression": "value"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 276,
+      "kind": "from",
+      "expression": "normalized"
+    },
+    {
+      "file": "supabase/functions/share-preview/index.ts",
+      "line": 282,
+      "kind": "from",
+      "expression": "new Uint8Array(digest"
+    }
+  ],
+  "authCalls": [
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 11,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 194,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 242,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 275,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedService.swift",
+      "line": 316,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
+      "line": 11,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityFeedbackCatalogService.swift",
+      "line": 38,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 11,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 52,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 95,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 169,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 211,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 259,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 282,
+      "method": "resend"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 288,
+      "method": "update"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 319,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 335,
+      "method": "verifyOTP"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 371,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 392,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityIdentityProfileService.swift",
+      "line": 406,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 10,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 50,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 93,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 125,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 153,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 194,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 216,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 265,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityNotificationService.swift",
+      "line": 288,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 10,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 31,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 48,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 69,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 93,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPollService.swift",
+      "line": 115,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 154,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 203,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 252,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 279,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 306,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 333,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 347,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 389,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityPostDetailService.swift",
+      "line": 403,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 77,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 218,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 332,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 379,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 397,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityRatingService.swift",
+      "line": 415,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 109,
+      "method": "currentSession"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 112,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 115,
+      "method": "signOut"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 120,
+      "method": "signInAnonymously"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 169,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 279,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/CommunityService.swift",
+      "line": 471,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/LiveCommunityPublishBackend.swift",
+      "line": 114,
+      "method": "session"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/LiveCommunitySessionRepository.swift",
+      "line": 8,
+      "method": "currentUser"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/LiveCommunitySessionRepository.swift",
+      "line": 34,
+      "method": "signOut"
+    },
+    {
+      "file": "leafy/Features/Community/Data/Supabase/LiveCommunitySessionRepository.swift",
+      "line": 36,
+      "method": "signOut"
+    },
+    {
+      "file": "leafy/Services/Supabase/CustomCampusAuthService.swift",
+      "line": 84,
+      "method": "signIn"
+    },
+    {
+      "file": "leafy/Services/Supabase/CustomCampusAuthService.swift",
+      "line": 94,
+      "method": "signUp"
+    },
+    {
+      "file": "leafy/Services/Supabase/CustomCampusAuthService.swift",
+      "line": 107,
+      "method": "resend"
+    },
+    {
+      "file": "leafy/Services/Supabase/CustomCampusAuthService.swift",
+      "line": 121,
+      "method": "verifyOTP"
+    },
+    {
+      "file": "leafy/Services/Supabase/CustomCampusAuthService.swift",
+      "line": 142,
+      "method": "session"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/core/di/AppContainer.kt",
+      "line": 24,
+      "method": "AuthRepository"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/core/di/AppContainer.kt",
+      "line": 25,
+      "method": "SchoolAuthRepository"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/navigation/MyLeafyNavHost.kt",
+      "line": 28,
+      "method": "LoginScreen"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 12,
+      "method": "auth"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 40,
+      "method": "currentSessionOrNull"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 41,
+      "method": "signInAnonymously"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 88,
+      "method": "currentSessionOrNull"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/CommunityService.kt",
+      "line": 88,
+      "method": "signOut"
+    },
+    {
+      "file": "android/app/src/main/java/com/myleafy/android/services/supabase/SupabaseClientProvider.kt",
+      "line": 5,
+      "method": "Auth"
     },
     {
       "file": "supabase/functions/_shared/admin-announcements.ts",
-      "line": 53,
-      "kind": "from",
-      "name": "admin_users"
+      "line": 46,
+      "method": "getUser"
     },
     {
-      "file": "supabase/functions/_shared/admin-core.ts",
-      "line": 179,
-      "kind": "from",
-      "name": "admin_sessions"
+      "file": "supabase/functions/campus-request/index.ts",
+      "line": 44,
+      "method": "getUser"
     },
     {
-      "file": "supabase/functions/_shared/admin-core.ts",
-      "line": 194,
-      "kind": "from",
-      "name": "admin_accounts"
+      "file": "supabase/functions/community-attachment-download/index.ts",
+      "line": 20,
+      "method": "getUser"
     },
     {
-      "file": "supabase/functions/_shared/admin-core.ts",
-      "line": 209,
-      "kind": "from",
-      "name": "admin_sessions"
+      "file": "supabase/functions/community-bootstrap-user/index.ts",
+      "line": 44,
+      "method": "getUser"
     },
     {
-      "file": "supabase/functions/_shared/admin-core.ts",
-      "line": 238,
-      "kind": "from",
-      "name": "admin_audit_logs"
+      "file": "supabase/functions/community-delete-account/index.ts",
+      "line": 197,
+      "method": "getUser"
+    },
+    {
+      "file": "supabase/functions/community-delete-account/index.ts",
+      "line": 240,
+      "method": "admin"
+    },
+    {
+      "file": "supabase/functions/community-validate-attachment/index.ts",
+      "line": 38,
+      "method": "getUser"
+    },
+    {
+      "file": "supabase/functions/community-validate-upload/index.ts",
+      "line": 29,
+      "method": "getUser"
+    },
+    {
+      "file": "site/src/admin/AdminConsole.tsx",
+      "line": 83,
+      "method": "sign_out"
+    },
+    {
+      "file": "site/src/admin/AdminConsole.tsx",
+      "line": 84,
+      "method": "logout"
+    },
+    {
+      "file": "site/src/admin/AdminConsole.tsx",
+      "line": 85,
+      "method": "user_menu"
+    },
+    {
+      "file": "site/src/admin/AdminConsole.tsx",
+      "line": 86,
+      "method": "auth_check_error"
     }
-  ]
+  ],
+  "adminActions": [
+    "overview",
+    "listCampuses",
+    "listCampusRequests",
+    "approveCampusRequest",
+    "rejectCampusRequest",
+    "listPosts",
+    "previewCommunityFeed",
+    "getPost",
+    "retryPostPublish",
+    "moderatePost",
+    "bulkModeratePosts",
+    "listPolls",
+    "getPoll",
+    "moderatePoll",
+    "reviewPollDeletion",
+    "listPostPins",
+    "pinPost",
+    "unpinPost",
+    "listComments",
+    "listModerationReports",
+    "getModerationReport",
+    "resolveModerationReport",
+    "moderateComment",
+    "bulkModerateComments",
+    "listProfiles",
+    "getProfile",
+    "muteProfile",
+    "unmuteProfile",
+    "listFeedback",
+    "updateFeedback",
+    "listAnnouncements",
+    "createAnnouncement",
+    "updateAnnouncement",
+    "listCommunityBanners",
+    "prepareCommunityBannerImageUpload",
+    "createCommunityBanner",
+    "updateCommunityBanner",
+    "publishCommunityBanner",
+    "archiveCommunityBanner",
+    "listPostgraduateSources",
+    "upsertPostgraduateSource",
+    "setPostgraduateSourceStatus",
+    "listPostgraduateSuggestions",
+    "approvePostgraduateSuggestion",
+    "rejectPostgraduateSuggestion",
+    "listCatalogSuggestions",
+    "approveCatalogSuggestion",
+    "rejectCatalogSuggestion",
+    "listTeachers",
+    "upsertTeacher",
+    "setTeacherStatus",
+    "listCourses",
+    "upsertCourse",
+    "setCourseStatus",
+    "listDishes",
+    "upsertDish",
+    "setDishStatus",
+    "listTeacherRatings",
+    "listDishRatings",
+    "deleteTeacherRating",
+    "deleteDishRating",
+    "listSemesterRuntimeConfigs",
+    "upsertSemesterRuntimeConfig",
+    "listAdmins",
+    "createAdmin",
+    "updateAdmin",
+    "disableAdmin",
+    "listAuditLogs",
+    "globalSearch",
+    "listAdminSessions",
+    "revokeAdminSession",
+    "listNationalCalendarRuntimeConfigs",
+    "upsertNationalCalendarRuntimeConfig"
+  ],
+  "weather": {
+    "ios": "Direct WeatherKit (AppDependencies.live)",
+    "android": "Direct Open-Meteo (WeatherRepository)",
+    "legacy": "campus-weather remains on the retiring Supabase backend; not a new required weather provider"
+  }
 }
