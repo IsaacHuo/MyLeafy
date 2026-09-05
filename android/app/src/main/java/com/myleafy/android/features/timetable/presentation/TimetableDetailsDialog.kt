@@ -3,20 +3,19 @@ package com.myleafy.android.features.timetable.presentation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.myleafy.android.core.data.local.CourseEntity
 import com.myleafy.android.core.data.local.ExamEntity
+import com.myleafy.android.ui.components.LeafyAlertDialog
+import com.myleafy.android.ui.components.LeafyTextButton
 
 @Composable
 fun CourseDetailsDialog(course: CourseEntity, onDismiss: () -> Unit) {
-    AlertDialog(
+    LeafyAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(course.courseName) },
         text = {
@@ -29,13 +28,13 @@ fun CourseDetailsDialog(course: CourseEntity, onDismiss: () -> Unit) {
                 DetailLine("节次", course.duration.sorted().joinToString("、") { "第${it}节" })
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } },
+        confirmButton = { LeafyTextButton(onClick = onDismiss) { Text("完成") } },
     )
 }
 
 @Composable
 fun ExamDetailsDialog(exam: ExamEntity, onDismiss: () -> Unit) {
-    AlertDialog(
+    LeafyAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(exam.name) },
         text = {
@@ -45,7 +44,7 @@ fun ExamDetailsDialog(exam: ExamEntity, onDismiss: () -> Unit) {
                 DetailLine("地点", exam.location.ifBlank { "未提供" })
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } },
+        confirmButton = { LeafyTextButton(onClick = onDismiss) { Text("完成") } },
     )
 }
 

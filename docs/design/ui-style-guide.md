@@ -134,6 +134,8 @@ Android 的权威实现位于 `android/app/src/main/java/com/myleafy/android/ui/
 | 高度 | `LeafyElevation.flat/resting/floating/modal`；深色模式主要使用 tonal surface |
 | 动效 | `LeafyMotion.quick/standard/emphasized` 与统一 easing；只用于可解释的状态变化 |
 | 课程颜色 | `leafyCourseColors`；继续使用稳定 hash，颜色不作为唯一状态编码 |
+| 状态几何 | `LeafyStroke`、`LeafyGesture` 与 `LeafyComponentSize.emptyStateMaxWidth`；不再借用普通间距表达进度线宽或刷新阈值 |
+| 功能几何 | `LeafyTimetableTokens`、`LeafyAdaptiveTokens`、`LeafyLoginTokens`；高密度课表、校园断点和验证码尺寸不混入通用间距 |
 
 共享布局位于 `ui/components/LeafyComponents.kt`，统一 Root/Secondary TopBar、ContentSurface、ToolRow、SettingsRow、Loading/Empty/Error、Snackbar 与 Sheet。组件根节点必须应用调用方传入的 `Modifier`；leading/trailing/actions/content 使用 slot，业务政策留在功能页。
 
@@ -229,6 +231,8 @@ Glass 只用于工具栏、浮动控件、胶囊或少量导航表面。不要�
 `LeafyGlassIconButton` 用于顶部或浮动工具动作。单独的图标按钮必须有 accessibility label，且最小触控面积不小于 44 × 44 pt；视觉图形可以小于触控区域。
 
 Android 对应最小触控面积为 48 × 48dp，使用 `LeafyActionIconButton` 或 `leafyMinimumTouchTarget()`。
+
+Android 主、次、文字和危险操作使用共享语义按钮；Dialog 与 Modal Bottom Sheet 使用统一 shape/surface，具体标题、正文和动作继续通过 slot 由功能页提供。设置页使用无额外外层卡片的 `LeafySettingsGroup`，行间依靠弱分隔。
 
 请求进行中时：
 
@@ -399,3 +403,10 @@ Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigatio
 - VoiceOver 标签、阅读顺序和触控面积是否合格。
 - iOS 17 回退与 iOS 26 增强是否都经过检查。
 - 是否避免了硬编码颜色、无语义间距、emoji 图标和工程化错误文案。
+
+## 14. Android 截图回归
+
+- Roborazzi golden 固定简体中文、`Asia/Shanghai`、窗口尺寸、测试数据和显式日期时间；基准图位于 `android/app/src/test/screenshots/`。
+- 普通 JVM 测试默认排除 `ScreenshotTests`；截图任务通过 `-Pscreenshot` 单独运行。
+- CI 是 golden 验证权威，只执行 verify，不自动录制或覆盖基准图；失败时上传实际图、差异图和报告。
+- 截图变更必须与对应页面的 iOS 对照、Android 参考、差距与迁移说明一起审阅。业务账号、真实社区内容和个人照片不得作为 fixture。

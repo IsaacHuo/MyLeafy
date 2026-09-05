@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -24,18 +23,17 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
-import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyErrorState
-import com.myleafy.android.ui.components.leafyMinimumTouchTarget
 import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyStroke
 
 @Composable
 fun ClassroomScreen(
@@ -81,14 +79,13 @@ fun ClassroomScreen(
         }
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
 
-        Button(
+        LeafyPrimaryButton(
             onClick = { viewModel.query(week, day, startPeriod = 1, endPeriod = 12) },
             enabled = uiState !is ClassroomUiState.Loading,
-            modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
-            shape = LeafyButtonDefaults.shape,
+            modifier = Modifier.fillMaxWidth(),
         ) {
             if (uiState is ClassroomUiState.Loading) {
-                CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.compact), strokeWidth = 2.dp)
+                CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.compact), strokeWidth = LeafyStroke.progress)
             } else {
                 Text("查询全天空闲教室")
             }

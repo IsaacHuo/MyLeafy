@@ -6,6 +6,7 @@ import android.graphics.Shader
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,13 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -39,8 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.myleafy.android.core.prefs.TimetableBackgroundSettings
 import com.myleafy.android.features.timetable.domain.TimetableGridItem
@@ -49,26 +48,18 @@ import com.myleafy.android.features.timetable.domain.TimetableGridSnapshot
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyTimetableTokens
+import com.myleafy.android.ui.theme.LeafyTimetableBackgroundFallback
 import com.myleafy.android.ui.theme.leafyCourseColors
 import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// High-density timetable geometry is deliberately local rather than shared UI spacing.
-private val AxisWidth = 40.dp
-private val HeaderHeight = 44.dp
-private val MaximumPeriodRowHeight = 56.dp
-private val GridGap = 2.dp
-private val GridCellShape = RoundedCornerShape(8.dp)
 private const val PeriodCount = 13
-// Axis metadata is intentionally denser than general UI typography so all
-// thirteen start times remain readable without competing with course titles.
-private val AxisTimeFontSize = 9.sp
-private val AxisTimeLineHeight = 11.sp
+private val GridCellShape = RoundedCornerShape(LeafyTimetableTokens.cellCornerRadius)
 
 fun stableCourseColorIndex(name: String, colorCount: Int): Int {
     if (name.isEmpty() || colorCount <= 0) return 0
@@ -93,9 +84,10 @@ fun TimetableGrid(
         val contentWidth = maxWidth
         // The timetable is a single viewport: rows compress to the available height
         // instead of turning the whole grid into a vertically scrolling surface.
-        val periodRowHeight = ((maxHeight - HeaderHeight).coerceAtLeast(PeriodCount.dp) / PeriodCount)
-            .coerceAtMost(MaximumPeriodRowHeight)
-        val contentHeight = HeaderHeight + periodRowHeight * PeriodCount
+        val minimumBodyHeight = LeafyTimetableTokens.minimumPeriodRowHeight * PeriodCount
+        val periodRowHeight = ((maxHeight - LeafyTimetableTokens.headerHeight).coerceAtLeast(minimumBodyHeight) / PeriodCount)
+            .coerceAtMost(LeafyTimetableTokens.maximumPeriodRowHeight)
+        val contentHeight = LeafyTimetableTokens.headerHeight + periodRowHeight * PeriodCount
         Box(
             modifier = Modifier
                 .fillMaxSize(),
@@ -108,7 +100,7 @@ fun TimetableGrid(
                 currentTime = currentTime,
                 onEmptyCellClick = onEmptyCellClick,
                 onItemClick = onItemClick,
-                headerHeight = HeaderHeight,
+                headerHeight = LeafyTimetableTokens.headerHeight,
                 periodRowHeight = periodRowHeight,
                 visibleDayCount = visibleDayCount,
                 background = background,
@@ -136,10 +128,7 @@ private fun TimetableBackground(settings: TimetableBackgroundSettings, modifier:
                 settings.photoPath
             }
             val bitmap by produceState<android.graphics.Bitmap?>(null, selectedPath) {
-                value = withContext(Dispatchers.IO) { selectedPath?.let(BitmapFactory::decodeFile) }
-            }
-            DisposableEffect(bitmap) {
-                onDispose { bitmap?.takeUnless { it.isRecycled }?.recycle() }
+                value = withContext(Dispatchers.IO) { selectedPath?.let(::decodeTimetableBackground) }
             }
             bitmap?.let { image ->
                 Image(
@@ -171,6 +160,21 @@ private fun TimetableBackground(settings: TimetableBackgroundSettings, modifier:
             )
         }
     }
+}
+
+private fun decodeTimetableBackground(path: String, maxSide: Int = 1_920): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxSide * 2) sample *= 2
+    return BitmapFactory.decodeFile(
+        path,
+        BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+        },
+    )
 }
 
 @Composable
@@ -237,20 +241,20 @@ private fun TimetableGridLayout(
                     modifier = Modifier
                         .layoutId(GridSlot.Timeline(timeline.day, timeline.rowPosition))
                         .zIndex(2f)
-                        .height(2.dp)
+                        .height(LeafyTimetableTokens.currentTimeIndicator)
                         .testTag("timetable-current-time")
                         .semantics { contentDescription = "当前时间" }
-                        .background(MaterialTheme.colorScheme.error),
+                        .background(MaterialTheme.colorScheme.primary),
                 )
             }
         },
     ) { measurables, constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
-        val axisWidth = AxisWidth.roundToPx()
+        val axisWidth = LeafyTimetableTokens.axisWidth.roundToPx()
         val headerHeightPx = headerHeight.roundToPx()
         val rowHeight = periodRowHeight.roundToPx()
-        val gap = GridGap.roundToPx()
+        val gap = LeafyTimetableTokens.gridGap.roundToPx()
         val dayWidth = (width - axisWidth) / visibleDayCount.toFloat()
 
         val placements = measurables.map { measurable ->
@@ -271,7 +275,7 @@ private fun TimetableGridLayout(
                 }
                 is GridSlot.Timeline -> Constraints.fixed(
                     (dayWidth.roundToInt() - gap * 2).coerceAtLeast(1),
-                    2.dp.roundToPx(),
+                    LeafyTimetableTokens.currentTimeIndicator.roundToPx(),
                 )
             }
             slot to measurable.measure(childConstraints)
@@ -318,35 +322,38 @@ private fun DayHeader(
     hasBackground: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    Column(
         modifier = modifier.padding(vertical = LeafySpacing.tiny),
-        shape = GridCellShape,
-        color = if (isToday) {
-            MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.82f else 1f)
-        } else {
-            MaterialTheme.leafySurfaces.page.copy(alpha = if (hasBackground) 0.64f else 1f)
-        },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        Text(
+            text = dayLabels[date.dayOfWeek.value - 1],
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Surface(
+            modifier = Modifier.size(LeafyTimetableTokens.dateIndicatorSize),
+            shape = CircleShape,
+            color = if (isToday) {
+                MaterialTheme.colorScheme.primary.copy(alpha = if (hasBackground) 0.9f else 1f)
+            } else {
+                MaterialTheme.leafySurfaces.page.copy(alpha = if (hasBackground) 0.48f else 0f)
+            },
+            contentColor = if (isToday) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
         ) {
-            Text(
-                text = if (isToday) "今天" else dayLabels[date.dayOfWeek.value - 1],
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-            )
-            Text(
-                text = date.format(DateTimeFormatter.ofPattern("M/d")),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isToday) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -366,8 +373,8 @@ private fun PeriodAxis(period: Int, modifier: Modifier = Modifier) {
         Text(
             text = slot?.startText.orEmpty(),
             style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = AxisTimeFontSize,
-                lineHeight = AxisTimeLineHeight,
+                fontSize = LeafyTimetableTokens.axisTimeFontSize,
+                lineHeight = LeafyTimetableTokens.axisTimeLineHeight,
             ),
             color = MaterialTheme.colorScheme.outline,
         )
@@ -470,4 +477,4 @@ private val dayLabels = listOf("周一", "周二", "周三", "周四", "周五",
 
 private fun parseBackgroundColor(value: String): Color = runCatching {
     Color(android.graphics.Color.parseColor(value))
-}.getOrDefault(Color(0xFFDDE9DF))
+}.getOrDefault(LeafyTimetableBackgroundFallback)

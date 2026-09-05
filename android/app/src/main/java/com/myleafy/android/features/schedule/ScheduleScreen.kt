@@ -31,13 +31,12 @@ import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -70,6 +69,7 @@ import com.myleafy.android.navigation.FeatureDestination
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyLoadingState
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.components.leafyMinimumTouchTarget
@@ -82,7 +82,7 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-private enum class ScheduleSection(val label: String) {
+internal enum class ScheduleSection(val label: String) {
     MEMOS("随记"), EVENTS("日程"), REPORTS("推送"),
 }
 
@@ -197,18 +197,13 @@ fun ScheduleScreen(
         Column(
             modifier = Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = LeafySpacing.card),
         ) {
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            PrimaryTabRow(selectedTabIndex = ScheduleSection.entries.indexOf(selectedSection)) {
                 ScheduleSection.entries.forEachIndexed { index, section ->
-                    SegmentedButton(
+                    Tab(
                         selected = selectedSection == section,
                         onClick = { selectedSection = section },
-                        shape = SegmentedButtonDefaults.itemShape(index, ScheduleSection.entries.size),
-                        label = {
-                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Text(section.label, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
+                        text = { Text(section.label) },
+                        modifier = Modifier.leafyMinimumTouchTarget(),
                     )
                 }
             }
@@ -339,7 +334,7 @@ private fun ScheduleMenuItem(
 }
 
 @Composable
-private fun ScheduleContent(
+internal fun ScheduleContent(
     section: ScheduleSection,
     memos: List<ScheduleMemoEntity>,
     events: List<ScheduleEventEntity>,
@@ -360,7 +355,7 @@ private fun ScheduleContent(
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
-                Button(onClick = onNewMemo, modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget()) {
+                LeafyPrimaryButton(onClick = onNewMemo, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text("新建随记", modifier = Modifier.padding(start = LeafySpacing.micro))
                 }
@@ -386,7 +381,7 @@ private fun ScheduleContent(
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
-                Button(onClick = onNewEvent, modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget()) {
+                LeafyPrimaryButton(onClick = onNewEvent, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text("添加个人日程", modifier = Modifier.padding(start = LeafySpacing.micro))
                 }
@@ -442,8 +437,7 @@ private fun ScheduleReportsContent(
         items(state.settings, key = { it.mode.name }) { setting ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.leafySurfaces.content,
-                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.leafySurfaces.page,
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
@@ -469,6 +463,7 @@ private fun ScheduleReportsContent(
                     )
                 }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         item {
             Text("个人日程提醒", style = MaterialTheme.typography.titleLarge)
@@ -531,8 +526,7 @@ private fun MemoRow(memo: ScheduleMemoEntity, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.leafySurfaces.content,
-        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.leafySurfaces.page,
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = memo.title ?: memo.body, style = MaterialTheme.typography.titleSmall)
@@ -551,6 +545,8 @@ private fun MemoRow(memo: ScheduleMemoEntity, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            Spacer(modifier = Modifier.height(LeafySpacing.compact))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
@@ -560,8 +556,7 @@ private fun EventRow(event: ScheduleEventEntity, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.leafySurfaces.content,
-        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.leafySurfaces.page,
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = event.title, style = MaterialTheme.typography.titleSmall)
@@ -573,6 +568,8 @@ private fun EventRow(event: ScheduleEventEntity, onClick: () -> Unit) {
             event.note?.takeIf(String::isNotBlank)?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, maxLines = 2)
             }
+            Spacer(modifier = Modifier.height(LeafySpacing.compact))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }

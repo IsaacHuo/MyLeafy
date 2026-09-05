@@ -17,6 +17,9 @@ val LeafyLavender = Color(0xFF756A86)
 val LeafyWarning = Color(0xFF8A6418)
 val LeafyDanger = Color(0xFFBA1A1A)
 
+// 课表自定义纯色背景解析失败时使用的稳定默认色。
+val LeafyTimetableBackgroundFallback = Color(0xFFDDE9DF)
+
 val LeafyCoursePaletteLight = listOf(
     Color(0xFFBFD8AE),
     Color(0xFFAED2C0),

@@ -16,18 +16,15 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,9 +40,12 @@ import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.services.supabase.SharedTimetableSnapshotDto
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.components.LeafyPrimaryButton
+import com.myleafy.android.ui.components.LeafySecondaryButton
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.leafySurfaces
 
@@ -109,10 +109,10 @@ private fun MySharingContent(state: TimetableSharingUiState, viewModel: Timetabl
                 Column(modifier = Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                     Text(if (state.mine == null) "尚未发布" else "已发布 ${state.mine.course_count} 门课程", style = MaterialTheme.typography.titleMedium)
                     Text("只上传课程名称、教师、地点、周次、节次和学期；成绩、考试、备注、提醒与背景不会上传。", style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = viewModel::publish, enabled = !state.mutating, modifier = Modifier.fillMaxWidth()) {
+                    LeafyPrimaryButton(onClick = viewModel::publish, enabled = !state.mutating, modifier = Modifier.fillMaxWidth()) {
                         Text(if (state.mine == null) "发布当前学期课表" else "更新已发布课表")
                     }
-                    OutlinedButton(onClick = viewModel::createInvite, enabled = state.mine != null && !state.mutating, modifier = Modifier.fillMaxWidth()) {
+                    LeafySecondaryButton(onClick = viewModel::createInvite, enabled = state.mine != null && !state.mutating, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.Share, contentDescription = null)
                         Text("生成单次邀请码")
                     }
@@ -142,10 +142,10 @@ private fun MySharingContent(state: TimetableSharingUiState, viewModel: Timetabl
             items(state.members, key = { it.id }) { member ->
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("成员 ${member.viewer_id.take(8)}", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { viewModel.revoke(member.viewer_id) }, enabled = !state.mutating) { Text("撤销") }
+                    LeafyTextButton(onClick = { viewModel.revoke(member.viewer_id) }, enabled = !state.mutating) { Text("撤销") }
                 }
             }
-            item { OutlinedButton(onClick = viewModel::stopSharing, enabled = !state.mutating, modifier = Modifier.fillMaxWidth()) { Text("停止全部共享") } }
+            item { LeafySecondaryButton(onClick = viewModel::stopSharing, enabled = !state.mutating, modifier = Modifier.fillMaxWidth()) { Text("停止全部共享") } }
         }
     }
 }
@@ -167,7 +167,7 @@ private fun ReceivedSharingContent(state: TimetableSharingUiState, viewModel: Ti
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        item { Button(onClick = viewModel::accept, enabled = state.acceptCode.length == 12 && !state.mutating, modifier = Modifier.fillMaxWidth()) { Text("接受邀请码") } }
+        item { LeafyPrimaryButton(onClick = viewModel::accept, enabled = state.acceptCode.length == 12 && !state.mutating, modifier = Modifier.fillMaxWidth()) { Text("接受邀请码") } }
         if (state.viewable.isEmpty()) {
             item { LeafyEmptyState("还没有他人共享课表", "输入邀请码后会在本机只读展示。") }
         } else {
@@ -186,7 +186,7 @@ private fun SharedSnapshotCard(snapshot: SharedTimetableSnapshotDto, onLeave: ()
                 Text("周${course.day_of_week} ${course.duration.joinToString("-")}节 · ${course.course_name} · ${course.location.ifBlank { course.room }}", style = MaterialTheme.typography.bodySmall)
             }
             if (snapshot.courses.size > 8) Text("另有 ${snapshot.courses.size - 8} 门课程", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = onLeave, modifier = Modifier.align(Alignment.End)) { Text("离开共享") }
+            LeafyTextButton(onClick = onLeave, modifier = Modifier.align(Alignment.End)) { Text("离开共享") }
         }
     }
 }

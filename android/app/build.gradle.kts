@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.roborazzi)
 }
 
 val localProperties = Properties().apply {
@@ -101,6 +102,26 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+            all {
+                it.systemProperties["robolectric.pixelCopyRenderMode"] = "hardware"
+                it.systemProperties["user.language"] = "zh"
+                it.systemProperties["user.country"] = "CN"
+                it.systemProperties["user.timezone"] = "Asia/Shanghai"
+                it.useJUnit {
+                    if (project.hasProperty("screenshot")) {
+                        includeCategories("com.myleafy.android.testing.ScreenshotTests")
+                    } else {
+                        excludeCategories("com.myleafy.android.testing.ScreenshotTests")
+                    }
+                }
+            }
+        }
+    }
+
     // 解析回归测试直接复用仓库根 contracts/ 下的教务 Fixture（单一事实来源）
     sourceSets {
         getByName("test") {
@@ -110,6 +131,10 @@ android {
             assets.srcDir("$projectDir/schemas")
         }
     }
+}
+
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }
 
 ksp {
@@ -155,6 +180,14 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.test.runner)
+    testImplementation(libs.roborazzi.core)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(libs.robolectric)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.ext.junit)

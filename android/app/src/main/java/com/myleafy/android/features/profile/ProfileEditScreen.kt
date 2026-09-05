@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -21,20 +20,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
-import com.myleafy.android.ui.components.LeafyButtonDefaults
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyStatusBanner
-import com.myleafy.android.ui.components.leafyMinimumTouchTarget
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyStroke
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -164,14 +162,13 @@ fun ProfileEditScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(
+                LeafyPrimaryButton(
                     onClick = viewModel::save,
                     enabled = state.nickname.isNotBlank() && !state.isSaving,
-                    modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
-                    shape = LeafyButtonDefaults.shape,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (state.isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = LeafyStroke.progress)
                     }
                     else Text("保存资料")
                 }

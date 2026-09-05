@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -33,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,7 +41,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.data.local.ExamEntity
@@ -58,9 +57,13 @@ import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyTextButton
+import com.myleafy.android.ui.theme.LeafyAdaptiveTokens
+import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyStroke
 import com.myleafy.android.ui.theme.leafySurfaces
 import kotlinx.coroutines.delay
 
@@ -97,7 +100,7 @@ fun CampusScreen(
                         if (syncState is CampusSyncState.Syncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(LeafyIconSize.standard),
-                                strokeWidth = 2.dp,
+                                strokeWidth = LeafyStroke.progress,
                             )
                         } else {
                             Icon(Icons.Outlined.CloudSync, contentDescription = "同步成绩与考试")
@@ -117,7 +120,7 @@ fun CampusScreen(
                     message = state.message,
                     modifier = Modifier.fillMaxSize().padding(contentPadding),
                     action = {
-                        TextButton(onClick = viewModel::refresh) { Text("重试") }
+                        LeafyTextButton(onClick = viewModel::refresh) { Text("重试") }
                     },
                 )
             }
@@ -138,7 +141,7 @@ fun CampusScreen(
 }
 
 @Composable
-private fun CampusDashboard(
+internal fun CampusDashboard(
     state: CampusUiState.Loaded,
     syncState: CampusSyncState,
     onConsumeSync: () -> Unit,
@@ -151,7 +154,7 @@ private fun CampusDashboard(
     var selectedDomain by rememberSaveable { androidx.compose.runtime.mutableStateOf(CampusDomain.Teaching) }
 
     BoxWithConstraints(modifier = modifier) {
-        if (maxWidth >= 600.dp) {
+        if (maxWidth >= LeafyAdaptiveTokens.twoPaneBreakpoint) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.page),
                 horizontalArrangement = Arrangement.spacedBy(LeafySpacing.section),
@@ -159,7 +162,7 @@ private fun CampusDashboard(
                 CampusDomainSidebar(
                     selectedDomain = selectedDomain,
                     onDomainSelected = { selectedDomain = it },
-                    modifier = Modifier.width(184.dp).padding(top = LeafySpacing.card),
+                    modifier = Modifier.width(LeafyAdaptiveTokens.campusSidebarWidth).padding(top = LeafySpacing.card),
                 )
                 CampusDomainContent(
                     domain = selectedDomain,
@@ -237,7 +240,7 @@ private fun CampusDomainSidebar(
                 color = if (selectedDomain == domain) {
                     MaterialTheme.colorScheme.secondaryContainer
                 } else {
-                    MaterialTheme.colorScheme.surfaceContainerLow
+                    MaterialTheme.leafySurfaces.page
                 },
             ) {
                 Column(modifier = Modifier.padding(LeafySpacing.card)) {
@@ -266,7 +269,7 @@ private fun CampusDomainContent(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier,
+        modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth),
         contentPadding = PaddingValues(
             start = LeafySpacing.page,
             top = LeafySpacing.micro,

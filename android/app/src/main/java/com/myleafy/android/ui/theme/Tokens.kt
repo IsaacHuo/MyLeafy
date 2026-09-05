@@ -4,6 +4,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 object LeafySpacing {
     val hairline = 1.dp
@@ -24,6 +25,37 @@ object LeafyElevation {
     val modal = 6.dp
 }
 
+object LeafyStroke {
+    val progress = 2.dp
+    val emphasis = 2.dp
+}
+
+object LeafyGesture {
+    val pullRefreshThreshold = 72.dp
+}
+
+object LeafyTimetableTokens {
+    val axisWidth = 40.dp
+    val headerHeight = 44.dp
+    val minimumPeriodRowHeight = 1.dp
+    val maximumPeriodRowHeight = 56.dp
+    val gridGap = 2.dp
+    val cellCornerRadius = 8.dp
+    val dateIndicatorSize = 28.dp
+    val axisTimeFontSize = 9.sp
+    val axisTimeLineHeight = 11.sp
+    val currentTimeIndicator = 2.dp
+}
+
+object LeafyAdaptiveTokens {
+    val twoPaneBreakpoint = 600.dp
+    val campusSidebarWidth = 184.dp
+}
+
+object LeafyLoginTokens {
+    val captchaWidth = 96.dp
+}
+
 object LeafyIconSize {
     val compact = 18.dp
     val standard = 24.dp
@@ -41,6 +73,7 @@ object LeafyComponentSize {
     val contentMaxWidth = 720.dp
     val formMaxWidth = 420.dp
     val floatingActionClearance = 96.dp
+    val emptyStateMaxWidth = 520.dp
 }
 
 object LeafyMotion {

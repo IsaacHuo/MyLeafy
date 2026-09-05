@@ -17,16 +17,12 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ThumbUp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,10 +37,14 @@ import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadDto
 import com.myleafy.android.ui.components.LeafyContentSurface
+import com.myleafy.android.ui.components.LeafyActionIconButton
+import com.myleafy.android.ui.components.LeafyAlertDialog
 import com.myleafy.android.ui.components.LeafyErrorState
 import com.myleafy.android.ui.components.LeafyLoadingState
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
 
 private enum class ConfirmationKind { DELETE_POST, DELETE_COMMENT, REPORT_POST, REPORT_COMMENT, BLOCK_USER }
@@ -78,12 +78,12 @@ fun PostDetailScreen(
             ConfirmationKind.REPORT_COMMENT -> "举报评论" to "将以“其他违规”提交给社区审核。"
             ConfirmationKind.BLOCK_USER -> "屏蔽用户" to "屏蔽后，动态列表将不再显示该用户的内容。"
         }
-        AlertDialog(
+        LeafyAlertDialog(
             onDismissRequest = { confirmation = null },
             title = { Text(title) },
             text = { Text(message) },
             confirmButton = {
-                TextButton(onClick = {
+                LeafyTextButton(onClick = {
                     when (pending.kind) {
                         ConfirmationKind.DELETE_POST -> viewModel.deletePost()
                         ConfirmationKind.DELETE_COMMENT -> viewModel.deleteComment(pending.targetId)
@@ -94,7 +94,7 @@ fun PostDetailScreen(
                     confirmation = null
                 }) { Text("确认") }
             },
-            dismissButton = { TextButton(onClick = { confirmation = null }) { Text("取消") } },
+            dismissButton = { LeafyTextButton(onClick = { confirmation = null }) { Text("取消") } },
         )
     }
 
@@ -109,7 +109,7 @@ fun PostDetailScreen(
                 title = "帖子暂时无法加载",
                 message = state.message,
                 modifier = contentModifier.fillMaxSize(),
-                action = { Button(onClick = viewModel::load) { Text("重试") } },
+                action = { LeafyPrimaryButton(onClick = viewModel::load) { Text("重试") } },
             )
 
             is PostDetailUiState.Loaded -> PostDetailContent(
@@ -164,7 +164,7 @@ private fun PostDetailContent(
                     Text(state.post.body, style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(LeafySpacing.compact))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
+                        LeafyActionIconButton(
                             onClick = onLike,
                             enabled = !state.isLikePending && !state.isFavoritePending && state.pendingModerationTarget == null,
                         ) {
@@ -174,7 +174,7 @@ private fun PostDetailContent(
                                 tint = if (state.post.viewer_has_liked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(
+                        LeafyActionIconButton(
                             onClick = onFavorite,
                             enabled = !state.isFavoritePending && !state.isLikePending && state.pendingModerationTarget == null,
                         ) {
@@ -207,7 +207,7 @@ private fun PostDetailContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(message, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
-                        TextButton(onClick = onClearMessage) { Text("知道了") }
+                        LeafyTextButton(onClick = onClearMessage) { Text("知道了") }
                     }
                 }
             }
@@ -224,7 +224,7 @@ private fun PostDetailContent(
                     singleLine = true,
                 )
                 Spacer(Modifier.width(LeafySpacing.micro))
-                Button(
+                LeafyPrimaryButton(
                     onClick = {
                         onComment(commentInput, null, null)
                     },
@@ -256,7 +256,7 @@ private fun PostMenu(
     onConfirm: (PendingConfirmation) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    IconButton(onClick = { expanded = true }, enabled = enabled) {
+    LeafyActionIconButton(onClick = { expanded = true }, enabled = enabled) {
         Icon(Icons.Outlined.MoreVert, contentDescription = "帖子操作")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -322,7 +322,7 @@ private fun CommentLine(
         }
         if (!comment.is_deleted_placeholder) {
             var expanded by remember { mutableStateOf(false) }
-            IconButton(onClick = { expanded = true }, enabled = menuEnabled) {
+            LeafyActionIconButton(onClick = { expanded = true }, enabled = menuEnabled) {
                 Icon(Icons.Outlined.MoreVert, contentDescription = "评论操作")
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

@@ -17,15 +17,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -46,6 +42,9 @@ import com.myleafy.android.ui.components.LeafyContentSurface
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyPrimaryButton
+import com.myleafy.android.ui.components.LeafySecondaryButton
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -120,10 +119,10 @@ fun TimetableBackgroundScreen(
             }
             if (settings.kind == "photo") {
                 Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                    Button(onClick = {
+                    LeafyPrimaryButton(onClick = {
                         photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }) { Text(if (settings.photoPath == null) "选择照片" else "替换照片") }
-                    if (settings.photoPath != null) OutlinedButton(onClick = viewModel::removePhoto) { Text("移除") }
+                    if (settings.photoPath != null) LeafySecondaryButton(onClick = viewModel::removePhoto) { Text("移除") }
                 }
                 Text("使用 Android Photo Picker，不申请媒体库读取权限。", style = MaterialTheme.typography.bodySmall)
             } else {
@@ -153,7 +152,7 @@ private fun ColorSettings(settings: TimetableBackgroundSettings, viewModel: Time
                 modifier = Modifier
                     .background(parseColor(value), CircleShape)
                     .clickable { viewModel.update { it.copy(colorHex = value, enabled = true, kind = "color") } }
-                    .padding(16.dp),
+                    .padding(LeafySpacing.card),
             )
         }
     }
@@ -163,7 +162,7 @@ private fun ColorSettings(settings: TimetableBackgroundSettings, viewModel: Time
         label = { Text("十六进制颜色") },
         supportingText = { Text("例如 #DDE9DF") },
         trailingIcon = {
-            TextButton(enabled = isValidHex(hex), onClick = { viewModel.update { it.copy(colorHex = normalizedHex(hex), enabled = true, kind = "color") } }) {
+            LeafyTextButton(enabled = isValidHex(hex), onClick = { viewModel.update { it.copy(colorHex = normalizedHex(hex), enabled = true, kind = "color") } }) {
                 Text("应用")
             }
         },

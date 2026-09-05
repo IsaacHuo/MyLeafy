@@ -5,14 +5,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,10 +16,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.myleafy.android.ui.components.LeafyAlertDialog
+import com.myleafy.android.ui.components.LeafyModalBottomSheet
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafySheetContent
-import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
-import com.myleafy.android.ui.theme.leafySurfaces
 
 data class MemoDraft(
     val id: String? = null,
@@ -56,9 +54,8 @@ fun MemoEditorSheet(
         }
     }
 
-    ModalBottomSheet(
+    LeafyModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.leafySurfaces.modal,
     ) {
         LeafySheetContent(
             modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -101,11 +98,11 @@ fun MemoEditorSheet(
                 horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
             ) {
                 if (initial.id != null && onDelete != null) {
-                    TextButton(onClick = { confirmsDelete = true }, enabled = !isSaving) {
+                    LeafyTextButton(onClick = { confirmsDelete = true }, enabled = !isSaving) {
                         Text("删除", color = MaterialTheme.colorScheme.error)
                     }
                 }
-                Button(
+                LeafyPrimaryButton(
                     onClick = {
                         onSave(
                             MemoDraft(
@@ -119,26 +116,26 @@ fun MemoEditorSheet(
                         )
                     },
                     enabled = !isEmpty && !isSaving,
-                    modifier = Modifier.weight(1f).leafyMinimumTouchTarget(),
+                    modifier = Modifier.weight(1f),
                 ) { Text(if (isSaving) "保存中…" else "保存") }
             }
         }
     }
 
     if (confirmsDelete && initial.id != null && onDelete != null) {
-        AlertDialog(
+        LeafyAlertDialog(
             onDismissRequest = { confirmsDelete = false },
             title = { Text("删除这条随记？") },
             text = { Text("随记会移入软删除状态，本阶段暂不提供回收站恢复。") },
             confirmButton = {
-                TextButton(
+                LeafyTextButton(
                     onClick = {
                         confirmsDelete = false
                         onDelete(initial.id)
                     },
                 ) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmsDelete = false }) { Text("取消") } },
+            dismissButton = { LeafyTextButton(onClick = { confirmsDelete = false }) { Text("取消") } },
         )
     }
 }

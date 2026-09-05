@@ -21,12 +21,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,17 +39,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
-import com.myleafy.android.ui.components.LeafyButtonDefaults
-import com.myleafy.android.ui.components.leafyMinimumTouchTarget
+import com.myleafy.android.ui.components.LeafyActionIconButton
+import com.myleafy.android.ui.components.LeafyPrimaryButton
+import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafyLoginTokens
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyStroke
 
 /**
  * 学校登录页（M2.2：强智登录）。验证码自动获取、点击刷新；
@@ -72,6 +79,9 @@ fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var captcha by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val passwordFocus = remember { FocusRequester() }
+    val captchaFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
 
     if (uiState.loginSucceeded) {
         LaunchedEffect(Unit) { onBack() }
@@ -94,19 +104,22 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("学号") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
         )
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
             label = { Text("密码") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { captchaFocus.requestFocus() }),
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                IconButton(
+                LeafyActionIconButton(
                     onClick = { passwordVisible = !passwordVisible },
-                    modifier = Modifier.size(LeafyComponentSize.minimumTouchTarget),
                 ) {
                     Icon(
                         if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
@@ -120,9 +133,14 @@ fun LoginScreen(
             OutlinedTextField(
                 value = captcha,
                 onValueChange = { captcha = it },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).focusRequester(captchaFocus),
                 label = { Text("验证码") },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus()
+                    if (!uiState.isSubmitting) viewModel.submit(account, password, captcha)
+                }),
             )
             Spacer(modifier = Modifier.width(LeafySpacing.compact))
             CaptchaImage(
@@ -136,25 +154,19 @@ fun LoginScreen(
         val errorMessage = uiState.errorMessage
         Box(modifier = Modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.minimumTouchTarget)) {
             if (errorMessage != null) {
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.CenterStart),
-                )
+                LeafyStatusBanner(message = errorMessage, isError = true)
             }
         }
 
-            Button(
+            LeafyPrimaryButton(
                 onClick = { viewModel.submit(account, password, captcha) },
-                modifier = Modifier.fillMaxWidth().leafyMinimumTouchTarget(),
+                modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isSubmitting,
-                shape = LeafyButtonDefaults.shape,
             ) {
                 if (uiState.isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(LeafyIconSize.standard),
-                        strokeWidth = 2.dp,
+                        strokeWidth = LeafyStroke.progress,
                     )
                 } else {
                     Text("登录")
@@ -174,7 +186,7 @@ private fun CaptchaImage(
 ) {
     Surface(
         onClick = onRefresh,
-        modifier = Modifier.size(96.dp, LeafyComponentSize.minimumTouchTarget),
+        modifier = Modifier.size(LeafyLoginTokens.captchaWidth, LeafyComponentSize.minimumTouchTarget),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {

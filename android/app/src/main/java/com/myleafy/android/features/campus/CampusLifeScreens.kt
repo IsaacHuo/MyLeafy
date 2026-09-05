@@ -24,15 +24,12 @@ import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.LocalHospital
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.SportsBasketball
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -40,7 +37,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,10 +57,13 @@ import com.myleafy.android.core.data.local.SunshineRunRecordEntity
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.components.LeafyActionIconButton
+import com.myleafy.android.ui.components.LeafyAlertDialog
 import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.LocalDate
@@ -100,7 +99,7 @@ fun SunshineRunScreen(
     LeafySecondaryScaffold(
         title = "阳光长跑",
         onBack = onBack,
-        actions = { TextButton(onClick = { showRules = true }) { Text("规则") } },
+        actions = { LeafyTextButton(onClick = { showRules = true }) { Text("规则") } },
     ) { contentModifier ->
         LazyColumn(
             modifier = contentModifier,
@@ -125,7 +124,7 @@ fun SunshineRunScreen(
                             progress = { (state.runs.size.toFloat() / state.settings.totalTarget).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Button(
+                        LeafyPrimaryButton(
                             onClick = { viewModel.addRun(today, periodStart, periodEnd) },
                             enabled = currentWeek !in excluded,
                             modifier = Modifier.fillMaxWidth(),
@@ -191,7 +190,7 @@ private fun SunshineRulesDialog(
     var weeksText by remember(periodWeeks) { mutableStateOf(periodWeeks.toString()) }
     var targetText by remember(periodTarget) { mutableStateOf(periodTarget.toString()) }
     var excludedText by remember(excludedWeeks) { mutableStateOf(excludedWeeks) }
-    AlertDialog(
+    LeafyAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("长跑规则") },
         text = {
@@ -209,11 +208,11 @@ private fun SunshineRulesDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            LeafyTextButton(onClick = {
                 onSave(totalText.toIntOrNull() ?: 34, weeksText.toIntOrNull() ?: 2, targetText.toIntOrNull() ?: 4, excludedText)
             }) { Text("保存") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
 
@@ -278,7 +277,7 @@ private fun FitnessEditorDialog(onDismiss: () -> Unit, onSave: (LocalDate, Strin
     var unit by remember { mutableStateOf("秒") }
     var note by remember { mutableStateOf("") }
     val valid = runCatching { LocalDate.parse(date) }.isSuccess && item.isNotBlank() && value.toDoubleOrNull() != null && unit.isNotBlank()
-    AlertDialog(
+    LeafyAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("新增体测记录") },
         text = {
@@ -290,8 +289,8 @@ private fun FitnessEditorDialog(onDismiss: () -> Unit, onSave: (LocalDate, Strin
                 TextFieldValue(note, { note = it }, "备注")
             }
         },
-        confirmButton = { TextButton(enabled = valid, onClick = { onSave(LocalDate.parse(date), item, value.toDouble(), unit, note) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = { LeafyTextButton(enabled = valid, onClick = { onSave(LocalDate.parse(date), item, value.toDouble(), unit, note) }) { Text("保存") } },
+        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
 
@@ -477,7 +476,7 @@ private fun MedicalLedgerContent(
                     Text(entry.status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                     Text("凭证照片 ${photos.count { it.entryId == entry.id }} 张", style = MaterialTheme.typography.bodySmall)
                 }
-                TextButton(onClick = { onAddPhoto(entry.id) }) { Text("加照片") }
+                LeafyTextButton(onClick = { onAddPhoto(entry.id) }) { Text("加照片") }
                 LeafyActionIconButton(onClick = { onDelete(entry) }) { Icon(Icons.Outlined.Delete, "删除医疗台账") }
             }
         }
@@ -494,7 +493,7 @@ private fun MedicalEditorDialog(onDismiss: () -> Unit, onSave: (MedicalLedgerDra
     var materials by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     val valid = runCatching { LocalDate.parse(date) }.isSuccess && hospital.isNotBlank() && expense.toDoubleOrNull() != null
-    AlertDialog(
+    LeafyAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("新增医疗台账") },
         text = {
@@ -509,11 +508,11 @@ private fun MedicalEditorDialog(onDismiss: () -> Unit, onSave: (MedicalLedgerDra
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            LeafyTextButton(enabled = valid, onClick = {
                 onSave(MedicalLedgerDraft(visitDate = LocalDate.parse(date), hospitalName = hospital, department = department, diagnosis = diagnosis, totalExpense = expense.toDouble(), materials = materials, note = note))
             }) { Text("保存") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
 

@@ -15,7 +15,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.ui.unit.dp
+import com.myleafy.android.ui.theme.LeafyGesture
 import kotlin.math.max
 
 /** 使用稳定 NestedScroll API 的轻量下拉刷新状态，不依赖实验性 Material API。 */
@@ -66,7 +66,7 @@ fun rememberLeafyPullRefreshState(
     onRefresh: () -> Unit,
 ): LeafyPullRefreshState {
     val callback by rememberUpdatedState(onRefresh)
-    val thresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
+    val thresholdPx = with(LocalDensity.current) { LeafyGesture.pullRefreshThreshold.toPx() }
     val state = remember(thresholdPx) { LeafyPullRefreshState(thresholdPx) { callback() } }
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) state.dragDistance = 0f

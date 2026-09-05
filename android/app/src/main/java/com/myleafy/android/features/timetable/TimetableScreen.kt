@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -36,7 +37,6 @@ import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.Thunderstorm
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -45,7 +45,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,7 +60,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,10 +82,14 @@ import com.myleafy.android.features.timetable.presentation.TimetableGrid
 import com.myleafy.android.features.timetable.weather.WeatherCondition
 import com.myleafy.android.features.timetable.weather.WeatherUiState
 import com.myleafy.android.ui.components.LeafyActionIconButton
+import com.myleafy.android.ui.components.LeafyAlertDialog
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafySnackbarHost
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyComponentSize
+import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.Instant
 import java.time.LocalDate
@@ -341,18 +343,18 @@ fun TimetableScreen(
         )
     }
     if (showWeatherPermissionDialog) {
-        AlertDialog(
+        LeafyAlertDialog(
             onDismissRequest = { showWeatherPermissionDialog = false },
             title = { Text("显示当地天气") },
             text = { Text("MyLeafy 只使用设备提供的粗略位置直接请求 Open-Meteo；位置不会上传到 MyLeafy 或 Supabase，也不会影响课表使用。") },
             confirmButton = {
-                TextButton(onClick = {
+                LeafyTextButton(onClick = {
                     showWeatherPermissionDialog = false
                     locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
                 }) { Text("继续") }
             },
             dismissButton = {
-                TextButton(onClick = { showWeatherPermissionDialog = false }) { Text("取消") }
+                LeafyTextButton(onClick = { showWeatherPermissionDialog = false }) { Text("取消") }
             },
         )
     }
@@ -392,15 +394,20 @@ private fun TimetableWeatherTitle(
     }
     Row(
         modifier = Modifier
-            .heightIn(min = 48.dp)
+            .heightIn(min = LeafyComponentSize.minimumTouchTarget)
             .clickable(onClick = onClick)
             .semantics { contentDescription = "天气，$label" }
             .padding(horizontal = LeafySpacing.micro),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(LeafySpacing.tiny),
     ) {
-        Icon(icon, contentDescription = null)
-        Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(LeafyIconSize.compact))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 

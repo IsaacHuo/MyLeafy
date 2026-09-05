@@ -2,8 +2,10 @@ package com.myleafy.android.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -22,27 +24,36 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafyIconSize
@@ -348,7 +359,7 @@ fun LeafyEmptyState(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .widthIn(max = 520.dp)
+            .widthIn(max = LeafyComponentSize.emptyStateMaxWidth)
             .padding(horizontal = LeafySpacing.section, vertical = LeafySpacing.spacious),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
@@ -460,4 +471,164 @@ object LeafyButtonDefaults {
         @Composable get() = ButtonDefaults.ContentPadding
     val elevation
         @Composable get() = ButtonDefaults.buttonElevation(defaultElevation = LeafyElevation.flat)
+}
+
+@Composable
+fun LeafyPrimaryButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        enabled = enabled,
+        shape = LeafyButtonDefaults.shape,
+        contentPadding = LeafyButtonDefaults.contentPadding,
+        elevation = LeafyButtonDefaults.elevation,
+        content = content,
+    )
+}
+
+@Composable
+fun LeafySecondaryButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        enabled = enabled,
+        shape = LeafyButtonDefaults.shape,
+        contentPadding = LeafyButtonDefaults.contentPadding,
+        content = content,
+    )
+}
+
+@Composable
+fun LeafyTextButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        enabled = enabled,
+        shape = LeafyButtonDefaults.shape,
+        content = content,
+    )
+}
+
+@Composable
+fun LeafyDestructiveButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        enabled = enabled,
+        shape = LeafyButtonDefaults.shape,
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+        contentPadding = LeafyButtonDefaults.contentPadding,
+        content = content,
+    )
+}
+
+@Composable
+fun LeafySettingsDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier.padding(
+            start = LeafyComponentSize.settingsIconContainer + LeafySpacing.card + LeafySpacing.compact,
+        ),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+@Composable
+fun LeafySettingsGroup(
+    title: String,
+    modifier: Modifier = Modifier,
+    supportingText: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+    ) {
+        LeafySectionHeader(title = title, supportingText = supportingText)
+        Column(content = content)
+    }
+}
+
+@Composable
+fun LeafyAdaptiveContent(
+    modifier: Modifier = Modifier,
+    maxWidth: Dp = LeafyComponentSize.contentMaxWidth,
+    contentPadding: PaddingValues = PaddingValues(horizontal = LeafySpacing.page),
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = maxWidth)
+                .padding(contentPadding),
+            content = content,
+        )
+    }
+}
+
+@Composable
+fun LeafyAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissButton: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = confirmButton,
+        modifier = modifier,
+        dismissButton = dismissButton,
+        title = title,
+        text = text,
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.leafySurfaces.modal,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LeafyModalBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    sheetState: SheetState? = null,
+    dragHandle: @Composable (() -> Unit)? = { BottomSheetDefaults.DragHandle() },
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val resolvedSheetState = sheetState ?: rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        sheetState = resolvedSheetState,
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.leafySurfaces.modal,
+        dragHandle = dragHandle,
+        content = content,
+    )
 }

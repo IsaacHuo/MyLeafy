@@ -49,3 +49,17 @@ jobs:
 
       - name: Run Android lint
         run: ./gradlew :app:lintDebug
+
+      - name: Verify Roborazzi screenshots
+        run: ./gradlew :app:verifyRoborazziDebug -Pscreenshot
+
+      - name: Upload Roborazzi reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: roborazzi-${{ github.sha }}
+          path: |
+            android/app/build/reports/roborazzi/**
+            android/app/build/outputs/roborazzi/**
+            android/app/build/test-results/**
+          if-no-files-found: ignore

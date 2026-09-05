@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-09-02
+Last verified: 2026-09-05
 
 ## Current Focus
 
@@ -13,6 +13,7 @@ Last verified: 2026-09-02
 
 ## Recently Completed
 
+- **Android 第二轮 UI 精修与截图基线**：在首轮 Design System 上补充 progress、刷新阈值、空状态宽度及课表/校园/登录功能级 Token；课表日期/今天/当前时间层级、社区平坦信息流、日迹轻量 Tab、校园宽屏侧栏、“我的”设置分组与登录 IME 流程完成第二轮收敛，业务状态机、RootTab、路由和 capability 门控保持不变。Roborazzi 1.56.0 + Robolectric 4.16 以独立 JUnit category 管理中文/上海时区 golden，CI 只验证并上传差异。修复课表照片背景退出/切换时 UI 层提前回收 Bitmap 导致的 `Canvas: trying to use a recycled bitmap` 崩溃，并加入 instrumentation 生命周期回归测试。
 - **Android 对照式 UI 精修**：Compose Design System 补齐系统字体 Typography、Spacing、Elevation、IconSize、Motion、Surface 与课程色板，浅深色 Material 3 语义角色不再回落默认紫色；根导航接入官方 Adaptive Navigation Suite，Compact 使用 Bottom Navigation、Medium/Expanded 使用 Navigation Rail，保持 `RootTab`、状态恢复、深链和 capability 门控不变。课表、社区、日迹、校园、“我的”、登录及已实现二级页已迁移到统一 TopBar、Surface、状态组件、Sheet 与 48dp 触控基线，减少 Card 套 Card 和零散视觉常量。
 - **Android 原生能力补全**：课表以 20 页 `HorizontalPager` 横滑切周并保持 13 节单屏无纵向滚动，支持隐藏周末、粗略位置天气和本机照片/纯色背景；社区入口在所有身份下可见但实际请求继续受 capability 门控；日迹默认日程并以 WorkManager 提供早晚报、考试和个人日程提醒；校园加入本机体育/体测/医疗台账及 Supabase 评价目录；共享课表沿用既有一次性邀请码、RLS 和隐私字段白名单。
 

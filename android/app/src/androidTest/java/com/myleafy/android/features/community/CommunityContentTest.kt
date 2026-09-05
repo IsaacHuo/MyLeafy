@@ -2,8 +2,8 @@ package com.myleafy.android.features.community
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import com.myleafy.android.shared.model.PostDto
 import com.myleafy.android.ui.theme.MyLeafyTheme
@@ -42,9 +42,9 @@ class CommunityContentTest {
             }
         }
 
-        composeRule.onAllNodesWithText("学习交流")[0].performClick()
+        composeRule.onNodeWithTag("community-filter-学习交流").performClick()
         composeRule.runOnIdle { assertEquals("学习交流", selectedCategory) }
-        composeRule.onNodeWithText("森林生态学习资料").performClick()
+        composeRule.onNodeWithTag("community-post-post-1").performClick()
         composeRule.runOnIdle { assertEquals("post-1", openedPost) }
     }
 

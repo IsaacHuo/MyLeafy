@@ -2,7 +2,7 @@
 
 本文基于当前 `main` 代码整理，描述 **MyLeafy 现在实际的结构**。它不是未来方案：尚未实现的架构应进入 `docs/`。若本文与代码冲突，以代码为准，并请按 `state/README.md` 的维护原则更新本文。
 
-Last verified: 2026-09-02
+Last verified: 2026-09-05
 
 ## 1. 系统组成
 
@@ -229,7 +229,7 @@ React-admin（site/src/admin）
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
 - Android 使用 `MyLeafyNavHost` + `RootTab` 始终呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；未登录或不具备 capability 时社区页只展示门槛说明，不初始化社区请求。根目的地由 Material 3 Adaptive Navigation Suite 按窗口宽度呈现 Compact Bottom Navigation 或 Medium/Expanded Navigation Rail，二级目的地隐藏根导航；两种 chrome 复用同一目的地集合、选择状态与状态恢复。
 - Android 二级真实页面与 `FeatureDestination` 占位页面统一使用 48dp 紧凑返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；资料编辑、缓存同步、个性化、帮助中心、权限说明、反馈、关于与内置校历均为真实页面。
-- Android `MyLeafyTheme` 是 Compose 视觉语义的单一入口：`LeafyTypography`、`LeafySpacing`、`LeafyElevation`、`LeafyIconSize`、`LeafyMotion`、`LeafySurfaceColors` 与 `LeafyCourseColors` 由共享组件消费。根壳拥有导航区域 Insets，页面 Scaffold 拥有状态栏/TopBar Insets，编辑表单与 Sheet 拥有 IME Insets；应用 padding 后必须消费，避免系统栏遮挡或重复留白。
+- Android `MyLeafyTheme` 是 Compose 视觉语义的单一入口：`LeafyTypography`、`LeafySpacing`、`LeafyElevation`、`LeafyIconSize`、`LeafyMotion`、`LeafySurfaceColors` 与 `LeafyCourseColors` 由共享组件消费；progress/gesture 等状态值使用语义 Token，课表几何、校园断点和验证码尺寸使用功能级 Token。根壳拥有导航区域 Insets，页面 Scaffold 拥有状态栏/TopBar Insets，编辑表单与 Sheet 拥有 navigation bar/IME Insets；应用 padding 后必须消费，避免系统栏遮挡或重复留白。课表照片由应用私有文件读取，显示中的 Bitmap 所有权交给 Compose/运行时，不在 composable disposal 中手动回收。
 - Android 启动阶段不强制登录；学校登录从“我的”进入。Room、教务和 Supabase 页面只展示各自真实数据，未登录、未配置或校园网不可达时进入明确的 Empty/Error 状态。
 - Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 标志和 capabilities；Room v5 的全部业务实体使用 `scopeKey` 隔离。schema 4→5 通过显式 migration 保留既有课程、成绩、考试、随记和日程，并增加通知、阳光长跑、体测及医疗台账；仅预发布 schema 1–3 允许破坏性重建，未来缺 migration 时直接失败。
 - Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时社区页仍可发现，但不会初始化客户端或社区任务。共享课表与评价也在仓储边界检查学校身份、profile 和各自 capability。
@@ -322,7 +322,7 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 | 范围 | 位置 |
 |---|---|
 | iOS 单元/契约测试 | `leafyTests/`（XCTest，Domain/Application/Presentation 分层覆盖） |
-| Android 单元/导航测试 | `android/app/src/test/`（JVM 契约）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 变化时执行 assemble、JVM tests 与 lint |
+| Android 单元/导航/截图测试 | `android/app/src/test/`（JVM 契约与 Roborazzi golden，截图以 JUnit category 隔离）、`android/app/src/test/screenshots/`（受版本控制基准图）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航/照片背景生命周期测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 变化时执行 assemble、JVM tests、lint 与 Roborazzi verify，失败时上传实际图和差异产物 |
 | Android 发布 | `.github/workflows/android-release.yml` 仅通过 `workflow_dispatch` 发布 `android-vX.Y.Z`；从 GitHub secrets 恢复 Android 专用签名与公开 Supabase 配置，先执行 tests/lint/assemble，再用 `apksigner` 验证并附带 APK、SHA-256 和 build-info。iOS `vX.Y` tag 与归档流程保持独立 |
 | 教务解析回归 | 固定 HTML 样本测试 |
 | Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |

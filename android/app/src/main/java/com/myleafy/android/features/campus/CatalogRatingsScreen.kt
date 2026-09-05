@@ -15,11 +15,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
@@ -27,7 +24,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,9 +38,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.services.supabase.RatingCatalogKind
 import com.myleafy.android.ui.components.LeafyActionIconButton
+import com.myleafy.android.ui.components.LeafyAlertDialog
 import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyPrimaryButton
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.leafySurfaces
 
@@ -94,7 +93,7 @@ fun CatalogRatingsScreen(
                     onValueChange = viewModel::search,
                     label = { Text("搜索${state.kind.title()}") },
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    trailingIcon = { TextButton(onClick = viewModel::refresh) { Text("搜索") } },
+                    trailingIcon = { LeafyTextButton(onClick = viewModel::refresh) { Text("搜索") } },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -142,7 +141,7 @@ private fun CatalogList(
         if (state.loading) {
             item { Box(Modifier.fillMaxWidth().padding(LeafySpacing.page), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         } else if (state.hasMore) {
-            item { Button(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) { Text("加载更多") } }
+            item { LeafyPrimaryButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) { Text("加载更多") } }
         }
     }
 }
@@ -170,7 +169,7 @@ private fun RatingItemRow(item: CatalogRatingItem, onRate: (Long, Int) -> Unit) 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("我的评分：", style = MaterialTheme.typography.bodySmall)
                 (1..5).forEach { star ->
-                    IconButton(onClick = { onRate(profile.id, star) }) {
+                    LeafyActionIconButton(onClick = { onRate(profile.id, star) }) {
                         Icon(
                             if ((item.myStars ?: 0) >= star) Icons.Filled.Star else Icons.Outlined.StarBorder,
                             contentDescription = "$star 星",
@@ -197,7 +196,7 @@ private fun CatalogSuggestionDialog(
     var stars by remember { mutableStateOf(5) }
     var note by remember { mutableStateOf("") }
     val valid = name.isNotBlank() && unit.isNotBlank() && (kind != RatingCatalogKind.COURSE || teacher.isNotBlank())
-    AlertDialog(
+    LeafyAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("建议新增${kind.title()}") },
         text = {
@@ -213,7 +212,7 @@ private fun CatalogSuggestionDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("初始评分")
                         (1..5).forEach { star ->
-                            IconButton(onClick = { stars = star }) {
+                            LeafyActionIconButton(onClick = { stars = star }) {
                                 Icon(if (stars >= star) Icons.Filled.Star else Icons.Outlined.StarBorder, "$star 星")
                             }
                         }
@@ -223,11 +222,11 @@ private fun CatalogSuggestionDialog(
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = {
+            LeafyTextButton(enabled = valid, onClick = {
                 onSubmit(name, unit, teacher.takeIf(String::isNotBlank), category.takeIf(String::isNotBlank), credit.toDoubleOrNull(), stars, note.takeIf(String::isNotBlank))
             }) { Text("提交") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
     )
 }
 

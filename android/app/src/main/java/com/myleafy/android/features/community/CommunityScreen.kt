@@ -19,12 +19,12 @@ import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,12 +43,12 @@ import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyErrorState
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyLoadingState
+import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.components.leafyPullRefresh
 import com.myleafy.android.ui.components.rememberLeafyPullRefreshState
 import com.myleafy.android.ui.theme.LeafyComponentSize
-import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.leafySurfaces
 
@@ -145,7 +146,7 @@ fun CommunityContent(
                 title = "社区暂时无法加载",
                 message = "${state.error}\n网络失败不会展示模拟内容，请检查连接后重试。",
                 modifier = Modifier.fillMaxSize().padding(contentPadding),
-                action = { Button(onClick = onRefresh) { Text("重试") } },
+                action = { LeafyPrimaryButton(onClick = onRefresh) { Text("重试") } },
             )
 
             else -> LazyColumn(
@@ -179,7 +180,7 @@ fun CommunityContent(
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                             LeafyStatusBanner(message = "刷新失败，已保留上次内容：$message", isError = true)
-                            Button(onClick = onRefresh) { Text("重新刷新") }
+                            LeafyPrimaryButton(onClick = onRefresh) { Text("重新刷新") }
                         }
                     }
                 }
@@ -231,6 +232,7 @@ private fun CommunityFilters(
                 selected = selection.mode == CommunityFeedMode.LATEST && selection.category == category,
                 onClick = { onSelectLatest(category) },
                 label = { Text(category) },
+                modifier = Modifier.testTag("community-filter-$category"),
             )
         }
     }
@@ -240,19 +242,27 @@ private fun CommunityFilters(
 fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.leafySurfaces.content,
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = LeafyElevation.resting,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("community-post-${post.id}"),
+        color = MaterialTheme.leafySurfaces.page,
+        shape = MaterialTheme.shapes.small,
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+            ) {
                 Text(
                     text = if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
+                val date = post.created_at.substringBefore('T').replace('-', '.')
+                if (date.isNotBlank()) {
+                    Text("· $date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 post.category?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
@@ -275,6 +285,8 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                     Text("已收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
             }
+            Spacer(modifier = Modifier.height(LeafySpacing.compact))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
