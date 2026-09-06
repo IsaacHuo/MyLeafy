@@ -7,6 +7,177 @@ import Supabase
 import SwiftData
 @testable import Leafy
 
+final class TimetableTableParserTests: XCTestCase {
+    func testRandomCellIDsParseAllWeeksAndFirstMondayWithoutSummaryDuplicates() throws {
+        let html = table(courses: [
+            0: [4: course("课程甲", weeks: "1-3,5-11(周)")],
+            1: [1: course("课程乙", weeks: "1-4(周)") + "<br>---------------------<br>"
+                + course("课程丙", weeks: "6-14,16(周)", teacher: "李老师", room: "二教703")],
+            3: [1: course("课程丁", weeks: "1-3,5-11(周)")],
+            6: [7: course("课程戊", weeks: "20(周)")]
+        ])
+
+        let records = try HTMLParser.parseTimetableRecords(html: html)
+        XCTAssertEqual(records.count, 5)
+        let firstMonday = records.filter { $0.dayOfWeek == 1 && $0.weeks.contains(1) }
+        XCTAssertEqual(firstMonday.map(\.courseName).sorted(), ["课程丁", "课程乙"])
+        XCTAssertEqual(firstMonday.first { $0.courseName == "课程乙" }?.duration, [3, 4])
+        XCTAssertEqual(firstMonday.first { $0.courseName == "课程丁" }?.duration, [6, 7])
+
+        let laterCourse = try XCTUnwrap(records.first { $0.courseName == "课程丙" })
+        XCTAssertEqual(laterCourse.weeks, Array(6...14) + [16])
+        XCTAssertEqual(laterCourse.teacher, "李老师")
+        XCTAssertEqual(laterCourse.location, "二教")
+        XCTAssertEqual(laterCourse.room, "703")
+        let thursday = try XCTUnwrap(records.first { $0.courseName == "课程甲" })
+        XCTAssertEqual(thursday.dayOfWeek, 4)
+        XCTAssertEqual(thursday.duration, [1, 2])
+        XCTAssertEqual(thursday.weeks, [1, 2, 3] + Array(5...11))
+        let lastPeriod = try XCTUnwrap(records.first { $0.courseName == "课程戊" })
+        XCTAssertEqual(lastPeriod.dayOfWeek, 7)
+        XCTAssertEqual(lastPeriod.duration, [12])
+        XCTAssertEqual(lastPeriod.weeks, [20])
+    }
+
+    func testEveryWeekdayAndPeriodBandUsesTablePosition() throws {
+        let periods = [[1, 2], [3, 4], [5], [6, 7], [8, 9], [10, 11], [12]]
+        let courses = Dictionary(uniqueKeysWithValues: periods.indices.map { row in
+            (row, [row + 1: course("位置\(row)", weeks: "1-20(周)")])
+        })
+        let records = try HTMLParser.parseTimetableRecords(html: table(courses: courses))
+
+        XCTAssertEqual(records.count, 7)
+        for row in periods.indices {
+            let record = try XCTUnwrap(records.first { $0.courseName == "位置\(row)" })
+            XCTAssertEqual(record.dayOfWeek, row + 1)
+            XCTAssertEqual(record.duration, periods[row])
+            XCTAssertEqual(record.weeks, Array(1...20))
+        }
+    }
+
+    func testOddEvenWeeksAndDifferentRoomsInOneCellRemainSeparate() throws {
+        let content = course("同名课程", weeks: "1-8(单周)", room: "二教101")
+            + "<hr>" + course("同名课程", weeks: "1-8(双周)", room: "二教202")
+        let records = try HTMLParser.parseTimetableRecords(html: table(courses: [2: [2: content]]))
+
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records.first { $0.room == "101" }?.weeks, [1, 3, 5, 7])
+        XCTAssertEqual(records.first { $0.room == "202" }?.weeks, [2, 4, 6, 8])
+        XCTAssertTrue(records.allSatisfy { $0.dayOfWeek == 2 && $0.duration == [5] })
+    }
+
+    func testTablePositionWinsOverMisleadingLegacyCellID() throws {
+        let html = table(courses: [1: [1: course("定位课程", weeks: "1(周)")]])
+            .replacingOccurrences(of: "00000000000000000000000000000002-1-2", with: "kbcontent_7_7")
+        let record = try XCTUnwrap(HTMLParser.parseTimetableRecords(html: html).first)
+
+        XCTAssertEqual(record.dayOfWeek, 1)
+        XCTAssertEqual(record.duration, [3, 4])
+    }
+
+    func testNestedPresentationDivsDoNotShiftWeekdaysOrDuplicateCourses() throws {
+        let html = table(courses: [0: [3: "<div><span>" + course("嵌套课程", weeks: "2(周)") + "</span></div>"]])
+            .replacingOccurrences(of: "class=\"kbcontent1\">", with: "class=\"kbcontent1\"><div></div>")
+        let records = try HTMLParser.parseTimetableRecords(html: html)
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.dayOfWeek, 3)
+        XCTAssertEqual(records.first?.duration, [1, 2])
+    }
+
+    func testCompleteEmptyGridIsVerifiedEmptyEvenWithPracticalCourseFooter() throws {
+        guard case .verifiedEmpty = try HTMLParser.parseTimetableResult(html: table()) else {
+            return XCTFail("A complete empty grid should be recognized as empty")
+        }
+    }
+
+    func testLastPeriodIsNotDroppedWhenPracticalCourseFooterIsAbsent() throws {
+        let records = try HTMLParser.parseTimetableRecords(html: table(
+            courses: [6: [5: course("晚间课程", weeks: "20(周)")]],
+            includesFooter: false
+        ))
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.duration, [12])
+        XCTAssertEqual(records.first?.dayOfWeek, 5)
+    }
+
+    func testMalformedNonemptyCellRejectsWholeResultEvenAfterValidCourse() {
+        let html = table(courses: [
+            0: [1: course("有效课程", weeks: "1-4(周)")],
+            1: [1: "课程信息存在但缺少周次"]
+        ])
+        assertUnparseable(html)
+    }
+
+    func testMalformedSecondCourseInSameCellRejectsPartialResult() {
+        let html = table(courses: [0: [1: course("有效课程", weeks: "1-4(周)")
+            + "<hr>课程信息存在但缺少周次"]])
+        assertUnparseable(html)
+    }
+
+    func testWeeksOutsideSupportedDatasetAreNotSavedAsEmptyTimetable() {
+        assertUnparseable(table(courses: [0: [1: course("越界课程", weeks: "21-25(周)")]]))
+    }
+
+    func testMissingDetailedContentDoesNotSilentlyUseSummaryOrClearCourses() {
+        let html = table(courses: [0: [1: course("课程甲", weeks: "1(周)")]])
+            .replacingOccurrences(of: "class=\"kbcontent\"", with: "class=\"changed-content\"")
+        assertUnparseable(html)
+    }
+
+    func testTruncatedGridAndChangedHeadersAreRejected() {
+        assertUnparseable(table().replacingOccurrences(of: "星期一", with: "未知列"))
+        assertUnparseable(table().replacingOccurrences(of: "34节", with: "56节"))
+        assertUnparseable("<table id=\"kbtable\"><tr><th></th><th>星期一</th></tr></table>")
+        let html = table().replacingOccurrences(of: "<td>", with: "<td colspan=\"2\">")
+        assertUnparseable(html)
+    }
+
+    private func assertUnparseable(_ html: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertThrowsError(try HTMLParser.parseTimetableResult(html: html), file: file, line: line) { error in
+            guard case HTMLParserError.tableRowsUnparseable("课表") = error else {
+                return XCTFail("Unexpected error: \(error)", file: file, line: line)
+            }
+        }
+    }
+
+    private func course(_ name: String, weeks: String, teacher: String = "张老师", room: String = "二教101") -> String {
+        "\(name)<br><font title=\"老师\">\(teacher)</font><br>"
+            + "<font title=\"周次(节次)\">\(weeks)</font><br><font title=\"教室\">\(room)</font><br>"
+    }
+
+    /// 保留真实页面结构与节次标题，只使用虚构课程、教师、教室和行编号。
+    private func table(courses: [Int: [Int: String]] = [:], includesFooter: Bool = true) -> String {
+        let headings = ["", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        let periodLabels = ["12节", "34节", "5节", "67节", "89节", "1011节", "12节"]
+        let rows = periodLabels.enumerated().map { row, label in
+            let rowID = String(format: "%032d", row + 1)
+            let cells = (1...7).map { day in
+                let content = courses[row]?[day] ?? "&nbsp;"
+                return """
+                <td><input type="hidden" value=""><input type="hidden" value="">
+                  <div id="\(rowID)-\(day)-1" class="kbcontent1">\(content)</div>
+                  <div id="\(rowID)-\(day)-2" style="display: none;" class="kbcontent">\(content)</div>
+                </td>
+                """
+            }.joined()
+            return "<tr><th>\(label)&nbsp;</th>\(cells)</tr>"
+        }.joined()
+        let footer = includesFooter
+            ? "<tr><th>实验实习安排:</th><td colspan=\"7\">课程设计 16周；实验自行安排</td></tr>"
+            : ""
+        return """
+        <html><head><title>学期理论课表</title></head><body>
+          <select name="xnxq01id"><option value="2026-2027-1" selected>2026-2027-1</option></select>
+          <table id="kbtable"><tbody>
+            <tr>\(headings.map { "<th>\($0)</th>" }.joined())</tr>
+            \(rows)\(footer)
+          </tbody></table>
+        </body></html>
+        """
+    }
+}
+
 extension PerformanceRefactorTests {
     func testTimetableResponsiveLayoutSwitchesToAgendaWhenSevenDayGridIsTooNarrow() {
         let widths: [CGFloat] = [320, 375, 507, 700, 1024, 1366]

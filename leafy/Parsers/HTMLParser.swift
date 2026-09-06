@@ -559,27 +559,67 @@ class HTMLParser {
     }
 
     nonisolated private static func parseTimetableTable(_ timetableTable: Element) throws -> [ParsedCourseRecord] {
-        var rows = try timetableTable.select("tr").array()
-        guard rows.count > 2 else {
+        let rows = try timetableTable.select("tr").array()
+        guard let header = rows.first else {
             throw HTMLParserError.timetableTableNotFound
         }
-        rows = Array(rows.dropFirst().dropLast())
+
+        let headerCells = header.children().array()
+        let weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        guard headerCells.count == totalDays + 1,
+              try headerCells.dropFirst().map({ try $0.text() }) == weekdays else {
+            throw HTMLParserError.tableRowsUnparseable("课表")
+        }
+
+        let periodRows = try rows.dropFirst().filter { row in
+            let cells = row.children().array()
+            // 实验实习说明没有确定的星期和节次，不属于周课表网格。
+            return try cells.first?.text().contains("实验实习安排") != true
+        }
+        guard periodRows.count == durationSlots.count else {
+            throw HTMLParserError.tableRowsUnparseable("课表")
+        }
 
         var weeklySchedule = makeEmptyWeeklyMatrix()
 
-        for (rowIndex, row) in rows.enumerated() {
-            guard durationSlots.indices.contains(rowIndex) else { break }
-
-            let allDivs = try row.select("div").array()
-            let blocks = stride(from: 1, to: allDivs.count, by: 2).map { allDivs[$0] }
+        for (rowIndex, row) in periodRows.enumerated() {
+            let cells = row.children().array()
             let duration = durationSlots[rowIndex]
+            // 学校把 1–2 节和第 12 节都写作“12节”，必须结合行序确认节次。
+            let periodLabel = duration.map(String.init).joined() + "节"
+            guard cells.count == totalDays + 1,
+                  try cells[0].text().replacingOccurrences(of: "\\s+", with: "", options: .regularExpression) == periodLabel,
+                  try cells.allSatisfy({ cell in
+                      let colspan = try cell.attr("colspan")
+                      let rowspan = try cell.attr("rowspan")
+                      return (colspan.isEmpty || colspan == "1") && (rowspan.isEmpty || rowspan == "1")
+                  }) else {
+                throw HTMLParserError.tableRowsUnparseable("课表")
+            }
 
-            for (dayIndex, block) in blocks.enumerated() {
-                guard dayIndex < totalDays else { continue }
+            for (dayIndex, cell) in cells.dropFirst().enumerated() {
+                // 同一格有简略版 kbcontent1 和详细版 kbcontent，只读取详细版。
+                let blocks = try cell.select(".kbcontent").array()
+                let cellText = try cell.text().trimmingCharacters(in: .whitespacesAndNewlines)
+                if blocks.isEmpty && cellText.isEmpty { continue }
+                guard blocks.count == 1, let block = blocks.first else {
+                    throw HTMLParserError.tableRowsUnparseable("课表")
+                }
+                if try block.text().trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    guard cellText.isEmpty else {
+                        throw HTMLParserError.tableRowsUnparseable("课表")
+                    }
+                    continue
+                }
 
                 let parsedBlocks = try parseStudentBlock(block, duration: duration)
+                guard !parsedBlocks.isEmpty else {
+                    throw HTMLParserError.tableRowsUnparseable("课表")
+                }
                 for (data, weeks) in parsedBlocks {
-                    guard !data.courseName.isEmpty, !weeks.isEmpty else { continue }
+                    guard !data.courseName.isEmpty, weeks.contains(where: { (1...totalWeeks).contains($0) }) else {
+                        throw HTMLParserError.tableRowsUnparseable("课表")
+                    }
 
                     for week in weeks where (1...totalWeeks).contains(week) {
                         var existingList = weeklySchedule[week - 1][dayIndex]
@@ -650,6 +690,12 @@ class HTMLParser {
 
         let document = try SwiftSoup.parse(html)
 
+        // 完整表格的行列是课程位置的权威来源，课程格 ID 可能是学校生成的随机编号。
+        if let timetableTable = try document.select("#kbtable").first() {
+            let records = try parseTimetableTable(timetableTable)
+            return records.isEmpty ? .verifiedEmpty : .records(records)
+        }
+
         let contentElements = try document.select("[id^=kbcontent_], .kbcontent").array()
         if !contentElements.isEmpty {
             let records = try parseTimetableContentElements(document)
@@ -657,28 +703,6 @@ class HTMLParser {
                 return .records(records)
             }
             let containsCourseContent = try contentElements
-                .map { try $0.text() }
-                .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            guard !containsCourseContent else {
-                throw HTMLParserError.tableRowsUnparseable("课表")
-            }
-            return .verifiedEmpty
-        }
-
-        if let timetableTable = try document.select("#kbtable").first() {
-            let records = try parseTimetableTable(timetableTable)
-            if !records.isEmpty {
-                return .records(records)
-            }
-            let rows = try timetableTable.select("tr").array()
-            guard rows.count > 2 else {
-                throw HTMLParserError.timetableTableNotFound
-            }
-            let courseBlocks = try rows.dropFirst().dropLast().flatMap { row in
-                let divs = try row.select("div").array()
-                return stride(from: 1, to: divs.count, by: 2).map { divs[$0] }
-            }
-            let containsCourseContent = try courseBlocks
                 .map { try $0.text() }
                 .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             guard !containsCourseContent else {
