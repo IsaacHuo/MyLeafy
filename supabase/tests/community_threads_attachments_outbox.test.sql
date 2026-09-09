@@ -307,6 +307,16 @@ select throws_ok(
 
 set local request.jwt.claim.sub = 'a1000000-0000-0000-0000-000000000001';
 
+-- Thread and attachment cases above are independent of the idempotency case.
+-- Move only their fixture posts outside the production hourly quota; do not
+-- disable the rate-limit trigger or reset quota between idempotent replays.
+update public.posts
+set created_at = now() - interval '2 hours'
+where id in (
+  'a3000000-0000-0000-0000-000000000001',
+  'a3000000-0000-0000-0000-000000000002'
+);
+
 select is(
   (public.create_community_post_v4(
     'a3000000-0000-0000-0000-000000000003',
