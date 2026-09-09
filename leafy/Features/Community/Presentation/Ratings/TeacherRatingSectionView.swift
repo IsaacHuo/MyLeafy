@@ -27,23 +27,59 @@ struct TeacherSectionView: View {
     @Binding var requestedTeacherName: String?
     let refreshID: UUID
     let isActive: Bool
-    let lifecycleStore: RatingCatalogSectionStore
+    @Bindable var store: TeacherRatingCatalogStore
 
     private let pageSize = 50
     private let visibleLoadMoreCount = 20
 
-    @State private var search = ""
-    @State private var selectedUnit: String?
-    @State private var selectedStars: Int?
-    @State private var isFilterExpanded = false
-    @State private var teachers: [TeacherRatingSummary] = []
-    @State private var filteredTeachers: [TeacherRatingSummary] = []
-    @State private var availableUnits: [String] = []
-    @State private var isLoading = false
-    @State private var isLoadingMore = false
-    @State private var canLoadMore = false
-    @State private var sourceOffset = 0
-    @State private var errorMessage: String?
+    private var search: String {
+        get { store.search }
+        nonmutating set { store.search = newValue }
+    }
+    private var selectedUnit: String? {
+        get { store.selectedUnit }
+        nonmutating set { store.selectedUnit = newValue }
+    }
+    private var selectedStars: Int? {
+        get { store.selectedStars }
+        nonmutating set { store.selectedStars = newValue }
+    }
+    private var isFilterExpanded: Bool {
+        get { store.isFilterExpanded }
+        nonmutating set { store.isFilterExpanded = newValue }
+    }
+    private var teachers: [TeacherRatingSummary] {
+        get { store.teachers }
+        nonmutating set { store.teachers = newValue }
+    }
+    private var filteredTeachers: [TeacherRatingSummary] {
+        get { store.filteredTeachers }
+        nonmutating set { store.filteredTeachers = newValue }
+    }
+    private var availableUnits: [String] {
+        get { store.availableUnits }
+        nonmutating set { store.availableUnits = newValue }
+    }
+    private var isLoading: Bool {
+        get { store.isLoading }
+        nonmutating set { store.isLoading = newValue }
+    }
+    private var isLoadingMore: Bool {
+        get { store.isLoadingMore }
+        nonmutating set { store.isLoadingMore = newValue }
+    }
+    private var canLoadMore: Bool {
+        get { store.canLoadMore }
+        nonmutating set { store.canLoadMore = newValue }
+    }
+    private var sourceOffset: Int {
+        get { store.sourceOffset }
+        nonmutating set { store.sourceOffset = newValue }
+    }
+    private var errorMessage: String? {
+        get { store.errorMessage }
+        nonmutating set { store.errorMessage = newValue }
+    }
     @State private var searchTask: Task<Void, Never>?
     @State private var suggestionSheet: CatalogSuggestionSheetContext?
     @State private var isApplyingRequestedTeacher = false
@@ -65,10 +101,10 @@ struct TeacherSectionView: View {
                     }
 
                     TeacherFilterToolbar(
-                        search: $search,
-                        selectedUnit: $selectedUnit,
-                        selectedStars: $selectedStars,
-                        isExpanded: $isFilterExpanded,
+                        search: $store.search,
+                        selectedUnit: $store.selectedUnit,
+                        selectedStars: $store.selectedStars,
+                        isExpanded: $store.isFilterExpanded,
                         availableUnits: availableUnits,
                         hasActiveFilters: hasActiveFilters,
                         clearFilters: clearFilters
@@ -81,7 +117,7 @@ struct TeacherSectionView: View {
             }
         }
         .task(id: isActive) {
-            guard isActive, lifecycleStore.beginInitialLoad() else { return }
+            guard isActive, !store.load.hasLoaded else { return }
             await loadTeachers(reset: true)
         }
         .onChange(of: search) { _, _ in
@@ -104,6 +140,9 @@ struct TeacherSectionView: View {
         }
         .onDisappear {
             searchTask?.cancel()
+            store.load.cancel()
+            isLoading = false
+            isLoadingMore = false
         }
         .task(id: requestedTeacherName) {
             guard let requestedTeacherName else { return }
@@ -117,7 +156,7 @@ struct TeacherSectionView: View {
 
     @ViewBuilder
     private var teacherContent: some View {
-        if isLoading && teachers.isEmpty {
+        if (isLoading || (!store.load.hasLoaded && errorMessage == nil)) && teachers.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
@@ -189,7 +228,7 @@ struct TeacherSectionView: View {
 
     private var emptyTeacherMessage: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "先在 Supabase 的 teachers 表导入 name,unit CSV，导入后这里会显示真实老师列表。"
+            ? "当前学校暂未收录教师，可以提交缺失老师。"
             : "换一个姓名或学院关键词再试。"
     }
 
@@ -198,16 +237,14 @@ struct TeacherSectionView: View {
         let signpostState = LeafyPerformanceSignposter.ratings.beginInterval("teachers-load")
         defer { LeafyPerformanceSignposter.ratings.endInterval("teachers-load", signpostState) }
 
-        if reset {
-            isLoading = true
-        } else {
-            guard !isLoadingMore, canLoadMore else { return }
-            isLoadingMore = true
-        }
+        guard reset || (!isLoading && !isLoadingMore && canLoadMore) else { return }
+        let loadID = store.load.begin()
+        let requestSearch = search
+        isLoading = reset
+        isLoadingMore = !reset
         defer {
-            if reset {
+            if store.load.isCurrent(loadID) {
                 isLoading = false
-            } else {
                 isLoadingMore = false
             }
         }
@@ -217,6 +254,7 @@ struct TeacherSectionView: View {
             teachers = reset ? demoTeachers : teachers
             sourceOffset = demoTeachers.count
             canLoadMore = false
+            store.load.complete(loadID)
             errorMessage = nil
             updateDerivedTeacherState()
             return
@@ -224,12 +262,14 @@ struct TeacherSectionView: View {
 
         do {
             try await dependencies.communityRepository.ensureAnonymousSession()
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch else { return }
             if reset {
                 let fetchedTeachers = try await dependencies.communityRepository.fetchTeacherRatingSummaries(
                     search: search,
                     limit: pageSize,
                     offset: 0
                 )
+                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch else { return }
                 teachers = fetchedTeachers
                 sourceOffset = fetchedTeachers.count
                 canLoadMore = fetchedTeachers.count == pageSize
@@ -244,6 +284,7 @@ struct TeacherSectionView: View {
                         limit: pageSize,
                         offset: sourceOffset
                     )
+                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch else { return }
                     sourceOffset += fetchedTeachers.count
 
                     let existingIDs = Set(teachers.map(\.id))
@@ -257,15 +298,12 @@ struct TeacherSectionView: View {
                     }
                 }
             }
+            store.load.complete(loadID)
             errorMessage = nil
         } catch is CancellationError {
             return
         } catch {
-            if reset {
-                teachers = []
-                sourceOffset = 0
-                canLoadMore = false
-            }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch else { return }
             errorMessage = error.localizedDescription
         }
         updateDerivedTeacherState()

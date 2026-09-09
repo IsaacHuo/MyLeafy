@@ -723,72 +723,41 @@ class HTMLParser {
         try parseTimetableRecords(html: html).map { $0.makeCourse() }
     }
     
-    /// 解析强智系统成绩页面HTML
+    /// Read portal columns by heading; course identity must survive persistence.
     static func parseGrades(html: String) throws -> [Grade] {
-        var parsedGrades: [Grade] = []
         let document = try SwiftSoup.parse(html)
-
-        let gradeTables = try candidateDataTables(in: document).filter { table in
-            let headerText = try table.select("tr").first()?
-                .select("th,td")
-                .array()
-                .map { try $0.text().trimmingCharacters(in: .whitespacesAndNewlines) }
-                .joined(separator: " ") ?? ""
-            return headerText.contains("课程名称")
-                && headerText.contains("成绩")
-                && headerText.contains("学分")
-                && (headerText.contains("开课学期") || headerText.contains("课程编号"))
-        }
-        guard let gradeTable = gradeTables.first else {
-            throw HTMLParserError.tableNotFound("成绩")
-        }
-        let rows = try gradeTable.select("tr").array()
-        let dataRows = try rows.filter { try !$0.select("td").isEmpty() }
-
-        for row in rows {
-            let tds = try row.select("td")
-            if tds.count >= 6 {
-                let term = try tds[1].text().trimmingCharacters(in: .whitespacesAndNewlines)
-                let courseName = try tds[3].text().trimmingCharacters(in: .whitespacesAndNewlines)
-                var score = try tds[4].text().trimmingCharacters(in: .whitespacesAndNewlines)
-                let credit = try tds[5].text().trimmingCharacters(in: .whitespacesAndNewlines)
-
-                guard !term.isEmpty,
-                      !courseName.isEmpty,
-                      courseName != "课程名称",
-                      parseCredit(credit) != nil else {
-                    continue
+        for table in try candidateDataTables(in: document) {
+            let grid = try AcademicHTMLTable(table)
+            guard let headerIndex = grid.rows.firstIndex(where: {
+                $0.contains("课程名称") && $0.contains("成绩") && $0.contains("学分")
+            }) else { continue }
+            let header = grid.rows[headerIndex]
+            func column(_ names: String...) -> Int? { AcademicHTMLTable.column(names, in: header) }
+            let termColumn = column("开课学期", "学期")
+            let nameColumn = column("课程名称")
+            let scoreColumn = column("成绩")
+            let creditColumn = column("学分")
+            let codeColumn = column("课程编号", "课程代码")
+            var grades: [Grade] = []
+            for row in grid.rows.dropFirst(headerIndex + 1) {
+                func value(_ index: Int?) -> String { AcademicHTMLTable.value(row, at: index) }
+                if row.allSatisfy({ $0.isEmpty }) || row.joined().contains("暂无数据") || row.joined().contains("无记录") { continue }
+                guard !value(termColumn).isEmpty, !value(nameColumn).isEmpty,
+                      AcademicHTMLTable.decimal(value(creditColumn)) != nil else {
+                    throw HTMLParserError.tableRowsUnparseable("成绩")
                 }
-
-                let courseAttribute = tds.count > 7
-                    ? try tds[7].text().trimmingCharacters(in: .whitespacesAndNewlines)
-                    : ""
-                let courseCategory = tds.count > 10
-                    ? try tds[10].text().trimmingCharacters(in: .whitespacesAndNewlines)
-                    : ""
-                let type = [courseAttribute, courseCategory]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: " · ")
-
-                if score.isEmpty || score == " " {
-                    score = try tds[4].select("a").text().trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                
-                if score.isEmpty || score == " " {
-                    score = try tds[4].select("font").text().trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-
-                let grade = Grade(term: term, courseName: courseName, credit: credit, score: score, type: type)
-                parsedGrades.append(grade)
+                let attribute = value(column("课程属性"))
+                let category = value(column("课程分类", "课程性质"))
+                grades.append(Grade(
+                    term: value(termColumn), courseName: value(nameColumn), credit: value(creditColumn),
+                    score: value(scoreColumn), type: [attribute, category].filter { !$0.isEmpty }.joined(separator: " · "),
+                    courseCode: value(codeColumn).isEmpty ? nil : value(codeColumn),
+                    courseAttribute: attribute, courseCategory: category, examNature: value(column("考试性质"))
+                ))
             }
+            return grades
         }
-
-        if parsedGrades.isEmpty,
-           !dataRows.isEmpty,
-           try !rowsRepresentVerifiedEmpty(dataRows) {
-            throw HTMLParserError.tableRowsUnparseable("成绩")
-        }
-        return parsedGrades
+        throw HTMLParserError.tableNotFound("成绩")
     }
 
     static func parseExams(html: String) throws -> [ExamArrangement] {
@@ -861,63 +830,36 @@ class HTMLParser {
 
     static func parseTeachingPlan(html: String) throws -> [TeachingPlanSection] {
         let document = try SwiftSoup.parse(html)
-        guard let table = try document.select("#dataList").first() else {
-            throw HTMLParserError.tableNotFound("教学计划")
-        }
-        let headerText = try table.select("tr").first()?.select("th,td").text() ?? ""
-        guard headerText.contains("课程"),
-              headerText.contains("学分"),
-              headerText.contains("学期") else {
-            throw HTMLParserError.tableNotFound("教学计划")
-        }
-
-        let rows = try table.select("tr").array()
-        let dataRows = try rows.dropFirst().filter { try !$0.select("td").isEmpty() }
-        var currentPeriod = ""
-        var grouped: [String: [TeachingPlanCourse]] = [:]
-        var orderedTerms: [String] = []
-
-        for row in rows.dropFirst() {
-            let cells = try row.select("td").array().map {
-                try $0.text().trimmingCharacters(in: .whitespacesAndNewlines)
+        for table in try candidateDataTables(in: document) {
+            let grid = try AcademicHTMLTable(table)
+            guard let headerIndex = grid.rows.firstIndex(where: {
+                $0.contains("课程名称") && $0.contains("学分") && ($0.contains("开课学期") || $0.contains("学期"))
+            }) else { continue }
+            let header = grid.rows[headerIndex]
+            func column(_ names: String...) -> Int? { AcademicHTMLTable.column(names, in: header) }
+            var grouped: [String: [TeachingPlanCourse]] = [:]
+            var orderedTerms: [String] = []
+            var currentTerm = ""
+            for row in grid.rows.dropFirst(headerIndex + 1) {
+                func value(_ names: String...) -> String { AcademicHTMLTable.value(row, at: AcademicHTMLTable.column(names, in: header)) }
+                if row.allSatisfy({ $0.isEmpty }) || row.joined().contains("暂无数据") || row.joined().contains("无记录") { continue }
+                let period = value("开课学期", "学期").isEmpty ? currentTerm : value("开课学期", "学期")
+                guard !period.isEmpty, !value("课程名称").isEmpty,
+                      let credit = AcademicHTMLTable.decimal(value("学分")) else {
+                    throw HTMLParserError.tableRowsUnparseable("教学计划")
+                }
+                currentTerm = period
+                if grouped[period] == nil { orderedTerms.append(period) }
+                grouped[period, default: []].append(TeachingPlanCourse(
+                    id: Int(value("序号")) ?? grouped.values.reduce(0) { $0 + $1.count } + 1,
+                    period: period, name: value("课程名称"), unit: value("开课单位"), credit: credit,
+                    duration: value("总学时", "学时"), type: value("课程属性"), exam: value("考试性质", "考核方式"),
+                    courseCode: value("课程编号", "课程代码"), courseCategory: value("课程分类", "课程性质")
+                ))
             }
-            guard cells.count >= 8,
-                  let id = Int(cells[0]) else {
-                continue
-            }
-
-            let period = cells[1].isEmpty ? currentPeriod : cells[1]
-            guard !period.isEmpty else { continue }
-            currentPeriod = period
-
-            let exam = extractPlanExamText(from: (try? row.html()) ?? "")
-            let course = TeachingPlanCourse(
-                id: id,
-                period: period,
-                name: cells[3],
-                unit: cells[4],
-                credit: Double(cells[5]) ?? 0,
-                duration: cells[6],
-                type: cells[7],
-                exam: exam
-            )
-
-            if grouped[period] == nil {
-                grouped[period] = []
-                orderedTerms.append(period)
-            }
-            grouped[period, default: []].append(course)
+            return orderedTerms.map { TeachingPlanSection(term: $0, courses: grouped[$0] ?? []) }
         }
-
-        let sections = orderedTerms.map { term in
-            TeachingPlanSection(term: term, courses: grouped[term] ?? [])
-        }
-        if sections.isEmpty,
-           !dataRows.isEmpty,
-           try !rowsRepresentVerifiedEmpty(dataRows) {
-            throw HTMLParserError.tableRowsUnparseable("教学计划")
-        }
-        return sections
+        throw HTMLParserError.tableNotFound("教学计划")
     }
 
     private static func parseExamRow(
@@ -1198,122 +1140,81 @@ class HTMLParser {
 
     static func parseGradeCreditSummary(html: String) throws -> GradeCreditSummary {
         let document = try SwiftSoup.parse(html)
-        let pageText = try normalizedDocumentText(document)
-        let officialGPA = parseOfficialDecimal(in: pageText, labels: [
-            "平均学分绩点",
-            "平均绩点",
-            "学分绩点",
-            "绩点",
-            "GPA"
-        ], maxValue: 5)
-        let officialWeightedAverage = parseOfficialDecimal(in: pageText, labels: [
-            "加权平均分",
-            "加权均分",
-            "平均成绩",
-            "平均分"
-        ], maxValue: 100)
-        let officialCreditPoint = parseOfficialCreditPoint(in: pageText)
-
+        let officialGPA = try officialSummaryValue(in: document, labels: ["平均学分绩点", "平均绩点", "学分绩点", "GPA"], maximum: 5)
+        let officialWeightedAverage = try officialSummaryValue(in: document, labels: ["加权平均分", "加权均分", "平均成绩", "平均分"], maximum: 100)
+        let officialCreditPoint = try officialSummaryValue(in: document, labels: ["学分积"], maximum: nil)
         for table in try candidateDataTables(in: document) {
-            let rows = try table.select("tr").array()
-            guard rows.count > 2 else { continue }
-
-            let tableText = try normalizeProgramText(table.text())
-            guard tableText.contains("所得学分"),
-                  tableText.contains("必修学分"),
-                  tableText.contains("专业选修"),
-                  tableText.contains("公共选修") else {
-                continue
-            }
-
-            let dataRows = try rows
-                .map(rowTexts)
-                .filter { cells in
-                    cells.count >= 16
-                        && extractFirstInteger(from: cells[0]) != nil
-                        && parseCredit(cells[1]) != nil
-                }
-
-            guard let cells = dataRows.first else { continue }
-
-            let publicBucketNames = [
-                "人文科学",
-                "社会科学",
-                "数学与自然科学",
-                "体育",
-                "审美艺术",
-                "视频课",
-                "暑期课",
-                "写作与沟通",
-                "四史"
-            ]
-            let publicBuckets = publicBucketNames.enumerated().map { offset, name in
-                GradeCreditBucket(
-                    name: name,
-                    credits: parseCredit(cells[safe: 7 + offset] ?? "") ?? 0
-                )
-            }
-
-            let rawLabels = [
-                "序号",
-                "所得学分",
-                "必修学分",
-                "专业选修总计",
-                "本专业选修",
-                "外专业选修",
-                "公共选修总计"
-            ] + publicBucketNames
+            let grid = try AcademicHTMLTable(table)
+            guard let headerIndex = grid.rows.firstIndex(where: { $0.contains("所得学分") && $0.contains("必修学分") }) else { continue }
+            let top = grid.rows[headerIndex]
+            let totalColumn = AcademicHTMLTable.column(["所得学分"], in: top)!
+            guard let dataIndex = grid.rows.indices.dropFirst(headerIndex + 1).first(where: {
+                AcademicHTMLTable.decimal(AcademicHTMLTable.value(grid.rows[$0], at: totalColumn)) != nil
+            }) else { throw HTMLParserError.tableRowsUnparseable("所得学分详情") }
+            let cells = grid.rows[dataIndex]
+            guard cells.count == top.count else { throw HTMLParserError.tableRowsUnparseable("所得学分详情") }
+            let bottom = grid.rows[dataIndex - 1]
             var rawFields: [String: String] = [:]
-            for (index, label) in rawLabels.enumerated() where cells.indices.contains(index) {
+            var buckets: [GradeCreditBucket] = []
+            var professional = 0.0, major = 0.0, crossMajor = 0.0, publicTotal = 0.0, required = 0.0
+            for index in top.indices {
+                let group = AcademicHTMLTable.heading(top[index])
+                let leaf = AcademicHTMLTable.heading(AcademicHTMLTable.value(bottom, at: index))
+                let value = cells[index].isEmpty ? 0 : AcademicHTMLTable.decimal(cells[index])
+                guard group != "序号" else { continue }
+                guard let value else { throw HTMLParserError.tableRowsUnparseable("所得学分详情") }
+                let label = group == leaf ? group : group + "/" + leaf
                 rawFields[label] = cells[index]
+                if group == "必修学分" { required = value }
+                if group.contains("专业选修") {
+                    if leaf == "总计" || leaf == "合计" { professional = value }
+                    if leaf == "本专业" { major = value; rawFields["本专业选修"] = cells[index] }
+                    if leaf == "外专业" { crossMajor = value }
+                }
+                if group.contains("公共选修") || group.contains("通识选修") {
+                    if leaf == "总计" || leaf == "合计" || leaf == group { publicTotal = value; rawFields["公共选修总计"] = cells[index] }
+                    else { buckets.append(GradeCreditBucket(name: bottom[index], credits: value)) }
+                }
             }
-            appendOfficialGradeSummaryFields(
-                to: &rawFields,
-                officialGPA: officialGPA,
-                officialWeightedAverage: officialWeightedAverage,
-                officialCreditPoint: officialCreditPoint
-            )
-
-            return GradeCreditSummary(
-                totalCredits: parseCredit(cells[safe: 1] ?? "") ?? 0,
-                requiredCredits: parseCredit(cells[safe: 2] ?? "") ?? 0,
-                professionalElectiveCredits: parseCredit(cells[safe: 3] ?? "") ?? 0,
-                professionalMajorElectiveCredits: parseCredit(cells[safe: 4] ?? "") ?? 0,
-                professionalCrossMajorElectiveCredits: parseCredit(cells[safe: 5] ?? "") ?? 0,
-                publicElectiveCredits: parseCredit(cells[safe: 6] ?? "") ?? 0,
-                officialGPA: officialGPA,
-                officialWeightedAverage: officialWeightedAverage,
-                officialCreditPoint: officialCreditPoint,
-                publicElectiveBuckets: publicBuckets,
-                rawFields: rawFields
-            )
+            rawFields["所得学分"] = cells[totalColumn]
+            appendOfficialGradeSummaryFields(to: &rawFields, officialGPA: officialGPA,
+                officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint)
+            return GradeCreditSummary(totalCredits: AcademicHTMLTable.decimal(cells[totalColumn])!, requiredCredits: required,
+                professionalElectiveCredits: professional, professionalMajorElectiveCredits: major,
+                professionalCrossMajorElectiveCredits: crossMajor, publicElectiveCredits: publicTotal,
+                officialGPA: officialGPA, officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint,
+                publicElectiveBuckets: buckets, rawFields: rawFields, syncedAt: Date())
         }
-
-        if officialGPA != nil || officialWeightedAverage != nil || officialCreditPoint != nil {
-            var rawFields: [String: String] = [:]
-            appendOfficialGradeSummaryFields(
-                to: &rawFields,
-                officialGPA: officialGPA,
-                officialWeightedAverage: officialWeightedAverage,
-                officialCreditPoint: officialCreditPoint
-            )
-
-            return GradeCreditSummary(
-                totalCredits: 0,
-                requiredCredits: 0,
-                professionalElectiveCredits: 0,
-                professionalMajorElectiveCredits: 0,
-                professionalCrossMajorElectiveCredits: 0,
-                publicElectiveCredits: 0,
-                officialGPA: officialGPA,
-                officialWeightedAverage: officialWeightedAverage,
-                officialCreditPoint: officialCreditPoint,
-                publicElectiveBuckets: [],
-                rawFields: rawFields
-            )
+        guard officialGPA != nil || officialWeightedAverage != nil || officialCreditPoint != nil else {
+            throw HTMLParserError.tableNotFound("所得学分详情")
         }
+        var rawFields: [String: String] = [:]
+        appendOfficialGradeSummaryFields(to: &rawFields, officialGPA: officialGPA,
+            officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint)
+        return GradeCreditSummary(totalCredits: 0, requiredCredits: 0, professionalElectiveCredits: 0,
+            professionalMajorElectiveCredits: 0, professionalCrossMajorElectiveCredits: 0, publicElectiveCredits: 0,
+            officialGPA: officialGPA, officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint,
+            publicElectiveBuckets: [], rawFields: rawFields, syncedAt: Date())
+    }
 
-        throw HTMLParserError.tableNotFound("所得学分详情")
+    private static func officialSummaryValue(in document: Document, labels: [String], maximum: Double?) throws -> Double? {
+        // Only explicit label/value pairs or inline summaries. Never scan flattened ranking tables.
+        for row in try document.select("tr").array() {
+            let cells = row.children().array()
+            if cells.count == 2, labels.contains(AcademicHTMLTable.heading(try cells[0].text())),
+               let value = AcademicHTMLTable.decimal(try cells[1].text()), maximum.map({ value <= $0 }) ?? true {
+                return value
+            }
+        }
+        for element in try document.select("p,div,span,body").array() {
+            let text = element.ownText()
+            for label in labels {
+                let pattern = NSRegularExpression.escapedPattern(for: label) + #"\s*(?:为|是|:|：)\s*([0-9]+(?:\.[0-9]+)?)"#
+                if let groups = firstRegexGroups(in: text, pattern: pattern), let first = groups.first,
+                   let value = Double(first), maximum.map({ value <= $0 }) ?? true { return value }
+            }
+        }
+        return nil
     }
 
     private static func appendOfficialGradeSummaryFields(
@@ -1341,8 +1242,7 @@ class HTMLParser {
         for label in labels {
             let escapedLabel = NSRegularExpression.escapedPattern(for: label)
             let patterns = [
-                "\(escapedLabel)\\s*(?:为|是|:|：)?\\s*([0-9]+(?:\\.[0-9]+)?)",
-                "\(escapedLabel)[^0-9]{0,12}([0-9]+(?:\\.[0-9]+)?)"
+                "\(escapedLabel)\\s*(?:为|是|:|：)\\s*([0-9]+(?:\\.[0-9]+)?)"
             ]
 
             for pattern in patterns {
@@ -1383,7 +1283,15 @@ class HTMLParser {
         return TrainingProgramDocument(
             title: title,
             sections: sections,
-            creditRequirements: requirements
+            creditRequirements: requirements,
+            tables: try document.select("table").array().filter { table in
+                // Keep content tables once, without page-layout tables or nested duplicates.
+                try table.select("table").count == 1
+            }.enumerated().compactMap { index, table in
+                let rows = try AcademicHTMLTable(table).rows
+                guard rows.count > 1 else { return nil }
+                return TrainingProgramTable(id: "table-\(index)", title: "方案表格 \(index + 1)", rows: rows)
+            }
         )
     }
 
@@ -1544,10 +1452,10 @@ class HTMLParser {
                         appendRequirement(label: "毕业生应取得总学分", kind: .total, credit: credit)
                     }
 
-                    for (label, kind) in trainingCreditLabels where cell.contains(label) {
-                        if let credit = creditValue(after: index, in: cells) {
-                            appendRequirement(label: label, kind: kind, credit: credit)
-                        }
+                    if isTrainingCreditLabel(cell), !cell.contains("毕业生应取得总学分"),
+                       let credit = creditValue(after: index, in: cells) {
+                        let kind: GraduationCreditKind = cell.contains("本专业选修") ? .professionalElective : .classify(cell)
+                        appendRequirement(label: cell, kind: kind, credit: credit)
                     }
                 }
             }
@@ -1598,8 +1506,10 @@ class HTMLParser {
     }
 
     private static func isTrainingCreditLabel(_ text: String) -> Bool {
-        text.contains("毕业生应取得总学分")
-            || trainingCreditLabels.contains { text.contains($0.label) }
+        let compact = text.replacingOccurrences(of: " ", with: "")
+        return compact.count < 45 && compact.contains("学分")
+            && AcademicHTMLTable.decimal(compact) == nil
+            && !compact.contains("学时") && !compact.contains("占比")
     }
 
     private static func cleanTrainingCreditCategory(label: String, kind: GraduationCreditKind) -> String {
@@ -1802,47 +1712,8 @@ class HTMLParser {
             || joined.contains("要求")
     }
 
-    nonisolated static func parseEmptyClassrooms(html: String) throws -> [EmptyClassroom] {
-        let document = try SwiftSoup.parse(html)
-        guard let table = try document.select("#dataList").first() else {
-            throw HTMLParserError.tableNotFound("空教室")
-        }
-        let headerText = try table.select("th").text()
-        guard headerText.contains("教室") else {
-            throw HTMLParserError.tableNotFound("空教室")
-        }
-
-        let rows = try table.select("tr").array()
-        let dataRows = try rows.filter { try !$0.select("td").isEmpty() }
-
-        var result: [(weight: Int, room: EmptyClassroom)] = []
-        var recognizedRoomRowCount = 0
-
-        for row in dataRows {
-            let texts = try row.select("td").array().map { cell in
-                try normalizedClassroomCellText(cell.text())
-            }
-            guard texts.count > 1 else { continue }
-            guard let parsed = parseClassroomRow(texts[0]) else { continue }
-            recognizedRoomRowCount += 1
-            if texts.dropFirst().contains(where: { !$0.isEmpty }) {
-                continue
-            }
-            result.append(parsed)
-        }
-
-        if recognizedRoomRowCount == 0,
-           !dataRows.isEmpty,
-           try !rowsRepresentVerifiedEmpty(dataRows) {
-            throw HTMLParserError.tableRowsUnparseable("空教室")
-        }
-
-        return result.sorted { lhs, rhs in
-            if lhs.weight == rhs.weight {
-                return lhs.room.room < rhs.room.room
-            }
-            return lhs.weight > rhs.weight
-        }.map(\.room)
+    nonisolated static func parseEmptyClassrooms(html: String, start: Int? = nil, end: Int? = nil) throws -> [EmptyClassroom] {
+        try parseClassroomAvailability(html: html).availableRooms(start: start, end: end)
     }
 
     private static func extractPlanExamText(from rowHTML: String) -> String {
@@ -1858,7 +1729,7 @@ class HTMLParser {
         return String(rowHTML[textRange]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    nonisolated private static func parseClassroomRow(_ text: String) -> (weight: Int, room: EmptyClassroom)? {
+    nonisolated static func parseClassroomRow(_ text: String) -> (weight: Int, room: EmptyClassroom)? {
         let map: [String: (Int, String)] = [
             "A": (10, "学研A座"),
             "A座": (10, "学研A座"),

@@ -15,10 +15,10 @@ final class ClassroomLookupServiceTests: XCTestCase {
     func testEmptyClassroomParserAcceptsSecondTeachingBuildingAliases() throws {
         let html = """
         <table id="dataList">
-          <tr><th>教室</th><th>1</th></tr>
-          <tr><th>教室</th><th>2</th></tr>
-          <tr><td>第二教学楼205（80/80）</td><td></td></tr>
-          <tr><td>二教楼510a(60/60)</td><td></td></tr>
+          <tr><th>星期</th><th>星期三</th></tr>
+          <tr><td></td><td tdvalue="0102">0102</td></tr>
+          <tr jsbh="fixture"><td>第二教学楼205（80/80）</td><td></td></tr>
+          <tr jsbh="fixture"><td>二教楼510a(60/60)</td><td></td></tr>
           <tr><td>页脚</td></tr>
           <tr><td>页脚</td></tr>
         </table>
@@ -35,11 +35,11 @@ final class ClassroomLookupServiceTests: XCTestCase {
     func testEmptyClassroomParserAcceptsReferenceProjectSamples() throws {
         let html = """
         <table id="dataList">
-          <tr><th>教室</th><th>0102</th></tr>
-          <tr><th>教室</th><th>0304</th></tr>
-          <tr><td>A0304(20/10)</td><td></td></tr>
-          <tr><td>B0405(20 / 15)</td><td></td></tr>
-          <tr><td>二教608(40/13)</td><td></td></tr>
+          <tr><th>星期</th><th>星期三</th></tr>
+          <tr><td></td><td tdvalue="0102">0102</td></tr>
+          <tr jsbh="fixture"><td>A0304(20/10)</td><td></td></tr>
+          <tr jsbh="fixture"><td>B0405(20 / 15)</td><td></td></tr>
+          <tr jsbh="fixture"><td>二教608(40/13)</td><td></td></tr>
           <tr><td>页脚</td></tr>
           <tr><td>页脚</td></tr>
         </table>
@@ -57,10 +57,10 @@ final class ClassroomLookupServiceTests: XCTestCase {
     func testEmptyClassroomParserSkipsRowsWithOccupiedCells() throws {
         let html = """
         <table id="dataList">
-          <tr><th>教室</th><th>0102</th></tr>
-          <tr><th>教室</th><th>0304</th></tr>
-          <tr><td>二教205(80/80)</td><td></td></tr>
-          <tr><td>二教206(80/80)</td><td>*</td></tr>
+          <tr><th>星期</th><th>星期三</th></tr>
+          <tr><td></td><td tdvalue="0102">0102</td></tr>
+          <tr jsbh="fixture"><td>二教205(80/80)</td><td></td></tr>
+          <tr jsbh="fixture"><td>二教206(80/80)</td><td>◆</td></tr>
           <tr><td>页脚</td></tr>
           <tr><td>页脚</td></tr>
         </table>
@@ -108,7 +108,7 @@ final class ClassroomLookupServiceTests: XCTestCase {
         let cache = InMemoryClassroomLookupCache()
         let service = LiveClassroomLookupService(
             fetchEmptyClassroomsHTML: { _, _, _ in "<html></html>" },
-            parseEmptyClassrooms: { _ in rooms },
+            parseEmptyClassrooms: { _, _, _ in rooms },
             isDemoModeEnabled: { false },
             cache: cache
         )
@@ -223,40 +223,22 @@ final class ClassroomLookupServiceTests: XCTestCase {
         XCTAssertFalse(slot.available)
     }
 
-    func testClassroomUsageStatusResolvesAvailableWhenParsedRoomsContainTarget() {
-        let status = ClassroomUsageStatusResolver.status(
-            html: "<table id=\"dataList\"><tr><td>二教205(80/80)</td><td></td></tr></table>",
-            parsedRooms: [EmptyClassroom(building: "二教", room: "205")],
-            target: ClassroomIdentity(building: "二教", room: "205"),
-            rawBuilding: "二教",
-            rawRoom: "205"
-        )
-
-        XCTAssertEqual(status, .available)
+    func testFullDayMatrixMapsGroupedPeriodsAndMissingRoomsAreNotOccupied() throws {
+        let matrix = try HTMLParser.parseClassroomAvailability(html: classroomMatrixFixture())
+        let usage = try matrix.usage(for: ClassroomIdentity(building: "二教", room: "101"))
+        XCTAssertEqual(usage.count, 12)
+        XCTAssertEqual(usage.filter { $0.status == .occupied }.map(\.period), [1, 2, 6, 7])
+        XCTAssertThrowsError(try matrix.usage(for: ClassroomIdentity(building: "二教", room: "999")))
+        XCTAssertEqual(try matrix.availableRooms(start: 3, end: 5).count, 2)
+        XCTAssertEqual(try matrix.availableRooms(start: 1, end: 1).map(\.room), ["102"])
     }
 
-    func testClassroomUsageStatusResolvesOccupiedWhenTargetIsAbsent() {
-        let status = ClassroomUsageStatusResolver.status(
-            html: "<table id=\"dataList\"><tr><td>二教206(80/80)</td><td></td></tr></table>",
-            parsedRooms: [EmptyClassroom(building: "二教", room: "206")],
-            target: ClassroomIdentity(building: "二教", room: "205"),
-            rawBuilding: "二教",
-            rawRoom: "205"
-        )
-
-        XCTAssertEqual(status, .occupied)
-    }
-
-    func testClassroomUsageStatusResolvesOccupiedWhenParsedPageDoesNotListTargetAsEmpty() {
-        let status = ClassroomUsageStatusResolver.status(
-            html: "<table id=\"dataList\"><tr><td>二教205(80/80)</td><td>课程</td></tr></table>",
-            parsedRooms: [],
-            target: ClassroomIdentity(building: "二教", room: "205"),
-            rawBuilding: "二教",
-            rawRoom: "205"
-        )
-
-        XCTAssertEqual(status, .occupied)
+    func testUnknownSymbolsAndMissingColumnsDoNotBecomeAvailable() throws {
+        let html = classroomMatrixFixture().replacingOccurrences(of: "◆", with: "?")
+        let matrix = try HTMLParser.parseClassroomAvailability(html: html)
+        XCTAssertThrowsError(try matrix.availableRooms(start: 1, end: 2))
+        XCTAssertThrowsError(try matrix.usage(for: ClassroomIdentity(building: "二教", room: "101")))
+        XCTAssertThrowsError(try HTMLParser.parseClassroomAvailability(html: html.replacingOccurrences(of: "tdvalue=", with: "other=")))
     }
 
     func testRemoteFailureFallsBackToCachedDataAndUserFacingError() async {
@@ -376,4 +358,16 @@ private actor InMemoryClassroomLookupCache: ClassroomLookupCaching {
     private func usageKey(date: Date, building: String, room: String) -> String {
         "\(date.timeIntervalSince1970)-\(building)-\(room)"
     }
+}
+
+func classroomMatrixFixture() -> String {
+    """
+    <table id="dataList">
+    <tr><th>星期</th><th colspan="7">星期三</th></tr>
+    <tr><td></td><td tdvalue="0102">0102</td><td tdvalue="0304">0304</td><td tdvalue="05">05</td><td tdvalue="0607">0607</td><td tdvalue="0809">0809</td><td tdvalue="1011">1011</td><td tdvalue="12">12</td></tr>
+    <tr jsbh="room-a"><td>二教101(133/70)</td><td>◆</td><td></td><td></td><td>Ｊ</td><td></td><td></td><td></td></tr>
+    <tr jsbh="room-b"><td>二教102(133/70)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td colspan="8">符号说明：空白为空闲</td></tr>
+    </table>
+    """
 }

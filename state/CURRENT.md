@@ -1,8 +1,11 @@
 # Current State
 
-Last verified: 2026-09-05
+Last verified: 2026-09-09
 
 ## Current Focus
+
+- **iOS 3.2.1 修复**：成绩以课程编号识别重修，官方学分汇总按多层表头解析；空教室使用学校 POST 占用矩阵；评价目录保留分类状态；社区仅提示新增内容；日迹日程顶部间距对齐推送。3.2 已上线，本轮准备 3.2.1。
+- **Cloudflare 迁移暂停**：保留独立迁移分支及未提交工作；当前修复继续使用 Supabase 生产链路。
 
 - **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.1 登录/社区网络提示热修复已正式发布，并在 Xiaomi 24069RA21C / Android 16 保留身份与本地数据完成覆盖安装、冷启动及社区加载验收。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑与投稿、本机语音转写与统计分享图。
@@ -12,6 +15,8 @@ Last verified: 2026-09-05
 - **工程收敛**：Presentation → Application → Domain → Data 分层重构，移除已被当前实现取代的兼容入口与旧类型。
 
 ## Recently Completed
+
+- **iOS 3.2.1 可靠性修复**：课程编号与官方学分口径、空教室全天矩阵、评价目录生命周期、社区新增提示、日程顶部间距及跨 Tab 首次路由已修复。iOS 26.5 Demo 已验证首次入口、分类切换和普通/大字体间距；真实账号已在学校网页核对查询协议和最好成绩。正式 iOS 账号的联网刷新与 App Store 提交仍需独立验收。
 
 - **Android 第二轮 UI 精修与截图基线**：在首轮 Design System 上补充 progress、刷新阈值、空状态宽度及课表/校园/登录功能级 Token；课表日期/今天/当前时间层级、社区平坦信息流、日迹轻量 Tab、校园宽屏侧栏、“我的”设置分组与登录 IME 流程完成第二轮收敛，业务状态机、RootTab、路由和 capability 门控保持不变。Roborazzi 1.56.0 + Robolectric 4.16 以独立 JUnit category 管理中文/上海时区 golden，CI 只验证并上传差异。修复课表照片背景退出/切换时 UI 层提前回收 Bitmap 导致的 `Canvas: trying to use a recycled bitmap` 崩溃，并加入 instrumentation 生命周期回归测试。
 - **Android 对照式 UI 精修**：Compose Design System 补齐系统字体 Typography、Spacing、Elevation、IconSize、Motion、Surface 与课程色板，浅深色 Material 3 语义角色不再回落默认紫色；根导航接入官方 Adaptive Navigation Suite，Compact 使用 Bottom Navigation、Medium/Expanded 使用 Navigation Rail，保持 `RootTab`、状态恢复、深链和 capability 门控不变。课表、社区、日迹、校园、“我的”、登录及已实现二级页已迁移到统一 TopBar、Surface、状态组件、Sheet 与 48dp 触控基线，减少 Card 套 Card 和零散视觉常量。

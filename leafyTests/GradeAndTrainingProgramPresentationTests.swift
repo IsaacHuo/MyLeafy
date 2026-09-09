@@ -91,7 +91,7 @@ final class GradeAndTrainingProgramPresentationTests: XCTestCase {
         )
         XCTAssertEqual(
             analytics.highImpactCourses.prefix(3).map(\.name),
-            ["低分高学分", "高分高学分", "文字等级"]
+            ["高分高学分", "低分高学分", "低于均分"]
         )
 
         let impacts = analytics.highImpactCourses.compactMap {

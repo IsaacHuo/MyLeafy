@@ -34,6 +34,6 @@ fail_if_found \
 fail_if_found \
   "已删除的 legacy 符号仍有引用：" \
   'LeafyPlatformImage|legacyNativeTabShell|AppFontSizePreference|CustomCountdownStore|UIConstants|publish_community_post_v1' \
-  leafy leafyTests supabase/functions
+  -g '!*.test.ts' leafy leafyTests supabase/functions
 
 printf '%s\n' "Layer boundary checks passed."

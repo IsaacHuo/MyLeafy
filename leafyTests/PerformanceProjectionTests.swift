@@ -9,18 +9,21 @@ import SwiftData
 
 final class PerformanceProjectionTests: XCTestCase {
     @MainActor
-    func testRatingCatalogWorkspaceLoadsEachSectionOnceOnDemand() {
+    func testRatingCatalogRetainsDataAndOnlyCompletesCurrentSuccessfulRequest() {
         let workspace = RatingCatalogWorkspace()
-
-        XCTAssertTrue(workspace.teachers.beginInitialLoad())
-        XCTAssertFalse(workspace.teachers.beginInitialLoad())
-        XCTAssertFalse(workspace.courses.hasStartedInitialLoad)
-        XCTAssertFalse(workspace.dishes.hasStartedInitialLoad)
-
-        XCTAssertTrue(workspace.courses.beginInitialLoad())
-        XCTAssertTrue(workspace.teachers.hasStartedInitialLoad)
-        XCTAssertTrue(workspace.courses.hasStartedInitialLoad)
-        XCTAssertFalse(workspace.dishes.hasStartedInitialLoad)
+        let first = workspace.teachers.load.begin()
+        workspace.teachers.search = "测试"
+        XCTAssertFalse(workspace.teachers.load.hasLoaded)
+        workspace.teachers.load.cancel()
+        workspace.teachers.load.complete(first)
+        XCTAssertFalse(workspace.teachers.load.hasLoaded)
+        let second = workspace.teachers.load.begin()
+        XCTAssertFalse(workspace.teachers.load.isCurrent(first))
+        workspace.teachers.load.complete(second)
+        XCTAssertTrue(workspace.teachers.load.hasLoaded)
+        XCTAssertEqual(workspace.teachers.search, "测试")
+        XCTAssertFalse(workspace.courses.load.hasLoaded)
+        XCTAssertFalse(workspace.dishes.load.hasLoaded)
     }
 
     func testMasonryProjectionPreservesAlternatingOrder() {
@@ -54,7 +57,8 @@ final class PerformanceProjectionTests: XCTestCase {
 
         XCTAssertEqual(chinese, "7/22 09:05")
         XCTAssertTrue(english.contains("7/22"))
-        XCTAssertTrue(english.contains("AM"))
+        // Compact timestamps intentionally omit AM/PM.
+        XCTAssertTrue(english.contains("9:05"))
         XCTAssertNotEqual(chinese, english)
     }
 

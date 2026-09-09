@@ -398,13 +398,9 @@ enum EffectiveGradeCourseResolver {
     static func numericScore(from text: String) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let value = Double(trimmed) {
-            return value
+            return value.isFinite && (0...100).contains(value) ? value : nil
         }
 
-        if containsFailingText(trimmed) { return nil }
-        if trimmed.contains("优秀") { return 95 }
-        if trimmed.contains("良好") { return 85 }
-        if trimmed.contains("中等") { return 75 }
         return nil
     }
 
@@ -433,16 +429,17 @@ enum EffectiveGradeCourseResolver {
         let score = numericScore(from: rawScore)
         let isPassed = isPassingScore(rawScore)
         guard let credit = Double(grade.credit.trimmingCharacters(in: .whitespacesAndNewlines)),
-              credit > 0,
+              credit.isFinite, credit >= 0,
               !rawScore.isEmpty,
               score != nil || isPassed || containsFailingText(rawScore) else {
             return nil
         }
 
-        let courseKey = [
-            normalizedCourseName(grade.courseName),
-            String(format: "%.3f", credit)
-        ].joined(separator: "|")
+        let code = grade.courseCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let courseKey = code.isEmpty
+            ? [grade.term, normalizedCourseName(grade.courseName), String(credit)].joined(separator: "|")
+            : "code|" + code
+
 
         return Attempt(
             recordID: grade.id,
@@ -488,7 +485,10 @@ enum EffectiveGradeCourseResolver {
     }
 
     private static func containsPassingText(_ text: String) -> Bool {
-        text.contains("及格")
+        text.contains("优秀")
+            || text.contains("良好")
+            || text.contains("中等")
+            || text.contains("及格")
             || text.contains("合格")
             || text.contains("通过")
     }

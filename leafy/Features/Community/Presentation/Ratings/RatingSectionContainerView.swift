@@ -52,21 +52,21 @@ struct RatingSectionContainerView: View {
                         requestedTeacherName: $requestedTeacherName,
                         refreshID: teacherRefreshID,
                         isActive: true,
-                        lifecycleStore: workspace.teachers
+                        store: workspace.teachers
                     )
                     case .courses:
                     CourseSectionView(
                         selectedCourse: $selectedCourse,
                         refreshID: courseRefreshID,
                         isActive: true,
-                        lifecycleStore: workspace.courses
+                        store: workspace.courses
                     )
                     case .dishes:
                     DishSectionView(
                         selectedDish: $selectedDish,
                         refreshID: dishRefreshID,
                         isActive: true,
-                        lifecycleStore: workspace.dishes
+                        store: workspace.dishes
                     )
                 }
                 }

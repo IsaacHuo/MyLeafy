@@ -137,3 +137,12 @@ Deno.test("semester calendar events preserve compatible academic categories", ()
   }
   assert(source.includes("...(academicCategory ? { academicCategory } : {})"));
 });
+
+Deno.test("operational profile list counts and exports exclude demos in the database query", async () => {
+  const list = source.slice(source.indexOf("async function listProfiles("), source.indexOf("async function getProfile("));
+  assert(list.includes('.eq("is_demo", false)'));
+  const overview = source.slice(source.indexOf("async function overview("), source.indexOf("function buildOverviewSummary("));
+  assert(overview.includes('if (table === "profiles") scopedQuery = scopedQuery.eq("is_demo", false)'));
+  const exportSource = await Deno.readTextFile(new URL("../admin-export/index.ts", import.meta.url));
+  assert(exportSource.includes('if (resource === "profiles") query = query.eq("is_demo", false)'));
+});

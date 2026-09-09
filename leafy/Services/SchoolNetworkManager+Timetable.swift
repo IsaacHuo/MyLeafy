@@ -585,7 +585,10 @@ extension SchoolNetworkManager {
         guard let url = URL(string: "\(baseURL)/jsxsd/kscj/cjcx_list") else {
             throw URLError(.badURL)
         }
-        let (html, _) = try await html(from: url)
+        var request = makeRequest(url: url, method: "POST", referer: URL(string: "\(baseURL)/jsxsd/kscj/cjcx_query"))
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = "kksj=&kcxz=&kcmc=&xsfs=all".data(using: .utf8)
+        let (html, _) = try await html(for: request)
         if isLoginPage(html), await invalidateSessionIfNeeded() {
             throw SchoolNetworkError.sessionExpired
         }

@@ -51,6 +51,7 @@ nonisolated struct CommunityFeedSnapshot: Equatable, Sendable {
     let polls: [CommunityPoll]
     let items: [CommunityFeedItem]
     let pollsFailed: Bool
+    let requestedAt: Date
 }
 
 nonisolated enum CommunityFeedSearchDebounce {
@@ -88,9 +89,13 @@ final class CommunityFeedViewModel: ObservableObject {
     private static let maximumFeedLimit = 50
 
     private var currentQuery = CommunityFeedQuery.default
+    private var currentIdentityScope: String?
     private var activeLoadID: UUID?
     private var activeStageID: UUID?
     private var activePollRetryID: UUID?
+    private var seenItemIDs = Set<String>()
+    private var newestSeenCreation: Date?
+    private var appliedSnapshotRequestedAt: Date?
     private var pendingSnapshot: CommunityFeedSnapshot?
     private var stagedRefreshTask: Task<Void, Never>?
     private let repository: any CommunityFeedRepository
@@ -128,11 +133,16 @@ final class CommunityFeedViewModel: ObservableObject {
         stagedRefreshTask = nil
         clearPendingSnapshot()
 
-        let didChangeQuery = currentQuery != query
+        let identityScope = ActiveCampusContext.identity?.scopeKey
+        let didChangeQuery = currentQuery != query || currentIdentityScope != identityScope
+        currentIdentityScope = identityScope
         currentQuery = query
         isLoadingMore = false
         hasMoreItems = true
         if didChangeQuery {
+            seenItemIDs.removeAll()
+            newestSeenCreation = nil
+            appliedSnapshotRequestedAt = nil
             posts = []
             items = []
             pollErrorMessage = nil
@@ -153,6 +163,7 @@ final class CommunityFeedViewModel: ObservableObject {
         if !cachedPosts.isEmpty {
             posts = cachedPosts
             items = CommunityFeedItemOrdering.ordered(posts: cachedPosts, polls: [], matching: query)
+            recordDisplayedItems()
         }
     }
 
@@ -200,6 +211,7 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     private func fetchSnapshot(query: CommunityFeedQuery) async throws -> CommunityFeedSnapshot {
+        let requestedAt = Date()
         try await CommunityTimeout.run(
             seconds: 10,
             message: L10n.text("社区会话建立超时，请检查网络后重试。")
@@ -235,7 +247,8 @@ final class CommunityFeedViewModel: ObservableObject {
                 polls: loadedPolls,
                 matching: query
             ),
-            pollsFailed: pollsFailed
+            pollsFailed: pollsFailed,
+            requestedAt: requestedAt
         )
     }
 
@@ -249,6 +262,8 @@ final class CommunityFeedViewModel: ObservableObject {
     private func apply(_ snapshot: CommunityFeedSnapshot) {
         posts = snapshot.posts
         items = snapshot.items
+        appliedSnapshotRequestedAt = snapshot.requestedAt
+        recordDisplayedItems()
         hasMoreItems = canLoadMore(after: snapshot.posts, query: snapshot.query)
         pollErrorMessage = snapshot.pollsFailed
             ? L10n.text("社区投票加载失败，请重试。")
@@ -382,11 +397,17 @@ final class CommunityFeedViewModel: ObservableObject {
                   currentQuery == query
             else { return }
 
-            if snapshot.items == items {
+            guard !snapshot.pollsFailed else { return }
+            let hasNewItems = snapshot.items.contains { item in
+                guard !seenItemIDs.contains(item.id), let createdAt = CommunityTimestampFormatter.parse(item.createdAt) else { return false }
+                if query.mode.isHot {
+                    // A previously published post entering the ranking is not new content.
+                    return appliedSnapshotRequestedAt.map { createdAt >= $0 } ?? false
+                }
+                return newestSeenCreation.map { createdAt >= $0 } ?? true
+            }
+            guard hasNewItems else {
                 clearPendingSnapshot()
-                CommunityDiagnostics.log.info(
-                    "Community feed staged refresh unchanged query=\(query.cacheKey, privacy: .public) duration=\(Date().timeIntervalSince(startedAt), privacy: .public)"
-                )
                 return
             }
 
@@ -402,6 +423,13 @@ final class CommunityFeedViewModel: ObservableObject {
             CommunityDiagnostics.log.error(
                 "Community feed staged refresh failed query=\(query.cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)"
             )
+        }
+    }
+
+    private func recordDisplayedItems() {
+        seenItemIDs.formUnion(items.map(\.id))
+        if let latest = items.compactMap({ CommunityTimestampFormatter.parse($0.createdAt) }).max() {
+            newestSeenCreation = max(newestSeenCreation ?? latest, latest)
         }
     }
 
@@ -430,6 +458,7 @@ final class CommunityFeedViewModel: ObservableObject {
             let loadedPolls = try await loadPollsIfNeeded(query: query)
             guard !Task.isCancelled, activeLoadID == loadID, currentQuery == query else { return }
             items = CommunityFeedItemOrdering.ordered(posts: posts, polls: loadedPolls, matching: query)
+            recordDisplayedItems()
         } catch {
             guard !Task.isCancelled, activeLoadID == loadID, currentQuery == query else { return }
             CommunityDiagnostics.log.error("Community feed polls retry failed: \(error.localizedDescription, privacy: .public)")
@@ -496,6 +525,8 @@ final class CommunityFeedViewModel: ObservableObject {
             }
             posts = loadedPosts
             items = CommunityFeedItemOrdering.ordered(posts: loadedPosts, polls: loadedPolls, matching: nextQuery)
+            recordDisplayedItems()
+            clearPendingSnapshot()
             hasMoreItems = canLoadMore(after: loadedPosts, query: nextQuery)
             savePostsToCache()
             feedGeneration += 1

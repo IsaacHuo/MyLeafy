@@ -3,10 +3,7 @@ import OSLog
 import SwiftSoup
 
 extension SchoolNetworkManager {
-    private enum ClassroomUsageLookupResult {
-        case slot(ClassroomUsageSlot)
-        case reauthenticationNeeded(Error)
-    }
+
 
     func fetchExamSchedule() async throws -> String {
         if ReviewDemoMode.isEnabled {
@@ -254,6 +251,7 @@ extension SchoolNetworkManager {
     private func isEmptyClassroomPage(_ html: String) -> Bool {
         (html.contains("id=\"dataList\"") || html.contains("id='dataList'")) &&
         (
+            html.contains("tdvalue=") ||
             html.contains("项目列表") ||
             html.contains("jsjy_query2") ||
             html.contains("教室")
@@ -330,8 +328,19 @@ extension SchoolNetworkManager {
         try requireUndergraduatePortal(for: "空教室查询")
 
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
-        let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable()
-        let schedule = SemesterConfig.weekAndDay(for: date, config: semesterConfig)
+        let activeConfig = await SemesterConfig.refreshRemoteIfAvailable()
+        var schoolCalendar = Calendar(identifier: .gregorian)
+        schoolCalendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let selectedDay = schoolCalendar.startOfDay(for: date)
+        let configurations = [activeConfig] + SemesterConfig.timelineConfigurations.filter { $0.semesterID != activeConfig.semesterID }
+        guard let semesterConfig = configurations.first(where: { config in
+            let days = schoolCalendar.dateComponents([.day], from: schoolCalendar.startOfDay(for: config.semesterStartDate), to: selectedDay).day ?? -1
+            return (0..<(SemesterConfig.timetableWeekCapacity * 7)).contains(days)
+        }) else {
+            throw SchoolNetworkError.classroomDataUnavailable("所选日期不在已配置的学期内，请选择学期内的日期。")
+        }
+        let days = schoolCalendar.dateComponents([.day], from: schoolCalendar.startOfDay(for: semesterConfig.semesterStartDate), to: selectedDay).day ?? 0
+        let schedule = (week: days / 7 + 1, day: ((schoolCalendar.component(.weekday, from: selectedDay) + 5) % 7) + 1)
         let dateString = DateFormatters.queryDate.string(from: date)
 
         let path = "\(baseURL)/jsxsd/kbxx/jsjy_query2"
@@ -342,8 +351,8 @@ extension SchoolNetworkManager {
             URLQueryItem(name: "xnxqh", value: semesterConfig.semesterID),
             URLQueryItem(name: "zc", value: String(schedule.week)),
             URLQueryItem(name: "zc2", value: String(schedule.week)),
-            URLQueryItem(name: "jc", value: String(start)),
-            URLQueryItem(name: "jc2", value: String(end)),
+            URLQueryItem(name: "jc", value: String(format: "%02d", start)),
+            URLQueryItem(name: "jc2", value: String(format: "%02d", end)),
             URLQueryItem(name: "xqbh", value: ""),
             URLQueryItem(name: "jxqbh", value: ""),
             URLQueryItem(name: "jxlbh", value: ""),
@@ -353,14 +362,16 @@ extension SchoolNetworkManager {
             URLQueryItem(name: "xnxqhmc", value: ""),
             URLQueryItem(name: "xq", value: String(schedule.day)),
             URLQueryItem(name: "xq2", value: String(schedule.day)),
-            URLQueryItem(name: "jszt", value: "5")
+            URLQueryItem(name: "jszt", value: "")
         ]
 
-        guard let url = components.url else {
+        guard let url = URL(string: path) else {
             throw URLError(.badURL)
         }
 
-        let request = makeRequest(url: url, referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
+        var request = makeRequest(url: url, method: "POST", referer: URL(string: "\(baseURL)/jsxsd/kbxx/jsjy_query"))
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
         let (html, response) = try await html(for: request)
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
@@ -391,51 +402,9 @@ extension SchoolNetworkManager {
 
         try requireUndergraduatePortal(for: "空教室查询")
 
-        let target = ClassroomIdentity(building: building, room: room)
-        let log = Logger(subsystem: "com.isaachuo.leafy", category: "ClassroomLookup")
-        return try await withThrowingTaskGroup(of: ClassroomUsageLookupResult.self) { group in
-            for period in 1...12 {
-                group.addTask {
-                    do {
-                        let html = try await self.fetchEmptyClassrooms(date: date, start: period, end: period)
-                        let rooms = try await MainActor.run {
-                            try HTMLParser.parseEmptyClassrooms(html: html)
-                        }
-                        let status = ClassroomUsageStatusResolver.status(
-                            html: html,
-                            parsedRooms: rooms,
-                            target: target,
-                            rawBuilding: building,
-                            rawRoom: room
-                        )
-                        log.info(
-                            "Classroom usage period=\(period) target=\(target.building, privacy: .public)-\(target.room, privacy: .public) parsedRooms=\(rooms.count) status=\(status.rawValue, privacy: .public)"
-                        )
-                        return .slot(ClassroomUsageSlot(period: period, status: status))
-                    } catch {
-                        if ClassroomLookupReauthentication.requiresReauthentication(error) {
-                            return .reauthenticationNeeded(error)
-                        }
-                        log.error(
-                            "Classroom usage period=\(period) target=\(target.building, privacy: .public)-\(target.room, privacy: .public) status=unknown error=\(error.localizedDescription, privacy: .public)"
-                        )
-                        return .slot(ClassroomUsageSlot(period: period, status: .unknown))
-                    }
-                }
-            }
-
-            var result: [ClassroomUsageSlot] = []
-            for try await lookupResult in group {
-                switch lookupResult {
-                case .slot(let slot):
-                    result.append(slot)
-                case .reauthenticationNeeded(let error):
-                    group.cancelAll()
-                    throw error
-                }
-            }
-            return result.sorted { $0.period < $1.period }
-        }
+        let html = try await fetchEmptyClassrooms(date: date, start: 1, end: 12)
+        let matrix = try HTMLParser.parseClassroomAvailability(html: html)
+        return try matrix.usage(for: ClassroomIdentity(building: building, room: room))
     }
 
     func calendarAssets() -> [CalendarAsset] {

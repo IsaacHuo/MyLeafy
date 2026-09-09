@@ -678,6 +678,13 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testCourseReminderTriggerDateUsesSelectedAnchorPeriod() throws {
+        // These fixtures describe March 2026, independently of the active remote semester.
+        let savedConfig = SemesterRuntimeConfigCache.load()
+        SemesterRuntimeConfigCache.save(.previousSpring)
+        defer {
+            if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
+            else { SemesterRuntimeConfigCache.clear() }
+        }
         let course = Course(
             courseName: "森林生态学",
             teacher: "T",
@@ -1200,20 +1207,20 @@ extension PerformanceRefactorTests {
 
         XCTAssertTrue(
             try HTMLParser.parseEmptyClassrooms(
-                html: jwxtFixture("empty_classrooms_no_available.html")
+                html: classroomMatrixFixture().replacingOccurrences(of: "<td></td>", with: "<td>◆</td>")
             ).isEmpty
         )
         XCTAssertTrue(
             try HTMLParser.parseEmptyClassrooms(
-                html: jwxtFixture("empty_classrooms_empty_table.html")
+                html: "<table id=\"dataList\"><tr><th>星期</th><th>星期三</th></tr><tr><td></td><td tdvalue=\"0102\">0102</td></tr></table>"
             ).isEmpty
         )
         XCTAssertThrowsError(
             try HTMLParser.parseEmptyClassrooms(
-                html: jwxtFixture("empty_classrooms_malformed_rows.html")
+                html: classroomMatrixFixture().replacingOccurrences(of: "tdvalue=", with: "other=")
             )
         ) { error in
-            guard case HTMLParserError.tableRowsUnparseable("空教室") = error else {
+            guard case HTMLParserError.tableRowsUnparseable("教室节次") = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
         }
@@ -1486,6 +1493,13 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testWidgetSnapshotUsesOccurrenceNoteBeforeCourseNote() throws {
+        // These fixtures describe March 2026, independently of the active remote semester.
+        let savedConfig = SemesterRuntimeConfigCache.load()
+        SemesterRuntimeConfigCache.save(.previousSpring)
+        defer {
+            if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
+            else { SemesterRuntimeConfigCache.clear() }
+        }
         let firstWeekDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 8)))
         let secondWeekDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 8)))
         let course = Course(
@@ -1527,6 +1541,13 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testCalendarExportBuilderBuildsRangeAndLeafyURL() throws {
+        // These fixtures describe March 2026, independently of the active remote semester.
+        let savedConfig = SemesterRuntimeConfigCache.load()
+        SemesterRuntimeConfigCache.save(.previousSpring)
+        defer {
+            if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
+            else { SemesterRuntimeConfigCache.clear() }
+        }
         let referenceDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 8)))
         let course = Course(
             courseName: "森林生态学",
@@ -1695,6 +1716,13 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testCalendarExportBuilderBuildsExamAndReminderDraftsWithoutCourses() throws {
+        // These fixtures describe March 2026, independently of the active remote semester.
+        let savedConfig = SemesterRuntimeConfigCache.load()
+        SemesterRuntimeConfigCache.save(.previousSpring)
+        defer {
+            if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
+            else { SemesterRuntimeConfigCache.clear() }
+        }
         let referenceDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 8)))
         let reminder = TimetableCellReminder(week: 2, dayOfWeek: 1, period: 3, title: "社团面试")
         let exam = ExamArrangement(

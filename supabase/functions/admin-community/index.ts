@@ -237,6 +237,7 @@ async function overview(context: AdminContext, params: Record<string, unknown>) 
     configure?: (query: any) => any,
   ) => countRows(client, table, (query) => {
     let scopedQuery = campusID ? query.eq(column, campusID) : query;
+    if (table === "profiles") scopedQuery = scopedQuery.eq("is_demo", false);
     if (configure) {
       scopedQuery = configure(scopedQuery);
     }
@@ -599,7 +600,7 @@ async function moderationAnalytics(context: AdminContext, days: number, campusID
       : countRows(context.adminClient, "comments", (query) => query.eq("status", "hidden").gte("moderated_at", since)),
     countRows(context.adminClient, "profiles", (query) => {
       let scopedQuery = campusID ? query.eq("community_campus_id", campusID) : query;
-      return scopedQuery.gte("muted_at", since);
+      return scopedQuery.eq("is_demo", false).gte("muted_at", since);
     }),
     countModerationReports(context, campusID, (query) => query.eq("status", "open")),
     countModerationReports(context, campusID, (query) => query.eq("status", "open").lt("created_at", new Date(Date.now() - 24 * 36e5).toISOString())),
@@ -1425,6 +1426,7 @@ async function listProfiles(context: AdminContext, params: Record<string, unknow
   let query: any = context.adminClient
     .from("profiles")
     .select(profileAdminProjection(context), { count: "exact" })
+    .eq("is_demo", false)
     .order("created_at", { ascending: false })
     .range(from, to);
 

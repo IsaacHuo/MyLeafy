@@ -181,6 +181,48 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
+    func testCommunityFeedDoesNotPromptForCountsEditsOrOlderRankedItems() async throws {
+        let original = makeCommunityPost(title: "原帖", createdAt: "2026-05-14T10:00:00Z")
+        let edited = makeCommunityPost(id: original.id, title: "修改后的正文", commentCount: 5, likeCount: 3, createdAt: original.createdAt)
+        let older = makeCommunityPost(title: "旧帖进入排序", createdAt: "2026-05-13T10:00:00Z")
+        let repository = FakeCommunityRepository(postResponses: [[original], [edited], [older, edited], [edited]])
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+        await viewModel.load()
+        for _ in 0..<3 {
+            viewModel.requestStagedRefresh(after: .zero)
+            try await Task.sleep(for: .milliseconds(100))
+            XCTAssertFalse(viewModel.hasPendingRefresh)
+        }
+    }
+
+    @MainActor
+    func testHotFeedDoesNotCallAnExistingNewerRankedPostNewContent() async throws {
+        let formatter = ISO8601DateFormatter()
+        let original = makeCommunityPost(likeCount: 10, createdAt: formatter.string(from: Date().addingTimeInterval(-300)))
+        let previouslyPublished = makeCommunityPost(likeCount: 20, createdAt: formatter.string(from: Date().addingTimeInterval(-60)))
+        let repository = FakeCommunityRepository(postResponses: [[original], [previouslyPublished, original]])
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+        await viewModel.load(query: .hot)
+        viewModel.requestStagedRefresh(after: .zero)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(viewModel.hasPendingRefresh)
+    }
+
+    @MainActor
+    func testCommunityFeedPartialSnapshotDoesNotCreateNewContentPrompt() async throws {
+        let original = makeCommunityPost()
+        let newer = makeCommunityPost(createdAt: "2026-05-15T00:00:00Z")
+        let repository = FakeCommunityRepository(postResponses: [[original], [newer, original]])
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
+        await viewModel.load()
+        await repository.setPollFetchError(.failure("投票请求失败"))
+        viewModel.requestStagedRefresh(after: .zero)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(viewModel.hasPendingRefresh)
+        XCTAssertEqual(viewModel.posts, [original])
+    }
+
+    @MainActor
     func testCommunityFeedCoalescesRepeatedStagedRefreshRequests() async throws {
         let initialPost = makeCommunityPost(title: "旧帖子")
         let newPost = makeCommunityPost(title: "新帖子")

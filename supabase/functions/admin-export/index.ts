@@ -113,6 +113,7 @@ async function loadRows(client: any, resource: string, cfg: ExportConfig, filter
     : cfg;
   const select = effective.select ?? effective.columns.join(",");
   let query: any = client.from(effective.table).select(select).limit(10_000);
+  if (resource === "profiles") query = query.eq("is_demo", false);
   const sortField = effective.columns.includes(String(sort?.field)) ? String(sort?.field) : effective.defaultSort;
   query = query.order(sortField, { ascending: String(sort?.order).toUpperCase() === "ASC" });
 

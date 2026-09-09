@@ -12,21 +12,54 @@ struct CourseSectionView: View {
     @Binding var selectedCourse: CourseRatingSummary?
     let refreshID: UUID
     let isActive: Bool
-    let lifecycleStore: RatingCatalogSectionStore
+    @Bindable var store: CourseRatingCatalogStore
 
     private let pageSize = 50
 
-    @State private var search = ""
-    @State private var selectedCategory: String?
-    @State private var selectedStars: Int?
-    @State private var isFilterExpanded = false
-    @State private var courses: [CourseRatingSummary] = []
-    @State private var filteredCourses: [CourseRatingSummary] = []
-    @State private var availableCategories: [String] = []
-    @State private var isLoading = false
-    @State private var isLoadingMore = false
-    @State private var canLoadMore = false
-    @State private var errorMessage: String?
+    private var search: String {
+        get { store.search }
+        nonmutating set { store.search = newValue }
+    }
+    private var selectedCategory: String? {
+        get { store.selectedCategory }
+        nonmutating set { store.selectedCategory = newValue }
+    }
+    private var selectedStars: Int? {
+        get { store.selectedStars }
+        nonmutating set { store.selectedStars = newValue }
+    }
+    private var isFilterExpanded: Bool {
+        get { store.isFilterExpanded }
+        nonmutating set { store.isFilterExpanded = newValue }
+    }
+    private var courses: [CourseRatingSummary] {
+        get { store.courses }
+        nonmutating set { store.courses = newValue }
+    }
+    private var filteredCourses: [CourseRatingSummary] {
+        get { store.filteredCourses }
+        nonmutating set { store.filteredCourses = newValue }
+    }
+    private var availableCategories: [String] {
+        get { store.availableCategories }
+        nonmutating set { store.availableCategories = newValue }
+    }
+    private var isLoading: Bool {
+        get { store.isLoading }
+        nonmutating set { store.isLoading = newValue }
+    }
+    private var isLoadingMore: Bool {
+        get { store.isLoadingMore }
+        nonmutating set { store.isLoadingMore = newValue }
+    }
+    private var canLoadMore: Bool {
+        get { store.canLoadMore }
+        nonmutating set { store.canLoadMore = newValue }
+    }
+    private var errorMessage: String? {
+        get { store.errorMessage }
+        nonmutating set { store.errorMessage = newValue }
+    }
     @State private var searchTask: Task<Void, Never>?
     @State private var suggestionSheet: CatalogSuggestionSheetContext?
 
@@ -47,10 +80,10 @@ struct CourseSectionView: View {
                     }
 
                     CourseFilterToolbar(
-                        search: $search,
-                        selectedCategory: $selectedCategory,
-                        selectedStars: $selectedStars,
-                        isExpanded: $isFilterExpanded,
+                        search: $store.search,
+                        selectedCategory: $store.selectedCategory,
+                        selectedStars: $store.selectedStars,
+                        isExpanded: $store.isFilterExpanded,
                         availableCategories: availableCategories,
                         hasActiveFilters: hasActiveFilters,
                         clearFilters: clearFilters
@@ -63,7 +96,7 @@ struct CourseSectionView: View {
             }
         }
         .task(id: isActive) {
-            guard isActive, lifecycleStore.beginInitialLoad() else { return }
+            guard isActive, !store.load.hasLoaded else { return }
             await loadCourses(reset: true)
         }
         .onChange(of: search) { _, _ in
@@ -85,6 +118,9 @@ struct CourseSectionView: View {
         }
         .onDisappear {
             searchTask?.cancel()
+            store.load.cancel()
+            isLoading = false
+            isLoadingMore = false
         }
         .leafySheet(item: $suggestionSheet) { context in
             CatalogSuggestionSheet(context: context)
@@ -94,7 +130,7 @@ struct CourseSectionView: View {
 
     @ViewBuilder
     private var courseContent: some View {
-        if isLoading && courses.isEmpty {
+        if (isLoading || (!store.load.hasLoaded && errorMessage == nil)) && courses.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
@@ -172,16 +208,15 @@ struct CourseSectionView: View {
         let signpostState = LeafyPerformanceSignposter.ratings.beginInterval("courses-load")
         defer { LeafyPerformanceSignposter.ratings.endInterval("courses-load", signpostState) }
 
-        if reset {
-            isLoading = true
-        } else {
-            guard !isLoadingMore, canLoadMore else { return }
-            isLoadingMore = true
-        }
+        guard reset || (!isLoading && !isLoadingMore && canLoadMore) else { return }
+        let loadID = store.load.begin()
+        let requestSearch = search
+        let requestSelectedCategory = selectedCategory
+        isLoading = reset
+        isLoadingMore = !reset
         defer {
-            if reset {
+            if store.load.isCurrent(loadID) {
                 isLoading = false
-            } else {
                 isLoadingMore = false
             }
         }
@@ -200,6 +235,7 @@ struct CourseSectionView: View {
                 courses.append(contentsOf: demoCourses.filter { !existingIDs.contains($0.id) })
             }
             canLoadMore = demoCourses.count == pageSize
+            store.load.complete(loadID)
             errorMessage = nil
             updateDerivedCourseState()
             return
@@ -207,12 +243,14 @@ struct CourseSectionView: View {
 
         do {
             try await dependencies.communityRepository.ensureAnonymousSession()
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCategory == requestSelectedCategory else { return }
             let fetchedCourses = try await dependencies.communityRepository.fetchCourseRatingSummaries(
                 search: search,
                 category: selectedCategory,
                 limit: pageSize,
                 offset: reset ? 0 : courses.count
             )
+                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCategory == requestSelectedCategory else { return }
             if reset {
                 courses = fetchedCourses
             } else {
@@ -220,12 +258,10 @@ struct CourseSectionView: View {
                 courses.append(contentsOf: fetchedCourses.filter { !existingIDs.contains($0.id) })
             }
             canLoadMore = fetchedCourses.count == pageSize
+            store.load.complete(loadID)
             errorMessage = nil
         } catch {
-            if reset {
-                courses = []
-                canLoadMore = false
-            }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCategory == requestSelectedCategory else { return }
             errorMessage = error.localizedDescription
         }
         updateDerivedCourseState()

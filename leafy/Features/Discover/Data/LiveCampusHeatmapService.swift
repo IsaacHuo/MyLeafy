@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
     private let fetchEmptyClassroomsHTML: @Sendable (Date, Int, Int) async throws -> String
-    private let parseEmptyClassrooms: @Sendable (String) throws -> [EmptyClassroom]
+    private let parseEmptyClassrooms: @Sendable (String, Int, Int) throws -> [EmptyClassroom]
     private let isDemoModeEnabled: @Sendable () async -> Bool
     private let demoEmptyClassrooms: @Sendable (Date, Int, Int) async -> [EmptyClassroom]
     private let requiresReauthentication: @Sendable (Error) -> Bool
@@ -13,8 +13,8 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
         fetchEmptyClassroomsHTML: @escaping @Sendable (Date, Int, Int) async throws -> String = { date, start, end in
             try await ActiveCampusContext.networkManager.fetchEmptyClassrooms(date: date, start: start, end: end)
         },
-        parseEmptyClassrooms: @escaping @Sendable (String) throws -> [EmptyClassroom] = { html in
-            try HTMLParser.parseEmptyClassrooms(html: html)
+        parseEmptyClassrooms: @escaping @Sendable (String, Int, Int) throws -> [EmptyClassroom] = { html, start, end in
+            try HTMLParser.parseEmptyClassrooms(html: html, start: start, end: end)
         },
         isDemoModeEnabled: @escaping @Sendable () async -> Bool = {
             await MainActor.run { ReviewDemoMode.isEnabled }
@@ -62,7 +62,7 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
                     request.startPeriod,
                     request.endPeriod
                 )
-                rooms = try parseEmptyClassrooms(html)
+                rooms = try parseEmptyClassrooms(html, request.startPeriod, request.endPeriod)
             }
 
             let updatedData = CachedCampusHeatmapData(

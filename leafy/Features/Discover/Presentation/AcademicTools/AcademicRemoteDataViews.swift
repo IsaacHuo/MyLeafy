@@ -1014,6 +1014,11 @@ private struct GraduationProgressSummaryView: View {
                     categoryRow(category)
                 }
 
+                if let syncedAt = creditSummary?.syncedAt {
+                    Text("官方学分更新于 \(syncedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if let creditSummary, !creditSummary.publicElectiveBuckets.isEmpty {
                     publicElectiveDistribution(summary: creditSummary)
                 }
@@ -1043,7 +1048,7 @@ private struct GraduationProgressSummaryView: View {
 
             Spacer()
 
-            Text("\(creditFormat(category.completedCredits)) / \(creditFormat(category.requiredCredits))")
+            Text(category.hasCompletedCredits ? "\(creditFormat(category.completedCredits)) / \(creditFormat(category.requiredCredits))" : "未确认 / \(creditFormat(category.requiredCredits))")
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
         }
@@ -1075,16 +1080,18 @@ private struct GraduationProgressSummaryView: View {
     }
 
     private func categorySubtitle(_ category: GraduationCreditCategoryProgress) -> String {
+        guard category.hasCompletedCredits else { return "官方要求，已修学分尚未确认" }
         if category.kind == .publicElective || category.kind == .professionalElective {
             return category.isSatisfied
                 ? "已满足"
-                : "还差 \(creditFormat(category.remainingCredits)) 学分，约 \(category.estimatedRemainingCourses ?? 1) 门"
+                : "还差 \(creditFormat(category.remainingCredits)) 学分"
         }
 
         return "官方要求 \(creditFormat(category.requiredCredits)) 学分"
     }
 
     private func categoryIcon(_ category: GraduationCreditCategoryProgress) -> String {
+        guard category.hasCompletedCredits else { return "官方要求，已修学分尚未确认" }
         if category.kind == .publicElective || category.kind == .professionalElective {
             return category.isSatisfied ? "checkmark.circle.fill" : "circle.dashed"
         }
@@ -1092,6 +1099,7 @@ private struct GraduationProgressSummaryView: View {
     }
 
     private func categoryIconColor(_ category: GraduationCreditCategoryProgress) -> Color {
+        guard category.hasCompletedCredits else { return AppTheme.secondaryText }
         if category.kind == .publicElective || category.kind == .professionalElective {
             return category.isSatisfied ? AppTheme.accent : AppTheme.warning
         }
@@ -1130,10 +1138,10 @@ struct TrainingProgramView: View {
 
     private var graduationProgressFootnote: String {
         if creditSummary?.hasCreditTotals == true {
-            return "总学分和公选课分类优先使用成绩页同步的教务官方所得学分；补考或重修记录仍按有效课程口径去重。其他类别先展示官方要求，不做无法核验的本地归类。"
+            return "总学分、公选和本专业选修优先使用教务官方所得学分。其他类别仅展示官方要求。总学分达标不代表已满足全部毕业条件；第二课堂按方案单独核验。"
         }
 
-        return "总学分按成绩页有效通过课程估算；补考或重修通过后只计一门，未通过记录不计入毕业进度。公选课、专选课按成绩页课程分类估算，其他类别先展示官方要求。"
+        return "总学分按有效通过课程估算，不代表学校认定的毕业学分。同编号重修只计一次；缺少编号的旧记录不跨学期合并。分类学分尚未确认，请同步官方汇总。"
     }
 
     var body: some View {
@@ -1191,6 +1199,12 @@ struct TrainingProgramView: View {
                     ForEach(document.sections) { section in
                         programSectionCard(section)
                     }
+                }
+            }
+
+            if let tables = document?.tables {
+                ForEach(tables) { table in
+                    TrainingProgramTableView(table: table)
                 }
             }
 
@@ -1525,10 +1539,11 @@ struct TrainingProgramView: View {
             guard let categoryProgress = progress.categories.first(where: { $0.kind == requirement.kind }) else {
                 return "\(requirement.category) · 官方要求"
             }
+            guard categoryProgress.hasCompletedCredits else { return "\(requirement.category) · 已修学分尚未确认" }
             if categoryProgress.isSatisfied {
                 return "\(requirement.category) · 已满足"
             }
-            return "\(requirement.category) · 还差 \(creditFormat(categoryProgress.remainingCredits)) 学分，约 \(categoryProgress.estimatedRemainingCourses ?? 1) 门"
+            return "\(requirement.category) · 还差 \(creditFormat(categoryProgress.remainingCredits)) 学分"
         case .other:
             return "\(requirement.category) · 官方分类要求"
         }
@@ -1613,6 +1628,7 @@ struct EmptyClassroomView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var didAutoSubmit = false
+    @State private var hasQueried = false
     @State private var operationAlert: LeafyOperationAlert?
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var progressController = AcademicOperationProgressController()
@@ -1739,9 +1755,9 @@ struct EmptyClassroomView: View {
             if !isCustomCampus, mode == .byPeriod {
                 VStack(alignment: .leading, spacing: AppSpacing.compact) {
                     AcademicDetailSectionHeader(title: "空闲教室")
-                    if rooms.isEmpty && !isLoading {
+                    if rooms.isEmpty && !isLoading && errorMessage == nil {
                         AcademicDetailCard {
-                            Text("当前条件下没有可用教室")
+                            Text(hasQueried ? "当前条件下没有可用教室" : "请选择查询条件并开始查询")
                                 .foregroundStyle(.secondary)
                         }
                     } else {
@@ -1942,7 +1958,7 @@ struct EmptyClassroomView: View {
                 )
             }
         }
-        defer { Task { @MainActor in isLoading = false } }
+        defer { isLoading = false }
 
         let outcome = await dependencies.classroomLookupService.lookup(
             classroomLookupRequest,
@@ -1953,6 +1969,7 @@ struct EmptyClassroomView: View {
             rooms = ClassroomLookupCatalog.filteredRooms(outcome.data.rooms)
             usage = outcome.data.usage
             expandedBuildingIDs = []
+            hasQueried = true
             errorMessage = outcome.errorMessage
             if outcome.requiresReauthentication {
                 progressController.record(

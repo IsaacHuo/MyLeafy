@@ -16,7 +16,7 @@ struct AcademicHubView: View {
     @State private var dishRefreshID = UUID()
     @State private var requestedTeacherName: String?
     @State private var navigationPath: [AcademicNavigationItem] = []
-    @State private var isHandlingExternalRoute = false
+    @State private var navigationTab: AcademicPrimaryTab?
 
     init(
         selectedTab: Binding<AcademicPrimaryTab> = .constant(.cultivation),
@@ -69,10 +69,10 @@ struct AcademicHubView: View {
                     .padding(.top, -AppSpacing.micro)
                 }
                 .onChange(of: selectedTab) { _, _ in
-                    if isHandlingExternalRoute {
-                        isHandlingExternalRoute = false
-                        return
-                    }
+                    // A route may arrive before SwiftUI delivers the tab's onChange callback.
+                    // Keep a path already owned by the destination tab.
+                    guard navigationTab != selectedTab else { return }
+                    navigationTab = selectedTab
                     navigationPath.removeAll()
                     if accessibilityReduceMotion {
                         proxy.scrollTo("academic-content-top", anchor: .top)
@@ -244,6 +244,7 @@ struct AcademicHubView: View {
             sanitizeSelectedTab()
             return
         }
+        navigationTab = route.tab
         navigationPath.append(AcademicNavigationItem(route: route))
     }
 
@@ -287,13 +288,8 @@ struct AcademicHubView: View {
         }
 
         navigationPath.removeAll()
-        let changesSelectedTab = selectedTab != target.tab
-        isHandlingExternalRoute = changesSelectedTab
         selectedTab = target.tab
         openRoute(target.detailRoute)
-        if !changesSelectedTab {
-            isHandlingExternalRoute = false
-        }
 
         appNavigation.requestedAcademicRoute = nil
     }
@@ -320,13 +316,8 @@ struct AcademicHubView: View {
         }
 
         navigationPath.removeAll()
-        let changesSelectedTab = selectedTab != route.tab
-        isHandlingExternalRoute = changesSelectedTab
         selectedTab = route.tab
         openRoute(route)
-        if !changesSelectedTab {
-            isHandlingExternalRoute = false
-        }
 
         appNavigation.requestedAcademicDetailRoute = nil
     }
@@ -346,13 +337,9 @@ struct AcademicHubView: View {
         }
 
         navigationPath.removeAll()
-        let changesSelectedTab = selectedTab != .ratings
-        isHandlingExternalRoute = changesSelectedTab
         selectedTab = .ratings
+        navigationTab = .ratings
         requestedTeacherName = route.name
-        if !changesSelectedTab {
-            isHandlingExternalRoute = false
-        }
         appNavigation.requestedTeacherRatingRoute = nil
     }
 

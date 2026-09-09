@@ -142,7 +142,7 @@ final class CampusHeatmapServiceTests: XCTestCase {
                 await recorder.recordFetch(date: date, start: start, end: end)
                 return "<html></html>"
             },
-            parseEmptyClassrooms: { _ in rooms },
+            parseEmptyClassrooms: { _, _, _ in rooms },
             isDemoModeEnabled: { false },
             now: { updatedAt },
             cache: cache

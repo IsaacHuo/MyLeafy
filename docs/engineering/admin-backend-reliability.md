@@ -28,3 +28,7 @@ Deploy the database migration first, then `admin-login`, `admin-me`, `admin-logo
 `admin-export`, then publish the site. Do not auto-review pending production suggestions in a migration. After all
 layers are live, retry the pending suggestion from the production UI and verify the approved target, rating count,
 teacher count, audit record, and consistency queries.
+
+## User counting scope
+
+Operational user metrics use `profiles.is_demo = false`, including profile lists, exact pagination totals, search, CSV exports, overview cards, and daily new-user trends. The generated classification covers legacy and installation review identities; it is not a client-editable flag. Demo accounts remain available to authentication and community workflows. Deploy the database migration before the updated admin Edge Functions.

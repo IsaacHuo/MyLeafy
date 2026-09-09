@@ -496,6 +496,10 @@ enum ReviewDemoDataSeeder {
         let credit: String
         let score: String
         let type: String
+        let courseCode: String?
+        let courseAttribute: String?
+        let courseCategory: String?
+        let examNature: String?
 
         init(_ grade: Grade) {
             term = grade.term
@@ -503,10 +507,14 @@ enum ReviewDemoDataSeeder {
             credit = grade.credit
             score = grade.score
             type = grade.type
+            courseCode = grade.courseCode
+            courseAttribute = grade.courseAttribute
+            courseCategory = grade.courseCategory
+            examNature = grade.examNature
         }
 
         var grade: Grade {
-            Grade(term: term, courseName: courseName, credit: credit, score: score, type: type)
+            Grade(term: term, courseName: courseName, credit: credit, score: score, type: type, courseCode: courseCode, courseAttribute: courseAttribute, courseCategory: courseCategory, examNature: examNature)
         }
     }
 }

@@ -12,21 +12,54 @@ struct DishSectionView: View {
     @Binding var selectedDish: DishRatingSummary?
     let refreshID: UUID
     let isActive: Bool
-    let lifecycleStore: RatingCatalogSectionStore
+    @Bindable var store: DishRatingCatalogStore
 
     private let pageSize = 50
 
-    @State private var search = ""
-    @State private var selectedCanteen: String?
-    @State private var selectedLocation: String?
-    @State private var selectedStars: Int?
-    @State private var isFilterExpanded = false
-    @State private var dishes: [DishRatingSummary] = []
-    @State private var filteredDishes: [DishRatingSummary] = []
-    @State private var isLoading = false
-    @State private var isLoadingMore = false
-    @State private var canLoadMore = false
-    @State private var errorMessage: String?
+    private var search: String {
+        get { store.search }
+        nonmutating set { store.search = newValue }
+    }
+    private var selectedCanteen: String? {
+        get { store.selectedCanteen }
+        nonmutating set { store.selectedCanteen = newValue }
+    }
+    private var selectedLocation: String? {
+        get { store.selectedLocation }
+        nonmutating set { store.selectedLocation = newValue }
+    }
+    private var selectedStars: Int? {
+        get { store.selectedStars }
+        nonmutating set { store.selectedStars = newValue }
+    }
+    private var isFilterExpanded: Bool {
+        get { store.isFilterExpanded }
+        nonmutating set { store.isFilterExpanded = newValue }
+    }
+    private var dishes: [DishRatingSummary] {
+        get { store.dishes }
+        nonmutating set { store.dishes = newValue }
+    }
+    private var filteredDishes: [DishRatingSummary] {
+        get { store.filteredDishes }
+        nonmutating set { store.filteredDishes = newValue }
+    }
+    private var isLoading: Bool {
+        get { store.isLoading }
+        nonmutating set { store.isLoading = newValue }
+    }
+    private var isLoadingMore: Bool {
+        get { store.isLoadingMore }
+        nonmutating set { store.isLoadingMore = newValue }
+    }
+    private var canLoadMore: Bool {
+        get { store.canLoadMore }
+        nonmutating set { store.canLoadMore = newValue }
+    }
+    private var errorMessage: String? {
+        get { store.errorMessage }
+        nonmutating set { store.errorMessage = newValue }
+    }
     @State private var searchTask: Task<Void, Never>?
     @State private var suggestionSheet: CatalogSuggestionSheetContext?
 
@@ -50,11 +83,11 @@ struct DishSectionView: View {
                     }
 
                     DishFilterToolbar(
-                        search: $search,
-                        selectedCanteen: $selectedCanteen,
-                        selectedLocation: $selectedLocation,
-                        selectedStars: $selectedStars,
-                        isExpanded: $isFilterExpanded,
+                        search: $store.search,
+                        selectedCanteen: $store.selectedCanteen,
+                        selectedLocation: $store.selectedLocation,
+                        selectedStars: $store.selectedStars,
+                        isExpanded: $store.isFilterExpanded,
                         hasActiveFilters: hasActiveFilters,
                         clearFilters: clearFilters
                     )
@@ -66,7 +99,7 @@ struct DishSectionView: View {
             }
         }
         .task(id: isActive) {
-            guard isActive, lifecycleStore.beginInitialLoad() else { return }
+            guard isActive, !store.load.hasLoaded else { return }
             await loadDishes(reset: true)
         }
         .onChange(of: search) { _, _ in
@@ -96,6 +129,9 @@ struct DishSectionView: View {
         }
         .onDisappear {
             searchTask?.cancel()
+            store.load.cancel()
+            isLoading = false
+            isLoadingMore = false
         }
         .leafySheet(item: $suggestionSheet) { context in
             CatalogSuggestionSheet(context: context)
@@ -105,7 +141,7 @@ struct DishSectionView: View {
 
     @ViewBuilder
     private var dishContent: some View {
-        if isLoading && dishes.isEmpty {
+        if (isLoading || (!store.load.hasLoaded && errorMessage == nil)) && dishes.isEmpty {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
@@ -178,16 +214,16 @@ struct DishSectionView: View {
         let signpostState = LeafyPerformanceSignposter.ratings.beginInterval("dishes-load")
         defer { LeafyPerformanceSignposter.ratings.endInterval("dishes-load", signpostState) }
 
-        if reset {
-            isLoading = true
-        } else {
-            guard !isLoadingMore, canLoadMore else { return }
-            isLoadingMore = true
-        }
+        guard reset || (!isLoading && !isLoadingMore && canLoadMore) else { return }
+        let loadID = store.load.begin()
+        let requestSearch = search
+        let requestSelectedCanteen = selectedCanteen
+        let requestSelectedLocation = selectedLocation
+        isLoading = reset
+        isLoadingMore = !reset
         defer {
-            if reset {
+            if store.load.isCurrent(loadID) {
                 isLoading = false
-            } else {
                 isLoadingMore = false
             }
         }
@@ -207,6 +243,7 @@ struct DishSectionView: View {
                 dishes.append(contentsOf: demoDishes.filter { !existingIDs.contains($0.id) })
             }
             canLoadMore = demoDishes.count == pageSize
+            store.load.complete(loadID)
             errorMessage = nil
             updateDerivedDishState()
             return
@@ -214,6 +251,7 @@ struct DishSectionView: View {
 
         do {
             try await dependencies.communityRepository.ensureAnonymousSession()
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
             let fetchedDishes = try await dependencies.communityRepository.fetchDishRatingSummaries(
                 search: search,
                 canteen: selectedCanteen,
@@ -221,6 +259,7 @@ struct DishSectionView: View {
                 limit: pageSize,
                 offset: reset ? 0 : dishes.count
             )
+                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
             if reset {
                 dishes = fetchedDishes
             } else {
@@ -228,12 +267,10 @@ struct DishSectionView: View {
                 dishes.append(contentsOf: fetchedDishes.filter { !existingIDs.contains($0.id) })
             }
             canLoadMore = fetchedDishes.count == pageSize
+            store.load.complete(loadID)
             errorMessage = nil
         } catch {
-            if reset {
-                dishes = []
-                canLoadMore = false
-            }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
             errorMessage = error.localizedDescription
         }
         updateDerivedDishState()

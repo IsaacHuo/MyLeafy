@@ -60,6 +60,8 @@ struct TeachingPlanCourse: Identifiable, Codable, Hashable {
     let duration: String
     let type: String
     let exam: String
+    var courseCode: String? = nil
+    var courseCategory: String? = nil
 }
 
 struct GradeRankingRecord: Identifiable, Codable, Hashable {
@@ -132,9 +134,10 @@ struct GradeCreditSummary: Codable, Hashable {
     let officialCreditPoint: Double?
     let publicElectiveBuckets: [GradeCreditBucket]
     let rawFields: [String: String]
+    var syncedAt: Date? = nil
 
     var hasCreditTotals: Bool {
-        totalCredits > 0
+        rawFields["所得学分"] != nil || totalCredits > 0
             || requiredCredits > 0
             || professionalElectiveCredits > 0
             || professionalMajorElectiveCredits > 0
@@ -155,15 +158,10 @@ struct GradeCreditSummary: Codable, Hashable {
 
     func mergedForCache(with existing: GradeCreditSummary?) -> GradeCreditSummary {
         guard let existing else { return self }
+        // A fresh full summary is authoritative, including absent official metrics.
+        if hasCreditTotals { return self }
 
-        let creditSource: GradeCreditSummary
-        if hasCreditTotals {
-            creditSource = self
-        } else if existing.hasCreditTotals {
-            creditSource = existing
-        } else {
-            creditSource = self
-        }
+        let creditSource = existing.hasCreditTotals ? existing : self
 
         return GradeCreditSummary(
             totalCredits: creditSource.totalCredits,
@@ -176,7 +174,8 @@ struct GradeCreditSummary: Codable, Hashable {
             officialWeightedAverage: officialWeightedAverage ?? existing.officialWeightedAverage,
             officialCreditPoint: officialCreditPoint ?? existing.officialCreditPoint,
             publicElectiveBuckets: creditSource.publicElectiveBuckets,
-            rawFields: existing.rawFields.merging(rawFields) { _, new in new }
+            rawFields: existing.rawFields.merging(rawFields) { _, new in new },
+            syncedAt: creditSource.syncedAt
         )
     }
 }
@@ -268,6 +267,13 @@ struct TrainingProgramDocument: Identifiable, Codable, Hashable {
     let title: String
     let sections: [TrainingProgramSection]
     let creditRequirements: [GraduationCreditRequirement]
+    var tables: [TrainingProgramTable]? = nil
+}
+
+struct TrainingProgramTable: Identifiable, Codable, Hashable {
+    let id: String
+    let title: String
+    let rows: [[String]]
 }
 
 struct TrainingProgramLink: Identifiable, Codable, Hashable {
@@ -334,7 +340,7 @@ struct GraduationCreditCategoryProgress: Identifiable, Hashable {
     let requiredCredits: Double
     let completedCredits: Double
     let completedCourseCount: Int
-    let estimatedRemainingCourses: Int?
+    var hasCompletedCredits: Bool = true
     let completedBuckets: [GradeCreditBucket]
     let missingBucketNames: [String]
 
@@ -345,12 +351,12 @@ struct GraduationCreditCategoryProgress: Identifiable, Hashable {
     }
 
     var completionRatio: Double? {
-        guard requiredCredits > 0 else { return nil }
+        guard hasCompletedCredits, requiredCredits > 0 else { return nil }
         return min(completedCredits / requiredCredits, 1)
     }
 
     var isSatisfied: Bool {
-        requiredCredits > 0 && completedCredits + 0.001 >= requiredCredits
+        hasCompletedCredits && requiredCredits > 0 && completedCredits + 0.001 >= requiredCredits
     }
 }
 
@@ -412,10 +418,7 @@ enum GraduationCreditProgressCalculator {
             .max()
 
         let categoryRequirements = groupedCategoryRequirements(from: requirements)
-        let totalRequired = explicitTotal
-            ?? categoryRequirements.reduce(0) { $0 + $1.requiredCredits }
-            .nonZero
-            ?? requirements.reduce(0) { $0 + max($1.requiredCredits, $1.plannedCredits) }
+        let totalRequired = explicitTotal ?? 0
 
         var requirementByCourseName: [String: GraduationCreditRequirement] = [:]
         for requirement in courseRequirements {
@@ -457,14 +460,14 @@ enum GraduationCreditProgressCalculator {
         let categories = categoryRequirements.map { requirement in
             let key = categoryKey(kind: requirement.kind, category: requirement.category)
             let completed = completedByCategory[key] ?? (0, 0)
-            let remaining = max(requirement.requiredCredits - completed.credits, 0)
-            let averageCredit = averageCourseCredit(
-                for: requirement,
-                completedCredits: completed.credits,
-                completedCourses: completed.courses,
-                courseRequirements: courseRequirements
-            )
-            let remainingCourses = remaining > 0 ? Int(ceil(remaining / averageCredit)) : 0
+            let isKnown: Bool
+            if requirement.kind == .publicElective {
+                isKnown = creditSummary?.rawFields["公共选修总计"] != nil
+            } else if requirement.kind == .professionalElective {
+                isKnown = creditSummary?.rawFields["本专业选修"] != nil
+            } else {
+                isKnown = false
+            }
 
             return GraduationCreditCategoryProgress(
                 category: requirement.category,
@@ -472,7 +475,7 @@ enum GraduationCreditProgressCalculator {
                 requiredCredits: requirement.requiredCredits,
                 completedCredits: completed.credits,
                 completedCourseCount: completed.courses,
-                estimatedRemainingCourses: remaining > 0 ? max(remainingCourses, 1) : 0,
+                hasCompletedCredits: isKnown,
                 completedBuckets: requirement.kind == .publicElective ? (creditSummary?.publicCoveredBuckets ?? []) : [],
                 missingBucketNames: requirement.kind == .publicElective ? (creditSummary?.publicMissingBucketNames ?? []) : []
             )
@@ -535,35 +538,12 @@ enum GraduationCreditProgressCalculator {
         return Array(grouped.values)
     }
 
-    private static func averageCourseCredit(
-        for requirement: CategoryRequirement,
-        completedCredits: Double,
-        completedCourses: Int,
-        courseRequirements: [GraduationCreditRequirement]
-    ) -> Double {
-        if completedCourses > 0 {
-            return max(completedCredits / Double(completedCourses), 0.5)
-        }
-
-        let matchedCredits = courseRequirements
-            .filter { $0.displayCategory == requirement.category }
-            .map { max($0.requiredCredits, $0.plannedCredits) }
-            .filter { $0 > 0 }
-
-        if !matchedCredits.isEmpty {
-            return max(matchedCredits.reduce(0, +) / Double(matchedCredits.count), 0.5)
-        }
-
-        return 2.0
-    }
-
     private static func estimatedCourseCount(credits: Double, fallback: Int) -> Int {
         if fallback > 0 {
             return fallback
         }
 
-        guard credits > 0 else { return 0 }
-        return max(Int(ceil(credits / 2.0)), 1)
+        return 0
     }
 
     private static func fallbackCompletedCategory(type: String, courseName: String) -> String {

@@ -984,6 +984,7 @@ struct TimetableView: View {
         ) {
             quickAccessPopoverPresentation
                 .presentationCompactAdaptation(.popover)
+                .onDisappear(perform: completeQuickAccessDismissal)
         }
         .accessibilityLabel("首页快捷入口")
     }
@@ -1101,13 +1102,12 @@ struct TimetableView: View {
         pendingQuickAccessAction = action
         isQuickAccessPresented = false
 
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(220))
-            guard pendingQuickAccessAction == action else { return }
-            pendingQuickAccessAction = nil
-            guard !isQuickAccessPresented else { return }
-            performQuickAccessAction(action)
-        }
+    }
+
+    private func completeQuickAccessDismissal() {
+        guard !isQuickAccessPresented, let action = pendingQuickAccessAction else { return }
+        pendingQuickAccessAction = nil
+        performQuickAccessAction(action)
     }
 
     private func performQuickAccessAction(_ action: TimetableQuickAccessAction) {

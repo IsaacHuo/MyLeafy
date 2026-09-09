@@ -1112,7 +1112,7 @@ struct GradeAnalyticsDetailView: View {
         let officialText = displayedAnalytics.officialGPA == nil
             ? L10n.text("当前缓存没有解析到学校官方 GPA，因此 GPA 暂不展示。", language: leafyLanguage)
             : L10n.text("页面已解析到学校官方 GPA，GPA 展示只使用官方值。", language: leafyLanguage)
-        return officialText + L10n.text(" 其他统计按有效课程计算：同名同学分课程会合并，补考或重修优先取已通过且分数最高记录；优秀、良好、中等等明确等级会映射为可解释的分值，通过制成绩只计通过与学分，不计入分数统计。", language: leafyLanguage)
+        return officialText + L10n.text(" 其他统计为本地估算：学校课程按课程编号区分，同编号补考或重修优先取已通过且分数最高记录；缺少编号的旧记录不跨学期合并。文字等级只用于判断是否通过和计算学分，不换算成分数。", language: leafyLanguage)
     }
 
     private var supplementalStatistics: some View {

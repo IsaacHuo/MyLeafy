@@ -245,3 +245,7 @@ entitlement, StoreKit, research-tool RPC, event-table, and capability objects.
 - Admin Edge actions preserve all legacy names and expose 73 registered actions,
   including `retryPostPublish` and `getModerationReport`. CSV export is isolated
   in `admin-export` with server-side resource and field allowlists.
+
+### Operational demo exclusion
+
+`20260909120000_exclude_demo_from_admin_users.sql` adds the server-generated `profiles.is_demo` classification from trimmed, lowercase `edu_id` (`review-demo` or `review-demo-…`). Admin profile listing/export/overview/moderation user counts and `admin_daily_counts(integer,text,text)` exclude these rows before pagination and aggregation. Auth accounts, profile data, community access, and deletion semantics are unchanged.

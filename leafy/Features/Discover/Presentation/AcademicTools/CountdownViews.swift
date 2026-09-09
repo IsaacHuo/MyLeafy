@@ -139,6 +139,7 @@ struct CustomScheduleListView: View {
     private var configuredContent: some View {
         if presentation == .daytraceRoot {
             scheduleList
+                .contentMargins(.top, AppSpacing.card, for: .scrollContent)
         } else {
             scheduleList
                 .navigationTitle("自定日程")

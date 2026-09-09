@@ -3,7 +3,7 @@ import Foundation
 nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
     private let fetchEmptyClassroomsHTML: @Sendable (Date, Int, Int) async throws -> String
     private let fetchClassroomUsage: @Sendable (Date, String, String) async throws -> [ClassroomUsageSlot]
-    private let parseEmptyClassrooms: @Sendable (String) throws -> [EmptyClassroom]
+    private let parseEmptyClassrooms: @Sendable (String, Int, Int) throws -> [EmptyClassroom]
     private let isDemoModeEnabled: @Sendable () async -> Bool
     private let demoEmptyClassrooms: @Sendable (Date, Int, Int) async -> [EmptyClassroom]
     private let demoClassroomUsage: @Sendable (Date, String, String) async -> [ClassroomUsageSlot]
@@ -17,8 +17,8 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
         fetchClassroomUsage: @escaping @Sendable (Date, String, String) async throws -> [ClassroomUsageSlot] = { date, building, room in
             try await ActiveCampusContext.networkManager.fetchClassroomUsage(date: date, building: building, room: room)
         },
-        parseEmptyClassrooms: @escaping @Sendable (String) throws -> [EmptyClassroom] = { html in
-            try HTMLParser.parseEmptyClassrooms(html: html)
+        parseEmptyClassrooms: @escaping @Sendable (String, Int, Int) throws -> [EmptyClassroom] = { html, start, end in
+            try HTMLParser.parseEmptyClassrooms(html: html, start: start, end: end)
         },
         isDemoModeEnabled: @escaping @Sendable () async -> Bool = {
             await MainActor.run { ReviewDemoMode.isEnabled }
@@ -56,8 +56,8 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
         do {
             switch request.mode {
             case .byPeriod:
-                let html = try await fetchEmptyClassroomsHTML(request.date, request.startPeriod, request.endPeriod)
-                let rooms = try parseEmptyClassrooms(html)
+                let html = try await fetchEmptyClassroomsHTML(request.date, 1, 12)
+                let rooms = try parseEmptyClassrooms(html, request.startPeriod, request.endPeriod)
                 await cache.saveEmptyClassrooms(rooms, date: request.date, start: request.startPeriod, end: request.endPeriod)
                 return .success(ClassroomLookupData(rooms: rooms))
             case .byRoom:
@@ -67,7 +67,9 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
             }
         } catch {
             let reauthenticationNeeded = userInitiated && requiresReauthentication(error)
-            let message = reauthenticationNeeded
+            let message = SchoolDataSyncContinuationPolicy.shouldStop(after: error)
+                ? "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击查询。"
+                : reauthenticationNeeded
                 ? "登录状态已失效，请连接校园网后重新登录并继续查询。"
                 : "查询失败：\(error.localizedDescription)"
 
@@ -105,7 +107,8 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
                 building: request.building,
                 room: request.room
             )
-            return ClassroomLookupData(usage: usage)
+            let verified = usage.count == 12 && usage.allSatisfy { $0.status != .unknown }
+            return ClassroomLookupData(usage: verified ? usage : [])
         }
     }
 }

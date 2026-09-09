@@ -66,6 +66,7 @@ struct GradePresentationSignature: Equatable {
         let credit: String
         let score: String
         let type: String
+        let courseCode: String?
 
         init(grade: Grade) {
             id = grade.id
@@ -74,6 +75,7 @@ struct GradePresentationSignature: Equatable {
             credit = grade.credit
             score = grade.score
             type = grade.type
+            courseCode = grade.courseCode
         }
     }
 }

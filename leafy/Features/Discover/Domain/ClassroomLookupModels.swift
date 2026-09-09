@@ -151,21 +151,6 @@ nonisolated extension EmptyClassroom {
     }
 }
 
-nonisolated enum ClassroomUsageStatusResolver {
-    static func status(
-        html _: String,
-        parsedRooms rooms: [EmptyClassroom],
-        target: ClassroomIdentity,
-        rawBuilding _: String,
-        rawRoom _: String
-    ) -> ClassroomUsageStatus {
-        if rooms.contains(where: { ClassroomIdentity.matches($0.identity, target) }) {
-            return .available
-        }
-        return .occupied
-    }
-}
-
 nonisolated struct ClassroomLookupBuildingOption: Identifiable, Equatable, Sendable {
     let id: String
     let title: String
