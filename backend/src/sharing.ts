@@ -21,7 +21,9 @@ export async function publishTimetable(env:BackendEnv,who:Actor,body:Row){
     statement(env.DB,`INSERT INTO timetable_snapshots(owner_id,campus_id,semester_id,courses,course_count,published_at) VALUES(?,?,?,?,?,?)
       ON CONFLICT(owner_id,semester_id) DO UPDATE SET courses=excluded.courses,course_count=excluded.course_count,published_at=excluded.published_at,updated_at=excluded.published_at,campus_id=excluded.campus_id RETURNING *`,[who.profileId,campus,semester,JSON.stringify(items),items.length,now]),
   ]);
-  return decode('timetable_snapshots',result[result.length-2].results[0]);
+  const record=decode('timetable_snapshots',result[result.length-2].results[0]);
+  const [owner]=await rows(env.DB,'SELECT * FROM profiles WHERE id=?',[String(record.owner_id)]);
+  return {...record,owner:publicProfile(owner,who.profileId)};
 }
 export async function timetables(env:BackendEnv,who:Actor,url:URL){
   const semester=text(url.searchParams.get('semester_id'),64,false)||null;
@@ -52,10 +54,19 @@ export async function acceptInvite(env:BackendEnv,who:Actor,body:Row){
     statement(env.DB,'UPDATE timetable_invites SET accepted_by=?,accepted_at=? WHERE code_hash=? AND campus_id=?',[who.profileId,now,hash,campus]),
     statement(env.DB,'SELECT s.* FROM timetable_snapshots s JOIN timetable_invites i ON i.owner_id=s.owner_id AND i.semester_id=s.semester_id AND i.campus_id=s.campus_id WHERE i.code_hash=? AND i.campus_id=?',[hash,campus]),
   ]);
-  return decode('timetable_snapshots',result[result.length-2].results[0]);
+  const record=decode('timetable_snapshots',result[result.length-2].results[0]);
+  const [owner]=await rows(env.DB,'SELECT * FROM profiles WHERE id=?',[String(record.owner_id)]);
+  return {...record,owner:publicProfile(owner,who.profileId)};
 }
-export async function shareMembers(env:BackendEnv,who:Actor){
-  return rows(env.DB,'SELECT * FROM timetable_share_members WHERE owner_id=? AND campus_id=? AND revoked_at IS NULL ORDER BY created_at DESC,id',[who.profileId,requireCommunity(who)]);
+export async function shareMembers(env:BackendEnv,who:Actor,incoming=false):Promise<Row[]>{
+  const members=await rows(env.DB,`SELECT * FROM timetable_share_members WHERE ${incoming?'viewer_id':'owner_id'}=? AND campus_id=? AND revoked_at IS NULL ORDER BY created_at DESC,id`,[who.profileId,requireCommunity(who)]);
+  const ids=[...new Set(members.flatMap(m=>[m.viewer_id as string,m.owner_id as string]))],profiles:Row[]=[];
+  for(let i=0;i<ids.length;i+=80)profiles.push(...await rows(env.DB,`SELECT * FROM profiles WHERE id IN(${ids.slice(i,i+80).map(()=>'?').join(',')})`,ids.slice(i,i+80)));
+  return members.map(m=>({...m,viewer:publicProfile(profiles.find(p=>p.id===m.viewer_id)!,who.profileId),owner:publicProfile(profiles.find(p=>p.id===m.owner_id)!,who.profileId)}));
+}
+export async function ownedInvites(env:BackendEnv,who:Actor,url:URL){
+  const semester=text(url.searchParams.get('semester_id'),64,false)||null;
+  return rows(env.DB,'SELECT id,owner_id,semester_id,expires_at,accepted_by,accepted_at,created_at FROM timetable_invites WHERE owner_id=? AND campus_id=? AND (? IS NULL OR semester_id=?) ORDER BY created_at DESC,id LIMIT 20',[who.profileId,requireCommunity(who),semester,semester]);
 }
 export async function revokeShare(env:BackendEnv,who:Actor,id:string,leaving=false){
   uuid(id);const now=new Date().toISOString().replace('Z','000Z');

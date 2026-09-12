@@ -115,11 +115,23 @@ export async function attach(env:BackendEnv,who:Actor,body:Row,kind:'image'|'att
 
 export async function setProfileImage(env:BackendEnv,who:Actor,body:Row){
   const kind=body.kind;if(kind!=='avatar'&&kind!=='cover')throw new ApiError(400,'invalid_request','图片类型无效。');
+  if(kind==='cover'&&body.path===null){
+    await atomic(env.DB,[actorGuard(env.DB,who),statement(env.DB,'UPDATE profiles SET cover_path=NULL,updated_at=? WHERE id=?',[new Date().toISOString().replace('Z','000Z'),who.profileId])]);
+    return {updated:true,path:null};
+  }
   const path=text(body.path,512),prefix=`${kind==='avatar'?'avatars':'profile-covers'}/${who.profileId}/`;
   if(!path.startsWith(prefix))throw new ApiError(403,'path_mismatch','图片不属于当前账号。');
   const file=await ownedObject(env,who,imageBucket,path,null);validatedImage(file.bytes,kind==='avatar'?512:1800);
   await atomic(env.DB,[actorGuard(env.DB,who),statement(env.DB,`UPDATE profiles SET ${kind==='avatar'?'avatar_path':'cover_path'}=?,updated_at=? WHERE id=?`,[path,new Date().toISOString().replace('Z','000Z'),who.profileId]),statement(env.DB,"UPDATE file_objects SET state='attached' WHERE bucket=? AND path=?",[imageBucket,path])]);
   return {updated:true,path};
+}
+
+export async function profileImageOperations(env:BackendEnv,who:Actor,kind:'avatar'|'cover',value:unknown){
+  if(kind==='cover'&&value===null)return [];
+  const path=text(value,512),prefix=`${kind==='avatar'?'avatars':'profile-covers'}/${who.profileId}/`;
+  if(!path.startsWith(prefix))throw new ApiError(403,'path_mismatch','图片不属于当前账号。');
+  const file=await ownedObject(env,who,imageBucket,path,null);validatedImage(file.bytes,kind==='avatar'?512:1800);
+  return [guard(env.DB,"EXISTS(SELECT 1 FROM file_objects WHERE bucket=? AND path=? AND owner_id=? AND post_id IS NULL AND state<>'deleting')",[imageBucket,path,who.profileId]),statement(env.DB,"UPDATE file_objects SET state='attached' WHERE bucket=? AND path=?",[imageBucket,path])];
 }
 
 export async function readFile(env:BackendEnv,who:Actor,bucket:string,path:string,request:Request){

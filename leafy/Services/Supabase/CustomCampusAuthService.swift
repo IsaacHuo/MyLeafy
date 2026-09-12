@@ -81,6 +81,11 @@ struct CustomCampusAuthService: Sendable {
     func signIn(email: String, password: String) async throws -> CustomCampusAuthSession {
         let credentials = try validatedCredentials(email: email, password: password)
         do {
+            if MyLeafyBackendEnvironment.usesCloudflare {
+                let id = try await MyLeafyBackendEnvironment.client().signIn(email: credentials.email, password: credentials.password)
+                try await LeafySupabase.shared.client?.auth.signOut(scope: .local)
+                return CustomCampusAuthSession(authUserID: id, email: credentials.email)
+            }
             let session = try await clientProvider().auth.signIn(email: credentials.email, password: credentials.password)
             return CustomCampusAuthSession(session: session, fallbackEmail: credentials.email)
         } catch {
@@ -91,6 +96,10 @@ struct CustomCampusAuthService: Sendable {
     func startSignUp(email: String, password: String) async throws {
         let credentials = try validatedCredentials(email: email, password: password)
         do {
+            if MyLeafyBackendEnvironment.usesCloudflare {
+                try await MyLeafyBackendEnvironment.client().signUp(email: credentials.email, password: credentials.password)
+                return
+            }
             _ = try await clientProvider().auth.signUp(
                 email: credentials.email,
                 password: credentials.password,
@@ -104,6 +113,10 @@ struct CustomCampusAuthService: Sendable {
     func resendSignUpCode(email: String) async throws {
         let email = try validatedEmail(email)
         do {
+            if MyLeafyBackendEnvironment.usesCloudflare {
+                try await MyLeafyBackendEnvironment.client().resendVerification(email: email)
+                return
+            }
             try await clientProvider().auth.resend(
                 email: email,
                 type: .signup,
@@ -118,6 +131,11 @@ struct CustomCampusAuthService: Sendable {
         let email = try validatedEmail(email)
         let code = try validatedCode(code)
         do {
+            if MyLeafyBackendEnvironment.usesCloudflare {
+                let id = try await MyLeafyBackendEnvironment.client().verifyRegistration(email: email, otp: code)
+                try await LeafySupabase.shared.client?.auth.signOut(scope: .local)
+                return CustomCampusAuthSession(authUserID: id, email: email)
+            }
             let response = try await clientProvider().auth.verifyOTP(
                 email: email,
                 token: code,
@@ -139,6 +157,13 @@ struct CustomCampusAuthService: Sendable {
         }
 
         do {
+            if MyLeafyBackendEnvironment.usesCloudflare {
+                // Previously issued Supabase links remain an explicit migration
+                // entry point; validate them with their original auth provider.
+                let legacy = try await clientProvider().auth.session(from: url)
+                let id = try await MyLeafyBackendEnvironment.client().exchangeLegacySession(accessToken: legacy.accessToken, isAnonymous: legacy.user.isAnonymous)
+                return CustomCampusAuthSession(authUserID: id, email: legacy.user.email ?? id.uuidString)
+            }
             let session = try await clientProvider().auth.session(from: url)
             return CustomCampusAuthSession(session: session)
         } catch {

@@ -5,7 +5,7 @@ import { ApiError, integer, sha256, text } from './http';
 export async function runtimeConfiguration(env:BackendEnv,url:URL,calendar=false){
   const campus=text(url.searchParams.get('campus_id')??'bjfu',64);
   const result=calendar?await rows(env.DB,'SELECT * FROM national_calendar_runtime_configs WHERE is_active=1 ORDER BY updated_at DESC LIMIT 1'):
-    await rows(env.DB,'SELECT * FROM semester_runtime_configs WHERE campus_id=? AND is_active=1 ORDER BY updated_at DESC LIMIT 1',[campus]);
+    await rows(env.DB,url.searchParams.get('include_history')==='true'?'SELECT * FROM semester_runtime_configs WHERE campus_id=? ORDER BY semester_start_date,semester_id':'SELECT * FROM semester_runtime_configs WHERE campus_id=? AND is_active=1 ORDER BY updated_at DESC LIMIT 1',[campus]);
   const table=calendar?'national_calendar_runtime_configs':'semester_runtime_configs';
   const body=JSON.stringify(result.map(row=>decode(table,row)));
   return {body,etag:`"${await sha256(body)}"`};

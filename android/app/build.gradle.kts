@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -14,6 +15,19 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+// Explicit build-time selection; a Cloudflare error never switches the backend.
+val backendProvider = localProperties.getProperty("BACKEND_PROVIDER", "supabase")
+require(backendProvider in setOf("supabase", "cloudflare")) { "BACKEND_PROVIDER must be supabase or cloudflare." }
+val backendOrigin = localProperties.getProperty("BACKEND_ORIGIN", "")
+if (backendProvider == "cloudflare") {
+    val origin = URI(backendOrigin)
+    require(origin.scheme == "https" && !origin.host.isNullOrBlank() && origin.rawUserInfo == null &&
+        origin.rawPath.orEmpty() in setOf("", "/") && origin.rawQuery == null && origin.rawFragment == null) {
+        "Cloudflare requires BACKEND_ORIGIN as an HTTPS origin without credentials, path or query."
+    }
+}
+fun buildConfigString(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
 val releaseSigning = mapOf(
     "storeFile" to System.getenv("MYLEAFY_RELEASE_STORE_FILE"),
     "storePassword" to System.getenv("MYLEAFY_RELEASE_STORE_PASSWORD"),
@@ -28,11 +42,13 @@ if (requestsReleaseBuild) {
     require(isReleaseSigningConfigured) {
         "Release build requires MYLEAFY_RELEASE_STORE_FILE, STORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD."
     }
-    require(!localProperties.getProperty("SUPABASE_URL").isNullOrBlank()) {
-        "Release build requires SUPABASE_URL in android/secrets.properties."
-    }
-    require(!localProperties.getProperty("SUPABASE_ANON_KEY").isNullOrBlank()) {
-        "Release build requires SUPABASE_ANON_KEY in android/secrets.properties."
+    if (backendProvider == "supabase") {
+        require(!localProperties.getProperty("SUPABASE_URL").isNullOrBlank()) {
+            "Release build requires SUPABASE_URL in android/secrets.properties."
+        }
+        require(!localProperties.getProperty("SUPABASE_ANON_KEY").isNullOrBlank()) {
+            "Release build requires SUPABASE_ANON_KEY in android/secrets.properties."
+        }
     }
 }
 
@@ -47,6 +63,8 @@ android {
         versionCode = 2
         versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "BACKEND_PROVIDER", buildConfigString(backendProvider))
+        buildConfigField("String", "BACKEND_ORIGIN", buildConfigString(backendOrigin))
 
         buildConfigField(
             "String",

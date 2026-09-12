@@ -256,6 +256,11 @@ actor SemesterRuntimeConfigService {
     }
 
     private static func fetchRemoteActiveConfig() async throws -> SemesterRuntimeConfig {
+        if MyLeafyBackendEnvironment.usesCloudflare {
+            let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue)], authenticated: false)
+            guard let record = records.first else { throw URLError(.resourceUnavailable) }
+            return record.runtimeConfig
+        }
         let client = try LeafySupabase.shared.requireClient()
         let records: [RemoteSemesterRuntimeConfigRecord] = try await client
             .from("semester_runtime_configs")
@@ -275,6 +280,10 @@ actor SemesterRuntimeConfigService {
     }
 
     private static func fetchRemoteTimelineConfigs() async throws -> [SemesterRuntimeConfig] {
+        if MyLeafyBackendEnvironment.usesCloudflare {
+            let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue), URLQueryItem(name: "include_history", value: "true")], authenticated: false)
+            return records.map(\.runtimeConfig).filter(\.isUsable)
+        }
         let client = try LeafySupabase.shared.requireClient()
         let records: [RemoteSemesterRuntimeConfigRecord] = try await client
             .from("semester_runtime_configs")
@@ -854,6 +863,11 @@ actor NationalCalendarRuntimeConfigService {
     }
 
     private static func fetchRemoteActiveConfig() async throws -> NationalCalendarRuntimeConfig {
+        if MyLeafyBackendEnvironment.usesCloudflare {
+            let records: [RemoteNationalCalendarRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/calendar", authenticated: false)
+            guard let record = records.first else { throw URLError(.resourceUnavailable) }
+            return record.runtimeConfig
+        }
         let client = try LeafySupabase.shared.requireClient()
         let records: [RemoteNationalCalendarRuntimeConfigRecord] = try await client
             .from("national_calendar_runtime_configs")

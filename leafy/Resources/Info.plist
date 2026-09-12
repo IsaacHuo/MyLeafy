@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>MYLEAFY_BACKEND_PROVIDER</key>
+	<string>$(MYLEAFY_BACKEND_PROVIDER)</string>
+	<key>MYLEAFY_API_ORIGIN</key>
+	<string>$(MYLEAFY_API_ORIGIN)</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

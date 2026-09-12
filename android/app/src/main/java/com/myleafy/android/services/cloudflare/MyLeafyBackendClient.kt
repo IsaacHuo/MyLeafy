@@ -4,10 +4,22 @@ import com.myleafy.android.core.security.SecureStorage
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resumeWithException
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -68,6 +80,7 @@ class MyLeafyBackendClient(
     private val sessionMutex = Mutex()
     @Volatile private var session: BackendSession? = store.load()
     val userId: String? get() = session?.userId
+    private val sockets = java.util.Collections.synchronizedSet(mutableSetOf<WebSocket>())
 
     suspend fun ensureAnonymousSession() = sessionMutex.withLock {
         if (session != null) return@withLock
@@ -91,9 +104,13 @@ class MyLeafyBackendClient(
     }
 
     suspend fun signOut(localOnly: Boolean = false) = sessionMutex.withLock {
-        if (!localOnly && session != null) execute("/v1/auth/sign-out", "POST", "{}".toByteArray())
-        store.clear()
-        session = null
+        try {
+            if (!localOnly && session != null) execute("/v1/auth/sign-out", "POST", "{}".toByteArray())
+        } finally {
+            session = null
+            synchronized(sockets) { sockets.toList().forEach { it.cancel() }; sockets.clear() }
+            store.clear()
+        }
     }
 
     suspend fun request(path: String, method: String = "GET", body: JsonElement? = null, query: Map<String, String> = emptyMap()): JsonElement {
@@ -108,6 +125,35 @@ class MyLeafyBackendClient(
 
     suspend fun download(bucket: String, path: String): ByteArray =
         execute("/v1/files/read", "GET", query = mapOf("bucket" to bucket, "path" to path)).bytes
+
+    /** Signals only invalidate data. Consumers decide when authoritative REST results are applied. */
+    fun changes(scope: BackendSignalScope): Flow<String> = callbackFlow {
+        val active = session ?: throw BackendException(401, "unauthenticated", "请重新登录。", null)
+        val request = Request.Builder().url(originUrl.newBuilder().encodedPath("/v1/events/${scope.path}").build())
+            .header("Authorization", "Bearer ${active.token}").header("Cache-Control", "no-store").build()
+        val socket = http.newWebSocket(request, object : WebSocketListener() {
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                if (text == "pong") return
+                try {
+                    val event = json.parseToJsonElement(text).jsonObject
+                    check(event.getValue("type").jsonPrimitive.content == "changed") { "Invalid change signal" }
+                    val id = event.getValue("event_id").jsonPrimitive.content
+                    check(id.isNotBlank() && id.length <= 100) { "Invalid change event ID" }
+                    // One pending invalidation is enough; never merge signal payloads into records.
+                    trySend(id)
+                } catch (error: Exception) { close(error) }
+            }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { close(t) }
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(code, reason)
+                close(IOException("后台变更连接已关闭（$code），请重新连接。"))
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { close() }
+        })
+        sockets.add(socket)
+        if (session != active) socket.cancel()
+        awaitClose { sockets.remove(socket); socket.cancel() }
+    }.buffer(Channel.CONFLATED)
 
     private suspend fun execute(
         path: String,
@@ -129,7 +175,7 @@ class MyLeafyBackendClient(
         }
         val body = bytes?.toRequestBody(contentType.toMediaType())
             ?: if (method in listOf("POST", "PUT", "PATCH")) ByteArray(0).toRequestBody(contentType.toMediaType()) else null
-        http.newCall(request.method(method, body).build()).execute().use { response ->
+        http.newCall(request.method(method, body).build()).awaitResponse().use { response ->
             val data = response.body?.bytes() ?: ByteArray(0)
             if (!response.isSuccessful) {
                 val error = runCatching { json.parseToJsonElement(data.decodeToString()).jsonObject }.getOrNull()
@@ -145,6 +191,18 @@ class MyLeafyBackendClient(
         }
     }
 
+    private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { cancel() }
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (!continuation.isCancelled) continuation.resumeWithException(e)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                continuation.resume(response) { _, value, _ -> value.close() }
+            }
+        })
+    }
+
     private fun captureSession(response: BackendResponse) {
         val token = response.signedToken?.takeIf(String::isNotBlank)
             ?: throw BackendException(0, "missing_signed_session", "登录状态未建立，请重试。", null)
@@ -155,8 +213,11 @@ class MyLeafyBackendClient(
 
     private fun persist(value: BackendSession) {
         store.save(value)
+        if (session != value) synchronized(sockets) { sockets.toList().forEach { it.cancel() }; sockets.clear() }
         session = value
     }
 
     private data class BackendResponse(val bytes: ByteArray, val signedToken: String?)
 }
+
+enum class BackendSignalScope(val path: String) { FEED("feed"), NOTIFICATIONS("notifications") }

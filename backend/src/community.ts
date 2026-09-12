@@ -187,7 +187,13 @@ export async function setTerms(env:BackendEnv,who:Actor,accepted:boolean){
 
 export async function notifications(env:BackendEnv,who:Actor){
   const list=await rows(env.DB,`SELECT n.* FROM community_notifications n WHERE recipient_id=? AND dismissed_at IS NULL AND (actor_id IS NULL OR NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=n.actor_id)) ORDER BY created_at DESC,id DESC LIMIT 100`,[who.profileId,who.profileId]);
-  return list.map(n=>decode('community_notifications',n));
+  const ids=[...new Set(list.map(n=>n.actor_id).filter((id):id is string=>typeof id==='string'))],profiles:Row[]=[];
+  for(let i=0;i<ids.length;i+=80){const batch=ids.slice(i,i+80);profiles.push(...await rows(env.DB,`SELECT * FROM profiles WHERE id IN(${batch.map(()=>'?').join(',')})`,batch));}
+  return Promise.all(list.map(async n=>{
+    const source=profiles.find(p=>p.id===n.actor_id),profile=source?publicProfile(source,who.profileId):null;
+    if(profile?.avatar_path)profile.signed_avatar_url=await signedMediaURL(env,who,'community-images',String(profile.avatar_path));
+    return {...decode('community_notifications',n),actor:profile};
+  }));
 }
 
 export async function readNotifications(env:BackendEnv,who:Actor,id:string|null){

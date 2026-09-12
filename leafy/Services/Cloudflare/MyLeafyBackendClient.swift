@@ -70,6 +70,7 @@ actor MyLeafyBackendClient {
     nonisolated let baseURL: URL
     private let network: URLSession
     private let storage: any MyLeafyBackendSessionStoring
+    private var establishingSession: Task<Void, Error>?
     private var currentSession: MyLeafyBackendSession?
 
     init(baseURL: URL, network: URLSession? = nil, storage: (any MyLeafyBackendSessionStoring)? = nil) throws {
@@ -92,7 +93,24 @@ actor MyLeafyBackendClient {
         self.currentSession = try resolvedStorage.load()
     }
 
+    func requireBearerToken() throws -> String {
+        guard let currentSession else { throw MyLeafyBackendError(status: 401, code: "unauthenticated", message: "请重新登录。", requestID: nil) }
+        return currentSession.token
+    }
+
     var authUserID: UUID? { currentSession?.userID }
+
+    func establishSession(legacyToken: String? = nil, legacyAnonymous: Bool = true) async throws {
+        if currentSession != nil { return }
+        if let establishingSession { return try await establishingSession.value }
+        let task = Task {
+            if let legacyToken { _ = try await exchangeLegacySession(accessToken: legacyToken, isAnonymous: legacyAnonymous) }
+            else { try await anonymousSession() }
+        }
+        establishingSession = task
+        defer { establishingSession = nil }
+        try await task.value
+    }
 
     func anonymousSession() async throws {
         if currentSession != nil { return }
@@ -103,6 +121,23 @@ actor MyLeafyBackendClient {
     func signIn(email: String, password: String) async throws -> UUID {
         let data = try JSONEncoder().encode(EmailPassword(email: email, password: password))
         let (_, response, payload) = try await send(path: "/v1/auth/sign-in/email", method: "POST", body: data, authenticated: false)
+        try captureSession(response: response, data: payload)
+        return currentSession!.userID
+    }
+
+    func signUp(email: String, password: String) async throws {
+        struct Input: Encodable { let email: String; let password: String; let name: String }
+        _ = try await send(path: "/v1/auth/sign-up/email", method: "POST", body: JSONEncoder().encode(Input(email: email, password: password, name: email)), authenticated: false)
+    }
+
+    func resendVerification(email: String) async throws {
+        struct Input: Encodable { let email: String; let type = "email-verification" }
+        _ = try await send(path: "/v1/auth/email-otp/send-verification-otp", method: "POST", body: JSONEncoder().encode(Input(email: email)), authenticated: false)
+    }
+
+    func verifyRegistration(email: String, otp: String) async throws -> UUID {
+        struct Input: Encodable { let email: String; let otp: String }
+        let (_, response, payload) = try await send(path: "/v1/auth/email-otp/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, otp: otp)), authenticated: false)
         try captureSession(response: response, data: payload)
         return currentSession!.userID
     }
@@ -127,8 +162,8 @@ actor MyLeafyBackendClient {
         currentSession = nil
     }
 
-    func get<Response: Decodable & Sendable>(_ path: String, query: [URLQueryItem] = []) async throws -> Response {
-        let (_, _, data) = try await send(path: path, query: query, method: "GET", authenticated: true)
+    func get<Response: Decodable & Sendable>(_ path: String, query: [URLQueryItem] = [], authenticated: Bool = true) async throws -> Response {
+        let (_, _, data) = try await send(path: path, query: query, method: "GET", authenticated: authenticated)
         return try Self.decoder().decode(Response.self, from: data)
     }
 
@@ -137,6 +172,52 @@ actor MyLeafyBackendClient {
     ) async throws -> Response {
         let (_, _, data) = try await send(path: path, method: method, body: JSONEncoder().encode(body), authenticated: true)
         return try Self.decoder().decode(Response.self, from: data)
+    }
+
+    func perform<Body: Encodable & Sendable>(_ path: String, method: String = "POST", body: Body) async throws {
+        _ = try await send(path: path, method: method, body: JSONEncoder().encode(body), authenticated: true)
+    }
+
+    func uploadRequest(kind: String, uploadID: UUID, postID: UUID?, name: String, contentType: String) throws -> URLRequest {
+        guard let session = currentSession else { throw MyLeafyBackendError(status: 401, code: "unauthenticated", message: "请重新登录。", requestID: nil) }
+        var url = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        url.path = "/v1/files/upload"
+        url.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "upload_id", value: uploadID.uuidString.lowercased()), URLQueryItem(name: "name", value: name)]
+        if let postID { url.queryItems?.append(URLQueryItem(name: "post_id", value: postID.uuidString.lowercased())) }
+        var request = URLRequest(url: url.url!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        return request
+    }
+
+    nonisolated func changeEvents(scope: String) -> AsyncThrowingStream<Void, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let socket = try await self.events(scope: scope)
+                    socket.resume()
+                    defer { socket.cancel(with: .goingAway, reason: nil) }
+                    try await withTaskCancellationHandler {
+                        while !Task.isCancelled {
+                            let message = try await socket.receive()
+                            let data: Data
+                            switch message {
+                            case .data(let bytes): data = bytes
+                            case .string(let string): data = Data(string.utf8)
+                            @unknown default: continue
+                            }
+                            struct Event: Decodable { let type: String }
+                            if try JSONDecoder().decode(Event.self, from: data).type == "changed" { continuation.yield(()) }
+                        }
+                    } onCancel: { socket.cancel(with: .goingAway, reason: nil) }
+                    continuation.finish()
+                } catch {
+                    if Task.isCancelled { continuation.finish() } else { continuation.finish(throwing: error) }
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     func upload<Response: Decodable & Sendable>(data: Data, contentType: String, query: [URLQueryItem]) async throws -> Response {
@@ -182,6 +263,10 @@ actor MyLeafyBackendClient {
         let (data, response) = try await network.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(response.statusCode) else {
+            if authenticated && response.statusCode == 401 && request.value(forHTTPHeaderField: "Authorization") == currentSession.map({ "Bearer \($0.token)" }) {
+                try storage.remove()
+                currentSession = nil
+            }
             let failure = try? JSONDecoder().decode(Failure.self, from: data)
             throw MyLeafyBackendError(status: response.statusCode, code: failure?.errorEnvelope?.code ?? failure?.code ?? "http_\(response.statusCode)",
                                      message: failure?.errorEnvelope?.message ?? failure?.error ?? failure?.message ?? "后台请求失败，请稍后重试。",
@@ -191,6 +276,7 @@ actor MyLeafyBackendClient {
     }
 
     private func captureSession(response: HTTPURLResponse, data: Data) throws {
+        try Task.checkCancellation()
         let result = try JSONDecoder().decode(AuthenticationResult.self, from: data)
         // Better Auth's bearer plugin returns a signed token in this header. Its
         // unsigned JSON token must never be used as the Authorization credential.

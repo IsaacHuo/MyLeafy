@@ -1,6 +1,6 @@
 package com.myleafy.android.features.community
 
-import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.services.CommunityService
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolSessionState

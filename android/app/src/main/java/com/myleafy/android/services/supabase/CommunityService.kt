@@ -1,5 +1,8 @@
 package com.myleafy.android.services.supabase
 
+import com.myleafy.android.services.CatalogRatingService
+import com.myleafy.android.services.TimetableSharingService
+import com.myleafy.android.services.CommunityService
 import com.myleafy.android.shared.model.BootstrapResponse
 import com.myleafy.android.shared.model.CommentDto
 import com.myleafy.android.shared.model.CommentThreadPageDto
@@ -25,10 +28,10 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 
 /** 社区服务：匿名 Auth、身份引导（bootstrap）、Feed。 */
-class CommunityService(private val client: SupabaseClient) {
+class SupabaseCommunityService(private val client: SupabaseClient) : CommunityService {
 
-    val catalogRatings: CatalogRatingService by lazy { CatalogRatingService(client) }
-    val timetableSharing: TimetableSharingService by lazy { TimetableSharingService(client) }
+    override val catalogRatings: CatalogRatingService by lazy { SupabaseCatalogRatingService(client) }
+    override val timetableSharing: TimetableSharingService by lazy { SupabaseTimetableSharingService(client) }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -36,13 +39,13 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 确保存在匿名 Supabase 会话（对应 iOS `ensureAnonymousSession`）。 */
-    suspend fun ensureAnonymousSession() {
+    override suspend fun ensureAnonymousSession() {
         if (client.auth.currentSessionOrNull() != null) return
         client.auth.signInAnonymously()
     }
 
     /** 按 (edu_id, campus_id) 引导/继承社区 profile（对应 community-bootstrap-user）。 */
-    suspend fun bootstrapCommunityUser(eduId: String, displayName: String, campusId: String): BootstrapResponse {
+    override suspend fun bootstrapCommunityUser(eduId: String, displayName: String, campusId: String): BootstrapResponse {
         ensureAnonymousSession()
         val response = client.functions.invoke(
             "community-bootstrap-user",
@@ -56,7 +59,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 只更新允许用户编辑的资料字段；身份、校园和准入字段始终由服务端维护。 */
-    suspend fun updateProfile(
+    override suspend fun updateProfile(
         profileId: String,
         nickname: String,
         bio: String?,
@@ -84,12 +87,12 @@ class CommunityService(private val client: SupabaseClient) {
         }.decodeAs()
     }
 
-    suspend fun signOut() {
+    override suspend fun signOut() {
         if (client.auth.currentSessionOrNull() != null) client.auth.signOut()
     }
 
     /** 拉取社区 Feed（community-feed Edge Function，GET）。 */
-    suspend fun fetchFeed(query: FeedQuery): List<PostDto> {
+    override suspend fun fetchFeed(query: FeedQuery): List<PostDto> {
         ensureAnonymousSession()
         val response = client.functions.invoke("community-feed") {
             this.method = HttpMethod.Get
@@ -110,7 +113,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 按 id 获取完整帖子摘要（含作者与当前用户点赞状态）。 */
-    suspend fun fetchPost(postId: String): PostDto? {
+    override suspend fun fetchPost(postId: String): PostDto? {
         ensureAnonymousSession()
         return client.postgrest.rpc(
             "community_post_summary_v1",
@@ -119,7 +122,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 拉取评论线程（list_community_comment_threads_v1）。 */
-    suspend fun fetchCommentThreads(postId: String, limit: Int = 20): CommentThreadPageDto {
+    override suspend fun fetchCommentThreads(postId: String, limit: Int): CommentThreadPageDto {
         ensureAnonymousSession()
         return client.postgrest.rpc(
             "list_community_comment_threads_v1",
@@ -133,7 +136,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 点赞/取消点赞（toggle_post_like_v1，返回更新后的帖子）。 */
-    suspend fun togglePostLike(postId: String): PostDto {
+    override suspend fun togglePostLike(postId: String): PostDto {
         ensureAnonymousSession()
         return client.postgrest.rpc(
             "toggle_post_like_v1",
@@ -142,7 +145,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 收藏/取消收藏（服务端返回与详情一致的更新后摘要）。 */
-    suspend fun togglePostFavorite(postId: String): PostDto {
+    override suspend fun togglePostFavorite(postId: String): PostDto {
         ensureAnonymousSession()
         return client.postgrest.rpc(
             "toggle_post_favorite_v1",
@@ -151,7 +154,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** RLS 只允许读取当前 profile 的通知；屏蔽关系用于过滤历史通知。 */
-    suspend fun fetchNotifications(profileId: String, limit: Int = 50): List<NotificationDto> {
+    override suspend fun fetchNotifications(profileId: String, limit: Int): List<NotificationDto> {
         ensureAnonymousSession()
         val blockedIds = client.postgrest["community_blocks"]
             .select {
@@ -169,14 +172,14 @@ class CommunityService(private val client: SupabaseClient) {
             .filter { it.dismissed_at == null && (it.actor_id == null || it.actor_id !in blockedIds) }
     }
 
-    suspend fun markNotificationRead(notificationId: String) {
+    override suspend fun markNotificationRead(notificationId: String) {
         ensureAnonymousSession()
         client.postgrest["community_notifications"].update({ set("is_read", true) }) {
             filter { eq("id", notificationId) }
         }
     }
 
-    suspend fun markAllNotificationsRead(profileId: String) {
+    override suspend fun markAllNotificationsRead(profileId: String) {
         ensureAnonymousSession()
         client.postgrest["community_notifications"].update({ set("is_read", true) }) {
             filter {
@@ -187,7 +190,7 @@ class CommunityService(private val client: SupabaseClient) {
         }
     }
 
-    suspend fun deletePost(postId: String) {
+    override suspend fun deletePost(postId: String) {
         ensureAnonymousSession()
         client.postgrest.rpc(
             "soft_delete_own_post",
@@ -195,7 +198,7 @@ class CommunityService(private val client: SupabaseClient) {
         )
     }
 
-    suspend fun deleteComment(commentId: String) {
+    override suspend fun deleteComment(commentId: String) {
         ensureAnonymousSession()
         client.postgrest.rpc(
             "soft_delete_own_comment",
@@ -203,11 +206,11 @@ class CommunityService(private val client: SupabaseClient) {
         )
     }
 
-    suspend fun reportPost(postId: String, reason: String, detail: String?) {
+    override suspend fun reportPost(postId: String, reason: String, detail: String?) {
         reportContent("post", postId = postId, commentId = null, reason = reason, detail = detail)
     }
 
-    suspend fun reportComment(commentId: String, reason: String, detail: String?) {
+    override suspend fun reportComment(commentId: String, reason: String, detail: String?) {
         reportContent("comment", postId = null, commentId = commentId, reason = reason, detail = detail)
     }
 
@@ -232,7 +235,7 @@ class CommunityService(private val client: SupabaseClient) {
         )
     }
 
-    suspend fun blockUser(userId: String, reason: String?) {
+    override suspend fun blockUser(userId: String, reason: String?) {
         ensureAnonymousSession()
         client.postgrest.rpc(
             "block_community_user",
@@ -244,7 +247,7 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 发帖（create_community_post_v4，p_id 为客户端幂等 UUID，暂不支持图片/附件）。 */
-    suspend fun createPost(
+    override suspend fun createPost(
         postId: String,
         requestId: String,
         title: String,
@@ -269,14 +272,14 @@ class CommunityService(private val client: SupabaseClient) {
     }
 
     /** 评论（create_community_comment_v2，p_id 为客户端幂等 UUID；评论最多两层）。 */
-    suspend fun createComment(
+    override suspend fun createComment(
         commentId: String,
         requestId: String,
         postId: String,
         body: String,
         parentCommentId: String?,
         replyToCommentId: String?,
-        isAnonymous: Boolean = false,
+        isAnonymous: Boolean,
     ): CommentDto {
         ensureAnonymousSession()
         return client.postgrest.rpc(

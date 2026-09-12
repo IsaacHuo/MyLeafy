@@ -70,6 +70,20 @@ function invalidShareResponse(title, description) {
 }
 
 async function fetchPreview(context, query) {
+  const provider = context.env.MYLEAFY_BACKEND_PROVIDER || 'supabase';
+  if (!['supabase', 'cloudflare'].includes(provider)) throw new Error('Invalid share backend provider');
+  if (provider === 'cloudflare') {
+    const binding = context.env.MYLEAFY_PUBLIC_API;
+    if (!binding?.fetch) throw new Error('Cloudflare share service binding is missing');
+    const response = await binding.fetch(new Request(`https://myleafy-public.internal/v1/share-preview?${query}`));
+    if (!response.ok) throw new Error(`Cloudflare share preview failed (${response.status})`);
+    const preview = await response.json();
+    return {
+      title: nonEmptyString(preview.title) || defaultPreview.title,
+      description: nonEmptyString(preview.description) || defaultPreview.description,
+      imageURL: nonEmptyString(preview.imageURL) || defaultPreview.imageURL,
+    };
+  }
   const supabaseURL = context.env.SUPABASE_URL || context.env.VITE_SUPABASE_URL;
   if (!supabaseURL) {
     return defaultPreview;

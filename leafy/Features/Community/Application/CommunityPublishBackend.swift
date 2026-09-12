@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated struct CommunityUploadCredentials: Sendable {
     let baseURL: URL
-    let publishableKey: String
+    let publishableKey: String?
     let accessToken: String
 }
 

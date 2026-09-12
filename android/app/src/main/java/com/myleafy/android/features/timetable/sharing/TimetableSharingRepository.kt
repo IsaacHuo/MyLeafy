@@ -9,7 +9,7 @@ import com.myleafy.android.services.supabase.SharedTimetableCourseDto
 import com.myleafy.android.services.supabase.SharedTimetableSnapshotDto
 import com.myleafy.android.services.supabase.TimetableInviteDto
 import com.myleafy.android.services.supabase.TimetableShareMemberDto
-import com.myleafy.android.services.supabase.TimetableSharingService
+import com.myleafy.android.services.TimetableSharingService
 import kotlinx.coroutines.flow.first
 
 data class TimetableSharingSnapshot(

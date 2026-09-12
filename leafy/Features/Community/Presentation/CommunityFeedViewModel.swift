@@ -98,9 +98,9 @@ final class CommunityFeedViewModel: ObservableObject {
     private let changeStream: any CommunityFeedChangeStreaming
 
     init(
-        repository: any CommunityFeedRepository = LiveCommunityRepository(),
+        repository: any CommunityFeedRepository = CommunityBackendFactory.repository,
         cache: any CommunityFeedCaching = CommunityFeedCache(),
-        changeStream: any CommunityFeedChangeStreaming = LiveCommunityFeedChangeStream()
+        changeStream: any CommunityFeedChangeStreaming = CommunityBackendFactory.changes
     ) {
         self.repository = repository
         self.cache = cache

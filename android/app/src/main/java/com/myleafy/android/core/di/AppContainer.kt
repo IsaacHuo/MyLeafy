@@ -42,7 +42,12 @@ import com.myleafy.android.features.timetable.TimetableRepository
 import com.myleafy.android.features.timetable.weather.WeatherRepository
 import com.myleafy.android.features.timetable.background.TimetableBackgroundRepository
 import com.myleafy.android.features.timetable.sharing.TimetableSharingRepository
-import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.BuildConfig
+import com.myleafy.android.services.cloudflare.CloudflareCommunityService
+import com.myleafy.android.services.cloudflare.KeystoreBackendSessionStore
+import com.myleafy.android.services.cloudflare.MyLeafyBackendClient
+import com.myleafy.android.services.supabase.SupabaseCommunityService
+import com.myleafy.android.services.CommunityService
 import com.myleafy.android.services.supabase.SupabaseClientProvider
 
 /**
@@ -136,14 +141,22 @@ class AppContainer(context: Context) {
         scheduleRepository,
     )
 
-    // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化 Supabase。
+    // 按 capability 延迟创建；guest/无权限身份不会初始化任一在线后台。
     private var cachedCommunityService: CommunityService? = null
 
     private fun communityServiceForActiveScope(): CommunityService? {
         val scope = activeAppScopeStore.current
         if (scope.isGuest || !scope.supports(CampusCapabilities.COMMUNITY)) return null
-        return cachedCommunityService
-            ?: SupabaseClientProvider.create()?.let(::CommunityService)?.also { cachedCommunityService = it }
+        cachedCommunityService?.let { return it }
+        val service = when (BuildConfig.BACKEND_PROVIDER) {
+            "supabase" -> SupabaseClientProvider.create()?.let(::SupabaseCommunityService)
+            "cloudflare" -> CloudflareCommunityService(MyLeafyBackendClient(
+                BuildConfig.BACKEND_ORIGIN,
+                KeystoreBackendSessionStore(secureStorage, BuildConfig.BACKEND_ORIGIN),
+            ))
+            else -> error("Unknown backend provider")
+        }
+        return service?.also { cachedCommunityService = it }
     }
 
     private val liveCommunityRepository =
@@ -175,7 +188,12 @@ class AppContainer(context: Context) {
     )
 
     suspend fun signOut() {
-        val communitySignOut = runCatching { cachedCommunityService?.signOut() }
+        val communitySignOut = runCatching {
+            cachedCommunityService?.signOut()
+                ?: if (BuildConfig.BACKEND_PROVIDER == "cloudflare") {
+                    KeystoreBackendSessionStore(secureStorage, BuildConfig.BACKEND_ORIGIN).clear()
+                } else Unit
+        }
         authRepository.logout()
         liveCommunityRepository.clearProfileCache()
         cachedCommunityService = null

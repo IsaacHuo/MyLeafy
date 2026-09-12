@@ -18,7 +18,7 @@ MyLeafy 的 Android 原生客户端（单 `app` module）。迁移方案与教�
 ./gradlew connectedDebugAndroidTest # 运行 5 Tab / 二级导航设备烟雾测试
 ```
 
-release 构建必须同时提供 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE_STORE_PASSWORD`、`MYLEAFY_RELEASE_KEY_ALIAS` 和 `MYLEAFY_RELEASE_KEY_PASSWORD`，并在 `secrets.properties` 中提供公开的 Supabase URL/anon key；缺任一项会直接失败，不会生成 unsigned APK。正式产物由 GitHub Actions 的 `Cut Android Release` 发布到独立的 `android-vX.Y.Z` Release。
+release 构建必须同时提供 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE_STORE_PASSWORD`、`MYLEAFY_RELEASE_KEY_ALIAS` 和 `MYLEAFY_RELEASE_KEY_PASSWORD`，并在 `secrets.properties` 中提供所选后台的公开配置；缺任一项会直接失败，不会生成 unsigned APK。正式产物由 GitHub Actions 的 `Cut Android Release` 发布到独立的 `android-vX.Y.Z` Release。
 
 要求：JDK 17+，Android SDK Platform 36（`local.properties` 中 `sdk.dir`）。Windows 本地可直接使用 Android Studio 自带 JBR；本仓库的 wrapper 下载超时已放宽，适合首次获取 Gradle 分发包。
 
@@ -36,6 +36,10 @@ cp secrets.properties.example secrets.properties
 ```
 
 > 只允许公开的 project URL 与 anon key；严禁 service_role 或任何私密凭据。
+
+`BACKEND_PROVIDER` 默认为 `supabase`，生产仍使用 Supabase。迁移 staging 验证时显式设置 `BACKEND_PROVIDER=cloudflare` 和 `BACKEND_ORIGIN=https://目标Worker域名`；地址只能包含 HTTPS origin，配置错误会令构建失败。社区、资料、评价与共享课表沿用同一组仓储接口，调用由组合根一次选择，请求失败不会切换到另一个后台。guest/无社区 capability 不初始化任何在线后台。
+
+Cloudflare 会话按 origin 保存在 Android Keystore 加密存储，使用服务端签名 Bearer token；HTTP 取消会取消 OkHttp Call。文件通过受认证的上传/读取接口传输，变更信号使用受认证 WebSocket，并且只暴露失效通知，不直接替换 Feed 内容。Android 原页面尚无媒体上传和实时提示入口，本次未增加这些产品交互。
 
 ## 目录
 

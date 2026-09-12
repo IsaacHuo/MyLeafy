@@ -1,6 +1,7 @@
 import { auth, actor, type BackendEnv } from './auth';
 import { actorGuard, atomic, decode, guard, rows, sessionGuard, statement, type Bind } from './db';
 import { ApiError, readJSON, text } from './http';
+import { profileImageOperations } from './media';
 
 export async function bootstrap(env:BackendEnv,request:Request){
   const session=await auth(env).api.getSession({headers:request.headers,query:{disableRefresh:true}});
@@ -44,12 +45,13 @@ export async function myProfile(env:BackendEnv,request:Request){
   const who=await actor(env,request);
   const [profile]=await rows(env.DB,'SELECT * FROM profiles WHERE id=?',[who.profileId]);
   if(!profile)throw new ApiError(404,'not_found','资料不存在。');
-  return decode('profiles',profile);
+  const {profileWithMedia}=await import('./community-reads');
+  return profileWithMedia(env,who,profile);
 }
 
 export async function updateProfile(env:BackendEnv,request:Request){
   const who=await actor(env,request), body=await readJSON(request);
-  const fields:Record<string,number>={nickname:40,display_name:128,bio:500,major:100,grade:40};
+  const fields:Record<string,number>={nickname:40,display_name:128,bio:500,major:100,grade:40,avatar_path:512,cover_path:512};
   const keys=Object.keys(body);
   if(!keys.length||keys.some(key=>!(key in fields)&&key!=='shows_edu_verification_badge'))throw new ApiError(400,'invalid_request','包含不可修改的资料字段。');
   const values:Bind[]=keys.map(key=>{
@@ -60,13 +62,17 @@ export async function updateProfile(env:BackendEnv,request:Request){
     return body[key]===null&&key!=='nickname'?null:text(body[key],fields[key],key==='nickname');
   });
   const now=new Date().toISOString().replace('Z','000Z');
+  const mediaOperations:D1PreparedStatement[]=[];
+  for(const kind of ['avatar','cover'] as const)if(`${kind}_path`in body)mediaOperations.push(...await profileImageOperations(env,who,kind,body[`${kind}_path`]));
   const result=await atomic(env.DB,[
     sessionGuard(env.DB,who.authId,who.sessionId),
     guard(env.DB,'EXISTS(SELECT 1 FROM profile_auth_links WHERE auth_user_id=? AND profile_id=?)',[who.authId,who.profileId]),
+    ...mediaOperations,
     statement(env.DB,`UPDATE profiles SET ${keys.map(key=>`${key}=?`).join(',')},updated_at=?,profile_edited_at=? WHERE id=?`,[...values,now,now,who.profileId]),
     statement(env.DB,"UPDATE profiles SET is_profile_complete=CASE WHEN length(trim(nickname))>0 THEN 1 ELSE 0 END WHERE id=? RETURNING *",[who.profileId]),
   ]);
-  return decode('profiles',result[result.length-2].results[0]);
+  const {profileWithMedia}=await import('./community-reads');
+  return profileWithMedia(env,who,result[result.length-2].results[0]);
 }
 
 export async function deleteAccount(env:BackendEnv,request:Request){

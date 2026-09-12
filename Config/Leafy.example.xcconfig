@@ -8,3 +8,7 @@ SUPABASE_COMMUNITY_FEED_FUNCTION = community-feed
 SUPABASE_WEATHER_FUNCTION = campus-weather
 SUPABASE_COMMUNITY_EDGE_REGION = ap-northeast-1
 SUPABASE_COMMUNITY_API_BASE_URL =
+
+// Explicit authority. Production remains Supabase until migration acceptance.
+MYLEAFY_BACKEND_PROVIDER = supabase
+// MYLEAFY_API_ORIGIN = https:/$()/api.myleafy.space

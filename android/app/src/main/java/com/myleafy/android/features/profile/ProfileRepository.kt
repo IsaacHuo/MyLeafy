@@ -1,7 +1,7 @@
 package com.myleafy.android.features.profile
 
 import com.myleafy.android.core.network.SchoolSessionState
-import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.services.CommunityService
 import com.myleafy.android.shared.model.ProfileDto
 
 /**

@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "myleafy-site-staging",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-09-05",
+  "vars": { "MYLEAFY_BACKEND_PROVIDER": "cloudflare" },
+  "services": [
+    { "binding": "MYLEAFY_ADMIN_API", "service": "myleafy-api-staging", "entrypoint": "AdminAPI" },
+    { "binding": "MYLEAFY_PUBLIC_API", "service": "myleafy-api-staging" }
+  ]
+}

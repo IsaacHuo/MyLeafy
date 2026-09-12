@@ -42,7 +42,7 @@ struct CommunityAccessGate {
         self.termsChecker = termsChecker
     }
 
-    init(termsChecker: any CommunityTermsChecking = LiveCommunityRepository()) {
+    init(termsChecker: any CommunityTermsChecking = CommunityBackendFactory.repository) {
         self.init(sessionManager: CommunitySessionManager.shared, termsChecker: termsChecker)
     }
 

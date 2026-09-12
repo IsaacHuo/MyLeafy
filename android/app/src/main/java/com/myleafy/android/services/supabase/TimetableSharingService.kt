@@ -1,5 +1,6 @@
 package com.myleafy.android.services.supabase
 
+import com.myleafy.android.services.TimetableSharingService
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -13,58 +14,12 @@ import kotlinx.serialization.json.put
 @Serializable
 private data class BackendCapabilityDto(val features: Map<String, Boolean> = emptyMap())
 
-@Serializable
-data class SharedTimetableCourseDto(
-    val id: String,
-    val course_name: String,
-    val teacher: String,
-    val room: String,
-    val location: String,
-    val day_of_week: Int,
-    val weeks: List<Int>,
-    val duration: List<Int>,
-)
-
-@Serializable
-data class SharedTimetableSnapshotDto(
-    val id: String,
-    val owner_id: String,
-    val semester_id: String,
-    val courses: List<SharedTimetableCourseDto>,
-    val course_count: Int,
-    val published_at: String,
-    val created_at: String,
-    val updated_at: String,
-)
-
-@Serializable
-data class TimetableShareMemberDto(
-    val id: String,
-    val owner_id: String,
-    val viewer_id: String,
-    val created_at: String,
-    val updated_at: String,
-    val revoked_at: String? = null,
-)
-
-@Serializable
-data class TimetableInviteDto(
-    val id: String,
-    val owner_id: String,
-    val semester_id: String,
-    val expires_at: String,
-    val accepted_by: String? = null,
-    val accepted_at: String? = null,
-    val created_at: String,
-    val code: String? = null,
-)
-
-class TimetableSharingService(private val client: SupabaseClient) {
-    suspend fun isBackendAvailable(): Boolean = runCatching {
+class SupabaseTimetableSharingService(private val client: SupabaseClient) : TimetableSharingService {
+    override suspend fun isBackendAvailable(): Boolean = runCatching {
         client.postgrest.rpc("backend_capabilities_v1").decodeAs<BackendCapabilityDto>()
             .features["timetable_sharing"] == true
     }.getOrDefault(false)
-    suspend fun publish(
+    override suspend fun publish(
         campusId: String,
         ownerId: String,
         semesterId: String,
@@ -87,7 +42,7 @@ class TimetableSharingService(private val client: SupabaseClient) {
         }
     }
 
-    suspend fun mySnapshot(campusId: String, ownerId: String, semesterId: String): SharedTimetableSnapshotDto? =
+    override suspend fun mySnapshot(campusId: String, ownerId: String, semesterId: String): SharedTimetableSnapshotDto? =
         mapSharingErrors {
             client.postgrest["timetable_snapshots"].select {
                 filter {
@@ -99,7 +54,7 @@ class TimetableSharingService(private val client: SupabaseClient) {
             }.decodeList<SharedTimetableSnapshotDto>().firstOrNull()
         }
 
-    suspend fun viewableSnapshots(campusId: String, ownerId: String, semesterId: String): List<SharedTimetableSnapshotDto> =
+    override suspend fun viewableSnapshots(campusId: String, ownerId: String, semesterId: String): List<SharedTimetableSnapshotDto> =
         mapSharingErrors {
             client.postgrest["timetable_snapshots"].select {
                 filter {
@@ -111,7 +66,7 @@ class TimetableSharingService(private val client: SupabaseClient) {
             }.decodeList()
         }
 
-    suspend fun members(campusId: String, ownerId: String): List<TimetableShareMemberDto> = mapSharingErrors {
+    override suspend fun members(campusId: String, ownerId: String): List<TimetableShareMemberDto> = mapSharingErrors {
         client.postgrest["timetable_share_members"].select {
             filter {
                 eq("campus_id", campusId)
@@ -122,7 +77,7 @@ class TimetableSharingService(private val client: SupabaseClient) {
         }.decodeList()
     }
 
-    suspend fun invites(campusId: String, ownerId: String): List<TimetableInviteDto> = mapSharingErrors {
+    override suspend fun invites(campusId: String, ownerId: String): List<TimetableInviteDto> = mapSharingErrors {
         client.postgrest["timetable_invites"].select {
             filter {
                 eq("campus_id", campusId)
@@ -133,7 +88,7 @@ class TimetableSharingService(private val client: SupabaseClient) {
         }.decodeList()
     }
 
-    suspend fun createInvite(): TimetableInviteDto {
+    override suspend fun createInvite(): TimetableInviteDto {
         repeat(3) {
             val code = generateCode()
             try {
@@ -150,15 +105,15 @@ class TimetableSharingService(private val client: SupabaseClient) {
         throw IllegalStateException("邀请码生成冲突，请重新生成一次")
     }
 
-    suspend fun accept(code: String): SharedTimetableSnapshotDto = mapSharingErrors {
+    override suspend fun accept(code: String): SharedTimetableSnapshotDto = mapSharingErrors {
         client.postgrest.rpc(
             "accept_timetable_invite",
-            buildJsonObject { put("p_code", normalizeCode(code)) },
+            buildJsonObject { put("p_code", TimetableSharingService.normalizeCode(code)) },
         ).decodeList<SharedTimetableSnapshotDto>().firstOrNull()
             ?: error("接受邀请失败，请稍后重试")
     }
 
-    suspend fun revoke(ownerId: String, viewerId: String) = mapSharingErrors {
+    override suspend fun revoke(ownerId: String, viewerId: String) = mapSharingErrors {
         client.postgrest.rpc(
             "revoke_timetable_share",
             buildJsonObject {
@@ -169,12 +124,12 @@ class TimetableSharingService(private val client: SupabaseClient) {
         Unit
     }
 
-    suspend fun stopSharing() = mapSharingErrors {
+    override suspend fun stopSharing() = mapSharingErrors {
         client.postgrest.rpc("stop_timetable_sharing")
         Unit
     }
 
-    suspend fun leave(ownerId: String) = mapSharingErrors {
+    override suspend fun leave(ownerId: String) = mapSharingErrors {
         client.postgrest.rpc(
             "leave_timetable_share",
             buildJsonObject { put("p_owner_id", ownerId) },
@@ -190,7 +145,6 @@ class TimetableSharingService(private val client: SupabaseClient) {
         private const val Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ234567"
         private val random = SecureRandom()
 
-        fun normalizeCode(code: String): String = code.uppercase().filter { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" }
     }
 }
 

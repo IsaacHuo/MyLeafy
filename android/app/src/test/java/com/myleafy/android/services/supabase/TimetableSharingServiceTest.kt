@@ -1,5 +1,6 @@
 package com.myleafy.android.services.supabase
 
+import com.myleafy.android.services.TimetableSharingService
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -7,6 +7,10 @@ actor PostgraduateInfoService {
     private init() {}
 
     func fetchPublishedSources(limit: Int = 80) async throws -> [PostgraduateSource] {
+        if MyLeafyBackendEnvironment.usesCloudflare {
+            try await CloudflareCommunityRepository().ensureAnonymousSession()
+            return try await MyLeafyBackendEnvironment.client().get("/v1/postgraduate-sources", query: [URLQueryItem(name: "limit", value: String(max(1, min(limit, 120))))])
+        }
         try await CommunityService.shared.ensureAnonymousSession()
         let client = try LeafySupabase.shared.requireClient()
         let cappedLimit = max(1, min(limit, 120))

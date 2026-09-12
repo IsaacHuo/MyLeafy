@@ -42,8 +42,8 @@ nonisolated enum TimetableSharingError: LocalizedError {
     }
 }
 
-actor TimetableSharingService {
-    static let shared = TimetableSharingService()
+actor TimetableSharingService: TimetableSharing {
+    static let shared: any TimetableSharing = MyLeafyBackendEnvironment.usesCloudflare ? CloudflareTimetableSharingService() : TimetableSharingService()
 
     private let inviteCodeLength = 12
     private let inviteCodeAlphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ234567")

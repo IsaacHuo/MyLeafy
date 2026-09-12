@@ -72,6 +72,7 @@ export async function moderate(env:BackendEnv,context:AdminContext,action:string
   const operations=[guard(env.DB,`(SELECT count(*) FROM ${table} WHERE id IN(${slots}) AND status<>'deleted'${table==='posts'?" AND status<>'pending_review'":''})=?`,[...unique,unique.length]),
     statement(env.DB,`UPDATE ${table} SET status=?,moderated_by=?,moderated_at=?,moderation_reason=?,updated_at=?${table==='posts'?',media_cleanup_hold=?,media_purge_after=NULL':''} WHERE id IN(${slots}) RETURNING *`,[status,context.id,now,reason,now,...(table==='posts'?[status==='hidden'?1:0]:[]),...unique])];
   if(table==='comments')operations.push(statement(env.DB,`UPDATE posts SET comment_count=(SELECT count(*) FROM comments WHERE post_id=posts.id AND status='published') WHERE id IN(SELECT post_id FROM comments WHERE id IN(${slots}))`,unique));
+  if(table==='posts'&&status==='hidden')operations.push(statement(env.DB,`UPDATE community_post_pins SET status='inactive',updated_at=? WHERE post_id IN(${slots}) AND status='active'`,[now,...unique]));
   if(table==='posts'||table==='community_polls')operations.push(statement(env.DB,`INSERT INTO change_outbox(id,room) SELECT lower(hex(randomblob(16))),'campus:'||campus_id FROM ${table} WHERE id IN(${slots}) GROUP BY campus_id`,unique));
   const result=await commitAdmin(env,context,action,table,unique.length===1?unique[0]:null,operations);
   const items=await adminHydrate(env,context,table,result);

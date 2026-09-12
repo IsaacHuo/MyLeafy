@@ -3,21 +3,56 @@ import { actorGuard, atomic, decode, guard, outbox, rows, statement, type Row } 
 import { ApiError, text, uuid } from './http';
 import { publicProfile, publishingGuard, requireCommunity, safeContent } from './community';
 
-export async function setPostReaction(env:BackendEnv,who:Actor,id:string,kind:'like'|'favorite',enabled:boolean){
+export async function setPostReaction(env:BackendEnv,who:Actor,id:string,kind:'like'|'favorite',enabled:boolean|'toggle'){
   const postId=uuid(id),campus=requireCommunity(who),table=kind==='like'?'post_likes':'post_favorites',now=new Date().toISOString().replace('Z','000Z');
   const result=await atomic(env.DB,[actorGuard(env.DB,who,true),
     guard(env.DB,`EXISTS(SELECT 1 FROM posts p WHERE p.id=? AND p.campus_id=? AND p.status='published' ${kind==='like'&&enabled?'AND p.author_id<>?':''} AND NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=p.author_id))`,[postId,campus,...(kind==='like'&&enabled?[who.profileId]:[]),who.profileId]),
     ...(enabled&&kind==='like'?[publishingGuard(env.DB,who)]:[]),
-    enabled?statement(env.DB,`INSERT INTO ${table}(post_id,user_id) VALUES(?,?) ON CONFLICT DO NOTHING`,[postId,who.profileId]):statement(env.DB,`DELETE FROM ${table} WHERE post_id=? AND user_id=?`,[postId,who.profileId]),
+    ...(enabled==='toggle'?[
+      statement(env.DB,`DELETE FROM ${table} WHERE post_id=? AND user_id=?`,[postId,who.profileId]),
+      statement(env.DB,`INSERT INTO ${table}(post_id,user_id) SELECT ?,? WHERE changes()=0`,[postId,who.profileId]),
+    ]:[enabled?statement(env.DB,`INSERT INTO ${table}(post_id,user_id) VALUES(?,?) ON CONFLICT DO NOTHING`,[postId,who.profileId]):statement(env.DB,`DELETE FROM ${table} WHERE post_id=? AND user_id=?`,[postId,who.profileId])]),
     ...(enabled&&kind==='like'?[statement(env.DB,`INSERT INTO community_notifications(id,recipient_id,actor_id,post_id,type,title,body)
       SELECT ?,p.author_id,?,p.id,'like','有人赞了你的帖子',p.title FROM posts p WHERE p.id=? AND changes()=1 AND p.author_id<>? AND NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=p.author_id AND b.blocked_id=?) AND NOT EXISTS(SELECT 1 FROM community_notification_settings n WHERE n.user_id=p.author_id AND n.muted_all=1)`,[crypto.randomUUID(),who.profileId,postId,who.profileId,who.profileId]),
       statement(env.DB,"INSERT INTO change_outbox(id,room) SELECT ?,'profile:'||author_id FROM posts WHERE id=?",[crypto.randomUUID(),postId])]:[]),
     kind==='like'?statement(env.DB,'UPDATE posts SET like_count=(SELECT count(*) FROM post_likes WHERE post_id=?),updated_at=? WHERE id=? RETURNING like_count',[postId,now,postId]):statement(env.DB,'SELECT like_count FROM posts WHERE id=?',[postId]),
     ...(kind==='like'?[outbox(env.DB,`campus:${campus}`)]:[]),
+    statement(env.DB,`SELECT EXISTS(SELECT 1 FROM ${table} WHERE post_id=? AND user_id=?) AS viewer_enabled`,[postId,who.profileId]),
   ]);
   const counts=result.flatMap(r=>r.results).find(r=>'like_count' in r);
   if(!counts)throw new Error('Committed reaction count missing');
-  return {post_id:postId,like_count:counts.like_count,...(kind==='like'?{viewer_has_liked:enabled}:{viewer_has_favorited:enabled})};
+  const viewer=Boolean(result.flatMap(r=>r.results).find(r=>'viewer_enabled'in r)?.viewer_enabled);
+  return {post_id:postId,like_count:counts.like_count,...(kind==='like'?{viewer_has_liked:viewer}:{viewer_has_favorited:viewer})};
+}
+
+export async function toggleCommentLike(env:BackendEnv,who:Actor,id:string,body:Row){
+  uuid(id);const requestId=uuid(body.request_id),campus=requireCommunity(who);
+  const previous=async()=>{
+    const record=(await rows(env.DB,'SELECT * FROM private_community_comment_like_requests WHERE request_id=? AND user_id=?',[requestId,who.profileId]))[0];
+    if(!record)return null;
+    if(record.comment_id!==id)throw new ApiError(409,'COMMUNITY_LIKE_REQUEST_REUSED','请求标识已用于其他评论。');
+    return {comment_id:id,like_count:record.like_count,viewer_has_liked:record.viewer_has_liked===1};
+  };
+  const cached=await previous();if(cached)return cached;
+  try{
+    const result=await atomic(env.DB,[actorGuard(env.DB,who,true),publishingGuard(env.DB,who),
+      guard(env.DB,"EXISTS(SELECT 1 FROM comments c JOIN posts p ON p.id=c.post_id WHERE c.id=? AND c.status='published' AND p.status='published' AND p.campus_id=? AND c.author_id<>? AND NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id IN(c.author_id,p.author_id)))",[id,campus,who.profileId,who.profileId]),
+      statement(env.DB,'INSERT INTO private_community_comment_like_requests(request_id,user_id,comment_id,like_count,viewer_has_liked) SELECT ?,?,?,0,NOT EXISTS(SELECT 1 FROM comment_likes WHERE comment_id=? AND user_id=?)',[requestId,who.profileId,id,id,who.profileId]),
+      statement(env.DB,'DELETE FROM comment_likes WHERE comment_id=? AND user_id=?',[id,who.profileId]),
+      statement(env.DB,'INSERT INTO comment_likes(comment_id,user_id) SELECT comment_id,user_id FROM private_community_comment_like_requests WHERE request_id=? AND user_id=? AND viewer_has_liked=1',[requestId,who.profileId]),
+      statement(env.DB,"INSERT INTO community_notifications(id,recipient_id,actor_id,post_id,comment_id,type,title,body) SELECT ?,c.author_id,?,c.post_id,c.id,'like','有人赞了你的评论',substr(c.body,1,120) FROM comments c WHERE c.id=? AND changes()=1 AND NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=c.author_id AND b.blocked_id=?) AND NOT EXISTS(SELECT 1 FROM community_notification_settings s WHERE s.user_id=c.author_id AND s.muted_all=1)",[crypto.randomUUID(),who.profileId,id,who.profileId]),
+      statement(env.DB,"INSERT INTO change_outbox(id,room) SELECT ?,'profile:'||author_id FROM comments WHERE id=?",[crypto.randomUUID(),id]),
+      statement(env.DB,'UPDATE comments SET like_count=(SELECT count(*) FROM comment_likes WHERE comment_id=?) WHERE id=?',[id,id]),
+      statement(env.DB,'UPDATE private_community_comment_like_requests SET like_count=(SELECT like_count FROM comments WHERE id=?) WHERE request_id=? AND user_id=? RETURNING comment_id,like_count,viewer_has_liked',[id,requestId,who.profileId]),
+    ]);const record=result[result.length-2].results[0];return {...record,viewer_has_liked:record.viewer_has_liked===1};
+  }catch(error){if(error instanceof ApiError&&error.status===409){const replay=await previous();if(replay)return replay;}throw error;}
+}
+export async function pendingPost(env:BackendEnv,who:Actor,id:string,abort=false){
+  uuid(id);
+  if(!abort)return (await rows(env.DB,"SELECT id,author_id,status FROM posts WHERE id=? AND author_id=? AND status='pending_review'",[id,who.profileId]))[0]??null;
+  await atomic(env.DB,[actorGuard(env.DB,who,true),guard(env.DB,"NOT EXISTS(SELECT 1 FROM posts WHERE id=?) OR EXISTS(SELECT 1 FROM posts WHERE id=? AND author_id=? AND status IN('pending_review','deleted'))",[id,id,who.profileId]),
+    statement(env.DB,"UPDATE posts SET status='deleted',media_cleanup_hold=0,media_purge_after=?,updated_at=? WHERE id=? AND author_id=? AND status='pending_review'",[new Date().toISOString().replace('Z','000Z'),new Date().toISOString().replace('Z','000Z'),id,who.profileId]),
+  ]);return {aborted:true};
 }
 
 export async function deleteOwnContent(env:BackendEnv,who:Actor,id:string,comment=false){
@@ -31,11 +66,11 @@ export async function deleteOwnContent(env:BackendEnv,who:Actor,id:string,commen
   ]);return {deleted:true};
 }
 
-export async function setBlock(env:BackendEnv,who:Actor,id:string,enabled:boolean){
+export async function setBlock(env:BackendEnv,who:Actor,id:string,enabled:boolean,reason:unknown=null){
   uuid(id);if(id===who.profileId)throw new ApiError(400,'invalid_request','不能屏蔽自己。');
   await atomic(env.DB,[actorGuard(env.DB,who,true),
     guard(env.DB,"EXISTS(SELECT 1 FROM profiles WHERE id=? AND CASE WHEN campus_id='bjfu' THEN 'bjfu' ELSE community_campus_id END=?)",[id,requireCommunity(who)]),
-    enabled?statement(env.DB,'INSERT INTO community_blocks(blocker_id,blocked_id) VALUES(?,?) ON CONFLICT DO NOTHING',[who.profileId,id]):statement(env.DB,'DELETE FROM community_blocks WHERE blocker_id=? AND blocked_id=?',[who.profileId,id]),
+    enabled?statement(env.DB,'INSERT INTO community_blocks(blocker_id,blocked_id,reason) VALUES(?,?,?) ON CONFLICT(blocker_id,blocked_id) DO UPDATE SET reason=excluded.reason',[who.profileId,id,text(reason,1000,false)||null]):statement(env.DB,'DELETE FROM community_blocks WHERE blocker_id=? AND blocked_id=?',[who.profileId,id]),
     outbox(env.DB,`profile:${who.profileId}`),
   ]);return {blocked:enabled};
 }
