@@ -206,9 +206,6 @@ struct GradesView: View {
                 }
             }
         }
-        .refreshable {
-            await runPrimaryGradeAction()
-        }
         .navigationTitle("成绩")
         .leafyInlineNavigationTitle()
         .toolbar {
@@ -281,9 +278,6 @@ struct GradesView: View {
         .onAppear {
             creditSummary = SchoolDataCache.loadGradeCreditSummary()
             refreshGradePresentationIfNeeded()
-            if grades.isEmpty, networkManager.isLoggedIn, !isCustomCampus {
-                Task { await fetchGrades(userInitiated: false) }
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { notification in
             let event = notification.object as? SchoolDataRefreshEvent
@@ -327,13 +321,6 @@ struct GradesView: View {
                         Label("导入 CSV", systemImage: "tray.and.arrow.down")
                     }
                     .buttonStyle(.bordered)
-                } else {
-                    Button {
-                        Task { await runPrimaryGradeAction() }
-                    } label: {
-                        Label("获取最新成绩", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .buttonStyle(.borderedProminent)
                 }
             }
             .tint(AppTheme.accent)

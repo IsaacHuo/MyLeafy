@@ -8,6 +8,7 @@ nonisolated enum TimetableContinuousInteractionPhase: Equatable, Sendable {
     case pinching
     case settling
     case paging
+    case pageSettling
 }
 
 nonisolated struct TimetableZoomPreparedDay: Identifiable, Equatable, Sendable {
@@ -226,6 +227,9 @@ final class TimetableContinuousViewportController {
     @ObservationIgnored private var rangeStart: Date
     @ObservationIgnored private var rangeEnd: Date
     @ObservationIgnored private var gestureStartProgress: CGFloat = 0
+    @ObservationIgnored private var pagingStartOffset: CGFloat = 0
+    @ObservationIgnored private var pagingTranslation: CGFloat = 0
+    @ObservationIgnored private var pagingViewportWidth: CGFloat = 0
     @ObservationIgnored private var animatedValue: Double = 0
     @ObservationIgnored private var animatedVelocity: Double = 0
     @ObservationIgnored private var animationTarget: Double = 0
@@ -281,8 +285,15 @@ final class TimetableContinuousViewportController {
     }
 
     func updateBounds(rangeStart: Date, rangeEnd: Date) {
-        self.rangeStart = calendar.startOfDay(for: rangeStart)
-        self.rangeEnd = calendar.startOfDay(for: rangeEnd)
+        let start = calendar.startOfDay(for: rangeStart)
+        let end = calendar.startOfDay(for: rangeEnd)
+        guard start != self.rangeStart || end != self.rangeEnd else { return }
+        stopAnimation()
+        zoomProgress = zoomProgress >= 0.5 ? 1 : 0
+        phase = .idle
+        horizontalOffset = 0
+        self.rangeStart = start
+        self.rangeEnd = end
         centerDate = clampedCenterDate(centerDate)
         weekStartDate = Self.monday(containing: centerDate, calendar: calendar)
         windowRevision += 1
@@ -290,6 +301,8 @@ final class TimetableContinuousViewportController {
 
     func positionOnWeek(_ weekStartDate: Date, centersToday: Bool, today: Date = Date()) {
         stopAnimation()
+        zoomProgress = zoomProgress >= 0.5 ? 1 : 0
+        phase = .idle
         let normalizedWeekStart = calendar.startOfDay(for: weekStartDate)
         self.weekStartDate = normalizedWeekStart
         if centersToday {
@@ -304,9 +317,14 @@ final class TimetableContinuousViewportController {
 
     func beginMagnification(centersToday: Bool, today: Date = Date()) {
         guard phase != .paging else { return }
+        if phase == .pageSettling {
+            beginPaging(viewportWidth: pagingViewportWidth)
+            horizontalOffset = 0
+        }
         stopAnimation()
         if zoomProgress <= 0.001 {
-            if centersToday {
+            if centersToday,
+               calendar.isDate(Self.monday(containing: today, calendar: calendar), inSameDayAs: weekStartDate) {
                 centerDate = calendar.startOfDay(for: today)
             } else {
                 centerDate = calendar.date(byAdding: .day, value: 1, to: weekStartDate)
@@ -362,6 +380,7 @@ final class TimetableContinuousViewportController {
 
     func setZoomTarget(_ target: CGFloat, centersToday: Bool, reducesMotion: Bool) {
         beginMagnification(centersToday: centersToday)
+        guard phase == .pinching else { return }
         let resolvedTarget: CGFloat = target >= 0.5 ? 1 : 0
         if resolvedTarget == 0 {
             weekStartDate = Self.monday(containing: centerDate, calendar: calendar)
@@ -379,16 +398,30 @@ final class TimetableContinuousViewportController {
         )
     }
 
-    func beginPaging() {
-        guard phase == .idle, zoomProgress <= 0.001 || zoomProgress >= 0.999 else { return }
+    @discardableResult
+    func beginPaging(viewportWidth: CGFloat) -> Bool {
+        guard viewportWidth.isFinite, viewportWidth > 0,
+              phase == .idle || phase == .pageSettling,
+              zoomProgress <= 0.001 || zoomProgress >= 0.999 else { return false }
+        let interruptedOffset = phase == .pageSettling ? horizontalOffset : 0
         stopAnimation()
+        // Rebase to the closest visible page while preserving the presentation position.
+        // A new drag owns the offset immediately; the old display link must no longer write it.
+        let visibleDirection = abs(interruptedOffset) >= viewportWidth * 0.5
+            ? allowedPageDirection(interruptedOffset < 0 ? 1 : -1) : 0
+        if visibleDirection != 0 { completePage(direction: visibleDirection) }
+        horizontalOffset = interruptedOffset + CGFloat(visibleDirection) * viewportWidth
+        pagingStartOffset = horizontalOffset
+        pagingTranslation = 0
+        pagingViewportWidth = viewportWidth
         phase = .paging
-        horizontalOffset = 0
+        return true
     }
 
     func updatePaging(translation: CGFloat) {
-        guard phase == .paging else { return }
-        horizontalOffset = translation
+        guard phase == .paging, translation.isFinite else { return }
+        pagingTranslation = translation
+        horizontalOffset = min(max(pagingStartOffset + translation, -pagingViewportWidth), pagingViewportWidth)
     }
 
     func endPaging(
@@ -397,30 +430,38 @@ final class TimetableContinuousViewportController {
         viewportWidth: CGFloat,
         reducesMotion: Bool
     ) {
-        guard phase == .paging, viewportWidth > 0 else { return }
-        let requestedDirection: Int
-        if abs(predictedTranslation) >= viewportWidth * 0.28 {
-            requestedDirection = predictedTranslation < 0 ? 1 : -1
-        } else {
-            requestedDirection = 0
-        }
+        guard phase == .paging, viewportWidth.isFinite, viewportWidth > 0 else { return }
+        let projectedOffset = predictedTranslation.isFinite
+            ? horizontalOffset + predictedTranslation - pagingTranslation : horizontalOffset
+        let requestedDirection = abs(projectedOffset) >= viewportWidth * 0.28
+            ? (projectedOffset < 0 ? 1 : -1) : 0
         let direction = allowedPageDirection(requestedDirection)
         let targetOffset = CGFloat(-direction) * viewportWidth
         guard !reducesMotion else {
-            horizontalOffset = targetOffset
             completePage(direction: direction)
             return
         }
         startAnimation(
             kind: .page(direction),
             value: Double(horizontalOffset),
-            velocity: Double(velocity),
+            velocity: velocity.isFinite ? Double(velocity) : 0,
             target: Double(targetOffset)
         )
     }
 
+    func cancelPaging(reducesMotion: Bool) {
+        guard phase == .paging else { return }
+        guard !reducesMotion else {
+            completePage(direction: 0)
+            return
+        }
+        startAnimation(kind: .page(0), value: Double(horizontalOffset), velocity: 0, target: 0)
+    }
+
     func returnToToday(_ today: Date = Date()) {
         stopAnimation()
+        zoomProgress = zoomProgress >= 0.5 ? 1 : 0
+        phase = .idle
         let normalizedToday = calendar.startOfDay(for: today)
         centerDate = clampedCenterDate(normalizedToday)
         weekStartDate = Self.monday(containing: centerDate, calendar: calendar)
@@ -438,6 +479,11 @@ final class TimetableContinuousViewportController {
         lastFrameTimestamp = timestamp
         guard deltaTime > 0 else { return }
 
+        advanceAnimation(by: deltaTime)
+    }
+
+    func advanceAnimation(by deltaTime: TimeInterval) {
+        guard animationKind != .none, deltaTime.isFinite, deltaTime > 0 else { return }
         Self.spring.update(
             value: &animatedValue,
             velocity: &animatedVelocity,
@@ -455,8 +501,11 @@ final class TimetableContinuousViewportController {
             break
         }
 
-        if abs(animatedValue - animationTarget) < 0.001,
-           abs(animatedVelocity) < 0.01 {
+        let isPageAnimation: Bool
+        if case .page = animationKind { isPageAnimation = true } else { isPageAnimation = false }
+        // Offsets are points, zoom progress is unitless. Do not keep an invisible subpixel tail active.
+        if abs(animatedValue - animationTarget) < (isPageAnimation ? 0.5 : 0.001),
+           abs(animatedVelocity) < (isPageAnimation ? 5 : 0.01) {
             let completedKind = animationKind
             stopAnimation()
             switch completedKind {
@@ -480,7 +529,7 @@ final class TimetableContinuousViewportController {
         animatedVelocity = velocity
         animationTarget = target
         lastFrameTimestamp = nil
-        phase = kind == .zoom ? .settling : .paging
+        phase = kind == .zoom ? .settling : .pageSettling
 
         let link = CADisplayLink(target: displayLinkTarget, selector: #selector(TimetableDisplayLinkTarget.tick(_:)))
         if #available(iOS 15.0, *) {

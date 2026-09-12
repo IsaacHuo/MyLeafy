@@ -98,6 +98,7 @@ struct TimetableView: View {
     @State private var timetableBackgroundImage: UIImage?
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
     @State private var timetableBackgroundConfiguration = TimetableBackgroundConfiguration.load()
+    @GestureState private var isTimetablePagingDragActive = false
     @State private var continuousViewport: TimetableContinuousViewportController
     @State private var continuousRenderWindow: TimetableZoomRenderWindow
     @State private var continuousDayPayloads: [TimetableZoomDayRenderPayload] = []
@@ -393,6 +394,9 @@ struct TimetableView: View {
             }
             syncReturnButtonVisibility(for: currentWeek)
         }
+        .onChange(of: isTimetablePagingDragActive) { _, isActive in
+            if !isActive { continuousViewport.cancelPaging(reducesMotion: accessibilityReduceMotion) }
+        }
         .onChange(of: timetableHidesWeekends) { _, _ in
             handleWeekendVisibilityChange()
         }
@@ -640,12 +644,12 @@ struct TimetableView: View {
            page != currentWeek {
             currentWeek = page
         }
-        refreshContinuousDayPayloads()
+        refreshContinuousDayPayloads(forNewWindow: true)
         syncReturnButtonVisibility(for: currentWeek)
     }
 
-    private func refreshContinuousDayPayloads() {
-        guard continuousViewport.phase == .idle else {
+    private func refreshContinuousDayPayloads(forNewWindow: Bool = false) {
+        guard forNewWindow || continuousViewport.phase == .idle else {
             hasDeferredContinuousPayloadRefresh = true
             return
         }
@@ -1382,15 +1386,17 @@ struct TimetableView: View {
 
     private var timetableHorizontalPagingGesture: some Gesture {
         DragGesture(minimumDistance: 8)
+            .updating($isTimetablePagingDragActive) { _, isActive, _ in isActive = true }
             .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                if continuousViewport.phase == .idle {
-                    continuousViewport.beginPaging()
+                if continuousViewport.phase != .paging {
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 }
-                guard continuousViewport.phase == .paging else { return }
                 var transaction = Transaction(animation: nil)
                 transaction.isContinuous = true
                 withTransaction(transaction) {
+                    if continuousViewport.phase != .paging {
+                        guard continuousViewport.beginPaging(viewportWidth: continuousContentViewportWidth) else { return }
+                    }
                     continuousViewport.updatePaging(translation: value.translation.width)
                 }
             }

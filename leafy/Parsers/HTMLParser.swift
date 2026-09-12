@@ -1140,9 +1140,17 @@ class HTMLParser {
 
     static func parseGradeCreditSummary(html: String) throws -> GradeCreditSummary {
         let document = try SwiftSoup.parse(html)
-        let officialGPA = try officialSummaryValue(in: document, labels: ["平均学分绩点", "平均绩点", "学分绩点", "GPA"], maximum: 5)
-        let officialWeightedAverage = try officialSummaryValue(in: document, labels: ["加权平均分", "加权均分", "平均成绩", "平均分"], maximum: 100)
-        let officialCreditPoint = try officialSummaryValue(in: document, labels: ["学分积"], maximum: nil)
+        guard let summaryDocument = document.copy() as? Document else {
+            throw HTMLParserError.tableRowsUnparseable("成绩汇总")
+        }
+        // Keep inline labels and values together, excluding data tables and non-visible markup.
+        try summaryDocument.select("table,script,style,template,[hidden],[aria-hidden=true]").remove()
+        let summaryText = try summaryDocument.text()
+        let officialGPA = try officialSummaryValue(in: document, summaryText: summaryText,
+            labels: ["平均学分绩点(GPA)", "平均绩点(GPA)", "平均学分绩点", "平均绩点", "学分绩点", "GPA"], maximum: 5)
+        let officialWeightedAverage = try officialSummaryValue(in: document, summaryText: summaryText,
+            labels: ["加权平均分", "加权均分"], maximum: 100)
+        let officialCreditPoint = try officialSummaryValue(in: document, summaryText: summaryText, labels: ["学分积"], maximum: nil)
         for table in try candidateDataTables(in: document) {
             let grid = try AcademicHTMLTable(table)
             guard let headerIndex = grid.rows.firstIndex(where: { $0.contains("所得学分") && $0.contains("必修学分") }) else { continue }
@@ -1197,22 +1205,27 @@ class HTMLParser {
             publicElectiveBuckets: [], rawFields: rawFields, syncedAt: Date())
     }
 
-    private static func officialSummaryValue(in document: Document, labels: [String], maximum: Double?) throws -> Double? {
-        // Only explicit label/value pairs or inline summaries. Never scan flattened ranking tables.
+    private static func normalizedOfficialSummaryLabel(_ text: String) -> String {
+        text.replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+            .replacingOccurrences(of: #"\s*\(\s*GPA\s*\)"#, with: "(GPA)", options: [.regularExpression, .caseInsensitive])
+    }
+
+    private static func officialSummaryValue(in document: Document, summaryText: String, labels: [String], maximum: Double?) throws -> Double? {
+        // Only exact table label/value pairs or explicit prose summaries, never ranking-table numbers.
         for row in try document.select("tr").array() {
             let cells = row.children().array()
-            if cells.count == 2, labels.contains(AcademicHTMLTable.heading(try cells[0].text())),
+            if cells.count == 2,
+               labels.contains(normalizedOfficialSummaryLabel(AcademicHTMLTable.heading(try cells[0].text()))),
                let value = AcademicHTMLTable.decimal(try cells[1].text()), maximum.map({ value <= $0 }) ?? true {
                 return value
             }
         }
-        for element in try document.select("p,div,span,body").array() {
-            let text = element.ownText()
-            for label in labels {
-                let pattern = NSRegularExpression.escapedPattern(for: label) + #"\s*(?:为|是|:|：)\s*([0-9]+(?:\.[0-9]+)?)"#
-                if let groups = firstRegexGroups(in: text, pattern: pattern), let first = groups.first,
-                   let value = Double(first), maximum.map({ value <= $0 }) ?? true { return value }
-            }
+        let text = normalizedOfficialSummaryLabel(summaryText)
+        for label in labels {
+            let pattern = NSRegularExpression.escapedPattern(for: label) + #"\s*(?:为|是|:|：)\s*([0-9]+(?:\.[0-9]+)?)"#
+            if let groups = firstRegexGroups(in: text, pattern: pattern, options: .caseInsensitive), let first = groups.first,
+               let value = Double(first), maximum.map({ value <= $0 }) ?? true { return value }
         }
         return nil
     }

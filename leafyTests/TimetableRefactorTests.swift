@@ -538,7 +538,7 @@ extension PerformanceRefactorTests {
         )
         XCTAssertEqual(controller.zoomProgress, 1, accuracy: 0.001)
 
-        controller.beginPaging()
+        controller.beginPaging(viewportWidth: 390)
         controller.updatePaging(translation: -390)
         controller.endPaging(
             predictedTranslation: -390,
@@ -566,7 +566,7 @@ extension PerformanceRefactorTests {
         controller.endMagnification(magnification: 1.5, velocity: 0, reducesMotion: true)
         XCTAssertEqual(formatter.string(from: controller.centerDate), "2026-12-29")
 
-        controller.beginPaging()
+        controller.beginPaging(viewportWidth: 390)
         controller.updatePaging(translation: -390)
         controller.endPaging(
             predictedTranslation: -390,
