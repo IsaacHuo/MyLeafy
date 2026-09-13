@@ -17069,6 +17069,7 @@
       }
     },
     "获取最新成绩" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
