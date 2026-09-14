@@ -146,3 +146,7 @@ android/secrets.properties
 *.aab
 *.keystore
 *.jks
+
+# Backend local runtime data and dependencies
+/backend/.local/
+/backend/node_modules/
