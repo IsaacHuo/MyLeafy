@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
@@ -55,6 +56,7 @@ import com.myleafy.android.features.timetable.TimetableScreen
 import com.myleafy.android.features.timetable.sharing.TimetableSharingScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
 import com.myleafy.android.ui.components.LeafyEmptyState
+import com.myleafy.android.ui.theme.leafySurfaces
 
 object Routes {
     const val LOGIN = "login"
@@ -87,7 +89,9 @@ fun MyLeafyNavHost(
     val currentDestination = backStackEntry?.destination
     val rootRoutes = RootTab.entries.mapTo(mutableSetOf()) { it.route }
     val showsBottomBar = currentDestination?.route in rootRoutes
-    val visibleRootTabs = RootTab.entries
+    val selectedTab = currentDestination?.let { destination ->
+        RootTab.entries.firstOrNull { tab -> destination.hierarchy.any { it.route == tab.route } }
+    }
 
     val navigationContent: @Composable () -> Unit = {
         NavHost(
@@ -290,33 +294,16 @@ fun MyLeafyNavHost(
         }
     }
 
-    if (showsBottomBar) {
-        NavigationSuiteScaffold(
-            navigationSuiteItems = {
-                visibleRootTabs.forEach { tab ->
-                    val selected = currentDestination
-                        ?.hierarchy
-                        ?.any { it.route == tab.route } == true
-                    item(
-                        modifier = Modifier.testTag("root-tab-${tab.route}"),
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = if (selected) tab.selectedIcon else tab.icon,
-                                contentDescription = stringResource(tab.labelRes),
-                            )
-                        },
-                        label = { Text(stringResource(tab.labelRes)) },
-                    )
+    if (showsBottomBar && selectedTab != null) {
+        LeafyNavigationScaffold(
+            selectedTab = selectedTab,
+            onTabSelected = { tab ->
+                navController.navigate(tab.route) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             },
             content = navigationContent,
@@ -326,6 +313,43 @@ fun MyLeafyNavHost(
             navigationContent()
         }
     }
+}
+
+/**
+ * 根部导航壳（纯 chrome，无状态）：只负责导航组件的外观与选中态，
+ * 不持有路由、不发起导航，业务回调仍由 [MyLeafyNavHost] 提供。
+ * 截图测试可以复用同一实现，避免出现与真实外壳不一致的假壳。
+ */
+@Composable
+fun LeafyNavigationScaffold(
+    selectedTab: RootTab,
+    onTabSelected: (RootTab) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    NavigationSuiteScaffold(
+        navigationSuiteItems = {
+            RootTab.entries.forEach { tab ->
+                val selected = tab == selectedTab
+                item(
+                    modifier = Modifier.testTag("root-tab-${tab.route}"),
+                    selected = selected,
+                    onClick = { onTabSelected(tab) },
+                    icon = {
+                        Icon(
+                            imageVector = if (selected) tab.selectedIcon else tab.icon,
+                            contentDescription = stringResource(tab.labelRes),
+                        )
+                    },
+                    label = { Text(stringResource(tab.labelRes)) },
+                )
+            }
+        },
+        modifier = modifier,
+        containerColor = MaterialTheme.leafySurfaces.page,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        content = content,
+    )
 }
 
 @Composable

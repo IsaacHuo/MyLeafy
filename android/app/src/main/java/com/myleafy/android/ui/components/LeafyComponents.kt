@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
@@ -51,8 +53,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyElevation
@@ -68,7 +73,15 @@ fun LeafyRootTopBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     LeafyRootTopBar(
-        titleContent = { Text(text = title, style = MaterialTheme.typography.headlineSmall) },
+        titleContent = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+            )
+        },
         modifier = modifier,
         actions = actions,
     )
@@ -85,13 +98,21 @@ fun LeafyRootTopBar(
         title = titleContent,
         actions = actions,
         modifier = modifier,
-        expandedHeight = LeafyComponentSize.topBar,
+        expandedHeight = leafyTopBarHeight(),
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.leafySurfaces.page,
             scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
         ),
     )
 }
+
+/**
+ * TopBar 高度随系统字体缩放增长（上限 1.6 倍）。
+ * 100% 字体保持 56dp；200% 字体不再裁切标题，也不会额外放大内边距。
+ */
+@Composable
+private fun leafyTopBarHeight(): Dp =
+    LeafyComponentSize.topBar * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,7 +132,15 @@ fun LeafySecondaryScaffold(
         snackbarHost = snackbarHost,
         topBar = {
             TopAppBar(
-                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                title = {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
+                    )
+                },
                 navigationIcon = {
                     LeafyActionIconButton(onClick = onBack) {
                         Icon(
@@ -121,7 +150,7 @@ fun LeafySecondaryScaffold(
                     }
                 },
                 actions = actions,
-                expandedHeight = LeafyComponentSize.topBar,
+                expandedHeight = leafyTopBarHeight(),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.leafySurfaces.page,
                     scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
@@ -309,7 +338,7 @@ fun LeafyFeatureCard(
                 shape = MaterialTheme.shapes.small,
             ) {
                 Box(
-                    modifier = Modifier.size(LeafyComponentSize.settingsIconContainer),
+                    modifier = Modifier.size(LeafyComponentSize.featureIconContainer),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -356,17 +385,56 @@ fun LeafyEmptyState(
     icon: ImageVector = Icons.Outlined.Info,
     action: (@Composable () -> Unit)? = null,
 ) {
+    LeafyStateContent(
+        title = title,
+        message = message,
+        icon = icon,
+        modifier = modifier,
+        iconContainerColor = MaterialTheme.leafySurfaces.accentSoft,
+        iconContentColor = MaterialTheme.colorScheme.primary,
+        action = action,
+    )
+}
+
+@Composable
+fun LeafyErrorState(
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
+    LeafyStateContent(
+        title = title,
+        message = message,
+        icon = Icons.Outlined.Warning,
+        modifier = modifier,
+        iconContainerColor = MaterialTheme.colorScheme.errorContainer,
+        iconContentColor = MaterialTheme.colorScheme.onErrorContainer,
+        action = action,
+    )
+}
+
+/** 空状态与错误状态共用同一版面，只有图标底板语义色不同。 */
+@Composable
+private fun LeafyStateContent(
+    title: String,
+    message: String,
+    icon: ImageVector,
+    iconContainerColor: Color,
+    iconContentColor: Color,
+    modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .widthIn(max = LeafyComponentSize.emptyStateMaxWidth)
-            .padding(horizontal = LeafySpacing.section, vertical = LeafySpacing.spacious),
+            .padding(horizontal = LeafySpacing.section, vertical = LeafySpacing.section),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
         Surface(
-            color = MaterialTheme.leafySurfaces.accentSoft,
-            contentColor = MaterialTheme.colorScheme.primary,
+            color = iconContainerColor,
+            contentColor = iconContentColor,
             shape = MaterialTheme.shapes.large,
         ) {
             Box(
@@ -380,31 +448,20 @@ fun LeafyEmptyState(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(LeafySpacing.compact))
         Text(text = title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(LeafySpacing.tiny))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        action?.invoke()
+        action?.let {
+            Spacer(modifier = Modifier.height(LeafySpacing.card))
+            it()
+        }
     }
-}
-
-@Composable
-fun LeafyErrorState(
-    title: String,
-    message: String,
-    modifier: Modifier = Modifier,
-    action: (@Composable () -> Unit)? = null,
-) {
-    LeafyEmptyState(
-        title = title,
-        message = message,
-        modifier = modifier,
-        icon = Icons.Outlined.Info,
-        action = action,
-    )
 }
 
 @Composable
@@ -581,8 +638,8 @@ fun LeafyAdaptiveContent(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
                 .widthIn(max = maxWidth)
+                .fillMaxWidth()
                 .padding(contentPadding),
             content = content,
         )

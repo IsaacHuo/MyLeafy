@@ -50,6 +50,7 @@ import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.LeafyTimetableTokens
 import com.myleafy.android.ui.theme.LeafyTimetableBackgroundFallback
+import com.myleafy.android.ui.theme.LeafyTimetableType
 import com.myleafy.android.ui.theme.leafyCourseColors
 import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.LocalDate
@@ -372,10 +373,7 @@ private fun PeriodAxis(period: Int, modifier: Modifier = Modifier) {
         )
         Text(
             text = slot?.startText.orEmpty(),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = LeafyTimetableTokens.axisTimeFontSize,
-                lineHeight = LeafyTimetableTokens.axisTimeLineHeight,
-            ),
+            style = LeafyTimetableType.axisTime,
             color = MaterialTheme.colorScheme.outline,
         )
     }
