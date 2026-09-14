@@ -1,6 +1,39 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "课表已更新，但 %d 项课程提醒未恢复：%@。请检查通知设置后再次刷新课表。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The timetable was updated, but %d course reminders could not be restored: %@. Check notification settings and refresh the timetable again."
+          }
+        }
+      }
+    },
+    "无法确定“%@”第 %d 周备注对应的课次，课表未更新。原课表和备注已保留。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session for the note on “%@” in week %d is unclear. The timetable was not updated. Your previous timetable and notes have been kept."
+          }
+        }
+      }
+    },
+    "“%@”的备注或提醒存在冲突，课表未更新。请检查相关记录后重试。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes or reminders for “%@” conflict. The timetable was not updated. Check these records and try again."
+          }
+        }
+      }
+    },
     "" : {
       "localizations" : {
         "en-US" : {
