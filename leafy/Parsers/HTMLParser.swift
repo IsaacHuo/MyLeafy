@@ -57,6 +57,26 @@ nonisolated struct CourseData {
     var duration: [Int]
 }
 
+nonisolated private struct CourseMergeKey: Hashable {
+    let courseName: String
+    let teacher: String
+    let classInfo: String
+    let dayOfWeek: Int
+    let duration: [Int]
+    let room: String
+    let location: String
+
+    init(data: CourseData, dayOfWeek: Int) {
+        courseName = data.courseName
+        teacher = data.teacher
+        classInfo = data.classInfo
+        self.dayOfWeek = dayOfWeek
+        duration = data.duration
+        room = data.room
+        location = data.location
+    }
+}
+
 nonisolated struct ParsedCourseRecord: Sendable {
     var courseName: String
     var teacher: String
@@ -518,6 +538,7 @@ class HTMLParser {
     // Compare classes for continuous time merge
     nonisolated private static func compareCourseData(prev: CourseData, curr: CourseData) -> Int {
         if prev.courseName == curr.courseName &&
+            prev.teacher == curr.teacher &&
             prev.location == curr.location &&
             prev.room == curr.room &&
             prev.classInfo == curr.classInfo {
@@ -525,9 +546,7 @@ class HTMLParser {
             if let last = prev.duration.last, let first = curr.duration.first, last + 1 == first {
                 return 1 // Merge durations
             }
-            let prevSum = prev.duration.reduce(0, +)
-            let currSum = curr.duration.reduce(0, +)
-            if prevSum == currSum {
+            if prev.duration == curr.duration {
                 return 2 // Exact duplicate
             }
         }
@@ -535,13 +554,13 @@ class HTMLParser {
     }
 
     nonisolated private static func buildCourseRecords(from weeklySchedule: [[[(CourseData, [Int])]]]) throws -> [ParsedCourseRecord] {
-        var uniqueCourses: [String: ParsedCourseRecord] = [:]
+        var uniqueCourses: [CourseMergeKey: ParsedCourseRecord] = [:]
         for (weekIndex, weekData) in weeklySchedule.enumerated() {
             let weekNumber = weekIndex + 1
             for (dayIndex, dayCourses) in weekData.enumerated() {
                 let dayOfWeek = dayIndex + 1
                 for (data, _) in dayCourses {
-                    let key = "\(data.courseName)|\(dayOfWeek)|\(data.duration)|\(data.room)|\(data.location)"
+                    let key = CourseMergeKey(data: data, dayOfWeek: dayOfWeek)
                     if var existing = uniqueCourses[key] {
                         if !existing.weeks.contains(weekNumber) {
                             existing.weeks.append(weekNumber)
