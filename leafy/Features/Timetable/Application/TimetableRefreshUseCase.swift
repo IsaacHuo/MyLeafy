@@ -110,24 +110,29 @@ struct TimetableRefreshUseCase {
         records: [ParsedCourseRecord],
         existingCourses: [Course],
         modelContext: ModelContext,
-        semesterID: String = SemesterConfig.currentSemesterID
-    ) throws -> [Course] {
-        for course in existingCourses where course.sourceSemesterID == semesterID {
-            modelContext.delete(course)
-        }
-
+        semesterID: String = SemesterConfig.currentSemesterID,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> TimetablePersistResult {
+        let oldCourses = existingCourses.filter { $0.sourceSemesterID == semesterID }
+        let oldIdentifiers = Array(Set(oldCourses.flatMap {
+            TimetableNotificationManager.courseReminderIdentifiers(for: $0)
+        }))
         let newCourses = records.map { $0.makeCourse(semesterID: semesterID) }
-        for course in newCourses {
-            modelContext.insert(course)
-        }
-
+        let associations = try TimetableLocalDataReassociation(oldCourses: oldCourses, newCourses: newCourses, context: modelContext)
         do {
-            try modelContext.save()
+            associations.apply(to: modelContext)
+            let reminderPlan = try TimetableReminderRefreshPlan(
+                oldIdentifiers: oldIdentifiers, courses: newCourses,
+                settings: modelContext.fetch(FetchDescriptor<CourseReminderSetting>())
+            )
+            for course in oldCourses { modelContext.delete(course) }
+            for course in newCourses { modelContext.insert(course) }
+            try save(modelContext)
+            return TimetablePersistResult(courses: newCourses, reminders: reminderPlan)
         } catch {
             modelContext.rollback()
             throw error
         }
-        return newCourses
     }
 
     static func nearestAvailableWeek(from parsedCourses: [ParsedCourseRecord], preferredWeek: Int) -> Int? {

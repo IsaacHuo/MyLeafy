@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import SwiftData
 import SwiftUI
@@ -653,7 +654,7 @@ enum TimetableNotificationManager {
     }
 
     static func cancelReminder(for course: Course) {
-        let ids = course.weeks.map { notificationID(courseKey: course.stableCourseKey, week: $0) }
+        let ids = courseReminderIdentifiers(for: course)
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
@@ -670,9 +671,7 @@ enum TimetableNotificationManager {
     }
 
     static func cancelAllCourseReminders(courses: [Course]) {
-        let ids = courses.flatMap { course in
-            course.weeks.map { notificationID(courseKey: course.stableCourseKey, week: $0) }
-        }
+        let ids = courses.flatMap { courseReminderIdentifiers(for: $0) }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
@@ -699,7 +698,20 @@ enum TimetableNotificationManager {
         return center
     }
 
-    private static func notificationID(courseKey: String, week: Int) -> String {
+    static func notificationID(courseKey: String, week: Int) -> String {
+        let digest = SHA256.hash(data: Data(courseKey.utf8)).map { String(format: "%02x", $0) }.joined()
+        return "leafy.courseReminder.\(digest).\(week)"
+    }
+
+    static func courseReminderIdentifiers(for course: Course) -> [String] {
+        course.weeks.flatMap { week in
+            [notificationID(courseKey: course.stableCourseKey, week: week),
+             previousCourseNotificationID(courseKey: course.stableCourseKey, week: week)]
+        }
+    }
+
+    // Removal only: notifications issued before full-key hashing must not remain pending.
+    private static func previousCourseNotificationID(courseKey: String, week: Int) -> String {
         let stableID = courseKey.unicodeScalars
             .map { String(format: "%02X", $0.value) }
             .joined()

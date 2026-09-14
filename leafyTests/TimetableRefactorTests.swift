@@ -882,7 +882,7 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testTimetableRefreshPersistsCoursesPerSemester() throws {
-        let schema = Schema([Course.self])
+        let schema = Schema([Course.self, CourseNote.self, CourseOccurrenceNote.self, CourseReminderSetting.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = container.mainContext

@@ -110,15 +110,20 @@ enum SchoolDataSyncService {
             progressReporter?(.begin(.processingTimetable))
             let records = try HTMLParser.parseTimetableResult(html: document.html).records
             progressReporter?(.begin(.savingTimetable))
-            let parsed = try persistTimetable(
+            let persisted = try await persistTimetable(
                 records,
                 semesterID: document.verifiedSemesterID,
                 modelContext: modelContext
             )
             successfulOperationCount += 1
-            results.append(L10n.text("课表 %d 门", language: language, parsed.count))
+            results.append(L10n.text("课表 %d 门", language: language, Set(persisted.sharedCourses.map(\.courseName)).count))
+            if let warning = persisted.reminderWarning {
+                failedOperationCount += 1
+                results.append(warning)
+                progressReporter?(.fail(.savingTimetable, warning))
+            }
             if await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(
-                courses: parsed.map(SharedTimetableCourse.init(course:))
+                courses: persisted.sharedCourses
             ) {
                 results.append(L10n.text("共享课表已更新", language: language))
             }
@@ -318,22 +323,23 @@ enum SchoolDataSyncService {
         _ records: [ParsedCourseRecord],
         semesterID: String,
         modelContext: ModelContext
-    ) throws -> [Course] {
-        let courses = try TimetableRefreshUseCase().persist(
+    ) async throws -> (sharedCourses: [SharedTimetableCourse], reminderWarning: String?) {
+        let saved = try TimetableRefreshUseCase().persist(
             records: records,
-            existingCourses: fetch(Course.self, from: modelContext),
+            existingCourses: modelContext.fetch(FetchDescriptor<Course>()),
             modelContext: modelContext,
             semesterID: semesterID
         )
 
+        let reminderWarning = await saved.reminders.restore()
         let now = Date()
         TimetableCacheMetadata.lastSyncAt = now
-        TimetableCacheMetadata.lastFailureMessage = nil
+        TimetableCacheMetadata.lastFailureMessage = reminderWarning
         TimetableCacheMetadata.lastSyncedSemesterID = semesterID
         AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: now)
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         SchoolDataRefreshNotifier.post(.timetable)
-        return courses
+        return (saved.sharedCourses, reminderWarning)
     }
 
     static func persistGrades(_ grades: [Grade], modelContext: ModelContext) throws {

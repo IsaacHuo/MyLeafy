@@ -2624,25 +2624,29 @@ struct TimetableView: View {
                 )
             }
 
-            try await MainActor.run {
+            let (saved, refreshSummary) = try await MainActor.run {
                 progressReporter?(.begin(.savingTimetable))
                 let refreshSummary = TimetableRefreshSummary.compare(
                     records: parsedCourseRecords,
                     existingCourses: courses,
                     semesterID: document.verifiedSemesterID
                 )
-                let newCourses = try refreshUseCase.persist(
+                let saved = try refreshUseCase.persist(
                     records: parsedCourseRecords,
                     existingCourses: courses,
                     modelContext: modelContext,
                     semesterID: document.verifiedSemesterID
                 )
-                let sharedCourses = newCourses.map(SharedTimetableCourse.init(course:))
+                return (saved, refreshSummary)
+            }
+            let reminderWarning = await saved.reminders.restore()
+            await MainActor.run {
+                let sharedCourses = saved.sharedCourses
 
                 timetableGridSnapshotCache.invalidate()
                 timetableGridSnapshot = nil
                 TimetableCacheMetadata.lastSyncAt = Date()
-                TimetableCacheMetadata.lastFailureMessage = nil
+                TimetableCacheMetadata.lastFailureMessage = reminderWarning
                 TimetableCacheMetadata.lastSyncedSemesterID = document.verifiedSemesterID
                 AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
                 SchoolDataRefreshNotifier.post(.timetable)
@@ -2650,14 +2654,14 @@ struct TimetableView: View {
                     await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: sharedCourses)
                 }
                 lastSyncAt = TimetableCacheMetadata.lastSyncAt
-                lastFailureMessage = nil
+                lastFailureMessage = reminderWarning
                 isFetching = false
                 progressController.completeCurrentStep()
                 progressController.clear()
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
                 if userInitiated {
-                    alertMessage = timetableRefreshMessage(for: refreshSummary)
+                    alertMessage = reminderWarning ?? timetableRefreshMessage(for: refreshSummary)
                     showAlert = true
                 }
             }
