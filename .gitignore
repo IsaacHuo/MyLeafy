@@ -136,6 +136,7 @@ Config/Leafy.local.xcconfig
 # https://github.com/github/gitignore/blob/main/Android.gitignore
 android/.gradle/
 android/.idea/
+android/.kotlin/
 android/**/build/
 android/captures/
 android/.externalNativeBuild/
