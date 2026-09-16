@@ -70,6 +70,7 @@ import com.myleafy.android.ui.theme.leafySurfaces
 fun LeafyRootTopBar(
     title: String,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     LeafyRootTopBar(
@@ -83,6 +84,7 @@ fun LeafyRootTopBar(
             )
         },
         modifier = modifier,
+        compact = compact,
         actions = actions,
     )
 }
@@ -92,13 +94,14 @@ fun LeafyRootTopBar(
 fun LeafyRootTopBar(
     titleContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(
         title = titleContent,
         actions = actions,
         modifier = modifier,
-        expandedHeight = leafyTopBarHeight(),
+        expandedHeight = leafyTopBarHeight(compact = compact),
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.leafySurfaces.page,
             scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
@@ -108,11 +111,13 @@ fun LeafyRootTopBar(
 
 /**
  * TopBar 高度随系统字体缩放增长（上限 1.6 倍）。
- * 100% 字体保持 56dp；200% 字体不再裁切标题，也不会额外放大内边距。
+ * 100% 字体保持 56dp（紧凑模式 48dp）；200% 字体不再裁切标题，也不会额外放大内边距。
  */
 @Composable
-private fun leafyTopBarHeight(): Dp =
-    LeafyComponentSize.topBar * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
+private fun leafyTopBarHeight(compact: Boolean = false): Dp {
+    val base = if (compact) LeafyComponentSize.topBarCompact else LeafyComponentSize.topBar
+    return base * LocalDensity.current.fontScale.coerceIn(1f, 1.6f)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -425,41 +430,50 @@ private fun LeafyStateContent(
     modifier: Modifier = Modifier,
     action: (@Composable () -> Unit)? = null,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .widthIn(max = LeafyComponentSize.emptyStateMaxWidth)
-            .padding(horizontal = LeafySpacing.section, vertical = LeafySpacing.section),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // 外层铺满调用方给定的区域并水平居中，内层内容列再限宽。
+    // 输出限宽必须写成 widthIn 在前、fillMaxWidth 在后：先收窄可用宽度再填充，
+    // 反过来 fillMaxWidth 会把约束固定成父级宽度，widthIn 就不会生效。
+    // 居中放在组件内部，这样调用方只传 fillMaxSize / fillMaxWidth 也能在宽屏对齐。
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        Surface(
-            color = iconContainerColor,
-            contentColor = iconContentColor,
-            shape = MaterialTheme.shapes.large,
+        Column(
+            modifier = Modifier
+                .widthIn(max = LeafyComponentSize.emptyStateMaxWidth)
+                .fillMaxWidth()
+                .padding(horizontal = LeafySpacing.section, vertical = LeafySpacing.section),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                modifier = Modifier.size(LeafyIconSize.emptyStateContainer),
-                contentAlignment = Alignment.Center,
+            Surface(
+                color = iconContainerColor,
+                contentColor = iconContentColor,
+                shape = MaterialTheme.shapes.large,
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(LeafyIconSize.standard),
-                )
+                Box(
+                    modifier = Modifier.size(LeafyIconSize.emptyStateContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(LeafyIconSize.standard),
+                    )
+                }
             }
-        }
-        Spacer(modifier = Modifier.height(LeafySpacing.compact))
-        Text(text = title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(LeafySpacing.tiny))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        action?.let {
-            Spacer(modifier = Modifier.height(LeafySpacing.card))
-            it()
+            Spacer(modifier = Modifier.height(LeafySpacing.compact))
+            Text(text = title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.height(LeafySpacing.tiny))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            action?.let {
+                Spacer(modifier = Modifier.height(LeafySpacing.card))
+                it()
+            }
         }
     }
 }

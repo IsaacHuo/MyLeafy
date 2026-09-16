@@ -35,7 +35,6 @@ object LeafyGesture {
 
 object LeafyTimetableTokens {
     val axisWidth = 40.dp
-    val headerHeight = 44.dp
     val minimumPeriodRowHeight = 1.dp
     val maximumPeriodRowHeight = 56.dp
     val gridGap = 2.dp
@@ -63,6 +62,7 @@ object LeafyIconSize {
 
 object LeafyComponentSize {
     val topBar = 56.dp
+    val topBarCompact = 48.dp
     val minimumTouchTarget = 48.dp
     val featureIconContainer = 40.dp
     val settingsIconContainer = 48.dp
@@ -72,6 +72,7 @@ object LeafyComponentSize {
     val formMaxWidth = 420.dp
     val floatingActionClearance = 96.dp
     val emptyStateMaxWidth = 520.dp
+    val timetableNavigation = 40.dp
 }
 
 object LeafyMotion {

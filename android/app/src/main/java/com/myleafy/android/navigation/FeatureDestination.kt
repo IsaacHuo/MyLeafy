@@ -29,17 +29,27 @@ enum class FeatureDestination(
     SCHEDULE_TAGS(
         route = "schedule/tags",
         title = "标签",
-        description = "标签整理与筛选界面正在建设。",
+        description = "按标签整理并筛选本机随记。",
     ),
     SCHEDULE_STATISTICS(
         route = "schedule/statistics",
         title = "记录日迹",
-        description = "本机统计、热力图与分享卡片将在后续阶段接入。",
+        description = "本机统计、热力图与分享卡片。",
+    ),
+    SCHEDULE_REVIEW(
+        route = "schedule/review",
+        title = "每日回顾",
+        description = "按日期回顾旧随记。",
+    ),
+    SCHEDULE_EXPORT(
+        route = "schedule/export",
+        title = "导出随记",
+        description = "将本机随记导出为文本并分享。",
     ),
     SCHEDULE_TRASH(
         route = "schedule/trash",
         title = "回收站",
-        description = "已删除随记的恢复与清理界面正在建设。",
+        description = "恢复或彻底删除已移除的随记。",
     ),
     SCHEDULE_REPORTS(
         route = "schedule/reports",
@@ -48,8 +58,18 @@ enum class FeatureDestination(
     ),
     CAMPUS_TRAINING_PLAN(
         route = "campus/training-plan",
-        title = "培养方案",
-        description = "培养方案与毕业要求的 Android 界面正在迁移。",
+        title = "教学与培养",
+        description = "查看教学计划、培养方案与毕业要求。",
+    ),
+    CAMPUS_COMPREHENSIVE(
+        route = "campus/comprehensive",
+        title = "综素测算",
+        description = "按学院细则本地估算综素分并整理材料。",
+    ),
+    CAMPUS_HONOR_RECORDS(
+        route = "campus/honor-records",
+        title = "荣誉记录",
+        description = "在本机保存奖状证书等 PDF 或图片。",
     ),
     CAMPUS_CALENDAR(
         route = "campus/calendar",
@@ -85,6 +105,11 @@ enum class FeatureDestination(
         route = "profile/sync",
         title = "缓存与同步",
         description = "统一的数据检查与重新同步界面正在建设。",
+    ),
+    PROFILE_UPDATE(
+        route = "profile/update",
+        title = "检查更新",
+        description = "从 GitHub Releases 获取并安装最新的 Android 安装包。",
     ),
     PROFILE_SHARING(
         route = "profile/sharing",

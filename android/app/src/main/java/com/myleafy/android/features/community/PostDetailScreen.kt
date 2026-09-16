@@ -162,6 +162,10 @@ private fun PostDetailContent(
                     Text(state.post.title, style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(LeafySpacing.micro))
                     Text(state.post.body, style = MaterialTheme.typography.bodyLarge)
+                    if (state.post.images.isNotEmpty()) {
+                        Spacer(Modifier.height(LeafySpacing.compact))
+                        CommunityPostImageColumn(images = state.post.images)
+                    }
                     Spacer(Modifier.height(LeafySpacing.compact))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LeafyActionIconButton(

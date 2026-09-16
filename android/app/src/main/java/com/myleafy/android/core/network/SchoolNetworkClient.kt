@@ -5,6 +5,8 @@ import com.myleafy.android.parsers.ParsedExamRecord
 import com.myleafy.android.parsers.ParsedGradeRecord
 import com.myleafy.android.parsers.ParsedGradeRanking
 import com.myleafy.android.parsers.ParsedGradeSummary
+import com.myleafy.android.parsers.ParsedTeachingPlanSection
+import com.myleafy.android.parsers.ParsedTrainingProgram
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -50,6 +52,12 @@ interface SchoolNetworkClient {
         startPeriod: Int,
         endPeriod: Int,
     ): List<EmptyClassroom>
+
+    /** 抓取并解析教学计划（强智 /jsxsd/pyfa/pyfa_query）。 */
+    suspend fun fetchTeachingPlan(): List<ParsedTeachingPlanSection>
+
+    /** 抓取并解析培养方案与毕业要求（强智 /jsxsd/pyfa/pyfazd_query）。 */
+    suspend fun fetchTrainingProgram(): ParsedTrainingProgram
 
     fun clearSession()
 }

@@ -24,3 +24,11 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_medical_ledger_photos_scopeKey_entryId` ON `medical_ledger_photos` (`scopeKey`, `entryId`)")
     }
 }
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `honor_records` (`scopeKey` TEXT NOT NULL, `id` TEXT NOT NULL, `title` TEXT NOT NULL, `note` TEXT NOT NULL, `awardedAt` INTEGER, `originalFilename` TEXT NOT NULL, `localFilename` TEXT NOT NULL, `contentType` TEXT NOT NULL, `importedAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`scopeKey`, `id`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `comprehensive_quality_records` (`scopeKey` TEXT NOT NULL, `id` TEXT NOT NULL, `collegeName` TEXT NOT NULL, `cohort` TEXT NOT NULL, `academicStandardScore` REAL, `officialQualityScore` REAL, `officialCompositeScore` REAL, `note` TEXT NOT NULL, `componentsJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`scopeKey`, `id`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `academic_documents` (`scopeKey` TEXT NOT NULL, `kind` TEXT NOT NULL, `payload` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`scopeKey`, `kind`))")
+    }
+}

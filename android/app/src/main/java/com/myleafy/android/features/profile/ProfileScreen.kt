@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Login
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.Icon
@@ -78,11 +80,38 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isSigningOut by viewModel.isSigningOut.collectAsStateWithLifecycle()
-    var confirmLogout by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
         viewModel.refreshProfile()
         onPauseOrDispose { }
     }
+
+    ProfileContent(
+        state = uiState,
+        isSigningOut = isSigningOut,
+        onLoginClick = onLoginClick,
+        onEditProfileClick = onEditProfileClick,
+        onFeatureClick = onFeatureClick,
+        onLogout = viewModel::logout,
+        modifier = modifier,
+    )
+}
+
+/**
+ * 由 state 驱动的“我的”页面：只消费 state 与回调，供截图与预览使用。
+ * 退出确认弹窗的开合是本页的瞬时 UI 状态，不参与进程重建恢复，
+ * 因此用 remember 而不是 rememberSaveable——恢复语义与抽取前保持一致。
+ */
+@Composable
+fun ProfileContent(
+    state: ProfileUiState,
+    isSigningOut: Boolean,
+    onLoginClick: () -> Unit,
+    onEditProfileClick: () -> Unit,
+    onFeatureClick: (FeatureDestination) -> Unit,
+    onLogout: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var confirmLogout by remember { mutableStateOf(false) }
     if (confirmLogout) {
         LeafyAlertDialog(
             onDismissRequest = { confirmLogout = false },
@@ -91,7 +120,7 @@ fun ProfileScreen(
             confirmButton = {
                 LeafyTextButton(onClick = {
                     confirmLogout = false
-                    viewModel.logout()
+                    onLogout()
                 }) { Text("退出") }
             },
             dismissButton = { LeafyTextButton(onClick = { confirmLogout = false }) { Text("取消") } },
@@ -113,25 +142,59 @@ fun ProfileScreen(
                 verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
             ) {
             item {
-                when (val state = uiState) {
-                    is ProfileUiState.Local -> LocalProfileCard(state, onLoginClick)
-                    is ProfileUiState.ProfileLoading -> {
-                        LeafyLoadingState(modifier = Modifier.fillMaxWidth())
+                when (val profileState = state) {
+                    is ProfileUiState.Local -> {
+                        val eduId = profileState.eduId?.takeIf { it.isNotBlank() }
+                        ProfileEntry(
+                            title = if (eduId != null) "MyLeafy" else "登录学校账号",
+                            subtitle = if (eduId != null) {
+                                "校园 ${profileState.campusId} · 学号 $eduId"
+                            } else {
+                                "尚未绑定学校身份，登录后可同步课表与成绩"
+                            },
+                            avatarLabel = eduId ?: "我",
+                            onClick = if (eduId == null) onLoginClick else null,
+                        )
                     }
-                    is ProfileUiState.Community -> ProfileCard(
-                        state.campusId,
-                        state.eduId,
-                        state.profile,
-                        onEditProfileClick,
-                    )
+                    is ProfileUiState.ProfileLoading -> {
+                        ProfileEntry(
+                            title = "正在加载资料…",
+                            subtitle = "读取当前校园身份",
+                            avatarLabel = "我",
+                            onClick = null,
+                        )
+                    }
+                    is ProfileUiState.Community -> {
+                        val name = profileState.profile.nickname.ifBlank {
+                            profileState.profile.display_name ?: "未命名"
+                        }
+                        ProfileEntry(
+                            title = name,
+                            subtitle = buildString {
+                                append("校园 ${profileState.campusId} · 学号 ${profileState.eduId}")
+                                if (!profileState.profile.is_profile_complete) append(" · 资料待完善")
+                            },
+                            avatarLabel = name,
+                            onClick = onEditProfileClick,
+                        )
+                    }
                     is ProfileUiState.Error -> {
                         Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                            LocalIdentityCard(state.campusId, state.eduId)
-                            LeafyStatusBanner(message = state.message, isError = true)
+                            ProfileEntry(
+                                title = "MyLeafy",
+                                subtitle = buildString {
+                                    append("校园 ${profileState.campusId}")
+                                    profileState.eduId?.takeIf { it.isNotBlank() }?.let { append(" · 学号 $it") }
+                                },
+                                avatarLabel = profileState.eduId ?: "我",
+                                onClick = null,
+                            )
+                            LeafyStatusBanner(message = profileState.message, isError = true)
                         }
                     }
                 }
             }
+
 
             item {
                 LeafySettingsGroup(title = "数据与偏好") {
@@ -168,6 +231,13 @@ fun ProfileScreen(
             item {
                 LeafySettingsGroup(title = "帮助与安全") {
                     ProfileDestinationRow(
+                        title = "检查更新",
+                        description = "获取最新的 Android 安装包",
+                        icon = Icons.Outlined.SystemUpdate,
+                        onClick = { onFeatureClick(FeatureDestination.PROFILE_UPDATE) },
+                    )
+                    LeafySettingsDivider()
+                    ProfileDestinationRow(
                         title = "帮助中心",
                         description = "使用指南、常见问题与数据安全",
                         icon = Icons.AutoMirrored.Outlined.HelpOutline,
@@ -200,7 +270,7 @@ fun ProfileScreen(
                     )
                 }
             }
-            val hasIdentity = when (val state = uiState) {
+            val hasIdentity = when (state) {
                 is ProfileUiState.Community -> true
                 is ProfileUiState.Local -> !state.eduId.isNullOrBlank()
                 is ProfileUiState.Error -> !state.eduId.isNullOrBlank()
@@ -227,83 +297,44 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun LocalProfileCard(state: ProfileUiState.Local, onLoginClick: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
-        LocalIdentityCard(state.campusId, state.eduId)
-        if (state.eduId.isNullOrBlank()) {
-            LeafyPrimaryButton(
-                onClick = onLoginClick,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Login, contentDescription = null)
-                Text("登录学校账号", modifier = Modifier.padding(start = LeafySpacing.micro))
-            }
-        }
-    }
-}
-
-@Composable
-private fun LocalIdentityCard(campusId: String, eduId: String?) {
-    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(LeafySpacing.page)) {
-            Text(text = "MyLeafy", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(LeafySpacing.micro))
-            Text(text = "校园 $campusId", style = MaterialTheme.typography.titleMedium)
+private fun ProfileEntry(
+    title: String,
+    subtitle: String,
+    avatarLabel: String,
+    onClick: (() -> Unit)?,
+) {
+    LeafySettingsRow(
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleSmall) },
+        supportingContent = {
             Text(
-                text = if (eduId.isNullOrBlank()) "尚未绑定学校身份" else "学号 $eduId",
-                style = MaterialTheme.typography.bodyMedium,
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-    }
+        },
+        leadingContent = { ProfileAvatar(avatarLabel) },
+        trailingContent = {
+            if (onClick != null) {
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
+            }
+        },
+        onClick = onClick,
+    )
 }
 
 @Composable
-private fun ProfileCard(campusId: String, eduId: String, profile: ProfileDto, onEdit: () -> Unit) {
-    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(LeafySpacing.page)) {
+private fun ProfileAvatar(label: String) {
+    Surface(
+        modifier = Modifier.size(LeafyComponentSize.featureIconContainer),
+        shape = CircleShape,
+        color = MaterialTheme.leafySurfaces.accentSoft,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
             Text(
-                text = profile.nickname.ifBlank { profile.display_name ?: "未命名" },
-                style = MaterialTheme.typography.headlineSmall,
+                text = label.trim().take(1).ifBlank { "我" },
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Spacer(modifier = Modifier.height(LeafySpacing.micro))
-            Text(
-                text = "校园 $campusId · 学号 $eduId",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (!profile.bio.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(LeafySpacing.compact))
-                Text(text = profile.bio, style = MaterialTheme.typography.bodyMedium)
-            }
-            val studyInfo = listOfNotNull(profile.major, profile.grade)
-                .filter { it.isNotBlank() }
-                .joinToString(" · ")
-            if (studyInfo.isNotBlank()) {
-                Spacer(modifier = Modifier.height(LeafySpacing.micro))
-                Text(
-                    text = studyInfo,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (!profile.is_profile_complete) {
-                Spacer(modifier = Modifier.height(LeafySpacing.micro))
-                Text(
-                    text = "完善社区资料后可参与发布与互动",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            LeafySecondaryButton(
-                onClick = onEdit,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                androidx.compose.material3.Icon(Icons.Outlined.Edit, contentDescription = null)
-                Text("编辑资料", modifier = Modifier.padding(start = LeafySpacing.micro))
-            }
         }
     }
 }

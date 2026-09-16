@@ -16,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
  */
 interface ScheduleRepository {
     fun memos(): Flow<List<ScheduleMemoEntity>>
+    fun trashedMemos(): Flow<List<ScheduleMemoEntity>>
     fun events(): Flow<List<ScheduleEventEntity>>
     fun eventsInRange(startInclusive: Long, endExclusive: Long): Flow<List<ScheduleEventEntity>>
 
@@ -23,6 +24,9 @@ interface ScheduleRepository {
     suspend fun event(id: String): ScheduleEventEntity?
     suspend fun saveMemo(id: String?, body: String, title: String?, tags: List<String>): String
     suspend fun deleteMemo(id: String)
+    suspend fun restoreMemo(id: String)
+    suspend fun permanentlyDeleteMemo(id: String)
+    suspend fun emptyTrash()
     suspend fun saveEvent(
         id: String?,
         title: String,
@@ -43,6 +47,9 @@ class RoomScheduleRepository(
 
     override fun memos(): Flow<List<ScheduleMemoEntity>> =
         activeAppScopeStore.scope.flatMapLatest { memoDao.activeMemos(it.scopeKey) }
+
+    override fun trashedMemos(): Flow<List<ScheduleMemoEntity>> =
+        activeAppScopeStore.scope.flatMapLatest { memoDao.trashedMemos(it.scopeKey) }
 
     override fun events(): Flow<List<ScheduleEventEntity>> =
         activeAppScopeStore.scope.flatMapLatest { eventDao.all(it.scopeKey) }
@@ -90,6 +97,20 @@ class RoomScheduleRepository(
             updatedAt = System.currentTimeMillis(),
         )
     }
+
+    override suspend fun restoreMemo(id: String) {
+        memoDao.restore(
+            scopeKey = activeAppScopeStore.current.scopeKey,
+            id = id,
+            updatedAt = System.currentTimeMillis(),
+        )
+    }
+
+    override suspend fun permanentlyDeleteMemo(id: String) =
+        memoDao.permanentDelete(activeAppScopeStore.current.scopeKey, id)
+
+    override suspend fun emptyTrash() =
+        memoDao.emptyTrash(activeAppScopeStore.current.scopeKey)
 
     override suspend fun saveEvent(
         id: String?,

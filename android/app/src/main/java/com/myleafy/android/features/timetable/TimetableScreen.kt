@@ -12,6 +12,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,10 +37,10 @@ import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.Thunderstorm
 import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
@@ -60,6 +61,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,6 +86,8 @@ import com.myleafy.android.features.timetable.weather.WeatherCondition
 import com.myleafy.android.features.timetable.weather.WeatherUiState
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyAlertDialog
+import com.myleafy.android.ui.components.LeafyErrorState
+import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafySnackbarHost
 import com.myleafy.android.ui.components.LeafyStatusBanner
@@ -198,6 +203,7 @@ fun TimetableScreen(
                         },
                     )
                 },
+                compact = true,
                 actions = {
                     LeafyActionIconButton(
                         onClick = {
@@ -259,14 +265,14 @@ fun TimetableScreen(
         },
     ) { contentPadding ->
         when (val state = uiState) {
-            TimetableUiState.Loading -> Box(
+            TimetableUiState.Loading -> LeafyLoadingState(
                 modifier = Modifier.fillMaxSize().padding(contentPadding),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
-            is TimetableUiState.Error -> LeafyStatusBanner(
+                message = "正在加载课表",
+            )
+            is TimetableUiState.Error -> LeafyErrorState(
+                title = "课表暂时无法加载",
                 message = state.message,
-                isError = true,
-                modifier = Modifier.padding(contentPadding).padding(LeafySpacing.card),
+                modifier = Modifier.fillMaxSize().padding(contentPadding),
             )
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
@@ -441,22 +447,24 @@ private fun TimetableScreenContent(
     Column(modifier = modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = LeafySpacing.tiny),
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LeafyActionIconButton(
+            IconButton(
                 onClick = {
                     coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
                 },
                 enabled = pagerState.currentPage > 0,
+                modifier = Modifier.size(LeafyComponentSize.timetableNavigation),
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
             }
+            // 周次与日期同一行：左侧“本周 · 第 N 周”，右侧日期范围，
+            // 为课表让出纵向空间。两端各占一半宽度，字体放大时各自省略而不互相挤压。
             Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                modifier = Modifier.weight(1f).padding(horizontal = LeafySpacing.tiny),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = if (visiblePage.week == state.currentWeek) {
@@ -464,21 +472,27 @@ private fun TimetableScreenContent(
                     } else {
                         "第 ${visiblePage.week} 周"
                     },
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = " · ${formatWeekRange(visiblePage.weekRange.startDate)}",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = formatWeekRange(visiblePage.weekRange.startDate),
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
             }
-            LeafyActionIconButton(
+            IconButton(
                 onClick = {
                     coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
                 },
                 enabled = pagerState.currentPage < state.supportedWeeks - 1,
+                modifier = Modifier.size(LeafyComponentSize.timetableNavigation),
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
             }
@@ -581,7 +595,7 @@ private fun formatWeekRange(start: LocalDate): String {
     return "${start.format(shortDateFormatter)}–${end.format(shortDateFormatter)}"
 }
 
-private val shortDateFormatter = DateTimeFormatter.ofPattern("M月d日")
+private val shortDateFormatter = DateTimeFormatter.ofPattern("M/d")
 
 private val scheduleDraftSaver = androidx.compose.runtime.saveable.Saver<ScheduleEventDraft?, List<String>>(
     save = { draft ->

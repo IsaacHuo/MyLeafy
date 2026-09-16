@@ -3,17 +3,19 @@ package com.myleafy.android.testing
 import android.app.Application
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.myleafy.android.features.timetable.domain.TimetableGridItem
-import com.myleafy.android.features.timetable.domain.TimetableGridItemType
-import com.myleafy.android.features.timetable.domain.TimetableGridSnapshot
-import com.myleafy.android.features.timetable.domain.TimetableWeekRange
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
-import com.myleafy.android.ui.theme.MyLeafyTheme
 import java.time.LocalDate
 import java.time.LocalTime
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.experimental.categories.Category
@@ -22,6 +24,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
+/**
+ * Timetable goldens. The grid is a single viewport, so the checks here are about
+ * date-first headers, course text priority, conflict lanes and hit targets rather
+ * than scrolling.
+ */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w360dp-h800dp-xxhdpi", application = Application::class)
@@ -30,58 +37,113 @@ class TimetableScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    @Test fun sevenDaysWithTodayTimelineAndOverlap() = capture(showWeekends = true, darkTheme = false)
+    @Test
+    fun sevenDaysWithTodayTimelineAndOverlap() {
+        render(showWeekends = true, darkTheme = false)
+        capture()
+    }
 
-    @Test fun weekdaysDark() = capture(showWeekends = false, darkTheme = true)
+    @Test
+    fun weekdaysDark() {
+        render(showWeekends = false, darkTheme = true)
+        capture()
+    }
 
-    private fun capture(showWeekends: Boolean, darkTheme: Boolean) {
-        val monday = LocalDate.of(2026, 9, 7)
-        val snapshot = TimetableGridSnapshot(
-            weekRange = TimetableWeekRange(week = 1, startDate = monday),
-            items = listOf(
-                item("forest", "森林生态学", "一教 101", 0, 1, 2),
-                item("math", "高等数学", "二教 305", 1, 3, 2, lane = 0, laneCount = 2),
-                item("lab", "植物实验", "实验楼", 1, 3, 3, lane = 1, laneCount = 2),
-                item("english", "大学英语", "学研 A206", 3, 7, 2),
-                item("sport", "体育", "田径场", 4, 10, 2),
-            ),
+    /** 360dp + 130% system font: long course names inside a two-column conflict. */
+    @Test
+    fun weekdaysLongNamesConflictFontScale130() {
+        render(
+            showWeekends = false,
+            darkTheme = false,
+            fontScale = 1.3f,
+            longNames = true,
         )
+        // The accessibility description keeps the full course name even when a
+        // narrow conflict lane has to ellipsize the visible text.
+        composeRule
+            .onNodeWithContentDescription(ScreenshotData.LONG_COURSE_TITLE, substring = true)
+            .assertExists()
+        capture()
+    }
+
+    /**
+     * 200% font scale: the grid must stay usable without compensating the system
+     * font scale, so every cell and course block keeps working as a hit target.
+     */
+    @Test
+    fun weekdaysFontScale200() {
+        var clickedDate: LocalDate? = null
+        var clickedPeriod: Int? = null
+        var clickedItem: TimetableGridItem? = null
+        render(
+            showWeekends = false,
+            darkTheme = false,
+            fontScale = 2f,
+            onEmptyCellClick = { date, period ->
+                clickedDate = date
+                clickedPeriod = period
+            },
+            onItemClick = { clickedItem = it },
+        )
+
+        composeRule.onNodeWithTag("timetable-cell-2026-09-07-1").performClick()
+        composeRule.runOnIdle {
+            assertEquals(ScreenshotData.monday, clickedDate)
+            assertEquals(1, clickedPeriod)
+        }
+
+        composeRule.onNodeWithTag("timetable-item-course::forest::1").performClick()
+        composeRule.runOnIdle { assertEquals("forest", clickedItem?.sourceId) }
+
+        composeRule.onNodeWithContentDescription("森林生态学", substring = true).assertExists()
+        capture()
+    }
+
+    @Test
+    @Config(sdk = [36], qualifiers = "w600dp-h900dp-xxhdpi", application = Application::class)
+    fun weekdaysMedium600Dark() {
+        render(showWeekends = false, darkTheme = true)
+        capture()
+    }
+
+    /**
+     * Wide layout with a full week and long names: with the extra width there is no
+     * reason for the course name to be ellipsized.
+     */
+    @Test
+    @Config(sdk = [36], qualifiers = "w840dp-h900dp-xxhdpi", application = Application::class)
+    fun sevenDaysWide840LongNames() {
+        render(showWeekends = true, darkTheme = false, longNames = true)
+        composeRule
+            .onNodeWithContentDescription(ScreenshotData.LONG_COURSE_TITLE, substring = true)
+            .assertIsDisplayed()
+        capture()
+    }
+
+    private fun render(
+        showWeekends: Boolean,
+        darkTheme: Boolean,
+        fontScale: Float = 1f,
+        longNames: Boolean = false,
+        onEmptyCellClick: (LocalDate, Int) -> Unit = { _, _ -> },
+        onItemClick: (TimetableGridItem) -> Unit = {},
+    ) {
+        val snapshot = weekOneSnapshot(longNames)
         composeRule.setContent {
-            MyLeafyTheme(darkTheme = darkTheme) {
+            LeafyScreenshotTheme(darkTheme = darkTheme, fontScale = fontScale) {
                 TimetableGrid(
                     snapshot = snapshot,
-                    onEmptyCellClick = { _, _ -> },
-                    onItemClick = {},
+                    onEmptyCellClick = onEmptyCellClick,
+                    onItemClick = onItemClick,
                     modifier = Modifier.fillMaxSize(),
-                    today = monday.plusDays(1),
+                    today = ScreenshotData.day(1),
                     currentTime = LocalTime.of(9, 10),
                     showWeekends = showWeekends,
                 )
             }
         }
         composeRule.waitForIdle()
-        composeRule.onRoot().captureRoboImage()
     }
 
-    private fun item(
-        id: String,
-        title: String,
-        subtitle: String,
-        day: Int,
-        start: Int,
-        span: Int,
-        lane: Int = 0,
-        laneCount: Int = 1,
-    ) = TimetableGridItem(
-        stableId = "course:$id:1",
-        sourceId = id,
-        type = TimetableGridItemType.COURSE,
-        title = title,
-        subtitle = subtitle,
-        dayIndex = day,
-        startPeriod = start,
-        periodSpan = span,
-        lane = lane,
-        laneCount = laneCount,
-    )
+    private fun capture() = composeRule.onRoot().captureRoboImage()
 }

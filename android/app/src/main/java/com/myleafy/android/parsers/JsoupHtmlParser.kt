@@ -652,6 +652,189 @@ class JsoupHtmlParser : HtmlParser {
             .replace(" ", "")
             .replace("　", "")
 
+    // MARK: - 教学计划 / 培养方案
+
+    override fun parseTeachingPlan(html: String): List<ParsedTeachingPlanSection> {
+        val document = Jsoup.parse(html)
+        for (table in candidateDataTables(document)) {
+            val rows = table.select("tr")
+            if (rows.isEmpty()) continue
+            val headers = rows[0].select("th,td").map { normalizedTableCellText(it) }
+            val termIndex = headers.indexOfFirst { it.contains("开课学期") || it == "学期" }
+            val nameIndex = headers.indexOfFirst { it.contains("课程名称") }
+            val creditIndex = headers.indexOfFirst { it.contains("学分") }
+            if (termIndex < 0 || nameIndex < 0 || creditIndex < 0) continue
+
+            fun columnIndex(vararg keys: String): Int =
+                headers.indexOfFirst { header -> keys.any { header.contains(it) } }
+
+            val unitIndex = columnIndex("开课单位")
+            val durationIndex = columnIndex("总学时", "学时")
+            val typeIndex = columnIndex("课程属性")
+            val categoryIndex = columnIndex("课程分类", "课程性质")
+            val examIndex = columnIndex("考试性质", "考核方式")
+            val codeIndex = columnIndex("课程编号", "课程代码")
+
+            val sections = LinkedHashMap<String, MutableList<ParsedTeachingPlanCourse>>()
+            var currentTerm = ""
+            var parsedAny = false
+            for (row in rows.drop(1)) {
+                val cells = row.select("td").map { normalizedTableCellText(it) }
+                if (cells.isEmpty()) continue
+                val rowText = cells.joinToString("")
+                if (rowText.contains("暂无数据") || rowText.contains("无记录")) continue
+                if (cells.all { it.isBlank() }) continue
+
+                val termCell = cells.getOrNull(termIndex)?.trim().orEmpty()
+                if (termCell.isNotEmpty()) currentTerm = termCell
+
+                val name = cells.getOrNull(nameIndex)?.trim().orEmpty()
+                val creditValue = cells.getOrNull(creditIndex)?.let { parseCredit(it) }
+                if (name.isEmpty() || currentTerm.isEmpty() || creditValue == null) {
+                    throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "教学计划")
+                }
+                parsedAny = true
+                sections.getOrPut(currentTerm) { mutableListOf() }.add(
+                    ParsedTeachingPlanCourse(
+                        courseCode = cells.getOrNull(codeIndex)?.trim().orEmpty(),
+                        name = name,
+                        unit = cells.getOrNull(unitIndex)?.trim().orEmpty(),
+                        credit = cells.getOrNull(creditIndex)?.trim().orEmpty(),
+                        duration = cells.getOrNull(durationIndex)?.trim().orEmpty(),
+                        type = cells.getOrNull(typeIndex)?.trim().orEmpty(),
+                        courseCategory = cells.getOrNull(categoryIndex)?.trim().orEmpty(),
+                        exam = cells.getOrNull(examIndex)?.trim().orEmpty(),
+                    ),
+                )
+            }
+            if (!parsedAny) return emptyList()
+            return sections.map { (term, courses) -> ParsedTeachingPlanSection(term, courses) }
+        }
+        throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "教学计划")
+    }
+
+    override fun parseTrainingProgram(html: String): ParsedTrainingProgram {
+        val document = Jsoup.parse(html)
+        val tables = candidateDataTables(document)
+        val title = resolveTrainingProgramTitle(document)
+        val sections = parseTrainingProgramSections(document)
+        val creditRequirements = parseTrainingCreditRequirements(tables)
+        if (sections.isEmpty() && creditRequirements.isEmpty()) {
+            throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "培养方案明细")
+        }
+        val rawTables = tables
+            .filter { it.select("table").isEmpty() }
+            .map { table ->
+                ParsedTrainingProgramTable(
+                    table.select("tr").map { row ->
+                        row.select("th,td").map { normalizedTableCellText(it) }
+                    }.filter { it.any(String::isNotBlank) },
+                )
+            }
+            .filter { it.rows.isNotEmpty() }
+        return ParsedTrainingProgram(
+            title = title,
+            sections = sections,
+            tables = rawTables,
+            creditRequirements = creditRequirements,
+        )
+    }
+
+    private fun resolveTrainingProgramTitle(document: org.jsoup.nodes.Document): String {
+        document.select("p").firstOrNull { it.text().contains("专业本科培养方案") }?.let {
+            return it.text().trim()
+        }
+        Regex("([^，。；\\s]{2,40}专业本科培养方案)").find(document.text())?.let {
+            return it.groupValues[1]
+        }
+        return "专业培养方案"
+    }
+
+    private fun parseTrainingProgramSections(document: org.jsoup.nodes.Document): List<ParsedTrainingProgramSection> {
+        val result = mutableListOf<ParsedTrainingProgramSection>()
+        var currentTitle: String? = null
+        var currentBody = StringBuilder()
+        var currentLinks = mutableListOf<ParsedTrainingProgramLink>()
+
+        fun flush() {
+            val title = currentTitle ?: return
+            result.add(
+                ParsedTrainingProgramSection(
+                    title = title,
+                    body = currentBody.toString().trim(),
+                    links = currentLinks.toList(),
+                ),
+            )
+            currentBody = StringBuilder()
+            currentLinks = mutableListOf()
+        }
+
+        for (paragraph in document.select("p")) {
+            if (paragraph.parents().any { it.tagName() == "table" }) continue
+            val text = normalizedTableCellText(paragraph)
+            if (trainingSectionHeading.matches(text)) {
+                flush()
+                currentTitle = text
+                continue
+            }
+            if (currentTitle == null) continue
+            val links = paragraph.select("a[href]").mapNotNull { anchor ->
+                val url = anchor.absUrl("href").ifBlank { anchor.attr("href") }
+                if (!url.startsWith("http://") && !url.startsWith("https://")) return@mapNotNull null
+                ParsedTrainingProgramLink(anchor.text().trim().ifBlank { url }, url)
+            }
+            currentLinks.addAll(links)
+            val bodyText = text.removePrefix(currentTitle.orEmpty()).trim()
+            if (bodyText.isNotEmpty()) {
+                if (currentBody.isNotEmpty()) currentBody.append('\n')
+                currentBody.append(bodyText)
+            }
+        }
+        flush()
+        return result
+    }
+
+    private fun parseTrainingCreditRequirements(
+        tables: List<Element>,
+    ): List<ParsedGraduationCreditRequirement> {
+        val requirements = mutableListOf<ParsedGraduationCreditRequirement>()
+        for (table in tables) {
+            for (row in table.select("tr")) {
+                val cells = row.select("th,td").map { normalizedTableCellText(it) }
+                val labelCell = cells.firstOrNull { it.isNotBlank() } ?: continue
+                val otherCells = cells.filter { it != labelCell }
+                val isTotal = labelCell.contains("毕业生应取得总学分") ||
+                    labelCell.contains("应取得总学分")
+                if (isTotal) {
+                    val credits = otherCells.firstNotNullOfOrNull { parseCredit(it) } ?: continue
+                    requirements.add(
+                        ParsedGraduationCreditRequirement(
+                            label = "毕业生应取得总学分",
+                            credits = credits,
+                            isTotal = true,
+                        ),
+                    )
+                    continue
+                }
+                val label = trainingCreditLabels.firstOrNull { labelCell.contains(it) } ?: continue
+                if (labelCell.contains("学时") || labelCell.contains("占比")) continue
+                if (labelCell.length >= 45) continue
+                val credits = otherCells.firstNotNullOfOrNull { parseCredit(it) } ?: continue
+                requirements.add(
+                    ParsedGraduationCreditRequirement(
+                        label = cleanTrainingCreditLabel(label),
+                        credits = credits,
+                        isTotal = false,
+                    ),
+                )
+            }
+        }
+        return requirements.distinctBy { it.label }
+    }
+
+    private fun cleanTrainingCreditLabel(label: String): String =
+        label.replace("最低选修学分", "").replace("最低选修", "").replace("学分", "").trim()
+
     // MARK: - 辅助
 
     private fun normalizedTableCellText(element: Element): String =
@@ -765,6 +948,19 @@ class JsoupHtmlParser : HtmlParser {
             "课表暂未公布",
             "暂无课表",
             "没有找到符合条件的课表",
+        )
+
+        val trainingSectionHeading = Regex("^[一二三四五六七八九十]+[、.．].{2,40}$")
+
+        val trainingCreditLabels = listOf(
+            "通识选修课",
+            "通识必修课",
+            "专业基础课",
+            "专业核心课",
+            "本专业选修课最低选修学分",
+            "集中性实践环节",
+            "毕业论文（设计）",
+            "拓展教育",
         )
 
         val classroomBuildingMap = mapOf(

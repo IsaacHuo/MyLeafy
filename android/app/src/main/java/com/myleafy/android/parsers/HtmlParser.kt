@@ -1,5 +1,7 @@
 package com.myleafy.android.parsers
 
+import kotlinx.serialization.Serializable
+
 /**
  * 教务 HTML 解析器接口（阶段 2 由 jsoup 实现，选择器语法与 iOS SwiftSoup 一致）。
  *
@@ -27,6 +29,12 @@ interface HtmlParser {
 
     /** 解析空教室页面（空闲教室，占用行会被跳过）。 */
     fun parseEmptyClassrooms(html: String): List<EmptyClassroom>
+
+    /** 解析教学计划页面（/jsxsd/pyfa/pyfa_query）。 */
+    fun parseTeachingPlan(html: String): List<ParsedTeachingPlanSection>
+
+    /** 解析培养方案/毕业要求页面（/jsxsd/pyfa/pyfazd_query）。 */
+    fun parseTrainingProgram(html: String): ParsedTrainingProgram
 }
 
 /** 课表课程记录（解析器中间产物，不直接持久化）。 */
@@ -79,6 +87,57 @@ data class ParsedExamRecord(
 data class EmptyClassroom(
     val building: String,
     val room: String,
+)
+
+@Serializable
+data class ParsedTeachingPlanCourse(
+    val courseCode: String,
+    val name: String,
+    val unit: String,
+    val credit: String,
+    val duration: String,
+    val type: String,
+    val courseCategory: String,
+    val exam: String,
+)
+
+@Serializable
+data class ParsedTeachingPlanSection(
+    val term: String,
+    val courses: List<ParsedTeachingPlanCourse>,
+)
+
+@Serializable
+data class ParsedTrainingProgramLink(
+    val title: String,
+    val url: String,
+)
+
+@Serializable
+data class ParsedTrainingProgramSection(
+    val title: String,
+    val body: String,
+    val links: List<ParsedTrainingProgramLink>,
+)
+
+@Serializable
+data class ParsedTrainingProgramTable(
+    val rows: List<List<String>>,
+)
+
+@Serializable
+data class ParsedGraduationCreditRequirement(
+    val label: String,
+    val credits: Double,
+    val isTotal: Boolean,
+)
+
+@Serializable
+data class ParsedTrainingProgram(
+    val title: String,
+    val sections: List<ParsedTrainingProgramSection>,
+    val tables: List<ParsedTrainingProgramTable>,
+    val creditRequirements: List<ParsedGraduationCreditRequirement>,
 )
 
 class HtmlParseError(val kind: ParseErrorKind, detail: String) : Exception(detail) {

@@ -44,8 +44,8 @@ android {
         applicationId = "com.myleafy.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField(
@@ -167,8 +167,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime)
 
-    implementation(libs.okhttp)
-    implementation(libs.jsoup)
+implementation(libs.okhttp)
+implementation(libs.coil)
+implementation(libs.jsoup)
 
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)

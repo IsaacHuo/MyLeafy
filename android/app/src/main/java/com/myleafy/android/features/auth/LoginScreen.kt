@@ -78,29 +78,64 @@ fun LoginScreen(
     var account by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var captcha by rememberSaveable { mutableStateOf("") }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    val passwordFocus = remember { FocusRequester() }
-    val captchaFocus = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
 
     if (uiState.loginSucceeded) {
         LaunchedEffect(Unit) { onBack() }
     }
+
+    LoginContent(
+        state = uiState,
+        account = account,
+        password = password,
+        captcha = captcha,
+        onAccountChange = { account = it },
+        onPasswordChange = { password = it },
+        onCaptchaChange = { captcha = it },
+        onSubmit = { viewModel.submit(account, password, captcha) },
+        onRefreshCaptcha = viewModel::refreshCaptcha,
+        onBack = onBack,
+        modifier = modifier,
+    )
+}
+
+/**
+ * 由 state 驱动的登录表单：表单内容、提交与刷新验证码等副作用都由 [LoginScreen] 持有，
+ * 这里只消费 state 与回调，便于截图与预览直接给定状态。
+ * 本组件自身仍保留两项瞬时 UI 状态——密码显隐与输入焦点——它们不承载业务语义。
+ */
+@Composable
+fun LoginContent(
+    state: LoginUiState,
+    account: String,
+    password: String,
+    captcha: String,
+    onAccountChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onCaptchaChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onRefreshCaptcha: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val passwordFocus = remember { FocusRequester() }
+    val captchaFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
 
     LeafySecondaryScaffold(title = "学校登录", onBack = onBack, modifier = modifier) { contentModifier ->
         Box(modifier = contentModifier.fillMaxSize().imePadding()) {
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .fillMaxWidth()
                     .widthIn(max = LeafyComponentSize.formMaxWidth)
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.card),
             ) {
 
         OutlinedTextField(
             value = account,
-            onValueChange = { account = it },
+            onValueChange = onAccountChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text("学号") },
             singleLine = true,
@@ -110,7 +145,7 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = onPasswordChange,
             modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
             label = { Text("密码") },
             singleLine = true,
@@ -132,26 +167,26 @@ fun LoginScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = captcha,
-                onValueChange = { captcha = it },
+                onValueChange = onCaptchaChange,
                 modifier = Modifier.weight(1f).focusRequester(captchaFocus),
                 label = { Text("验证码") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     focusManager.clearFocus()
-                    if (!uiState.isSubmitting) viewModel.submit(account, password, captcha)
+                    if (!state.isSubmitting) onSubmit()
                 }),
             )
             Spacer(modifier = Modifier.width(LeafySpacing.compact))
             CaptchaImage(
-                captchaBytes = uiState.captchaBytes,
-                isLoading = uiState.isCaptchaLoading,
-                onRefresh = viewModel::refreshCaptcha,
+                captchaBytes = state.captchaBytes,
+                isLoading = state.isCaptchaLoading,
+                onRefresh = onRefreshCaptcha,
             )
         }
         Spacer(modifier = Modifier.height(LeafySpacing.card))
 
-        val errorMessage = uiState.errorMessage
+        val errorMessage = state.errorMessage
         Box(modifier = Modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.minimumTouchTarget)) {
             if (errorMessage != null) {
                 LeafyStatusBanner(message = errorMessage, isError = true)
@@ -159,11 +194,11 @@ fun LoginScreen(
         }
 
             LeafyPrimaryButton(
-                onClick = { viewModel.submit(account, password, captcha) },
+                onClick = onSubmit,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isSubmitting,
+                enabled = !state.isSubmitting,
             ) {
-                if (uiState.isSubmitting) {
+                if (state.isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(LeafyIconSize.standard),
                         strokeWidth = LeafyStroke.progress,

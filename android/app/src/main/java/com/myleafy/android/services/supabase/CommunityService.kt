@@ -8,6 +8,7 @@ import com.myleafy.android.shared.model.FeedQuery
 import com.myleafy.android.shared.model.FeedResponse
 import com.myleafy.android.shared.model.NotificationDto
 import com.myleafy.android.shared.model.PostDto
+import com.myleafy.android.services.SupabaseConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
@@ -16,13 +17,21 @@ import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.postgrest.query.Order
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 
 /** 社区服务：匿名 Auth、身份引导（bootstrap）、Feed。 */
 class CommunityService(private val client: SupabaseClient) {
@@ -34,6 +43,12 @@ class CommunityService(private val client: SupabaseClient) {
         ignoreUnknownKeys = true
         coerceInputValues = true
     }
+
+    private val storageClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     /** 确保存在匿名 Supabase 会话（对应 iOS `ensureAnonymousSession`）。 */
     suspend fun ensureAnonymousSession() {
@@ -243,7 +258,7 @@ class CommunityService(private val client: SupabaseClient) {
         )
     }
 
-    /** 发帖（create_community_post_v4，p_id 为客户端幂等 UUID，暂不支持图片/附件）。 */
+    /** 发帖（create_community_post_v4，p_id 为客户端幂等 UUID；支持图片计数）。 */
     suspend fun createPost(
         postId: String,
         requestId: String,
@@ -251,6 +266,8 @@ class CommunityService(private val client: SupabaseClient) {
         body: String,
         category: String?,
         isAnonymous: Boolean,
+        imageCount: Int = 0,
+        attachmentCount: Int = 0,
     ): PostDto {
         ensureAnonymousSession()
         return client.postgrest.rpc(
@@ -262,10 +279,90 @@ class CommunityService(private val client: SupabaseClient) {
                 put("p_body", body)
                 if (category != null) put("p_category", category) else put("p_category", JsonNull)
                 put("p_is_anonymous", isAnonymous)
-                put("p_image_count", 0)
-                put("p_attachment_count", 0)
+                put("p_image_count", imageCount)
+                put("p_attachment_count", attachmentCount)
             },
         ).decodeAs()
+    }
+
+    /**
+     * 上传帖子图片并完成服务端校验/挂载。
+     *
+     * 顺序与 iOS `CommunityPublishCoordinator` 一致：先上传 full/thumb 对象到
+     * `community-images`，再由 `community-validate-upload` 生成收据，最后调用
+     * `attach_community_post_image_v1` 挂载。全部对象必须为 JPEG 且不超过 1MB。
+     */
+    suspend fun uploadPostImage(
+        profileId: String,
+        postId: String,
+        imageId: String,
+        fullBytes: ByteArray,
+        thumbnailBytes: ByteArray,
+        sortOrder: Int,
+    ) {
+        ensureAnonymousSession()
+        val prefix = "posts/${profileId.lowercase()}/${postId.lowercase()}"
+        val fullPath = "$prefix/full/${imageId.lowercase()}.jpg"
+        val thumbnailPath = "$prefix/thumb/${imageId.lowercase()}.jpg"
+        uploadStorageObject("community-images", fullPath, "image/jpeg", fullBytes)
+        uploadStorageObject("community-images", thumbnailPath, "image/jpeg", thumbnailBytes)
+        val receiptId = validatePostImageUpload(postId, fullPath, thumbnailPath)
+        attachPostImage(receiptId, imageId, sortOrder)
+    }
+
+    private suspend fun uploadStorageObject(
+        bucket: String,
+        objectPath: String,
+        contentType: String,
+        bytes: ByteArray,
+    ) = withContext(Dispatchers.IO) {
+        val token = client.auth.currentSessionOrNull()?.accessToken
+            ?: throw IllegalStateException("社区会话已失效，请重新登录后重试")
+        val url = "${SupabaseConfig.supabaseUrl}/storage/v1/object/$bucket/$objectPath"
+        val request = Request.Builder()
+            .url(url)
+            .post(bytes.toRequestBody(contentType.toMediaType()))
+            .header("Authorization", "Bearer $token")
+            .header("apikey", SupabaseConfig.anonKey)
+            .header("x-upsert", "false")
+            .header("cache-control", "31536000")
+            .build()
+        storageClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("图片上传失败（HTTP ${response.code}）")
+            }
+        }
+    }
+
+    private suspend fun validatePostImageUpload(
+        postId: String,
+        fullPath: String,
+        thumbnailPath: String,
+    ): String {
+        val response = client.functions.invoke(
+            "community-validate-upload",
+            buildJsonObject {
+                put("kind", "post")
+                put("post_id", postId.lowercase())
+                put("full_path", fullPath)
+                put("thumbnail_path", thumbnailPath)
+            },
+        )
+        val root = json.parseToJsonElement(response.bodyAsText()) as? JsonObject
+            ?: throw IllegalStateException("图片校验返回了非对象响应")
+        root["receipt_id"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }?.let { return it }
+        throw IllegalStateException(root["error"]?.jsonPrimitive?.content ?: "图片校验失败，请重新选择图片")
+    }
+
+    private suspend fun attachPostImage(receiptId: String, imageId: String, sortOrder: Int) {
+        client.postgrest.rpc(
+            "attach_community_post_image_v1",
+            buildJsonObject {
+                put("p_receipt_id", receiptId)
+                put("p_image_id", imageId)
+                put("p_sort_order", sortOrder)
+            },
+        )
     }
 
     /** 评论（create_community_comment_v2，p_id 为客户端幂等 UUID；评论最多两层）。 */

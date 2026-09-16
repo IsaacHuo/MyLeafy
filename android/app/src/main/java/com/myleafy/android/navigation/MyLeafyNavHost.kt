@@ -30,6 +30,9 @@ import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.campus.CatalogRatingsScreen
 import com.myleafy.android.features.campus.CampusCalendarScreen
+import com.myleafy.android.features.campus.ComprehensiveQualityScreen
+import com.myleafy.android.features.campus.HonorRecordsScreen
+import com.myleafy.android.features.campus.TrainingProgramScreen
 import com.myleafy.android.features.campus.ClassroomScreen
 import com.myleafy.android.features.campus.ExamsScreen
 import com.myleafy.android.features.campus.GradesScreen
@@ -44,6 +47,7 @@ import com.myleafy.android.features.community.ComposePostScreen
 import com.myleafy.android.features.community.PostDetailScreen
 import com.myleafy.android.features.profile.ProfileScreen
 import com.myleafy.android.features.profile.AboutMyLeafyScreen
+import com.myleafy.android.features.profile.CheckUpdatesScreen
 import com.myleafy.android.features.profile.FeedbackScreen
 import com.myleafy.android.features.profile.HelpCenterScreen
 import com.myleafy.android.features.profile.PermissionsInfoScreen
@@ -52,6 +56,11 @@ import com.myleafy.android.features.profile.ProfilePreferencesScreen
 import com.myleafy.android.features.profile.ProfileSyncScreen
 import com.myleafy.android.features.profile.TimetableBackgroundScreen
 import com.myleafy.android.features.schedule.ScheduleScreen
+import com.myleafy.android.features.schedule.ScheduleExportScreen
+import com.myleafy.android.features.schedule.ScheduleReviewScreen
+import com.myleafy.android.features.schedule.ScheduleStatisticsScreen
+import com.myleafy.android.features.schedule.ScheduleTagsScreen
+import com.myleafy.android.features.schedule.ScheduleTrashScreen
 import com.myleafy.android.features.timetable.TimetableScreen
 import com.myleafy.android.features.timetable.sharing.TimetableSharingScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
@@ -240,6 +249,31 @@ fun MyLeafyNavHost(
                         FeatureDestination.CAMPUS_CALENDAR -> CampusCalendarScreen(
                             onBack = { navController.popBackStack() },
                         )
+                        FeatureDestination.SCHEDULE_TAGS -> ScheduleTagsScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.SCHEDULE_STATISTICS -> ScheduleStatisticsScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.SCHEDULE_REVIEW -> ScheduleReviewScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.SCHEDULE_EXPORT -> ScheduleExportScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.SCHEDULE_TRASH -> ScheduleTrashScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.CAMPUS_TRAINING_PLAN -> TrainingProgramScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.CAMPUS_COMPREHENSIVE -> ComprehensiveQualityScreen(
+                            onBack = { navController.popBackStack() },
+                            available = activeScope.campusId == com.myleafy.android.core.campus.CampusID.bjfu,
+                        )
+                        FeatureDestination.CAMPUS_HONOR_RECORDS -> HonorRecordsScreen(
+                            onBack = { navController.popBackStack() },
+                        )
                         FeatureDestination.CAMPUS_SUNSHINE_RUN -> SunshineRunScreen(
                             onBack = { navController.popBackStack() },
                         )
@@ -274,6 +308,9 @@ fun MyLeafyNavHost(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_ABOUT -> AboutMyLeafyScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.PROFILE_UPDATE -> CheckUpdatesScreen(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.TIMETABLE_BACKGROUND -> TimetableBackgroundScreen(

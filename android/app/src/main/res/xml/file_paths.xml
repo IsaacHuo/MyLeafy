@@ -2,4 +2,8 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="calendar_exports" path="calendar-exports/" />
     <cache-path name="medical_exports" path="medical-exports/" />
+    <cache-path name="schedule_exports" path="schedule-exports/" />
+    <cache-path name="comprehensive_exports" path="comprehensive-exports/" />
+    <cache-path name="apk_updates" path="updates/" />
+    <files-path name="honor_records" path="HonorRecords/" />
 </paths>

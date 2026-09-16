@@ -12,6 +12,8 @@ sealed class SchoolNetworkError(message: String) : Exception(message) {
     object TimetableQueryFormNotFound : SchoolNetworkError("未找到课表查询表单")
     object TimetableSemesterMismatch : SchoolNetworkError("课表学期不匹配")
     object ClassroomDataUnavailable : SchoolNetworkError("空教室数据不可用")
+    object TeachingPlanDataUnavailable : SchoolNetworkError("教学计划数据不可用")
+    object TrainingProgramDataUnavailable : SchoolNetworkError("培养方案数据不可用")
     object FeatureUnavailable : SchoolNetworkError("功能不可用")
     object CampusNetworkRequired : SchoolNetworkError("只能校园网内访问")
     class Unexpected(reason: String) : SchoolNetworkError(reason)

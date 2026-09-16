@@ -2,6 +2,7 @@ package com.myleafy.android.features.campus
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import com.myleafy.android.features.timetable.domain.SemesterConfig
+import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyContentSurface
 import com.myleafy.android.ui.theme.LeafySpacing
@@ -77,6 +79,40 @@ fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Text(
+                    text = "作息时间",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "每天 13 节的常规上课时段，与课表时间轴一致。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            item {
+                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(LeafySpacing.card)) {
+                        TimetablePeriodSchedule.slots.forEach { slot ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = LeafySpacing.tiny),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = "第 ${slot.period} 节",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = "${slot.startText} – ${slot.endText}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
                             }
                         }
                     }

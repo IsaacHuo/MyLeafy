@@ -63,7 +63,7 @@ interface CommunityRepository {
 
     suspend fun blockUser(userId: String, reason: String? = null)
 
-    /** 发帖（文本，暂无图片/附件）。 */
+    /** 发帖（文本 + 可选图片，最多 4 张）。 */
     suspend fun createPost(
         postId: String,
         requestId: String,
@@ -71,6 +71,7 @@ interface CommunityRepository {
         body: String,
         category: String?,
         isAnonymous: Boolean,
+        images: List<CommunityPostImageUpload> = emptyList(),
     ): PostDto
 
     /** 评论（最多两层：parentCommentId 为根评论 id）。 */
@@ -216,9 +217,33 @@ class LiveCommunityRepository(
         body: String,
         category: String?,
         isAnonymous: Boolean,
+        images: List<CommunityPostImageUpload>,
     ): PostDto {
-        requireCommunityProfile(requireComplete = true)
-        return requireService().createPost(postId, requestId, title, body, category, isAnonymous)
+        val profile = requireCommunityProfile(requireComplete = true)
+        require(images.size <= CommunityImageProcessing.postImageLimit) {
+            "单条帖子最多上传 ${CommunityImageProcessing.postImageLimit} 张图片"
+        }
+        val service = requireService()
+        service.createPost(
+            postId = postId,
+            requestId = requestId,
+            title = title,
+            body = body,
+            category = category,
+            isAnonymous = isAnonymous,
+            imageCount = images.size,
+        )
+        images.forEachIndexed { index, image ->
+            service.uploadPostImage(
+                profileId = profile.id,
+                postId = postId,
+                imageId = image.id,
+                fullBytes = image.bytes,
+                thumbnailBytes = image.thumbnailBytes,
+                sortOrder = index,
+            )
+        }
+        return service.fetchPost(postId) ?: throw IllegalStateException("帖子发布后未能读取结果")
     }
 
     override suspend fun createComment(
@@ -281,6 +306,7 @@ class PlaceholderCommunityRepository : CommunityRepository {
         body: String,
         category: String?,
         isAnonymous: Boolean,
+        images: List<CommunityPostImageUpload>,
     ): PostDto =
         throw NotImplementedError("社区功能未接入")
 

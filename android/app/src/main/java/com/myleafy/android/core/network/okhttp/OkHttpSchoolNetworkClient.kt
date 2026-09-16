@@ -18,6 +18,8 @@ import com.myleafy.android.parsers.HtmlParser
 import com.myleafy.android.parsers.HtmlParseError
 import com.myleafy.android.parsers.ParsedExamRecord
 import com.myleafy.android.parsers.ParsedGradeRecord
+import com.myleafy.android.parsers.ParsedTeachingPlanSection
+import com.myleafy.android.parsers.ParsedTrainingProgram
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -285,6 +287,35 @@ class OkHttpSchoolNetworkClient(
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.ClassroomDataUnavailable
         }
+    }
+
+    override suspend fun fetchTeachingPlan(): List<ParsedTeachingPlanSection> = withContext(Dispatchers.IO) {
+        val html = fetchJsxsdPage("/jsxsd/pyfa/pyfa_query")
+        try {
+            parser.parseTeachingPlan(html)
+        } catch (e: HtmlParseError) {
+            throw SchoolNetworkError.TeachingPlanDataUnavailable
+        }
+    }
+
+    override suspend fun fetchTrainingProgram(): ParsedTrainingProgram = withContext(Dispatchers.IO) {
+        val html = fetchJsxsdPage("/jsxsd/pyfa/pyfazd_query")
+        try {
+            parser.parseTrainingProgram(html)
+        } catch (e: HtmlParseError) {
+            throw SchoolNetworkError.TrainingProgramDataUnavailable
+        }
+    }
+
+    private fun fetchJsxsdPage(path: String): String {
+        val request = requestBuilder(path, referer = "${baseUrl}/jsxsd/framework/xsMain.jsp").get().build()
+        val html = execute(request).use {
+            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+        }
+        if (SchoolPageDetector.isLoginPage(html)) {
+            throw SchoolNetworkError.SessionExpired
+        }
+        return html
     }
 
     override fun clearSession() {

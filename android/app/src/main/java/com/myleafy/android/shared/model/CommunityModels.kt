@@ -31,6 +31,23 @@ data class ProfileDto(
     val updated_at: String = "",
 )
 
+/** 帖子图片（post_images，字段与 community-feed/summary 的 images 元素一致）。 */
+@Serializable
+data class PostImageDto(
+    val id: String,
+    val post_id: String = "",
+    val path: String = "",
+    val thumbnail_path: String? = null,
+    val sort_order: Int = 0,
+    val width: Int? = null,
+    val height: Int? = null,
+    val thumbnail_width: Int? = null,
+    val thumbnail_height: Int? = null,
+    val full_width: Int? = null,
+    val full_height: Int? = null,
+    val created_at: String = "",
+)
+
 /** 帖子（posts）。 */
 @Serializable
 data class PostDto(
@@ -48,6 +65,7 @@ data class PostDto(
     val viewer_has_liked: Boolean = false,
     val viewer_has_favorited: Boolean = false,
     val author: ProfileDto? = null,
+    val images: List<PostImageDto> = emptyList(),
 )
 
 /** 评论（comments，最多两层）。 */

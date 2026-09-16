@@ -13,8 +13,8 @@
 | SDK | compileSdk 36 / targetSdk 36 / **minSdk 29**（Android 10+） |
 | JDK | 构建用 JDK 17（Android Studio 内嵌 JBR 亦可） |
 | 包 | `com.myleafy.android`，versionCode 1，versionName 0.1.0 |
-| 结构 | 单 `:app` module；本地 Room 库 `myleafy.db`（v4） |
-| 数据层 | Room v4：Course / Grade / GradeRanking / GradeSummary / Exam / ScheduleMemo / ScheduleEvent，全部按 `scopeKey` 隔离；DataStore Preferences（非敏感设置） |
+| 结构 | 单 `:app` module；本地 Room 库 `myleafy.db`（v6） |
+| 数据层 | Room v6：Course / Grade / GradeRanking / GradeSummary / Exam / ScheduleMemo / ScheduleEvent / ScheduleReportSetting / ScheduleEventReminder / SunshineRunRecord / SunshineRunSettings / FitnessTestRecord / MedicalLedgerEntry / MedicalLedgerPhoto / HonorRecord / ComprehensiveQualityRecord / AcademicDocument，全部按 `scopeKey` 隔离；DataStore Preferences（非敏感设置） |
 | 导航 | 5 个根 Tab（社区按 capability 隐藏）+ `login` 路由 + 深链（`myleafy://community-post` / `timetable-invite`） |
 | 验证 | Android CI 与本地包装器执行 `assembleDebug` / `testDebugUnitTest` / `lintDebug`；API 36 执行 scoped Room 与 Compose 导航测试 |
 
@@ -72,7 +72,7 @@
 
 ### 暂时不迁
 
-社区发布队列、评教/评课/评菜目录、学习空间/专注记录/职业/医疗等本地记录、运营后台、分享与导入扩展、Widget。
+社区发布队列（后台/断点续传重试）、附件上传、投票、学习空间/专注记录、职业规划、考研信息、Widget、分享与导入扩展、研究生登录与课表 WebView 兜底。社区图片帖已接入（同步上传，最多 4 张）。
 
 ### 高风险
 
@@ -108,7 +108,7 @@
 
 **版本目录已锁定、阶段 2 按需接入：** okhttp 4.12.0（5.x 需 compileSdk 37，与 AGP 8.13.2 上限冲突）、jsoup 1.23.1。
 
-**阶段 2 评估：** supabase-kt（postgrest/auth/functions）、datastore-preferences、coil（图片加载）、workmanager。
+**已接入：** supabase-kt（postgrest/auth/functions）、datastore-preferences、coil 2.7.0（社区图片加载）、workmanager。
 
 **明确不引入：** Hilt/Koin（除非多模块）、Service Locator、自制 DI 框架、BaseViewModel/BaseRepository/Generic Wrapper、Kotlin Multiplatform、Compose Multiplatform。
 
@@ -311,8 +311,10 @@ Android 1.0.0 使用独立的 `android-vX.Y.Z` tag 与 `Cut Android Release` wor
 
 - **阶段 2 教务接入（M2.1-M2.5）：已完成。** OkHttp 客户端（登录/Cookie/编码）、jsoup 解析器与 Fixture 回归、Room 落库、课表网格渲染、登录页、成绩/考试抓取与展示。
 - **阶段 4 社区核心体验：已完成。** supabase-kt（匿名 Auth + bootstrap + feed）、帖子详情/评论/点赞、文本发帖与评论、搜索、分类/热门、通知、收藏、本人内容软删除、举报和屏蔽。
-- **阶段 5 校园与我的：核心闭环已完成。** 空教室、成绩/排名与考试独立同步、领域分组；社区资料 bootstrap 与昵称/简介/专业/年级编辑；主题/文字偏好、缓存与单项同步中心、安全退出、帮助/权限/反馈/关于。评价目录、共享课表成员与邀请码留到后续阶段。
-- **阶段 3 日迹基础闭环：已完成。** 随记编辑/软删除、个人日程增删改、课表共享数据源与 ICS；复杂 Markdown、图片/语音、统计和分享卡片留到增强阶段。
+- **阶段 5 校园与我的：核心闭环已完成。** 空教室、成绩/排名与考试独立同步、领域分组；社区资料 bootstrap 与昵称/简介/专业/年级编辑；主题/文字偏好、缓存与单项同步中心、安全退出、帮助/权限/反馈/关于。评价目录、共享课表成员与邀请码已完成。
+- **阶段 3 日迹基础闭环：已完成。** 随记编辑/软删除、个人日程增删改、课表共享数据源与 ICS；标签、记录日迹统计与分享图、回收站、每日回顾、纯文本导出已完成；复杂 Markdown、图片/语音、图文分享卡留到增强阶段。
+- **静态子页补齐（2026-09-15）**：校园补齐教学与培养（`pyfa_query`/`pyfazd_query` 解析与 `academic_documents` 缓存）、校历作息、综素测算、荣誉记录、图书馆座位预约外链与周末去哪（仅北林）；日迹补齐标签、统计（年度频率/近 30 天热力/里程碑/分享图）、回收站、每日回顾与文本导出。新增 schema 5→6 migration、`HonorRecord`/`ComprehensiveQualityRecord`/`AcademicDocument` 实体与 DAO、`TeachingPlanDataUnavailable`/`TrainingProgramDataUnavailable` 错误语义。
+- **社区图片帖（2026-09-15）**：`PostDto` 增加 `images`（`post_images` 字段）；发帖支持最多 4 张图片，客户端压缩为 full（≤1600px/≤800KB）与 thumb（≤480px/≤120KB）JPEG，上传 `community-images` 公开 bucket 后经 `community-validate-upload` 收据与 `attach_community_post_image_v1` 挂载；信息流与详情用 Coil 加载公开 URL。本机安装于 Xiaomi `cc0902c4` 验证 `MainActivity` 启动正常。
 - **UI 后续收尾**：逐步把 `FeatureDestination` 占位替换为真实实现；校园网依赖页面单独做真机/可访问教务网络验收，静态说明页保持可离线使用。
 - **发布工程**：release 签名与 GitHub Release 已接入；WorkManager 后台刷新、Widget（Glance）和系统通知留到后续版本。
 

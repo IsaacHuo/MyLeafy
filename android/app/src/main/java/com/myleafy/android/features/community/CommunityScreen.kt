@@ -2,8 +2,8 @@ package com.myleafy.android.features.community
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Forum
@@ -21,6 +22,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -214,28 +217,63 @@ private fun CommunityFilters(
         contentPadding = PaddingValues(vertical = LeafySpacing.tiny),
     ) {
         item {
-            FilterChip(
+            CommunityFilterChip(
+                label = "近七日热门",
                 selected = selection.mode == CommunityFeedMode.HOT,
                 onClick = onSelectHot,
-                label = { Text("近七日热门") },
             )
         }
         item {
-            FilterChip(
+            CommunityFilterChip(
+                label = "全部",
                 selected = selection.mode == CommunityFeedMode.LATEST && selection.category == null,
                 onClick = { onSelectLatest(null) },
-                label = { Text("全部") },
             )
         }
         items(communityCategories) { category ->
-            FilterChip(
+            CommunityFilterChip(
+                label = category,
                 selected = selection.mode == CommunityFeedMode.LATEST && selection.category == category,
                 onClick = { onSelectLatest(category) },
-                label = { Text(category) },
                 modifier = Modifier.testTag("community-filter-$category"),
             )
         }
     }
+}
+
+/**
+ * 无描边分类胶囊。
+ *
+ * 仍然是 Material `FilterChip`，因此点击、选中语义、涟漪与 48dp 命中都沿用组件自身实现；
+ * 只替换颜色与形状：选中态用 accentSoft 底 + 品牌深绿字，未选中态用 surfaceContainer 底 +
+ * 次级字色，层级由色阶而不是边框建立。文字改用 labelMedium，避免通用按钮字号把胶囊撑高。
+ */
+@Composable
+private fun CommunityFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+        modifier = modifier,
+        shape = CircleShape,
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = Color.Transparent,
+            selectedBorderColor = Color.Transparent,
+        ),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = MaterialTheme.leafySurfaces.accentSoft,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+    )
 }
 
 @Composable
@@ -249,22 +287,29 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
         shape = MaterialTheme.shapes.small,
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            // 帖首：作者保留在阅读起点，分类紧随其后。
+            // 用 FlowRow 而不是定宽 Row：大字体或长分类时分类换到下一行，
+            // 作者因此始终保留可见宽度，不会被分类挤没。
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+                verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
+                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                val date = post.created_at.substringBefore('T').replace('-', '.')
-                if (date.isNotBlank()) {
-                    Text("· $date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                }
-                Spacer(modifier = Modifier.weight(1f))
                 post.category?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(LeafySpacing.micro))
@@ -274,15 +319,34 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                 post.body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (post.images.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(LeafySpacing.micro))
+                CommunityPostCoverImage(images = post.images)
+            }
             Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.card)) {
-                Text("${post.like_count} 赞", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${post.comment_count} 评论", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // 帖尾：时间与互动计数是一组元信息，给每篇帖子一个稳定的阅读落点。
+            // 同样用 FlowRow：200% 字体或长计数时换行，而不是把这一行挤到溢出。
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+                verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                val date = post.created_at.substringBefore('T').replace('-', '.')
+                if (date.isNotBlank()) {
+                    Text(
+                        date,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                    )
+                }
+                Text("${post.like_count} 赞", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${post.comment_count} 评论", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (post.viewer_has_favorited) {
-                    Text("已收藏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
             Spacer(modifier = Modifier.height(LeafySpacing.compact))

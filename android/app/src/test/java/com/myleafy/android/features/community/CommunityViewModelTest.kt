@@ -164,6 +164,7 @@ private class FakeCommunityRepository : CommunityRepository {
         body: String,
         category: String?,
         isAnonymous: Boolean,
+        images: List<CommunityPostImageUpload>,
     ): PostDto = error("unused")
     override suspend fun createComment(
         commentId: String,

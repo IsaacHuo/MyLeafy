@@ -28,8 +28,10 @@ import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -183,6 +185,14 @@ fun ScheduleScreen(
                             ScheduleMenuItem("记录日迹", Icons.Outlined.BarChart) {
                                 menuExpanded = false
                                 onFeatureClick(FeatureDestination.SCHEDULE_STATISTICS)
+                            }
+                            ScheduleMenuItem("每日回顾", Icons.Outlined.AutoAwesome) {
+                                menuExpanded = false
+                                onFeatureClick(FeatureDestination.SCHEDULE_REVIEW)
+                            }
+                            ScheduleMenuItem("导出随记", Icons.Outlined.FileUpload) {
+                                menuExpanded = false
+                                onFeatureClick(FeatureDestination.SCHEDULE_EXPORT)
                             }
                             ScheduleMenuItem("回收站", Icons.Outlined.DeleteSweep) {
                                 menuExpanded = false
@@ -559,7 +569,16 @@ private fun EventRow(event: ScheduleEventEntity, onClick: () -> Unit) {
         color = MaterialTheme.leafySurfaces.page,
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
-            Text(text = event.title, style = MaterialTheme.typography.titleSmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = event.title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                if (event.startsAt > System.currentTimeMillis()) {
+                    Text(
+                        text = ScheduleCountdown.description(event.startsAt),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Text(
                 text = formatEventTime(event) + (event.location?.let { " · $it" } ?: ""),
                 style = MaterialTheme.typography.bodySmall,

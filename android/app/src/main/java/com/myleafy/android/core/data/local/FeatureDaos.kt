@@ -62,6 +62,9 @@ interface ScheduleMemoDao {
     @Query("SELECT * FROM schedule_memos WHERE scopeKey = :scopeKey AND trashedAt IS NULL ORDER BY pinnedAt DESC, updatedAt DESC")
     fun activeMemos(scopeKey: String): Flow<List<ScheduleMemoEntity>>
 
+    @Query("SELECT * FROM schedule_memos WHERE scopeKey = :scopeKey AND trashedAt IS NOT NULL ORDER BY trashedAt DESC")
+    fun trashedMemos(scopeKey: String): Flow<List<ScheduleMemoEntity>>
+
     @Query("SELECT * FROM schedule_memos WHERE scopeKey = :scopeKey AND id = :id")
     suspend fun memoById(scopeKey: String, id: String): ScheduleMemoEntity?
 
@@ -71,8 +74,14 @@ interface ScheduleMemoDao {
     @Query("UPDATE schedule_memos SET trashedAt = :trashedAt, updatedAt = :updatedAt WHERE scopeKey = :scopeKey AND id = :id")
     suspend fun softDelete(scopeKey: String, id: String, trashedAt: Long, updatedAt: Long)
 
+    @Query("UPDATE schedule_memos SET trashedAt = NULL, updatedAt = :updatedAt WHERE scopeKey = :scopeKey AND id = :id")
+    suspend fun restore(scopeKey: String, id: String, updatedAt: Long)
+
     @Query("DELETE FROM schedule_memos WHERE scopeKey = :scopeKey AND id = :id")
     suspend fun permanentDelete(scopeKey: String, id: String)
+
+    @Query("DELETE FROM schedule_memos WHERE scopeKey = :scopeKey AND trashedAt IS NOT NULL")
+    suspend fun emptyTrash(scopeKey: String)
 }
 
 @Dao

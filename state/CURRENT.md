@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-09-13
+Last verified: 2026-09-15
 
 ## Current Focus
 
@@ -17,6 +17,10 @@ Last verified: 2026-09-13
 ## Recently Completed
 
 - **iOS 教师按周保留**：解析器保留不同教师的周次段与连续课时；共用刷新保存入口加入备注、课次备注和提醒的关联预检/原子保存，提醒成功保存后重建并显式报告排期失败。课程提醒 ID 改用完整课程键摘要，清理旧截断 ID。已添加教师分段与本地数据保护的合成回归用例，最终构建和测试代码编译验证中；按用户要求未执行测试，真机视觉及系统日历验收由用户完成。Android 同类问题本轮未修改。
+
+- **Android 社区图片帖**：社区发帖支持最多 4 张图片，客户端压缩为 full/thumb 两档 JPEG 后上传公开 `community-images` bucket，经 `community-validate-upload` 收据与 `attach_community_post_image_v1` 挂载；信息流封面与详情图片列用 Coil 加载公开 URL。新增 Coil 依赖，`assembleDebug`/JVM tests/lint 通过，并已安装到 Xiaomi `cc0902c4` 启动验证。
+
+- **Android 静态子页补齐**：校园补齐教学与培养（教学计划/培养方案解析与缓存）、校历作息、综素测算、荣誉记录、图书馆座位预约外链与周末去哪（仅北林）；日迹补齐标签、记录日迹统计与分享图、回收站、每日回顾与文本导出。新增 Room schema 5→6 migration（`honor_records`/`comprehensive_quality_records`/`academic_documents`）与对应实体/DAO/仓储、解析器与错误语义，并补充日迹统计与教务解析单测。校园页不包含学习空间、职业规划、考研信息。`assembleDebug`、JVM tests（109 通过）、lint 均通过。
 
 - **成绩与周切换补充修复**：成绩页取消下拉刷新，GPA 正文识别支持括号标签及内联元素，并隔离注释旧值和算术均分；课表拖动可接管未完成的翻页吸附，连续翻周、反向拖动、取消及显式跳周分别收敛状态。
 

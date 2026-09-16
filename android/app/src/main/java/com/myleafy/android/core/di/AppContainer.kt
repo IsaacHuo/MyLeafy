@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.data.local.MIGRATION_4_5
+import com.myleafy.android.core.data.local.MIGRATION_5_6
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolNetworkClient
@@ -53,6 +54,8 @@ import com.myleafy.android.services.supabase.SupabaseClientProvider
  */
 class AppContainer(context: Context) {
 
+    val applicationContext: Context = context.applicationContext
+
     private val database: AppDatabase = Room.databaseBuilder(
         context.applicationContext,
         AppDatabase::class.java,
@@ -62,9 +65,15 @@ class AppContainer(context: Context) {
         // 未来版本缺少 migration 时必须直接失败，不能静默丢数据。
         .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
         .addMigrations(MIGRATION_4_5)
+        .addMigrations(MIGRATION_5_6)
         .build()
 
     val courseDao: CourseDao get() = database.courseDao()
+    val honorRecordDao: com.myleafy.android.core.data.local.HonorRecordDao get() = database.honorRecordDao()
+    val comprehensiveQualityDao: com.myleafy.android.core.data.local.ComprehensiveQualityDao
+        get() = database.comprehensiveQualityDao()
+    val academicDocumentDao: com.myleafy.android.core.data.local.AcademicDocumentDao
+        get() = database.academicDocumentDao()
 
     val settingsStore: SettingsStore = SettingsStore(context)
     val weatherRepository: WeatherRepository = WeatherRepository(context.applicationContext)

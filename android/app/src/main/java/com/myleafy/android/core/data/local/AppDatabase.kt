@@ -29,8 +29,11 @@ import androidx.room.TypeConverters
         FitnessTestRecordEntity::class,
         MedicalLedgerEntryEntity::class,
         MedicalLedgerPhotoEntity::class,
+        HonorRecordEntity::class,
+        ComprehensiveQualityRecordEntity::class,
+        AcademicDocumentEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -45,4 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun scheduleNotificationDao(): ScheduleNotificationDao
     abstract fun sportsDao(): SportsDao
     abstract fun medicalDao(): MedicalDao
+    abstract fun honorRecordDao(): HonorRecordDao
+    abstract fun comprehensiveQualityDao(): ComprehensiveQualityDao
+    abstract fun academicDocumentDao(): AcademicDocumentDao
 }

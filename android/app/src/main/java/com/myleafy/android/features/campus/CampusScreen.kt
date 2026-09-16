@@ -1,5 +1,7 @@
 package com.myleafy.android.features.campus
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -23,9 +25,12 @@ import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.Functions
 import androidx.compose.material.icons.outlined.LocalHospital
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.SportsBasketball
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -41,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.data.local.ExamEntity
@@ -204,6 +210,7 @@ private enum class CampusDomain(val label: String, val supportingText: String) {
     Sports("体育相关", "长跑、体测与场馆信息"),
     Medical("医疗事项", "政策、报销指引与本机台账"),
     Ratings("评价相关", "评教、评课与评菜"),
+    Weekend("周末去哪", "北京周边周末出行推荐"),
 }
 
 @Composable
@@ -268,6 +275,11 @@ private fun CampusDomainContent(
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (domain == CampusDomain.Weekend) {
+        WeekendTravelSection(modifier = modifier)
+        return
+    }
+    val context = LocalContext.current
     LazyColumn(
         modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth),
         contentPadding = PaddingValues(
@@ -321,8 +333,8 @@ private fun CampusDomainContent(
             }
             item {
                 LeafyFeatureCard(
-                    title = "培养方案",
-                    description = "教学计划与毕业要求",
+                    title = "教学与培养",
+                    description = "教学计划、培养方案与毕业要求",
                     icon = Icons.Outlined.School,
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_TRAINING_PLAN) },
                 )
@@ -335,6 +347,22 @@ private fun CampusDomainContent(
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_CALENDAR) },
                 )
             }
+            item {
+                LeafyFeatureCard(
+                    title = "综素测算",
+                    description = "按学院细则本地估算综素分",
+                    icon = Icons.Outlined.Functions,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_COMPREHENSIVE) },
+                )
+            }
+            item {
+                LeafyFeatureCard(
+                    title = "荣誉记录",
+                    description = "在本机保存奖状证书等文件",
+                    icon = Icons.Outlined.WorkspacePremium,
+                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_HONOR_RECORDS) },
+                )
+            }
         }
         if (domain == CampusDomain.SelfStudy) {
             item {
@@ -343,6 +371,14 @@ private fun CampusDomainContent(
                     description = "按周次和星期查询可用教室",
                     icon = Icons.Outlined.Class,
                     onClick = onClassroomClick,
+                )
+            }
+            item {
+                LeafyFeatureCard(
+                    title = "图书馆座位预约",
+                    description = "跳转北林图书馆座位预约系统",
+                    icon = Icons.Outlined.MenuBook,
+                    onClick = { openExternalUrl(context, "https://seat.bjfu.edu.cn/jsq-v/#/main/index") },
                 )
             }
         }
@@ -443,5 +479,14 @@ internal fun ExamRow(exam: ExamEntity) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** 打开外部链接（图书馆座位预约等）。链接由系统浏览器或对应应用处理。 */
+internal fun openExternalUrl(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
     }
 }

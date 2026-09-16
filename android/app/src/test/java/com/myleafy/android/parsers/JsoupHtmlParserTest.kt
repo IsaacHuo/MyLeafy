@@ -189,6 +189,61 @@ class JsoupHtmlParserTest {
         assertEquals(EmptyClassroom(building = "二教", room = "608"), rooms[2])
     }
 
+    @Test
+    fun parsesTeachingPlanGroupedByTerm() {
+        val html = """
+            <html><body>
+              <table id="dataList">
+                <tr><th>序号</th><th>开课学期</th><th>课程名称</th><th>开课单位</th><th>学分</th><th>总学时</th><th>课程属性</th><th>考试性质</th><th>课程编号</th></tr>
+                <tr><td>1</td><td>2026-2027-1</td><td>森林生态学</td><td>林学院</td><td>3.0</td><td>48</td><td>必修</td><td>考试</td><td>FOR-101</td></tr>
+                <tr><td>2</td><td></td><td>数据结构</td><td>信息学院</td><td>4</td><td>64</td><td>必修</td><td>考试</td><td>CS-201</td></tr>
+              </table>
+            </body></html>
+        """.trimIndent()
+
+        val sections = parser.parseTeachingPlan(html)
+        assertEquals(1, sections.size)
+        assertEquals("2026-2027-1", sections[0].term)
+        assertEquals(2, sections[0].courses.size)
+        assertEquals("森林生态学", sections[0].courses[0].name)
+        assertEquals("FOR-101", sections[0].courses[0].courseCode)
+        assertEquals("数据结构", sections[0].courses[1].name)
+    }
+
+    @Test
+    fun teachingPlanWithoutTargetStructureFails() {
+        val error = assertThrows(HtmlParseError::class.java) {
+            parser.parseTeachingPlan("<html><body><p>无表格</p></body></html>")
+        }
+        assertEquals(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, error.kind)
+    }
+
+    @Test
+    fun parsesTrainingProgramSectionsAndCredits() {
+        val html = """
+            <html><body>
+              <p>森林保护专业本科培养方案</p>
+              <p>一、培养目标</p>
+              <p>培养具有扎实基础的复合型人才。</p>
+              <p>二、毕业要求</p>
+              <p>完成全部课程与实践环节。</p>
+              <table>
+                <tr><td>毕业生应取得总学分</td><td>160</td></tr>
+                <tr><td>专业核心课</td><td>40</td></tr>
+              </table>
+            </body></html>
+        """.trimIndent()
+
+        val program = parser.parseTrainingProgram(html)
+        assertEquals("森林保护专业本科培养方案", program.title)
+        assertEquals(2, program.sections.size)
+        assertEquals("一、培养目标", program.sections[0].title)
+        assertEquals("二、毕业要求", program.sections[1].title)
+        assertEquals(2, program.creditRequirements.size)
+        assertTrue(program.creditRequirements.any { it.isTotal && it.credits == 160.0 })
+        assertTrue(program.creditRequirements.any { !it.isTotal && it.label == "专业核心课" })
+    }
+
     private fun fixture(name: String): String {
         val stream = checkNotNull(javaClass.classLoader?.getResourceAsStream("jwxt/fixtures/$name")) {
             "Fixture 缺失: jwxt/fixtures/$name"

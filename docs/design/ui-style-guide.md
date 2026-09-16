@@ -127,7 +127,7 @@ Android 的权威实现位于 `android/app/src/main/java/com/myleafy/android/ui/
 
 | 跨平台语义 | Android Compose |
 |---|---|
-| 字体 32/26/20/18/16/14/11 | `LeafyTypography`，使用系统字体并叠加系统 `fontScale` 与 App 文字偏好 |
+| 字体 32/26/20/18/16/14/11 | `MyLeafyTypography`（11 个 Material 角色）与课表专用 `LeafyTimetableType`，使用系统字体并叠加系统 `fontScale` 与 App 文字偏好 |
 | 间距 8/12/16/20/24 | `LeafySpacing.micro/compact/card/page/section` |
 | 图标与触控 | `LeafyIconSize`；所有自定义可点击控件至少 48 × 48dp |
 | 表面 | `leafySurfaces.page/grouped/content/elevated/modal/accentSoft` |
