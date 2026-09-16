@@ -16,6 +16,8 @@ Last verified: 2026-09-15
 
 ## Recently Completed
 
+- **Android 1.1.0 正式发布**：2026-09-16 从 `main` `5cbc577` 发布 immutable tag `android-v1.1.0`；Release 含签名 APK（`MyLeafy-Android-1.1.0.apk`）、SHA-256 与 build-info，工作流 `Cut Android Release` 全绿。App 内「检查更新」按 `android-v*` 正式 tag 读取该 Release。
+
 - **iOS 教师按周保留**：解析器保留不同教师的周次段与连续课时；共用刷新保存入口加入备注、课次备注和提醒的关联预检/原子保存，提醒成功保存后重建并显式报告排期失败。课程提醒 ID 改用完整课程键摘要，清理旧截断 ID。已添加教师分段与本地数据保护的合成回归用例，最终构建和测试代码编译验证中；按用户要求未执行测试，真机视觉及系统日历验收由用户完成。Android 同类问题本轮未修改。
 
 - **Android 社区图片帖**：社区发帖支持最多 4 张图片，客户端压缩为 full/thumb 两档 JPEG 后上传公开 `community-images` bucket，经 `community-validate-upload` 收据与 `attach_community_post_image_v1` 挂载；信息流封面与详情图片列用 Coil 加载公开 URL。新增 Coil 依赖，`assembleDebug`/JVM tests/lint 通过，并已安装到 Xiaomi `cc0902c4` 启动验证。
