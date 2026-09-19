@@ -23,7 +23,6 @@ private enum TimetableQuickAccessAction: Equatable, Sendable {
     case emptyClassroom
     case addSchedule
     case exportTimetable
-    case resyncTimetable
 }
 
 private struct TimetableZoomDayRenderPayload: Identifiable {
@@ -306,9 +305,6 @@ struct TimetableView: View {
             VStack(spacing: AppSpacing.compact) {
                 if !networkManager.hasCachedIdentity {
                     unauthenticatedState
-                        .padding(.horizontal, AppSpacing.page)
-                } else if isFetching && courses.isEmpty {
-                    loadingState
                         .padding(.horizontal, AppSpacing.page)
                 } else if isCustomCampus && courses.isEmpty {
                     customCampusEmptyState
@@ -1038,42 +1034,8 @@ struct TimetableView: View {
                 systemImage: "square.and.arrow.up",
                 action: .exportTimetable
             )
-
-            if !isCustomCampus {
-                quickAccessResyncButton
-            }
         }
         .fixedSize(horizontal: true, vertical: true)
-    }
-
-    private var quickAccessResyncButton: some View {
-        Button {
-            scheduleQuickAccessAction(.resyncTimetable)
-        } label: {
-            HStack(spacing: 8 * leafyControlScale) {
-                if isFetching {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: 22 * leafyControlScale)
-                } else {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 12 * leafyControlScale, weight: .semibold))
-                        .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
-                        .frame(width: 22 * leafyControlScale)
-                }
-
-                Text(isFetching ? "正在同步" : "重新同步")
-                    .font(.body)
-                    .foregroundStyle(isFetching ? AppTheme.secondaryText : AppTheme.primaryText)
-            }
-            .frame(minHeight: 44, alignment: .leading)
-            .padding(.horizontal, 12 * leafyControlScale)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isFetching)
-        .accessibilityLabel(isFetching ? "正在同步" : "重新同步")
-        .accessibilityHint("同步教务系统中的最新课表")
     }
 
     private func quickAccessPopoverButton(
@@ -1126,8 +1088,6 @@ struct TimetableView: View {
             presentFreeScheduleSheet()
         case .exportTimetable:
             isExportSheetPresented = true
-        case .resyncTimetable:
-            Task { await fetchAndParseTimetable(userInitiated: true) }
         }
     }
 
@@ -1343,6 +1303,14 @@ struct TimetableView: View {
         .simultaneousGesture(timetableMagnificationGesture)
         .simultaneousGesture(timetableHorizontalPagingGesture)
         .accessibilityValue(displayMode == .threeDay ? "三日放大视图" : "一周课表视图")
+        .accessibilityActions {
+            if !isCustomCampus {
+                Button("刷新课表") {
+                    Task { await refreshTimetableFromGesture() }
+                }
+                .disabled(!canRefreshTimetable)
+            }
+        }
         .accessibilityZoomAction { action in
             switch action.direction {
             case .zoomIn:
@@ -1449,6 +1417,8 @@ struct TimetableView: View {
             isAwayFromCurrentWeek: .constant(false),
             verticalOffset: viewportVerticalOffsetBinding,
             containerID: "continuous-zoom-timetable",
+            isRefreshEnabled: canRefreshTimetable,
+            onRefresh: isCustomCampus ? nil : { await refreshTimetableFromGesture() },
             onFirstInteractiveLayout: handleFirstInteractiveLayout,
             currentWeekProvider: { 1 },
             corner: {
@@ -2332,17 +2302,6 @@ struct TimetableView: View {
         return AppTheme.cardBackground.opacity(usesCustomTimetableBackground ? 0.48 : 0.36)
     }
 
-    private var loadingState: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .scaleEffect(1.1)
-            Text("正在同步课表")
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     private var unauthenticatedState: some View {
         ContentUnavailableView(
             "需要重新登录",
@@ -2537,11 +2496,23 @@ struct TimetableView: View {
         #endif
     }
 
+    private var canRefreshTimetable: Bool {
+        !isCustomCampus && !isFetching && !progressController.isActive
+            && reauthenticationRequest == nil && !continuousViewport.isInteractionActive
+    }
+
+    @MainActor
+    private func refreshTimetableFromGesture() async {
+        guard canRefreshTimetable else { return }
+        await fetchAndParseTimetable(userInitiated: true)
+    }
+
+    @MainActor
     private func fetchAndParseTimetable(
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
-        guard !isFetching else { return }
+        guard !isFetching, !Task.isCancelled else { return }
         if isCustomCampus {
             await MainActor.run {
                 if userInitiated {
@@ -2551,16 +2522,27 @@ struct TimetableView: View {
             return
         }
         if ReviewDemoMode.isEnabled {
-            await MainActor.run {
-                ReviewDemoDataSeeder.seed(using: modelContext)
+            isFetching = true
+            defer { isFetching = false }
+            do {
+                let saved = try ReviewDemoDataSeeder.refreshTimetable(using: modelContext)
+                let reminderWarning = await saved.reminders.restore()
+                TimetableCacheMetadata.lastSyncAt = Date()
+                TimetableCacheMetadata.lastFailureMessage = reminderWarning
+                TimetableCacheMetadata.lastSyncedSemesterID = SemesterConfig.currentSemesterID
                 lastSyncAt = TimetableCacheMetadata.lastSyncAt
-                lastFailureMessage = nil
+                lastFailureMessage = reminderWarning
+                timetableGridSnapshotCache.invalidate()
+                timetableGridSnapshot = nil
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
-                if userInitiated {
-                    alertMessage = L10n.text("同步完成，已加载示例课表。", language: leafyLanguage)
+                if userInitiated && !Task.isCancelled {
+                    alertMessage = reminderWarning ?? L10n.text("同步完成，已加载示例课表。", language: leafyLanguage)
                     showAlert = true
                 }
+            } catch {
+                alertMessage = error.localizedDescription
+                showAlert = true
             }
             return
         }
@@ -2599,17 +2581,17 @@ struct TimetableView: View {
             }
             return
         }
-        await MainActor.run { isFetching = true }
+        isFetching = true
+        defer { isFetching = false }
         progressReporter?(.begin(.refreshingSemester))
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: userInitiated)
-        await MainActor.run {
-            applySemesterRuntimeConfig(semesterConfig)
-        }
-
         do {
+            try Task.checkCancellation()
+            applySemesterRuntimeConfig(semesterConfig)
             let refreshUseCase = TimetableRefreshUseCase(repository: dependencies.schoolTimetableRepository)
             progressReporter?(.begin(.fetchingTimetable))
             let document = try await refreshUseCase.fetchDocument()
+            try Task.checkCancellation()
             let parsedCourseRecords: [ParsedCourseRecord]
 
             do {
@@ -2624,6 +2606,7 @@ struct TimetableView: View {
                 )
             }
 
+            try Task.checkCancellation()
             let (saved, refreshSummary) = try await MainActor.run {
                 progressReporter?(.begin(.savingTimetable))
                 let refreshSummary = TimetableRefreshSummary.compare(
@@ -2660,12 +2643,16 @@ struct TimetableView: View {
                 progressController.clear()
                 syncReturnButtonVisibility()
                 publishWidgetSnapshot()
-                if userInitiated {
+                if userInitiated && !Task.isCancelled {
                     alertMessage = reminderWarning ?? timetableRefreshMessage(for: refreshSummary)
                     showAlert = true
                 }
             }
         } catch {
+            if Task.isCancelled {
+                progressController.clear()
+                return
+            }
             await MainActor.run {
                 isFetching = false
                 TimetableCacheMetadata.lastFailureMessage = error.localizedDescription

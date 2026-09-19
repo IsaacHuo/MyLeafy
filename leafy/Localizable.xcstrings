@@ -1,6 +1,17 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "刷新课表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh timetable"
+          }
+        }
+      }
+    },
     "课表已更新，但 %d 项课程提醒未恢复：%@。请检查通知设置后再次刷新课表。" : {
       "extractionState" : "manual",
       "localizations" : {

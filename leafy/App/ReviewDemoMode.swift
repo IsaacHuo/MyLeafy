@@ -59,6 +59,23 @@ enum ReviewDemoDataSeeder {
         try? modelContext.save()
     }
 
+    /// Refreshing the timetable must not reseed grades, exams, or other school caches.
+    @MainActor
+    static func refreshTimetable(using modelContext: ModelContext) throws -> TimetablePersistResult {
+        let records = sampleCourses.map {
+            ParsedCourseRecord(
+                courseName: $0.courseName, teacher: $0.teacher, classInfo: $0.classInfo,
+                room: $0.room, location: $0.location, dayOfWeek: $0.dayOfWeek,
+                weeks: $0.weeks, duration: $0.duration
+            )
+        }
+        return try TimetableRefreshUseCase().persist(
+            records: records,
+            existingCourses: modelContext.fetch(FetchDescriptor<Course>()),
+            modelContext: modelContext
+        )
+    }
+
     @MainActor
     static func exit(using modelContext: ModelContext? = nil) {
         ReviewDemoMode.isEnabled = false
