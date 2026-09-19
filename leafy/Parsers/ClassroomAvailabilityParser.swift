@@ -74,10 +74,11 @@ extension HTMLParser {
             var slots: [ClassroomUsageSlot] = []
             for (index, column) in columns.enumerated() {
                 let text = try cells[index + 1].text().trimmingCharacters(in: .whitespacesAndNewlines)
-                let symbol = text.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? text
-                let knownOccupied = ["◆", "L", "G", "K", "Κ", "X", "J"]
-                let status: ClassroomUsageStatus = text.isEmpty ? .available
-                    : (knownOccupied.contains(symbol) ? .occupied : .unknown)
+                let normalized = text.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? text
+                let symbols = normalized.filter { !$0.isWhitespace }
+                let knownOccupied: Set<Character> = ["◆", "L", "G", "K", "Κ", "X", "J"]
+                let status: ClassroomUsageStatus = symbols.isEmpty ? .available
+                    : (symbols.allSatisfy { knownOccupied.contains($0) } ? .occupied : .unknown)
                 slots += column.map { ClassroomUsageSlot(period: $0, status: status) }
             }
             rows.append((room.weight, .init(room: room.room, slots: slots.sorted { $0.period < $1.period })))

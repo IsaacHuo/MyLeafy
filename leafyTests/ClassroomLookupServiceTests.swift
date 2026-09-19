@@ -241,6 +241,87 @@ final class ClassroomLookupServiceTests: XCTestCase {
         XCTAssertThrowsError(try HTMLParser.parseClassroomAvailability(html: html.replacingOccurrences(of: "tdvalue=", with: "other=")))
     }
 
+    func testKnownOccupancySymbolsSupportCombinationsAndMarkup() throws {
+        let occupiedCells = [
+            "◆", "Ｊ", "Ｌ", "Ｇ", "Κ", "Ｘ", "K", "J", "L", "G", "X",
+            "◆ J", "◆Ｊ", "◆\nＪ\tＬ　Ｇ Κ Ｘ", "◆◆",
+            "<span>◆</span><span>Ｊ</span>", "<span>◆</span><br><b>Ｊ</b>"
+        ]
+        for cell in occupiedCells {
+            let html = classroomMatrixFixture().replacingOccurrences(of: "<td>◆</td>", with: "<td>\(cell)</td>")
+            let matrix = try HTMLParser.parseClassroomAvailability(html: html)
+            XCTAssertEqual(try matrix.availableRooms(start: 1, end: 2).map(\.room), ["102"], cell)
+            let usage = try matrix.usage(for: ClassroomIdentity(building: "二教", room: "101"))
+            XCTAssertEqual(Array(usage.prefix(2)).map(\.status), [.occupied, .occupied], cell)
+        }
+    }
+
+    func testUnknownContentMixedWithKnownSymbolsStillFails() throws {
+        for cell in ["◆ ?", "Ｊ未知", "<span>◆</span><span>?</span>"] {
+            let html = classroomMatrixFixture().replacingOccurrences(of: "<td>◆</td>", with: "<td>\(cell)</td>")
+            let matrix = try HTMLParser.parseClassroomAvailability(html: html)
+            XCTAssertThrowsError(try matrix.availableRooms(start: 1, end: 2), cell)
+            XCTAssertThrowsError(try matrix.usage(for: ClassroomIdentity(building: "二教", room: "101")), cell)
+            XCTAssertEqual(try matrix.availableRooms(start: 3, end: 5).count, 2)
+        }
+    }
+
+    func testWhitespaceOnlyIsAvailableAndEveryRequestedPeriodMustBeFree() throws {
+        let html = classroomMatrixFixture().replacingOccurrences(of: "<td>◆</td>", with: "<td> &nbsp;\n　\t </td>")
+        let matrix = try HTMLParser.parseClassroomAvailability(html: html)
+        XCTAssertEqual(try matrix.availableRooms(start: 1, end: 5).count, 2)
+        XCTAssertEqual(try matrix.availableRooms(start: 5, end: 6).map(\.room), ["102"])
+    }
+
+    func testPeriodLookupStillFetchesFullDayAndCachesOnlySelectedRange() async {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let cache = InMemoryClassroomLookupCache()
+        let html = classroomMatrixFixture().replacingOccurrences(of: "◆", with: "<span>◆</span><span>Ｊ</span>")
+        let service = LiveClassroomLookupService(
+            fetchEmptyClassroomsHTML: { _, start, end in
+                XCTAssertEqual(start, 1)
+                XCTAssertEqual(end, 12)
+                return html
+            },
+            isDemoModeEnabled: { false },
+            cache: cache
+        )
+        let outcome = await service.lookup(
+            ClassroomLookupRequest(date: date, startPeriod: 3, endPeriod: 5), userInitiated: true
+        )
+        XCTAssertNil(outcome.errorMessage)
+        XCTAssertEqual(outcome.data.rooms.count, 2)
+        let selected = await cache.emptyRooms(date: date, start: 3, end: 5)
+        let fullDay = await cache.emptyRooms(date: date, start: 1, end: 12)
+        XCTAssertEqual(selected, outcome.data.rooms)
+        XCTAssertTrue(fullDay.isEmpty)
+    }
+
+    func testRealParserFailurePreservesSuccessfulCache() async {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let cachedRooms = [EmptyClassroom(building: "二教", room: "205")]
+        let cache = InMemoryClassroomLookupCache()
+        await cache.saveEmptyClassrooms(cachedRooms, date: date, start: 1, end: 2)
+        let html = classroomMatrixFixture().replacingOccurrences(of: "◆", with: "◆ ?")
+        let service = LiveClassroomLookupService(
+            fetchEmptyClassroomsHTML: { _, start, end in
+                XCTAssertEqual(start, 1)
+                XCTAssertEqual(end, 12)
+                return html
+            },
+            isDemoModeEnabled: { false },
+            requiresReauthentication: { _ in false },
+            cache: cache
+        )
+        let outcome = await service.lookup(
+            ClassroomLookupRequest(date: date, startPeriod: 1, endPeriod: 2), userInitiated: true
+        )
+        XCTAssertNotNil(outcome.errorMessage)
+        XCTAssertEqual(outcome.data.rooms, cachedRooms)
+        let savedRooms = await cache.emptyRooms(date: date, start: 1, end: 2)
+        XCTAssertEqual(savedRooms, cachedRooms)
+    }
+
     func testRemoteFailureFallsBackToCachedDataAndUserFacingError() async {
         let date = Date(timeIntervalSince1970: 1_800_000_000)
         let cachedRooms = [EmptyClassroom(building: "图书馆", room: "研讨间 3")]

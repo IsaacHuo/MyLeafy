@@ -116,6 +116,23 @@ struct ClassroomLookupRequest: Equatable, Identifiable, Sendable {
     init(building: String, room: String) {
         self.init(date: Date(), building: building, room: room)
     }
+
+    var queryKey: ClassroomLookupQueryKey {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let day = calendar.startOfDay(for: date)
+        switch mode {
+        case .byPeriod:
+            return .byPeriod(day: day, start: startPeriod, end: endPeriod)
+        case .byRoom:
+            return .byRoom(day: day, room: ClassroomIdentity(building: building, room: room))
+        }
+    }
+}
+
+enum ClassroomLookupQueryKey: Equatable, Sendable {
+    case byPeriod(day: Date, start: Int, end: Int)
+    case byRoom(day: Date, room: ClassroomIdentity)
 }
 
 struct ClassroomLookupData: Equatable, Sendable {

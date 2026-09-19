@@ -1622,16 +1622,21 @@ struct EmptyClassroomView: View {
     @State private var endPeriod = min(max(TimetablePeriodSchedule.defaultStudyPeriod(), 1), 12)
     @State private var buildingOptionID = ClassroomLookupCatalog.defaultBuildingOption.id
     @State private var selectedRoomID = ClassroomLookupCatalog.defaultBuildingOption.rooms.first?.id ?? ""
-    @State private var rooms: [EmptyClassroom] = []
-    @State private var usage: [ClassroomUsageSlot] = []
+    @State private var lookupState = ClassroomLookupPresentationState()
+    @State private var pendingRecoveryQuery: ClassroomLookupRequest?
     @State private var expandedBuildingIDs: Set<String> = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
     @State private var didAutoSubmit = false
-    @State private var hasQueried = false
     @State private var operationAlert: LeafyOperationAlert?
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var progressController = AcademicOperationProgressController()
+
+    private var currentQueryKey: ClassroomLookupQueryKey { classroomLookupRequest.queryKey }
+    private var currentOutcome: ClassroomLookupOutcome? { lookupState.outcome(for: currentQueryKey) }
+    private var rooms: [EmptyClassroom] { ClassroomLookupCatalog.filteredRooms(currentOutcome?.data.rooms ?? []) }
+    private var usage: [ClassroomUsageSlot] { currentOutcome?.data.usage ?? [] }
+    private var isLoading: Bool { lookupState.isLoading }
+    private var errorMessage: String? { currentOutcome?.errorMessage }
+    private var hasQueried: Bool { currentOutcome != nil }
 
     private let autoSubmitInitialQuery: Bool
     private var safeStartPeriod: Int { min(max(startPeriod, 1), 12) }
@@ -1821,16 +1826,34 @@ struct EmptyClassroomView: View {
         .onChange(of: startPeriod) { _, newValue in
             normalizePeriods(startingAt: newValue)
         }
+        .onChange(of: currentQueryKey) { _, key in
+            if lookupState.updateQuery(to: key) {
+                expandedBuildingIDs = []
+                pendingRecoveryQuery = nil
+                reauthenticationRequest = nil
+                progressController.clear()
+            }
+        }
+        .onDisappear {
+            lookupState.invalidate()
+            pendingRecoveryQuery = nil
+            reauthenticationRequest = nil
+            progressController.clear()
+        }
         .schoolReauthenticationSheet(
             request: $reauthenticationRequest,
             networkManager: networkManager,
             operationKind: .emptyClassrooms,
             progressController: progressController
         ) { _ in
+            guard let pendingRecoveryQuery, pendingRecoveryQuery.queryKey == currentQueryKey else { return }
+            self.pendingRecoveryQuery = nil
+            let retry = classroomLookupRequest
             Task {
                 await submitQuery(
                     userInitiated: true,
-                    allowsAutomaticRecovery: false
+                    allowsAutomaticRecovery: false,
+                    request: retry
                 )
             }
         }
@@ -1919,83 +1942,66 @@ struct EmptyClassroomView: View {
         .contentShape(Rectangle())
     }
 
+    @MainActor
     private func submitQuery(
         userInitiated: Bool,
-        allowsAutomaticRecovery: Bool = true
+        allowsAutomaticRecovery: Bool = true,
+        request: ClassroomLookupRequest? = nil
     ) async {
         guard !isLoading else { return }
         guard !isCustomCampus else {
+            lookupState.invalidate()
             progressController.clear()
-            errorMessage = nil
             return
         }
+
+        let query = request ?? classroomLookupRequest
+        guard query.queryKey == currentQueryKey else { return }
+        lookupState.begin(query)
+        pendingRecoveryQuery = nil
+        expandedBuildingIDs = []
+        defer { lookupState.finish(query) }
 
         if userInitiated {
             progressController.begin(.emptyClassrooms)
         }
 
         if userInitiated,
-           let request = SchoolReauthentication.preflightRequest(
+           let recovery = SchoolReauthentication.preflightRequest(
                networkManager: networkManager,
                context: .emptyClassrooms,
                allowsAutomaticAttempt: allowsAutomaticRecovery
            ) {
-            await MainActor.run {
-                reauthenticationRequest = request
-            }
+            pendingRecoveryQuery = query
+            reauthenticationRequest = recovery
             return
         }
 
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
-            rooms = []
-            usage = []
-            if userInitiated {
-                progressController.record(
-                    .begin(mode == .byPeriod ? .queryingEmptyClassrooms : .queryingClassroomUsage),
-                    for: .emptyClassrooms
-                )
-            }
+        let stage: AcademicOperationStage = query.mode == .byPeriod ? .queryingEmptyClassrooms : .queryingClassroomUsage
+        if userInitiated {
+            progressController.record(.begin(stage), for: .emptyClassrooms)
         }
-        defer { isLoading = false }
+        let outcome = await dependencies.classroomLookupService.lookup(query, userInitiated: userInitiated)
+        guard !Task.isCancelled,
+              lookupState.accept(outcome, for: query, matching: currentQueryKey) else { return }
 
-        let outcome = await dependencies.classroomLookupService.lookup(
-            classroomLookupRequest,
-            userInitiated: userInitiated
-        )
-
-        await MainActor.run {
-            rooms = ClassroomLookupCatalog.filteredRooms(outcome.data.rooms)
-            usage = outcome.data.usage
-            expandedBuildingIDs = []
-            hasQueried = true
-            errorMessage = outcome.errorMessage
-            if outcome.requiresReauthentication {
-                progressController.record(
-                    .fail(
-                        mode == .byPeriod ? .queryingEmptyClassrooms : .queryingClassroomUsage,
-                        outcome.errorMessage ?? "登录状态已失效"
-                    ),
-                    for: .emptyClassrooms
-                )
-                reauthenticationRequest = SchoolReauthenticationRequest(
-                    context: .emptyClassrooms,
-                    allowsAutomaticAttempt: allowsAutomaticRecovery
-                )
-            }
-        }
-
-        if userInitiated, !outcome.requiresReauthentication {
+        if outcome.requiresReauthentication {
+            progressController.record(
+                .fail(stage, outcome.errorMessage ?? "登录状态已失效"),
+                for: .emptyClassrooms
+            )
+            pendingRecoveryQuery = query
+            reauthenticationRequest = SchoolReauthenticationRequest(
+                context: .emptyClassrooms,
+                allowsAutomaticAttempt: allowsAutomaticRecovery
+            )
+        } else if userInitiated {
             if outcome.errorMessage == nil {
-                await MainActor.run {
-                    progressController.record(.begin(.queryCompleted), for: .emptyClassrooms)
-                }
+                progressController.record(.begin(.queryCompleted), for: .emptyClassrooms)
                 try? await Task.sleep(for: .milliseconds(500))
             }
-            await MainActor.run {
-                progressController.clear()
-            }
+            guard lookupState.isCurrent(query, matching: currentQueryKey) else { return }
+            progressController.clear()
         }
     }
 
