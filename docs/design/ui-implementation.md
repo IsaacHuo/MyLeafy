@@ -50,8 +50,10 @@ MyLeafy 的 UI 目标是轻量、原生、低噪声的北林校园工具感：
 
 App 图标：
 
-- 图标外观可以跟随主题或使用预设色。
-- 自定义主题色会映射到最接近的预设图标外观。
+- 图标提供绿色、蓝色、粉色、杏色、紫色五种预设，继续由 `LeafyAppIconManager` 使用已有名称切换。
+- `leafy/Resources/AppIcons/` 中的五份 `.icon` 文件可直接用 Icon Composer 打开；SVG 保留叶片轮廓和渐变，暖白底板不预切圆角，阴影 18%、透光 12%，高光与深色/单色外观由系统渲染。
+- iOS 26、27 使用对应系统的 Liquid Glass 呈现；iOS 17 等旧系统使用 Xcode 编译生成的平面图标，视觉接近旧版但不保证逐像素一致。原 PNG、Android 和网站图标不修改，App 内页面和图标选择交互不变。
+- [五色预览对照](assets/app-icons/liquid-glass-preview.png)由 Icon Composer 自带渲染器导出，上排为 26、下排为 27；仅作为渲染预览，真机验收独立进行。
 
 ## 3. 字体、字号和密度
 

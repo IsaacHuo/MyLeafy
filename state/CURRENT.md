@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-09-15
+Last verified: 2026-09-19
 
 ## Current Focus
 
@@ -17,6 +17,8 @@ Last verified: 2026-09-15
 ## Recently Completed
 
 - **iOS 课表下拉刷新**：周视图、三日视图和空课表接入原生下拉刷新，移除左上角重新同步菜单项；沿用课表专用同步、身份恢复、步骤进度与结果弹窗，Demo 刷新仅更新课程。通用学校/游客及其他同步入口保持原行为。静态检查通过，完整构建尚未完成；按用户要求不运行测试或启动 App，真机交互与真实教务刷新由用户验收。
+
+- **iOS 原生液态玻璃图标**：五种现有配色使用同一结构的 Icon Composer `.icon` 资源，保留叶片造型和色系。iOS 26 / 27 均使用原生动态玻璃，允许系统高光差异；旧系统使用 Xcode 生成的平面版本。App 内页面、图标选择逻辑及原 PNG 母版未改，真机外观与切换验收由用户完成。
 
 - **Android 1.1.0 正式发布**：2026-09-16 从 `main` `5cbc577` 发布 immutable tag `android-v1.1.0`；Release 含签名 APK（`MyLeafy-Android-1.1.0.apk`）、SHA-256 与 build-info，工作流 `Cut Android Release` 全绿。App 内「检查更新」按 `android-v*` 正式 tag 读取该 Release。
 

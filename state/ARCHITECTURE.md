@@ -62,6 +62,7 @@ flowchart LR
 - `ReviewDemoMode`：App Store 审核演示账号/数据模式。
 - `AppStoreReviewCoordinator`：App Store 评分与更新检查。
 - `App/Theme/`：`AppTheme`、`AppChrome`、`LeafyAppIconManager`、`Color+Hash` 等视觉基础设施。
+- `Resources/AppIcons/`：五份可编辑 Icon Composer `.icon` 包，内含叶片 SVG 与材质配置；沿用 `AppIcon` 和四个备用图标名称，由主 target 的文件系统同步组收录。iOS 26+ 使用系统分层玻璃渲染，旧系统使用 Xcode 生成的平面资源。原有 `Assets.xcassets` 图标 PNG 保留为历史母版及 Android 生成来源，不承担旧系统原图不变的保证。
 
 ## 3. 目录结构与模块地图
 

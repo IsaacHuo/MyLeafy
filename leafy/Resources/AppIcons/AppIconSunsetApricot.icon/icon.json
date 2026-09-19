@@ -1,0 +1,28 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.98039,0.97647,0.95686,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "AppIconSunsetApricot.svg",
+          "name": "Leaf"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.18
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.12
+      },
+      "name": "Leaf"
+    }
+  ],
+  "supported-platforms": {
+    "circles": [],
+    "squares": "shared"
+  }
+}
