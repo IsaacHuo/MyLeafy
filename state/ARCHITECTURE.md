@@ -13,7 +13,7 @@ Last verified: 2026-09-26
 | MyLeafy iOS App | 用户设备 | 学校登录、教务数据获取、本地持久化；新版云端业务通过 URLSession 调用 Cloudflare `/v1` API |
 | MyLeafy Android App | 用户设备 | Android 原生实现（Kotlin/Compose/Room/WorkManager/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录、横滑周课表/天气/背景/个人日程/ICS、日迹通知与标签/统计/回顾/回收站/导出、成绩/考试/教学计划与培养方案、社区（文本与图片帖）、共享课表、体育/医疗/评价、综素测算、荣誉记录、周末去哪、资料与设置 |
 | 学校教务系统 | 学校基础设施 | 身份、课表、成绩、考试、教学计划等权威教务数据（非稳定 API） |
-| Cloudflare 新后端 | Workers / D1 / R2 / Durable Objects | Hono 业务 API、Better Auth、SQL 授权、文件、实时变更信号、Cron；代码已接入，生产切换尚未完成 |
+| Cloudflare 新后端 | Workers / D1 / R2 / Durable Objects | Hono 业务 API、Better Auth、SQL 授权、文件、实时变更信号、Cron；新版服务已启用，旧版 App 的 Supabase 服务并行保留 |
 | Supabase 旧生产后端 | 托管云服务 | 已发布旧版及 Android 仍使用；保留作为迁移源，切流前保持生产权威 |
 | 官网与运营后台 | Cloudflare Pages | 公开页面、分享落地页、管理界面与管理 API 代理 |
 | Widget / Share / 导入扩展 | 系统扩展 | 课表小组件、系统分享、外部学习资料导入 |
@@ -197,7 +197,7 @@ SchoolNetworkManager（URLSession 主链路 / WKWebView 课表兼容）
 
 - 学校课表和成绩的权威来源仍是学校系统，SwiftData 是本地副本。
 - 用户创建的备注、提醒、随记、个人日程等以本地数据为权威。
-- 新版社区帖子和通知以配置的 Cloudflare API 为权威，不复制为完整 SwiftData 数据库；旧生产版本在切流前仍使用 Supabase。
+- 新版社区帖子和通知以配置的 Cloudflare API 为权威，不复制为完整 SwiftData 数据库；已安装旧版仍使用 Supabase，两套数据暂不实时同步。
 
 课表渲染性能：`TimetableGridSnapshot` 等预计算布局输入、一次构造并贯穿缓存的 `TimetableRenderInput`、按 `(week, day)` / `(week, day, period)` 建立的提醒索引、稳定课程颜色索引，以及 Widget 专用共享数据（扩展不直接访问主 App SwiftData 上下文）。
 

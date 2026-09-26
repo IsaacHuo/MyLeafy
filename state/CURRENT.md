@@ -5,7 +5,7 @@ Last verified: 2026-09-26
 ## Current Focus
 
 - **iOS 3.2.2 修复**：本轮修复中途换教师的排课合并，保护刷新前的备注和提醒；此前成绩、空教室、评价目录、社区新增提示与日迹间距修复保留。版本元数据已更新，未提交 App Store。
-- **Cloudflare 全新版本开发**：iOS 与网站代码改用 Workers API；iOS 已移除 Supabase SDK，Android 保持原实现。已安装旧版 App 仍走 Supabase，不冻结或停用；新版先由用户真机验证。官网/运营后台接入 Cloudflare 已获用户确认，两套数据暂不互相同步。Cloudflare OAuth、D1/R2、Supabase 数据库及 Resend 配置已验证；staging/production Worker、D1 migrations 与网站服务绑定已部署，新库保持只读；完整加密备份、文件比对及数据迁移仍在推进。按用户要求合入 main 继续开发，验收采用静态检查与构建，真机流程由用户检验。Pages 生产自动部署按用户要求保持开启。
+- **Cloudflare 新版已可真机验证**：iOS、官网及运营后台使用 Cloudflare，新后端已开放读写。已将 2026-09-26 20:37（上海时间）的 Supabase 快照导入 D1，53 张目标表逐表校验、外键检查及 623 个 R2 文件回读哈希校验通过。新版已完成 hwf（iPhone 17 Pro）签名构建并安装；功能由用户真机验证，未进行模拟器交互。旧版 App 继续使用原 Supabase，未冻结或停用，两套数据暂不实时同步。Android 未改。main 已收敛并推送，多余分支和 worktree 已清理，Pages 自动部署保持开启。
 
 - **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.1 登录/社区网络提示热修复已正式发布，并在 Xiaomi 24069RA21C / Android 16 保留身份与本地数据完成覆盖安装、冷启动及社区加载验收。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑、本机语音转写与统计分享图。
@@ -82,6 +82,8 @@ Last verified: 2026-09-26
 - 英文课表与校园文案润色、本地化目录规整。
 
 ## Known Problems
+
+- **iOS 测试目标隔离声明**：当前 Xcode 下 build-for-testing 被 CampusHeatmapCaching / ClassroomLookupCaching 的 MainActor 协议与测试 actor 冲突阻断；App 与真机签名构建通过。本轮按用户后续要求只做静态与构建验收，未运行 XCTest。
 
 - **教务系统不稳定**：HTML、登录流程或网络策略变化可能使解析暂时失效（持续风险，见 `docs/product/overview.md` §7）。
 - **Android 本科课表结构变化**：真实登录后的 `xskb_list.do` 当前返回 `200`，但页面不含 Android 解析器支持的 `kbcontent/kbtable` 结构，App 会如实报“课表数据不可用”并保留缓存；后续需迁移 iOS 的表单解析 / WebView bootstrap 回退。

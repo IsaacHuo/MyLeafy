@@ -31,7 +31,10 @@
 
 ## 验证状态
 
-- 已验证：Cloudflare OAuth 与 staging/production D1/R2 访问；Supabase 数据库、Auth/Storage 读取；Resend 已验证域名；iOS arm64 Simulator 目标构建、网站构建及后台类型检查。
-- 已部署：staging 与 production Worker、9 份 D1 migration、Resend Secrets；api.myleafy.space 绑定正式 Worker，Pages 生产服务绑定已配置，自动部署保持开启。数据库处于 read_only，尚未开放业务写入。
-- 正在进行：完整生产加密备份、文件备份、转换校验及新 API 验收。
-- 未完成：生产切换、真机验收、App Store 发布与旧服务退役。
+- 本次源快照：2026-09-26 20:37（上海时间），backup ID `6a541f00-79e4-4a19-9b59-449707f47779`。数据库与文件均已加密备份；首次失败的快照保持 incomplete，未用于导入。
+- 已完成：源备份校验（53 个数据集、33,188 行及 623 个文件）、SQLite 转换、按依赖顺序的完整重放、D1 的 53 张目标表逐主键内容校验与外键检查、623 个 R2 对象回读 SHA-256 校验。导入包含新的认证表，源数据集与目标表不是一一对应；旧客户端及管理员会话不迁移。
+- Cloudflare production 已切为 active；官网／运营后台和新 iOS 共用 `api.myleafy.space`。staging 保留隔离测试用途。旧 Supabase 保持运行且未写入或冻结，当前不做双向同步。
+- iOS 静态检查、Simulator 编译目标构建、hwf 真机签名构建和签名校验通过，新包已安装到 hwf（iPhone 17 Pro）。没有模拟器点选验收，真实使用流程由用户验证。曾尝试的测试目标构建被既有缓存协议隔离冲突阻断，随后按用户要求不继续 XCTest。
+- Worker 类型检查、73 个后台操作静态覆盖检查、网站构建通过；GitHub 的后端、网站、仓库安全及 iOS CI 已通过相应提交检查。Resend 配置和域名已验证、Secrets 已部署，实际验证码送达待用户真机验证。
+- 未进行 App Store 发布、旧服务退役或新写入后的恢复演练。真实用户开始在 Cloudflare 写入后，不得用旧快照直接覆盖新库；保留备份至少 30 天。
+- 本机的加密备份及验收报告在 `backend/.local/`，密钥在独立的 `.env.migration`，均被 Git 忽略。原有本地化文件及 Xcode Cloud 未提交文件保留。
