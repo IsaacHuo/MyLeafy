@@ -18,7 +18,7 @@ Owned coordination document for the current migration. All responses below use t
 | GET `/v1/community/posts/:id/pending` | none | `{id,author_id,status}` or null, owner only |
 | POST `/v1/community/posts/:id/abort` | `{}` | `{aborted:true}`, owner only, abort pending uploads and cleanup files |
 | GET `/v1/community/polls` | `kind=feed|authored|voted&limit=N` | hydrated `[CommunityPoll]` including author, options, viewer_option_id |
-| DELETE `/v1/community/polls/:id` | none | existing deleteOwnPoll behavior (see Supabase RPC), not deletion-request substitution |
+| POST `/v1/community/polls/:id/deletion-request` | `{reason:null}` | Both requestPollDeletion and deleteOwnPoll preserve the current production deletion-review flow |
 | POST `/v1/feedback` | `{issue_type,body,contact,device_info:{...}}` | `{submitted:true}`, current profile nullable for signed-in session without bootstrap |
 | POST `/v1/catalog/suggestions` | `{suggestion_type,name,unit,teacher_name,category,credit,initial_stars}` | `{submitted:true}`, authenticated user/profile resolved server-side |
 | GET `/v1/community/banner` | none | `CommunityBanner` or null, server-selected campus, `image_url` signed |

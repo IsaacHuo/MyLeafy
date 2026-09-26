@@ -31,6 +31,7 @@
 
 ## 验证状态
 
-- 已验证：Cloudflare OAuth 与 staging D1/R2 访问；Supabase 数据库、Auth/Storage 读取；Resend 已验证域名；iOS arm64 Simulator 目标构建、网站构建及后台类型检查。
-- 正在进行：完整生产加密备份、文件备份、转换校验、远端部署及新 API 端到端验收。
+- 已验证：Cloudflare OAuth 与 staging/production D1/R2 访问；Supabase 数据库、Auth/Storage 读取；Resend 已验证域名；iOS arm64 Simulator 目标构建、网站构建及后台类型检查。
+- 已部署：staging 与 production Worker、8 份 D1 migration、Resend Secrets；api.myleafy.space 绑定正式 Worker，Pages 生产服务绑定已配置，自动部署保持开启。数据库处于 read_only，尚未开放业务写入。
+- 正在进行：完整生产加密备份、文件备份、转换校验及新 API 验收。
 - 未完成：生产切换、真机验收、App Store 发布与旧服务退役。

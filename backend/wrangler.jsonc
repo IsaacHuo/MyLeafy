@@ -61,6 +61,59 @@
           "35 18 * * *"
         ]
       }
+    },
+    "production": {
+      "name": "myleafy-api-production",
+      "workers_dev": false,
+      "vars": {
+        "ENVIRONMENT": "production",
+        "API_ORIGIN": "https://api.myleafy.space",
+        "SITE_ORIGIN": "https://myleafy.space"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "myleafy-production",
+          "database_id": "7eb5c92e-ccfd-4a56-9b80-6dcb8e81225d",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "myleafy-production-files"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "SIGNALS",
+            "class_name": "ChangeSignals"
+          }
+        ]
+      },
+      "migrations": [
+        {
+          "tag": "v1",
+          "new_sqlite_classes": [
+            "ChangeSignals"
+          ]
+        }
+      ],
+      "triggers": {
+        "crons": [
+          "* * * * *",
+          "17 * * * *",
+          "20 17 * * *",
+          "35 18 * * *"
+        ]
+      },
+      "routes": [
+        {
+          "pattern": "api.myleafy.space",
+          "custom_domain": true
+        }
+      ]
     }
   }
 }
