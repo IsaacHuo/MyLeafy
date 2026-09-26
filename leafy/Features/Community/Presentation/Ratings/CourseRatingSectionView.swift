@@ -199,7 +199,7 @@ struct CourseSectionView: View {
 
     private var emptyCourseMessage: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedCategory == nil
-            ? "先在 Supabase 的 course_catalog 表导入 name,unit,category,credit CSV，导入后这里会显示公选课列表。"
+            ? "课程资料更新后，这里会显示公选课列表。"
             : "换一个课程名、开课单位或分类关键词再试。"
     }
 

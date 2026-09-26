@@ -81,13 +81,13 @@ export async function moderate(env:BackendEnv,context:AdminContext,action:string
 export async function retryPostPublish(env:BackendEnv,context:AdminContext,params:Row){
   const id=uuid(params.id),now=new Date().toISOString().replace('Z','000Z');
   const result=await commitAdmin(env,context,'retryPostPublish','posts',id,[
-    guard(env.DB,"EXISTS(SELECT 1 FROM posts p WHERE p.id=? AND p.status='pending_review' AND p.expected_image_count>0 AND p.expected_image_count=(SELECT count(*) FROM post_images WHERE post_id=p.id) AND p.expected_attachment_count=(SELECT count(*) FROM post_attachments WHERE post_id=p.id))",[id]),
+    guard(env.DB,"EXISTS(SELECT 1 FROM posts p WHERE p.id=? AND p.status='pending_review' AND (p.expected_image_count+p.expected_attachment_count)>0 AND p.expected_image_count=(SELECT count(*) FROM post_images WHERE post_id=p.id) AND p.expected_attachment_count=(SELECT count(*) FROM post_attachments WHERE post_id=p.id))",[id]),
     statement(env.DB,"UPDATE posts SET status='published',image_upload_completed_at=?,attachment_upload_completed_at=?,updated_at=?,media_cleanup_hold=0,media_purge_after=NULL WHERE id=? RETURNING *",[now,now,now,id]),
     statement(env.DB,"INSERT INTO change_outbox(id,room) SELECT ?,'campus:'||campus_id FROM posts WHERE id=?",[crypto.randomUUID(),id]),
   ]);return (await adminHydrate(env,context,'posts',result))[0];
 }
 export async function reviewPollDeletion(env:BackendEnv,context:AdminContext,params:Row){
-  const id=uuid(params.id),status=choice(params.status,['approved','rejected']),reason=text(params.reason,300,false)||null;
+  const id=uuid(params.id),status=choice(params.decision,['approved','rejected']),reason=text(params.reason,300,false)||null;
   const result=await commitAdmin(env,context,'reviewPollDeletion','community_polls',id,[
     guard(env.DB,"EXISTS(SELECT 1 FROM community_polls WHERE id=? AND deletion_status='pending' AND status<>'deleted')",[id]),
     statement(env.DB,`UPDATE community_polls SET deletion_status=?,deletion_reviewed_by=?,deletion_reviewed_at=?,deletion_review_reason=?${status==='approved'?",status='deleted'":''} WHERE id=? RETURNING *`,[status,context.id,new Date().toISOString().replace('Z','000Z'),reason,id]),

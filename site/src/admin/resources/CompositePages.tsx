@@ -30,7 +30,7 @@ export function ManualPage() {
       <Typography variant="h4" gutterBottom>运营手册</Typography>
       <Typography paragraph>推荐处理顺序：举报与高风险内容 → 待审核学校与线索 → 用户反馈 → 公告与资料维护。</Typography>
       <Typography variant="h6">权限边界</Typography>
-      <Typography paragraph>只读账号只能查看；运营账号可以执行内容与资料操作；超级管理员额外管理账号、会话、审计与敏感导出。所有写操作由 Supabase Edge Function 再次校验并记录审计。</Typography>
+      <Typography paragraph>只读账号只能查看；运营账号可以执行内容与资料操作；超级管理员额外管理账号、会话、审计与敏感导出。所有写操作由 Cloudflare Worker 再次校验并记录审计。</Typography>
       <Typography variant="h6">高风险操作</Typography>
       <Typography paragraph>下架、删除、禁言、撤销会话和批量操作必须填写原因并等待服务端成功。遇到错误请保留界面显示的 request ID，不要重复提交或绕过后台直接修改表。</Typography>
       <Typography variant="h6">校园范围</Typography>

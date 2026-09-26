@@ -73,9 +73,9 @@ nonisolated struct CloudflareCommunityRepository: CommunityRepository, Community
         func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode(nickname, forKey: .nickname)
-            try c.encodeIfPresent(bio, forKey: .bio)
-            try c.encodeIfPresent(major, forKey: .major)
-            try c.encodeIfPresent(grade, forKey: .grade)
+            try c.encode(bio, forKey: .bio)
+            try c.encode(major, forKey: .major)
+            try c.encode(grade, forKey: .grade)
             try c.encode(showsBadge, forKey: .showsBadge)
             try c.encodeIfPresent(avatarPath, forKey: .avatarPath)
             if resetCover { try c.encodeNil(forKey: .coverPath) }

@@ -174,6 +174,7 @@ export async function createComment(env:BackendEnv,who:Actor,body:Row){
 }
 
 export async function comments(env:BackendEnv,who:Actor,postId:string,url:URL){
+  postId=uuid(postId);
   await postDetail(env,who,postId);
   const limit=integer(url.searchParams.has('limit')?Number(url.searchParams.get('limit')):50,1,100);
   const result=await rows(env.DB,`SELECT c.* FROM comments c WHERE c.post_id=? AND c.status='published' AND NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=c.author_id) ORDER BY c.created_at,c.id LIMIT ?`,[postId,who.profileId,limit]);
@@ -190,8 +191,9 @@ export async function setTerms(env:BackendEnv,who:Actor,accepted:boolean){
   return {accepted,terms_version:termsVersion};
 }
 
-export async function notifications(env:BackendEnv,who:Actor){
-  const list=await rows(env.DB,`SELECT n.* FROM community_notifications n WHERE recipient_id=? AND dismissed_at IS NULL AND (actor_id IS NULL OR NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=n.actor_id)) ORDER BY created_at DESC,id DESC LIMIT 100`,[who.profileId,who.profileId]);
+export async function notifications(env:BackendEnv,who:Actor,url?:URL){
+  const limit=integer(Number(url?.searchParams.get('limit')??100),1,100);
+  const list=await rows(env.DB,`SELECT n.* FROM community_notifications n WHERE recipient_id=? AND dismissed_at IS NULL AND (actor_id IS NULL OR NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=n.actor_id)) ORDER BY created_at DESC,id DESC LIMIT ?`,[who.profileId,who.profileId,limit]);
   const ids=[...new Set(list.map(n=>n.actor_id).filter((id):id is string=>typeof id==='string'))],profiles:Row[]=[];
   for(let i=0;i<ids.length;i+=80){const batch=ids.slice(i,i+80);profiles.push(...await rows(env.DB,`SELECT * FROM profiles WHERE id IN(${batch.map(()=>'?').join(',')})`,batch));}
   return Promise.all(list.map(async n=>{

@@ -4,7 +4,7 @@ import { LocalD1 } from './d1-local';
 import type { BackendEnv } from '../src/auth';
 import { adminGuard, adminLogin, adminLogout, adminMe, authenticateAdmin } from '../src/admin-auth';
 import { atomic, statement, type Row } from '../src/db';
-import { updateAdminAccount, upsertCatalog, upsertRuntime } from '../src/admin-write';
+import { retryPostPublish, reviewPollDeletion, updateAdminAccount, upsertCatalog, upsertRuntime } from '../src/admin-write';
 import { adminList } from '../src/admin-data';
 import { handleAdminRequest } from '../src/admin-router';
 import { overview } from '../src/admin-overview';
@@ -143,4 +143,27 @@ it('excludes historical and installation Demo profiles from lists, search, total
   const dashboard=await overview(env,context,{days:7,timezone:'Asia/Shanghai'});
   expect(dashboard.analytics.daily.reduce((sum,row)=>sum+row.profiles,0)).toBe(1);
   expect(db.sqlite.prepare('SELECT count(*) n FROM profiles').get()!.n).toBe(3);
+});
+
+it('uses website poll deletion decisions and permits complete attachment-only publication recovery',async()=>{
+  const {env,login,db}=await fixture();
+  env.MEDIA_SIGNING_SECRET='synthetic-media-signing-secret-over-32-characters';env.API_ORIGIN='https://api.invalid';
+  const session=await adminLogin(env,login()),context=await authenticateAdmin(env,new Request('https://admin.internal/me',{headers:{Authorization:`Bearer ${session.token}`}}));
+  const author=crypto.randomUUID(),poll=crypto.randomUUID(),post=crypto.randomUUID();
+  db.sqlite.exec("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi');");
+  db.sqlite.prepare("INSERT INTO profiles(id,edu_id,nickname,campus_id,community_campus_id) VALUES(?,'retry-test','测试','bjfu','bjfu')").run(author);
+  db.sqlite.prepare("INSERT INTO community_polls(id,author_id,question,campus_id,deletion_status) VALUES(?,?,'问题','bjfu','pending')").run(poll,author);
+  expect(await reviewPollDeletion(env,context,{id:poll,decision:'approved'})).toMatchObject({status:'deleted',deletion_status:'approved'});
+  db.sqlite.prepare("INSERT INTO posts(id,author_id,title,body,status,campus_id,expected_image_count,expected_attachment_count) VALUES(?,?,'标题','正文','pending_review','bjfu',0,1)").run(post,author);
+  await expect(retryPostPublish(env,context,{id:post})).rejects.toMatchObject({status:409});
+  db.sqlite.prepare("INSERT INTO post_attachments(id,post_id,path,display_name,content_type,file_extension,byte_size,sha256,sort_order) VALUES(?,?,'test.pdf','test.pdf','application/pdf','pdf',19,?,0)").run(crypto.randomUUID(),post,'a'.repeat(64));
+  expect(await retryPostPublish(env,context,{id:post})).toMatchObject({id:post,status:'published'});
+  expect(db.sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+});
+it('rejects inherited action names and hides admin data during import',async()=>{
+  const {env,login,db}=await fixture(),session=await adminLogin(env,login());
+  const request=()=>new Request('https://admin.internal/admin/actions',{method:'POST',headers:{Authorization:`Bearer ${session.token}`,'Content-Type':'application/json'},body:JSON.stringify({action:'constructor'})});
+  expect((await handleAdminRequest(request(),env)).status).toBe(400);
+  db.sqlite.exec("UPDATE backend_control SET mode='importing'");
+  expect((await handleAdminRequest(request(),env)).status).toBe(503);
 });

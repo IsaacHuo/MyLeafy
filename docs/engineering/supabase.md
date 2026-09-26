@@ -1,5 +1,7 @@
 # MyLeafy Supabase 接入
 
+> 本文只用于已安装旧版仍在使用的 Supabase 服务与迁移源维护。新版 iOS、官网和运营后台已改接 Cloudflare，当前部署见 [Cloudflare 后端](cloudflare-migration.md)。不要将这里的部署命令用于新后端。
+
 本文说明 MyLeafy 如何使用 Supabase，以及开发环境如何建立可工作的 Auth、Database、Storage 与 Edge Functions。它面向贡献者和自建环境，不包含生产账号、真实密钥或私有运营流程。
 
 > Supabase 承载 MyLeafy 业务数据，不替代学校教务登录，也不是学校课表、成绩和考试数据的权威来源。

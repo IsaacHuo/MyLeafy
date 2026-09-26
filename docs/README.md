@@ -18,7 +18,7 @@ git     → What changed.                       （普通改动历史）
 1. [项目总览](product/overview.md)：产品定位、能力范围、数据来源与当前限制。
 2. [App 产品设计](design/app-design.md)：信息架构、核心流程、页面职责与状态约定。
 3. [当前架构](../state/ARCHITECTURE.md)：当前代码结构、分层、数据流与行为约束。
-4. [Supabase 接入](engineering/supabase.md)：身份、数据域、RLS、Storage、Functions 与本地环境。
+4. [Cloudflare 后端](engineering/cloudflare-migration.md)：新版 API、数据迁移、部署与旧版服务边界。
 5. [贡献规范](../CONTRIBUTING.md)：日常开发、验证和协作方式。
 
 ## Product
@@ -42,13 +42,14 @@ git     → What changed.                       （普通改动历史）
 
 | 文档 | 内容 |
 |---|---|
-| [Supabase 接入](engineering/supabase.md) | Auth、Database、RLS、Storage、Functions 和联调 |
+| [Cloudflare 后端](engineering/cloudflare-migration.md) | Workers、D1、R2、认证与迁移验证 |
+| [旧 Supabase 服务](engineering/supabase.md) | 旧版仍在使用的 Auth、RLS、Storage、Functions |
 | [运营后台](engineering/admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 |
 | [后台可靠性](engineering/admin-backend-reliability.md) | 管理动作、错误契约和发布顺序 |
 
 当前代码分层、数据流与行为约束以 [`state/ARCHITECTURE.md`](../state/ARCHITECTURE.md) 为权威；本文档中的 Engineering 文档按各自主题补充设计细节和 rationale。
 
-数据库迁移顺序和关键不变量由代码旁的 [`supabase/schema-ledger.md`](../supabase/schema-ledger.md) 维护；网站开发说明位于 [`site/README.md`](../site/README.md)。
+新版数据库迁移在 [`backend/migrations/`](../backend/migrations/)；旧版迁移顺序由 [`supabase/schema-ledger.md`](../supabase/schema-ledger.md) 维护；网站开发说明位于 [`site/README.md`](../site/README.md)。
 
 ## Operations
 

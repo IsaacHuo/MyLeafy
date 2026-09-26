@@ -47,6 +47,8 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
   const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Request-ID':requestId,'X-Content-Type-Options':'nosniff'}});
   try{
     const path=new URL(request.url).pathname;
+    const state=await env.DB.prepare('SELECT mode FROM backend_control WHERE id=1').first<{mode:string}>();
+    if(!state||state.mode==='importing')throw new ApiError(503,'maintenance','服务维护中，请稍后重试。',true);
     if(path==='/admin/banner-upload'){
       if(request.method!=='PUT')throw new ApiError(405,'method_not_allowed','请求方法无效。');
       await authenticateAdmin(env,request);
@@ -61,6 +63,7 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
     const body=await readJSON(request);
     if(path==='/admin/export'){await requireWritable(env.DB);return exportAdminData(env,context,body);}
     const action=text(body.action,100),params=body.params??{};
+    if(!supportedAdminActions.has(action))throw new ApiError(400,'bad_request','未知管理操作。');
     if(!params||typeof params!=='object'||Array.isArray(params))throw new ApiError(400,'bad_request','管理操作参数必须是对象。');
     let data:unknown;
     if(action==='overview')data=await overview(env,context,params as Row);

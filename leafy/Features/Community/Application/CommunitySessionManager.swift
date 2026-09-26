@@ -195,7 +195,9 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     private func matchesCurrentBootstrap(profile: CommunityProfile, eduID: String, campusID: String) -> Bool {
-        guard profile.eduID == eduID else { return false }
+        if ActiveCampusContext.identity?.isCustom == true {
+            guard let storedID = UUID(uuidString: profile.eduID), let activeID = UUID(uuidString: eduID), storedID == activeID else { return false }
+        } else if profile.eduID != eduID { return false }
         if profile.campusID == campusID { return true }
         return ActiveCampusContext.identity?.isCustom == true && profile.hasApprovedCommunityAccess
     }

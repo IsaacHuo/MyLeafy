@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { LocalD1 } from './d1-local';
 import { actor, auth, type BackendEnv } from '../src/auth';
-import { bootstrap, deleteAccount, requestProfileEmail, verifyProfileEmail } from '../src/identity';
+import { updateProfile, bootstrap, deleteAccount, requestProfileEmail, verifyProfileEmail } from '../src/identity';
 
 const databases:LocalD1[]=[];
 afterEach(()=>{vi.unstubAllGlobals();for(const db of databases.splice(0))db.close();});
@@ -68,4 +68,21 @@ it('notification email becomes visible only after successful OTP verification',a
   expect(otp).toHaveLength(8);
   await verifyProfileEmail(env,request({email:env.TEST_EMAIL_RECIPIENT,otp}));
   expect(db.sqlite.prepare('SELECT bound_email FROM profiles').get()!.bound_email).toBe(env.TEST_EMAIL_RECIPIENT);
+});
+
+it('general account bootstrap preserves the same profile across UUID casing and clears optional profile fields',async()=>{
+  const {db,env}=setup(),session=await anonymousSession(env);
+  db.sqlite.exec("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('general','通用','通用','通用','custom');");
+  db.sqlite.prepare('UPDATE identity_user SET isAnonymous=0,emailVerified=1 WHERE id=?').run(session.userId);
+  const request=(edu:string)=>new Request(`${env.API_ORIGIN}/v1/profile/bootstrap`,{method:'POST',headers:session.headers,body:JSON.stringify({campus_id:'general',edu_id:edu})});
+  const initial=await bootstrap(env,request(session.userId.toUpperCase()));
+  const repeated=await bootstrap(env,request(session.userId.toLowerCase()));
+  expect(repeated.profile.id).toBe(initial.profile.id);
+  // Migrated profiles can retain their original lowercase identity value.
+  db.sqlite.prepare('UPDATE profiles SET edu_id=lower(edu_id) WHERE id=?').run(initial.profile.id as string);
+  expect((await bootstrap(env,request(session.userId.toUpperCase()))).profile.id).toBe(initial.profile.id);
+  expect(db.sqlite.prepare('SELECT count(*) n FROM profiles').get()!.n).toBe(1);
+  const patch=(body:object)=>new Request(`${env.API_ORIGIN}/v1/profile`,{method:'PATCH',headers:session.headers,body:JSON.stringify(body)});
+  await updateProfile(env,patch({nickname:'测试',bio:'简介',major:'专业',grade:'2026'}));
+  expect(await updateProfile(env,patch({bio:null,major:null,grade:null}))).toMatchObject({bio:null,major:null,grade:null});
 });

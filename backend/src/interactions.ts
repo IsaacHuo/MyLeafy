@@ -79,7 +79,7 @@ export async function setBlock(env:BackendEnv,who:Actor,id:string,enabled:boolea
 
 export async function report(env:BackendEnv,who:Actor,body:Row){
   const kind=body.target_type;if(!['post','comment','user'].includes(kind as string))throw new ApiError(400,'invalid_request','举报类型无效。');
-  const reason=text(body.reason,100),detail=text(body.detail,2000,false)||null,id=uuid(body.target_id),reportId=crypto.randomUUID();
+  const reason=text(body.reason,100),detail=text(body.detail,2000,false)||null,id=uuid(kind==='post'?body.post_id:kind==='comment'?body.comment_id:body.reported_user_id),reportId=crypto.randomUUID();
   const source=kind==='post'?'SELECT author_id AS user_id,id AS post_id,NULL AS comment_id FROM posts WHERE id=? AND campus_id=?':
     kind==='comment'?'SELECT c.author_id AS user_id,c.post_id,c.id AS comment_id FROM comments c JOIN posts p ON p.id=c.post_id WHERE c.id=? AND p.campus_id=?':
     "SELECT id AS user_id,NULL AS post_id,NULL AS comment_id FROM profiles WHERE id=? AND CASE WHEN campus_id='bjfu' THEN 'bjfu' ELSE community_campus_id END=?";

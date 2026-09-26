@@ -40,7 +40,8 @@ PR 和推送到 `main` 会按改动范围触发 CI：
 
 - Repository safety：所有改动都检查不应跟踪的私有文件和明显密钥格式。
 - Site CI：仅 `site/**` 变化时运行单元测试和生产构建；`npm run build` 已包含 TypeScript 检查。
-- Supabase CI：仅 `supabase/**` 变化时检查和测试 Edge Functions，并从零应用 migration 后运行数据库测试。
+- Cloudflare 后端 CI：`backend/**` 变化时运行 TypeScript 检查、客户端契约检查、业务与迁移测试及 Worker dry-run 构建。
+- 旧 Supabase CI：仅 `supabase/**` 变化时检查和测试 Edge Functions，并从零应用 migration 后运行数据库测试。
 - iOS CI：仅 App、扩展、测试、配置或 Xcode 工程变化时执行 iOS 17 build-only 检查。
 
 同一分支连续推送时只保留最新运行。Playwright 双浏览器 E2E、完整 iOS 测试、真机验证和发布检查不属于每次提交的日常门槛，应在重大交互改动或发布前按相关文档执行。

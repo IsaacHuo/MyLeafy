@@ -669,34 +669,28 @@ final class CommunityPublishCoordinator: ObservableObject {
             }
             try await backend.requireCapabilities(for: Set(task.media.map(\.kind)))
 
-            if task.authorID == nil {
+            // Recover a committed publication even when the final upload/attach
+            // response was lost and local media flags still say incomplete.
+            if let existing = try await backend.pendingPostContext(postID: taskID) {
+                updateTask(taskID) { $0.authorID = existing.authorID }
+                if existing.status == "published" {
+                    complete(taskID: taskID)
+                    return
+                }
+            } else if task.authorID == nil {
                 setState(taskID, .creatingPost)
-                if let existing = try await backend.pendingPostContext(postID: taskID) {
-                    updateTask(taskID) {
-                        $0.authorID = existing.authorID
-                    }
-                    if existing.status == "published" {
-                        complete(taskID: taskID)
-                        return
-                    }
-                } else {
-                    _ = try await backend.createPendingPost(
-                        id: taskID,
-                        requestID: taskID,
-                        input: task.input,
-                        imageCount: task.media.filter { $0.kind == .image }.count,
-                        attachmentCount: task.media.filter { $0.kind == .attachment }.count
-                    )
-                    guard let context = try await backend.pendingPostContext(postID: taskID) else {
-                        throw CommunityServiceError.edgeFunctionRejected("帖子创建后未能读取发布状态。")
-                    }
-                    updateTask(taskID) {
-                        $0.authorID = context.authorID
-                    }
-                    if context.status == "published" {
-                        complete(taskID: taskID)
-                        return
-                    }
+                _ = try await backend.createPendingPost(
+                    id: taskID, requestID: taskID, input: task.input,
+                    imageCount: task.media.filter { $0.kind == .image }.count,
+                    attachmentCount: task.media.filter { $0.kind == .attachment }.count
+                )
+                guard let context = try await backend.pendingPostContext(postID: taskID) else {
+                    throw CommunityServiceError.edgeFunctionRejected("帖子创建后未能读取发布状态。")
+                }
+                updateTask(taskID) { $0.authorID = context.authorID }
+                if context.status == "published" {
+                    complete(taskID: taskID)
+                    return
                 }
             }
 

@@ -8,7 +8,7 @@ export async function bootstrap(env:BackendEnv,request:Request){
   if(!session)throw new ApiError(401,'unauthenticated','请重新登录。');
   const body=await readJSON(request);
   let campus=body.campus_id==='bjfu'||body.campus_id==null?'bjfu':'general';
-  const eduId=text(body.edu_id,128);
+  let eduId=text(body.edu_id,128);
   // General-campus identifiers belong to the authenticated email account. BJFU
   // retains the existing school identity contract, as explicitly requested.
   if(campus==='general'&&(session.user.isAnonymous||!session.user.emailVerified||eduId.toLowerCase()!==session.user.id.toLowerCase())){
@@ -16,8 +16,8 @@ export async function bootstrap(env:BackendEnv,request:Request){
   }
   // Selecting a general-campus community changes profiles.campus_id in the
   // existing schema. Follow this account's established link on future launches.
-  const established=campus==='general'?await env.DB.prepare("SELECT p.id,p.campus_id FROM profile_auth_links l JOIN profiles p ON p.id=l.profile_id WHERE l.auth_user_id=? AND lower(p.edu_id)=? AND p.campus_id<>'bjfu'").bind(session.user.id,eduId.toLowerCase()).first<{id:string;campus_id:string}>():null;
-  if(established)campus=established.campus_id;
+  const established=campus==='general'?await env.DB.prepare("SELECT p.id,p.campus_id,p.edu_id FROM profile_auth_links l JOIN profiles p ON p.id=l.profile_id WHERE l.auth_user_id=? AND lower(p.edu_id)=? AND p.campus_id<>'bjfu'").bind(session.user.id,eduId.toLowerCase()).first<{id:string;campus_id:string;edu_id:string}>():null;
+  if(established){campus=established.campus_id;eduId=established.edu_id;}else if(campus==='general'){eduId=session.user.id.toUpperCase();}
   const displayName=text(body.display_name,128,false)||eduId;
   const proposedId=crypto.randomUUID();
   const now=new Date().toISOString().replace('Z','000Z');
@@ -53,7 +53,7 @@ export async function updateProfile(env:BackendEnv,request:Request){
   const who=await actor(env,request), body=await readJSON(request);
   const fields:Record<string,number>={nickname:40,display_name:128,bio:500,major:100,grade:40,avatar_path:512,cover_path:512};
   const keys=Object.keys(body);
-  if(!keys.length||keys.some(key=>!(key in fields)&&key!=='shows_edu_verification_badge'))throw new ApiError(400,'invalid_request','包含不可修改的资料字段。');
+  if(!keys.length||keys.some(key=>!Object.hasOwn(fields,key)&&key!=='shows_edu_verification_badge'))throw new ApiError(400,'invalid_request','包含不可修改的资料字段。');
   const values:Bind[]=keys.map(key=>{
     if(key==='shows_edu_verification_badge'){
       if(typeof body[key]!=='boolean')throw new ApiError(400,'invalid_request','字段类型无效。');

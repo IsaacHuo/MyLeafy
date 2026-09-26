@@ -52,10 +52,9 @@ extension CloudflareCommunityRepository {
         return try await Array((notifications.map(NotificationFeedItem.community) + announcements.map(NotificationFeedItem.announcement)).sorted { $0.sortDate > $1.sortDate }.prefix(limit))
     }
     func fetchUnreadNotificationCount() async throws -> Int {
-        guard try await !fetchNotificationSettings().mutedAll else { return 0 }
-        async let notifications: [CommunityNotification] = get("/v1/notifications", query(["limit":"100"]))
-        async let announcements: [SiteAnnouncement] = get("/v1/announcements", query(["limit":"100"]))
-        return try await notifications.filter { !$0.isRead }.count + announcements.filter { !$0.isRead }.count
+        struct UnreadCount: Decodable { let count: Int }
+        let result: UnreadCount = try await get("/v1/notifications/unread-count")
+        return result.count
     }
     func markNotificationFeedRead(announcementLimit: Int) async throws {
         try await perform("/v1/notifications/read-all")

@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/iOS-17.0%2B-111111?logo=apple" alt="iOS 17.0+">
   <img src="https://img.shields.io/badge/Swift-5.x-F05138?logo=swift&logoColor=white" alt="Swift 5.x">
   <img src="https://img.shields.io/badge/UI-SwiftUI-0A84FF" alt="SwiftUI">
-  <img src="https://img.shields.io/badge/backend-Supabase-3FCF8E?logo=supabase&logoColor=white" alt="Supabase">
+  <img src="https://img.shields.io/badge/backend-Cloudflare-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare">
   <img src="https://img.shields.io/badge/license-Apache--2.0-555555" alt="Apache-2.0">
 </p>
 
@@ -22,7 +22,7 @@
   Android 版 APK 即将通过 <a href="https://github.com/IsaacHuo/MyLeafy/releases">GitHub Releases</a> 发布。
 </p>
 
-MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校园社区与共享课表整合在一个原生 iOS 客户端中。根导航为课表、社区、日迹、校园、我的；日迹顶部直接提供随记、日程、推送，侧栏“记录”分组提供“记录日迹”和“每日回顾”。随记与个人日程按校园身份保存在本地。北京林业大学入口直接连接学校教务系统获取用户授权的数据；通用入口只提供本机导入能力。Supabase 承载社区、通知、评分、共享与运营数据。
+MyLeafy 以课表和学业数据为核心，将教务查询、学习管理、校园社区与共享课表整合在一个原生 iOS 客户端中。根导航为课表、社区、日迹、校园、我的；日迹顶部直接提供随记、日程、推送，侧栏“记录”分组提供“记录日迹”和“每日回顾”。随记与个人日程按校园身份保存在本地。北京林业大学入口直接连接学校教务系统获取用户授权的数据；通用入口只提供本机导入能力。Cloudflare 承载新版 iOS 的社区、通知、评分、共享与运营数据。已安装旧版继续使用原 Supabase，双方数据暂不实时同步。
 
 > 仓库名、Xcode target 与部分内部类型仍使用 `leafy` / `Leafy`。对外产品名称统一为 **MyLeafy**。
 
@@ -40,12 +40,12 @@ flowchart LR
     end
 
     School["学校教务系统<br/>身份 · 课表 · 成绩 · 考试"]
-    Backend["Supabase 业务后端<br/>Auth · Database · Storage · Functions"]
+    Backend["Cloudflare 业务后端<br/>Workers · D1 · R2 · Better Auth"]
 
     Student -->|日常学习与校园任务| IOS
     Operator -->|受控运营| Web
     IOS -->|授权访问教务数据| School
-    IOS -->|用户会话 + RLS| Backend
+    IOS -->|用户会话 + 业务 API| Backend
     Web -->|管理代理 + 服务端授权| Backend
 
     classDef actor fill:#F8FAFC,stroke:#64748B,color:#0F172A,stroke-width:1.5px;
@@ -79,8 +79,8 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 - SwiftUI 构建页面与导航，iOS 17 为部署基线；根导航使用系统 `TabView`，不叠加页面透明度伪造淡入；在 iOS 26 上使用受可用性检查保护的系统视觉能力。
 - 教务数据通过 `URLSession`、显式 Cookie 管理和 SwiftSoup 解析；课表链路在必要时使用 `WKWebView` 复现浏览器路径。
 - SwiftData 保存课表、成绩、按校园身份隔离的随记与个人日程等用户侧本地数据；页面通过预计算投影与展示数据降低复杂网格的渲染成本。
-- Supabase Auth、PostgreSQL、Storage 与 Edge Functions 承载非教务业务；RLS、校园范围和资源所有权共同约束数据访问。
-- Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，管理会话不暴露给浏览器 JavaScript。
+- Cloudflare Workers、D1、R2、Durable Objects 与 Better Auth 承载非教务业务；服务端统一校验会话、校园范围和资源所有权，关联写入使用原子事务。
+- Web 运营后台通过 Cloudflare Pages Functions 代理管理请求，通过私有服务绑定连接 Worker，管理会话不暴露给浏览器 JavaScript。
 
 详细边界、数据流和依赖方向见[当前架构](state/ARCHITECTURE.md)。
 
@@ -93,7 +93,7 @@ MyLeafy 采用原生 iOS 优先、边界清晰和本地可用的工程策略：
 | 教务网络 | URLSession、HTTPCookieStorage、WKWebView |
 | HTML 解析 | SwiftSoup |
 | 系统服务 | WeatherKit、WidgetKit、Keychain |
-| 业务后端 | Supabase Auth、PostgreSQL、Storage、Edge Functions |
+| 业务后端 | Cloudflare Workers、D1、R2、Durable Objects、Better Auth；Resend 验证邮件 |
 | Web 后台 | React 18、React-admin 5、MUI、ECharts、Vite、TypeScript |
 | 边缘代理 | Cloudflare Pages Functions |
 | 自动化检查 | GitHub Actions、Vitest、Playwright、XCTest |
@@ -106,13 +106,14 @@ leafy/
 │   ├── App/                # 应用启动、根导航、主题与生命周期
 │   ├── Core/               # 依赖、持久化、校园能力、并发等基础设施
 │   ├── Features/           # Auth、Timetable、Community、Schedule、Discover、Profile
-│   ├── Services/           # 教务、Supabase、同步与诊断服务
+│   ├── Services/           # 教务、Cloudflare、同步与诊断服务
 │   ├── Parsers/            # 教务 HTML 解析
 │   └── Shared/             # 跨功能模型与共享组件
 ├── leafyTests/             # iOS 单元与契约测试
 ├── leafyWidget/            # Widget 扩展
 ├── LeafyShareExtension/    # 系统分享扩展
-├── supabase/               # migrations、Edge Functions、模板与测试
+├── backend/                # Workers API、D1 migrations、业务测试与迁移工具
+├── supabase/               # 旧版服务与迁移源，仍保留运行
 ├── site/                   # 官网、运营后台与 Cloudflare Functions
 ├── Config/                 # 可提交的配置模板；本地密钥文件不入库
 ├── docs/                   # 产品、设计、工程与运维文档（设计与规划）
@@ -126,9 +127,9 @@ leafy/
 
 - macOS 与 Xcode 26 或更新版本（项目引用 iOS 26 SDK API，并为 iOS 17–25 提供运行时回退）
 - iOS 17.0 或更新版本的模拟器/设备
-- Node.js 20.19 或更新版本，或 Node.js 22.12 及更新版本（仅网站与运营后台）
+- Node.js 22.12 或更新版本（Worker、网站与运营后台）
 - 可用的目标学校教务账号（验证真实教务链路时需要）
-- 自建 Supabase 项目（验证社区、共享与运营能力时需要）
+- 可用的 Cloudflare API 环境（验证社区、共享与运营能力时需要）
 
 ### iOS App
 
@@ -140,9 +141,9 @@ cp Config/Leafy.example.xcconfig Config/Leafy.local.xcconfig
 open leafy.xcodeproj
 ```
 
-在 `Config/Leafy.local.xcconfig` 中配置本地 Supabase URL 与 publishable key，然后选择 `leafy` scheme 运行。真实密钥、本地 xcconfig、证书和描述文件不得提交到仓库。
+在 `Config/Leafy.local.xcconfig` 中设置 `MYLEAFY_API_ORIGIN`，然后选择 `leafy` scheme 运行。默认使用 `https://api.myleafy.space`；隔离调试使用 staging 域名。App 不携带数据库或服务端密钥，本地 xcconfig、证书和描述文件不得提交。
 
-若只关注不依赖 Supabase 的本地页面，可保留示例配置；社区、共享课表和部分远程能力会进入不可用状态。
+仅验证本地功能时可使用免登录入口；该身份不连接后台，课表、随记与个人日程保存在本机。
 
 ### 网站与运营后台
 
@@ -160,17 +161,22 @@ npm run dev:pages
 
 环境变量与安全边界见[运营后台](docs/engineering/admin-console.md)。
 
-### Supabase
+### Cloudflare 后端
 
-仓库中的 `supabase/` 包含数据库迁移、Edge Functions、邮件模板、导入模板与验证脚本。新环境应从空项目按迁移顺序建立 schema，并按需部署函数：
+`backend/` 提供 `/v1` 业务 API、D1 迁移、文件校验与持久化清理任务。客户端只访问 Worker，由 Worker 访问数据库与私有 R2。
 
 ```bash
-supabase link --project-ref <project-ref>
-supabase db push
-supabase functions deploy community-bootstrap-user
+cd backend
+npm ci
+npm run typecheck
+npm run check:contracts
+npm test
+npx wrangler deploy --env staging --dry-run
 ```
 
-不要在 iOS、网站前端或公开配置中使用 `service_role`。完整说明见[Supabase 接入](docs/engineering/supabase.md)。
+实际部署前配置隔离的 D1、R2、域名及 Worker Secrets；见 [Cloudflare 迁移与部署](docs/engineering/cloudflare-migration.md)。生产库已有用户写入，禁止重放旧快照覆盖。Pages 通过服务绑定连接 Worker，部署说明见 [site/README.md](site/README.md)。
+
+`supabase/` 继续保留旧版服务和迁移源；其中的命令不适用于新 Cloudflare 环境。迁移工具、旧身份序列化标记中保留 Supabase 名称，不代表新版仍使用其 SDK。
 
 ## 文档
 
@@ -180,7 +186,8 @@ supabase functions deploy community-bootstrap-user
 | [当前架构](state/ARCHITECTURE.md) | iOS/后端开发者 | 当前分层、依赖、教务链路、本地存储与系统边界 |
 | [App 产品设计](docs/design/app-design.md) | 产品与客户端开发者 | 信息架构、核心流程、页面状态与产品原则 |
 | [UI 风格规范](docs/design/ui-style-guide.md) | 设计与客户端开发者 | 设计令牌、组件、可访问性与页面模式 |
-| [Supabase 接入](docs/engineering/supabase.md) | 后端与客户端开发者 | 身份、数据域、RLS、Storage、Functions 与本地联调 |
+| [Cloudflare 后端](docs/engineering/cloudflare-migration.md) | 后端与客户端开发者 | API、认证、存储、迁移与验证边界 |
+| [旧 Supabase 服务](docs/engineering/supabase.md) | 旧服务维护者 | 旧版服务与迁移源说明 |
 | [运营后台](docs/engineering/admin-console.md) | Web/后端开发者 | 管理架构、角色、安全、资源与开发验证 |
 | [贡献规范](CONTRIBUTING.md) | 贡献者 | Issue、分支、PR、测试与安全要求 |
 
@@ -190,7 +197,7 @@ supabase functions deploy community-bootstrap-user
 
 - 教务系统不是稳定 API。页面结构、登录流程或网络策略变化可能使解析暂时失效。
 - 当前教务身份绑定由 App 在登录成功后发起；它不等同于服务端对学校身份进行独立证明。
-- 社区、评价和共享能力依赖正确部署的 Supabase schema、RLS 与 Edge Functions。
+- 社区、评价和共享能力依赖正确部署的 Worker、D1 schema、R2 与服务端权限检查。
 - 教师与课程等目录型数据需要经过可信来源整理或后台审核，仓库不会自动保证数据完整性。
 - 这是持续演进中的校园产品，内部数据模型与未稳定接口可能变化。
 

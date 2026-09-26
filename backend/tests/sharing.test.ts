@@ -62,7 +62,7 @@ it('like retries create one notification; favorites do not create false feed upd
   const before=db.sqlite.prepare('SELECT count(*) AS n FROM change_outbox').get()!.n;
   await setPostReaction(env,viewer,id,'favorite',true);
   expect(db.sqlite.prepare('SELECT count(*) AS n FROM change_outbox').get()!.n).toBe(before);
-  await report(env,viewer,{target_type:'post',target_id:id,reason:'其他'});
+  await report(env,viewer,{target_type:'post',post_id:id,reason:'其他'});
   expect(db.sqlite.prepare('SELECT status FROM posts').get()!.status).toBe('published');
 });
 it('poll vote replay and option changes preserve totals; deletion requires author and moderation',async()=>{

@@ -50,3 +50,12 @@ export async function submitFeedback(env:BackendEnv,request:Request,body:Row){
     statement(env.DB,'INSERT INTO feedback_submissions(user_id,campus_id,issue_type,body,contact,device_info) VALUES(?,?,?,?,?,?)',[who?.profileId??null,campus,text(body.issue_type,40),text(body.body,4000),text(body.contact,200,false)||null,device]),
   ]);return {submitted:true};
 }
+
+export async function unreadNotificationCount(env:BackendEnv,who:Actor){
+  const settings=await notificationSettings(env,who);
+  if(settings.muted_all)return {count:0};
+  const timestamp=now();
+  const notifications=await env.DB.prepare(`SELECT count(*) AS n FROM community_notifications n WHERE recipient_id=? AND is_read=0 AND dismissed_at IS NULL AND (actor_id IS NULL OR NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=n.actor_id))`).bind(who.profileId,who.profileId).first<{n:number}>();
+  const announcements=await env.DB.prepare(`SELECT count(*) AS n FROM site_announcements a LEFT JOIN site_announcement_reads r ON r.announcement_id=a.id AND r.user_id=? WHERE a.campus_id=? AND a.status='published' AND a.published_at<=? AND (a.expires_at IS NULL OR a.expires_at>?) AND r.read_at IS NULL AND r.dismissed_at IS NULL`).bind(who.authId,who.campusId??who.identityCampus,timestamp,timestamp).first<{n:number}>();
+  return {count:(notifications?.n??0)+(announcements?.n??0)};
+}

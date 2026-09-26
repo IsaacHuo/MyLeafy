@@ -14,7 +14,7 @@ Last verified: 2026-09-26
 | MyLeafy Android App | 用户设备 | Android 原生实现（Kotlin/Compose/Room/WorkManager/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录、横滑周课表/天气/背景/个人日程/ICS、日迹通知与标签/统计/回顾/回收站/导出、成绩/考试/教学计划与培养方案、社区（文本与图片帖）、共享课表、体育/医疗/评价、综素测算、荣誉记录、周末去哪、资料与设置 |
 | 学校教务系统 | 学校基础设施 | 身份、课表、成绩、考试、教学计划等权威教务数据（非稳定 API） |
 | Cloudflare 新后端 | Workers / D1 / R2 / Durable Objects | Hono 业务 API、Better Auth、SQL 授权、文件、实时变更信号、Cron；新版服务已启用，旧版 App 的 Supabase 服务并行保留 |
-| Supabase 旧生产后端 | 托管云服务 | 已发布旧版及 Android 仍使用；保留作为迁移源，切流前保持生产权威 |
+| Supabase 旧生产后端 | 托管云服务 | 已发布旧版及 Android 仍使用；独立保持运行，作为旧版数据权威及迁移源，与新版暂不实时同步 |
 | 官网与运营后台 | Cloudflare Pages | 公开页面、分享落地页、管理界面与管理 API 代理 |
 | Widget / Share / 导入扩展 | 系统扩展 | 课表小组件、系统分享、外部学习资料导入 |
 
@@ -84,7 +84,7 @@ leafy/
 │   ├── Schedule/           # 日迹：随记/日程/推送/记录日迹（Domain/Data/Presentation）
 │   ├── Discover/           # 校园：AcademicHub/AcademicTools/LearningWorkspace/WeekendTravel
 │   └── Profile/            # 我的（Domain/Application/Presentation）
-├── Services/               # 外部系统边界（教务、Supabase、同步、诊断）
+├── Services/               # 外部系统边界（教务、Cloudflare、同步、诊断）
 ├── Parsers/                # SwiftSoup 教务 HTML 解析
 ├── Shared/                 # 跨功能模型、平台兼容、扩展共享数据
 └── WidgetSupport/          # Widget 展示数据构建
@@ -99,8 +99,8 @@ flowchart TB
     Application["Application<br/>用例与协调器 · 服务协议 · 投影与预计算"]
     Domain["Domain<br/>业务模型 · 纯规则与计算"]
     Data["Data<br/>live service 实现 · 数据适配"]
-    Infrastructure["Infrastructure<br/>教务网络 · HTML 解析 · SwiftData · Supabase · 系统服务"]
-    External["外部系统<br/>学校教务 · Supabase · WeatherKit · WidgetKit"]
+    Infrastructure["Infrastructure<br/>教务网络 · HTML 解析 · SwiftData · Cloudflare API · 系统服务"]
+    External["外部系统<br/>学校教务 · Cloudflare · WeatherKit · WidgetKit"]
 
     Presentation -->|用户意图| Application
     Application -->|执行业务规则| Domain
@@ -109,7 +109,7 @@ flowchart TB
 ```
 
 - Feature 依赖方向固定为 `Presentation → Application → Domain`。
-- `Data` 实现 Application 层定义的窄协议；`Domain` 不依赖 SwiftUI、Supabase 或具体持久化。
+- `Data` 实现 Application 层定义的窄协议；`Domain` 不依赖 SwiftUI、网络后端或具体持久化。
 - 组合根（`Core/Dependencies/AppDependencies.swift`）负责把 `Data` 实现注入页面。
 - 历史代码仍有部分跨层文件；新增代码遵守依赖方向，旧文件只在相关功能改动时迁移。
 
@@ -131,7 +131,7 @@ flowchart TB
 
 - `Domain/`：帖子/评论/草稿等模型。
 - `Application/`：`CommunitySessionManager`（会话与 profile 生命周期）、`CommunityRepository`、`CommunityPublishCoordinator`、`CommunityPostDraftRepository`、`RatingCatalogWorkspace`、`CommunityAccessGate` 等。
-- `Data/`：`Supabase/` 下各 `*Service` 与 `Live*Repository`；Feed Realtime 只发送校园范围的变更信号，完整列表仍由 `community-feed` 获取；`Local/LocalCommunityPostDraftRepository`。
+- `Data/`：`Cloudflare/` 保存接口模型，仓储实现在 `Services/Cloudflare/`；Durable Objects WebSocket 只发送校园范围的变更信号，完整列表仍由 `/v1/community/feed` 获取；`Local/LocalCommunityPostDraftRepository`。
 - `Presentation/`：Feed、详情、发布、通知、投票、`Ratings/`（评教/评课/评菜）。Feed 在社区 Tab 活跃时预取变更快照，用户通过“有新内容”入口应用，手动刷新提供显式结果反馈。
 
 ### Schedule — `Features/Schedule/`（日迹）
@@ -171,7 +171,7 @@ flowchart TB
 - `SchoolLoginCredentialStore` / `SchoolSessionCredentialStore`：学校凭据与会话存储。
 - `TimetableWebViewBootstrapper`：课表 HTTP 路径失败后的 `WKWebView` 兼容路径。
 - `CustomCampusImportService`：自定义校园导入。
-- `Supabase/`：`LeafySupabase`、`SupabaseConfig`、`SupabaseBackendClient`、`TimetableSharingService`、`CustomCampusAuthService`、`PostgraduateInfoService`。
+- `Cloudflare/`：`CloudflareBackendClient`、`CloudflareCommunityRepository`、`CloudflareTimetableSharingService`、`CustomCampusAuthService`、`PostgraduateInfoService`；会话按 API origin 隔离。
 - `Diagnostics/DebugNetworkDiagnostics`：开发诊断。
 
 ### `leafy/Parsers/`
@@ -258,20 +258,20 @@ Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnaps
 
 Widget provider 按当前日期投影今天、明天及本自然周，在项目起止和午夜生成 timeline entries；周一切换自然周。小中号优先进行中与待开始项目、按可用高度限量显示并标明剩余数量；大号按真实时间混排七天，跨天日程逐日裁切，时间冲突最多两条可读轨道，密集区域显示数量入口。无结束时间的日程用 45 分钟投影，不展示虚构结束时间。课程链接进入课表详情，日程及更多链接通过 `leafy://schedules` 进入个人日程。
 
-## 10. Supabase 与 Web/运营后台边界
+## 10. Cloudflare 与 Web/运营后台边界
 
 - `backend/`：新版 Workers 业务、D1 migrations、数据导出转换与校验工具。
 - `supabase/`：旧生产 schema、Edge Functions 和测试，作为迁移输入及旧服务维护依据。
-- 主要函数组：社区初始化与 Feed（`community-bootstrap-user`、`community-feed`）、校园服务（`campus-request`、`campus-weather`）、分享（`share-preview`）、媒体验证与清理、管理（`admin-*`）。
+- 新版业务统一走 `/v1`；后台走 Worker `AdminAPI` 私有入口，公开 HTTP 不开放管理路由。旧 `supabase/functions/` 只服务旧版。
 - `site/`：官网（React + Vite）+ React-admin 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。
-- 高权限操作必须经过服务端认证、授权、参数校验与审计；iOS/前端只用 publishable key。
+- 高权限操作必须经过服务端认证、授权、参数校验与审计；iOS 使用用户会话调用业务 API，前端管理会话只保存在 HttpOnly Cookie；两者均不持有数据库密钥。
 
 ## 11. 当前行为约束
 
 以下是不变量，修改代码前必须遵守（与 `docs/` 中的设计细节不同，这些是当前必须成立的事实）：
 
 - 根导航顺序固定为 `课表 / 社区 / 日迹 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。社区 Tab 按校园 capability 隐藏。
-- 免登录（guest）入口完全本地：不创建任何账号，不连接 Supabase 或我们的后台；学期/校历配置使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
+- 免登录（guest）入口完全本地：不创建任何账号，不连接任何云端后台；学期/校历配置使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
 - Android 的 guest/无社区 capability 身份仍显示全部五个根入口，但社区页只展示门槛说明，且不得初始化 Supabase 或社区任务。Android 个人日程同时呈现在课表与日迹列表，可导出 ICS，但不申请系统日历写入权限。
 - Android 窗口宽度只能改变根导航和校园领域选择的 chrome；不得改变 `RootTab` 顺序、默认目的地、深链、返回栈、状态恢复、capability 门控或任何业务数据请求。
 - 日迹顶部直接提供 `随记 / 日程 / 推送`；首次进入默认日程，根 Tab 往返保留本次分区选择，明确深链优先；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。
@@ -300,7 +300,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 - 成绩和教学计划按表头解析并保存课程编号；同编号重修保留原始记录并选有效成绩，不同编号同名课程分别统计。缺少编号的旧数据不跨学期合并。文字成绩用于通过判断，不自行换算数值分数；GPA 仅展示学校官方值，均分缺少官方值时标明本地估算。
 - 培养方案保留原文、表格和动态要求。毕业总要求只使用明确总计，不能加总可能重叠的类别；已获总学分、公选、本专业选修优先用官方汇总。无法核验的类别完成量显示未确认，不显示零或臆测剩余门数。第二课堂要求单独核验，总学分达标不等同全部毕业条件满足。
 - 运营后台用户列表、搜索、分页、导出与用户统计统一排除 `profiles.is_demo`；该生成列按规范化 `edu_id` 的 legacy/installation Demo 规则计算。Demo 的身份、资料、访问和删除能力保留。
-- 帖子与评论通过校验 RPC 创建，并以 community actor + 客户端 request ID 幂等重放；PostgREST 命名参数必须显式编码可空字段，服务端保留顶层评论省略回复目标、帖子省略空分类的精确兼容重载。发帖队列在重试中复用稳定 UUID，评论内容与回复目标未变化时复用 request ID，超时重试不重复落库或通知。举报从不自动隐藏内容；图片帖使用短期单次服务端验证凭证，图片与附件全部完整且数量匹配后原子发布。评论最多两层。
+- 帖子与评论通过 `/v1` API 创建，并以 community actor + 客户端 request ID 幂等重放；可空资料字段明确编码 null，数据库 UUID 在接口边界统一规范化。发帖队列在重试中复用稳定 UUID，评论内容与回复目标未变化时复用 request ID，超时重试不重复落库或通知。举报从不自动隐藏内容；图片帖使用短期单次服务端验证凭证，图片与附件全部完整且数量匹配后原子发布。相同媒体 ID、路径和顺序的挂载重试返回已提交结果，不能复用凭证挂载其他内容；发布队列重试先读取真实发布状态。评论最多两层。
 - 共享课表是一次性邀请码 + 只读授权；明文邀请码短暂展示，数据库保存 hash；不上传成绩、备注、提醒。
 - 课表背景、个性化设置保存在本机，不进入分享图或 Widget。
 - 照片背景未显式选择显示模式时默认完整显示；启用状态下替换照片通过最终配置通知立即刷新课表根背景层。
@@ -344,15 +344,16 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 | Android 单元/导航/截图测试 | `android/app/src/test/`（JVM 契约与 Roborazzi golden，截图以 JUnit category 隔离）、`android/app/src/test/screenshots/`（受版本控制基准图）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航/照片背景生命周期测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 变化时执行 assemble、JVM tests、lint 与 Roborazzi verify，失败时上传实际图和差异产物 |
 | Android 发布 | `.github/workflows/android-release.yml` 仅通过 `workflow_dispatch` 发布 `android-vX.Y.Z`；从 GitHub secrets 恢复 Android 专用签名与公开 Supabase 配置，先执行 tests/lint/assemble，再用 `apksigner` 验证并附带 APK、SHA-256 和 build-info。iOS `vX.Y` tag 与归档流程保持独立 |
 | 教务解析回归 | 固定 HTML 样本测试 |
-| Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |
-| Edge Functions | Deno typecheck / 单元 / 契约测试 |
+| Cloudflare 后端 | `backend/tests/`（D1 事务、权限、幂等、文件、身份、迁移） |
+| 旧 Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |
+| 旧 Edge Functions | Deno typecheck / 单元 / 契约测试 |
 | Web | `site/`（TypeScript typecheck、Vitest、Playwright） |
 
-CI 位于 `.github/workflows/`：`ios-ci`、`site-ci`、`supabase-ci`、`repository-safety`，按改动范围触发。
+CI 位于 `.github/workflows/`：`ios-ci`、`site-ci`、`backend-ci`、`supabase-ci`、`repository-safety`，按改动范围触发。
 
 ## 13. 与其他文档的关系
 
-- 详细工程设计与决策 rationale：`docs/engineering/`（`supabase.md`、`admin-console.md`、`admin-backend-reliability.md`）。
+- 详细工程设计与决策 rationale：`docs/engineering/`（`cloudflare-migration.md`、`admin-console.md`、`admin-backend-reliability.md`）。
 - 产品定位与设计：`docs/product/`、`docs/design/`。
 - 当前进度与重点：`state/CURRENT.md`。
 - 可复用排查知识：`logs/`。

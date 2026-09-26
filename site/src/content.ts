@@ -449,8 +449,8 @@ export const privacySections: Array<{
     icon: Cloud,
     items: [
       "北京林业大学教务系统用于学校登录与教务数据查询。",
-      "Supabase 为 MyLeafy 社区服务提供账号、数据和文件存储，以及通知、反馈、评价、共享课表等功能。",
-      "Cloudflare 为 myleafy.space 提供官网访问和 support@myleafy.space 邮件转发。",
+      "Cloudflare 为新版 MyLeafy 提供账号服务运行环境、社区数据和文件存储，以及通知、反馈、评价、共享课表等功能。尚未迁移的旧版客户端继续使用 Supabase。",
+      "Cloudflare 为 myleafy.space 提供官网访问和 support@myleafy.space 邮件转发。Resend 用于发送账号及邮箱验证邮件。",
       "Apple 系统能力用于 App 分发、照片与文件选择、位置、日历、系统分享、通知与本地存储。"
     ]
   },

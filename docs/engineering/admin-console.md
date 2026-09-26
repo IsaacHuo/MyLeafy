@@ -2,7 +2,7 @@
 
 MyLeafy 运营后台是与官网同仓部署的受保护 Web 应用，生产路由为 `/admin`。它用于管理 MyLeafy 自有的社区、目录、配置和运营数据，不访问用户的学校密码，也不代替学校教务后台。
 
-后台前端位于 `site/src/admin/`，使用 React-admin 5、MUI、ECharts、Vite 与 TypeScript。管理 API 由 Cloudflare Pages Functions 代理到 Supabase Edge Functions。
+后台前端位于 `site/src/admin/`，使用 React-admin 5、MUI、ECharts、Vite 与 TypeScript。管理 API 由 Cloudflare Pages Functions 代理到 Cloudflare Worker AdminAPI。
 
 ## 1. 架构与信任边界
 
@@ -11,13 +11,13 @@ sequenceDiagram
     actor Admin as 管理员
     participant Browser as React-admin 浏览器
     participant Proxy as Cloudflare Pages Functions
-    participant Edge as Supabase Edge Functions
-    participant Data as PostgreSQL / Storage / Audit
+    participant Edge as Cloudflare Worker AdminAPI
+    participant Data as D1 / R2 / Audit
 
     Admin->>Browser: 发起管理操作
     Browser->>Proxy: 同域请求 + HttpOnly Cookie + CSRF
     Proxy->>Proxy: 校验 Origin、Method、类型与大小
-    Proxy->>Edge: 管理 token + 代理证明 + Request ID
+    Proxy->>Edge: 私有服务绑定 + 管理 token + Request ID
     Edge->>Edge: 校验会话、角色、校园范围与字段白名单
     Edge->>Data: 执行授权后的最小操作
     Data-->>Edge: 返回结果、冲突或拒绝
@@ -30,9 +30,9 @@ sequenceDiagram
 
 1. **浏览器 UI**：渲染资源、表单和确认交互，不持有服务端密钥。
 2. **Cloudflare Pages Functions**：管理 HttpOnly Cookie，校验同源、CSRF 和请求格式，并代理请求。
-3. **Supabase Edge Functions**：执行管理会话验证、RBAC、校园范围、参数校验、数据访问与审计。
+3. **Cloudflare Worker AdminAPI**：执行管理会话验证、RBAC、校园范围、参数校验、数据访问与审计。
 
-数据库和 Storage 是最终数据层。浏览器不能绕过代理直接以管理员身份调用 Data API。
+D1 和 R2 是最终数据层。浏览器不能绕过代理直接以管理员身份调用 Data API。
 
 ## 2. 请求链路
 
@@ -50,8 +50,8 @@ POST /api/admin/export
 
 1. 管理员在 `/admin` 提交凭据。
 2. Pages Function 校验来源、请求大小和代理配置。
-3. 请求转发至 `admin-login` Edge Function。
-4. Edge Function 执行限流、账号状态和密码验证。
+3. 请求转发至 Worker `/admin/login`。
+4. Worker 执行限流、账号状态和密码验证。
 5. 成功后，Pages Function 将管理会话写入 `leafy_admin_session` Cookie。
 
 Cookie 属性：
@@ -70,7 +70,7 @@ Cookie 属性：
 - 客户端发送固定 CSRF header。
 - Pages Function 校验 `Origin`、方法、内容类型和 CSRF。
 - 代理为每次请求生成或转发 request ID。
-- Edge Function 验证管理会话、角色和校园范围。
+- Worker 验证管理会话、角色和校园范围。
 - 高风险操作记录结果、持续时间和审计状态。
 
 只有确定的未认证响应才清理本地管理员状态。权限不足、网络故障或服务端错误不得被统一误处理为“退出登录”。
@@ -92,7 +92,7 @@ Cookie 属性：
 
 页面顶部的学校选择器是查询与操作范围，不是管理员授权边界。当前版本不提供多学校管理员 ACL；若未来需要按学校隔离管理员权限，必须作为独立的服务端授权能力设计，不能依赖前端选择器。
 
-前端隐藏按钮只改善体验，不构成授权。所有权限必须在 Edge Function 重新判断。
+前端隐藏按钮只改善体验，不构成授权。所有权限必须在 Worker 重新判断。
 
 ## 4. 资源模型
 
@@ -233,35 +233,13 @@ UI 至少区分：
 
 涉及敏感数据的导出仅开放给必要角色，并在服务端限制字段。导出后人工删除不作为数据最小化措施。
 
-## 9. 环境变量
+## 9. 环境配置
 
-Cloudflare Pages 的 Preview 与 Production 分别配置：
+Pages 通过 `MYLEAFY_ADMIN_API` 绑定 Worker 的 `AdminAPI` entrypoint；`MYLEAFY_PUBLIC_API` 绑定默认入口处理分享。生产目标为 `myleafy-api-production`，隔离测试目标为 `myleafy-api-staging`。浏览器不会获得绑定或数据库凭据，公开 Worker 路由不开放管理接口。
 
-```text
-SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-ADMIN_PROXY_SECRET=<at-least-32-random-bytes>
-```
-
-同一 `ADMIN_PROXY_SECRET` 作为 Supabase Edge Function secret：
-
-```bash
-supabase secrets set ADMIN_PROXY_SECRET='<same-random-secret>'
-```
-
-本地 Pages Functions 开发使用 `site/.dev.vars`，此文件不得提交：
-
-```text
-SUPABASE_URL=...
-SUPABASE_PUBLISHABLE_KEY=...
-ADMIN_PROXY_SECRET=...
-```
-
-禁止使用 `VITE_` 前缀暴露管理代理 secret。Vite 以 `VITE_` 开头的变量会进入浏览器 bundle。
+D1、R2、认证及签名 Secrets 配置在 Worker 环境，网站无需旧 Supabase 变量或 `ADMIN_PROXY_SECRET`。配置见 [site/README.md](../../site/README.md) 与 [Cloudflare 后端](cloudflare-migration.md)。
 
 ## 10. 本地开发
-
-### 10.1 纯前端
 
 ```bash
 cd site
@@ -269,64 +247,15 @@ npm ci
 npm run dev
 ```
 
-适合官网开发和 mock API 下的后台界面开发。Vite dev server 不包含真实 Pages Functions 管理代理。
+纯前端开发使用 mock API。`npm run dev:pages` 构建并运行 Pages Functions，真实请求需另行绑定本地 Worker。管理员账号与 bcrypt 密码哈希已从旧库迁入 D1；现有超级管理员可通过后台创建其他管理员，不在客户端或文档保存真实凭据。
 
-### 10.2 完整代理链路
+## 11. 数据库与 Worker
 
-```bash
-cd site
-npm ci
-npm run dev:pages
-```
+当前管理实现位于 `backend/src/admin-*.ts`，schema 位于 `backend/migrations/`。管理写入使用带权限和状态前置条件的 D1 batch，业务更新、审计和变更通知记录共同提交或回滚。
 
-该命令先构建网站，再使用 Wrangler 启动 Pages 环境。运行前配置 `site/.dev.vars`，并确保对应 Supabase migration、函数和管理员账号已建立。
+部署顺序为 D1 前向迁移（仅存在新迁移时）、Worker、Pages 绑定及网站。当前生产库已有新用户写入，不重复导入旧快照。旧 Supabase 服务单独保留，不受新版部署影响。
 
-### 10.3 初始化首位管理员
-
-仓库脚本从环境变量读取数据库连接和账号信息：
-
-```bash
-export SUPABASE_DB_URL='postgresql://...'
-export ADMIN_USERNAME='admin'
-export ADMIN_PASSWORD='replace-with-a-long-unique-password'
-export ADMIN_DISPLAY_NAME='MyLeafy Admin'
-bash supabase/scripts/create-admin-account.sh
-```
-
-脚本和文档中只使用占位值。密码和数据库 URL 不得写入 shell history、提交记录或 Issue。
-
-## 11. 数据库与函数
-
-管理链路依赖：
-
-- 管理员、会话、登录尝试和审计相关 migration。
-- `admin-login`、`admin-me`、`admin-logout`。
-- `admin-community` 通用管理 action。
-- `admin-export` 受控导出。
-- 公告等独立兼容函数。
-- `_shared/admin-*` 权限、CSV 与核心工具。
-
-基本部署：
-
-```bash
-supabase db push
-supabase functions deploy admin-login
-supabase functions deploy admin-me
-supabase functions deploy admin-logout
-supabase functions deploy admin-community
-supabase functions deploy admin-export
-```
-
-部署顺序遵循：前向 migration → 向后兼容的 Edge Functions → Cloudflare 变量和代理 → Web 静态资源。不要先发布依赖尚未存在 action 的前端。
-
-图片帖发布流程涉及前向 migration `20260725190000_community_post_upload_closure.sql`。发布顺序固定为：
-
-1. 部署 migration，并确认当前 `create_community_post_v4` 与媒体原子发布链路可用；不再部署 `publish_community_post_v1` 旧客户端入口。
-2. 部署 `admin-community`，使 `retryPostPublish` 与 `getModerationReport` 可用。
-3. 发布 Web 静态资源；iOS 新版本改用 `create_community_post_v3`。
-4. 使用合成内容验证自动发布；真实异常帖子只检查图片和操作是否可见，不替管理员批准内容。
-
-发布后分别以 `viewer` 和 `operator` 冒烟验证。`viewer` 不应看到编辑、导出、批量或写操作；`operator` 的写操作必须产生审计记录。
+图片与附件完整且数量匹配后才发布；`retryPostPublish` 同样检查全部媒体，支持纯附件帖。只恢复发布状态，不替管理员批准违规内容。验证允许与拒绝路径，viewer 不得写入或导出，operator 操作必须记录审计。
 
 ## 12. 安全要求
 
@@ -341,10 +270,10 @@ supabase functions deploy admin-export
 
 - 校验 Origin、方法、请求大小和 CSRF。
 - Cookie 设置 HttpOnly、Secure、SameSite 和受限 Path。
-- 代理 secret 只存在于服务端环境。
+- 服务绑定与签名密钥只存在于服务端环境。
 - 日志不记录密码、Cookie、Authorization 和响应敏感正文。
 
-### Edge Functions
+### Workers
 
 - 管理 session 独立于普通 App session。
 - 每个 action 进行角色、校园、资源、字段与状态校验。
@@ -354,9 +283,9 @@ supabase functions deploy admin-export
 
 ### 数据库
 
-- 普通用户 RLS 不因后台存在而放宽。
-- 管理表不授予 anon/authenticated 直接访问。
-- 登录尝试等安全数据只允许服务端角色访问。
+- 普通用户的校园范围、所有权和封禁检查不因后台存在而放宽。
+- 客户端不可直接访问 D1 或管理表。
+- 登录尝试等安全数据只允许授权的服务端操作访问。
 - migration 保持可重建且可审计；危险删除必须在当前客户端与能力清单确认无调用后执行。
 
 ## 13. 交互规范
@@ -394,26 +323,16 @@ npm run build
 - WebKit/iPad 响应式布局下的详情与操作可用性。
 - 浏览器 storage 中不存在管理 token。
 
-### Edge Functions 与数据库
+### Worker 与数据库
 
 ```bash
-deno check supabase/functions/admin-login/index.ts \
-  supabase/functions/admin-me/index.ts \
-  supabase/functions/admin-logout/index.ts \
-  supabase/functions/admin-community/index.ts \
-  supabase/functions/admin-export/index.ts
-
-deno test --allow-env --allow-read --allow-sys \
-  supabase/functions/_shared/admin-core.test.ts \
-  supabase/functions/_shared/admin-permissions.test.ts \
-  supabase/functions/_shared/admin-csv.test.ts \
-  supabase/functions/admin-community/admin-community.contract.test.ts
-
-supabase db reset --local
-bash supabase/tests/run_database_tests.sh
+npm run typecheck --prefix backend
+npm run check:contracts --prefix backend
+npm test --prefix backend
+npm run test:migration --prefix backend
 ```
 
-测试必须覆盖允许与拒绝路径、跨校园访问、角色降级、过期会话、参数越界、CSV 公式注入和审计记录。图片帖还必须覆盖 0/1/多图、最后一图原子发布、部分上传不公开、重复凭证、数量不匹配、旧客户端兼容、异常重试和并发状态冲突。
+测试必须覆盖允许与拒绝路径、跨校园访问、角色降级、过期会话、参数越界、CSV 公式注入和审计记录。图片帖还必须覆盖 0/1/多图、最后一图原子发布、部分上传不公开、重复凭证、数量不匹配、相同请求重放、异常重试和并发状态冲突。
 
 ## 15. 变更检查清单
 
@@ -426,4 +345,4 @@ bash supabase/tests/run_database_tests.sh
 5. 添加允许与拒绝路径测试。
 6. 检查导出和全局搜索是否应该包含该资源。
 7. 确认前端不获得新 secret 或直接数据库权限。
-8. 更新本文和 [Supabase 接入](supabase.md)。
+8. 更新本文和 [Cloudflare 后端](cloudflare-migration.md)。

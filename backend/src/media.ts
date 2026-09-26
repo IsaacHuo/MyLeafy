@@ -1,7 +1,8 @@
 import type { Actor, BackendEnv } from './auth';
 import { actorGuard, atomic, guard, outbox, rows, statement, type Row } from './db';
 import { ApiError, integer, readBytes, sha256, text, uuid } from './http';
-import { publishingGuard, requireCommunity } from './community';
+import { postAccessSQL, publishingGuard, requireCommunity } from './community';
+import { signedMediaURL } from './media-tickets';
 import { canonicalContentTypes, isAttachmentSizeAllowed, isContentTypeAllowed, isOOXML, isPDF, isUTF8Markdown, jpegDimensions, sanitizedDisplayName, supportedExtension } from './media-validation';
 
 const imageBucket='community-images',attachmentBucket='community-attachments';
@@ -51,7 +52,7 @@ export async function upload(env:BackendEnv,who:Actor,request:Request){
 
 async function ownedObject(env:BackendEnv,who:Actor,bucket:string,path:string,postId:string|null){
   objectKey(bucket,path);
-  const record=await env.DB.prepare("SELECT * FROM file_objects WHERE bucket=? AND path=? AND owner_id=? AND post_id IS ? AND state='uploaded'").bind(bucket,path,who.profileId,postId).first<Row>();
+  const record=await env.DB.prepare("SELECT * FROM file_objects WHERE bucket=? AND path=? AND owner_id=? AND post_id IS ? AND state IN('uploaded','attached')").bind(bucket,path,who.profileId,postId).first<Row>();
   if(!record)throw new ApiError(404,'not_found','待验证文件不存在。');
   const file=await env.FILES.get(objectKey(bucket,path));if(!file)throw new ApiError(404,'not_found','上传尚未完成，请重试。');
   const bytes=new Uint8Array(await file.arrayBuffer());
@@ -65,9 +66,11 @@ export async function validateImages(env:BackendEnv,who:Actor,body:Row){
   const prefix=`posts/${who.profileId}/${postId}/`;
   if(!fullPath.startsWith(`${prefix}full/`)||!thumbPath.startsWith(`${prefix}thumb/`))throw new ApiError(403,'path_mismatch','图片路径不属于该帖子。');
   const f=validatedImage(full.bytes,1600),t=validatedImage(thumb.bytes,480),id=crypto.randomUUID();
+  const completed=await env.DB.prepare('SELECT id FROM private_community_upload_receipts WHERE profile_id=? AND post_id=? AND full_path=? AND thumbnail_path=? AND consumed_at IS NOT NULL').bind(who.profileId,postId,fullPath,thumbPath).first<{id:string}>();
+  if(completed)return {receipt_id:completed.id};
   const result=await atomic(env.DB,[actorGuard(env.DB,who,true),pendingPostGuard(env,who,postId),
     statement(env.DB,`INSERT INTO private_community_upload_receipts(id,auth_user_id,profile_id,post_id,full_path,thumbnail_path,full_sha256,thumbnail_sha256,full_size,thumbnail_size,full_width,full_height,thumbnail_width,thumbnail_height)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(full_path) DO NOTHING`,[id,who.authId,who.profileId,postId,fullPath,thumbPath,full.record.sha256 as string,thumb.record.sha256 as string,full.bytes.length,thumb.bytes.length,f.width,f.height,t.width,t.height]),
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(full_path) DO UPDATE SET id=excluded.id,auth_user_id=excluded.auth_user_id,expires_at=excluded.expires_at WHERE profile_id=excluded.profile_id AND post_id=excluded.post_id AND thumbnail_path=excluded.thumbnail_path AND consumed_at IS NULL AND (expires_at<=strftime('%Y-%m-%dT%H:%M:%f','now')||'000Z' OR auth_user_id<>excluded.auth_user_id)`,[id,who.authId,who.profileId,postId,fullPath,thumbPath,full.record.sha256 as string,thumb.record.sha256 as string,full.bytes.length,thumb.bytes.length,f.width,f.height,t.width,t.height]),
     statement(env.DB,'SELECT id,auth_user_id,thumbnail_path,expires_at,consumed_at FROM private_community_upload_receipts WHERE full_path=?',[fullPath]),
   ]);
   const receipt=result[result.length-2].results[0];
@@ -79,9 +82,11 @@ export async function validateAttachment(env:BackendEnv,who:Actor,body:Row){
   const postId=uuid(body.post_id),path=text(body.object_path,512),name=sanitizedDisplayName(body.display_name),extension=supportedExtension(name);
   if(!name||!extension||!path.startsWith(`posts/${who.profileId}/${postId}/`)||!path.endsWith(`.${extension}`))throw new ApiError(400,'invalid_attachment','附件信息无效。');
   const file=await ownedObject(env,who,attachmentBucket,path,postId),id=crypto.randomUUID();
+  const completed=await env.DB.prepare('SELECT * FROM private_community_attachment_upload_receipts WHERE profile_id=? AND post_id=? AND object_path=? AND consumed_at IS NOT NULL').bind(who.profileId,postId,path).first<Row>();
+  if(completed)return {receipt_id:completed.id,byte_size:completed.byte_size,sha256:completed.sha256,content_type:completed.content_type,file_extension:completed.file_extension};
   const result=await atomic(env.DB,[actorGuard(env.DB,who,true),pendingPostGuard(env,who,postId),
     statement(env.DB,`INSERT INTO private_community_attachment_upload_receipts(id,auth_user_id,profile_id,post_id,object_path,display_name,content_type,file_extension,byte_size,sha256)
-      VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(object_path) DO NOTHING`,[id,who.authId,who.profileId,postId,path,name,canonicalContentTypes[extension],extension,file.bytes.length,file.record.sha256 as string]),
+      VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(object_path) DO UPDATE SET id=excluded.id,auth_user_id=excluded.auth_user_id,display_name=excluded.display_name,expires_at=excluded.expires_at WHERE profile_id=excluded.profile_id AND post_id=excluded.post_id AND consumed_at IS NULL AND (expires_at<=strftime('%Y-%m-%dT%H:%M:%f','now')||'000Z' OR auth_user_id<>excluded.auth_user_id)`,[id,who.authId,who.profileId,postId,path,name,canonicalContentTypes[extension],extension,file.bytes.length,file.record.sha256 as string]),
     statement(env.DB,'SELECT * FROM private_community_attachment_upload_receipts WHERE object_path=?',[path]),
   ]);
   const receipt=result[result.length-2].results[0];
@@ -93,9 +98,16 @@ export async function attach(env:BackendEnv,who:Actor,body:Row,kind:'image'|'att
   const receiptId=uuid(body.receipt_id),id=uuid(body.id),sort=integer(body.sort_order,0,kind==='image'?3:1);
   const receipts=kind==='image'?'private_community_upload_receipts':'private_community_attachment_upload_receipts';
   const table=kind==='image'?'post_images':'post_attachments';
-  const receipt=await env.DB.prepare(`SELECT * FROM ${receipts} WHERE id=? AND profile_id=? AND auth_user_id=?`).bind(receiptId,who.profileId,who.authId).first<Row>();
+  const receipt=await env.DB.prepare(`SELECT * FROM ${receipts} WHERE id=? AND profile_id=?`).bind(receiptId,who.profileId).first<Row>();
   if(!receipt)throw new ApiError(404,'not_found','验证凭证不存在。');
   const postId=receipt.post_id as string,now=new Date().toISOString().replace('Z','000Z');
+  const replay=async()=>{
+    const row=await env.DB.prepare(`SELECT a.*,p.status AS post_status FROM ${table} a JOIN posts p ON p.id=a.post_id JOIN ${receipts} r ON r.post_id=p.id WHERE r.id=? AND r.profile_id=? AND r.consumed_at IS NOT NULL AND a.id=? AND p.author_id=?`).bind(receiptId,who.profileId,id,who.profileId).first<Row>();
+    const same=row&&row.sort_order===sort&&row.path===(kind==='image'?receipt.full_path:receipt.object_path)&&(kind!=='image'||row.thumbnail_path===receipt.thumbnail_path);
+    return same?{attached:true,post_id:postId,status:row.post_status}:null;
+  };
+  if(receipt.consumed_at){const result=await replay();if(result)return result;throw new ApiError(409,'receipt_used','验证凭证已用于其他附件。');}
+  try{
   const result=await atomic(env.DB,[actorGuard(env.DB,who,true),publishingGuard(env.DB,who),pendingPostGuard(env,who,postId),
     guard(env.DB,`EXISTS(SELECT 1 FROM ${receipts} WHERE id=? AND profile_id=? AND auth_user_id=? AND consumed_at IS NULL AND expires_at>?)`,[receiptId,who.profileId,who.authId,now]),
     guard(env.DB,`(SELECT count(*) FROM ${table} WHERE post_id=?)<(SELECT ${kind==='image'?'expected_image_count':'expected_attachment_count'} FROM posts WHERE id=?)`,[postId,postId]),
@@ -111,6 +123,7 @@ export async function attach(env:BackendEnv,who:Actor,body:Row,kind:'image'|'att
     outbox(env.DB,`campus:${requireCommunity(who)}`),
   ]);
   return {attached:true,post_id:postId,status:result[result.length-3].results[0].status};
+  }catch(error){if(error instanceof ApiError&&error.status===409){const completed=await replay();if(completed)return completed;}throw error;}
 }
 
 export async function setProfileImage(env:BackendEnv,who:Actor,body:Row){
@@ -151,4 +164,11 @@ export async function readFile(env:BackendEnv,who:Actor,bucket:string,path:strin
     headers.set('Content-Range',`bytes ${start}-${start+length-1}/${object.size}`);headers.set('Content-Length',String(length));status=206;
   }else headers.set('Content-Length',String(object.size));
   return new Response(object.body,{status,headers});
+}
+
+export async function attachmentDownload(env:BackendEnv,who:Actor,attachmentID:unknown){
+  const id=uuid(attachmentID);
+  const file=await env.DB.prepare(`SELECT a.* FROM post_attachments a JOIN posts p ON p.id=a.post_id WHERE a.id=? AND ${postAccessSQL()}`).bind(id,requireCommunity(who),who.profileId,who.profileId).first<{path:string;display_name:string;content_type:string;byte_size:number}>();
+  if(!file)throw new ApiError(404,'not_found','附件不存在或无权访问。');
+  return {url:await signedMediaURL(env,who,'community-attachments',file.path),display_name:file.display_name,content_type:file.content_type,byte_size:file.byte_size,expires_in:600};
 }

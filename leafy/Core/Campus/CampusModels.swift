@@ -147,6 +147,7 @@ nonisolated struct CampusDescriptor: Codable, Hashable, Identifiable, Sendable {
 
 nonisolated enum CampusIdentityKind: String, Codable, Hashable, Sendable {
     case schoolPortal
+    // Persisted identity value: keep it stable so existing local data remains in scope.
     case customSupabase
     case guest
 }

@@ -1,6 +1,8 @@
 # MyLeafy App 功能总结
 
-本文档总结 MyLeafy 原生 iOS、Android App 与 iOS 小组件的用户侧功能。共同功能先按 iOS 完整产品描述，Android 尚未覆盖或采用原生替代交互的差异在对应章节和“Android 原生实现”小节注明。代码、target 和部分内部类型仍沿用 Leafy 命名；官网、`/admin` 后台、`admin-console/` 与 Supabase 迁移/函数只作为 App 数据与运营支撑背景出现，不作为 App 内页面展开。
+本文档总结 MyLeafy 原生 iOS、Android App 与 iOS 小组件的用户侧功能。共同功能先按 iOS 完整产品描述，Android 尚未覆盖或采用原生替代交互的差异在对应章节和“Android 原生实现”小节注明。代码、target 和部分内部类型仍沿用 Leafy 命名；官网、`/admin` 后台、`backend/` 与 Cloudflare API只作为 App 数据与运营支撑背景出现，不作为 App 内页面展开。
+
+本文云端服务描述以新版 iOS 为准；旧版与 Android 的 Supabase 服务保持独立。
 
 ## 1. 产品与数据边界
 
@@ -11,10 +13,10 @@ MyLeafy 是当前主要面向北京林业大学学生的校园工具 App。根 T
 | 数据类型 | 来源 | App 内用途 |
 |---|---|---|
 | 学号登录、验证码、课表、成绩、考试、教学计划、培养方案、空教室 | 北京林业大学强智教务系统 | 教务身份、课表和学业数据 |
-| 社区资料、帖子、图片、评论、点赞、收藏、通知、公告、反馈、评教/评课/评菜、共享课表授权、考研公共信息 | Supabase | 社区互动、运营内容与共享服务 |
+| 社区资料、帖子、图片、评论、点赞、收藏、通知、公告、反馈、评教/评课/评菜、共享课表授权、考研公共信息 | Cloudflare | 社区互动、运营内容与共享服务 |
 | 课程、成绩、备注、提醒、学习资料、简历、任务、体测、目标院校、常用链接等个人数据 | 本机 SwiftData / App 私有目录 | 离线查看和本地个人管理 |
 | 校历、作息、体育场馆等静态信息 | App 包内资源或本地整理数据 | 校园参考信息 |
-| 天气 | Supabase 天气服务缓存 | 首页、社区和小组件天气展示 |
+| 天气 | WeatherKit | 首页、社区和小组件天气展示 |
 
 启动逻辑：
 
@@ -43,7 +45,7 @@ MyLeafy 是当前主要面向北京林业大学学生的校园工具 App。根 T
 - 登录成功后的学校身份与 Cookie 会话由 App 本地管理。
 - 用户主动更新教务数据时直接复用当前 Cookie；网络不可达保留 Session，只有学校明确返回登录失效才重新认证。
 - 本科重新认证最多尝试三张验证码；每张都进行原图、放大和灰度增强三路端侧识别，至少两路小写四位结果一致且可信时才提交登录。OCR 不可靠或学校明确返回验证码错误时刷新下一张，三轮后人工输入；账号密码、网络或未知错误不会继续自动重试。研究生重新认证保持人工验证码，首次登录始终人工输入验证码。
-- 社区身份不会替代学校身份；同一教务身份在不同设备的 Supabase 匿名会话会自动继承同一社区资料和内容。
+- 社区身份不会替代学校身份；同一教务身份在不同设备的 Better Auth 学校会话会自动继承同一社区资料和内容。
 
 状态与异常：
 
@@ -132,7 +134,7 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 
 社区首页功能：
 
-- 展示真实 Supabase 帖子流。
+- 展示真实 Cloudflare 帖子流。
 - 支持下拉刷新。
 - 支持分类筛选。
 - 支持近 7 天热门帖子，按互动热度排序。
@@ -183,21 +185,21 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 - 通知包含评论、点赞，以及本机发布成功或失败事件。
 - 通知可跳转到对应帖子。
 - 站内公告可打开公告详情。
-- 通知订阅使用 Supabase Realtime，App 前台时刷新未读数。
+- 通知订阅使用 Cloudflare Durable Objects WebSocket，App 前台时刷新未读数。
 
 数据来源：
 
-- 社区会话、profile、帖子、图片、附件、评论、点赞、收藏、通知、公告和投票来自 Supabase。
-- 图片处理在本机完成；图片和附件文件上传到 Supabase 私有 Storage，通过短期签名链接读取。
+- 社区会话、profile、帖子、图片、附件、评论、点赞、收藏、通知、公告和投票来自 Cloudflare。
+- 图片处理在本机完成；图片和附件文件上传到 Cloudflare R2 私有存储，通过短期签名链接读取。
 - 附件结构与类型会校验，但不提供病毒扫描。删帖后的图片和附件默认保留 30 天再清理；存在未解决举报或后台隐藏时暂停清理。
-- 社区举报、屏蔽和删除申请写入 Supabase。
+- 社区举报、屏蔽和删除申请写入 Cloudflare。
 
 状态与异常：
 
 - 未同意条款时显示条款提示卡。
 - 加载中显示 `ProgressView`。
 - 空帖子流、空搜索结果、空投票均有 `ContentUnavailableView`。
-- Supabase 配置、权限或网络错误通过错误卡片展示，并提供重试。
+- Cloudflare 配置、权限或网络错误通过错误卡片展示，并提供重试。
 
 ## 6. 校园
 
@@ -322,7 +324,7 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 数据来源：
 
 - 目标院校保存在本机。
-- 公共来源和线索状态来自 Supabase。
+- 公共来源和线索状态来自 Cloudflare。
 
 ### 6.8 评教/评课/评菜
 
@@ -340,7 +342,7 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 
 数据来源：
 
-- 教师、课程、菜品目录和评分来自 Supabase。
+- 教师、课程、菜品目录和评分来自 Cloudflare。
 - 演示模式下使用演示数据。
 
 状态与异常：
@@ -407,9 +409,9 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 
 数据来源：
 
-- 个人社区资料来自 Supabase。
+- 个人社区资料来自 Cloudflare。
 - 个人本地设置使用 `AppStorage` 和 SwiftData。
-- 反馈提交到 Supabase。
+- 反馈提交到 Cloudflare。
 - App Store 评分和更新通过外部 App Store 链接。
 
 ## 9. 共享课表
@@ -426,7 +428,7 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 数据来源：
 
 - 本地课表展示数据由 App 从 SwiftData 生成。
-- 分享、邀请码和授权关系由 Supabase 管理。
+- 分享、邀请码和授权关系由 Cloudflare 管理。
 
 状态与异常：
 
@@ -474,12 +476,12 @@ Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigatio
 - 课表固定呈现 20 周，教务返回哪些课程周次就填入哪些周，其余周保持空白。
 - App 会在进入前台或后台时刷新 Widget 展示数据。
 - SwiftData 容器异常时自动尝试备份旧缓存并重建。
-- 教务个人数据优先保存在本机；社区和主动发布内容保存到 Supabase。
+- 教务个人数据优先保存在本机；社区和主动发布内容保存到 Cloudflare。
 
 安全边界：
 
 - 学校登录仍是主身份来源。
-- Supabase 匿名会话用于社区侧身份，不替代学校登录。
+- Better Auth 学校会话用于社区侧身份，不替代学校登录。
 - 通知邮箱只用于服务异常和重要消息联系，不参与社区登录或恢复。
 - 社区互动前要求资料补全和条款确认。
 - 反馈、举报、屏蔽、删除申请等操作进入社区服务侧处理。
@@ -511,7 +513,7 @@ MyLeafy 的核心页面通常覆盖以下状态：
 
 - Loading：学校数据、社区数据、本地文件或天气加载中。
 - Empty：暂无课表、暂无帖子、暂无投票、暂无目录、暂无本地记录等。
-- Error：网络不可达、学校会话失效、解析失败、Supabase 配置或权限失败、本地文件不可用。
+- Error：网络不可达、学校会话失效、解析失败、Cloudflare 配置或权限失败、本地文件不可用。
 - Unauthenticated：学校身份缺失或过期，需要登录或重新认证。
 - Review/Pending：含图片帖子、投票删除申请、目录补录建议和考研线索可能进入审核流程。
 - Local-only：学习资料、简历、任务、体测、专注记录等只保存在本机。

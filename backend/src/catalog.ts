@@ -5,7 +5,7 @@ import { requireCommunity } from './community';
 
 const catalogs={teachers:{table:'teachers',rating:'teacher_ratings',foreignKey:'teacher_id'},courses:{table:'course_catalog',rating:'course_ratings',foreignKey:'course_id'},dishes:{table:'dish_catalog',rating:'dish_ratings',foreignKey:'dish_id'}} as const;
 export function catalogKind(kind:string){
-  if(!(kind in catalogs))throw new ApiError(404,'not_found','目录不存在。');
+  if(!Object.hasOwn(catalogs,kind))throw new ApiError(404,'not_found','目录不存在。');
   return catalogs[kind as keyof typeof catalogs];
 }
 export async function catalog(env:BackendEnv,who:Actor,kind:string,url:URL):Promise<Row[]>{

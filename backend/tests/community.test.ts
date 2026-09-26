@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalD1 } from './d1-local';
 import type { Actor, BackendEnv } from '../src/auth';
-import { createPost, createComment, feed, termsVersion } from '../src/community';
+import { createPost, createComment, comments, notifications, feed, termsVersion } from '../src/community';
 import { actorGuard, atomic, statement } from '../src/db';
 import { commentThreads } from '../src/comment-threads';
 import { profileStats, activityPosts } from '../src/community-reads';
-import { announcements, announcementRead, notificationSettings } from '../src/notices';
-import { pendingPost, setPostReaction, toggleCommentLike } from '../src/interactions';
+import { announcements, announcementRead, notificationSettings, unreadNotificationCount } from '../src/notices';
+import { report, pendingPost, setPostReaction, toggleCommentLike } from '../src/interactions';
 
 const databases:LocalD1[]=[];
 function setup(){
@@ -139,4 +139,33 @@ it('normalizes UUID casing in iOS route parameters before reading or writing',as
   db.sqlite.prepare("INSERT INTO site_announcements(id,title,body,status,published_at,created_by) VALUES(?,'标题','内容','published',?,?)").run(announcementId,new Date(Date.now()-1000).toISOString(),who.authId);
   await announcementRead(env,who,announcementId.toUpperCase());
   expect(db.sqlite.prepare('SELECT announcement_id FROM site_announcement_reads WHERE user_id=?').get(who.authId)!.announcement_id).toBe(announcementId);
+});
+
+it('accepts the actual iOS report payload and preserves publication and campus isolation',async()=>{
+  const {env,who,db}=setup(),postId=crypto.randomUUID(),commentId=crypto.randomUUID();
+  await createPost(env,who,{id:postId,title:'举报测试',body:'正文'});
+  await createComment(env,who,{id:commentId,post_id:postId,body:'评论'});
+  expect(await comments(env,who,postId.toUpperCase(),new URL('https://api.invalid'))).toHaveLength(1);
+  for(const body of [{target_type:'post',post_id:postId.toUpperCase()},{target_type:'comment',comment_id:commentId.toUpperCase()},{target_type:'user',reported_user_id:who.profileId.toUpperCase()}]){
+    await report(env,who,{...body,reason:'spam'});
+    await expect(report(env,{...who,campusId:'other'},{...body,reason:'spam'})).rejects.toMatchObject({status:409});
+  }
+  expect(db.sqlite.prepare('SELECT count(*) n FROM community_reports').get()!.n).toBe(3);
+  expect(db.sqlite.prepare('SELECT status FROM posts WHERE id=?').get(postId)!.status).toBe('published');
+  expect(db.sqlite.prepare('SELECT status FROM comments WHERE id=?').get(commentId)!.status).toBe('published');
+});
+it('counts all unread notices beyond the page limit while respecting read, mute and dismiss state',async()=>{
+  const {env,who,db}=setup();
+  const insert=db.sqlite.prepare("INSERT INTO community_notifications(recipient_id,type,title) VALUES(?,'like','通知')");
+  for(let i=0;i<105;i++)insert.run(who.profileId);
+  const announcement=crypto.randomUUID();
+  db.sqlite.prepare("INSERT INTO site_announcements(id,title,body,status,published_at,created_by,campus_id) VALUES(?,'公告','正文','published','2020-01-01T00:00:00.000000Z','admin','bjfu')").run(announcement);
+  expect(await notifications(env,who,new URL('https://api.invalid/?limit=3'))).toHaveLength(3);
+  expect(await unreadNotificationCount(env,who)).toEqual({count:106});
+  await announcementRead(env,who,announcement);
+  db.sqlite.exec('UPDATE community_notifications SET is_read=1 WHERE rowid IN (SELECT rowid FROM community_notifications LIMIT 2)');
+  db.sqlite.exec("UPDATE community_notifications SET dismissed_at='2020-01-01' WHERE is_read=0 AND rowid IN (SELECT rowid FROM community_notifications WHERE is_read=0 LIMIT 1)");
+  expect(await unreadNotificationCount(env,who)).toEqual({count:102});
+  await notificationSettings(env,who,{muted_all:true});
+  expect(await unreadNotificationCount(env,who)).toEqual({count:0});
 });
