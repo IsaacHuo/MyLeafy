@@ -1,4 +1,4 @@
-import { cloudflareToken } from './cloudflare-auth.mjs';
+import { cloudflareToken, cloudflareRequest } from './cloudflare-auth.mjs';
 import { readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { backupKey, digest, Vault } from './snapshot.mjs';
@@ -19,7 +19,7 @@ catch(error){if(error.code!=='ENOENT')throw error;progress={complete:false,objec
 const base=`https://api.cloudflare.com/client/v4/accounts/${config.account_id}/r2/buckets/${config.env[environment].r2_buckets[0].bucket_name}/objects/`;
 // This is the same authenticated object API used by the pinned Wrangler R2 CLI.
 async function object(path,method='GET',body,contentType){
-  const response=await fetch(base+path.split('/').map(encodeURIComponent).join('/'),{method,headers:{Authorization:`Bearer ${await cloudflareToken()}`,...(contentType?{'Content-Type':contentType}:{}),...(body?{'Content-Length':String(body.length)}:{})},body,signal:AbortSignal.timeout(60000)});
+  const response=await cloudflareRequest(base+path.split('/').map(encodeURIComponent).join('/'),{method,headers:{Authorization:`Bearer ${await cloudflareToken()}`,...(contentType?{'Content-Type':contentType}:{}),...(body?{'Content-Length':String(body.length)}:{})},body,signal:AbortSignal.timeout(60000)});
   if(response.status===404&&method==='GET')return null;
   if(!response.ok)throw new Error(`R2 ${method} failed (HTTP ${response.status})`);return response;
 }
@@ -27,6 +27,8 @@ let progressWrites=Promise.resolve();
 function saveProgress(){progressWrites=progressWrites.then(()=>vault.putJSON(`r2-${environment}-transfer`,progress));return progressWrites;}
 async function transferObject([id,file]){
   const path=`${file.bucket}/${file.path}`,bytes=await vault.get(file.chunk.name,file.chunk);
+  // Completed immutable objects were already read back and hash-verified.
+  if(progress.objects[id]?.verified)return;
   const current=await object(path),currentBytes=current?Buffer.from(await current.arrayBuffer()):null;
   if(currentBytes&&digest(currentBytes)===file.chunk.sha256){progress.objects[id]={...progress.objects[id],verified:true};await saveProgress();return;}
   if(!currentBytes&&!progress.objects[id]){progress.objects[id]={previous_absent:true};await saveProgress();}

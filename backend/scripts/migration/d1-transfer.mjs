@@ -1,9 +1,9 @@
-import { cloudflareToken } from './cloudflare-auth.mjs';
+import { importSQL } from './d1-import.mjs';
+import { cloudflareToken, cloudflareRequest } from './cloudflare-auth.mjs';
 import { DatabaseSync } from 'node:sqlite';
-import { readFile, writeFile, chmod, unlink } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
 import { digest, difference, tableSummary } from './snapshot.mjs';
 import { literal, quote } from './convert.mjs';
 
@@ -25,7 +25,7 @@ export function rowSQL(table,row,primaryKey=[]){
 export async function deltaSQL(beforePath,afterPath){
   const before=new DatabaseSync(beforePath,{readOnly:true}),after=new DatabaseSync(afterPath,{readOnly:true});
   try{
-    const {summaries}=await transferSQL(afterPath),baseline={},changes={};
+    const {summaries}=await transferSQL(afterPath),baseline={},changes={},deferred=[];
     const lines=['PRAGMA defer_foreign_keys=ON;',"UPDATE backend_control SET mode='importing' WHERE id=1;",'UPDATE migration_control SET importing=1 WHERE id=1;','CREATE TABLE _leafy_migration_values(id TEXT NOT NULL,ordinal INTEGER NOT NULL,value TEXT NOT NULL,PRIMARY KEY(id,ordinal));'];
     for(const [table,meta] of Object.entries(summaries)){
       const select=`SELECT ${meta.columns.map(quote).join(',')} FROM ${quote(table)}`;
@@ -38,12 +38,38 @@ export async function deltaSQL(beforePath,afterPath){
     for(const row of changes.comments.deleted)lines.push(`UPDATE comments SET parent_comment_id=NULL,reply_to_comment_id=NULL WHERE parent_comment_id=${literal(row.id)};`);
     for(const table of Object.keys(changes).reverse())for(const row of changes[table].deleted)lines.push(`DELETE FROM ${quote(table)} WHERE ${summaries[table].primaryKey.map(key=>`${quote(key)}=${literal(row[key])}`).join(' AND ')};`);
     for(const [table,delta] of Object.entries(changes)){
-      for(const row of [...delta.inserted,...delta.updated.map(change=>change.after)])lines.push(...rowSQL(table,row,summaries[table].primaryKey));
+      const columns=deferredReferenceColumns(after,table),primaryKey=summaries[table].primaryKey;
+      for(const row of [...delta.inserted,...delta.updated.map(change=>change.after)]){
+        lines.push(...rowSQL(table,{...row,...Object.fromEntries(columns.map(column=>[column,null]))},primaryKey));
+        if(columns.some(column=>row[column]!==null))deferred.push(`UPDATE ${quote(table)} SET ${columns.map(column=>`${quote(column)}=${literal(row[column])}`).join(',')} WHERE ${primaryKey.map(column=>`${quote(column)}=${literal(row[column])}`).join(' AND ')};`);
+      }
     }
+    lines.push(...deferred);
     for(const [table,summary] of Object.entries(summaries))lines.push(`INSERT INTO mutation_assertions(ok) SELECT CASE WHEN (SELECT count(*) FROM ${quote(table)})=${summary.count} THEN 1 ELSE 0 END;`);
     lines.push('INSERT INTO mutation_assertions(ok) SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM pragma_foreign_key_check) THEN 1 ELSE 0 END;','DELETE FROM mutation_assertions;','DROP TABLE _leafy_migration_values;','UPDATE migration_control SET importing=0 WHERE id=1;',"UPDATE backend_control SET mode='read_only',generation=generation+1 WHERE id=1;");
     return {sql:lines.join('\n')+'\n',summaries,baseline,counts:Object.fromEntries(Object.entries(changes).map(([table,d])=>[table,{inserted:d.inserted.length,updated:d.updated.length,deleted:d.deleted.length}]))};
   }finally{before.close();after.close();}
+}
+
+function dependencyOrder(db,tables){
+  const known=new Set(tables),done=new Set(),visiting=new Set(),ordered=[];
+  const visit=table=>{
+    if(done.has(table))return;
+    if(visiting.has(table))throw new Error(`Cyclic table dependency needs explicit mapping: ${table}`);
+    visiting.add(table);
+    for(const key of db.prepare(`PRAGMA foreign_key_list(${quote(table)})`).all())if(!deferredReferenceColumns(db,table).includes(key.from)&&key.table!==table&&known.has(key.table))visit(key.table);
+    visiting.delete(table);done.add(table);ordered.push(table);
+  };
+  for(const table of tables)visit(table);
+  return ordered;
+}
+function deferredReferenceColumns(db,table){
+  const columns=[...new Set(db.prepare(`PRAGMA foreign_key_list(${quote(table)})`).all().filter(key=>key.table===table).map(key=>key.from))];
+  // Profiles and campus requests form a nullable back-reference cycle.
+  if(table==='profiles')columns.push('community_request_id');
+  const info=db.prepare(`PRAGMA table_info(${quote(table)})`).all();
+  if(columns.some(name=>info.find(column=>column.name===name)?.notnull))throw new Error(`Required self-reference needs explicit ordering: ${table}`);
+  return columns;
 }
 
 export async function transferSQL(sourcePath){
@@ -52,19 +78,22 @@ export async function transferSQL(sourcePath){
     if(db.prepare('PRAGMA foreign_key_check').all().length)throw new Error('Source conversion has orphaned foreign keys');
     if(db.prepare('SELECT mode FROM backend_control').get()?.mode!=='read_only')throw new Error('Source conversion is not sealed for import');
     const mapping=JSON.parse(await readFile(new URL('../../contracts/table-mapping.json',import.meta.url),'utf8'));
-    const tables=['auth_users','identity_user','identity_account',...Object.keys(mapping),'file_objects'];
+    const tables=dependencyOrder(db,['auth_users','identity_user','identity_account',...Object.keys(mapping),'file_objects']);
     const lines=['PRAGMA defer_foreign_keys=ON;',"UPDATE backend_control SET mode='importing' WHERE id=1;",'UPDATE migration_control SET importing=1 WHERE id=1;',
       'CREATE TABLE _leafy_migration_values(id TEXT NOT NULL,ordinal INTEGER NOT NULL,value TEXT NOT NULL,PRIMARY KEY(id,ordinal));',
-      'UPDATE comments SET parent_comment_id=NULL,reply_to_comment_id=NULL;',
+      ...tables.flatMap(table=>{const columns=deferredReferenceColumns(db,table);return columns.length?[`UPDATE ${quote(table)} SET ${columns.map(column=>`${quote(column)}=NULL`).join(',')};`]:[];}),
       ...['admin_banner_uploads','identity_session','identity_verification','identity_rate_limit','change_outbox','file_delete_jobs',...tables.slice().reverse()].map(table=>`DELETE FROM ${quote(table)};`)];
-    const summaries={};
+    const summaries={},deferred=[];
     for(const table of tables){
       const columns=db.prepare(`PRAGMA table_xinfo(${quote(table)})`).all().filter(c=>c.hidden===0).map(c=>c.name);
       const primaryKey=db.prepare(`PRAGMA table_info(${quote(table)})`).all().filter(c=>c.pk>0).sort((a,b)=>a.pk-b.pk).map(c=>c.name);
       const rows=db.prepare(`SELECT ${columns.map(quote).join(',')} FROM ${quote(table)}`).all().map(row=>({...row}));
       summaries[table]={...tableSummary(rows,primaryKey),columns,primaryKey};
-      for(const row of rows)lines.push(...rowSQL(table,row));
+      const selfColumns=deferredReferenceColumns(db,table);
+      for(const row of rows)lines.push(...rowSQL(table,{...row,...Object.fromEntries(selfColumns.map(column=>[column,null]))}));
+      for(const row of rows)if(selfColumns.some(column=>row[column]!==null))deferred.push(`UPDATE ${quote(table)} SET ${selfColumns.map(column=>`${quote(column)}=${literal(row[column])}`).join(',')} WHERE ${primaryKey.map(column=>`${quote(column)}=${literal(row[column])}`).join(' AND ')};`);
     }
+    lines.push(...deferred);
     for(const [table,summary] of Object.entries(summaries))lines.push(`INSERT INTO mutation_assertions(ok) SELECT CASE WHEN (SELECT count(*) FROM ${quote(table)})=${summary.count} THEN 1 ELSE 0 END;`);
     lines.push('INSERT INTO mutation_assertions(ok) SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM pragma_foreign_key_check) THEN 1 ELSE 0 END;','DELETE FROM mutation_assertions;','DROP TABLE _leafy_migration_values;','UPDATE migration_control SET importing=0 WHERE id=1;',"UPDATE backend_control SET mode='read_only',generation=generation+1 WHERE id=1;");
     for(const line of lines)if(Buffer.byteLength(line)>95000)throw new Error('Generated statement exceeds D1 SQL size bound');
@@ -74,12 +103,12 @@ export async function transferSQL(sourcePath){
 
 export async function remoteQuery(config,environment,sql,params=[]){
   const target=config.env[environment];
-  const response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${config.account_id}/d1/database/${target.d1_databases[0].database_id}/query`,{method:'POST',headers:{Authorization:`Bearer ${await cloudflareToken()}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params}),signal:AbortSignal.timeout(30000)});
+  const response=await cloudflareRequest(`https://api.cloudflare.com/client/v4/accounts/${config.account_id}/d1/database/${target.d1_databases[0].database_id}/query`,{method:'POST',headers:{Authorization:`Bearer ${await cloudflareToken()}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params}),signal:AbortSignal.timeout(30000)});
   const data=await response.json();if(!response.ok||!data.success)throw new Error(`D1 request failed (HTTP ${response.status}); inspect the operator dashboard`);
   return data.result.flatMap(result=>result.results);
 }
 export async function verifyD1(config,environment,summaries){
-  for(const [table,summary] of Object.entries(summaries)){
+  async function verifyTable([table,summary]){
     const rows=[];let previous=null;
     while(true){
       const predicate=previous?` WHERE (${summary.primaryKey.map(quote).join(',')})>(${summary.primaryKey.map(()=>'?').join(',')})`:'';
@@ -90,6 +119,11 @@ export async function verifyD1(config,environment,summaries){
     const actual=tableSummary(rows,summary.primaryKey);
     if(actual.count!==summary.count||actual.sha256!==summary.sha256)throw new Error(`Remote data verification failed: ${table}`);
     console.log(JSON.stringify({table,verified:true,rows:actual.count}));
+  }
+  const entries=Object.entries(summaries);
+  for(let index=0;index<entries.length;index+=4){
+    const results=await Promise.allSettled(entries.slice(index,index+4).map(verifyTable));
+    const failed=results.find(result=>result.status==='rejected');if(failed)throw failed.reason;
   }
   if((await remoteQuery(config,environment,'PRAGMA foreign_key_check')).length)throw new Error('Remote D1 foreign key check failed');
 }
@@ -102,19 +136,10 @@ async function main(){
   if(environment==='production'&&!process.env.CUTOVER_BACKUP_ID)throw new Error('CUTOVER_BACKUP_ID must identify the verified pre-cutover backup');
   const [state]=await remoteQuery(config,environment,'SELECT mode FROM backend_control WHERE id=1');
   if(state?.mode!=='read_only')throw new Error('Target must be frozen before transfer');
-  const transfer=flag==='--delta-from'?await deltaSQL(baseline,source):await transferSQL(source),path=resolve(`${source}.${environment}.transfer.sql`);
+  const transfer=flag==='--delta-from'?await deltaSQL(baseline,source):await transferSQL(source);
   if(transfer.baseline)await verifyD1(config,environment,transfer.baseline);
-  await writeFile(path,transfer.sql,{mode:0o600,flag:'wx'});await chmod(path,0o600);
-  try{
-    await new Promise((fulfill,reject)=>{
-      const entry=process.env.WRANGLER_BIN||new URL('../../node_modules/wrangler/bin/wrangler.js',import.meta.url).pathname;
-      const child=spawn(process.execPath,[entry,'d1','execute',config.env[environment].d1_databases[0].database_name,'--remote','--env',environment,'--config',new URL('../../wrangler.jsonc',import.meta.url).pathname,'--file',path,'--yes'],{shell:false,env:process.env,stdio:['ignore','pipe','pipe']});
-      // CLI diagnostics can contain failing SQL and credential hashes. Keep them out of logs.
-      child.stdout.resume();child.stderr.resume();child.on('error',()=>reject(new Error('Wrangler could not start')));
-      child.on('close',code=>code===0?fulfill():reject(new Error(`D1 file import failed (exit ${code}); retain source backup and keep target frozen`)));
-    });
-    await verifyD1(config,environment,transfer.summaries);
-    console.log(JSON.stringify({environment,verified:true,mode:'read_only',source:basename(source)}));
-  }finally{await unlink(path);}
+  await importSQL(config,environment,transfer.sql);
+  await verifyD1(config,environment,transfer.summaries);
+  console.log(JSON.stringify({environment,verified:true,mode:'read_only',source:basename(source)}));
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await main();
