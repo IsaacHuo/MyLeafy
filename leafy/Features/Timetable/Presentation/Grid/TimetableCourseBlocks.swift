@@ -1058,6 +1058,14 @@ struct CustomScheduleEditorSheet: View {
     }
 
     @MainActor
+    private func publishWidgetSnapshot() {
+        LeafyWidgetSnapshotBuilder.publish(
+            from: modelContext,
+            isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
+        )
+    }
+
+    @MainActor
     private func saveCurrentItem() async {
         guard !isSaving else { return }
         focusedField = nil
@@ -1138,6 +1146,7 @@ struct CustomScheduleEditorSheet: View {
         do {
             try modelContext.save()
             removeSourceImportantDateIfNeeded()
+            publishWidgetSnapshot()
             onSaved?(.init(kind: .timetableReminder, stableID: record.id.uuidString))
             let scheduledCount: Int
             do {
@@ -1199,6 +1208,7 @@ struct CustomScheduleEditorSheet: View {
             }
         }
 
+        publishWidgetSnapshot()
         onSaved?(.init(kind: .importantDate, stableID: event.id))
 
         let scheduledCount: Int
@@ -1230,11 +1240,17 @@ struct CustomScheduleEditorSheet: View {
             modelContext.delete(record)
         }
 
-        try? modelContext.save()
-        operationAlert = .success(
-            L10n.text("日程已删除。", language: leafyLanguage),
-            action: { dismiss() }
-        )
+        do {
+            try modelContext.save()
+            publishWidgetSnapshot()
+            operationAlert = .success(
+                L10n.text("日程已删除。", language: leafyLanguage),
+                action: { dismiss() }
+            )
+        } catch {
+            modelContext.rollback()
+            operationAlert = .failure(error.localizedDescription)
+        }
     }
 
     @MainActor
@@ -1244,6 +1260,7 @@ struct CustomScheduleEditorSheet: View {
         events.removeAll { $0.id == event.id }
         TimetableNotificationManager.cancelReminder(for: event)
         CustomScheduleStore.save(events)
+        publishWidgetSnapshot()
         operationAlert = .success(
             L10n.text("日程已删除。", language: leafyLanguage),
             action: { dismiss() }

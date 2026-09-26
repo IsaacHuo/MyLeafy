@@ -2146,6 +2146,11 @@ struct TimetableView: View {
     }
 
     private func dayHeader(metadata: TimetableDayMetadata) -> some View {
+        let annotation = [
+            metadata.event?.displayTitle(language: leafyLanguage),
+            metadata.hasExam ? L10n.text("考试", language: leafyLanguage) : nil
+        ].compactMap { $0 }.joined(separator: " · ")
+
         return VStack(spacing: 0) {
             Text(metadata.dayTitle)
                 .font(.system(size: 14 * leafyControlScale, weight: .semibold))
@@ -2159,26 +2164,22 @@ struct TimetableView: View {
                 .minimumScaleFactor(0.72)
                 .allowsTightening(true)
                 .frame(height: 14 * leafyControlScale)
-            VStack(spacing: 0) {
-                if let event = metadata.event {
-                    Text(event.displayTitle(language: leafyLanguage))
-                        .font(.system(size: 7.5 * leafyControlScale))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                        .allowsTightening(true)
-                }
-                if metadata.hasExam {
-                    Label("考试", systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 7.5 * leafyControlScale, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: headerHeight, alignment: .center)
+        .overlay(alignment: .bottom) {
+            if !annotation.isEmpty {
+                Text(annotation)
+                    .font(.system(size: 7.5 * leafyControlScale))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .allowsTightening(true)
+                    .frame(height: 8 * leafyControlScale)
+                    .padding(.horizontal, 2 * leafyControlScale)
+                    .padding(.bottom, leafyControlScale)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 18 * leafyControlScale, alignment: .top)
         }
         .foregroundStyle(dayHeaderTextForeground(for: metadata))
-        .frame(maxWidth: .infinity, minHeight: headerHeight)
         .background(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(dayHeaderFill(today: metadata.isToday, event: metadata.event, hasExam: metadata.hasExam))
@@ -2701,10 +2702,7 @@ struct TimetableView: View {
 
     private func publishWidgetSnapshot() {
         LeafyWidgetSnapshotBuilder.publish(
-            courses: courses,
-            notes: courseNotes,
-            occurrenceNotes: occurrenceNotes,
-            reminders: courseReminderSettings,
+            from: modelContext,
             isAuthenticated: networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
         )
     }

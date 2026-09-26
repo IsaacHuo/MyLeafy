@@ -6,22 +6,6 @@ import SwiftData
 enum LeafyWidgetSnapshotBuilder {
     private static let logger = Logger(subsystem: "com.isaachuo.leafy", category: "WidgetSnapshot")
 
-    static func publish(
-        courses: [Course],
-        notes: [CourseNote],
-        occurrenceNotes: [CourseOccurrenceNote],
-        reminders: [CourseReminderSetting],
-        isAuthenticated: Bool,
-        date: Date = Date()
-    ) {
-        let archive = makeArchive(
-            courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
-            reminders: reminders, schedules: CustomScheduleStore.load(),
-            isAuthenticated: isAuthenticated, date: date
-        )
-        Task { await WidgetSnapshotPublisher.shared.publish(archive) }
-    }
-
     static func publish(from modelContext: ModelContext, isAuthenticated: Bool, date: Date = Date()) {
         do {
             let archive = makeArchive(
@@ -29,6 +13,7 @@ enum LeafyWidgetSnapshotBuilder {
                 notes: try modelContext.fetch(FetchDescriptor<CourseNote>()),
                 occurrenceNotes: try modelContext.fetch(FetchDescriptor<CourseOccurrenceNote>()),
                 reminders: try modelContext.fetch(FetchDescriptor<CourseReminderSetting>()),
+                cellReminders: try modelContext.fetch(FetchDescriptor<TimetableCellReminder>()),
                 schedules: CustomScheduleStore.load(), isAuthenticated: isAuthenticated, date: date
             )
             Task { await WidgetSnapshotPublisher.shared.publish(archive) }
@@ -40,7 +25,7 @@ enum LeafyWidgetSnapshotBuilder {
 
     static func publishNeedsLogin(date: Date = Date()) {
         let archive = makeArchive(courses: [], notes: [], occurrenceNotes: [], reminders: [],
-                                  schedules: [], isAuthenticated: false, date: date)
+                                  cellReminders: [], schedules: [], isAuthenticated: false, date: date)
         Task { await WidgetSnapshotPublisher.shared.publishNeedsLogin(archive) }
     }
 
@@ -50,12 +35,14 @@ enum LeafyWidgetSnapshotBuilder {
         notes: [CourseNote] = [],
         occurrenceNotes: [CourseOccurrenceNote] = [],
         reminders: [CourseReminderSetting] = [],
+        cellReminders: [TimetableCellReminder] = [],
         schedules: [CustomScheduleEvent] = [],
         isAuthenticated: Bool,
         date: Date
     ) -> LeafyWidgetSnapshotArchive {
         makeArchive(courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
-                    reminders: reminders, schedules: schedules, isAuthenticated: isAuthenticated, date: date)
+                    reminders: reminders, cellReminders: cellReminders,
+                    schedules: schedules, isAuthenticated: isAuthenticated, date: date)
     }
     #endif
 
@@ -64,6 +51,7 @@ enum LeafyWidgetSnapshotBuilder {
         notes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote],
         reminders: [CourseReminderSetting],
+        cellReminders: [TimetableCellReminder],
         schedules: [CustomScheduleEvent],
         isAuthenticated: Bool,
         date: Date
@@ -101,6 +89,17 @@ enum LeafyWidgetSnapshotBuilder {
                         accentIndex: accentIndex(for: course.courseName)
                     ))
                 }
+            }
+            items += cellReminders.compactMap { reminder -> LeafyWidgetAgendaItem? in
+                guard let start = reminder.resolvedStartDate else { return nil }
+                let end = reminder.resolvedEndDate.flatMap { $0 > start ? $0 : nil }
+                let id = reminder.id.uuidString
+                return LeafyWidgetAgendaItem(
+                    id: "timetable-schedule-\(id)", kind: .schedule, sourceID: id,
+                    title: reminder.title, startsAt: start, endsAt: end,
+                    locationText: reminder.locationText, teacherText: nil, noteText: nil,
+                    reminderText: nil, accentIndex: accentIndex(for: id)
+                )
             }
             items += schedules.map { event in
                 LeafyWidgetAgendaItem(

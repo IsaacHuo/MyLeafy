@@ -18,6 +18,7 @@ struct LeafyWeekWidgetView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(LeafyWidgetL10n.text("本周安排"))
                     .font(.system(size: 15, weight: .bold))
+                    .padding(.leading, 8)
                 Spacer(minLength: 4)
                 if let first = dates.first, let last = dates.last {
                     Text("\(shortDate(first))–\(shortDate(last))")

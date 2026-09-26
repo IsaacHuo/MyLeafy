@@ -419,10 +419,7 @@ struct TimetableProcessingView: View {
 
     private func publishWidgetSnapshot() {
         LeafyWidgetSnapshotBuilder.publish(
-            courses: courses,
-            notes: courseNotes,
-            occurrenceNotes: occurrenceNotes,
-            reminders: courseReminderSettings,
+            from: modelContext,
             isAuthenticated: true
         )
     }

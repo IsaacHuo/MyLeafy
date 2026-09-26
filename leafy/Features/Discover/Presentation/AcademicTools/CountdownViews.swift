@@ -244,6 +244,10 @@ struct CustomScheduleListView: View {
             modelContext.delete(reminder)
             do {
                 try modelContext.save()
+                LeafyWidgetSnapshotBuilder.publish(
+                    from: modelContext,
+                    isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
+                )
                 operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
             } catch {
                 operationAlert = .failure(error.localizedDescription)
@@ -439,6 +443,9 @@ private struct CustomScheduleListRow: View {
 
                     Text(CountdownEventRow.countdownDescription(for: item.startDate))
                         .font(.title3.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .allowsTightening(true)
                         .foregroundStyle(AppTheme.primaryText)
                 }
 
@@ -501,6 +508,9 @@ struct CountdownEventRow: View {
                 .foregroundStyle(.secondary)
             Text(Self.countdownDescription(for: targetDate))
                 .font(.title3.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .allowsTightening(true)
         }
         .padding(.vertical, 6)
     }
