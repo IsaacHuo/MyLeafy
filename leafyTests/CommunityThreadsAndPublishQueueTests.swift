@@ -61,20 +61,7 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         XCTAssertEqual(object["p_request_id"] as? String, "22222222-2222-2222-2222-222222222222")
     }
 
-    func testUnknownCommunityMutationErrorDoesNotExposeBackendDetails() async {
-        let backendMessage = "Could not find the function in the schema cache"
-        let error = NSError(domain: "PostgREST", code: 202, userInfo: [
-            NSLocalizedDescriptionKey: backendMessage
-        ])
 
-        let mapped = await CommunityService().mapCommunityMutationError(
-            error,
-            fallback: "评论发布失败"
-        )
-
-        XCTAssertEqual(mapped.localizedDescription, "评论发布失败，请稍后重试。")
-        XCTAssertFalse(mapped.localizedDescription.contains(backendMessage))
-    }
 
     func testCommentLikeResponseDecodesSingleRow() throws {
         let commentID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
@@ -308,93 +295,9 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         )
     }
 
-    func testPublishCapabilityRequirementsAreMediaSpecific() throws {
-        let staleCapabilities = try decodeCapabilities(
-            rpcs: ["create_community_post_v4_idempotent": true],
-            edgeFunctions: []
-        )
-        let textKinds: Set<CommunityPublishMediaKind> = []
-        let imageKinds: Set<CommunityPublishMediaKind> = [.image]
-        let attachmentKinds: Set<CommunityPublishMediaKind> = [.attachment]
 
-        XCTAssertTrue(
-            CommunityPublishCapabilityRequirements.isSatisfied(
-                by: staleCapabilities,
-                mediaKinds: textKinds
-            )
-        )
-        XCTAssertEqual(
-            CommunityPublishCapabilityRequirements.missingRPCs(
-                in: staleCapabilities,
-                mediaKinds: imageKinds
-            ),
-            ["attach_community_post_image_v1"]
-        )
-        XCTAssertEqual(
-            CommunityPublishCapabilityRequirements.missingEdgeFunctions(
-                in: staleCapabilities,
-                mediaKinds: imageKinds
-            ),
-            ["community-validate-upload"]
-        )
-        XCTAssertEqual(
-            CommunityPublishCapabilityRequirements.missingRPCs(
-                in: staleCapabilities,
-                mediaKinds: attachmentKinds
-            ),
-            ["attach_community_post_attachment_v1"]
-        )
-        XCTAssertEqual(
-            CommunityPublishCapabilityRequirements.missingEdgeFunctions(
-                in: staleCapabilities,
-                mediaKinds: attachmentKinds
-            ),
-            ["community-validate-attachment"]
-        )
-    }
 
-    func testPublishCapabilitiesRefreshOnlyWhenCachedValueIsMissingRequirements() async throws {
-        let mediaKinds: Set<CommunityPublishMediaKind> = [.attachment]
-        let staleCapabilities = try decodeCapabilities(
-            rpcs: ["create_community_post_v4_idempotent": true],
-            edgeFunctions: []
-        )
-        let currentCapabilities = try decodeCapabilities(
-            rpcs: Dictionary(
-                uniqueKeysWithValues: CommunityPublishCapabilityRequirements
-                    .requiredRPCs(for: mediaKinds)
-                    .map { ($0, true) }
-            ),
-            edgeFunctions: CommunityPublishCapabilityRequirements.requiredEdgeFunctions(for: mediaKinds)
-        )
 
-        let refreshed = await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
-            staleCapabilities,
-            mediaKinds: mediaKinds
-        ) {
-            currentCapabilities
-        }
-        XCTAssertTrue(
-            CommunityPublishCapabilityRequirements.isSatisfied(
-                by: refreshed,
-                mediaKinds: mediaKinds
-            )
-        )
-
-        let preserved = await CommunityPublishCapabilityRequirements.refreshingIfNeeded(
-            currentCapabilities,
-            mediaKinds: mediaKinds
-        ) {
-            XCTFail("满足要求的 capability 不应重复刷新")
-            return staleCapabilities
-        }
-        XCTAssertTrue(
-            CommunityPublishCapabilityRequirements.isSatisfied(
-                by: preserved,
-                mediaKinds: mediaKinds
-            )
-        )
-    }
 
     @MainActor
     func testCommentLikeSuccessUsesServerState() async {
@@ -641,21 +544,7 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         )
     }
 
-    private func decodeCapabilities(
-        rpcs: [String: Bool],
-        edgeFunctions: [String]
-    ) throws -> BackendCapabilities {
-        let payload: [String: Any] = [
-            "version": 2,
-            "features": [:],
-            "rpcs": rpcs,
-            "edge_functions": edgeFunctions
-        ]
-        return try JSONDecoder().decode(
-            BackendCapabilities.self,
-            from: JSONSerialization.data(withJSONObject: payload)
-        )
-    }
+
 }
 
 private enum CommunityCommentLikeToggleOutcome: Sendable {

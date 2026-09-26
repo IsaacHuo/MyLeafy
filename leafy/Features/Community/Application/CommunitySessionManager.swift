@@ -15,7 +15,7 @@ final class CommunitySessionManager: ObservableObject {
     private var activeBootstrapTask: Task<Void, Never>?
     private static let bootstrapTimeoutMessage = "社区身份初始化超时。请检查网络或稍后重试；帖子列表仍可浏览。"
 
-    private init(repository: any CommunityIdentitySessionRepository = LiveCommunitySessionRepository()) {
+    private init(repository: any CommunityIdentitySessionRepository = CommunityBackendFactory.identity) {
         self.repository = repository
     }
 

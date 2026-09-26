@@ -10,7 +10,6 @@
 		1119CC242F977338002A7E20 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 1119CC232F977338002A7E20 /* SwiftSoup */; };
 		A1B2C3D4E5F6000000000001 /* LeafyWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000000000002 /* LeafyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F00D00000000000000000001 /* LeafyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F00D00000000000000000002 /* LeafyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		F1A0B1C2D3E4F50102030407 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F1A0B1C2D3E4F50102030406 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -132,7 +131,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F1A0B1C2D3E4F50102030407 /* Supabase in Frameworks */,
 				1119CC242F977338002A7E20 /* SwiftSoup in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -220,7 +218,6 @@
 			);
 			name = Leafy;
 			packageProductDependencies = (
-				F1A0B1C2D3E4F50102030406 /* Supabase */,
 				1119CC232F977338002A7E20 /* SwiftSoup */,
 			);
 			productName = Leafy;
@@ -332,7 +329,6 @@
 			mainGroup = 1119CC032F976BA0002A7E20;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				F1A0B1C2D3E4F50102030404 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				1119CC222F977338002A7E20 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -581,7 +577,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2.2;
+				MARKETING_VERSION = 3.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaachuo.leafy;
 				PRODUCT_NAME = Leafy;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -622,7 +618,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2.2;
+				MARKETING_VERSION = 3.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaachuo.leafy;
 				PRODUCT_NAME = Leafy;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -653,7 +649,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.2;
+				MARKETING_VERSION = 3.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.leafy-widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -684,7 +680,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.2;
+				MARKETING_VERSION = 3.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.leafy-widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -765,7 +761,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.2;
+				MARKETING_VERSION = 3.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.share-extension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -796,7 +792,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.2;
+				MARKETING_VERSION = 3.2.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.share-extension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -869,14 +865,6 @@
 				minimumVersion = 2.13.4;
 			};
 		};
-		F1A0B1C2D3E4F50102030404 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/supabase/supabase-swift.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.43.1;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -884,11 +872,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1119CC222F977338002A7E20 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
 			productName = SwiftSoup;
-		};
-		F1A0B1C2D3E4F50102030406 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F1A0B1C2D3E4F50102030404 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -15,9 +15,9 @@ struct LeafyDependencies {
 
     static let live = LeafyDependencies(
         schoolTimetableRepository: LiveSchoolTimetableRepository(),
-        communityRepository: LiveCommunityRepository(),
-        communityActivityRepository: LiveCommunityActivityRepository(),
-        communityBannerRepository: LiveCommunityBannerRepository(),
+        communityRepository: CommunityBackendFactory.repository,
+        communityActivityRepository: CommunityBackendFactory.activity,
+        communityBannerRepository: CommunityBackendFactory.banner,
         communityPostDraftRepository: LocalCommunityPostDraftRepository.shared,
         communityImageProcessor: CommunityImageProcessor.shared,
         classroomLookupService: LiveClassroomLookupService(),

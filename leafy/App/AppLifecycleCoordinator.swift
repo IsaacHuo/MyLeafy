@@ -17,7 +17,7 @@ enum AppLifecycleCoordinator {
         ActiveCampusContext.networkManager.cancelInFlightRequests()
         CommunitySessionManager.shared.cancelInFlightWork()
         Task {
-            await CommunityService.shared.cancelInFlightWork()
+            try? await MyLeafyBackendEnvironment.client().cancelSessionEstablishment()
         }
     }
 }

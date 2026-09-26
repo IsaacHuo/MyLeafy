@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { onRequestGet } from "./[[path]].js";
 
 async function request(pathname) {
-  return onRequestGet({ request: new Request(`https://myleafy.space${pathname}`), env: {} });
+  return onRequestGet({ request: new Request(`https://myleafy.space${pathname}`), env: { MYLEAFY_PUBLIC_API: { fetch: async () => new Response(JSON.stringify({ title: "MyLeafy", description: "校园分享" }), { headers: { "Content-Type": "application/json" } }) } } });
 }
 
 describe("share page function", () => {

@@ -1,6 +1,5 @@
 import Foundation
 import CoreLocation
-import Supabase
 import WeatherKit
 
 nonisolated struct CampusWeather: Equatable, Sendable {
@@ -80,47 +79,7 @@ nonisolated struct WeatherKitWeatherService: WeatherServicing {
     }
 }
 
-nonisolated struct SupabaseWeatherService: WeatherServicing {
-    private let configProvider: @Sendable () throws -> SupabaseConfig
-    private let fetchRemoteWeather: @Sendable (SupabaseConfig) async throws -> CampusWeatherFunctionResponse
-    private let cache: CampusWeatherCaching
 
-    nonisolated init(
-        configProvider: @escaping @Sendable () throws -> SupabaseConfig = { try LeafySupabase.shared.requireConfig() },
-        fetchRemoteWeather: @escaping @Sendable (SupabaseConfig) async throws -> CampusWeatherFunctionResponse = { config in
-            let client = try LeafySupabase.shared.requireClient()
-            return try await client.functions.invoke(
-                config.weatherFunctionName,
-                options: FunctionInvokeOptions(
-                    method: .get,
-                    region: config.edgeRegion
-                )
-            )
-        },
-        cache: CampusWeatherCaching = UserDefaultsCampusWeatherCache()
-    ) {
-        self.configProvider = configProvider
-        self.fetchRemoteWeather = fetchRemoteWeather
-        self.cache = cache
-    }
-
-    func fetchCurrentWeather() async throws -> CampusWeather {
-        do {
-            let config = try configProvider()
-            let response = try await fetchRemoteWeather(config)
-            let weather = response.campusWeather
-            cache.save(weather)
-            return weather
-        } catch {
-            if let cachedWeather = cache.currentWeather(maxAge: Self.cacheMaxAge) {
-                return cachedWeather
-            }
-            throw error
-        }
-    }
-
-    private static let cacheMaxAge: TimeInterval = 6 * 60 * 60
-}
 
 nonisolated struct CampusWeatherFunctionResponse: Decodable, Sendable {
     let temperature: Double

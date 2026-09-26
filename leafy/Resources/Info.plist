@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>MYLEAFY_API_ORIGIN</key>
+	<string>$(MYLEAFY_API_ORIGIN)</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -118,19 +120,5 @@
 				</dict>
 			</dict>
 		</dict>
-	<key>SUPABASE_COMMUNITY_BOOTSTRAP_FUNCTION</key>
-	<string>community-bootstrap-user</string>
-	<key>SUPABASE_COMMUNITY_API_BASE_URL</key>
-	<string>$(SUPABASE_COMMUNITY_API_BASE_URL)</string>
-	<key>SUPABASE_COMMUNITY_EDGE_REGION</key>
-	<string>$(SUPABASE_COMMUNITY_EDGE_REGION)</string>
-	<key>SUPABASE_COMMUNITY_FEED_FUNCTION</key>
-	<string>$(SUPABASE_COMMUNITY_FEED_FUNCTION)</string>
-	<key>SUPABASE_WEATHER_FUNCTION</key>
-	<string>$(SUPABASE_WEATHER_FUNCTION)</string>
-	<key>SUPABASE_PUBLISHABLE_KEY</key>
-	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
 </dict>
 </plist>

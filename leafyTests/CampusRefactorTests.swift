@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 import ImageIO
 import UniformTypeIdentifiers
-import Supabase
 import SwiftData
 @testable import Leafy
 
@@ -105,14 +104,14 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(voteMap[pollID], firstOptionID)
     }
 
-    func testCustomCampusRegistrationUsesSignupRequestsWithoutPasswordUpdate() async {
+    func testCustomCampusRegistrationUsesSignupRequestsWithoutPasswordUpdate() async throws {
         AuthRecordingURLProtocol.reset()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AuthRecordingURLProtocol.self]
-        let client = SupabaseClient(
-            supabaseURL: URL(string: "https://example.supabase.co")!,
-            supabaseKey: "test-anon-key",
-            options: SupabaseClientOptions(global: .init(session: URLSession(configuration: configuration)))
+        let client = try MyLeafyBackendClient(
+            baseURL: URL(string: "https://api.example.com")!,
+            network: URLSession(configuration: configuration),
+            storage: CampusAuthTestSessions()
         )
         let service = CustomCampusAuthService(clientProvider: { client })
 
@@ -133,16 +132,16 @@ extension PerformanceRefactorTests {
 
         let requests = AuthRecordingURLProtocol.snapshot()
         XCTAssertEqual(requests.map(\.path), [
-            "/auth/v1/signup",
-            "/auth/v1/resend",
-            "/auth/v1/verify"
+            "/v1/auth/sign-up/email",
+            "/v1/auth/email-otp/send-verification-otp",
+            "/v1/auth/email-otp/verify-email"
         ])
         XCTAssertEqual(requests.map(\.method), ["POST", "POST", "POST"])
         guard requests.count == 3 else { return }
         XCTAssertEqual(requests[0].body["email"] as? String, "student@example.com")
         XCTAssertEqual(requests[0].body["password"] as? String, "password123")
-        XCTAssertEqual(requests[1].body["type"] as? String, "signup")
-        XCTAssertEqual(requests[2].body["type"] as? String, "signup")
+        XCTAssertEqual(requests[1].body["type"] as? String, "email-verification")
+        XCTAssertEqual(requests[2].body["otp"] as? String, "12345678")
         XCTAssertFalse(requests.contains { $0.path == "/auth/v1/user" })
     }
 
@@ -823,4 +822,10 @@ extension PerformanceRefactorTests {
             FitnessTestItem.height.rawValue
         ])
     }
+}
+
+private nonisolated struct CampusAuthTestSessions: MyLeafyBackendSessionStoring {
+    func load() throws -> MyLeafyBackendSession? { nil }
+    func save(_ session: MyLeafyBackendSession) throws {}
+    func remove() throws {}
 }

@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 import ImageIO
 import UniformTypeIdentifiers
-import Supabase
 import SwiftData
 @testable import Leafy
 

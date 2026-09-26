@@ -16,7 +16,7 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
     private var realtimeTask: Task<Void, Never>?
     private var scheduledRefreshTask: Task<Void, Never>?
 
-    init(repository: any CommunityNotificationRepository = LiveCommunityRepository()) {
+    init(repository: any CommunityNotificationRepository = CommunityBackendFactory.repository) {
         self.repository = repository
     }
 

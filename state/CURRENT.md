@@ -5,7 +5,7 @@ Last verified: 2026-09-26
 ## Current Focus
 
 - **iOS 3.2.2 修复**：本轮修复中途换教师的排课合并，保护刷新前的备注和提醒；此前成绩、空教室、评价目录、社区新增提示与日迹间距修复保留。版本元数据已更新，未提交 App Store。
-- **Cloudflare 迁移暂停**：迁移工作已保存到独立的 `codex/cloudflare-backend-migration` 分支；当前修复继续使用 Supabase 生产链路。
+- **Cloudflare 全新版本开发**：iOS 与网站代码改用 Workers API；iOS 已移除 Supabase SDK，Android 保持原实现。旧生产服务仍运行在 Supabase，尚未切流。Cloudflare OAuth、D1/R2、Supabase 数据库及 Resend 配置已验证；完整加密备份、文件比对及远端迁移仍在推进。按用户要求合入 main 继续开发，验收采用静态检查与构建，真机流程由用户检验。Pages 生产自动部署按用户要求保持开启。
 
 - **Android 核心体验对齐**：品牌/身份、课表/个人日程、社区、校园与“我的”核心闭环已完成；Android 1.0.1 登录/社区网络提示热修复已正式发布，并在 Xiaomi 24069RA21C / Android 16 保留身份与本地数据完成覆盖安装、冷启动及社区加载验收。
 - **日迹（Schedule）体验收尾**：随记/个人日程/推送三段根入口、记录日迹（自然年统计、近 30 天热力、里程碑）、Markdown 编辑、本机语音转写与统计分享图。

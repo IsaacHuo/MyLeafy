@@ -70,31 +70,16 @@ function invalidShareResponse(title, description) {
 }
 
 async function fetchPreview(context, query) {
-  const supabaseURL = context.env.SUPABASE_URL || context.env.VITE_SUPABASE_URL;
-  if (!supabaseURL) {
-    return defaultPreview;
-  }
-
-  try {
-    const endpoint = `${String(supabaseURL).replace(/\/+$/, "")}/functions/v1/share-preview?${query}`;
-    const response = await fetch(endpoint, {
-      headers: { Accept: "application/json" },
-    });
-
-    if (!response.ok) {
-      return defaultPreview;
-    }
-
-    const preview = await response.json();
-    return {
-      title: nonEmptyString(preview.title) || defaultPreview.title,
-      description: nonEmptyString(preview.description) || defaultPreview.description,
-      imageURL: nonEmptyString(preview.imageURL) || defaultPreview.imageURL,
-    };
-  } catch (error) {
-    console.error("share page preview fetch failed", error instanceof Error ? error.message : String(error));
-    return defaultPreview;
-  }
+  const binding = context.env.MYLEAFY_PUBLIC_API;
+  if (!binding?.fetch) throw new Error('Share service binding is missing');
+  const response = await binding.fetch(new Request(`https://myleafy-public.internal/v1/share-preview?${query}`));
+  if (!response.ok) throw new Error(`Share preview failed (${response.status})`);
+  const preview = await response.json();
+  return {
+    title: nonEmptyString(preview.title) || defaultPreview.title,
+    description: nonEmptyString(preview.description) || defaultPreview.description,
+    imageURL: nonEmptyString(preview.imageURL) || defaultPreview.imageURL,
+  };
 }
 
 function renderSharePage({

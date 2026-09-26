@@ -39,60 +39,7 @@ nonisolated enum CommunityPublishMediaKind: String, Codable, Hashable, Sendable 
     case attachment
 }
 
-nonisolated enum CommunityPublishCapabilityRequirements {
-    static func requiredRPCs(for mediaKinds: Set<CommunityPublishMediaKind>) -> [String] {
-        var names = ["create_community_post_v4_idempotent"]
-        if mediaKinds.contains(.image) {
-            names.append("attach_community_post_image_v1")
-        }
-        if mediaKinds.contains(.attachment) {
-            names.append("attach_community_post_attachment_v1")
-        }
-        return names
-    }
 
-    static func requiredEdgeFunctions(for mediaKinds: Set<CommunityPublishMediaKind>) -> [String] {
-        var names: [String] = []
-        if mediaKinds.contains(.image) {
-            names.append("community-validate-upload")
-        }
-        if mediaKinds.contains(.attachment) {
-            names.append("community-validate-attachment")
-        }
-        return names
-    }
-
-    static func missingRPCs(
-        in capabilities: BackendCapabilities,
-        mediaKinds: Set<CommunityPublishMediaKind>
-    ) -> [String] {
-        requiredRPCs(for: mediaKinds).filter { !capabilities.supportsRPC($0) }
-    }
-
-    static func missingEdgeFunctions(
-        in capabilities: BackendCapabilities,
-        mediaKinds: Set<CommunityPublishMediaKind>
-    ) -> [String] {
-        requiredEdgeFunctions(for: mediaKinds).filter { !capabilities.edgeFunctions.contains($0) }
-    }
-
-    static func isSatisfied(
-        by capabilities: BackendCapabilities,
-        mediaKinds: Set<CommunityPublishMediaKind>
-    ) -> Bool {
-        missingRPCs(in: capabilities, mediaKinds: mediaKinds).isEmpty
-            && missingEdgeFunctions(in: capabilities, mediaKinds: mediaKinds).isEmpty
-    }
-
-    static func refreshingIfNeeded(
-        _ capabilities: BackendCapabilities,
-        mediaKinds: Set<CommunityPublishMediaKind>,
-        refresh: () async throws -> BackendCapabilities
-    ) async rethrows -> BackendCapabilities {
-        guard !isSatisfied(by: capabilities, mediaKinds: mediaKinds) else { return capabilities }
-        return try await refresh()
-    }
-}
 
 nonisolated struct CommunityPublishMediaItem: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
@@ -126,6 +73,7 @@ nonisolated struct CommunityPublishTask: Codable, Identifiable, Hashable, Sendab
     var errorMessage: String?
     var completedAt: Date?
     var automaticallyRetryable: Bool? = nil
+    var backendAuthority: String? = nil
 
     var progress: Double {
         switch state {
@@ -203,6 +151,7 @@ nonisolated struct CommunityBackgroundTransferDescriptor: Codable, Hashable, Sen
 
 nonisolated struct CommunityBackgroundTransferResult: Sendable {
     let statusCode: Int
+    var data: Data = Data()
 }
 
 nonisolated struct CommunityBackgroundTransferError: LocalizedError, Sendable {
@@ -240,12 +189,13 @@ nonisolated final class CommunityBackgroundSessionStore: @unchecked Sendable {
     }
 }
 
-nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     static let shared = CommunityBackgroundTransferManager()
     static let sessionIdentifier = "com.isaachuo.leafy.community-publish"
 
     private let lock = NSLock()
     private var continuations: [String: CheckedContinuation<CommunityBackgroundTransferResult, Error>] = [:]
+    private var responseBodies: [Int: Data] = [:]
     private var cachedResults: [String: Result<CommunityBackgroundTransferResult, Error>] = [:]
     private var backgroundCompletionHandler: (() -> Void)?
     var progressHandler: (@Sendable (CommunityBackgroundTransferDescriptor, Double) -> Void)?
@@ -259,8 +209,17 @@ nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSession
         _ = session
     }
 
+    private static func isCurrentBackendUpload(_ url: URL?) -> Bool {
+        guard let url, let origin = URL(string: MyLeafyBackendEnvironment.publicationAuthority) else { return false }
+        return url.scheme == origin.scheme && url.host == origin.host && url.port == origin.port && url.path == "/v1/files/upload"
+    }
+
     func reconnect() {
-        session.getAllTasks { _ in }
+        session.getAllTasks { tasks in
+            for task in tasks where !Self.isCurrentBackendUpload(task.originalRequest?.url) {
+                task.cancel()
+            }
+        }
     }
 
     func setBackgroundCompletionHandler(_ handler: @escaping () -> Void) {
@@ -301,7 +260,7 @@ nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSession
                 self.lock.unlock()
 
                 if tasks.contains(where: {
-                    CommunityBackgroundTransferDescriptor.decode($0.taskDescription)?.key == descriptor.key
+                    Self.isCurrentBackendUpload($0.originalRequest?.url) && CommunityBackgroundTransferDescriptor.decode($0.taskDescription)?.key == descriptor.key
                 }) {
                     return
                 }
@@ -324,6 +283,12 @@ nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSession
         }
     }
 
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        responseBodies[dataTask.taskIdentifier, default: Data()].append(data)
+    }
+
     func urlSession(
         _: URLSession,
         task: URLSessionTask,
@@ -341,12 +306,15 @@ nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSession
 
     func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let descriptor = CommunityBackgroundTransferDescriptor.decode(task.taskDescription) else { return }
+        lock.lock()
+        let data = responseBodies.removeValue(forKey: task.taskIdentifier) ?? Data()
+        lock.unlock()
         let result: Result<CommunityBackgroundTransferResult, Error>
         if let error {
             result = .failure(error)
         } else if let response = task.response as? HTTPURLResponse,
                   (200..<300).contains(response.statusCode) {
-            result = .success(CommunityBackgroundTransferResult(statusCode: response.statusCode))
+            result = .success(CommunityBackgroundTransferResult(statusCode: response.statusCode, data: data))
         } else {
             let status = (task.response as? HTTPURLResponse)?.statusCode ?? -1
             result = .failure(
@@ -401,7 +369,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     private var workers: [UUID: Task<Void, Never>] = [:]
     private var hasConfigured = false
 
-    private init(backend: any CommunityPublishBackend = LiveCommunityPublishBackend()) {
+    private init(backend: any CommunityPublishBackend = CommunityBackendFactory.publish) {
         self.backend = backend
         tasks = loadPersistedTasks()
         CommunityBackgroundTransferManager.shared.progressHandler = { descriptor, progress in
@@ -566,7 +534,8 @@ final class CommunityPublishCoordinator: ObservableObject {
                 media: media,
                 authorID: nil,
                 errorMessage: nil,
-                completedAt: nil
+                completedAt: nil,
+                backendAuthority: MyLeafyBackendEnvironment.publicationAuthority
             ),
             at: 0
         )
@@ -692,6 +661,12 @@ final class CommunityPublishCoordinator: ObservableObject {
         do {
             guard !Task.isCancelled else { return }
             var task = try requiredTask(taskID)
+            if (task.backendAuthority ?? "supabase") != MyLeafyBackendEnvironment.publicationAuthority {
+                guard task.authorID == nil else {
+                    throw CommunityServiceError.edgeFunctionRejected("后台已切换，这条未完成的发布请取消后重新提交。")
+                }
+                updateTask(taskID) { $0.backendAuthority = MyLeafyBackendEnvironment.publicationAuthority }
+            }
             try await backend.requireCapabilities(for: Set(task.media.map(\.kind)))
 
             if task.authorID == nil {
@@ -726,10 +701,9 @@ final class CommunityPublishCoordinator: ObservableObject {
             }
 
             task = try requiredTask(taskID)
-            guard let authorID = task.authorID else {
+            guard task.authorID != nil else {
                 throw CommunityServiceError.missingAuthenticatedUser
             }
-            assignRemotePaths(taskID: taskID, authorID: authorID)
             setState(taskID, .uploading)
 
             for mediaID in try requiredTask(taskID).media.map(\.id) {
@@ -751,315 +725,36 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     private func processMedia(taskID: UUID, mediaID: UUID) async throws {
+        guard try !requiredMedia(taskID: taskID, mediaID: mediaID).validated else { return }
+        try await processDirectMedia(backend, taskID: taskID, mediaID: mediaID, directory: taskDirectory(taskID: taskID, create: false))
+    }
+
+    private func processDirectMedia(_ backend: any CommunityDirectMediaUploading, taskID: UUID, mediaID: UUID, directory: URL) async throws {
         var media = try requiredMedia(taskID: taskID, mediaID: mediaID)
-        guard !media.validated else { return }
-        let directory = try taskDirectory(taskID: taskID, create: false)
-
-        switch media.kind {
-        case .image:
-            guard let remotePath = media.remotePath,
-                  let thumbnailRemotePath = media.thumbnailRemotePath,
-                  let thumbnailRelativePath = media.thumbnailRelativePath else {
-                throw CommunityServiceError.edgeFunctionRejected("图片上传路径无效。")
-            }
-            if !media.fullUploaded {
-                try await uploadStandardObject(
-                    bucket: "community-images",
-                    objectPath: remotePath,
-                    contentType: media.contentType,
-                    fileURL: directory.appendingPathComponent(media.localRelativePath),
-                    descriptor: CommunityBackgroundTransferDescriptor(
-                        publishTaskID: taskID,
-                        mediaID: mediaID,
-                        component: .imageFull,
-                        offset: 0,
-                        byteCount: Int64(media.byteSize)
-                    )
-                )
-                updateMedia(taskID: taskID, mediaID: mediaID) {
-                    $0.fullUploaded = true
-                    $0.progress = $0.thumbnailUploaded ? 0.9 : 0.5
-                }
-            }
-            media = try requiredMedia(taskID: taskID, mediaID: mediaID)
-            if !media.thumbnailUploaded {
-                let thumbnailURL = directory.appendingPathComponent(thumbnailRelativePath)
-                let thumbnailSize = (try? thumbnailURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                try await uploadStandardObject(
-                    bucket: "community-images",
-                    objectPath: thumbnailRemotePath,
-                    contentType: "image/jpeg",
-                    fileURL: thumbnailURL,
-                    descriptor: CommunityBackgroundTransferDescriptor(
-                        publishTaskID: taskID,
-                        mediaID: mediaID,
-                        component: .imageThumbnail,
-                        offset: 0,
-                        byteCount: Int64(thumbnailSize)
-                    )
-                )
-                updateMedia(taskID: taskID, mediaID: mediaID) {
-                    $0.thumbnailUploaded = true
-                    $0.progress = 0.9
-                }
-            }
-
-            setState(taskID, .validating)
-            try await backend.validateAndAttachPostImage(
-                postID: taskID,
-                imageID: mediaID,
-                fullPath: remotePath,
-                thumbnailPath: thumbnailRemotePath,
-                sortOrder: media.sortOrder
-            )
-
-        case .attachment:
-            guard let remotePath = media.remotePath else {
-                throw CommunityServiceError.edgeFunctionRejected("附件上传路径无效。")
-            }
-            if !media.fullUploaded {
-                try await uploadAttachmentTUS(
-                    taskID: taskID,
-                    mediaID: mediaID,
-                    sourceURL: directory.appendingPathComponent(media.localRelativePath),
-                    objectPath: remotePath
-                )
-                updateMedia(taskID: taskID, mediaID: mediaID) {
-                    $0.fullUploaded = true
-                    $0.progress = 0.9
-                }
-            }
-            media = try requiredMedia(taskID: taskID, mediaID: mediaID)
-            setState(taskID, .validating)
-            try await backend.validateAndAttachPostAttachment(
-                postID: taskID,
-                attachmentID: mediaID,
-                objectPath: remotePath,
-                displayName: media.displayName,
-                sortOrder: media.sortOrder
-            )
+        if !media.fullUploaded {
+            let component: CommunityBackgroundTransferDescriptor.Component = media.kind == .image ? .imageFull : .attachmentChunk
+            let path = try await backend.uploadMedia(kind: media.kind == .image ? "full" : "attachment", taskID: taskID, mediaID: mediaID, name: media.displayName, contentType: media.contentType, fileURL: directory.appendingPathComponent(media.localRelativePath), descriptor: CommunityBackgroundTransferDescriptor(publishTaskID: taskID, mediaID: mediaID, component: component, offset: 0, byteCount: Int64(media.byteSize)))
+            updateMedia(taskID: taskID, mediaID: mediaID) { $0.remotePath = path; $0.fullUploaded = true; $0.progress = 0.5 }
         }
-
-        updateMedia(taskID: taskID, mediaID: mediaID) {
-            $0.validated = true
-            $0.progress = 1
-            $0.errorMessage = nil
+        media = try requiredMedia(taskID: taskID, mediaID: mediaID)
+        if media.kind == .image, !media.thumbnailUploaded {
+            guard let relative = media.thumbnailRelativePath else { throw CommunityServiceError.edgeFunctionRejected("图片缩略图不存在。") }
+            let file = directory.appendingPathComponent(relative)
+            let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            let path = try await backend.uploadMedia(kind: "thumb", taskID: taskID, mediaID: mediaID, name: "thumbnail.jpg", contentType: "image/jpeg", fileURL: file, descriptor: CommunityBackgroundTransferDescriptor(publishTaskID: taskID, mediaID: mediaID, component: .imageThumbnail, offset: 0, byteCount: Int64(size)))
+            updateMedia(taskID: taskID, mediaID: mediaID) { $0.thumbnailRemotePath = path; $0.thumbnailUploaded = true; $0.progress = 0.9 }
         }
+        media = try requiredMedia(taskID: taskID, mediaID: mediaID)
+        guard let path = media.remotePath else { throw CommunityServiceError.edgeFunctionRejected("文件上传路径无效。") }
+        setState(taskID, .validating)
+        if media.kind == .image {
+            guard let thumbnail = media.thumbnailRemotePath else { throw CommunityServiceError.edgeFunctionRejected("图片上传路径无效。") }
+            try await self.backend.validateAndAttachPostImage(postID: taskID, imageID: mediaID, fullPath: path, thumbnailPath: thumbnail, sortOrder: media.sortOrder)
+        } else {
+            try await self.backend.validateAndAttachPostAttachment(postID: taskID, attachmentID: mediaID, objectPath: path, displayName: media.displayName, sortOrder: media.sortOrder)
+        }
+        updateMedia(taskID: taskID, mediaID: mediaID) { $0.validated = true; $0.progress = 1; $0.errorMessage = nil }
         setState(taskID, .uploading)
-    }
-
-    private func uploadStandardObject(
-        bucket: String,
-        objectPath: String,
-        contentType: String,
-        fileURL: URL,
-        descriptor: CommunityBackgroundTransferDescriptor
-    ) async throws {
-        let credentials = try await backend.uploadCredentials()
-        var request = URLRequest(
-            url: credentials.baseURL
-                .appendingPathComponent("storage/v1/object")
-                .appendingPathComponent(bucket)
-                .appendingPathComponent(objectPath)
-        )
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
-        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        request.setValue("false", forHTTPHeaderField: "x-upsert")
-        request.setValue("31536000", forHTTPHeaderField: "cache-control")
-        _ = try await CommunityBackgroundTransferManager.shared.upload(
-            request: request,
-            fileURL: fileURL,
-            descriptor: descriptor
-        )
-    }
-
-    private func uploadAttachmentTUS(
-        taskID: UUID,
-        mediaID: UUID,
-        sourceURL: URL,
-        objectPath: String
-    ) async throws {
-        let chunkSize = 6 * 1024 * 1024
-        var media = try requiredMedia(taskID: taskID, mediaID: mediaID)
-        var uploadURL = media.tusUploadURL
-        var offset = media.tusOffset
-
-        if let currentURL = uploadURL {
-            do {
-                offset = try await tusOffset(uploadURL: currentURL)
-            } catch {
-                uploadURL = nil
-                offset = 0
-            }
-        }
-        if uploadURL == nil {
-            uploadURL = try await createTUSUpload(
-                objectPath: objectPath,
-                contentType: media.contentType,
-                byteSize: media.byteSize
-            )
-            offset = 0
-            updateMedia(taskID: taskID, mediaID: mediaID) {
-                $0.tusUploadURL = uploadURL
-                $0.tusOffset = 0
-            }
-        }
-        guard let uploadURL else {
-            throw CommunityServiceError.edgeFunctionRejected("无法创建附件续传会话。")
-        }
-
-        while offset < Int64(media.byteSize) {
-            guard !Task.isCancelled else { throw CancellationError() }
-            let length = min(Int64(chunkSize), Int64(media.byteSize) - offset)
-            let chunkURL = try makeChunkFile(
-                sourceURL: sourceURL,
-                taskID: taskID,
-                mediaID: mediaID,
-                offset: offset,
-                length: Int(length)
-            )
-            defer { try? fileManager.removeItem(at: chunkURL) }
-            let credentials = try await backend.uploadCredentials()
-            var request = URLRequest(url: uploadURL)
-            request.httpMethod = "PATCH"
-            request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-            request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
-            request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-            request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
-            request.setValue(String(offset), forHTTPHeaderField: "Upload-Offset")
-            _ = try await CommunityBackgroundTransferManager.shared.upload(
-                request: request,
-                fileURL: chunkURL,
-                descriptor: CommunityBackgroundTransferDescriptor(
-                    publishTaskID: taskID,
-                    mediaID: mediaID,
-                    component: .attachmentChunk,
-                    offset: offset,
-                    byteCount: length
-                )
-            )
-            offset += length
-            media = try requiredMedia(taskID: taskID, mediaID: mediaID)
-            updateMedia(taskID: taskID, mediaID: mediaID) {
-                $0.tusOffset = offset
-                $0.progress = min(0.9, Double(offset) / Double(max(1, media.byteSize)) * 0.9)
-            }
-        }
-    }
-
-    private func createTUSUpload(
-        objectPath: String,
-        contentType: String,
-        byteSize: Int
-    ) async throws -> URL {
-        let credentials = try await backend.uploadCredentials()
-        let endpoint = directStorageBaseURL(baseURL: credentials.baseURL)
-            .appendingPathComponent("storage/v1/upload/resumable")
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
-        request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-        request.setValue(String(byteSize), forHTTPHeaderField: "Upload-Length")
-        request.setValue(
-            [
-                tusMetadata("bucketName", "community-attachments"),
-                tusMetadata("objectName", objectPath),
-                tusMetadata("contentType", contentType),
-                tusMetadata("cacheControl", "3600")
-            ].joined(separator: ","),
-            forHTTPHeaderField: "Upload-Metadata"
-        )
-        request.setValue("false", forHTTPHeaderField: "x-upsert")
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let location = http.value(forHTTPHeaderField: "Location"),
-              let url = URL(string: location, relativeTo: endpoint)?.absoluteURL else {
-            throw CommunityBackgroundTransferError(
-                message: "附件续传会话创建失败。",
-                statusCode: (response as? HTTPURLResponse)?.statusCode
-            )
-        }
-        return url
-    }
-
-    private func tusOffset(uploadURL: URL) async throws -> Int64 {
-        let credentials = try await backend.uploadCredentials()
-        var request = URLRequest(url: uploadURL)
-        request.httpMethod = "HEAD"
-        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
-        request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let rawOffset = http.value(forHTTPHeaderField: "Upload-Offset"),
-              let offset = Int64(rawOffset) else {
-            throw CommunityBackgroundTransferError(
-                message: "附件续传状态已失效。",
-                statusCode: (response as? HTTPURLResponse)?.statusCode
-            )
-        }
-        return offset
-    }
-
-    private func directStorageBaseURL(baseURL: URL) -> URL {
-        guard let host = baseURL.host,
-              host.hasSuffix(".supabase.co"),
-              !host.hasSuffix(".storage.supabase.co"),
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            return baseURL
-        }
-        components.host = host.replacingOccurrences(of: ".supabase.co", with: ".storage.supabase.co")
-        components.path = ""
-        return components.url ?? baseURL
-    }
-
-    private func tusMetadata(_ key: String, _ value: String) -> String {
-        let encoded = Data(value.utf8).base64EncodedString()
-        return "\(key) \(encoded)"
-    }
-
-    private func makeChunkFile(
-        sourceURL: URL,
-        taskID: UUID,
-        mediaID: UUID,
-        offset: Int64,
-        length: Int
-    ) throws -> URL {
-        let source = try FileHandle(forReadingFrom: sourceURL)
-        defer { try? source.close() }
-        try source.seek(toOffset: UInt64(offset))
-        guard let data = try source.read(upToCount: length), data.count == length else {
-            throw CommunityServiceError.edgeFunctionRejected("读取附件分块失败。")
-        }
-        let url = try taskDirectory(taskID: taskID, create: true)
-            .appendingPathComponent("\(mediaID.uuidString.lowercased())-\(offset).chunk")
-        try data.write(to: url, options: .atomic)
-        try applyBackgroundFileProtection(to: url)
-        return url
-    }
-
-    private func assignRemotePaths(taskID: UUID, authorID: UUID) {
-        updateTask(taskID) { task in
-            for index in task.media.indices {
-                let media = task.media[index]
-                let base = "posts/\(authorID.uuidString.lowercased())/\(taskID.uuidString.lowercased())"
-                switch media.kind {
-                case .image:
-                    task.media[index].remotePath =
-                        "\(base)/full/\(media.id.uuidString.lowercased()).\(media.fileExtension)"
-                    task.media[index].thumbnailRemotePath =
-                        "\(base)/thumb/\(media.id.uuidString.lowercased()).jpg"
-                case .attachment:
-                    task.media[index].remotePath =
-                        "\(base)/\(media.id.uuidString.lowercased()).\(media.fileExtension)"
-                }
-            }
-        }
     }
 
     private func applyProgress(

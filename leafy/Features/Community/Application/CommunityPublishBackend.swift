@@ -1,12 +1,8 @@
 import Foundation
 
-nonisolated struct CommunityUploadCredentials: Sendable {
-    let baseURL: URL
-    let publishableKey: String
-    let accessToken: String
-}
 
-nonisolated protocol CommunityPublishBackend: Sendable {
+
+nonisolated protocol CommunityPublishBackend: CommunityDirectMediaUploading {
     func pendingPostContext(postID: UUID) async throws -> CommunityPendingPostContext?
     func abortPendingPost(postID: UUID) async throws
     func createPendingPost(
@@ -38,7 +34,6 @@ nonisolated protocol CommunityPublishBackend: Sendable {
         sortOrder: Int
     ) async throws
     func requireCapabilities(for mediaKinds: Set<CommunityPublishMediaKind>) async throws
-    func uploadCredentials() async throws -> CommunityUploadCredentials
 }
 
 extension CommunityPublishBackend {

@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Supabase
 
 nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
     let semesterID: String
@@ -256,33 +255,13 @@ actor SemesterRuntimeConfigService {
     }
 
     private static func fetchRemoteActiveConfig() async throws -> SemesterRuntimeConfig {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [RemoteSemesterRuntimeConfigRecord] = try await client
-            .from("semester_runtime_configs")
-            .select()
-            .eq("campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
-            .eq("is_active", value: true)
-            .order("updated_at", ascending: false)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let record = records.first else {
-            throw URLError(.resourceUnavailable)
-        }
-
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue)], authenticated: false)
+        guard let record = records.first else { throw URLError(.resourceUnavailable) }
         return record.runtimeConfig
     }
 
     private static func fetchRemoteTimelineConfigs() async throws -> [SemesterRuntimeConfig] {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [RemoteSemesterRuntimeConfigRecord] = try await client
-            .from("semester_runtime_configs")
-            .select()
-            .eq("campus_id", value: ActiveCampusContext.descriptor.id.rawValue)
-            .order("semester_start_date", ascending: true)
-            .execute()
-            .value
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue), URLQueryItem(name: "include_history", value: "true")], authenticated: false)
         return records.map(\.runtimeConfig).filter(\.isUsable)
     }
 }
@@ -854,21 +833,8 @@ actor NationalCalendarRuntimeConfigService {
     }
 
     private static func fetchRemoteActiveConfig() async throws -> NationalCalendarRuntimeConfig {
-        let client = try LeafySupabase.shared.requireClient()
-        let records: [RemoteNationalCalendarRuntimeConfigRecord] = try await client
-            .from("national_calendar_runtime_configs")
-            .select()
-            .eq("is_active", value: true)
-            .order("year", ascending: false)
-            .order("updated_at", ascending: false)
-            .limit(1)
-            .execute()
-            .value
-
-        guard let record = records.first else {
-            throw URLError(.resourceUnavailable)
-        }
-
+        let records: [RemoteNationalCalendarRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/calendar", authenticated: false)
+        guard let record = records.first else { throw URLError(.resourceUnavailable) }
         return record.runtimeConfig
     }
 }

@@ -7,33 +7,48 @@ export async function onRequest(context) {
   const route = routeName(new URL(context.request.url).pathname);
   if (!route) return apiError(404, "not_found", "Admin API route not found.", requestID);
 
-  const originError = validateSameOrigin(context.request);
+  const originError = validateSameOrigin(context.request, route !== 'banner-upload');
   if (originError) return apiError(403, "forbidden", originError, requestID);
 
-  const expectedMethod = route === "me" ? "GET" : "POST";
+  const expectedMethod = route === "me" ? "GET" : route === 'banner-upload' ? 'PUT' : "POST";
   if (context.request.method !== expectedMethod) {
     return apiError(405, "method_not_allowed", "Method not allowed.", requestID);
   }
 
-  const supabaseURL = context.env.SUPABASE_URL;
-  const publishableKey = context.env.SUPABASE_PUBLISHABLE_KEY;
-  const proxySecret = context.env.ADMIN_PROXY_SECRET;
-  if (!supabaseURL || !publishableKey || !proxySecret) {
+  const binding = context.env.MYLEAFY_ADMIN_API;
+  if (!binding?.fetch) {
     return apiError(500, "backend_unavailable", "Admin backend environment is incomplete.", requestID);
   }
-
-  const functionName = route === "actions" ? "admin-community" : route === "export" ? "admin-export" : `admin-${route}`;
   const token = readCookie(context.request.headers.get("cookie"), cookieName);
   if (route !== "login" && !token) return unauthorized(requestID);
+  if (route === 'banner-upload') {
+    const ticket = new URL(context.request.url).searchParams.get('ticket');
+    if (!ticket || ticket.length > 4096) return apiError(400, 'bad_request', 'Upload ticket is required.', requestID);
+    const bytes = await boundedBody(context.request, 2 * 1024 * 1024 + 64 * 1024);
+    if (!bytes) return apiError(413, 'payload_too_large', 'Upload is too large.', requestID);
+    try {
+      const upstream = await binding.fetch(new Request(`https://myleafy-admin.internal/admin/banner-upload?ticket=${encodeURIComponent(ticket)}`, {
+        method: 'PUT', body: bytes, headers: {
+          'Content-Type': context.request.headers.get('content-type') || 'application/octet-stream',
+          Authorization: `Bearer ${token}`, 'x-request-id': requestID,
+          'x-leafy-client-ip': context.request.headers.get('cf-connecting-ip') || '0.0.0.0',
+        },
+      }));
+      return proxyResponse(upstream, requestID, upstream.status === 401);
+    } catch {
+      return apiError(502, 'backend_unavailable', 'Unable to reach the upload service.', requestID, true);
+    }
+  }
 
   let body;
   if (expectedMethod === "POST") {
     const bodyError = validateJSONRequest(context.request);
     if (bodyError) return apiError(bodyError.status, bodyError.code, bodyError.message, requestID);
-    body = await context.request.text();
-    if (new TextEncoder().encode(body).byteLength > maxRequestBodyBytes) {
+    const bytes = await boundedBody(context.request, maxRequestBodyBytes);
+    if (!bytes) {
       return apiError(413, "payload_too_large", "Request body is too large.", requestID);
     }
+    body = new TextDecoder().decode(bytes);
     try {
       JSON.parse(body);
     } catch {
@@ -42,21 +57,20 @@ export async function onRequest(context) {
   }
   let upstream;
   try {
-    upstream = await fetch(`${String(supabaseURL).replace(/\/+$/, "")}/functions/v1/${functionName}`, {
+    const options = {
       method: expectedMethod,
       headers: {
         Accept: route === "export" ? "text/csv, application/json" : "application/json",
         "Content-Type": "application/json",
-        apikey: publishableKey,
         "x-request-id": requestID,
-        "x-leafy-admin-proxy": proxySecret,
         "x-leafy-client-ip": context.request.headers.get("cf-connecting-ip") || "0.0.0.0",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body !== undefined ? { body: body || "{}" } : {}),
-    });
+    };
+    upstream = await binding.fetch(new Request(`https://myleafy-admin.internal/admin/${route}`, options));
   } catch (error) {
-    console.error(JSON.stringify({ event: "admin_bff_upstream_failed", request_id: requestID, error: String(error) }));
+    console.error(JSON.stringify({ event: "admin_bff_upstream_failed", request_id: requestID }));
     return apiError(502, "backend_unavailable", "Unable to reach the admin backend.", requestID, true);
   }
 
@@ -66,11 +80,11 @@ export async function onRequest(context) {
 }
 
 function routeName(pathname) {
-  const match = pathname.match(/^\/api\/admin\/(login|me|logout|actions|export)\/?$/);
+  const match = pathname.match(/^\/api\/admin\/(login|me|logout|actions|export|banner-upload)\/?$/);
   return match?.[1] || null;
 }
 
-function validateSameOrigin(request) {
+function validateSameOrigin(request, requireCSRF = true) {
   const origin = request.headers.get("origin");
   const expectedOrigin = new URL(request.url).origin;
   if (origin && origin !== expectedOrigin) return "Cross-origin admin request rejected.";
@@ -81,8 +95,24 @@ function validateSameOrigin(request) {
       return "Admin request is missing same-origin browser provenance.";
     }
   }
-  if (request.headers.get(csrfHeader) !== "1") return "Missing admin CSRF header.";
+  if (requireCSRF && request.headers.get(csrfHeader) !== "1") return "Missing admin CSRF header.";
   return null;
+}
+
+async function boundedBody(request, limit) {
+  if (Number(request.headers.get('content-length')) > limit) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks = []; let length = 0;
+  while (true) {
+    const {value, done} = await reader.read(); if (done) break;
+    length += value.byteLength;
+    if (length > limit) { await reader.cancel(); return null; }
+    chunks.push(value);
+  }
+  const output = new Uint8Array(length); let offset = 0;
+  for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.length; }
+  return output;
 }
 
 function validateJSONRequest(request) {

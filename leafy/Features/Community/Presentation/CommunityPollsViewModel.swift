@@ -11,7 +11,7 @@ final class CommunityPollsViewModel: ObservableObject {
 
     private let repository: any CommunityPollRepository
 
-    init(repository: any CommunityPollRepository = LiveCommunityRepository()) {
+    init(repository: any CommunityPollRepository = CommunityBackendFactory.repository) {
         self.repository = repository
     }
 

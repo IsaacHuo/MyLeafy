@@ -456,7 +456,7 @@ final class CommunityPostDetailViewModel: ObservableObject {
     private let repository: any CommunityPostDetailRepository
     private var commentRequestTracker: CommunityCommentRequestTracker
 
-    init(post: CommunityPost, repository: any CommunityPostDetailRepository = LiveCommunityRepository()) {
+    init(post: CommunityPost, repository: any CommunityPostDetailRepository = CommunityBackendFactory.repository) {
         self.post = post
         postID = post.id
         self.repository = repository

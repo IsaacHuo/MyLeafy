@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 import ImageIO
 import UniformTypeIdentifiers
-import Supabase
 import SwiftData
 @testable import Leafy
 
@@ -259,80 +258,26 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(CustomCampusAuthService.normalizeCodeForTesting("12 34 56 78"), "12345678")
     }
 
-    func testCustomCampusAuthMapsRecoverableSupabaseSignupErrors() {
-        let invalidCredentials = AuthError.api(
-            message: "Invalid login credentials",
-            errorCode: .invalidCredentials,
-            underlyingData: Data(),
-            underlyingResponse: HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
-        )
-        let emailNotConfirmed = AuthError.api(
-            message: "Email not confirmed",
-            errorCode: .emailNotConfirmed,
-            underlyingData: Data(),
-            underlyingResponse: HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
-        )
-        let expiredCode = AuthError.api(
-            message: "Email link is expired",
-            errorCode: .otpExpired,
-            underlyingData: Data(),
-            underlyingResponse: HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 400, httpVersion: nil, headerFields: nil)!
-        )
-        let rateLimited = AuthError.api(
-            message: "Email rate limit exceeded",
-            errorCode: .overEmailSendRateLimit,
-            underlyingData: Data(),
-            underlyingResponse: HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 429, httpVersion: nil, headerFields: nil)!
-        )
-        let existingUser = AuthError.api(
-            message: "User already registered",
-            errorCode: .userAlreadyExists,
-            underlyingData: Data(),
-            underlyingResponse: HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 422, httpVersion: nil, headerFields: nil)!
-        )
-
-        XCTAssertTrue(CustomCampusAuthService.mapAuthErrorForTesting(invalidCredentials) is CustomCampusAuthError)
-        XCTAssertEqual(
-            CustomCampusAuthService.mapAuthErrorForTesting(invalidCredentials).localizedDescription,
-            CustomCampusAuthError.invalidCredentials.localizedDescription
-        )
-        XCTAssertEqual(
-            CustomCampusAuthService.mapAuthErrorForTesting(emailNotConfirmed, email: "user@example.com").localizedDescription,
-            CustomCampusAuthError.emailNotConfirmed("user@example.com").localizedDescription
-        )
-        XCTAssertEqual(
-            CustomCampusAuthService.mapAuthErrorForTesting(expiredCode).localizedDescription,
-            CustomCampusAuthError.expiredCode.localizedDescription
-        )
-        XCTAssertEqual(
-            CustomCampusAuthService.mapAuthErrorForTesting(rateLimited).localizedDescription,
-            CustomCampusAuthError.emailRateLimited.localizedDescription
-        )
-        XCTAssertEqual(
-            CustomCampusAuthService.mapAuthErrorForTesting(existingUser).localizedDescription,
-            CustomCampusAuthError.userAlreadyExists.localizedDescription
-        )
+    func testCustomCampusAuthMapsRecoverableBackendErrors() {
+        let cases: [(String, CustomCampusAuthError)] = [
+            ("INVALID_EMAIL_OR_PASSWORD", .invalidCredentials),
+            ("EMAIL_NOT_VERIFIED", .emailNotConfirmed("user@example.com")),
+            ("OTP_EXPIRED", .expiredCode),
+            ("TOO_MANY_REQUESTS", .emailRateLimited),
+            ("USER_ALREADY_EXISTS", .userAlreadyExists),
+        ]
+        for (code, expected) in cases {
+            let error = MyLeafyBackendError(status: 400, code: code, message: "Server message", requestID: "test")
+            XCTAssertEqual(CustomCampusAuthService.mapAuthErrorForTesting(error).localizedDescription, expected.localizedDescription)
+        }
     }
 
-    func testCustomCampusAuthMapsPKCECallbackFailures() {
-        let expired = AuthError.pkceGrantCodeExchange(
-            message: "Email link is expired",
-            error: "access_denied",
-            code: ErrorCode.otpExpired.rawValue
-        )
-        let missingFlowState = AuthError.pkceGrantCodeExchange(
-            message: "Flow state not found",
-            error: "server_error",
-            code: ErrorCode.flowStateNotFound.rawValue
-        )
-
-        XCTAssertEqual(
-            CustomCampusAuthService.mapCallbackErrorForTesting(expired).localizedDescription,
-            CustomCampusAuthError.callbackLinkInvalid.localizedDescription
-        )
-        XCTAssertEqual(
-            CustomCampusAuthService.mapCallbackErrorForTesting(missingFlowState).localizedDescription,
-            CustomCampusAuthError.callbackNeedsOriginalDevice.localizedDescription
-        )
+    func testOldEmailCallbackRequiresFreshLogin() async {
+        do {
+            _ = try await CustomCampusAuthService().restoreSession(from: URL(string: "leafy://auth/callback?code=expired")!)
+            XCTFail("Old sessions must not be exchanged")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, CustomCampusAuthError.callbackLinkInvalid.localizedDescription)
+        }
     }
 }

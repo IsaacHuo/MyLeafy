@@ -77,7 +77,7 @@ Core stack:
 - SwiftUI
 - SwiftData
 - URLSession
-- Supabase
+- Cloudflare Workers / D1 / R2 / Durable Objects / Better Auth（新版）；Supabase（旧生产迁移源、Android）
 - Swift Package Manager
 
 Current state (read first):

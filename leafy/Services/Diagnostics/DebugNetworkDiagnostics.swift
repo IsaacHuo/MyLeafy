@@ -4,12 +4,12 @@ import Foundation
 enum DebugNetworkDiagnostics {
     static func runStartupProbe() {
         Task.detached {
-            guard let config = try? LeafySupabase.shared.requireConfig() else {
-                print("[DebugNetworkDiagnostics] Supabase config unavailable")
+            guard ActiveCampusContext.descriptor.id != .guest, let client = try? MyLeafyBackendEnvironment.client() else {
+                print("[DebugNetworkDiagnostics] Backend probe skipped")
                 return
             }
 
-            await probe(name: "Supabase REST", url: config.url.appending(path: "rest/v1/"))
+            await probe(name: "MyLeafy API", url: client.baseURL.appending(path: "health"))
         }
     }
 

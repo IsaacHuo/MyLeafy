@@ -51,30 +51,15 @@ final class WeatherServicingTests: XCTestCase {
         XCTAssertEqual(weather.condition, L10n.text("多云"))
     }
 
-    func testSupabaseWeatherServiceFallsBackToFreshCache() async throws {
-        let cache = InMemoryCampusWeatherCache(
-            weather: CampusWeather(temperature: 18, condition: "晴"),
-            savedAt: Date()
-        )
-        let service = SupabaseWeatherService(
-            configProvider: { WeatherServicingTests.makeTestConfig() },
-            fetchRemoteWeather: { _ in throw URLError(.badServerResponse) },
-            cache: cache
-        )
 
-        let weather = try await service.fetchCurrentWeather()
 
-        XCTAssertEqual(weather, CampusWeather(temperature: 18, condition: "晴"))
-    }
-
-    func testSupabaseWeatherServiceThrowsWhenCacheExpired() async {
+    func testWeatherKitWeatherServiceThrowsWhenCacheExpired() async {
         let cache = InMemoryCampusWeatherCache(
             weather: CampusWeather(temperature: 18, condition: "晴"),
             savedAt: Date(timeIntervalSinceNow: -(7 * 60 * 60))
         )
-        let service = SupabaseWeatherService(
-            configProvider: { WeatherServicingTests.makeTestConfig() },
-            fetchRemoteWeather: { _ in throw URLError(.badServerResponse) },
+        let service = WeatherKitWeatherService(
+            fetchLiveWeather: { _ in throw URLError(.badServerResponse) },
             cache: cache
         )
 
@@ -86,17 +71,7 @@ final class WeatherServicingTests: XCTestCase {
         }
     }
 
-    nonisolated private static func makeTestConfig() -> SupabaseConfig {
-        SupabaseConfig(
-            url: URL(string: "https://example.supabase.co")!,
-            publishableKey: "test-key",
-            bootstrapFunctionName: "community-bootstrap-user",
-            feedFunctionName: "community-feed",
-            weatherFunctionName: "campus-weather",
-            edgeRegion: "ap-northeast-1",
-            communityAPIBaseURL: nil
-        )
-    }
+
 }
 
 private nonisolated final class InMemoryCampusWeatherCache: CampusWeatherCaching, @unchecked Sendable {

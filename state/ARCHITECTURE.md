@@ -10,10 +10,11 @@ Last verified: 2026-09-26
 
 | 运行单元 | 部署位置 | 职责 |
 |---|---|---|
-| MyLeafy iOS App | 用户设备 | 学校登录、教务数据获取、本地持久化、用户交互与普通 Supabase 业务 |
+| MyLeafy iOS App | 用户设备 | 学校登录、教务数据获取、本地持久化；新版云端业务通过 URLSession 调用 Cloudflare `/v1` API |
 | MyLeafy Android App | 用户设备 | Android 原生实现（Kotlin/Compose/Room/WorkManager/OkHttp/supabase-kt），见 `docs/engineering/android-migration.md`；已含教务登录、横滑周课表/天气/背景/个人日程/ICS、日迹通知与标签/统计/回顾/回收站/导出、成绩/考试/教学计划与培养方案、社区（文本与图片帖）、共享课表、体育/医疗/评价、综素测算、荣誉记录、周末去哪、资料与设置 |
 | 学校教务系统 | 学校基础设施 | 身份、课表、成绩、考试、教学计划等权威教务数据（非稳定 API） |
-| Supabase | 托管云服务 | Auth、PostgreSQL、RLS、Storage、Realtime、Edge Functions |
+| Cloudflare 新后端 | Workers / D1 / R2 / Durable Objects | Hono 业务 API、Better Auth、SQL 授权、文件、实时变更信号、Cron；代码已接入，生产切换尚未完成 |
+| Supabase 旧生产后端 | 托管云服务 | 已发布旧版及 Android 仍使用；保留作为迁移源，切流前保持生产权威 |
 | 官网与运营后台 | Cloudflare Pages | 公开页面、分享落地页、管理界面与管理 API 代理 |
 | Widget / Share / 导入扩展 | 系统扩展 | 课表小组件、系统分享、外部学习资料导入 |
 
@@ -31,12 +32,12 @@ flowchart LR
     end
 
     School["学校教务系统<br/>身份 · 课表 · 成绩 · 考试"]
-    Backend["Supabase 业务后端<br/>Auth · Database · Storage · Functions"]
+    Backend["新版 Cloudflare 后端<br/>Workers · D1 · R2 · Better Auth"]
 
     Student -->|日常学习与校园任务| IOS
     Operator -->|受控运营| Web
     IOS -->|授权访问教务数据| School
-    IOS -->|用户会话 + RLS| Backend
+    IOS -->|签名会话 + 业务 API| Backend
     Web -->|管理代理 + 服务端授权| Backend
 ```
 
@@ -196,32 +197,33 @@ SchoolNetworkManager（URLSession 主链路 / WKWebView 课表兼容）
 
 - 学校课表和成绩的权威来源仍是学校系统，SwiftData 是本地副本。
 - 用户创建的备注、提醒、随记、个人日程等以本地数据为权威。
-- 社区帖子和通知以 Supabase 为权威，不复制为完整 SwiftData 数据库。
+- 新版社区帖子和通知以配置的 Cloudflare API 为权威，不复制为完整 SwiftData 数据库；旧生产版本在切流前仍使用 Supabase。
 
 课表渲染性能：`TimetableGridSnapshot` 等预计算布局输入、一次构造并贯穿缓存的 `TimetableRenderInput`、按 `(week, day)` / `(week, day, period)` 建立的提醒索引、稳定课程颜色索引，以及 Widget 专用共享数据（扩展不直接访问主 App SwiftData 上下文）。
 
-### Supabase 业务链路（本地 → 云端）
+### 新版云端业务链路
 
 ```text
-学校登录成功
-  → 匿名 Supabase Auth 会话
-  → community-bootstrap-user（按 auth.uid() + campus_id + edu_id 建立 profile）
-  → 窄仓储协议（Features/Community/Data/Supabase/*Service）
-  → RLS + 校园作用域 + 所有权约束
+学校登录 / 通用校园邮箱登录
+  → Better Auth 签名 bearer 会话（Keychain 按 API origin 隔离）
+  → /v1/profile/bootstrap 建立长期 profile 关联
+  → CloudflareCommunityRepository / CloudflareTimetableSharingService
+  → Worker 校园、身份、所有权与事务校验 → D1 / R2
 ```
 
-`(campus_id, edu_id)` 唯一确定长期 profile；多设备匿名会话自动继承同一 profile。Supabase 不替代学校登录，也不是学校课表/成绩/考试的权威来源。
+`(campus_id, edu_id)` 确定长期 profile；密码账号保留用户 UUID，学校设备会话可重新建立。旧 Supabase 会话不兑换。通用校园的本地 `customSupabase` 身份序列化值保留，避免改变本地数据作用域；该值不代表新版依赖 Supabase。学校教务直连和本地数据权威不变。
 
-### 运营后台链路（浏览器 → Cloudflare → Edge Functions）
+iOS `MYLEAFY_API_ORIGIN` 在 Debug 默认 staging，Release 默认 `api.myleafy.space`，可由本地 xcconfig 覆盖。请求失败不更换后端。旧上传任务检查后台来源，已创建远端内容的任务禁止投递到新后端；文件上传采用后台 URLSession，服务端返回不可变路径。旧 Storage 上传任务重连时取消。
+
+### 运营后台链路
 
 ```text
-React-admin（site/src/admin）
-  → /api/admin/*（同域 Cloudflare Pages Functions：HttpOnly Cookie + CSRF + Origin 校验）
-  → Supabase Edge Functions（admin-login / admin-me / admin-community / admin-export 等）
-  → PostgreSQL / Storage / 审计
+React-admin → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
+  → MYLEAFY_ADMIN_API 私有 WorkerEntrypoint → D1 / R2 / 审计
+分享页面 → MYLEAFY_PUBLIC_API 服务绑定 → /v1/share-preview
 ```
 
-浏览器不持有服务端密钥，管理会话保存在 HttpOnly Cookie。`site/functions/api/admin/[[path]].js` 与 `site/functions/share/[[path]].js` 是 Pages Functions 代理。
+网站代理只使用 Worker 服务绑定，浏览器不持有服务端密钥。后台媒体预览使用短期签名地址，并在读取时复核管理员会话。73 个前端管理操作由 `backend/scripts/check-client-contracts.ts` 核对路由覆盖。部署、数据搬迁与代码构建证据分别记录，代码接入不代表生产已切换。
 
 ## 8. 导航与深链
 
@@ -258,7 +260,8 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 
 ## 10. Supabase 与 Web/运营后台边界
 
-- `supabase/`：86 个 migration、18 个 Edge Functions、`schema-ledger.md`（关键 schema 不变量与迁移顺序的事实来源）、模板与测试。
+- `backend/`：新版 Workers 业务、D1 migrations、数据导出转换与校验工具。
+- `supabase/`：旧生产 schema、Edge Functions 和测试，作为迁移输入及旧服务维护依据。
 - 主要函数组：社区初始化与 Feed（`community-bootstrap-user`、`community-feed`）、校园服务（`campus-request`、`campus-weather`）、分享（`share-preview`）、媒体验证与清理、管理（`admin-*`）。
 - `site/`：官网（React + Vite）+ React-admin 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。
 - 高权限操作必须经过服务端认证、授权、参数校验与审计；iOS/前端只用 publishable key。
@@ -328,7 +331,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 
 - 使用 `Logger` 与 performance signpost 记录可诊断事件；网络日志默认脱敏，不记录密码、Cookie、验证码和完整 token。
 - 服务端管理请求携带 request ID，错误界面用其定位。
-- 本地 store 损坏、教务会话过期、Supabase 配置缺失和网络不可达都有独立恢复路径；错误状态保留最近成功数据，除非继续展示会误导用户。
+- 本地 store 损坏、教务会话过期、API 配置缺失和网络不可达都有独立恢复路径；错误状态保留最近成功数据，除非继续展示会误导用户。
 
 - 成绩页不提供下拉刷新或空状态拉取按钮，进入页面只读取本地缓存，主动拉取统一使用右上角按钮；按钮触发后的既有会话恢复保留。GPA 正文支持括号标签和内联元素，注释旧值、排名表数字和算术均分不作为官方 GPA / 加权均分。
 - 翻页拖动与吸附动画分别使用 `paging` / `pageSettling`。新拖动取消旧显示链接，按最近可见页重定位并保留偏移；跨页接管时新窗口与 payload 一起更新，其余拖动帧不重建窗口。手势取消、跳周和回到今天均须释放交互状态。

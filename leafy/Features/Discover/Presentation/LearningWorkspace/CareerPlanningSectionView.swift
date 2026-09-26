@@ -1,6 +1,5 @@
 import Combine
 import QuickLook
-import Supabase
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
