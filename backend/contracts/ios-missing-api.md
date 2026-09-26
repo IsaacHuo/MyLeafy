@@ -15,7 +15,7 @@ Owned coordination document for the current migration. All responses below use t
 | POST `/v1/community/comments/:id/toggle-like` | `{}` | `{comment_id:UUID,like_count:number,viewer_has_liked:boolean}` atomic toggle |
 | POST `/v1/community/posts/:id/toggle-like` | `{}` | hydrated `CommunityPost` atomic toggle |
 | POST `/v1/community/posts/:id/toggle-favorite` | `{}` | hydrated `CommunityPost` atomic toggle |
-| GET `/v1/community/posts/:id/pending` | none | `{id,author_id,status}` or null, owner only |
+| GET `/v1/community/posts/:id/pending` | none | `{id,author_id,status}` for any existing owner post, including published/hidden/deleted; null only for missing or non-owned posts. The publishing queue uses it to confirm creation and recover retries. |
 | POST `/v1/community/posts/:id/abort` | `{}` | `{aborted:true}`, owner only, abort pending uploads and cleanup files |
 | GET `/v1/community/polls` | `kind=feed|authored|voted&limit=N` | hydrated `[CommunityPoll]` including author, options, viewer_option_id |
 | POST `/v1/community/polls/:id/deletion-request` | `{reason:null}` | Both requestPollDeletion and deleteOwnPoll preserve the current production deletion-review flow |

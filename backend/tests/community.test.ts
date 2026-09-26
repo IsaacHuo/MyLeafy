@@ -6,7 +6,7 @@ import { actorGuard, atomic, statement } from '../src/db';
 import { commentThreads } from '../src/comment-threads';
 import { profileStats, activityPosts } from '../src/community-reads';
 import { announcements, announcementRead, notificationSettings } from '../src/notices';
-import { setPostReaction, toggleCommentLike } from '../src/interactions';
+import { pendingPost, setPostReaction, toggleCommentLike } from '../src/interactions';
 
 const databases:LocalD1[]=[];
 function setup(){
@@ -78,6 +78,27 @@ describe('community transactional authorization',()=>{
     expect((await createPost(env,who,body)).id).toBe(first.id);
     expect(db.sqlite.prepare('SELECT count(*) AS n FROM posts').get()!.n).toBe(1);
     await expect(createPost(env,who,{...body,body:'另一个正文'})).rejects.toMatchObject({code:'COMMUNITY_CREATE_REQUEST_REUSED'});
+  });
+  it('confirms an immediately published text post and recovers its retry without duplication',async()=>{
+    const {env,who,db}=setup(),body={id:crypto.randomUUID(),title:'状态确认',body:'正文'};
+    expect(await pendingPost(env,who,body.id)).toBeNull();
+    await createPost(env,who,body);
+    const expected={id:body.id,author_id:who.profileId,status:'published'};
+    expect(await pendingPost(env,who,body.id.toUpperCase())).toEqual(expected);
+    await createPost(env,who,body);
+    expect(await pendingPost(env,who,body.id)).toEqual(expected);
+    expect(db.sqlite.prepare('SELECT count(*) AS n FROM posts').get()!.n).toBe(1);
+    expect(await pendingPost(env,{...who,profileId:crypto.randomUUID()},body.id)).toBeNull();
+    await expect(pendingPost(env,who,body.id,true)).rejects.toMatchObject({status:409});
+    expect(await pendingPost(env,who,body.id)).toEqual(expected);
+  });
+  it('retains hidden and deleted owner states instead of treating an existing post as missing',async()=>{
+    const {env,who,db}=setup(),id=crypto.randomUUID();
+    await createPost(env,who,{id,title:'生命周期',body:'正文'});
+    for(const status of ['hidden','deleted']){
+      db.sqlite.prepare('UPDATE posts SET status=? WHERE id=?').run(status,id);
+      expect(await pendingPost(env,who,id)).toEqual({id,author_id:who.profileId,status});
+    }
   });
   it('rejects expired sessions inside the write transaction',async()=>{
     const {env,who,db}=setup();

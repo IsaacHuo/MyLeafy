@@ -3,6 +3,7 @@ import { LocalD1 } from './d1-local';
 import type { Actor, BackendEnv } from '../src/auth';
 import { createPost, termsVersion } from '../src/community';
 import { attach, readFile, upload, validateAttachment } from '../src/media';
+import { pendingPost } from '../src/interactions';
 
 const databases:LocalD1[]=[];
 afterEach(()=>{for(const db of databases.splice(0))db.close();});
@@ -26,6 +27,7 @@ const pdf='%PDF-1.7\nbody\n%%EOF';
 it('uploads immutable files, consumes a receipt once, and publishes only the complete attachment set',async()=>{
   const {env,who,db}=setup(),postId=crypto.randomUUID();
   await createPost(env,who,{id:postId,title:'资料',body:'附件',attachment_count:2});
+  expect(await pendingPost(env,who,postId)).toMatchObject({status:'pending_review'});
   for(let i=0;i<2;i++){
     const url=`https://api.invalid/v1/files/upload?kind=attachment&upload_id=${crypto.randomUUID()}&post_id=${postId}&name=notes.pdf`;
     const request=()=>new Request(url,{method:'POST',headers:{'Content-Type':'application/pdf'},body:pdf});
@@ -34,6 +36,7 @@ it('uploads immutable files, consumes a receipt once, and publishes only the com
     const receipt=await validateAttachment(env,who,{post_id:postId,object_path:file.path,display_name:'notes.pdf'});
     const result=await attach(env,who,{receipt_id:receipt.receipt_id,id:crypto.randomUUID(),sort_order:i},'attachment');
     expect(result.status).toBe(i===0?'pending_review':'published');
+    expect(await pendingPost(env,who,postId)).toEqual({id:postId,author_id:who.profileId,status:result.status});
     await expect(attach(env,who,{receipt_id:receipt.receipt_id,id:crypto.randomUUID(),sort_order:i},'attachment')).rejects.toMatchObject({status:409});
   }
   expect(db.sqlite.prepare('SELECT count(*) AS n FROM post_attachments').get()!.n).toBe(2);

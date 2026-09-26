@@ -49,7 +49,9 @@ export async function toggleCommentLike(env:BackendEnv,who:Actor,id:string,body:
 }
 export async function pendingPost(env:BackendEnv,who:Actor,id:string,abort=false){
   id=uuid(id);
-  if(!abort)return (await rows(env.DB,"SELECT id,author_id,status FROM posts WHERE id=? AND author_id=? AND status='pending_review'",[id,who.profileId]))[0]??null;
+  // The publishing queue also uses this lookup to confirm success and recover
+  // retries. Text-only posts are already published when creation returns.
+  if(!abort)return (await rows(env.DB,"SELECT id,author_id,status FROM posts WHERE id=? AND author_id=?",[id,who.profileId]))[0]??null;
   await atomic(env.DB,[actorGuard(env.DB,who,true),guard(env.DB,"NOT EXISTS(SELECT 1 FROM posts WHERE id=?) OR EXISTS(SELECT 1 FROM posts WHERE id=? AND author_id=? AND status IN('pending_review','deleted'))",[id,id,who.profileId]),
     statement(env.DB,"UPDATE posts SET status='deleted',media_cleanup_hold=0,media_purge_after=?,updated_at=? WHERE id=? AND author_id=? AND status='pending_review'",[new Date().toISOString().replace('Z','000Z'),new Date().toISOString().replace('Z','000Z'),id,who.profileId]),
   ]);return {aborted:true};
