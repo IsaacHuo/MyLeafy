@@ -72,6 +72,7 @@ actor MyLeafyBackendClient {
     private let storage: any MyLeafyBackendSessionStoring
     private var establishingSession: Task<Void, Error>?
     private var currentSession: MyLeafyBackendSession?
+    private var sessionGeneration: UInt64 = 0
 
     init(baseURL: URL, network: URLSession? = nil, storage: (any MyLeafyBackendSessionStoring)? = nil) throws {
         guard baseURL.scheme == "https", baseURL.host != nil, baseURL.user == nil, baseURL.password == nil,
@@ -94,6 +95,7 @@ actor MyLeafyBackendClient {
     }
 
     func cancelSessionEstablishment() {
+        sessionGeneration &+= 1
         establishingSession?.cancel()
         establishingSession = nil
     }
@@ -108,24 +110,28 @@ actor MyLeafyBackendClient {
     func establishSession() async throws {
         if currentSession != nil { return }
         if let establishingSession { return try await establishingSession.value }
+        let generation = sessionGeneration
         let task = Task {
             try await anonymousSession()
         }
         establishingSession = task
-        defer { establishingSession = nil }
+        defer { if generation == sessionGeneration { establishingSession = nil } }
         try await task.value
     }
 
     func anonymousSession() async throws {
         if currentSession != nil { return }
+        let generation = sessionGeneration
         let (_, response, data) = try await send(path: "/v1/auth/sign-in/anonymous", method: "POST", body: Data("{}".utf8), authenticated: false)
-        try captureSession(response: response, data: data)
+        try captureSession(response: response, data: data, generation: generation)
     }
 
     func signIn(email: String, password: String) async throws -> UUID {
+        cancelSessionEstablishment()
+        let generation = sessionGeneration
         let data = try JSONEncoder().encode(EmailPassword(email: email, password: password))
         let (_, response, payload) = try await send(path: "/v1/auth/sign-in/email", method: "POST", body: data, authenticated: false)
-        try captureSession(response: response, data: payload)
+        try captureSession(response: response, data: payload, generation: generation)
         return currentSession!.userID
     }
 
@@ -140,20 +146,32 @@ actor MyLeafyBackendClient {
     }
 
     func verifyRegistration(email: String, otp: String) async throws -> UUID {
+        cancelSessionEstablishment()
+        let generation = sessionGeneration
         struct Input: Encodable { let email: String; let otp: String }
         let (_, response, payload) = try await send(path: "/v1/auth/email-otp/verify-email", method: "POST", body: JSONEncoder().encode(Input(email: email, otp: otp)), authenticated: false)
-        try captureSession(response: response, data: payload)
+        try captureSession(response: response, data: payload, generation: generation)
         return currentSession!.userID
     }
 
 
 
     func signOut(localOnly: Bool = false) async throws {
-        if !localOnly, currentSession != nil {
-            _ = try await send(path: "/v1/auth/sign-out", method: "POST", body: Data("{}".utf8), authenticated: true)
+        cancelSessionEstablishment()
+        let signedOutToken = currentSession?.token
+        var remoteFailure: Error?
+        if !localOnly, signedOutToken != nil {
+            do {
+                _ = try await send(path: "/v1/auth/sign-out", method: "POST", body: Data("{}".utf8), authenticated: true)
+            } catch { remoteFailure = error }
         }
-        try storage.remove()
-        currentSession = nil
+        // An offline logout must clear this device. A newer login must survive
+        // a delayed response from the session being revoked.
+        if currentSession?.token == signedOutToken {
+            try storage.remove()
+            currentSession = nil
+        }
+        if let remoteFailure { throw remoteFailure }
     }
 
     func get<Response: Decodable & Sendable>(_ path: String, query: [URLQueryItem] = [], authenticated: Bool = true) async throws -> Response {
@@ -269,8 +287,9 @@ actor MyLeafyBackendClient {
         return (response.statusCode, response, data)
     }
 
-    private func captureSession(response: HTTPURLResponse, data: Data) throws {
+    private func captureSession(response: HTTPURLResponse, data: Data, generation: UInt64) throws {
         try Task.checkCancellation()
+        guard generation == sessionGeneration else { throw CancellationError() }
         let result = try JSONDecoder().decode(AuthenticationResult.self, from: data)
         // Better Auth's bearer plugin returns a signed token in this header. Its
         // unsigned JSON token must never be used as the Authorization credential.

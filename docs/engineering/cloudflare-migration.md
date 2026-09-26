@@ -2,7 +2,7 @@
 
 ## 当前边界
 
-2026-09-26：按全新版本推进，iOS、网站和运营后台接入 Cloudflare；Android 暂不修改。新版代码在 main 继续开发。生产仍由 Supabase 承担，未冻结源写入、未切换 DNS、未删除旧服务。
+2026-09-26：按全新版本推进，iOS、网站和运营后台接入 Cloudflare；Android 暂不修改。新版代码在 main 继续开发。生产仍由 Supabase 承担，未冻结 Supabase 源写入、未删除旧服务；新 API 子域已绑定 Cloudflare。旧版 App 继续使用 Supabase，新版先由用户真机验证；官网/运营后台接入 Cloudflare 已由用户明确接受。两套数据暂不互相同步。
 
 ## 实现
 
@@ -32,6 +32,6 @@
 ## 验证状态
 
 - 已验证：Cloudflare OAuth 与 staging/production D1/R2 访问；Supabase 数据库、Auth/Storage 读取；Resend 已验证域名；iOS arm64 Simulator 目标构建、网站构建及后台类型检查。
-- 已部署：staging 与 production Worker、8 份 D1 migration、Resend Secrets；api.myleafy.space 绑定正式 Worker，Pages 生产服务绑定已配置，自动部署保持开启。数据库处于 read_only，尚未开放业务写入。
+- 已部署：staging 与 production Worker、9 份 D1 migration、Resend Secrets；api.myleafy.space 绑定正式 Worker，Pages 生产服务绑定已配置，自动部署保持开启。数据库处于 read_only，尚未开放业务写入。
 - 正在进行：完整生产加密备份、文件备份、转换校验及新 API 验收。
 - 未完成：生产切换、真机验收、App Store 发布与旧服务退役。
