@@ -722,7 +722,6 @@ struct RealCommunitySectionView: View {
     @State private var reportTarget: CommunityModerationTarget?
     @State private var blockTargetPost: CommunityPost?
     @State private var deleteTargetPost: CommunityPost?
-    @State private var shareCardSource: CommunityPostCardPreviewSource?
     @State private var operationAlert: LeafyOperationAlert?
     @State private var bannerRefreshID = UUID()
     @State private var isBannerVisible = false
@@ -803,7 +802,7 @@ struct RealCommunitySectionView: View {
                                         .padding(.top, AppSpacing.card)
                                 }
                             }
-                            .padding(.top, topContentInset + 10 * leafyControlScale)
+                            .padding(.top, topContentInset + 8 * leafyControlScale)
                             .padding(.bottom, 40)
                         }
                     }
@@ -880,9 +879,6 @@ struct RealCommunitySectionView: View {
                 onDelete: {}
             )
             .presentationDetents([.medium, .large])
-        }
-        .leafySheet(item: $shareCardSource) { source in
-            CommunityPostCardPreviewSheet(source: source)
         }
         .leafyOperationAlert($operationAlert)
         .confirmationDialog("举报内容", isPresented: Binding(
@@ -1077,20 +1073,8 @@ struct RealCommunitySectionView: View {
                 }
             )
             .contextMenu {
-                Button {
-                    shareCardSource = CommunityPostCardPreviewSource(content: .post(post))
-                } label: {
-                    Label("生成图文卡片", systemImage: "rectangle.on.rectangle.angled")
-                }
-
                 ShareLink(item: post.shareURL, subject: Text(post.title), message: Text(post.shareText)) {
                     Label("分享链接", systemImage: "link")
-                }
-
-                Button {
-                    LeafyClipboard.string = post.title
-                } label: {
-                    Label("复制标题", systemImage: "doc.on.doc")
                 }
 
                 Button(role: .destructive) {

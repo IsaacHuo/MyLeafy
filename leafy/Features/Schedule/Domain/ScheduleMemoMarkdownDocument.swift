@@ -151,40 +151,6 @@ nonisolated enum ScheduleMemoMarkdownParser {
             .joined(separator: "\n")
     }
 
-    static func submissionText(
-        from source: String,
-        attachmentNames: [UUID: String]
-    ) -> String {
-        blocks(in: source).map { block in
-            switch block.kind {
-            case .resource(let reference):
-                switch reference.kind {
-                case .image:
-                    return "![图片](请在邮件中手动添加)"
-                case .attachment:
-                    let name = attachmentNames[reference.id] ?? "附件"
-                    return "[附件：\(name)]"
-                }
-            case .heading(let level, let text):
-                return "\(String(repeating: "#", count: level)) \(text)"
-            case .paragraph(let text):
-                return text
-            case .quote(let text):
-                return "> \(text)"
-            case .unorderedList(let text):
-                return "- \(text)"
-            case .orderedList(let number, let text):
-                return "\(number). \(text)"
-            case .task(let isCompleted, let text):
-                return "- [\(isCompleted ? "x" : " ")] \(text)"
-            case .code(let text):
-                return "```\n\(text)\n```"
-            case .divider:
-                return "---"
-            }
-        }.joined(separator: "\n\n")
-    }
-
     private static func resourceReference(in line: String) -> ScheduleMemoInlineResourceReference? {
         let candidates: [(prefix: String, kind: ScheduleMemoInlineResourceReference.Kind)] = [
             ("![图片](leafy-memo://image/", .image),
@@ -350,56 +316,5 @@ nonisolated enum ScheduleMemoEditorMutation {
     private static func clamped(_ range: NSRange, length: Int) -> NSRange {
         let location = min(max(range.location, 0), length)
         return NSRange(location: location, length: min(max(range.length, 0), length - location))
-    }
-}
-
-nonisolated struct ScheduleMemoSubmissionDraft: Equatable, Sendable {
-    static let recipient = "2210286979@qq.com"
-
-    let subject: String
-    let body: String
-
-    var mailtoURL: URL? {
-        var components = URLComponents()
-        components.scheme = "mailto"
-        components.path = Self.recipient
-        components.queryItems = [
-            URLQueryItem(name: "subject", value: subject),
-            URLQueryItem(name: "body", value: body)
-        ]
-        return components.url
-    }
-
-    static func make(
-        title: String?,
-        source: String,
-        tags: [String],
-        createdAt: Date,
-        updatedAt: Date,
-        attachmentNames: [UUID: String]
-    ) -> ScheduleMemoSubmissionDraft {
-        let storedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let summary = storedTitle.isEmpty
-            ? String(ScheduleMemoMarkdownParser.plainText(from: source).prefix(40))
-            : storedTitle
-        let resolvedSummary = summary.isEmpty ? "随记投稿" : summary
-        var sections = [
-            "创建时间：\(createdAt.formatted(date: .long, time: .shortened))",
-            "更新时间：\(updatedAt.formatted(date: .long, time: .shortened))"
-        ]
-        if !tags.isEmpty {
-            sections.append("标签：\(tags.map { "#\($0)" }.joined(separator: " "))")
-        }
-        if !attachmentNames.isEmpty {
-            sections.append("本地附件：\(attachmentNames.values.sorted().joined(separator: "、"))")
-        }
-        sections.append("")
-        sections.append(ScheduleMemoMarkdownParser.submissionText(from: source, attachmentNames: attachmentNames))
-        sections.append("")
-        sections.append("提示：随记中的本地图片和附件未自动附加，请在邮箱 App 中按需补充。")
-        return ScheduleMemoSubmissionDraft(
-            subject: "【MyLeafy 投稿】\(resolvedSummary)",
-            body: sections.joined(separator: "\n")
-        )
     }
 }

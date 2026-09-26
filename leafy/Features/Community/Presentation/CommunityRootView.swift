@@ -313,9 +313,9 @@ struct CommunityRootView: View {
     }
 
     private var communityHeaderContentInset: CGFloat {
-        let baseInset = LeafyRootChromeMetrics.reservedHeight
+        let baseInset = LeafyRootChromeMetrics.controlDiameter
         guard isTopicFilterPresented, isCommunityFeedAtTop else { return baseInset }
-        return baseInset + communityTopicFilterHeight + LeafyRootChromeMetrics.contentSpacing
+        return baseInset + communityTopicFilterHeight + 8 * leafyControlScale
     }
 
     @MainActor

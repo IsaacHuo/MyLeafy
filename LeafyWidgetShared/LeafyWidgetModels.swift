@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 nonisolated enum LeafyWidgetConstants {
     static let appGroupIdentifier = "group.com.isaachuo.leafy"
@@ -68,6 +69,7 @@ nonisolated enum LeafyWidgetRoute: Equatable {
     case timetableSharing
     case cacheSync
     case scheduleReports
+    case schedules
 
     private static let scheme = "leafy"
 
@@ -99,6 +101,8 @@ nonisolated enum LeafyWidgetRoute: Equatable {
             components.host = "cache-sync"
         case .scheduleReports:
             components.host = "schedule-reports"
+        case .schedules:
+            components.host = "schedules"
         }
 
         return components.url ?? Self.fallbackURL
@@ -123,115 +127,16 @@ nonisolated enum LeafyWidgetRoute: Equatable {
             self = .cacheSync
         case "schedule-reports":
             self = .scheduleReports
+        case "schedules":
+            self = .schedules
         default:
             return nil
         }
     }
 }
 
-nonisolated struct LeafyWidgetSnapshot: Codable, Hashable, Sendable {
-    enum Status: String, Codable, Hashable, Sendable {
-        case ready
-        case noCourses
-        case needsLogin
-        case stale
-    }
-
-    var generatedAt: Date
-    var status: Status
-    var displayDate: String
-    var weekText: String
-    var dayText: String
-    var headline: String
-    var subtitle: String
-    var syncText: String?
-    var lastFailureText: String?
-    var nextExamText: String?
-    var courses: [LeafyWidgetCourse]
-
-    static let placeholder = LeafyWidgetSnapshot(
-        generatedAt: Date(),
-        status: .ready,
-        displayDate: "5月12日",
-        weekText: "第 10 周",
-        dayText: "周二",
-        headline: "今日课表",
-        subtitle: "下一节：数据结构",
-        syncText: "最近同步：12:30",
-        lastFailureText: nil,
-        nextExamText: "考试：高等数学 A · 5月21日",
-        courses: [
-            LeafyWidgetCourse(
-                id: UUID(),
-                title: "数据结构",
-                timeText: "08:00-09:35",
-                periodText: "第 1-2 节",
-                locationText: "二教 205",
-                teacherText: "林青",
-                noteText: "复习树和图",
-                reminderText: "提前 10 分钟",
-                accentIndex: 0,
-                isActive: true
-            ),
-            LeafyWidgetCourse(
-                id: UUID(),
-                title: "大学英语",
-                timeText: "11:30-12:15",
-                periodText: "第 5 节",
-                locationText: "学研中心 B203",
-                teacherText: "叶岚",
-                noteText: nil,
-                reminderText: nil,
-                accentIndex: 1,
-                isActive: false
-            )
-        ]
-    )
-
-    static let empty = LeafyWidgetSnapshot(
-        generatedAt: Date(),
-        status: .noCourses,
-        displayDate: "今天",
-        weekText: "第 - 周",
-        dayText: "",
-        headline: "今天没有课程",
-        subtitle: "今日暂无课程安排。",
-        syncText: nil,
-        lastFailureText: nil,
-        nextExamText: nil,
-        courses: []
-    )
-}
-
-nonisolated struct LeafyWidgetCourse: Codable, Identifiable, Hashable, Sendable {
-    var id: UUID
-    var title: String
-    var timeText: String
-    var periodText: String
-    var locationText: String
-    var teacherText: String?
-    var noteText: String?
-    var reminderText: String?
-    var accentIndex: Int
-    var isActive: Bool
-}
-
-nonisolated struct LeafyWidgetSnapshotArchive: Codable, Hashable, Sendable {
-    var generatedAt: Date
-    var snapshots: [LeafyWidgetDaySnapshot]
-
-    func snapshot(for dayOffset: Int) -> LeafyWidgetSnapshot? {
-        let normalizedOffset = LeafyWidgetSnapshotStore.normalizedDayOffset(dayOffset)
-        return snapshots.first { $0.dayOffset == normalizedOffset }?.snapshot
-    }
-}
-
-nonisolated struct LeafyWidgetDaySnapshot: Codable, Hashable, Sendable {
-    var dayOffset: Int
-    var snapshot: LeafyWidgetSnapshot
-}
-
 nonisolated enum LeafyWidgetSnapshotStore {
+    private static let logger = Logger(subsystem: "com.isaachuo.leafy", category: "WidgetSnapshotStore")
     static var selectedDayOffset: Int {
         normalizedDayOffset(appGroupDefaults.integer(forKey: LeafyWidgetConstants.selectedDayOffsetKey))
     }
@@ -251,44 +156,13 @@ nonisolated enum LeafyWidgetSnapshotStore {
         normalizedDayOffset(dayOffset) == 0 ? 1 : 0
     }
 
-    static func loadSelectedSnapshot() -> LeafyWidgetSnapshot? {
-        load(dayOffset: selectedDayOffset)
-    }
-
-    static func load(dayOffset: Int) -> LeafyWidgetSnapshot? {
-        if let archive = loadArchive() {
-            return archive.snapshot(for: dayOffset) ?? archive.snapshots.first?.snapshot
-        }
-
-        return load()
-    }
-
-    static func load() -> LeafyWidgetSnapshot? {
-        guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
-        return try? JSONDecoder.leafyWidget.decode(LeafyWidgetSnapshot.self, from: data)
-    }
-
     static func loadArchive() -> LeafyWidgetSnapshotArchive? {
         guard let data = try? Data(contentsOf: snapshotArchiveURL),
               let archive = try? JSONDecoder.leafyWidget.decode(LeafyWidgetSnapshotArchive.self, from: data),
-              !archive.snapshots.isEmpty
-        else {
+              archive.schemaVersion == LeafyWidgetSnapshotArchive.currentSchemaVersion else {
             return nil
         }
-
         return archive
-    }
-
-    @discardableResult
-    static func save(_ snapshot: LeafyWidgetSnapshot) -> Bool {
-        save(
-            LeafyWidgetSnapshotArchive(
-                generatedAt: snapshot.generatedAt,
-                snapshots: [
-                    LeafyWidgetDaySnapshot(dayOffset: 0, snapshot: snapshot)
-                ]
-            )
-        )
     }
 
     @discardableResult
@@ -299,28 +173,10 @@ nonisolated enum LeafyWidgetSnapshotStore {
             let data = try JSONEncoder.leafyWidget.encode(archive)
             try data.write(to: snapshotArchiveURL, options: [.atomic])
 
-            if let todaySnapshot = archive.snapshot(for: 0) ?? archive.snapshots.first?.snapshot {
-                saveLegacySnapshot(todaySnapshot)
-            }
             return true
         } catch {
-            #if DEBUG
-            print("Leafy widget snapshot archive save failed: \(error)")
-            #endif
+            logger.error("Widget snapshot save failed: \(error.localizedDescription, privacy: .public)")
             return false
-        }
-    }
-
-    private static func saveLegacySnapshot(_ snapshot: LeafyWidgetSnapshot) {
-        do {
-            let directory = snapshotURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONEncoder.leafyWidget.encode(snapshot)
-            try data.write(to: snapshotURL, options: [.atomic])
-        } catch {
-            #if DEBUG
-            print("Leafy widget snapshot save failed: \(error)")
-            #endif
         }
     }
 

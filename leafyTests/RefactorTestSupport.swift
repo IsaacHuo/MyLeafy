@@ -430,38 +430,16 @@ func makeWidgetSignatureArchive(
     generatedAt: Date = Date(timeIntervalSince1970: 1)
 ) -> LeafyWidgetSnapshotArchive {
     LeafyWidgetSnapshotArchive(
-        generatedAt: generatedAt,
-        snapshots: [
-            LeafyWidgetDaySnapshot(
-                dayOffset: 0,
-                snapshot: LeafyWidgetSnapshot(
-                    generatedAt: generatedAt,
-                    status: .ready,
-                    displayDate: "Today",
-                    weekText: "Week",
-                    dayText: "Mon",
-                    headline: "今日课表",
-                    subtitle: "下一节：A",
-                    syncText: "最近同步：12:00",
-                    lastFailureText: nil,
-                    nextExamText: nil,
-                    courses: [
-                        LeafyWidgetCourse(
-                            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-                            title: "A",
-                            timeText: "08:00",
-                            periodText: "第 1 节",
-                            locationText: "101",
-                            teacherText: nil,
-                            noteText: nil,
-                            reminderText: nil,
-                            accentIndex: 0,
-                            isActive: false
-                        )
-                    ]
-                )
-            )
-        ]
+        generatedAt: generatedAt, isAuthenticated: true,
+        semesters: [LeafyWidgetSemester(id: "test", startsAt: Date(timeIntervalSince1970: 0),
+                                        weekCount: 20, hasTimetableCache: true)],
+        items: [LeafyWidgetAgendaItem(
+            id: "course-test-1", kind: .course,
+            sourceID: "00000000-0000-0000-0000-000000000001", title: "A",
+            startsAt: Date(timeIntervalSince1970: 28800),
+            endsAt: Date(timeIntervalSince1970: 31500), locationText: "101", accentIndex: 0
+        )], exams: [], defaultStartMinute: 480, defaultEndMinute: 1305,
+        syncText: "最近同步：12:00", lastFailureText: nil
     )
 }
 

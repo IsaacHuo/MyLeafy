@@ -213,12 +213,15 @@ struct LeafyApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: .schoolExamScheduleDidChange)) { _ in
                 refreshScheduleReportNotifications()
+                refreshWidgetSnapshot()
             }
             .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
                 refreshScheduleReportNotifications()
+                refreshWidgetSnapshot()
             }
             .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in
                 refreshScheduleReportNotifications()
+                refreshWidgetSnapshot()
             }
             .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
                 refreshScheduleReportNotifications()

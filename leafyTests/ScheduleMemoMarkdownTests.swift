@@ -92,33 +92,4 @@ final class ScheduleMemoMarkdownTests: XCTestCase {
         )
     }
 
-    func testSubmissionUsesMailtoAndDoesNotExposeLocalResourceIdentifiers() throws {
-        let attachmentID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
-        let source = """
-        # 校园观察
-
-        正文
-        [附件](leafy-memo://attachment/\(attachmentID.uuidString.lowercased()))
-        """
-        let draft = ScheduleMemoSubmissionDraft.make(
-            title: "校园观察",
-            source: source,
-            tags: ["校园"],
-            createdAt: Date(timeIntervalSince1970: 0),
-            updatedAt: Date(timeIntervalSince1970: 60),
-            attachmentNames: [attachmentID: "观察记录.md"]
-        )
-
-        let url = try XCTUnwrap(draft.mailtoURL)
-        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-
-        XCTAssertEqual(components.scheme, "mailto")
-        XCTAssertEqual(components.path, ScheduleMemoSubmissionDraft.recipient)
-        XCTAssertEqual(query["subject"], "【MyLeafy 投稿】校园观察")
-        XCTAssertEqual(query["body"], draft.body)
-        XCTAssertTrue(draft.body.contains("观察记录.md"))
-        XCTAssertFalse(draft.body.contains("leafy-memo://"))
-        XCTAssertFalse(draft.body.contains(attachmentID.uuidString.lowercased()))
-    }
 }

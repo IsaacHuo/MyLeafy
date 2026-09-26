@@ -46,7 +46,7 @@
       }
     },
     "今" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -109,12 +109,12 @@
       }
     },
     "明" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tomorrow"
+            "value" : "Next"
           }
         }
       }
@@ -170,6 +170,215 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "There are still %d periods"
+          }
+        }
+      }
+    },
+    "查看课程与个人日程，大号小组件展示本周安排。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See classes and personal events, with a weekly view in the large widget."
+          }
+        }
+      }
+    },
+    "今日安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
+          }
+        }
+      }
+    },
+    "明日安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow"
+          }
+        }
+      }
+    },
+    "本周安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This week"
+          }
+        }
+      }
+    },
+    "今日安排已结束" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All done for today"
+          }
+        }
+      }
+    },
+    "全天共 %d 项" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d items today"
+          }
+        }
+      }
+    },
+    "还有 %d 项安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%d more"
+          }
+        }
+      }
+    },
+    "共 %d 项安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d scheduled"
+          }
+        }
+      }
+    },
+    "个人日程" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personal events"
+          }
+        }
+      }
+    },
+    "进行中" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now"
+          }
+        }
+      }
+    },
+    "显示今天安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show today's agenda"
+          }
+        }
+      }
+    },
+    "显示明天安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show tomorrow's agenda"
+          }
+        }
+      }
+    },
+    "打开 App 更新小组件" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open app to update"
+          }
+        }
+      }
+    },
+    "打开 App，读取本机课程与日程。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open the app to load your classes and events."
+          }
+        }
+      }
+    },
+    "当天没有安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No events today"
+          }
+        }
+      }
+    },
+    "课程和个人日程会显示在这里。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classes and personal events appear here."
+          }
+        }
+      }
+    },
+    "登录后查看课程与个人日程。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to see your classes and events."
+          }
+        }
+      }
+    },
+    "需要重新登录" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in again"
+          }
+        }
+      }
+    },
+    "第 %d 周" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Week %d"
           }
         }
       }

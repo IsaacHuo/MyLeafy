@@ -233,6 +233,8 @@ final class AppNavigationCoordinator: ObservableObject {
             openProfileRoute(.cacheSync)
         case .scheduleReports:
             openScheduleDestination(.scheduleReports)
+        case .schedules:
+            openScheduleDestination(.customSchedules)
         }
     }
 

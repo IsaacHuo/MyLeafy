@@ -116,6 +116,9 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         let axisScrollView = UIScrollView()
         let bodyScrollView = UIScrollView()
         private var refreshTask: Task<Void, Never>?
+        private var refreshID: UUID?
+        private var needsRefreshReset = false
+        private var isResettingRefreshOffset = false
 
         private var cornerWidthConstraint: NSLayoutConstraint?
         private var cornerHeightConstraint: NSLayoutConstraint?
@@ -177,15 +180,21 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
 
         @objc func refreshRequested() {
             guard !isDismantled, refreshTask == nil else { return }
-            guard parent.isRefreshEnabled, let onRefresh = parent.onRefresh else {
-                bodyScrollView.refreshControl?.endRefreshing()
+            guard !isResettingRefreshOffset else {
+                finishRefresh()
                 return
             }
-            let control = bodyScrollView.refreshControl
+            guard parent.isRefreshEnabled, let onRefresh = parent.onRefresh else {
+                finishRefresh()
+                return
+            }
+            let id = UUID()
+            refreshID = id
             refreshTask = Task { @MainActor [weak self] in
                 defer {
-                    control?.endRefreshing()
-                    self?.refreshTask = nil
+                    if self?.refreshID == id {
+                        self?.finishRefresh()
+                    }
                 }
                 guard !Task.isCancelled else { return }
                 await onRefresh()
@@ -193,8 +202,56 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         }
 
         func cancelRefresh() {
+            guard refreshTask != nil || bodyScrollView.refreshControl?.isRefreshing == true else { return }
             refreshTask?.cancel()
+            finishRefresh()
+        }
+
+        private func finishRefresh() {
+            refreshID = nil
+            refreshTask = nil
             bodyScrollView.refreshControl?.endRefreshing()
+            guard !isDismantled else { return }
+            needsRefreshReset = true
+            resetRefreshOffsetIfPossible()
+        }
+
+        private func resetRefreshOffsetIfPossible() {
+            guard needsRefreshReset, !isDismantled,
+                  !bodyScrollView.isTracking, !bodyScrollView.isDragging,
+                  !isResettingRefreshOffset else { return }
+            needsRefreshReset = false
+            isResettingRefreshOffset = true
+            let changes = {
+                self.bodyScrollView.setContentOffset(
+                    CGPoint(x: self.bodyScrollView.contentOffset.x, y: 0), animated: false
+                )
+                self.syncFromBody()
+            }
+            UIView.animate(
+                withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.25,
+                delay: 0,
+                options: [.beginFromCurrentState, .allowUserInteraction],
+                animations: changes
+            ) { [weak self] _ in
+                guard let self, !self.isDismantled else { return }
+                self.isResettingRefreshOffset = false
+                // UIKit may finish removing its refresh inset after our layout pass.
+                // Reconcile the actual offset without taking over a new gesture.
+                if !self.bodyScrollView.isTracking && !self.bodyScrollView.isDragging {
+                    self.clampBodyOffsetIfNeeded()
+                    self.syncFromBody()
+                }
+                self.resetRefreshOffsetIfPossible()
+            }
+        }
+
+        private var allowsRefreshOverscroll: Bool {
+            parent.onRefresh != nil && (
+                refreshTask != nil || bodyScrollView.refreshControl?.isRefreshing == true
+                    || bodyScrollView.isTracking || bodyScrollView.isDragging
+                    || bodyScrollView.isDecelerating || isResettingRefreshOffset
+            )
         }
 
         func makeContainer() -> UIView {
@@ -426,7 +483,10 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             guard !isDismantled else { return }
             guard scrollView === bodyScrollView else { return }
+            resetRefreshOffsetIfPossible()
             if !decelerate {
+                clampBodyOffsetIfNeeded()
+                syncFromBody()
                 updateCurrentWeek()
                 updateAwayFromCurrentWeek()
             }
@@ -435,6 +495,9 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             guard !isDismantled else { return }
             guard scrollView === bodyScrollView else { return }
+            resetRefreshOffsetIfPossible()
+            clampBodyOffsetIfNeeded()
+            syncFromBody()
             updateCurrentWeek()
             updateAwayFromCurrentWeek()
         }
@@ -471,7 +534,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             if abs(resolvedVerticalOffset - parent.verticalOffset) > 0.5 {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, !self.isDismantled else { return }
-                    self.parent.verticalOffset = resolvedVerticalOffset
+                    self.parent.verticalOffset = self.clampedYOffset(self.bodyScrollView.contentOffset.y)
                 }
             }
         }
@@ -569,7 +632,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         }
 
         private func bodyYOffset(_ proposedY: CGFloat) -> CGFloat {
-            if parent.onRefresh != nil && proposedY < 0 {
+            if allowsRefreshOverscroll && proposedY < 0 {
                 return proposedY
             }
             return clampedYOffset(proposedY)
@@ -582,7 +645,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
         }
 
         private func clampedAxisYOffset(_ proposedY: CGFloat) -> CGFloat {
-            if parent.onRefresh != nil && proposedY < 0 {
+            if allowsRefreshOverscroll && proposedY < 0 {
                 return proposedY
             }
             guard parent.allowsVerticalScroll else { return 0 }

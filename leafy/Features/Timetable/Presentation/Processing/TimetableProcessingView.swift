@@ -423,7 +423,6 @@ struct TimetableProcessingView: View {
             notes: courseNotes,
             occurrenceNotes: occurrenceNotes,
             reminders: courseReminderSettings,
-            cellReminders: cellReminders,
             isAuthenticated: true
         )
     }

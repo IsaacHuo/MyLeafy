@@ -1590,14 +1590,14 @@ struct TimetableView: View {
             ForEach(1...totalClasses, id: \.self) { classIndex in
                 let slot = TimetablePeriodSchedule.slot(for: classIndex)
                 VStack(spacing: 0) {
+                    Text("\(classIndex)")
+                        .font(.system(size: 15 * leafyControlScale, weight: .semibold))
                     if let startText = slot?.startText {
                         Text(startText)
                             .font(.system(size: 6.4 * leafyControlScale, weight: .medium))
                             .lineLimit(1)
                             .minimumScaleFactor(0.68)
                     }
-                    Text("\(classIndex)")
-                        .font(.system(size: 15 * leafyControlScale, weight: .semibold))
                     if let endText = slot?.endText {
                         Text(endText)
                             .font(.system(size: 6.4 * leafyControlScale, weight: .medium))
@@ -2146,31 +2146,36 @@ struct TimetableView: View {
     }
 
     private func dayHeader(metadata: TimetableDayMetadata) -> some View {
-        return VStack(spacing: 1) {
+        return VStack(spacing: 0) {
             Text(metadata.dayTitle)
                 .font(.system(size: 14 * leafyControlScale, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .allowsTightening(true)
+                .frame(height: 18 * leafyControlScale)
             Text(metadata.numericDateText)
                 .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
                 .allowsTightening(true)
-            if let event = metadata.event {
-                Text(event.displayTitle(language: leafyLanguage))
-                    .font(.system(size: 8.5 * leafyControlScale, weight: .regular))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .allowsTightening(true)
+                .frame(height: 14 * leafyControlScale)
+            VStack(spacing: 0) {
+                if let event = metadata.event {
+                    Text(event.displayTitle(language: leafyLanguage))
+                        .font(.system(size: 7.5 * leafyControlScale))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .allowsTightening(true)
+                }
+                if metadata.hasExam {
+                    Label("考试", systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 7.5 * leafyControlScale, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
             }
-            if metadata.hasExam {
-                Label("考试", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 8.5 * leafyControlScale, weight: .semibold))
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 18 * leafyControlScale, alignment: .top)
         }
         .foregroundStyle(dayHeaderTextForeground(for: metadata))
         .frame(maxWidth: .infinity, minHeight: headerHeight)
@@ -2696,11 +2701,10 @@ struct TimetableView: View {
 
     private func publishWidgetSnapshot() {
         LeafyWidgetSnapshotBuilder.publish(
-            courses: courses.filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID },
+            courses: courses,
             notes: courseNotes,
             occurrenceNotes: occurrenceNotes,
             reminders: courseReminderSettings,
-            cellReminders: cellReminders,
             isAuthenticated: networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
         )
     }

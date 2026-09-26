@@ -1,77 +1,47 @@
 import Foundation
+import os
 import SwiftData
-import WidgetKit
 
 @MainActor
 enum LeafyWidgetSnapshotBuilder {
+    private static let logger = Logger(subsystem: "com.isaachuo.leafy", category: "WidgetSnapshot")
+
     static func publish(
         courses: [Course],
         notes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote],
         reminders: [CourseReminderSetting],
-        cellReminders: [TimetableCellReminder],
         isAuthenticated: Bool,
         date: Date = Date()
     ) {
-        let currentConfig = SemesterConfig.current
         let archive = makeArchive(
-            courses: courses.filter { $0.sourceSemesterID == currentConfig.semesterID },
-            notes: notes,
-            occurrenceNotes: occurrenceNotes,
-            reminders: reminders,
-            cellReminders: cellReminders,
-            isAuthenticated: isAuthenticated,
-            date: date
+            courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
+            reminders: reminders, schedules: CustomScheduleStore.load(),
+            isAuthenticated: isAuthenticated, date: date
         )
-        Task.detached {
-            await WidgetSnapshotPublisher.shared.publish(archive)
-        }
+        Task { await WidgetSnapshotPublisher.shared.publish(archive) }
     }
 
     static func publish(from modelContext: ModelContext, isAuthenticated: Bool, date: Date = Date()) {
-        let courses = fetch(Course.self, in: modelContext)
-        let notes = fetch(CourseNote.self, in: modelContext)
-        let occurrenceNotes = fetch(CourseOccurrenceNote.self, in: modelContext)
-        let reminders = fetch(CourseReminderSetting.self, in: modelContext)
-        let cellReminders = fetch(TimetableCellReminder.self, in: modelContext)
-
-        publish(
-            courses: courses,
-            notes: notes,
-            occurrenceNotes: occurrenceNotes,
-            reminders: reminders,
-            cellReminders: cellReminders,
-            isAuthenticated: isAuthenticated,
-            date: date
-        )
+        do {
+            let archive = makeArchive(
+                courses: try modelContext.fetch(FetchDescriptor<Course>()),
+                notes: try modelContext.fetch(FetchDescriptor<CourseNote>()),
+                occurrenceNotes: try modelContext.fetch(FetchDescriptor<CourseOccurrenceNote>()),
+                reminders: try modelContext.fetch(FetchDescriptor<CourseReminderSetting>()),
+                schedules: CustomScheduleStore.load(), isAuthenticated: isAuthenticated, date: date
+            )
+            Task { await WidgetSnapshotPublisher.shared.publish(archive) }
+        } catch {
+            // A failed read must not replace the last valid widget with an empty timetable.
+            logger.error("Widget snapshot read failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     static func publishNeedsLogin(date: Date = Date()) {
-        let language = AppLanguagePreference.current
-        let snapshots = LeafyWidgetConstants.supportedDayOffsets.map { dayOffset in
-            let snapshotDate = dateForSnapshot(baseDate: date, dayOffset: dayOffset)
-            return LeafyWidgetDaySnapshot(
-                dayOffset: dayOffset,
-                snapshot: LeafyWidgetSnapshot(
-                    generatedAt: date,
-                    status: .needsLogin,
-                    displayDate: Self.displayDate(for: snapshotDate, language: language),
-                    weekText: weekText(for: snapshotDate, language: language),
-                    dayText: dayText(for: snapshotDate, language: language),
-                    headline: L10n.text("需要重新登录", language: language),
-                    subtitle: L10n.text("连接校园网并打开 %@ 重新登录后，小组件会继续显示课表。", language: language, AppBrand.displayName),
-                    syncText: nil,
-                    lastFailureText: nil,
-                    nextExamText: nextExamText(from: SchoolDataCache.loadExamSchedule(), date: snapshotDate, language: language),
-                    courses: []
-                )
-            )
-        }
-
-        let archive = LeafyWidgetSnapshotArchive(generatedAt: date, snapshots: snapshots)
-        Task.detached {
-            await WidgetSnapshotPublisher.shared.publishNeedsLogin(archive)
-        }
+        let archive = makeArchive(courses: [], notes: [], occurrenceNotes: [], reminders: [],
+                                  schedules: [], isAuthenticated: false, date: date)
+        Task { await WidgetSnapshotPublisher.shared.publishNeedsLogin(archive) }
     }
 
     #if DEBUG
@@ -80,19 +50,12 @@ enum LeafyWidgetSnapshotBuilder {
         notes: [CourseNote] = [],
         occurrenceNotes: [CourseOccurrenceNote] = [],
         reminders: [CourseReminderSetting] = [],
-        cellReminders: [TimetableCellReminder] = [],
+        schedules: [CustomScheduleEvent] = [],
         isAuthenticated: Bool,
         date: Date
     ) -> LeafyWidgetSnapshotArchive {
-        makeArchive(
-            courses: courses,
-            notes: notes,
-            occurrenceNotes: occurrenceNotes,
-            reminders: reminders,
-            cellReminders: cellReminders,
-            isAuthenticated: isAuthenticated,
-            date: date
-        )
+        makeArchive(courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
+                    reminders: reminders, schedules: schedules, isAuthenticated: isAuthenticated, date: date)
     }
     #endif
 
@@ -101,248 +64,83 @@ enum LeafyWidgetSnapshotBuilder {
         notes: [CourseNote],
         occurrenceNotes: [CourseOccurrenceNote],
         reminders: [CourseReminderSetting],
-        cellReminders: [TimetableCellReminder],
+        schedules: [CustomScheduleEvent],
         isAuthenticated: Bool,
         date: Date
     ) -> LeafyWidgetSnapshotArchive {
         let language = AppLanguagePreference.current
-        let snapshots = LeafyWidgetConstants.supportedDayOffsets.map { dayOffset in
-            LeafyWidgetDaySnapshot(
-                dayOffset: dayOffset,
-                snapshot: makeSnapshot(
-                    courses: courses,
-                    notes: notes,
-                    occurrenceNotes: occurrenceNotes,
-                    reminders: reminders,
-                    cellReminders: cellReminders,
-                    isAuthenticated: isAuthenticated,
-                    date: dateForSnapshot(baseDate: date, dayOffset: dayOffset),
-                    generatedAt: date,
-                    dayOffset: dayOffset,
-                    language: language
-                )
-            )
-        }
-
-        return LeafyWidgetSnapshotArchive(generatedAt: date, snapshots: snapshots)
-    }
-
-    private static func makeSnapshot(
-        courses: [Course],
-        notes: [CourseNote],
-        occurrenceNotes: [CourseOccurrenceNote],
-        reminders: [CourseReminderSetting],
-        cellReminders: [TimetableCellReminder],
-        isAuthenticated: Bool,
-        date: Date,
-        generatedAt: Date,
-        dayOffset: Int,
-        language: AppLanguagePreference
-    ) -> LeafyWidgetSnapshot {
-        let currentConfig = SemesterConfig.current
-        let schedule = SemesterConfig.weekAndDay(for: date, config: currentConfig)
-        let todayCourses = courses
-            .filter { $0.sourceSemesterID == currentConfig.semesterID }
-            .filter { $0.dayOfWeek == schedule.day && $0.weeks.contains(schedule.week) }
-            .sortedByStartPeriod()
+        let configs = SemesterConfig.timelineConfigurations
         let notesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
-        let remindersByKey = Dictionary(uniqueKeysWithValues: reminders.map { ($0.courseKey, $0.minutesBefore) })
-        let todayCellReminders = cellReminders
-            .filter { reminder in
-                if let startsAt = reminder.startsAt {
-                    return Calendar.current.isDate(startsAt, inSameDayAs: date)
+        let remindersByKey = Dictionary(reminders.map { ($0.courseKey, $0.minutesBefore) },
+                                       uniquingKeysWith: { _, latest in latest })
+        let configsByID = Dictionary(uniqueKeysWithValues: configs.map { ($0.semesterID, $0) })
+        var items: [LeafyWidgetAgendaItem] = []
+        if isAuthenticated {
+            for course in courses {
+                guard let config = configsByID[course.sourceSemesterID],
+                      let first = course.duration.min(), let last = course.duration.max(),
+                      (1...7).contains(course.dayOfWeek) else { continue }
+                for week in Set(course.weeks).sorted() where (1...config.supportedWeeks).contains(week) {
+                    guard let start = TimetablePeriodSchedule.startDate(
+                        semesterStartDate: config.semesterStartDate, week: week,
+                        dayOfWeek: course.dayOfWeek, period: first
+                    ), let end = TimetablePeriodSchedule.endDate(
+                        semesterStartDate: config.semesterStartDate, week: week,
+                        dayOfWeek: course.dayOfWeek, period: last
+                    ), end > start else { continue }
+                    let minutes = TimetableNotificationManager.normalizedReminderMinutes(remindersByKey[course.stableCourseKey] ?? 0)
+                    items.append(LeafyWidgetAgendaItem(
+                        id: "course-\(course.id.uuidString)-\(week)", kind: .course,
+                        sourceID: course.id.uuidString, title: trimmed(course.courseName) ?? L10n.text("未命名课程"),
+                        startsAt: start, endsAt: end, locationText: course.locationTextForShare,
+                        teacherText: trimmed(course.teacher),
+                        noteText: TimetableNoteResolver.effectiveNote(for: course, week: week,
+                            courseNotesByKey: notesByKey, occurrenceNotesByKey: occurrenceNotesByKey),
+                        reminderText: minutes > 0 ? L10n.text("提前 %d 分钟", language: language, minutes) : nil,
+                        accentIndex: accentIndex(for: course.courseName)
+                    ))
                 }
-                return reminder.week == schedule.week && reminder.dayOfWeek == schedule.day
             }
-            .sorted { $0.period < $1.period }
-
-        let widgetCourses = todayCourses.enumerated().map { index, course in
-            LeafyWidgetCourse(
-                id: course.id,
-                title: displayName(for: course),
-                timeText: course.timeRangeText,
-                periodText: course.durationTextForShare,
-                locationText: course.locationTextForShare,
-                teacherText: trimmed(course.teacher),
-                noteText: TimetableNoteResolver.effectiveNote(
-                    for: course,
-                    week: schedule.week,
-                    courseNotesByKey: notesByKey,
-                    occurrenceNotesByKey: occurrenceNotesByKey
-                ),
-                reminderText: reminderText(minutes: remindersByKey[course.stableCourseKey] ?? 0, language: language),
-                accentIndex: index,
-                isActive: dayOffset == 0 && course.contains(date: date, week: schedule.week)
-            )
-        }
-
-        let extraCellReminderText = todayCellReminders.first.flatMap { reminder -> String? in
-            let title = trimmed(reminder.title) ?? L10n.text("课表提醒", language: language)
-            guard let slot = TimetablePeriodSchedule.slot(for: reminder.period) else {
-                return title
+            items += schedules.map { event in
+                LeafyWidgetAgendaItem(
+                    id: "schedule-\(event.id)", kind: .schedule, sourceID: event.id,
+                    title: event.title, startsAt: event.startsAt, endsAt: event.endsAt,
+                    locationText: event.locationText, teacherText: nil, noteText: nil,
+                    reminderText: nil, accentIndex: accentIndex(for: event.id)
+                )
             }
-            return "\(slot.startText) \(title)"
         }
-
-        let status: LeafyWidgetSnapshot.Status
-        if !isAuthenticated {
-            status = .needsLogin
-        } else if courses.isEmpty {
-            status = .stale
-        } else if todayCourses.isEmpty {
-            status = .noCourses
-        } else {
-            status = .ready
-        }
-
-        return LeafyWidgetSnapshot(
-            generatedAt: generatedAt,
-            status: status,
-            displayDate: displayDate(for: date, language: language),
-            weekText: weekText(for: date, language: language),
-            dayText: dayText(for: date, language: language),
-            headline: headline(
-                status: status,
-                activeCourse: widgetCourses.first { $0.isActive },
-                hasCourses: !widgetCourses.isEmpty,
-                dayOffset: dayOffset,
-                language: language
-            ),
-            subtitle: subtitle(
-                status: status,
-                courses: widgetCourses,
-                extraCellReminderText: extraCellReminderText,
-                dayOffset: dayOffset,
-                language: language
-            ),
-            syncText: syncText(language: language),
-            lastFailureText: trimmed(TimetableCacheMetadata.lastFailureMessage),
-            nextExamText: nextExamText(from: SchoolDataCache.loadExamSchedule(), date: date, language: language),
-            courses: Array(widgetCourses)
+        items.sort { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
+        let exams = isAuthenticated ? SchoolDataCache.loadExamSchedule().compactMap { exam -> LeafyWidgetExam? in
+            guard let start = exam.startsAt else { return nil }
+            return LeafyWidgetExam(startsAt: start, endsAt: exam.endsAt ?? start,
+                text: L10n.text("考试：%@ · %@", language: language, exam.name, exam.date))
+        }.sorted { $0.startsAt < $1.startsAt } : []
+        let firstSlot = TimetablePeriodSchedule.slots.first
+        let lastSlot = TimetablePeriodSchedule.slots.last
+        return LeafyWidgetSnapshotArchive(
+            generatedAt: date, isAuthenticated: isAuthenticated,
+            semesters: configs.map { config in
+                LeafyWidgetSemester(id: config.semesterID, startsAt: config.semesterStartDate,
+                    weekCount: config.supportedWeeks,
+                    hasTimetableCache: courses.contains { $0.sourceSemesterID == config.semesterID }
+                        || TimetableCacheMetadata.lastSyncedSemesterID == config.semesterID)
+            }, items: items, exams: exams,
+            defaultStartMinute: firstSlot.map { $0.startHour * 60 + $0.startMinute } ?? 480,
+            defaultEndMinute: lastSlot.map { $0.endHour * 60 + $0.endMinute } ?? 1305,
+            syncText: TimetableCacheMetadata.lastSyncAt.map {
+                L10n.text("最近同步：%@", language: language, DateFormatters.headerWithTime.string(from: $0))
+            }, lastFailureText: trimmed(TimetableCacheMetadata.lastFailureMessage)
         )
     }
 
-    private static func headline(
-        status: LeafyWidgetSnapshot.Status,
-        activeCourse: LeafyWidgetCourse?,
-        hasCourses: Bool,
-        dayOffset: Int,
-        language: AppLanguagePreference
-    ) -> String {
-        switch status {
-        case .ready:
-            if dayOffset == 0, let activeCourse {
-                return L10n.text("正在上：%@", language: language, activeCourse.title)
-            }
-            if hasCourses {
-                return dayOffset == 0 ? L10n.text("今日课表", language: language) : L10n.text("明日课表", language: language)
-            }
-            return dayOffset == 0 ? L10n.text("今日课表", language: language) : L10n.text("明日课表", language: language)
-        case .noCourses:
-            return dayOffset == 0 ? L10n.text("今天没有课程", language: language) : L10n.text("明天没有课程", language: language)
-        case .needsLogin:
-            return L10n.text("需要重新登录", language: language)
-        case .stale:
-            return L10n.text("暂无课表缓存", language: language)
-        }
-    }
-
-    private static func subtitle(
-        status: LeafyWidgetSnapshot.Status,
-        courses: [LeafyWidgetCourse],
-        extraCellReminderText: String?,
-        dayOffset: Int,
-        language: AppLanguagePreference
-    ) -> String {
-        switch status {
-        case .ready:
-            if let next = courses.first(where: { !$0.isActive }) {
-                return dayOffset == 0
-                    ? L10n.text("下一节：%@", language: language, next.title)
-                    : L10n.text("第一节：%@", language: language, next.title)
-            }
-            if let first = courses.first {
-                return "\(first.timeText) · \(first.locationText)"
-            }
-            return extraCellReminderText ?? L10n.text("今日课程较少。", language: language)
-        case .noCourses:
-            return extraCellReminderText ?? L10n.text("今日暂无课程安排。", language: language)
-        case .needsLogin:
-            return L10n.text("连接校园网并打开 %@ 重新登录后，小组件会继续显示课表。", language: language, AppBrand.displayName)
-        case .stale:
-            return L10n.text("打开缓存与同步，重新拉取最新课表。", language: language)
-        }
-    }
-
-    private static func syncText(language: AppLanguagePreference) -> String? {
-        guard let date = TimetableCacheMetadata.lastSyncAt else { return nil }
-        return L10n.text("最近同步：%@", language: language, DateFormatters.headerWithTime.string(from: date))
-    }
-
-    private static func nextExamText(from exams: [ExamArrangement], date: Date, language: AppLanguagePreference) -> String? {
-        guard let exam = exams.nextRelevantExam(from: date) else { return nil }
-        return L10n.text("考试：%@ · %@", language: language, exam.name, exam.date)
-    }
-
-    private static func displayDate(for date: Date, language: AppLanguagePreference) -> String {
-        DateFormatters.chineseDay.string(from: date)
-    }
-
-    private static func weekText(for date: Date, language: AppLanguagePreference) -> String {
-        L10n.text("第 %d 周", language: language, SemesterConfig.weekAndDay(for: date).week)
-    }
-
-    private static func dayText(for date: Date, language: AppLanguagePreference) -> String {
-        let weekday = SemesterConfig.weekAndDay(for: date).day
-        guard (1...7).contains(weekday) else { return "" }
-        return language.weekdayTitle(for: weekday)
-    }
-
-    private static func dateForSnapshot(baseDate: Date, dayOffset: Int) -> Date {
-        Calendar.current.date(byAdding: .day, value: dayOffset, to: baseDate)
-            ?? baseDate.addingTimeInterval(TimeInterval(dayOffset * 24 * 60 * 60))
-    }
-
-    private static func reminderText(minutes: Int, language: AppLanguagePreference) -> String? {
-        let minutes = TimetableNotificationManager.normalizedReminderMinutes(minutes)
-        guard minutes > 0 else { return nil }
-        return L10n.text("提前 %d 分钟", language: language, minutes)
-    }
-
-    private static func displayName(for course: Course) -> String {
-        trimmed(course.courseName) ?? L10n.text("未命名课程")
+    private static func accentIndex(for key: String) -> Int {
+        key.utf8.reduce(0) { ($0 * 31 + Int($1)) % 8 }
     }
 
     private static func trimmed(_ value: String?) -> String? {
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func fetch<T: PersistentModel>(_ type: T.Type, in modelContext: ModelContext) -> [T] {
-        (try? modelContext.fetch(FetchDescriptor<T>())) ?? []
-    }
-}
-
-private extension Course {
-    var timeRangeText: String {
-        guard let first = duration.min(),
-              let last = duration.max(),
-              let startSlot = TimetablePeriodSchedule.slot(for: first),
-              let endSlot = TimetablePeriodSchedule.slot(for: last) else {
-            return durationTextForShare
-        }
-
-        return "\(startSlot.startText)-\(endSlot.endText)"
-    }
-
-    func contains(date: Date, week: Int) -> Bool {
-        guard let start = TimetablePeriodSchedule.startDate(for: self, week: week),
-              let end = TimetablePeriodSchedule.endDate(for: self, week: week)
-        else {
-            return false
-        }
-
-        return date >= start && date <= end
+        let text = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
     }
 }

@@ -1415,28 +1415,20 @@ extension PerformanceRefactorTests {
         let archiveA = makeWidgetSignatureArchive(generatedAt: Date(timeIntervalSince1970: 1))
         var archiveB = archiveA
         archiveB.generatedAt = Date(timeIntervalSince1970: 2)
-        archiveB.snapshots[0].snapshot.generatedAt = Date(timeIntervalSince1970: 2)
 
         XCTAssertEqual(WidgetSnapshotSignature(archive: archiveA), WidgetSnapshotSignature(archive: archiveB))
     }
 
-    func testWidgetSignatureTracksVisibleSnapshotTextChanges() {
+    func testWidgetSignatureTracksCalendarAndStatusChanges() {
         let baseline = makeWidgetSignatureArchive()
-
-        var changedDisplayDate = baseline
-        changedDisplayDate.snapshots[0].snapshot.displayDate = "Tomorrow"
-        XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedDisplayDate))
-
-        var changedWeek = baseline
-        changedWeek.snapshots[0].snapshot.weekText = "Week 2"
-        XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedWeek))
-
-        var changedDay = baseline
-        changedDay.snapshots[0].snapshot.dayText = "Tue"
-        XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedDay))
-
+        var changedSemester = baseline
+        changedSemester.semesters[0].startsAt.addTimeInterval(86400)
+        XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedSemester))
+        var changedIdentity = baseline
+        changedIdentity.isAuthenticated = false
+        XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedIdentity))
         var changedExam = baseline
-        changedExam.snapshots[0].snapshot.nextExamText = "考试：高数 · 6月1日"
+        changedExam.exams = [LeafyWidgetExam(startsAt: Date(), endsAt: Date(), text: "考试：高数 · 6月1日")]
         XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedExam))
     }
 
@@ -1444,23 +1436,23 @@ extension PerformanceRefactorTests {
         let baseline = makeWidgetSignatureArchive()
 
         var changedTitle = baseline
-        changedTitle.snapshots[0].snapshot.courses[0].title = "B"
+        changedTitle.items[0].title = "B"
         XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedTitle))
 
         var changedTime = baseline
-        changedTime.snapshots[0].snapshot.courses[0].timeText = "09:00"
+        changedTime.items[0].startsAt.addTimeInterval(3600)
         XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedTime))
 
         var changedLocation = baseline
-        changedLocation.snapshots[0].snapshot.courses[0].locationText = "202"
+        changedLocation.items[0].locationText = "202"
         XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedLocation))
 
         var changedNote = baseline
-        changedNote.snapshots[0].snapshot.courses[0].noteText = "带教材"
+        changedNote.items[0].noteText = "带教材"
         XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedNote))
 
         var changedReminder = baseline
-        changedReminder.snapshots[0].snapshot.courses[0].reminderText = "提前 10 分钟"
+        changedReminder.items[0].reminderText = "提前 10 分钟"
         XCTAssertNotEqual(WidgetSnapshotSignature(archive: baseline), WidgetSnapshotSignature(archive: changedReminder))
     }
 
@@ -1475,7 +1467,8 @@ extension PerformanceRefactorTests {
                 location: "Building",
                 dayOfWeek: 1,
                 weeks: [1],
-                duration: [index]
+                duration: [index],
+                sourceSemesterID: SemesterRuntimeConfig.previousSpring.semesterID
             )
         }
 
@@ -1487,8 +1480,8 @@ extension PerformanceRefactorTests {
         let snapshot = try XCTUnwrap(archive.snapshot(for: 0))
 
         XCTAssertEqual(snapshot.status, .ready)
-        XCTAssertEqual(snapshot.courses.count, 5)
-        XCTAssertEqual(snapshot.courses.map(\.title), ["Course 1", "Course 2", "Course 3", "Course 4", "Course 5"])
+        XCTAssertEqual(snapshot.items.count, 5)
+        XCTAssertEqual(snapshot.items.map(\.title), ["Course 1", "Course 2", "Course 3", "Course 4", "Course 5"])
     }
 
     @MainActor
@@ -1535,8 +1528,8 @@ extension PerformanceRefactorTests {
             date: secondWeekDate
         )
 
-        XCTAssertEqual(try XCTUnwrap(firstWeekArchive.snapshot(for: 0)).courses.first?.noteText, "带球鞋")
-        XCTAssertEqual(try XCTUnwrap(secondWeekArchive.snapshot(for: 0)).courses.first?.noteText, "带衣服")
+        XCTAssertEqual(try XCTUnwrap(firstWeekArchive.snapshot(for: 0)).items.first?.noteText, "带球鞋")
+        XCTAssertEqual(try XCTUnwrap(secondWeekArchive.snapshot(for: 0)).items.first?.noteText, "带衣服")
     }
 
     @MainActor

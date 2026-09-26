@@ -589,7 +589,6 @@ struct RealCommunityPostCard: View {
     var onToggleFavorite: (() async -> Void)? = nil
 
     @State private var selectedImagePreviewIndex: Int?
-    @State private var shareCardSource: CommunityPostCardPreviewSource?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -653,9 +652,6 @@ struct RealCommunityPostCard: View {
                     initialIndex: selectedImagePreviewIndex
                 )
             }
-        }
-        .leafySheet(item: $shareCardSource) { source in
-            CommunityPostCardPreviewSheet(source: source)
         }
     }
 
@@ -751,28 +747,8 @@ struct RealCommunityPostCard: View {
 
     private var moderationMenu: some View {
         Menu {
-            Button {
-                shareCardSource = CommunityPostCardPreviewSource(content: .post(post))
-            } label: {
-                Label("生成图文卡片", systemImage: "rectangle.on.rectangle.angled")
-            }
-
             ShareLink(item: post.shareURL, subject: Text(post.title), message: Text(post.shareText)) {
                 Label("分享链接", systemImage: "link")
-            }
-
-            Button {
-                LeafyClipboard.string = post.title
-            } label: {
-                Label("复制标题", systemImage: "doc.on.doc")
-            }
-
-            if !post.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button {
-                    LeafyClipboard.string = post.body
-                } label: {
-                    Label("复制正文", systemImage: "text.quote")
-                }
             }
 
             if let onReport {

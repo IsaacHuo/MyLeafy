@@ -64,7 +64,7 @@ struct ScheduleRootView: View {
     @ScaledMetric(relativeTo: .body) private var scaledPickerHeight = LeafyRootChromeMetrics.controlDiameter
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @State private var compactPath: [ScheduleDestination] = []
-    @State private var primarySection: SchedulePrimarySection = .memos
+    @State private var primarySection: SchedulePrimarySection = .schedules
     @State private var showsMenu = false
     @State private var newSchedulePresentation: CustomScheduleEditorPresentation?
 
@@ -478,7 +478,6 @@ struct ScheduleMemoFeedView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @Environment(\.openURL) private var openURL
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @Query private var attachments: [ScheduleMemoAttachment]
@@ -492,7 +491,6 @@ struct ScheduleMemoFeedView: View {
     @State private var convertingMemo: ScheduleMemo?
     @State private var editingSchedulePresentation: CustomScheduleEditorPresentation?
     @State private var shareCardSource: ScheduleMemoShareCardPreviewSource?
-    @State private var submissionFallback: ScheduleMemoSubmissionDraft?
     @State private var importantDates = CustomScheduleStore.load()
     @State private var detailMemo: ScheduleMemo?
     @State private var composerHeight: CGFloat = 0
@@ -656,7 +654,6 @@ struct ScheduleMemoFeedView: View {
                     onEdit: { editingMemo = detailMemo },
                     onConvert: { convertingMemo = detailMemo },
                     onShareCard: { makeShareCard(for: detailMemo) },
-                    onSubmit: { submit(detailMemo) },
                     onPin: { togglePin(detailMemo) },
                     onTrash: {
                         requestTrash(detailMemo, closesDetail: true)
@@ -686,28 +683,6 @@ struct ScheduleMemoFeedView: View {
                     dismissButton: .default(Text("知道了"))
                 )
             }
-        }
-        .confirmationDialog(
-            "无法打开邮箱 App",
-            isPresented: Binding(
-                get: { submissionFallback != nil },
-                set: { if !$0 { submissionFallback = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let draft = submissionFallback {
-                Button("复制投稿内容") {
-                    UIPasteboard.general.string = draft.body
-                    submissionFallback = nil
-                }
-                Button("复制投稿邮箱") {
-                    UIPasteboard.general.string = ScheduleMemoSubmissionDraft.recipient
-                    submissionFallback = nil
-                }
-            }
-            Button("取消", role: .cancel) { submissionFallback = nil }
-        } message: {
-            Text("请复制投稿内容，稍后发送至 \(ScheduleMemoSubmissionDraft.recipient)。")
         }
     }
 
@@ -856,7 +831,6 @@ struct ScheduleMemoFeedView: View {
                             onEdit: { editingMemo = memo },
                             onConvert: { convertingMemo = memo },
                             onShareCard: { makeShareCard(for: memo) },
-                            onSubmit: { submit(memo) },
                             onPin: { togglePin(memo) },
                             onTrash: { requestTrash(memo) }
                         )
@@ -1068,27 +1042,6 @@ struct ScheduleMemoFeedView: View {
         }
     }
 
-    private func submit(_ memo: ScheduleMemo) {
-        let draft = ScheduleMemoSubmissionDraft.make(
-            title: memo.kind == .article ? memo.title : nil,
-            source: memo.body,
-            tags: memo.tags,
-            createdAt: memo.createdAt,
-            updatedAt: memo.updatedAt,
-            attachmentNames: Dictionary(uniqueKeysWithValues: memoAttachments(for: memo).map {
-                ($0.id, $0.originalFilename)
-            })
-        )
-        guard let url = draft.mailtoURL else {
-            submissionFallback = draft
-            return
-        }
-        openURL(url) { accepted in
-            guard !accepted else { return }
-            Task { @MainActor in submissionFallback = draft }
-        }
-    }
-
     private func togglePin(_ memo: ScheduleMemo) {
         memo.pinnedAt = memo.pinnedAt == nil ? Date() : nil
         memo.updatedAt = Date()
@@ -1229,7 +1182,6 @@ private struct ScheduleMemoCard: View {
     let onEdit: (() -> Void)?
     let onConvert: (() -> Void)?
     let onShareCard: (() -> Void)?
-    let onSubmit: () -> Void
     let onPin: (() -> Void)?
     let onTrash: (() -> Void)?
 
@@ -1333,7 +1285,6 @@ private struct ScheduleMemoCard: View {
             if memo.kind != .audio, let onShareCard {
                 Button("转为图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
             }
-            Button("投稿", systemImage: "envelope", action: onSubmit)
             if let onTrash {
                 Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
             }
@@ -1556,7 +1507,6 @@ private struct ScheduleMemoDetailView: View {
     let onEdit: () -> Void
     let onConvert: () -> Void
     let onShareCard: () -> Void
-    let onSubmit: () -> Void
     let onPin: () -> Void
     let onTrash: () -> Void
 
@@ -1672,7 +1622,6 @@ private struct ScheduleMemoDetailView: View {
                 Button("生成图文卡片", systemImage: "rectangle.on.rectangle.angled", action: onShareCard)
             }
             Button(memo.isPinned ? "取消置顶" : "置顶", systemImage: "pin", action: onPin)
-            Button("投稿", systemImage: "envelope", action: onSubmit)
             Button("移到回收站", systemImage: "trash", role: .destructive, action: onTrash)
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -2675,14 +2624,12 @@ private struct ScheduleMemoEditorView: View {
 }
 
 private struct ScheduleMemoReviewView: View {
-    @Environment(\.openURL) private var openURL
     @Query private var memos: [ScheduleMemo]
     @Query private var images: [ScheduleMemoImage]
     @Query private var attachments: [ScheduleMemoAttachment]
     @Query private var audioRecords: [ScheduleMemoAudio]
     @State private var page = 0
     @State private var shareCardSource: ScheduleMemoShareCardPreviewSource?
-    @State private var submissionFallback: ScheduleMemoSubmissionDraft?
     @State private var operationAlert: LeafyOperationAlert?
     @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
 
@@ -2740,7 +2687,6 @@ private struct ScheduleMemoReviewView: View {
                                     operationAlert = .failure(error.localizedDescription)
                                 }
                             },
-                            onSubmit: { submit(memo) },
                             onPin: nil,
                             onTrash: nil
                         )
@@ -2756,48 +2702,6 @@ private struct ScheduleMemoReviewView: View {
             ScheduleMemoShareCardPreviewSheet(source: source)
         }
         .leafyOperationAlert($operationAlert)
-        .confirmationDialog(
-            "无法打开邮箱 App",
-            isPresented: Binding(
-                get: { submissionFallback != nil },
-                set: { if !$0 { submissionFallback = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let draft = submissionFallback {
-                Button("复制投稿内容") {
-                    UIPasteboard.general.string = draft.body
-                    submissionFallback = nil
-                }
-                Button("复制投稿邮箱") {
-                    UIPasteboard.general.string = ScheduleMemoSubmissionDraft.recipient
-                    submissionFallback = nil
-                }
-            }
-            Button("取消", role: .cancel) { submissionFallback = nil }
-        } message: {
-            Text("请复制投稿内容，稍后发送至 \(ScheduleMemoSubmissionDraft.recipient)。")
-        }
-    }
-
-    private func submit(_ memo: ScheduleMemo) {
-        let memoAttachments = attachments.filter { $0.memoID == memo.id }
-        let draft = ScheduleMemoSubmissionDraft.make(
-            title: memo.kind == .article ? memo.title : nil,
-            source: memo.body,
-            tags: memo.tags,
-            createdAt: memo.createdAt,
-            updatedAt: memo.updatedAt,
-            attachmentNames: Dictionary(uniqueKeysWithValues: memoAttachments.map { ($0.id, $0.originalFilename) })
-        )
-        guard let url = draft.mailtoURL else {
-            submissionFallback = draft
-            return
-        }
-        openURL(url) { accepted in
-            guard !accepted else { return }
-            Task { @MainActor in submissionFallback = draft }
-        }
     }
 }
 

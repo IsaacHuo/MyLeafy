@@ -6787,26 +6787,6 @@
         }
       }
     },
-    "复制投稿内容" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy submission content"
-          }
-        }
-      }
-    },
-    "复制投稿邮箱" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy submission email"
-          }
-        }
-      }
-    },
     "复制标题" : {
       "localizations" : {
         "en-US" : {
@@ -9949,16 +9929,6 @@
         }
       }
     },
-    "投稿" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Submit contribution"
-          }
-        }
-      }
-    },
     "报销台账" : {
       "localizations" : {
         "en-US" : {
@@ -11020,16 +10990,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unable to export"
-          }
-        }
-      }
-    },
-    "无法打开邮箱 App" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unable to open email App"
           }
         }
       }
@@ -17728,27 +17688,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Please fill in the school's official full name. After submission, it requires administrator review, and once approved, it will automatically be added to the corresponding school community."
-          }
-        }
-      }
-    },
-    "请复制投稿内容，稍后发送至 %@。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Please copy the submission and send it to %@ later."
-          }
-        }
-      }
-    },
-    "请复制投稿内容，稍后发送至 %arg。" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Please copy the submission content and send it to %arg later."
           }
         }
       }

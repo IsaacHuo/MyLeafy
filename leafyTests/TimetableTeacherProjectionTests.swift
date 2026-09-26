@@ -65,7 +65,7 @@ final class TimetableTeacherProjectionTests: XCTestCase {
                     date: date
                 )
                 let snapshot = try XCTUnwrap(archive.snapshot(for: 0))
-                let course = try XCTUnwrap(snapshot.courses.first { $0.title == "课程乙" })
+                let course = try XCTUnwrap(snapshot.items.first { $0.title == "课程乙" })
 
                 XCTAssertEqual(course.teacherText, expectedTeacher, "第 \(week) 周教师不正确")
             }
