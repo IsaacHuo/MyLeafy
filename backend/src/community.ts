@@ -74,7 +74,7 @@ export async function selectFeedRecords(env:BackendEnv,campus:string,viewerId:st
   const cursor=url.searchParams.get('cursor');
   let after:{created_at:string;id:string}|null=null;
   if(cursor){
-    try{after=JSON.parse(atob(cursor));if(!after||!Number.isFinite(Date.parse(after.created_at)))throw new Error();uuid(after.id);}
+    try{after=JSON.parse(atob(cursor));if(!after||!Number.isFinite(Date.parse(after.created_at)))throw new Error();after.id=uuid(after.id);}
     catch{throw new ApiError(400,'invalid_cursor','分页位置无效。');}
   }
   if(hot&&after)throw new ApiError(400,'invalid_cursor','热门列表不支持此分页方式。');

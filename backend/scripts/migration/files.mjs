@@ -12,11 +12,11 @@ let files;
 try{files=await vault.getJSON('files-manifest');}
 catch(error){if(error.code!=='ENOENT')throw error;files={version:1,backup_id:manifest.id,complete:false,objects:{}};}
 if(files.backup_id!==manifest.id)throw new Error('File manifest belongs to another backup');
-for(const chunk of metadata.chunks){
-  for(const object of await vault.getJSON(chunk.name,chunk)){
+// A small bounded batch keeps large files out of unbounded Promise.all calls.
+async function download(object){
     const name=`object-${digest(`${object.bucket_id}/${object.name}`)}`;
     const existing=files.objects[name];
-    if(existing){await vault.get(existing.chunk.name,existing.chunk);continue;}
+    if(existing){await vault.get(existing.chunk.name,existing.chunk);return [name,existing];}
     const objectPath=[object.bucket_id,...object.name.split('/')].map(encodeURIComponent).join('/');
     const url=`${process.env.SUPABASE_URL.replace(/\/$/,'')}/storage/v1/object/authenticated/${objectPath}`;
     const response=await fetch(url,{headers:{apikey:process.env.SUPABASE_SERVICE_ROLE_KEY,Authorization:`Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`},signal:AbortSignal.timeout(60000)});
@@ -33,7 +33,14 @@ for(const chunk of metadata.chunks){
     }
     if(Number.isFinite(expected)&&expected!==bytes)throw new Error('Storage object changed since metadata snapshot; take a new snapshot after freezing source writes');
     const content=Buffer.concat(parts),saved=await vault.put(name,content);
-    files.objects[name]={bucket:object.bucket_id,path:object.name,source_id:object.id,source_version:object.version??null,content_type:response.headers.get('content-type')??object.metadata?.mimetype??'application/octet-stream',chunk:saved};
+    return [name,{bucket:object.bucket_id,path:object.name,source_id:object.id,source_version:object.version??null,content_type:response.headers.get('content-type')??object.metadata?.mimetype??'application/octet-stream',chunk:saved}];
+
+}
+for(const chunk of metadata.chunks){
+  const objects=await vault.getJSON(chunk.name,chunk);
+  for(let index=0;index<objects.length;index+=4){
+    const batch=await Promise.all(objects.slice(index,index+4).map(download));
+    for(const [name,file] of batch)files.objects[name]=file;
     await vault.putJSON('files-manifest',files);
     console.log(JSON.stringify({objects:Object.keys(files.objects).length,total_objects:metadata.count}));
   }

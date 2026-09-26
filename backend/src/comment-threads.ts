@@ -21,7 +21,7 @@ export async function commentThreads(env:BackendEnv,who:Actor,postId:string,url:
   postId=uuid(postId);
   const post=await env.DB.prepare("SELECT id FROM posts p WHERE id=? AND campus_id=? AND status='published' AND NOT EXISTS(SELECT 1 FROM community_blocks b WHERE b.blocker_id=? AND b.blocked_id=p.author_id)").bind(postId,requireCommunity(who),who.profileId).first();
   if(!post)throw new ApiError(404,'not_found','帖子不存在或不可访问。');
-  const limit=integer(Number(url.searchParams.get('limit')??20),1,50),after=text(url.searchParams.get('after_created_at'),40,false)||null,afterId=text(url.searchParams.get('after_id'),36,false)||null;
+  const limit=integer(Number(url.searchParams.get('limit')??20),1,50),after=text(url.searchParams.get('after_created_at'),40,false)||null,afterId=text(url.searchParams.get('after_id'),36,false).toLowerCase()||null;
   if(Boolean(after)!==Boolean(afterId))throw new ApiError(400,'invalid_cursor','评论分页位置无效。');
   if(after){if(!Number.isFinite(Date.parse(after)))throw new ApiError(400,'invalid_cursor','评论分页日期无效。');uuid(afterId);}
   // A root is retained as a blank placeholder when its visible replies survive.

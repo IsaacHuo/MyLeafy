@@ -39,7 +39,9 @@ export async function materialize(directory,output,key){
       summaries[table]=tableSummary(identity[table],['id']);
     }
     for(const [table,meta] of Object.entries(mapping)){
-      const encoded=(await load(table)).map(row=>encodeRow(meta,row));
+      // Preserve the source in the encrypted backup, but invalidate all old administrator sessions.
+      const source=await load(table);
+      const encoded=(table==='admin_sessions'?[]:source).map(row=>encodeRow(meta,row));
       for(const row of encoded)insert(table,row);
       const columns=meta.columns.filter(c=>!c.generated).map(c=>quote(c.name)).join(',');
       const actual=db.prepare(`SELECT ${columns} FROM ${quote(table)}`).all().map(row=>({...row}));
@@ -74,7 +76,7 @@ export async function materialize(directory,output,key){
     if(db.prepare('PRAGMA foreign_key_check').all().length)throw new Error('Converted database has orphaned foreign keys');
     if(db.prepare('PRAGMA integrity_check').get().integrity_check!=='ok')throw new Error('Converted database integrity check failed');
     db.exec("UPDATE migration_control SET importing=0; UPDATE backend_control SET mode='read_only'; COMMIT; PRAGMA foreign_keys=ON;");
-    const report={backup_id:manifest.id,verified:true,tables:summaries,files:objects.length};
+    const report={backup_id:manifest.id,verified:true,tables:summaries,files:objects.length,excluded_runtime_state:['Supabase auth sessions','Supabase refresh tokens','admin_sessions']};
     await vault.putJSON('conversion-report',report);return report;
   }catch(error){
     try{db.exec('ROLLBACK');}catch{}

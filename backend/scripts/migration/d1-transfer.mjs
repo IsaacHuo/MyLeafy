@@ -56,7 +56,7 @@ export async function transferSQL(sourcePath){
     const lines=['PRAGMA defer_foreign_keys=ON;',"UPDATE backend_control SET mode='importing' WHERE id=1;",'UPDATE migration_control SET importing=1 WHERE id=1;',
       'CREATE TABLE _leafy_migration_values(id TEXT NOT NULL,ordinal INTEGER NOT NULL,value TEXT NOT NULL,PRIMARY KEY(id,ordinal));',
       'UPDATE comments SET parent_comment_id=NULL,reply_to_comment_id=NULL;',
-      ...['legacy_session_exchanges','identity_session','identity_verification','identity_rate_limit','change_outbox','file_delete_jobs',...tables.slice().reverse()].map(table=>`DELETE FROM ${quote(table)};`)];
+      ...['admin_banner_uploads','identity_session','identity_verification','identity_rate_limit','change_outbox','file_delete_jobs',...tables.slice().reverse()].map(table=>`DELETE FROM ${quote(table)};`)];
     const summaries={};
     for(const table of tables){
       const columns=db.prepare(`PRAGMA table_xinfo(${quote(table)})`).all().filter(c=>c.hidden===0).map(c=>c.name);
