@@ -1,5 +1,4 @@
 // Cloudflare API origins are public configuration, never server credentials.
 MYLEAFY_API_ORIGIN = https:/$()/api.myleafy.space
-MYLEAFY_API_ORIGIN[config=Debug] = https:/$()/myleafy-api-staging.2210286979.workers.dev
 
 #include? "Leafy.local.xcconfig"

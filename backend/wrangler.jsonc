@@ -20,7 +20,7 @@
       "workers_dev": true,
       "vars": {
         "ENVIRONMENT": "staging",
-        "API_ORIGIN": "https://myleafy-api-staging.2210286979.workers.dev",
+        "API_ORIGIN": "https://api-staging.myleafy.space",
         "SITE_ORIGIN": "http://localhost:5173"
       },
       "d1_databases": [
@@ -60,7 +60,13 @@
           "20 17 * * *",
           "35 18 * * *"
         ]
-      }
+      },
+      "routes": [
+        {
+          "pattern": "api-staging.myleafy.space",
+          "custom_domain": true
+        }
+      ]
     },
     "production": {
       "name": "myleafy-api-production",

@@ -213,7 +213,7 @@ SchoolNetworkManager（URLSession 主链路 / WKWebView 课表兼容）
 
 `(campus_id, edu_id)` 确定长期 profile；密码账号保留用户 UUID，学校设备会话可重新建立。旧 Supabase 会话不兑换。通用校园的本地 `customSupabase` 身份序列化值保留，避免改变本地数据作用域；该值不代表新版依赖 Supabase。学校教务直连和本地数据权威不变。
 
-iOS `MYLEAFY_API_ORIGIN` 在 Debug 默认 staging，Release 默认 `api.myleafy.space`，可由本地 xcconfig 覆盖。请求失败不更换后端。旧上传任务检查后台来源，已创建远端内容的任务禁止投递到新后端；文件上传采用后台 URLSession，服务端返回不可变路径。旧 Storage 上传任务重连时取消。
+iOS `MYLEAFY_API_ORIGIN` 默认 `api.myleafy.space`，与新官网后台使用同一套数据；隔离调试可由本地 xcconfig 改为 `api-staging.myleafy.space`。请求失败不更换后端。旧上传任务检查后台来源，已创建远端内容的任务禁止投递到新后端；文件上传采用后台 URLSession，服务端返回不可变路径。旧 Storage 上传任务重连时取消。
 
 ### 运营后台链路
 

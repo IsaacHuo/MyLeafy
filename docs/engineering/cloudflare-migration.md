@@ -11,7 +11,7 @@
 - Durable Objects 发送变更信号，客户端重新拉取权威内容。Feed 和管理员预览共享筛选逻辑。
 - Pages 使用 `MYLEAFY_ADMIN_API` 私有入口和 `MYLEAFY_PUBLIC_API` 绑定；管理员图片/附件预览的签名票据复核有效会话。后台操作覆盖通过静态清单核对。
 - iOS 不再依赖 Supabase SDK。保留本地身份序列化键以保护本机数据；旧任务禁止跨后台提交。学校教务、WeatherKit、SwiftData、Widget 不迁到云端。
-- Debug 默认 staging，Release 默认 `api.myleafy.space`。生产域名未切流前不能把 Release 构建视为生产就绪。
+- iOS 默认连接 `api.myleafy.space`，与新官网后台使用同一套 Cloudflare 数据。隔离调试使用 `api-staging.myleafy.space`，不依赖当前网络解析异常的 workers.dev。
 
 ## 操作配置
 

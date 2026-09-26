@@ -1,3 +1,3 @@
 // Copy to Leafy.local.xcconfig. No server credentials belong in the App.
-// Staging first; use api.myleafy.space only after migration acceptance.
-MYLEAFY_API_ORIGIN = https:/$()/myleafy-api-staging.2210286979.workers.dev
+MYLEAFY_API_ORIGIN = https:/$()/api.myleafy.space
+// For isolated migration work, use https:/$()/api-staging.myleafy.space.
