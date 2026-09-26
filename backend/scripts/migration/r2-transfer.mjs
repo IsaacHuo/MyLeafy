@@ -23,19 +23,27 @@ async function object(path,method='GET',body,contentType){
   if(response.status===404&&method==='GET')return null;
   if(!response.ok)throw new Error(`R2 ${method} failed (HTTP ${response.status})`);return response;
 }
-for(const [id,file] of Object.entries(manifest.objects)){
+let progressWrites=Promise.resolve();
+function saveProgress(){progressWrites=progressWrites.then(()=>vault.putJSON(`r2-${environment}-transfer`,progress));return progressWrites;}
+async function transferObject([id,file]){
   const path=`${file.bucket}/${file.path}`,bytes=await vault.get(file.chunk.name,file.chunk);
   const current=await object(path),currentBytes=current?Buffer.from(await current.arrayBuffer()):null;
-  if(currentBytes&&digest(currentBytes)===file.chunk.sha256){progress.objects[id]={...progress.objects[id],verified:true};await vault.putJSON(`r2-${environment}-transfer`,progress);continue;}
-  if(!currentBytes&&!progress.objects[id]){progress.objects[id]={previous_absent:true};await vault.putJSON(`r2-${environment}-transfer`,progress);}
+  if(currentBytes&&digest(currentBytes)===file.chunk.sha256){progress.objects[id]={...progress.objects[id],verified:true};await saveProgress();return;}
+  if(!currentBytes&&!progress.objects[id]){progress.objects[id]={previous_absent:true};await saveProgress();}
   if(currentBytes&&!progress.objects[id]?.previous){
     progress.objects[id]={previous:await vault.put(`r2-${environment}-previous-${id}`,currentBytes),previous_content_type:current.headers.get('content-type')};
-    await vault.putJSON(`r2-${environment}-transfer`,progress);
+    await saveProgress();
   }
   await object(path,'PUT',bytes,file.content_type);
   const copied=await object(path);if(!copied||digest(Buffer.from(await copied.arrayBuffer()))!==file.chunk.sha256)throw new Error('R2 object verification failed');
-  progress.objects[id]={...progress.objects[id],verified:true};await vault.putJSON(`r2-${environment}-transfer`,progress);
+  progress.objects[id]={...progress.objects[id],verified:true};await saveProgress();
   console.log(JSON.stringify({verified_objects:Object.values(progress.objects).filter(value=>value.verified).length,total_objects:Object.keys(manifest.objects).length}));
 }
-progress.complete=true;await vault.putJSON(`r2-${environment}-transfer`,progress);
+const entries=Object.entries(manifest.objects);
+for(let index=0;index<entries.length;index+=8){
+  const results=await Promise.allSettled(entries.slice(index,index+8).map(transferObject));
+  const failed=results.find(result=>result.status==='rejected');
+  if(failed)throw failed.reason;
+}
+progress.complete=true;await saveProgress();
 console.log(JSON.stringify({environment,verified:true,objects:Object.keys(manifest.objects).length,note:'Destination-only objects are retained for rollback; no unverified object is deleted.'}));
