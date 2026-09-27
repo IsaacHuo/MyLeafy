@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-declare const process: { env: { readonly CI?: string } };
+declare const process: { env: { readonly CI?: string; readonly PLAYWRIGHT_CHROMIUM_CHANNEL?: string } };
 
 export default defineConfig({
   testDir: "./e2e",
@@ -11,7 +11,7 @@ export default defineConfig({
     trace: "on-first-retry"
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
     { name: "ipad-webkit", use: { ...devices["iPad Pro 11"] } },
   ],

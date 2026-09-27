@@ -49,7 +49,7 @@ describe("public site shell", () => {
     await waitFor(() => expect(document.title).toBe("MyLeafy 技术支持"));
     expect(document.documentElement).toHaveAttribute("lang", "zh-CN");
     expect(within(primaryNavigation).getByRole("link", { name: "支持" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveFocus());
   });
 
   it("closes the mobile navigation with Escape and restores button focus", async () => {

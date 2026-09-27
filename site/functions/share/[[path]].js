@@ -45,6 +45,7 @@ export async function onRequestGet(context) {
       canonicalURL: `${siteOrigin}/share/timetable/${code}`,
       imageURL: preview.imageURL,
       appURL: `leafy://timetable-invite?code=${encodeURIComponent(code)}`,
+      inviteCode: code,
       eyebrow: "共享课表",
       actionTitle: "在 App 中接受",
       fallbackTitle: "获取/更新 MyLeafy",
@@ -89,7 +90,8 @@ function renderSharePage({
   canonicalURL,
   imageURL,
   appURL,
-  fallbackURL = "https://apps.apple.com/cn/search?term=MyLeafy%20%E5%8C%97%E4%BA%AC%E6%9E%97%E4%B8%9A%E5%A4%A7%E5%AD%A6",
+  fallbackURL = `${siteOrigin}/#download`,
+  inviteCode = "",
   eyebrow,
   actionTitle,
   fallbackTitle,
@@ -106,7 +108,7 @@ function renderSharePage({
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="${escapedDescription}" />
     <meta name="theme-color" content="#091611" />
     <meta property="og:title" content="${escapedTitle}" />
@@ -146,7 +148,7 @@ function renderSharePage({
         min-height: 100dvh;
         display: grid;
         place-items: center;
-        padding: 32px 18px;
+        padding: max(32px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
       }
       article {
         width: min(100%, 720px);
@@ -195,7 +197,7 @@ function renderSharePage({
         gap: 12px;
         margin-top: 28px;
       }
-      a {
+      a, button {
         min-height: 44px;
         display: inline-flex;
         align-items: center;
@@ -205,6 +207,11 @@ function renderSharePage({
         text-decoration: none;
         font-size: 15px;
         font-weight: 700;
+        font-family: inherit;
+        line-height: 1.5;
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: transform 120ms cubic-bezier(.23,1,.32,1), background-color 160ms ease;
       }
       .primary {
         background: #9bc8a2;
@@ -215,26 +222,47 @@ function renderSharePage({
         color: #f0f4ef;
         background: rgba(255, 255, 255, 0.04);
       }
-      a:focus-visible {
+      a:focus-visible, button:focus-visible {
         outline: 2px solid #9bc8a2;
         outline-offset: 4px;
       }
+      a:active, button:active { transform: scale(.97); }
+      .invite { margin-top: 24px; border-block: 1px solid #ffffff24; padding-block: 16px; }
+      .invite-code { font-size: clamp(24px,6vw,36px); letter-spacing: .06em; overflow-wrap: anywhere; color: #b7ddbd; margin: 8px 0 18px; }
+      #copy-status { min-height: 28px; font-size: 14px; margin: 10px 0 0; }
+      .download-note { font-size: 13px; margin-top: 20px; }
+      @media (prefers-reduced-motion: reduce) { a, button { transition: none; } a:active, button:active { transform: none; } }
     </style>
   </head>
   <body>
     <main>
       <article>
-        <img src="/app-icon.png" alt="MyLeafy 应用图标" />
+        <img src="/media/optimized/app-icon.webp" width="56" height="56" alt="MyLeafy 应用图标" />
         <div class="eyebrow">${escapeHTML(eyebrow)}</div>
         <h1>${escapedTitle}</h1>
         <span class="badge">${escapeHTML(accentLabel)}</span>
         <p>${escapedDescription}</p>
+        ${inviteCode ? `<div class="invite"><p>课表邀请码</p><p class="invite-code" id="invite-code">${escapeHTML(inviteCode)}</p><button class="secondary" id="copy-invite" type="button">复制邀请码</button><p id="copy-status" role="status" aria-live="polite"></p><p>也可进入“我的 → 共享课表 → 添加同学课表”手动粘贴。邀请码 7 天内有效，仅可由一人接受。</p></div>` : ""}
         <div class="actions">
           <a class="primary" href="${escapedAppURL}">${escapeHTML(actionTitle)}</a>
           <a class="secondary" href="${escapedFallbackURL}">${escapeHTML(fallbackTitle)}</a>
         </div>
+        ${kind !== "unknown" ? '<p class="download-note">获取 MyLeafy：iOS 与 Android 两个版本均可在官网下载。</p>' : ""}
       </article>
     </main>
+    ${inviteCode ? `<script>
+      const button = document.getElementById('copy-invite');
+      const status = document.getElementById('copy-status');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          await navigator.clipboard.writeText(document.getElementById('invite-code').textContent);
+          status.textContent = '邀请码已复制到剪贴板。';
+        } catch {
+          status.textContent = '无法访问剪贴板，请选中邀请码并手动复制。';
+        } finally { button.disabled = false; }
+      });
+    </script>` : ""}
   </body>
 </html>`;
 }
