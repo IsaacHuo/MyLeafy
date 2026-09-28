@@ -21,7 +21,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -220,7 +220,7 @@ private fun PostDetailContent(
             Text("评论", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(LeafySpacing.micro))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                LeafyTextField(
                     value = commentInput,
                     onValueChange = { commentInput = it },
                     modifier = Modifier.weight(1f),

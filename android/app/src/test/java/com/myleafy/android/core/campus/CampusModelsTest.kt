@@ -15,9 +15,9 @@ class CampusModelsTest {
     }
 
     @Test
-    fun customCampusDoesNotSupportWeather() {
-        assertFalse(CampusDescriptor.custom.supports(CampusCapabilities.WEATHER))
-        assertFalse(CampusDescriptor.custom.supports(CampusCapabilities.CLASSROOMS))
+    fun localModeDoesNotSupportRemoteServices() {
+        assertFalse(CampusDescriptor.guest.supports(CampusCapabilities.WEATHER))
+        assertFalse(CampusDescriptor.guest.supports(CampusCapabilities.CLASSROOMS))
     }
 
     @Test

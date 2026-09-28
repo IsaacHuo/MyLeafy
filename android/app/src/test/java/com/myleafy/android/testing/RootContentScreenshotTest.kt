@@ -1,4 +1,5 @@
 package com.myleafy.android.testing
+import androidx.compose.ui.test.onNodeWithTag
 
 import android.app.Application
 import androidx.compose.foundation.layout.fillMaxSize
@@ -101,7 +102,7 @@ class RootContentScreenshotTest {
             }
         }
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("新建随记").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("schedule-create").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertTrue(newMemoClicks == 1) }
         capture()
     }
@@ -130,6 +131,8 @@ class RootContentScreenshotTest {
                 CampusDashboard(
                     state = loadedCampusState(),
                     syncState = CampusSyncState.Idle,
+                    campusId = com.myleafy.android.core.campus.CampusID.bjfu,
+                    onRetrySync = {},
                     onConsumeSync = {},
                     onGradesClick = {},
                     onExamsClick = {},
@@ -143,8 +146,8 @@ class RootContentScreenshotTest {
 
         composeRule
             .onNode(hasScrollAction())
-            .performScrollToNode(hasText("校历"))
-        composeRule.onNodeWithText("校历").assertIsDisplayed().performClick()
+            .performScrollToNode(hasText("校历与作息"))
+        composeRule.onNodeWithText("校历与作息").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(FeatureDestination.CAMPUS_CALENDAR, destination) }
         capture()
     }
@@ -174,6 +177,8 @@ class RootContentScreenshotTest {
                 CampusDashboard(
                     state = state,
                     syncState = CampusSyncState.Idle,
+                    campusId = com.myleafy.android.core.campus.CampusID.bjfu,
+                    onRetrySync = {},
                     onConsumeSync = {}, onGradesClick = {}, onExamsClick = {}, onClassroomClick = {},
                     onFeatureClick = {}, modifier = Modifier.fillMaxSize(),
                 )

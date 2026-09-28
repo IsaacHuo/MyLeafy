@@ -11,9 +11,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import com.myleafy.android.core.flow.retryableFlow
 import kotlinx.coroutines.launch
 
 sealed interface CampusUiState {
@@ -80,13 +80,27 @@ class CampusViewModel(
         )
     }
 
-    val uiState: StateFlow<CampusUiState> = mapped
-        .catch { emit(CampusUiState.Error(it.message ?: "学业数据加载失败")) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = CampusUiState.Loading,
-        )
+    /**
+     * 本地数据流读取失败后用它重新订阅。
+     * [CampusSyncState.Error] 是教务同步失败，走 [refresh]；
+     * [CampusUiState.Error] 是本机 Room 读取失败，重试只重新订阅本地数据。
+     */
+    private val loadRetryToken = MutableStateFlow(0)
+
+    val uiState: StateFlow<CampusUiState> = retryableFlow(
+        retryToken = loadRetryToken,
+        source = mapped,
+        onError = { CampusUiState.Error(it.message ?: "学业数据加载失败") },
+    ).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = CampusUiState.Loading,
+    )
+
+    /** 本地读取失败后的原地重试：重新订阅本地数据流，不发起教务请求。 */
+    fun retryLoad() {
+        loadRetryToken.value += 1
+    }
 
     fun refresh(scope: AcademicSyncScope = AcademicSyncScope.ALL) {
         if (_syncState.value is CampusSyncState.Syncing) return

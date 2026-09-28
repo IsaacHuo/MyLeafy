@@ -104,7 +104,7 @@ class LeafyDesignSystemScreenshotTest {
     @Test
     fun componentsFontScale200BottomReachability() {
         renderSampler(darkTheme = false, fontScale = 2f)
-        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("还没有日程"))
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("添加第一项个人日程后，会在这里显示。"))
         composeRule.onNodeWithText("还没有日程").assertIsDisplayed()
         composeRule
             .onNodeWithText("添加第一项个人日程后，会在这里显示。", useUnmergedTree = true)
@@ -135,7 +135,7 @@ class LeafyDesignSystemScreenshotTest {
                     LeafyStatusBanner(message = ScreenshotData.LONG_ERROR_MESSAGE, isError = true)
                     LeafyErrorState(
                         title = "校园数据暂不可用",
-                        message = ScreenshotData.LONG_ERROR_MESSAGE,
+                        message = ScreenshotData.LONG_STATE_MESSAGE,
                         action = { LeafyPrimaryButton(onClick = {}) { Text("重试") } },
                     )
                     LeafyEmptyState(
@@ -149,6 +149,9 @@ class LeafyDesignSystemScreenshotTest {
         composeRule.waitForIdle()
         composeRule
             .onNodeWithText(ScreenshotData.LONG_ERROR_MESSAGE, useUnmergedTree = true)
+            .assertTextLayoutFits()
+        composeRule
+            .onNodeWithText(ScreenshotData.LONG_STATE_MESSAGE, useUnmergedTree = true)
             .assertTextLayoutFits()
         composeRule
             .onNodeWithText(ScreenshotData.LONG_EMPTY_MESSAGE, useUnmergedTree = true)

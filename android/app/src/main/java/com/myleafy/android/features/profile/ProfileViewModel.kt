@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 sealed interface ProfileUiState {
@@ -41,11 +44,14 @@ class ProfileViewModel(
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
     private val _isSigningOut = MutableStateFlow(false)
     val isSigningOut: StateFlow<Boolean> = _isSigningOut.asStateFlow()
+    val appearance = settings.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Settings())
     private var latestSettings = Settings()
+    private var refreshJob: Job? = null
 
     init {
         viewModelScope.launch {
-            settings.settings.collect { s ->
+            settings.settings.collectLatest { s ->
+                refreshJob?.cancel()
                 latestSettings = s
                 val local = ProfileUiState.Local(s.campusId, s.eduId)
                 _uiState.value = if (s.eduId.isNullOrBlank()) {
@@ -60,7 +66,13 @@ class ProfileViewModel(
     fun refreshProfile() {
         val current = latestSettings
         if (current.eduId.isNullOrBlank()) return
-        viewModelScope.launch { _uiState.value = loadProfile(current.campusId, current.eduId) }
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            val result = loadProfile(current.campusId, current.eduId)
+            if (latestSettings.campusId == current.campusId && latestSettings.eduId == current.eduId) {
+                _uiState.value = result
+            }
+        }
     }
 
     fun logout() {
@@ -90,7 +102,10 @@ class ProfileViewModel(
                         ProfileUiState.Local(campusId, eduId)
                     }
                 },
-                onFailure = { ProfileUiState.Error(campusId, eduId, it.message ?: "资料加载失败") },
+                onFailure = {
+                    if (it is CancellationException) throw it
+                    ProfileUiState.Error(campusId, eduId, it.message ?: "资料加载失败")
+                },
             )
     }
 }

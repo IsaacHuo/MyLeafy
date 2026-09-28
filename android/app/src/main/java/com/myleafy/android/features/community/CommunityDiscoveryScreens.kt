@@ -17,7 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,12 +105,16 @@ fun CommunitySearchScreen(
     LeafySecondaryScaffold(title = "搜索社区", onBack = onBack) { contentModifier ->
         Column(modifier = contentModifier.fillMaxSize().padding(horizontal = LeafySpacing.card)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                LeafyTextField(
                     value = state.query,
                     onValueChange = viewModel::updateQuery,
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     placeholder = { Text("搜索帖子标题和正文") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
+                        if (state.query.isNotBlank() && !state.isLoading) viewModel.search()
+                    }),
                 )
                 IconButton(onClick = viewModel::search, enabled = state.query.isNotBlank() && !state.isLoading) {
                     Icon(Icons.Outlined.Search, contentDescription = "搜索")

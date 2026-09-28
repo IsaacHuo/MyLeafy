@@ -13,7 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 data class ProfileEditUiState(
     val nickname: String = "",
@@ -47,13 +48,20 @@ data class ProfileEditUiState(
     val isSaving: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
+    val dirty: Boolean = false,
+    val loaded: Boolean = false,
 )
 
 class ProfileEditViewModel(private val repository: ProfileRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileEditUiState())
     val uiState: StateFlow<ProfileEditUiState> = _uiState.asStateFlow()
 
-    init {
+    private var original = ProfileEditUiState()
+
+    init { load() }
+
+    fun load() {
+        _uiState.value = ProfileEditUiState()
         viewModelScope.launch {
             runCatching { repository.fetchProfile() ?: error("当前身份没有社区资料") }.fold(
                 onSuccess = { profile ->
@@ -63,21 +71,32 @@ class ProfileEditViewModel(private val repository: ProfileRepository) : ViewMode
                         major = profile.major.orEmpty(),
                         grade = profile.grade.orEmpty(),
                         isLoading = false,
+                        loaded = true,
                     )
+                    original = _uiState.value
                 },
-                onFailure = { _uiState.value = ProfileEditUiState(isLoading = false, error = it.message) },
+                onFailure = {
+                    if (it is CancellationException) throw it
+                    _uiState.value = ProfileEditUiState(isLoading = false, error = it.message ?: "资料加载失败")
+                },
             )
         }
     }
 
-    fun updateNickname(value: String) { _uiState.value = _uiState.value.copy(nickname = value, error = null) }
-    fun updateBio(value: String) { _uiState.value = _uiState.value.copy(bio = value, error = null) }
-    fun updateMajor(value: String) { _uiState.value = _uiState.value.copy(major = value, error = null) }
-    fun updateGrade(value: String) { _uiState.value = _uiState.value.copy(grade = value, error = null) }
+    fun updateNickname(value: String) = update(_uiState.value.copy(nickname = value))
+    fun updateBio(value: String) = update(_uiState.value.copy(bio = value))
+    fun updateMajor(value: String) = update(_uiState.value.copy(major = value))
+    fun updateGrade(value: String) = update(_uiState.value.copy(grade = value))
+
+    private fun update(value: ProfileEditUiState) {
+        if (_uiState.value.isSaving || _uiState.value.saved) return
+        _uiState.value = value.copy(error = null, dirty = value.nickname != original.nickname ||
+            value.bio != original.bio || value.major != original.major || value.grade != original.grade)
+    }
 
     fun save() {
         val state = _uiState.value
-        if (state.nickname.isBlank() || state.isSaving) {
+        if (!state.loaded || state.nickname.isBlank() || state.isSaving || state.saved) {
             if (state.nickname.isBlank()) _uiState.value = state.copy(error = "昵称不能为空")
             return
         }
@@ -97,6 +116,7 @@ class ProfileEditViewModel(private val repository: ProfileRepository) : ViewMode
                     )
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     _uiState.value = state.copy(isSaving = false, error = error.message ?: "资料保存失败")
                 },
             )
@@ -114,9 +134,17 @@ fun ProfileEditScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
-    LeafySecondaryScaffold(title = "编辑社区资料", onBack = onBack) { contentModifier ->
+    val requestExit = com.myleafy.android.ui.components.rememberEditorExit(state.dirty, state.isSaving, onBack)
+    LeafySecondaryScaffold(title = "编辑社区资料", onBack = requestExit) { contentModifier ->
         if (state.isLoading) {
             LeafyLoadingState(modifier = contentModifier.fillMaxSize())
+        } else if (!state.loaded) {
+            com.myleafy.android.ui.components.LeafyErrorState(
+                title = "资料加载失败",
+                message = state.error ?: "资料加载失败",
+                modifier = contentModifier.fillMaxSize(),
+                action = { com.myleafy.android.ui.components.LeafyTextButton(onClick = viewModel::load) { Text("重试") } },
+            )
         } else {
             Box(modifier = contentModifier.fillMaxSize().imePadding()) {
                 Column(
@@ -129,38 +157,37 @@ fun ProfileEditScreen(
                     verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
                 ) {
                 state.error?.let { LeafyStatusBanner(it, isError = true) }
-                OutlinedTextField(
+                LeafyTextField(
+                enabled = !state.isSaving,
                     value = state.nickname,
                     onValueChange = viewModel::updateNickname,
                     label = { Text("昵称（必填）") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                LeafyTextField(
+                enabled = !state.isSaving,
                     value = state.bio,
                     onValueChange = viewModel::updateBio,
                     label = { Text("简介") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                LeafyTextField(
+                enabled = !state.isSaving,
                     value = state.major,
                     onValueChange = viewModel::updateMajor,
                     label = { Text("专业") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                LeafyTextField(
+                enabled = !state.isSaving,
                     value = state.grade,
                     onValueChange = viewModel::updateGrade,
                     label = { Text("年级") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    "只更新昵称、简介、专业和年级；学号、校园与社区准入状态不能在客户端修改。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 LeafyPrimaryButton(
                     onClick = viewModel::save,
@@ -170,7 +197,7 @@ fun ProfileEditScreen(
                     if (state.isSaving) {
                         CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = LeafyStroke.progress)
                     }
-                    else Text("保存资料")
+                    Text(if (state.isSaving) "保存中…" else "保存资料")
                 }
             }
             }

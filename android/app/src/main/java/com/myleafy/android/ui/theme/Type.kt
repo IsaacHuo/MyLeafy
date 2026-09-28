@@ -60,11 +60,13 @@ val MyLeafyTypography = Typography(
  * 不再自行 copy(fontSize / lineHeight)。
  */
 object LeafyTimetableType {
-    /** 课程名：单节、行高紧张的格子。 */
+    /**
+     * 课程名。网格里的每一格都用这个角色：5/7 天 × 13 节要在一屏内放下，
+     * 冲突时列宽还会再折半，所以不存在“行高充足就换大字号”的空间。
+     * 历史实现里曾有一个 14sp 的 large 角色，但它从未被网格消费，
+     * 已随本次对齐移除，避免出现“源码 11sp、旧包 14sp”这类只有 token 才看得出的差异。
+     */
     val courseTitle = leafyTextStyle(11.sp, 14.sp, FontWeight.SemiBold)
-
-    /** 课程名：跨节或行高充足的格子。 */
-    val courseTitleLarge = leafyTextStyle(14.sp, 18.sp, FontWeight.SemiBold)
 
     /** 副文：地点、教师。 */
     val courseSubtitle = leafyTextStyle(10.sp, 13.sp, FontWeight.Medium)
@@ -75,6 +77,8 @@ object LeafyTimetableType {
     /** 日期数字：今天圆点内的日号。 */
     val dayNumber = leafyTextStyle(14.sp, 18.sp, FontWeight.SemiBold)
 
-    /** 节次时间轴。 */
-    val axisTime = leafyTextStyle(9.sp, 11.sp, FontWeight.Medium)
+    /** 时间轴竖排：节次在上，开始和结束时间在下。 */
+    val axisPeriod = leafyTextStyle(10.sp, 11.sp, FontWeight.SemiBold)
+    val axisTime = leafyTextStyle(8.sp, 9.sp, FontWeight.Medium)
+
 }

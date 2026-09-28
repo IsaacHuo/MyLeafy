@@ -1,5 +1,8 @@
 package com.myleafy.android.features.community
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -19,7 +22,6 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -76,8 +78,7 @@ fun CommunityScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
-        viewModel.refresh()
-        viewModel.refreshUnreadCount()
+        if (!uiState.isInitialLoading && !uiState.isRefreshing) viewModel.refresh()
         onPauseOrDispose { }
     }
 
@@ -118,14 +119,10 @@ fun CommunityContent(
                         Icon(Icons.Outlined.Search, contentDescription = "搜索社区")
                     }
                     LeafyActionIconButton(onClick = onNotificationsClick) {
-                        BadgedBox(
-                            badge = {
-                                if (state.unreadCount > 0) {
-                                    Badge { Text(state.unreadCount.coerceAtMost(99).toString()) }
-                                }
-                            },
-                        ) {
-                            Icon(Icons.Outlined.Notifications, contentDescription = "社区通知")
+                        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.Notifications, contentDescription =
+                                if (state.unreadCount > 0) "社区通知，${state.unreadCount} 条未读" else "社区通知")
+                            if (state.unreadCount > 0) Badge(Modifier.align(Alignment.TopEnd))
                         }
                     }
                 },
@@ -134,32 +131,20 @@ fun CommunityContent(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onComposeClick,
+                modifier = Modifier.testTag("community-compose"),
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("发帖") },
             )
         },
     ) { contentPadding ->
-        when {
-            state.isInitialLoading -> LeafyLoadingState(
-                modifier = Modifier.fillMaxSize().padding(contentPadding),
-                message = "正在加载校园动态",
-            )
-
-            state.posts.isEmpty() && state.error != null -> LeafyErrorState(
-                title = "社区暂时无法加载",
-                message = "${state.error}\n网络失败不会展示模拟内容，请检查连接后重试。",
-                modifier = Modifier.fillMaxSize().padding(contentPadding),
-                action = { LeafyPrimaryButton(onClick = onRefresh) { Text("重试") } },
-            )
-
-            else -> LazyColumn(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(contentPadding)
                     .leafyPullRefresh(pullRefreshState, enabled = !state.isRefreshing),
                 contentPadding = PaddingValues(
-                    start = LeafySpacing.card,
-                    end = LeafySpacing.card,
+                    start = LeafySpacing.page,
+                    end = LeafySpacing.page,
                     bottom = LeafyComponentSize.floatingActionClearance,
                 ),
                 verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
@@ -170,6 +155,9 @@ fun CommunityContent(
                         onSelectHot = onSelectHot,
                         onSelectLatest = onSelectLatest,
                     )
+                }
+                if (state.isInitialLoading) {
+                    item { LeafyLoadingState(message = "正在加载校园动态") }
                 }
                 if (state.isRefreshing || pullRefreshState.progress > 0f) {
                     item {
@@ -182,12 +170,12 @@ fun CommunityContent(
                 state.error?.let { message ->
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                            LeafyStatusBanner(message = "刷新失败，已保留上次内容：$message", isError = true)
+                            LeafyStatusBanner(message = if (state.posts.isEmpty()) message else "刷新失败，已保留上次内容：$message", isError = true)
                             LeafyPrimaryButton(onClick = onRefresh) { Text("重新刷新") }
                         }
                     }
                 }
-                if (state.posts.isEmpty()) {
+                if (state.posts.isEmpty() && !state.isInitialLoading && state.error == null) {
                     item {
                         LeafyEmptyState(
                             title = "没有找到内容",
@@ -202,7 +190,6 @@ fun CommunityContent(
                     }
                 }
             }
-        }
     }
 }
 
@@ -286,7 +273,7 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
         color = MaterialTheme.leafySurfaces.page,
         shape = MaterialTheme.shapes.small,
     ) {
-        Column(modifier = Modifier.padding(LeafySpacing.card)) {
+        Column(modifier = Modifier.padding(horizontal = LeafySpacing.micro, vertical = LeafySpacing.compact)) {
             // 帖首：作者保留在阅读起点，分类紧随其后。
             // 用 FlowRow 而不是定宽 Row：大字体或长分类时分类换到下一行，
             // 作者因此始终保留可见宽度，不会被分类挤没。
@@ -295,6 +282,12 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                 verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
+                Surface(shape = CircleShape, color = MaterialTheme.leafySurfaces.accentSoft) {
+                    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                        Text(if (post.is_anonymous) "匿" else post.author?.nickname?.take(1).orEmpty().ifBlank { "同" },
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
                 Text(
                     text = if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学",
                     style = MaterialTheme.typography.labelMedium,
@@ -306,14 +299,14 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                     Text(
                         it,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             Spacer(modifier = Modifier.height(LeafySpacing.micro))
-            Text(post.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(post.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(modifier = Modifier.height(LeafySpacing.tiny))
             Text(
                 post.body,
@@ -339,7 +332,7 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                     Text(
                         date,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                     )
                 }
@@ -350,7 +343,7 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                 }
             }
             Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
     }
 }

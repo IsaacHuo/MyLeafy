@@ -1,13 +1,17 @@
 package com.myleafy.android.testing
 
 import android.app.Application
+import androidx.core.view.drawToBitmap
+import org.robolectric.shadows.ShadowDialog
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.myleafy.android.features.schedule.MemoDraft
 import com.myleafy.android.features.schedule.MemoEditorSheet
 import com.myleafy.android.features.schedule.ScheduleEventDraft
@@ -131,7 +135,11 @@ class OverlayScreenshotTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("删除").performScrollTo().performClick()
         composeRule.onNodeWithText("删除这条日程？").assertIsDisplayed()
-        capture()
+        // Roborazzi 1.56 sorts windows by type, putting the sheet above its nested dialog.
+        // Capture the actual foremost dialog directly so the golden proves its content is visible.
+        composeRule.runOnIdle {
+            checkNotNull(ShadowDialog.getLatestDialog().window).decorView.drawToBitmap()
+        }.captureRoboImage()
     }
 
     private fun eventDraft(id: String?) = ScheduleEventDraft(
@@ -144,5 +152,6 @@ class OverlayScreenshotTest {
         note = "带上实验记录本与打印稿",
     )
 
-    private fun capture() = composeRule.onRoot().captureRoboImage()
+    @OptIn(ExperimentalRoborazziApi::class)
+    private fun capture() = captureScreenRoboImage()
 }

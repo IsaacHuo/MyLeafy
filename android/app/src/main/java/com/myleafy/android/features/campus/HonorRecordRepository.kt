@@ -104,31 +104,42 @@ class HonorRecordsViewModel(
     private val repository: HonorRecordRepository,
 ) : ViewModel() {
 
-    val records: StateFlow<List<HonorRecordEntity>> = repository.records()
-        .catch { emit(emptyList()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _loadFailed = MutableStateFlow(false)
+    val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
+    private val retry = MutableStateFlow(0)
+    val records: StateFlow<List<HonorRecordEntity>> = com.myleafy.android.core.flow.retryableFlow(
+        retry, repository.records(), onError = { error ->
+            _loadFailed.value = true
+            _message.value = error.message ?: "读取失败"
+            emptyList()
+        },
+    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun retryLoad() { _loadFailed.value = false; _message.value = null; retry.value += 1 }
 
     fun import(uri: Uri, title: String) {
         viewModelScope.launch {
             runCatching { repository.importFile(uri, title) }
-                .onFailure { _message.value = it.message ?: "导入失败" }
+                .onSuccess { _message.value = null }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "导入失败" }
         }
     }
 
     fun update(record: HonorRecordEntity, title: String, note: String, awardedAt: Long?) {
         viewModelScope.launch {
             runCatching { repository.update(record, title, note, awardedAt) }
-                .onFailure { _message.value = it.message ?: "保存失败" }
+                .onSuccess { _message.value = null }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "保存失败" }
         }
     }
 
     fun delete(record: HonorRecordEntity) {
         viewModelScope.launch {
             runCatching { repository.delete(record) }
-                .onFailure { _message.value = it.message ?: "删除失败" }
+                .onSuccess { _message.value = null }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "删除失败" }
         }
     }
 

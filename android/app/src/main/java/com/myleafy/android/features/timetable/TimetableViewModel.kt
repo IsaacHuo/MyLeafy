@@ -35,9 +35,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import com.myleafy.android.core.flow.retryableFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,6 +59,7 @@ sealed interface TimetableUiState {
         val background: TimetableBackgroundSettings,
     ) : TimetableUiState {
         val week: Int get() = selectedWeek
+
     }
 
     data class Error(val message: String) : TimetableUiState
@@ -90,6 +91,7 @@ class TimetableViewModel(
     private val scheduleRepository: ScheduleRepository,
     private val settingsStore: SettingsStore,
     private val weatherRepository: WeatherRepository,
+    private val canUseWeather: () -> Boolean = { false },
     private val onScheduleEventsChanged: () -> Unit = {},
     private val semesterId: String = SemesterConfig.currentSemesterId,
     private val calendarExporter: TimetableCalendarExporter = TimetableCalendarExporter(),
@@ -153,13 +155,28 @@ class TimetableViewModel(
         )
     }
 
-    val uiState: StateFlow<TimetableUiState> = mapped
-        .catch { emit(TimetableUiState.Error(it.message ?: "课表加载失败")) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = TimetableUiState.Loading,
-        )
+    /**
+     * 本地数据流读取失败后用它重新订阅。
+     * [TimetableSyncState.Error] 是教务同步失败，走 [refresh]；
+     * [TimetableUiState.Error] 是本机 Room/DataStore 读取失败，重试必须重新订阅，
+     * 而不是再去请求教务（那会把范围扩大到网络，也不是用户点“重新加载”的意图）。
+     */
+    private val loadRetryToken = MutableStateFlow(0)
+
+    val uiState: StateFlow<TimetableUiState> = retryableFlow(
+        retryToken = loadRetryToken,
+        source = mapped,
+        onError = { TimetableUiState.Error(it.message ?: "课表加载失败") },
+    ).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = TimetableUiState.Loading,
+    )
+
+    /** 本地读取失败后的原地重试：重新订阅本地数据流，不发起任何教务请求。 */
+    fun retryLoad() {
+        loadRetryToken.value += 1
+    }
 
     fun previousWeek() {
         selectedWeek.value = (selectedWeek.value - 1).coerceAtLeast(1)
@@ -187,7 +204,7 @@ class TimetableViewModel(
                     val count = (uiState.value as? TimetableUiState.Loaded)?.courses?.size ?: 0
                     TimetableSyncState.Success(count)
                 },
-                onFailure = { TimetableSyncState.Error(it.message ?: "同步失败") },
+                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TimetableSyncState.Error(it.message ?: "同步失败") },
             )
         }
     }
@@ -222,6 +239,7 @@ class TimetableViewModel(
                     _scheduleMutationState.value = ScheduleMutationState.Success
                 },
                 onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
                     _scheduleMutationState.value = ScheduleMutationState.Error(it.message ?: "日程保存失败")
                 },
             )
@@ -238,6 +256,7 @@ class TimetableViewModel(
                     _scheduleMutationState.value = ScheduleMutationState.Success
                 },
                 onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
                     _scheduleMutationState.value = ScheduleMutationState.Error(it.message ?: "日程删除失败")
                 },
             )
@@ -303,6 +322,10 @@ class TimetableViewModel(
     }
 
     fun refreshWeather(forceRefresh: Boolean = false) {
+        if (!canUseWeather()) {
+            _weatherState.value = WeatherUiState.Idle
+            return
+        }
         if (_weatherState.value is WeatherUiState.Loading || !weatherRepository.hasLocationPermission()) return
         _weatherState.value = WeatherUiState.Loading
         viewModelScope.launch {

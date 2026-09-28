@@ -23,7 +23,7 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,6 +67,7 @@ import com.myleafy.android.ui.theme.LeafyStroke
 @Composable
 fun LoginScreen(
     onBack: () -> Unit,
+    onLoggedIn: () -> Unit = onBack,
     viewModel: LoginViewModel = viewModel(
         factory = appViewModelFactory { container ->
             LoginViewModel(repository = container.authRepository)
@@ -80,7 +81,7 @@ fun LoginScreen(
     var captcha by rememberSaveable { mutableStateOf("") }
 
     if (uiState.loginSucceeded) {
-        LaunchedEffect(Unit) { onBack() }
+        LaunchedEffect(Unit) { onLoggedIn() }
     }
 
     LoginContent(
@@ -122,7 +123,7 @@ fun LoginContent(
     val captchaFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
-    LeafySecondaryScaffold(title = "学校登录", onBack = onBack, modifier = modifier) { contentModifier ->
+    LeafySecondaryScaffold(title = "北林登录", onBack = onBack, modifier = modifier) { contentModifier ->
         Box(modifier = contentModifier.fillMaxSize().imePadding()) {
             Column(
                 modifier = Modifier
@@ -133,7 +134,7 @@ fun LoginContent(
                     .padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.card),
             ) {
 
-        OutlinedTextField(
+        LeafyTextField(
             value = account,
             onValueChange = onAccountChange,
             modifier = Modifier.fillMaxWidth(),
@@ -143,7 +144,7 @@ fun LoginContent(
             keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
         )
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
-        OutlinedTextField(
+        LeafyTextField(
             value = password,
             onValueChange = onPasswordChange,
             modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
@@ -165,7 +166,7 @@ fun LoginContent(
         )
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
+            LeafyTextField(
                 value = captcha,
                 onValueChange = onCaptchaChange,
                 modifier = Modifier.weight(1f).focusRequester(captchaFocus),
@@ -203,6 +204,7 @@ fun LoginContent(
                         modifier = Modifier.size(LeafyIconSize.standard),
                         strokeWidth = LeafyStroke.progress,
                     )
+                    Text("登录中…", modifier = Modifier.padding(start = LeafySpacing.micro))
                 } else {
                     Text("登录")
                 }

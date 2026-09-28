@@ -4,6 +4,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,6 +44,7 @@ import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.LeafySpacing
@@ -50,6 +53,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun GradesScreen(
     onBack: () -> Unit,
+    canSync: Boolean = false,
     viewModel: CampusViewModel = academicViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -58,6 +62,7 @@ fun GradesScreen(
     AcademicDetailScaffold(
         title = "成绩与排名",
         syncState = syncState,
+        canSync = canSync,
         onBack = onBack,
         onRefresh = { viewModel.refresh(AcademicSyncScope.GRADES_AND_RANKINGS) },
         onConsumeSync = viewModel::consumeSyncResult,
@@ -68,6 +73,10 @@ fun GradesScreen(
                 title = "成绩数据暂不可用",
                 message = state.message,
                 modifier = modifier,
+                // 本地读取失败：重新订阅本地数据流，不发起教务请求。
+                action = {
+                    LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
+                },
             )
             is CampusUiState.Loaded -> GradesContent(state, modifier)
         }
@@ -77,6 +86,7 @@ fun GradesScreen(
 @Composable
 fun ExamsScreen(
     onBack: () -> Unit,
+    canSync: Boolean = false,
     viewModel: CampusViewModel = academicViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -85,6 +95,7 @@ fun ExamsScreen(
     AcademicDetailScaffold(
         title = "考试安排",
         syncState = syncState,
+        canSync = canSync,
         onBack = onBack,
         onRefresh = { viewModel.refresh(AcademicSyncScope.EXAMS) },
         onConsumeSync = viewModel::consumeSyncResult,
@@ -95,6 +106,9 @@ fun ExamsScreen(
                 title = "考试数据暂不可用",
                 message = state.message,
                 modifier = modifier,
+                action = {
+                    LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
+                },
             )
             is CampusUiState.Loaded -> LazyColumn(
                 modifier = modifier,
@@ -107,6 +121,9 @@ fun ExamsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                if (state.exams.isNotEmpty()) {
+                    item { LeafySectionHeader("考试明细") }
                 }
                 if (state.exams.isEmpty()) {
                     item {
@@ -126,7 +143,7 @@ fun ExamsScreen(
 
 @Composable
 private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
-    var selectedTerm by remember(state.terms) { mutableStateOf("全部") }
+    var selectedTerm by rememberSaveable(state.terms) { mutableStateOf("全部") }
     val displayedGrades = if (selectedTerm == "全部") state.grades else state.grades.filter { it.term == selectedTerm }
     val overallRankings = state.rankings.filter { it.term == "全部学期" }
 
@@ -141,8 +158,8 @@ private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
                     modifier = Modifier.padding(LeafySpacing.card),
                     verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
                 ) {
-                    Text("学校官方概览", style = MaterialTheme.typography.titleMedium)
-                    Row(
+                    Text("成绩概览", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
@@ -150,6 +167,11 @@ private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
                         AcademicMetric("学分积", state.gradeSummary?.officialCreditPoint?.let { "%.2f".format(it) } ?: "--")
                         AcademicMetric("成绩数", state.grades.size.toString())
                     }
+                    Text(
+                        "共 ${state.grades.size} 条成绩 · ${state.terms.size} 个学期",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Text(
                         "GPA 与排名只展示学校官方值；未解析到时不自行推算。",
                         style = MaterialTheme.typography.bodySmall,
@@ -199,21 +221,31 @@ private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
             }
         }
 
-        item { LeafySectionHeader("成绩明细", supportingText = "${state.terms.size} 个学期") }
+        // 顺序固定为 摘要 → 条件与同步状态 → 明细：同步状态在上方横幅，
+        // 这里先给学期条件，再给明细，避免用同样的大标题重复三遍。
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
-            ) {
-                (listOf("全部") + state.terms).forEach { term ->
-                    FilterChip(
-                        selected = selectedTerm == term,
-                        onClick = { selectedTerm = term },
-                        label = { Text(term) },
-                    )
+            LeafySectionHeader(
+                title = "筛选条件",
+                supportingText = if (selectedTerm == "全部") "全部学期" else selectedTerm,
+            )
+        }
+        if (state.terms.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+                ) {
+                    (listOf("全部") + state.terms).forEach { term ->
+                        FilterChip(
+                            selected = selectedTerm == term,
+                            onClick = { selectedTerm = term },
+                            label = { Text(term) },
+                        )
+                    }
                 }
             }
         }
+        item { LeafySectionHeader("成绩明细", supportingText = "${displayedGrades.size} 条") }
         if (displayedGrades.isEmpty()) {
             item {
                 LeafyEmptyState(
@@ -241,6 +273,7 @@ private fun AcademicDetailScaffold(
     title: String,
     syncState: CampusSyncState,
     onBack: () -> Unit,
+    canSync: Boolean,
     onRefresh: () -> Unit,
     onConsumeSync: () -> Unit,
     content: @Composable (Modifier) -> Unit,
@@ -249,7 +282,7 @@ private fun AcademicDetailScaffold(
         title = title,
         onBack = onBack,
         actions = {
-            LeafyActionIconButton(onClick = onRefresh, enabled = syncState !is CampusSyncState.Syncing) {
+            if (canSync) LeafyActionIconButton(onClick = onRefresh, enabled = syncState !is CampusSyncState.Syncing) {
                 if (syncState is CampusSyncState.Syncing) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(LeafyIconSize.standard),
@@ -262,17 +295,32 @@ private fun AcademicDetailScaffold(
         },
     ) { scaffoldModifier ->
         Column(modifier = scaffoldModifier.fillMaxSize()) {
-            val message = syncMessage(syncState)
-            if (message != null) {
+            if (syncState is CampusSyncState.Success) {
                 LeafyStatusBanner(
-                    message = message,
-                    isError = syncState is CampusSyncState.Error,
+                    message = syncMessage(syncState).orEmpty(),
+                    isError = syncState.warnings.isNotEmpty(),
                     modifier = Modifier.padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.micro),
+                    actionLabel = if (syncState.warnings.isNotEmpty()) "重试" else null,
+                    onAction = if (syncState.warnings.isNotEmpty()) onRefresh else null,
+                    onDismiss = onConsumeSync,
                 )
+                // 成功提示短暂出现后自动收起。
                 LaunchedEffect(syncState) {
-                    delay(4_000)
-                    onConsumeSync()
+                    if (syncState.warnings.isEmpty()) {
+                        delay(4_000)
+                        onConsumeSync()
+                    }
                 }
+            } else if (syncState is CampusSyncState.Error) {
+                // 失败保留在屏幕上，直到用户重试、同步成功或主动关闭。
+                LeafyStatusBanner(
+                    message = syncMessage(syncState).orEmpty(),
+                    isError = true,
+                    modifier = Modifier.padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.micro),
+                    actionLabel = "重试",
+                    onAction = onRefresh,
+                    onDismiss = onConsumeSync,
+                )
             }
             content(Modifier.fillMaxSize())
         }

@@ -73,6 +73,57 @@ class CommunityViewModelTest {
         assertEquals(7, repository.lastQuery?.days)
     }
 
+    @Test
+    fun selectionChangeClearsOldContentAndCancelledRequestCannotEndNewLoading() = runTest(dispatcher) {
+        val repository = FakeCommunityRepository()
+        repository.feedResult = Result.success(listOf(samplePost("old")))
+        val viewModel = CommunityViewModel(repository, "bjfu")
+        testScheduler.advanceUntilIdle()
+        val pending = kotlinx.coroutines.CompletableDeferred<List<PostDto>>()
+        repository.feedLoader = { pending.await() }
+        viewModel.selectLatest("学习交流")
+        testScheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.posts.isEmpty())
+        viewModel.selectHot()
+        testScheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.isInitialLoading)
+        assertEquals(null, viewModel.uiState.value.error)
+        pending.complete(listOf(samplePost("hot")))
+        testScheduler.advanceUntilIdle()
+        assertEquals(CommunityFeedMode.HOT, viewModel.uiState.value.loadedSelection?.mode)
+        assertEquals(listOf("hot"), viewModel.uiState.value.posts.map { it.id })
+    }
+
+    @Test
+    fun lateNonCooperativeResponseCannotReplaceNewSelection() = runTest(dispatcher) {
+        val repository = FakeCommunityRepository()
+        val oldRequest = kotlinx.coroutines.CompletableDeferred<List<PostDto>>()
+        repository.feedLoader = { query ->
+            if (query.mode == "hot") listOf(samplePost("new"))
+            else kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { oldRequest.await() }
+        }
+        val viewModel = CommunityViewModel(repository, "bjfu")
+        testScheduler.runCurrent()
+        viewModel.selectHot()
+        testScheduler.runCurrent()
+        oldRequest.complete(listOf(samplePost("stale")))
+        testScheduler.advanceUntilIdle()
+        assertEquals(listOf("new"), viewModel.uiState.value.posts.map { it.id })
+        assertEquals(null, viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun unreadFailureRetainsLastCount() = runTest(dispatcher) {
+        val repository = FakeCommunityRepository().apply { unreadResult = Result.success(7) }
+        val viewModel = CommunityViewModel(repository, "bjfu")
+        testScheduler.advanceUntilIdle()
+        repository.unreadResult = Result.failure(IllegalStateException("offline"))
+        viewModel.refreshUnreadCount()
+        testScheduler.advanceUntilIdle()
+        assertEquals(7, viewModel.uiState.value.unreadCount)
+        assertEquals(null, viewModel.uiState.value.error)
+    }
+
     private fun samplePost(id: String) = PostDto(id = id, author_id = "author", title = id, body = id)
 }
 
@@ -125,19 +176,57 @@ class PostDetailViewModelTest {
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
+class ComposePostViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    @After fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun duplicatePublishIsIgnoredAndFailureKeepsDraftForAnIdempotentRetry() = runTest(dispatcher) {
+        val pending = kotlinx.coroutines.CompletableDeferred<PostDto>()
+        val repository = FakeCommunityRepository().apply { postCreator = { pending.await() } }
+        val viewModel = ComposePostViewModel(repository, android.app.Application())
+        viewModel.updateTitle("草稿标题")
+        viewModel.updateBody("草稿正文")
+        viewModel.submit()
+        viewModel.submit()
+        testScheduler.runCurrent()
+        assertEquals(1, repository.postRequests.size)
+        viewModel.updateBody("提交期间不应改变正文")
+        pending.completeExceptionally(IllegalStateException("offline"))
+        testScheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.published)
+        assertEquals("草稿正文", viewModel.uiState.value.body)
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("offline"))
+        repository.postCreator = { PostDto(id = "saved", author_id = "viewer", title = "草稿标题", body = "草稿正文") }
+        viewModel.submit()
+        testScheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.published)
+        assertEquals(repository.postRequests[0], repository.postRequests[1])
+        viewModel.submit()
+        testScheduler.advanceUntilIdle()
+        assertEquals(2, repository.postRequests.size)
+    }
+}
+
 private class FakeCommunityRepository : CommunityRepository {
     var feedResult: Result<List<PostDto>> = Result.success(emptyList())
     var lastQuery: FeedQuery? = null
+    var feedLoader: (suspend (FeedQuery) -> List<PostDto>)? = null
+    var unreadResult = Result.success(0)
     var currentPost: PostDto? = null
     var deletedPost = false
     var commentFailuresRemaining = 0
     val commentRequests = mutableListOf<Pair<String, String>>()
+    val postRequests = mutableListOf<Pair<String, String>>()
+    var postCreator: suspend () -> PostDto = { error("unused") }
     override val isAvailable = true
     override val isPlaceholder = false
 
     override fun feed(query: FeedQuery): Flow<List<PostDto>> = flow {
         lastQuery = query
-        emit(feedResult.getOrThrow())
+        emit(feedLoader?.invoke(query) ?: feedResult.getOrThrow())
     }
 
     override suspend fun currentProfile() = ProfileDto(id = "viewer")
@@ -149,7 +238,7 @@ private class FakeCommunityRepository : CommunityRepository {
     override suspend fun togglePostFavorite(postId: String): PostDto =
         requireNotNull(currentPost).copy(viewer_has_favorited = !requireNotNull(currentPost).viewer_has_favorited)
     override suspend fun notifications(limit: Int): List<NotificationDto> = emptyList()
-    override suspend fun unreadNotificationCount(limit: Int): Int = 0
+    override suspend fun unreadNotificationCount(limit: Int): Int = unreadResult.getOrThrow()
     override suspend fun markNotificationRead(notificationId: String) = Unit
     override suspend fun markAllNotificationsRead() = Unit
     override suspend fun deletePost(postId: String) { deletedPost = true }
@@ -165,7 +254,10 @@ private class FakeCommunityRepository : CommunityRepository {
         category: String?,
         isAnonymous: Boolean,
         images: List<CommunityPostImageUpload>,
-    ): PostDto = error("unused")
+    ): PostDto {
+        postRequests += postId to requestId
+        return postCreator()
+    }
     override suspend fun createComment(
         commentId: String,
         requestId: String,

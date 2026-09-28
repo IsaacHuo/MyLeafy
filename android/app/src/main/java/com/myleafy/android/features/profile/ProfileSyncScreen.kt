@@ -100,7 +100,7 @@ class ProfileSyncViewModel(
     }
 
     private fun AcademicRefreshResult.requireSuccess(label: String): String {
-        if (!hasAnySuccess && failures.isNotEmpty()) error(failures.joinToString("；"))
+        if (failures.isNotEmpty()) error(failures.joinToString("；"))
         return buildString {
             append("$label 同步完成")
             grades?.let { append("：$it 条成绩") }
@@ -114,6 +114,7 @@ class ProfileSyncViewModel(
 @Composable
 fun ProfileSyncScreen(
     onBack: () -> Unit,
+    canSync: Boolean = false,
     viewModel: ProfileSyncViewModel = viewModel(
         factory = appViewModelFactory { container ->
             ProfileSyncViewModel(
@@ -133,10 +134,10 @@ fun ProfileSyncScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
-            item { LeafySectionHeader("学校数据", supportingText = "每个按钮只请求对应范围，失败时保留最近成功缓存。") }
-            item { SyncCard("课表", "当前学期 ${summary.courses} 门课程", states[SyncKind.TIMETABLE], { viewModel.sync(SyncKind.TIMETABLE) }) }
-            item { SyncCard("成绩与排名", "本地 ${summary.grades} 条成绩", states[SyncKind.GRADES], { viewModel.sync(SyncKind.GRADES) }) }
-            item { SyncCard("考试安排", "本地 ${summary.exams} 场考试", states[SyncKind.EXAMS], { viewModel.sync(SyncKind.EXAMS) }) }
+            item { LeafySectionHeader("学校数据", supportingText = if (canSync) null else "数据全部保存在本机，不连接任何后台。") }
+            item { SyncCard("课表", "当前学期 ${summary.courses} 门课程", states[SyncKind.TIMETABLE], { viewModel.sync(SyncKind.TIMETABLE) }, canSync) }
+            item { SyncCard("成绩与排名", "本地 ${summary.grades} 条成绩", states[SyncKind.GRADES], { viewModel.sync(SyncKind.GRADES) }, canSync) }
+            item { SyncCard("考试安排", "本地 ${summary.exams} 场考试", states[SyncKind.EXAMS], { viewModel.sync(SyncKind.EXAMS) }, canSync) }
             item { LeafySectionHeader("本机数据", supportingText = "随记与个人日程以本机为权威，不会在这里上传。") }
             item {
                 LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
@@ -155,7 +156,7 @@ fun ProfileSyncScreen(
 }
 
 @Composable
-private fun SyncCard(title: String, summary: String, state: SyncItemState?, onSync: () -> Unit) {
+private fun SyncCard(title: String, summary: String, state: SyncItemState?, onSync: () -> Unit, canSync: Boolean) {
     LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
@@ -171,7 +172,7 @@ private fun SyncCard(title: String, summary: String, state: SyncItemState?, onSy
                     else -> Unit
                 }
             }
-            LeafyPrimaryButton(
+            if (canSync) LeafyPrimaryButton(
                 onClick = onSync,
                 enabled = state !is SyncItemState.Running,
             ) {

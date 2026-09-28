@@ -58,6 +58,14 @@ object ScreenshotData {
     const val LONG_EMPTY_MESSAGE: String =
         "本学期还没有任何课程记录。完成一次教务同步后，课表、成绩与考试会一起出现在这里。"
 
+    /**
+     * 错误页的长文案。与 [LONG_ERROR_MESSAGE] 分开：同一个采样器里横幅与错误页
+     * 若复用同一段文字，语义树会出现两个同文本节点，断言与审阅都会失真。
+     */
+    const val LONG_STATE_MESSAGE: String =
+        "校园数据暂不可用：连接教务系统超时，已保留上次同步的成绩、考试与排名。" +
+            "恢复校园网或学校 VPN 后重试；长时间没有恢复时，可以在“缓存与同步”里查看最近一次成功时间。"
+
     const val LONG_COURSE_TITLE: String = "森林生态学野外综合实习（含群落调查与数据处理）"
 
     const val LONG_POST_TITLE: String =
@@ -343,7 +351,20 @@ fun LeafyScreenshotTheme(
  * Asserts the node's text layout does not overflow its constraints, i.e. the text
  * is not ellipsized or clipped. This is the semantic counterpart to eyeballing a
  * large-font screenshot.
+ *
+ * 判定分三项，纵向仍然是有界的检查，不是“只看 maxLines”：
+ * - `didExceedMaxLines`：文字被 maxLines 截断；
+ * - 某一行被省略号截断（`isLineEllipsized`）；
+ * - 行的实际右边界或底边界超出布局盒（`getLineRight` / `getLineBottom`），
+ *   也就是不是被换行、而是被裁掉的部分。
+ *
+ * 不能用 `MultiParagraph.width/height` 代替行边界：它们等于测量约束，
+ * 只要文字比约束窄就会“差值很大”，但这并不代表有内容被裁掉。
+ * 行边界允许 [TextOverflowTolerancePx] 的像素级舍入，超过容差的差值仍然失败，
+ * 并打印实测差值。
  */
+private const val TextOverflowTolerancePx = 1f
+
 fun SemanticsNodeInteraction.assertTextLayoutFits(): SemanticsNodeInteraction {
     val node = fetchSemanticsNode()
     val action = requireNotNull(node.config.getOrNull(SemanticsActions.GetTextLayoutResult)) {
@@ -352,9 +373,25 @@ fun SemanticsNodeInteraction.assertTextLayoutFits(): SemanticsNodeInteraction {
     val results = mutableListOf<TextLayoutResult>()
     requireNotNull(action.action).invoke(results)
     val layout = requireNotNull(results.firstOrNull()) { "Text layout result was empty" }
-    check(!layout.hasVisualOverflow) {
+    val paragraph = layout.multiParagraph
+    val truncated = paragraph.didExceedMaxLines ||
+        (0 until layout.lineCount).any { layout.isLineEllipsized(it) }
+    val lineRight = (0 until layout.lineCount).maxOf { layout.getLineRight(it) }
+    val lineBottom = layout.getLineBottom(layout.lineCount - 1)
+    val horizontalDeficit = lineRight - layout.size.width
+    val verticalDeficit = lineBottom - layout.size.height
+    check(
+        !truncated &&
+            horizontalDeficit <= TextOverflowTolerancePx &&
+            verticalDeficit <= TextOverflowTolerancePx,
+    ) {
+        val lineText = layout.layoutInput.text.text
         "Text overflows its layout: \"${node.config}\" " +
-            "(${layout.lineCount} lines, size=${layout.size})"
+            "(${layout.lineCount} lines, size=${layout.size}, lineRight=$lineRight, " +
+            "lineBottom=$lineBottom, truncated=$truncated, " +
+            "horizontalDeficit=$horizontalDeficit, verticalDeficit=$verticalDeficit, " +
+            "text=\"${lineText.take(40)}\", constraints=${layout.layoutInput.constraints}, " +
+            "bounds=${node.boundsInRoot})"
     }
     return this
 }

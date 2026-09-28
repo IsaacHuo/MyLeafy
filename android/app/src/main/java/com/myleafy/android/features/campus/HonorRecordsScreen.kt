@@ -10,6 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import com.myleafy.android.ui.components.rememberEditorExit
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +29,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -77,6 +83,7 @@ fun HonorRecordsScreen(
 ) {
     val records by viewModel.records.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editing by remember { mutableStateOf<HonorRecordEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<HonorRecordEntity?>(null) }
@@ -97,8 +104,8 @@ fun HonorRecordsScreen(
     ) { contentModifier ->
         Column(modifier = contentModifier.fillMaxSize()) {
             message?.let { value ->
-                LeafyStatusBanner(message = value, isError = true)
-                LaunchedEffect(value) { viewModel.consumeMessage() }
+                LeafyStatusBanner(message = value, isError = true, onDismiss = viewModel::consumeMessage,
+                        actionLabel = if (loadFailed) "重试" else null, onAction = if (loadFailed) viewModel::retryLoad else null)
             }
             if (records.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -138,7 +145,7 @@ fun HonorRecordsScreen(
                                     Text(record.note, style = MaterialTheme.typography.bodyMedium)
                                 }
                                 Spacer(Modifier.height(LeafySpacing.micro))
-                                Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                                     LeafyTextButton(onClick = {
                                         val file = viewModel.fileFor(record)
                                         runCatching {
@@ -208,17 +215,25 @@ private fun HonorRecordEditor(
     val context = LocalContext.current
     var title by rememberSaveable(record.id) { mutableStateOf(record.title) }
     var note by rememberSaveable(record.id) { mutableStateOf(record.note) }
-    var awardedAt by remember(record.id) { mutableStateOf(record.awardedAt) }
-    LeafyModalBottomSheet(onDismissRequest = onDismiss) {
-        LeafySheetContent(titleContent = { Text("编辑荣誉记录", style = MaterialTheme.typography.headlineSmall) }) {
-            OutlinedTextField(
+    var awardedAt by rememberSaveable(record.id) { mutableStateOf(record.awardedAt) }
+    val dirty = title != record.title || note != record.note || awardedAt != record.awardedAt
+    val requestExit = rememberEditorExit(dirty, false, onDismiss)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = {
+        if (it == SheetValue.Hidden && dirty) { requestExit(); false } else true
+    })
+    LeafyModalBottomSheet(onDismissRequest = requestExit, sheetState = sheetState) {
+        LeafySheetContent(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
+            titleContent = { Text("编辑荣誉记录", style = MaterialTheme.typography.headlineSmall) },
+        ) {
+            LeafyTextField(
                 value = title,
                 onValueChange = { title = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("名称") },
                 singleLine = true,
             )
-            OutlinedTextField(
+            LeafyTextField(
                 value = note,
                 onValueChange = { note = it },
                 modifier = Modifier.fillMaxWidth(),
@@ -239,7 +254,7 @@ private fun HonorRecordEditor(
             }) {
                 Text(current?.let { "获奖时间：${it.format(honorDateFormatter)}" } ?: "选择获奖时间")
             }
-            LeafyPrimaryButton(onClick = { onSave(title, note, awardedAt) }, modifier = Modifier.fillMaxWidth()) {
+            LeafyPrimaryButton(onClick = { onSave(title, note, awardedAt) }, enabled = title.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
                 Text("保存")
             }
         }

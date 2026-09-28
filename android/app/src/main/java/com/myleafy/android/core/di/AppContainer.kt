@@ -45,6 +45,11 @@ import com.myleafy.android.features.timetable.background.TimetableBackgroundRepo
 import com.myleafy.android.features.timetable.sharing.TimetableSharingRepository
 import com.myleafy.android.services.supabase.CommunityService
 import com.myleafy.android.services.supabase.SupabaseClientProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * 手动组合根（对应 iOS `LeafyDependencies`）。
@@ -89,8 +94,17 @@ class AppContainer(context: Context) {
     val activeAppScopeStore = ActiveAppScopeStore()
     val schoolSessionState = SchoolSessionState(activeAppScopeStore)
 
-    init {
-        schoolLoginCredentialStore.loadMostRecent(CampusID.bjfu.rawValue)?.let { cached ->
+    private val identityMutex = Mutex()
+    private var identityRestored = false
+
+    suspend fun restoreIdentity() = identityMutex.withLock {
+        if (identityRestored) return@withLock
+        val settings = settingsStore.settings.first()
+        com.myleafy.android.core.campus.CampusDescriptor.forCampus(CampusID(settings.campusId))
+        if (settings.campusId == CampusID.guest.rawValue) {
+            activeAppScopeStore.activateGuest()
+        } else withContext(Dispatchers.IO) {
+            schoolLoginCredentialStore.loadMostRecent(CampusID.bjfu.rawValue)?.let { cached ->
             schoolSessionState.identity = CampusIdentity(
                 campusId = CampusID.bjfu,
                 eduId = cached.account,
@@ -98,8 +112,11 @@ class AppContainer(context: Context) {
                 portal = SchoolPortal.UNDERGRADUATE,
                 kind = CampusIdentity.IdentityKind.SCHOOL_PORTAL,
             )
+            }
         }
+        identityRestored = true
     }
+
 
     // 教务 HTML 解析器（jsoup，M2.3）
     val htmlParser: HtmlParser = JsoupHtmlParser()
@@ -183,9 +200,21 @@ class AppContainer(context: Context) {
         settingsStore = settingsStore,
     )
 
+    suspend fun enterLocalMode() = identityMutex.withLock {
+        cachedCommunityService?.closeLocally()
+        cachedCommunityService = null
+        liveCommunityRepository.clearProfileCache()
+        schoolNetworkClient.clearSession()
+        settingsStore.setCampus(CampusID.guest.rawValue, null)
+        activeAppScopeStore.activateGuest()
+        identityRestored = true
+        scheduleNotificationScheduler.requestReconcile()
+    }
+
     suspend fun signOut() {
         val communitySignOut = runCatching { cachedCommunityService?.signOut() }
         authRepository.logout()
+        cachedCommunityService?.closeLocally()
         liveCommunityRepository.clearProfileCache()
         cachedCommunityService = null
         communitySignOut.getOrThrow()

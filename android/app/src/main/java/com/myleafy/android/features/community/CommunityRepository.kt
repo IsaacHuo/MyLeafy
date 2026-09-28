@@ -113,17 +113,6 @@ class LiveCommunityRepository(
                     campusId = identity.campusId.rawValue,
                 ).profile.also { cachedProfile = identity.scopeKey to it }
         }
-        if (identity.kind == com.myleafy.android.core.network.CampusIdentity.IdentityKind.CUSTOM_SUPABASE &&
-            !profile.community_access_status.equals("approved", ignoreCase = true)
-        ) {
-            throw IllegalStateException(
-                when (profile.community_access_status?.lowercase()) {
-                    "pending" -> "学校申请正在审核中，社区功能暂未开放"
-                    "rejected" -> "学校申请未通过，社区功能暂不可用"
-                    else -> "当前学校身份尚未获得社区准入"
-                },
-            )
-        }
         if (requireComplete && (!profile.is_profile_complete || profile.nickname.isBlank())) {
             throw IllegalStateException("请先在“我的”中完善社区资料")
         }

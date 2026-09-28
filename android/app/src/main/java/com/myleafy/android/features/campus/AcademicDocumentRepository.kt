@@ -160,7 +160,7 @@ class TrainingProgramViewModel(
                         )
                         if (value.failures.isNotEmpty()) append("；${value.failures.joinToString("；")}")
                     }
-                    if (value.hasAnySuccess) {
+                    if (value.hasAnySuccess && value.failures.isEmpty()) {
                         TrainingProgramRefreshState.Success(message)
                     } else {
                         TrainingProgramRefreshState.Error(message)

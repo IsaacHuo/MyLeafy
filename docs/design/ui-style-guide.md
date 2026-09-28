@@ -1,6 +1,6 @@
 # MyLeafy UI 风格规范
 
-本文定义 MyLeafy 跨平台界面的视觉语言、设计令牌、组件使用、页面模式和可访问性要求。品牌基准以当前 iOS SwiftUI 实现为准；Android 使用 Compose/Material 3 的原生交互表达同一套信息层级，不机械复制 iOS chrome。
+本文定义 MyLeafy 跨平台界面的视觉语言、设计令牌、组件使用、页面模式和可访问性要求。品牌基准以当前 iOS SwiftUI 实现为准；Android 使用 Compose 对齐现有 iOS 的布局、控件外观、信息密度与动效完成度；保留系统返回、键盘、权限与分享行为。使用轻透表面、细边界和轻阴影，不引入实时背景模糊。
 
 页面职责和流程见[App 产品设计](app-design.md)。
 
@@ -139,7 +139,7 @@ Android 的权威实现位于 `android/app/src/main/java/com/myleafy/android/ui/
 
 共享布局位于 `ui/components/LeafyComponents.kt`，统一 Root/Secondary TopBar、ContentSurface、ToolRow、SettingsRow、Loading/Empty/Error、Snackbar 与 Sheet。组件根节点必须应用调用方传入的 `Modifier`；leading/trailing/actions/content 使用 slot，业务政策留在功能页。
 
-Android 根目的地使用 Material 3 Adaptive Navigation Suite：Compact 显示 Bottom Navigation，Medium/Expanded 显示 Navigation Rail；`RootTab` 顺序、状态恢复和深链不随窗口宽度变化。Android 始终展示“社区”入口，未登录或校园不支持时在内容页解释门槛，实际社区请求仍由 capability 门控。根导航壳拥有导航区域 Insets，各页面拥有状态栏/TopBar Insets，表单和 Sheet 拥有 IME Insets；已应用的 padding 必须消费，避免重复。
+Android 根目的地在小于 600dp 时使用轻透圆角底部导航，宽屏继续使用 Material 3 Adaptive Navigation Suite 的 Navigation Rail；`RootTab` 顺序、状态恢复和深链不随窗口宽度变化。Android 始终展示“社区”入口，未登录或校园不支持时在内容页解释门槛，实际社区请求仍由 capability 门控。根导航壳拥有导航区域 Insets，各页面拥有状态栏/TopBar Insets，表单和 Sheet 拥有 IME Insets；已应用的 padding 必须消费，避免重复。
 
 ## 3. 字体与文本
 
@@ -232,7 +232,7 @@ Glass 只用于工具栏、浮动控件、胶囊或少量导航表面。不要�
 
 Android 对应最小触控面积为 48 × 48dp，使用 `LeafyActionIconButton` 或 `leafyMinimumTouchTarget()`。
 
-Android 主、次、文字和危险操作使用共享语义按钮；Dialog 与 Modal Bottom Sheet 使用统一 shape/surface，具体标题、正文和动作继续通过 slot 由功能页提供。设置页使用无额外外层卡片的 `LeafySettingsGroup`，行间依靠弱分隔。
+Android 主、次、文字和危险操作使用共享语义按钮；Dialog 与 Modal Bottom Sheet 使用统一 shape/surface，具体标题、正文和动作继续通过 slot 由功能页提供。设置页使用 inset grouped 风格的 `LeafySettingsGroup`：圆角内容表面、弱分组标题、缩进分隔线，图标底板 32dp、行触控区域至少 48dp。输入框统一使用 `LeafyTextField`。
 
 请求进行中时：
 
@@ -275,7 +275,7 @@ Android 主、次、文字和危险操作使用共享语义按钮；Dialog 与 M
 - iOS 26 使用系统 Tab API 与视觉行为；低版本使用兼容的 `tabItem` 实现。
 - 底部 Tab 不叠加透明度伪淡入或自定义导航层。
 
-Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigation Rail 是同一组根目的地的不同 chrome，不新增或重排 Tab；“社区”始终可发现，访问条件在页面内表达。
+Android 使用手机轻透圆角底部导航与宽屏 Navigation Rail：两者呈现同一组根目的地，不新增或重排 Tab；“社区”始终可发现，访问条件在页面内表达。
 
 日迹内部顶部使用 `随记 / 日程 / 推送`。该分区切换无白色选中衬底，外层导航继续使用 Liquid Glass。随记卡片采用系统白色表面；Tag 使用白字主题色胶囊，筛选后显示当前 Tag 和“全部随记”入口。图片预览保留左侧间距。校园侧栏内容切换保留淡化过渡。
 
@@ -410,3 +410,5 @@ Android 使用 Adaptive Navigation Suite：手机底部导航与宽屏 Navigatio
 - 普通 JVM 测试默认排除 `ScreenshotTests`；截图任务通过 `-Pscreenshot` 单独运行。
 - CI 是 golden 验证权威，只执行 verify，不自动录制或覆盖基准图；失败时上传实际图、差异图和报告。
 - 截图变更必须与对应页面的 iOS 对照、Android 参考、差距与迁移说明一起审阅。业务账号、真实社区内容和个人照片不得作为 fixture。
+
+Android 动效遵循 [Emil 的设计工程原则](https://github.com/emilkowalski/skills/blob/main/skills/emil-design-eng/SKILL.md)：按钮按压约 120ms，局部变化约 160–220ms，详情进场约 240ms。根 Tab 立即切换，不做整页横向飞入；Pager 和 Sheet 保留 Compose 原生可中断手势及系统动效缩放。

@@ -43,22 +43,27 @@ class ComposePostViewModel(
     val uiState: StateFlow<ComposePostUiState> = _uiState.asStateFlow()
 
     fun updateTitle(title: String) {
+        if (_uiState.value.isSubmitting || _uiState.value.published) return
         _uiState.value = _uiState.value.copy(title = title, errorMessage = null)
     }
 
     fun updateBody(body: String) {
+        if (_uiState.value.isSubmitting || _uiState.value.published) return
         _uiState.value = _uiState.value.copy(body = body, errorMessage = null)
     }
 
     fun updateCategory(category: String) {
+        if (_uiState.value.isSubmitting || _uiState.value.published) return
         _uiState.value = _uiState.value.copy(category = category, errorMessage = null)
     }
 
     fun toggleAnonymous() {
+        if (_uiState.value.isSubmitting || _uiState.value.published) return
         _uiState.value = _uiState.value.copy(isAnonymous = !_uiState.value.isAnonymous)
     }
 
     fun addImages(uris: List<Uri>) {
+        if (_uiState.value.isSubmitting || _uiState.value.published) return
         if (uris.isEmpty()) return
         val current = _uiState.value.images
         val remaining = CommunityImageProcessing.postImageLimit - current.size
@@ -80,6 +85,7 @@ class ComposePostViewModel(
     }
 
     fun removeImage(id: String) {
+        if (_uiState.value.isSubmitting || _uiState.value.published) return
         _uiState.value = _uiState.value.copy(
             images = _uiState.value.images.filterNot { it.id == id },
             errorMessage = null,
@@ -88,7 +94,7 @@ class ComposePostViewModel(
 
     fun submit() {
         val state = _uiState.value
-        if (state.isSubmitting) return
+        if (state.isSubmitting || state.published) return
         if (state.title.isBlank() || state.body.isBlank()) {
             _uiState.value = state.copy(errorMessage = "请填写标题与正文")
             return
@@ -118,6 +124,10 @@ class ComposePostViewModel(
             _uiState.value = result.fold(
                 onSuccess = { _uiState.value.copy(isSubmitting = false, published = true) },
                 onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) {
+                        _uiState.value = _uiState.value.copy(isSubmitting = false)
+                        throw it
+                    }
                     _uiState.value.copy(
                         isSubmitting = false,
                         errorMessage = it.toCommunityMessage("发布失败"),

@@ -30,13 +30,16 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.myleafy.android.ui.components.rememberEditorExit
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,6 +80,7 @@ fun SunshineRunScreen(
     viewModel: SportsViewModel = sportsViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     var showRules by rememberSaveable { mutableStateOf(false) }
     val today = LocalDate.now()
     val currentWeek = (ChronoUnit.DAYS.between(SemesterConfig.current.semesterStartDate, today) / 7 + 1)
@@ -106,6 +110,7 @@ fun SunshineRunScreen(
             contentPadding = PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
+            error?.let { message -> item { LeafyStatusBanner(message, isError = true, onDismiss = viewModel::dismissError) } }
             item {
                 Surface(color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
                     Column(
@@ -186,19 +191,21 @@ private fun SunshineRulesDialog(
     onDismiss: () -> Unit,
     onSave: (Int, Int, Int, String) -> Unit,
 ) {
-    var totalText by remember(total) { mutableStateOf(total.toString()) }
-    var weeksText by remember(periodWeeks) { mutableStateOf(periodWeeks.toString()) }
-    var targetText by remember(periodTarget) { mutableStateOf(periodTarget.toString()) }
-    var excludedText by remember(excludedWeeks) { mutableStateOf(excludedWeeks) }
+    var totalText by rememberSaveable(total) { mutableStateOf(total.toString()) }
+    var weeksText by rememberSaveable(periodWeeks) { mutableStateOf(periodWeeks.toString()) }
+    var targetText by rememberSaveable(periodTarget) { mutableStateOf(periodTarget.toString()) }
+    var excludedText by rememberSaveable(excludedWeeks) { mutableStateOf(excludedWeeks) }
+    val dirty = totalText != total.toString() || weeksText != periodWeeks.toString() || targetText != periodTarget.toString() || excludedText != excludedWeeks
+    val requestExit = rememberEditorExit(dirty, false, onDismiss)
     LeafyAlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = requestExit,
         title = { Text("长跑规则") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
                 NumberField(totalText, { totalText = it }, "全学期目标次数")
                 NumberField(weeksText, { weeksText = it }, "每周期周数")
                 NumberField(targetText, { targetText = it }, "每周期目标次数")
-                OutlinedTextField(
+                LeafyTextField(
                     value = excludedText,
                     onValueChange = { excludedText = it },
                     label = { Text("排除周（逗号分隔）") },
@@ -212,13 +219,14 @@ private fun SunshineRulesDialog(
                 onSave(totalText.toIntOrNull() ?: 34, weeksText.toIntOrNull() ?: 2, targetText.toIntOrNull() ?: 4, excludedText)
             }) { Text("保存") }
         },
-        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { LeafyTextButton(onClick = requestExit) { Text("取消") } },
     )
 }
 
 @Composable
 fun FitnessTestScreen(onBack: () -> Unit, viewModel: SportsViewModel = sportsViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf("") }
     val items = state.fitnessTests.filter { filter.isBlank() || it.item == filter }
@@ -232,8 +240,9 @@ fun FitnessTestScreen(onBack: () -> Unit, viewModel: SportsViewModel = sportsVie
             contentPadding = PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
+            error?.let { message -> item { LeafyStatusBanner(message, isError = true, onDismiss = viewModel::dismissError) } }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                     listOf("", "1000 米", "立定跳远", "肺活量").forEach { item ->
                         FilterChip(selected = filter == item, onClick = { filter = item }, label = { Text(item.ifBlank { "全部" }) })
                     }
@@ -271,17 +280,19 @@ private fun FitnessRow(record: FitnessTestRecordEntity, onDelete: (FitnessTestRe
 
 @Composable
 private fun FitnessEditorDialog(onDismiss: () -> Unit, onSave: (LocalDate, String, Double, String, String) -> Unit) {
-    var date by remember { mutableStateOf(LocalDate.now().toString()) }
-    var item by remember { mutableStateOf("1000 米") }
-    var value by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("秒") }
-    var note by remember { mutableStateOf("") }
+    val initialDate = rememberSaveable { LocalDate.now().toString() }
+    var date by rememberSaveable { mutableStateOf(initialDate) }
+    var item by rememberSaveable { mutableStateOf("1000 米") }
+    var value by rememberSaveable { mutableStateOf("") }
+    var unit by rememberSaveable { mutableStateOf("秒") }
+    var note by rememberSaveable { mutableStateOf("") }
     val valid = runCatching { LocalDate.parse(date) }.isSuccess && item.isNotBlank() && value.toDoubleOrNull() != null && unit.isNotBlank()
+    val requestExit = rememberEditorExit(date != initialDate || item != "1000 米" || value.isNotBlank() || unit != "秒" || note.isNotBlank(), false, onDismiss)
     LeafyAlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = requestExit,
         title = { Text("新增体测记录") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
                 TextFieldValue(date, { date = it }, "日期（YYYY-MM-DD）")
                 TextFieldValue(item, { item = it }, "项目")
                 TextFieldValue(value, { value = it }, "数值")
@@ -290,7 +301,7 @@ private fun FitnessEditorDialog(onDismiss: () -> Unit, onSave: (LocalDate, Strin
             }
         },
         confirmButton = { LeafyTextButton(enabled = valid, onClick = { onSave(LocalDate.parse(date), item, value.toDouble(), unit, note) }) { Text("保存") } },
-        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { LeafyTextButton(onClick = requestExit) { Text("取消") } },
     )
 }
 
@@ -336,6 +347,7 @@ fun MedicalScreen(
     viewModel: MedicalViewModel = viewModel(factory = appViewModelFactory { MedicalViewModel(it.campusLifeRepository) }),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var section by rememberSaveable { mutableStateOf(MedicalSection.POLICY) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
@@ -355,7 +367,7 @@ fun MedicalScreen(
                 clipData = ClipData.newRawUri("医疗报销台账", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }, "分享医疗台账"))
-        }
+        }.onFailure { viewModel.reportError(it.message ?: "分享失败") }
         viewModel.consumeExport()
     }
     LeafySecondaryScaffold(
@@ -374,6 +386,7 @@ fun MedicalScreen(
             }
         } else {
             Column(modifier = contentModifier.padding(horizontal = LeafySpacing.page)) {
+                error?.let { LeafyStatusBanner(it, isError = true, onDismiss = viewModel::dismissError) }
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     MedicalSection.entries.forEachIndexed { index, item ->
                         SegmentedButton(
@@ -485,19 +498,21 @@ private fun MedicalLedgerContent(
 
 @Composable
 private fun MedicalEditorDialog(onDismiss: () -> Unit, onSave: (MedicalLedgerDraft) -> Unit) {
-    var date by remember { mutableStateOf(LocalDate.now().toString()) }
-    var hospital by remember { mutableStateOf("") }
-    var department by remember { mutableStateOf("") }
-    var diagnosis by remember { mutableStateOf("") }
-    var expense by remember { mutableStateOf("") }
-    var materials by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    val initialDate = rememberSaveable { LocalDate.now().toString() }
+    var date by rememberSaveable { mutableStateOf(initialDate) }
+    var hospital by rememberSaveable { mutableStateOf("") }
+    var department by rememberSaveable { mutableStateOf("") }
+    var diagnosis by rememberSaveable { mutableStateOf("") }
+    var expense by rememberSaveable { mutableStateOf("") }
+    var materials by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
     val valid = runCatching { LocalDate.parse(date) }.isSuccess && hospital.isNotBlank() && expense.toDoubleOrNull() != null
+    val requestExit = rememberEditorExit(date != initialDate || hospital.isNotBlank() || department.isNotBlank() || diagnosis.isNotBlank() || expense.isNotBlank() || materials.isNotBlank() || note.isNotBlank(), false, onDismiss)
     LeafyAlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = requestExit,
         title = { Text("新增医疗台账") },
         text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+            LazyColumn(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
                 item { TextFieldValue(date, { date = it }, "就诊日期（YYYY-MM-DD）") }
                 item { TextFieldValue(hospital, { hospital = it }, "医院") }
                 item { TextFieldValue(department, { department = it }, "科室") }
@@ -512,18 +527,18 @@ private fun MedicalEditorDialog(onDismiss: () -> Unit, onSave: (MedicalLedgerDra
                 onSave(MedicalLedgerDraft(visitDate = LocalDate.parse(date), hospitalName = hospital, department = department, diagnosis = diagnosis, totalExpense = expense.toDouble(), materials = materials, note = note))
             }) { Text("保存") }
         },
-        dismissButton = { LeafyTextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { LeafyTextButton(onClick = requestExit) { Text("取消") } },
     )
 }
 
 @Composable
 private fun TextFieldValue(value: String, onValueChange: (String) -> Unit, label: String) {
-    OutlinedTextField(value, onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+    LeafyTextField(value, onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 }
 
 @Composable
 private fun NumberField(value: String, onValueChange: (String) -> Unit, label: String) {
-    OutlinedTextField(value, { onValueChange(it.filter(Char::isDigit)) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+    LeafyTextField(value, { onValueChange(it.filter(Char::isDigit)) }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 }
 
 @Composable

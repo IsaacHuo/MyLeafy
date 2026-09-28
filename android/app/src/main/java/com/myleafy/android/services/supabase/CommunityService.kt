@@ -103,6 +103,15 @@ class CommunityService(private val client: SupabaseClient) {
         if (client.auth.currentSessionOrNull() != null) client.auth.signOut()
     }
 
+    /** 切入本地模式时只清理本机会话，并终止客户端后台刷新。 */
+    suspend fun closeLocally() {
+        client.auth.stopAutoRefreshForCurrentSession()
+        client.auth.clearSession()
+        client.close()
+        storageClient.dispatcher.cancelAll()
+        storageClient.connectionPool.evictAll()
+    }
+
     /** 拉取社区 Feed（community-feed Edge Function，GET）。 */
     suspend fun fetchFeed(query: FeedQuery): List<PostDto> {
         ensureAnonymousSession()

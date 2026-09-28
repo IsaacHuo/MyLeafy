@@ -27,11 +27,11 @@ import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Functions
 import androidx.compose.material.icons.outlined.LocalHospital
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.SportsBasketball
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -39,31 +39,32 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.data.local.ExamEntity
 import com.myleafy.android.core.data.local.GradeEntity
 import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.navigation.FeatureDestination
 import com.myleafy.android.ui.components.LeafyActionIconButton
-import com.myleafy.android.ui.components.LeafyContentSurface
-import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyErrorState
-import com.myleafy.android.ui.components.LeafyFeatureCard
 import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyRootTopBar
-import com.myleafy.android.ui.components.LeafySectionHeader
 import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.components.LeafyTextButton
+import com.myleafy.android.ui.components.LeafyToolRow
 import com.myleafy.android.ui.theme.LeafyAdaptiveTokens
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyElevation
@@ -79,6 +80,7 @@ fun CampusScreen(
     onExamsClick: () -> Unit = {},
     onClassroomClick: () -> Unit = {},
     onFeatureClick: (FeatureDestination) -> Unit = {},
+    campusId: CampusID? = CampusID.bjfu,
     viewModel: CampusViewModel = viewModel(
         factory = appViewModelFactory { container ->
             CampusViewModel(
@@ -99,7 +101,7 @@ fun CampusScreen(
             LeafyRootTopBar(
                 title = "校园",
                 actions = {
-                    LeafyActionIconButton(
+                    if (campusId == CampusID.bjfu) LeafyActionIconButton(
                         onClick = viewModel::refresh,
                         enabled = syncState !is CampusSyncState.Syncing,
                     ) {
@@ -125,8 +127,9 @@ fun CampusScreen(
                     title = "校园数据暂不可用",
                     message = state.message,
                     modifier = Modifier.fillMaxSize().padding(contentPadding),
+                    // 本地读取失败：重新订阅本地数据流，不去请求教务。
                     action = {
-                        LeafyTextButton(onClick = viewModel::refresh) { Text("重试") }
+                        LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
                     },
                 )
             }
@@ -134,6 +137,8 @@ fun CampusScreen(
                 CampusDashboard(
                     state = state,
                     syncState = syncState,
+                    campusId = campusId,
+                    onRetrySync = viewModel::refresh,
                     onConsumeSync = viewModel::consumeSyncResult,
                     onGradesClick = onGradesClick,
                     onExamsClick = onExamsClick,
@@ -150,6 +155,8 @@ fun CampusScreen(
 internal fun CampusDashboard(
     state: CampusUiState.Loaded,
     syncState: CampusSyncState,
+    campusId: CampusID?,
+    onRetrySync: () -> Unit,
     onConsumeSync: () -> Unit,
     onGradesClick: () -> Unit,
     onExamsClick: () -> Unit,
@@ -157,7 +164,13 @@ internal fun CampusDashboard(
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 领域顺序固定；只有北林提供周末出行内容，其他身份不显示这一项，
+    // 避免出现“通用入口却在推荐北林周边”的内容错配。
+    val domains = remember(campusId) { CampusDomain.entries.filter { it.isAvailableFor(campusId) } }
     var selectedDomain by rememberSaveable { androidx.compose.runtime.mutableStateOf(CampusDomain.Teaching) }
+    LaunchedEffect(domains) {
+        if (selectedDomain !in domains) selectedDomain = domains.first()
+    }
 
     BoxWithConstraints(modifier = modifier) {
         if (maxWidth >= LeafyAdaptiveTokens.twoPaneBreakpoint) {
@@ -166,6 +179,7 @@ internal fun CampusDashboard(
                 horizontalArrangement = Arrangement.spacedBy(LeafySpacing.section),
             ) {
                 CampusDomainSidebar(
+                    domains = domains,
                     selectedDomain = selectedDomain,
                     onDomainSelected = { selectedDomain = it },
                     modifier = Modifier.width(LeafyAdaptiveTokens.campusSidebarWidth).padding(top = LeafySpacing.card),
@@ -174,6 +188,8 @@ internal fun CampusDashboard(
                     domain = selectedDomain,
                     state = state,
                     syncState = syncState,
+                    campusId = campusId,
+                    onRetrySync = onRetrySync,
                     onConsumeSync = onConsumeSync,
                     onGradesClick = onGradesClick,
                     onExamsClick = onExamsClick,
@@ -185,6 +201,7 @@ internal fun CampusDashboard(
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
                 CampusDomainChips(
+                    domains = domains,
                     selectedDomain = selectedDomain,
                     onDomainSelected = { selectedDomain = it },
                 )
@@ -192,6 +209,8 @@ internal fun CampusDashboard(
                     domain = selectedDomain,
                     state = state,
                     syncState = syncState,
+                    campusId = campusId,
+                    onRetrySync = onRetrySync,
                     onConsumeSync = onConsumeSync,
                     onGradesClick = onGradesClick,
                     onExamsClick = onExamsClick,
@@ -210,11 +229,16 @@ private enum class CampusDomain(val label: String, val supportingText: String) {
     Sports("体育相关", "长跑、体测与场馆信息"),
     Medical("医疗事项", "政策、报销指引与本机台账"),
     Ratings("评价相关", "评教、评课与评菜"),
-    Weekend("周末去哪", "北京周边周末出行推荐"),
+    Weekend("周末去哪", "北京周边周末出行推荐");
+
+    /** 周末出行是北林专属内容，其他校园入口不展示。 */
+    fun isAvailableFor(campusId: CampusID?): Boolean =
+        campusId == CampusID.bjfu || this == Teaching || this == Sports
 }
 
 @Composable
 private fun CampusDomainChips(
+    domains: List<CampusDomain>,
     selectedDomain: CampusDomain,
     onDomainSelected: (CampusDomain) -> Unit,
 ) {
@@ -222,7 +246,7 @@ private fun CampusDomainChips(
         contentPadding = PaddingValues(horizontal = LeafySpacing.page, vertical = LeafySpacing.compact),
         horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
-        items(CampusDomain.entries, key = { it.name }) { domain ->
+        items(domains, key = { it.name }) { domain ->
             FilterChip(
                 selected = selectedDomain == domain,
                 onClick = { onDomainSelected(domain) },
@@ -234,12 +258,13 @@ private fun CampusDomainChips(
 
 @Composable
 private fun CampusDomainSidebar(
+    domains: List<CampusDomain>,
     selectedDomain: CampusDomain,
     onDomainSelected: (CampusDomain) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-        CampusDomain.entries.forEach { domain ->
+        domains.forEach { domain ->
             Surface(
                 onClick = { onDomainSelected(domain) },
                 modifier = Modifier.fillMaxWidth(),
@@ -268,6 +293,8 @@ private fun CampusDomainContent(
     domain: CampusDomain,
     state: CampusUiState.Loaded,
     syncState: CampusSyncState,
+    campusId: CampusID?,
+    onRetrySync: () -> Unit,
     onConsumeSync: () -> Unit,
     onGradesClick: () -> Unit,
     onExamsClick: () -> Unit,
@@ -291,72 +318,90 @@ private fun CampusDomainContent(
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
         if (domain == CampusDomain.Teaching) {
-            val syncMessage = when (syncState) {
-                is CampusSyncState.Success -> buildString {
-                    append("同步完成")
-                    syncState.grades?.let { append("：$it 条成绩") }
-                    syncState.rankings?.let { append("，$it 条排名") }
-                    syncState.exams?.let { append("，$it 场考试") }
-                    if (syncState.warnings.isNotEmpty()) append("；${syncState.warnings.joinToString("；")}")
-                }
-                is CampusSyncState.Error -> "同步失败：${syncState.message}"
-                else -> null
-            }
-            if (syncMessage != null) {
-                item {
-                    LeafyStatusBanner(message = syncMessage, isError = syncState is CampusSyncState.Error)
-                    LaunchedEffect(syncState) {
-                        delay(3_000)
-                        onConsumeSync()
+            when (syncState) {
+                is CampusSyncState.Success -> {
+                    val syncMessage = buildString {
+                        append("同步完成")
+                        syncState.grades?.let { append("：$it 条成绩") }
+                        syncState.rankings?.let { append("，$it 条排名") }
+                        syncState.exams?.let { append("，$it 场考试") }
+                        if (syncState.warnings.isNotEmpty()) append("；${syncState.warnings.joinToString("；")}")
+                    }
+                    item {
+                        LeafyStatusBanner(
+                            message = syncMessage, isError = syncState.warnings.isNotEmpty(),
+                            actionLabel = if (syncState.warnings.isNotEmpty()) "重试" else null,
+                            onAction = if (syncState.warnings.isNotEmpty()) onRetrySync else null,
+                            onDismiss = onConsumeSync,
+                        )
+                        // 成功提示短暂出现后自动收起。
+                        LaunchedEffect(syncState) {
+                            if (syncState.warnings.isEmpty()) {
+                                delay(3_000)
+                                onConsumeSync()
+                            }
+                        }
                     }
                 }
+                // 失败保留在屏幕上，直到用户重试、同步成功或主动关闭。
+                is CampusSyncState.Error -> item {
+                    LeafyStatusBanner(
+                        message = "同步失败：${syncState.message}",
+                        isError = true,
+                        actionLabel = "重试",
+                        onAction = onRetrySync,
+                        onDismiss = onConsumeSync,
+                    )
+                }
+                CampusSyncState.Idle, CampusSyncState.Syncing -> Unit
             }
         }
 
-        item { LeafySectionHeader(title = domain.label, supportingText = domain.supportingText) }
         if (domain == CampusDomain.Teaching) {
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "成绩与排名",
-                    description = "成绩明细、官方 GPA 与班级/专业排名",
+                    description = "查看个人课程成绩",
                     icon = Icons.Outlined.Assessment,
                     onClick = onGradesClick,
                 )
             }
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "考试安排",
-                    description = "查看学校发布的考试时间与地点",
+                    description = "查看考试时间和地点",
                     icon = Icons.Outlined.CalendarMonth,
                     onClick = onExamsClick,
                 )
             }
+            if (campusId == CampusID.bjfu) {
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "教学与培养",
-                    description = "教学计划、培养方案与毕业要求",
+                    description = "查看课程体系与应取学分",
                     icon = Icons.Outlined.School,
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_TRAINING_PLAN) },
                 )
             }
             item {
-                LeafyFeatureCard(
-                    title = "校历",
-                    description = "学期、教学周与重要日期",
+                CampusToolRow(
+                    title = "校历与作息",
+                    description = "查看学期校历和作息时间",
                     icon = Icons.Outlined.CalendarMonth,
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_CALENDAR) },
                 )
             }
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "综素测算",
-                    description = "按学院细则本地估算综素分",
+                    description = "估算综素分，整理材料",
                     icon = Icons.Outlined.Functions,
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_COMPREHENSIVE) },
                 )
             }
+            }
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "荣誉记录",
                     description = "在本机保存奖状证书等文件",
                     icon = Icons.Outlined.WorkspacePremium,
@@ -366,51 +411,57 @@ private fun CampusDomainContent(
         }
         if (domain == CampusDomain.SelfStudy) {
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "空闲教室",
                     description = "按周次和星期查询可用教室",
                     icon = Icons.Outlined.Class,
                     onClick = onClassroomClick,
                 )
             }
-            item {
-                LeafyFeatureCard(
-                    title = "图书馆座位预约",
-                    description = "跳转北林图书馆座位预约系统",
-                    icon = Icons.Outlined.MenuBook,
-                    onClick = { openExternalUrl(context, "https://seat.bjfu.edu.cn/jsq-v/#/main/index") },
-                )
+            // 北林图书馆座位预约只对北林身份展示，通用/免登录入口不出现这条外链。
+            if (campusId == CampusID.bjfu) {
+                item {
+                    CampusToolRow(
+                        title = "图书馆座位预约",
+                        description = "跳转链接",
+                        icon = Icons.AutoMirrored.Outlined.MenuBook,
+                        onClick = { openExternalUrl(context, "https://seat.bjfu.edu.cn/jsq-v/#/main/index") },
+                    )
+                }
             }
         }
         if (domain == CampusDomain.Sports) {
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "阳光长跑",
-                    description = "本机记录、两周进度和自定义规则",
+                    description = "自定义目标次数、周期和假期周规则",
                     icon = Icons.AutoMirrored.Outlined.DirectionsRun,
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_SUNSHINE_RUN) },
                 )
             }
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "体测记录",
-                    description = "按项目记录数值、备注并观察趋势",
+                    description = "记录体测项目和成绩",
                     icon = Icons.Outlined.FitnessCenter,
                     onClick = { onFeatureClick(FeatureDestination.CAMPUS_FITNESS_TEST) },
                 )
             }
-            item {
-                LeafyFeatureCard(
-                    title = "场馆开放",
-                    description = "北林静态开放时间、预约、收费与备注",
-                    icon = Icons.Outlined.SportsBasketball,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_VENUES) },
-                )
+            // 场馆开放条目是北林静态信息，其他身份不展示。
+            if (campusId == CampusID.bjfu) {
+                item {
+                    CampusToolRow(
+                        title = "场馆开放",
+                        description = "场馆开放时间与预约方式",
+                        icon = Icons.Outlined.SportsBasketball,
+                        onClick = { onFeatureClick(FeatureDestination.CAMPUS_VENUES) },
+                    )
+                }
             }
         }
         if (domain == CampusDomain.Medical) {
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "医疗政策与报销台账",
                     description = "按就诊情景查看材料，并在本机管理报销记录",
                     icon = Icons.Outlined.LocalHospital,
@@ -420,7 +471,7 @@ private fun CampusDomainContent(
         }
         if (domain == CampusDomain.Ratings) {
             item {
-                LeafyFeatureCard(
+                CampusToolRow(
                     title = "评教、评课、评菜",
                     description = "需要社区身份与校园评价服务支持",
                     icon = Icons.Outlined.RateReview,
@@ -429,6 +480,29 @@ private fun CampusDomainContent(
             }
         }
     }
+}
+
+@Composable
+private fun CampusToolRow(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    com.myleafy.android.ui.components.LeafyFeatureCard(
+        title = title,
+        description = description,
+        icon = icon,
+        onClick = onClick,
+        trailingContent = {
+            Icon(
+                androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.size(LeafyIconSize.compact),
+            )
+        },
+    )
 }
 
 @Composable

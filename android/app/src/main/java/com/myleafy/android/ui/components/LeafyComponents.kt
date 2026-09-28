@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
+import com.myleafy.android.ui.theme.LeafyMotion
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -155,7 +165,7 @@ fun LeafySecondaryScaffold(
                     }
                 },
                 actions = actions,
-                expandedHeight = leafyTopBarHeight(),
+                expandedHeight = leafyTopBarHeight(compact = true),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.leafySurfaces.page,
                     scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
@@ -238,10 +248,11 @@ fun LeafyToolRow(
     supportingContent: (@Composable () -> Unit)? = null,
     leadingContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
+    minHeight: Dp = LeafyComponentSize.toolRowMinHeight,
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.toolRowMinHeight),
+        modifier = modifier.fillMaxWidth().heightIn(min = minHeight),
         color = MaterialTheme.leafySurfaces.content,
         shape = MaterialTheme.shapes.medium,
     ) {
@@ -483,20 +494,64 @@ fun LeafyStatusBanner(
     message: String,
     isError: Boolean,
     modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
     val container = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.leafySurfaces.accentSoft
     val content = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+    val hasAction = actionLabel != null && onAction != null
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = container,
         contentColor = content,
         shape = MaterialTheme.shapes.medium,
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(LeafySpacing.compact),
-        )
+        // 没有操作时保持单行文案的原版式；带重试/关闭时才引入一行操作区，
+        // 失败提示因此可以一直留在屏幕上，直到用户重试、成功或主动关闭。
+        if (!hasAction && onDismiss == null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(LeafySpacing.compact),
+            )
+        } else {
+            Row(
+                modifier = Modifier.padding(
+                    start = LeafySpacing.compact,
+                    end = LeafySpacing.tiny,
+                    top = LeafySpacing.tiny,
+                    bottom = LeafySpacing.tiny,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f).padding(vertical = LeafySpacing.tiny),
+                )
+                if (hasAction) {
+                    TextButton(
+                        onClick = requireNotNull(onAction),
+                        // 操作按横幅自身的语义色呈现：错误横幅上不再出现品牌绿按钮。
+                        colors = ButtonDefaults.textButtonColors(contentColor = content),
+                    ) {
+                        Text(text = requireNotNull(actionLabel), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                onDismiss?.let { dismiss ->
+                    IconButton(
+                        onClick = dismiss,
+                        modifier = Modifier.size(LeafyIconSize.touchTarget),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "关闭提示",
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -551,9 +606,13 @@ fun LeafyPrimaryButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale = animateFloatAsState(if (pressed && enabled) 0.98f else 1f, tween(LeafyMotion.quick), label = "button-press")
     Button(
         onClick = onClick,
-        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+        interactionSource = interaction,
         enabled = enabled,
         shape = LeafyButtonDefaults.shape,
         contentPadding = LeafyButtonDefaults.contentPadding,
@@ -569,9 +628,13 @@ fun LeafySecondaryButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale = animateFloatAsState(if (pressed && enabled) 0.98f else 1f, tween(LeafyMotion.quick), label = "button-press")
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+        interactionSource = interaction,
         enabled = enabled,
         shape = LeafyButtonDefaults.shape,
         contentPadding = LeafyButtonDefaults.contentPadding,
@@ -602,9 +665,13 @@ fun LeafyDestructiveButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale = animateFloatAsState(if (pressed && enabled) 0.98f else 1f, tween(LeafyMotion.quick), label = "button-press")
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget),
+        modifier = modifier.heightIn(min = LeafyComponentSize.minimumTouchTarget).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+        interactionSource = interaction,
         enabled = enabled,
         shape = LeafyButtonDefaults.shape,
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
@@ -619,7 +686,7 @@ fun LeafySettingsDivider(modifier: Modifier = Modifier) {
         modifier = modifier.padding(
             start = LeafyComponentSize.settingsIconContainer + LeafySpacing.card + LeafySpacing.compact,
         ),
-        color = MaterialTheme.colorScheme.outlineVariant,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
     )
 }
 
@@ -634,8 +701,13 @@ fun LeafySettingsGroup(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
-        LeafySectionHeader(title = title, supportingText = supportingText)
-        Column(content = content)
+        Column(Modifier.padding(horizontal = LeafySpacing.card)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            supportingText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.leafySurfaces.content) {
+            Column(content = content)
+        }
     }
 }
 

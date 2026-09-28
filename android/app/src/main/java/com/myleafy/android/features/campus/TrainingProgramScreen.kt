@@ -109,11 +109,15 @@ fun TrainingProgramScreen(
                     }
                 }
                 is TrainingProgramRefreshState.Error -> {
-                    LeafyStatusBanner(message = refresh.message, isError = true)
-                    LaunchedEffect(refresh) {
-                        kotlinx.coroutines.delay(4_000)
-                        viewModel.consumeRefreshState()
-                    }
+                    // 失败保留在屏幕上，直到用户重试、成功或主动关闭；
+                    // 重试沿用同一个刷新范围，不扩大请求。
+                    LeafyStatusBanner(
+                        message = refresh.message,
+                        isError = true,
+                        actionLabel = "重试",
+                        onAction = viewModel::refresh,
+                        onDismiss = viewModel::consumeRefreshState,
+                    )
                 }
                 else -> Unit
             }

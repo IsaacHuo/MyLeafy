@@ -21,13 +21,10 @@ data class CampusIdentity(
         get() = when (kind) {
             IdentityKind.SCHOOL_PORTAL ->
                 "${campusId.rawValue}:${kind.rawValue}:${portal.rawValue}:${eduId.lowercase()}"
-            IdentityKind.CUSTOM_SUPABASE ->
-                "${campusId.rawValue}:${kind.rawValue}:${eduId.lowercase()}"
         }
 
     enum class IdentityKind(val rawValue: String) {
         SCHOOL_PORTAL("schoolPortal"),
-        CUSTOM_SUPABASE("customSupabase"),
     }
 
     private companion object {

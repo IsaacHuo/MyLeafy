@@ -1,5 +1,21 @@
 package com.myleafy.android.navigation
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyMotion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
@@ -10,11 +26,11 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -25,8 +41,9 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.campus.ActiveAppScopeStore
+import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.campus.CampusCapabilities
-import com.myleafy.android.features.auth.LoginScreen
+import com.myleafy.android.features.auth.EntryScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.campus.CatalogRatingsScreen
 import com.myleafy.android.features.campus.CampusCalendarScreen
@@ -62,6 +79,7 @@ import com.myleafy.android.features.schedule.ScheduleStatisticsScreen
 import com.myleafy.android.features.schedule.ScheduleTagsScreen
 import com.myleafy.android.features.schedule.ScheduleTrashScreen
 import com.myleafy.android.features.timetable.TimetableScreen
+import com.myleafy.android.features.timetable.TimetableIdentity
 import com.myleafy.android.features.timetable.sharing.TimetableSharingScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
 import com.myleafy.android.ui.components.LeafyEmptyState
@@ -93,6 +111,9 @@ fun MyLeafyNavHost(
     activeAppScopeStore: ActiveAppScopeStore,
 ) {
     val activeScope by activeAppScopeStore.scope.collectAsStateWithLifecycle()
+    val initialRoute = remember {
+        if (activeAppScopeStore.current.campusId == null) Routes.LOGIN else RootTab.TIMETABLE.route
+    }
     val canUseCommunity = activeScope.supports(CampusCapabilities.COMMUNITY)
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -102,15 +123,44 @@ fun MyLeafyNavHost(
         RootTab.entries.firstOrNull { tab -> destination.hierarchy.any { it.route == tab.route } }
     }
 
+    LaunchedEffect(activeScope.campusId, currentDestination?.route) {
+        if (activeScope.campusId == null && currentDestination?.route != null && currentDestination.route != Routes.LOGIN) {
+            navController.navigate(Routes.LOGIN) {
+                popUpTo(navController.graph.id) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
+
     val navigationContent: @Composable () -> Unit = {
         NavHost(
             navController = navController,
-            startDestination = RootTab.TIMETABLE.route,
+            startDestination = initialRoute,
+            enterTransition = {
+                if (initialState.destination.route in rootRoutes && targetState.destination.route in rootRoutes) androidx.compose.animation.EnterTransition.None
+                else fadeIn(tween(LeafyMotion.emphasized)) + slideInHorizontally(tween(LeafyMotion.emphasized, easing = LeafyMotion.easing)) { it / 8 }
+            },
+            exitTransition = {
+                if (initialState.destination.route in rootRoutes && targetState.destination.route in rootRoutes) androidx.compose.animation.ExitTransition.None else fadeOut(tween(LeafyMotion.quick))
+            },
+            popEnterTransition = { fadeIn(tween(LeafyMotion.quick)) },
+            popExitTransition = {
+                fadeOut(tween(LeafyMotion.quick)) + slideOutHorizontally(tween(LeafyMotion.emphasized, easing = LeafyMotion.easing)) { it / 8 }
+            },
             modifier = Modifier.fillMaxSize(),
         ) {
             composable(RootTab.TIMETABLE.route) {
                 TimetableScreen(
                     onShareClick = { navController.navigate(FeatureDestination.TIMETABLE_SHARE.route) },
+                    identity = TimetableIdentity(
+                        signedOut = activeScope.campusId == null,
+                        isGuest = activeScope.isGuest,
+                        // 教务同步入口按真实学校连接器判断，而不是课表展示能力：
+                        // Android 的教务登录与抓取目前只实现北林，
+                        // TIMETABLE / AUTHENTICATION 都只是入口能力，不代表存在可用连接器。
+                        canSyncFromSchool = !activeScope.isGuest &&
+                            activeScope.campusId == com.myleafy.android.core.campus.CampusID.bjfu,
+                    ),
                 )
             }
             composable(RootTab.COMMUNITY.route) {
@@ -191,16 +241,17 @@ fun MyLeafyNavHost(
                     onExamsClick = { navController.navigate(Routes.EXAMS) },
                     onClassroomClick = { navController.navigate(Routes.CLASSROOM) },
                     onFeatureClick = { navController.navigate(it.route) },
+                    campusId = activeScope.campusId,
                 )
             }
             composable(Routes.CLASSROOM) {
                 ClassroomScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.GRADES) {
-                GradesScreen(onBack = { navController.popBackStack() })
+                GradesScreen(onBack = { navController.popBackStack() }, canSync = activeScope.campusId == CampusID.bjfu)
             }
             composable(Routes.EXAMS) {
-                ExamsScreen(onBack = { navController.popBackStack() })
+                ExamsScreen(onBack = { navController.popBackStack() }, canSync = activeScope.campusId == CampusID.bjfu)
             }
             composable(RootTab.PROFILE.route) {
                 ProfileScreen(
@@ -216,7 +267,17 @@ fun MyLeafyNavHost(
                 )
             }
             composable(Routes.LOGIN) {
-                LoginScreen(onBack = { navController.popBackStack() })
+                EntryScreen(
+                    onComplete = {
+                        navController.navigate(RootTab.TIMETABLE.route) {
+                            popUpTo(navController.graph.id) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    },
+                    onBack = if (activeScope.campusId != null) {
+                        { navController.popBackStack(); Unit }
+                    } else null,
+                )
             }
             composable(
                 route = Routes.TIMETABLE_SHARE_INVITE,
@@ -305,6 +366,7 @@ fun MyLeafyNavHost(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_SYNC -> ProfileSyncScreen(
+                            canSync = activeScope.campusId == CampusID.bjfu,
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_ABOUT -> AboutMyLeafyScreen(
@@ -336,7 +398,7 @@ fun MyLeafyNavHost(
             selectedTab = selectedTab,
             onTabSelected = { tab ->
                 navController.navigate(tab.route) {
-                    popUpTo(navController.graph.findStartDestination().id) {
+                    popUpTo(RootTab.TIMETABLE.route) {
                         saveState = true
                     }
                     launchSingleTop = true
@@ -364,29 +426,62 @@ fun LeafyNavigationScaffold(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            RootTab.entries.forEach { tab ->
-                val selected = tab == selectedTab
-                item(
-                    modifier = Modifier.testTag("root-tab-${tab.route}"),
-                    selected = selected,
-                    onClick = { onTabSelected(tab) },
-                    icon = {
-                        Icon(
-                            imageVector = if (selected) tab.selectedIcon else tab.icon,
-                            contentDescription = stringResource(tab.labelRes),
-                        )
-                    },
-                    label = { Text(stringResource(tab.labelRes)) },
-                )
+    BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.leafySurfaces.page)) {
+        if (maxWidth < 600.dp) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { content() }
+                Surface(
+                    modifier = Modifier.navigationBarsPadding().padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.micro),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.96f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    shadowElevation = 2.dp,
+                ) {
+                    Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 4.dp)) {
+                        RootTab.entries.forEach { tab ->
+                            val selected = tab == selectedTab
+                            val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            Column(
+                                Modifier.weight(1f).heightIn(min = 52.dp)
+                                    .testTag("root-tab-${tab.route}")
+                                    .selectable(selected = selected, role = Role.Tab, onClick = { onTabSelected(tab) })
+                                    .padding(vertical = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                            ) {
+                                Icon(if (selected) tab.selectedIcon else tab.icon, null, Modifier.size(22.dp), tint)
+                                Text(stringResource(tab.labelRes), color = tint, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
             }
-        },
-        modifier = modifier,
-        containerColor = MaterialTheme.leafySurfaces.page,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        content = content,
-    )
+        } else {
+            NavigationSuiteScaffold(
+                navigationSuiteItems = {
+                    RootTab.entries.forEach { tab ->
+                        val selected = tab == selectedTab
+                        item(
+                            modifier = Modifier.testTag("root-tab-${tab.route}"),
+                            selected = selected,
+                            onClick = { onTabSelected(tab) },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) tab.selectedIcon else tab.icon,
+                                    contentDescription = stringResource(tab.labelRes),
+                                )
+                            },
+                            label = { Text(stringResource(tab.labelRes)) },
+                        )
+                    }
+                },
+                modifier = modifier,
+                containerColor = MaterialTheme.leafySurfaces.page,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                content = content,
+            )
+        }
+    }
 }
 
 @Composable

@@ -19,3 +19,30 @@ sealed interface ScheduleMutationState {
     data object Success : ScheduleMutationState
     data class Error(val message: String) : ScheduleMutationState
 }
+
+internal val scheduleDraftSaver = androidx.compose.runtime.saveable.Saver<ScheduleEventDraft?, List<String>>(
+    save = { draft ->
+        draft?.let {
+            listOf(
+                it.id.orEmpty(),
+                it.title,
+                it.date.toString(),
+                it.startsAt.toString(),
+                it.endsAt.toString(),
+                it.location,
+                it.note,
+            )
+        }
+    },
+    restore = { values ->
+        ScheduleEventDraft(
+            id = values[0].ifBlank { null },
+            title = values[1],
+            date = LocalDate.parse(values[2]),
+            startsAt = LocalTime.parse(values[3]),
+            endsAt = LocalTime.parse(values[4]),
+            location = values[5],
+            note = values[6],
+        )
+    },
+)

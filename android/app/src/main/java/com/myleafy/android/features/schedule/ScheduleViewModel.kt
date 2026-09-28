@@ -56,6 +56,7 @@ class ScheduleViewModel(
         )
 
     fun saveMemo(id: String?, body: String, title: String?, tags: List<String>) {
+        if (_mutationState.value is ScheduleMutationState.Saving) return
         if (body.isBlank() && title.isNullOrBlank()) return
         _mutationState.value = ScheduleMutationState.Saving
         viewModelScope.launch {
@@ -68,7 +69,13 @@ class ScheduleViewModel(
                 )
             }.fold(
                 onSuccess = { _mutationState.value = ScheduleMutationState.Success },
-                onFailure = { _mutationState.value = ScheduleMutationState.Error(it.message ?: "随记保存失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) {
+                        _mutationState.value = ScheduleMutationState.Idle
+                        throw it
+                    }
+                    _mutationState.value = ScheduleMutationState.Error(it.message ?: "随记保存失败")
+                },
             )
         }
     }
@@ -76,16 +83,24 @@ class ScheduleViewModel(
     fun saveMemo(draft: MemoDraft) = saveMemo(draft.id, draft.body, draft.title, draft.tags)
 
     fun deleteMemo(id: String) {
+        if (_mutationState.value is ScheduleMutationState.Saving) return
         _mutationState.value = ScheduleMutationState.Saving
         viewModelScope.launch {
             runCatching { repository.deleteMemo(id) }.fold(
                 onSuccess = { _mutationState.value = ScheduleMutationState.Success },
-                onFailure = { _mutationState.value = ScheduleMutationState.Error(it.message ?: "随记删除失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) {
+                        _mutationState.value = ScheduleMutationState.Idle
+                        throw it
+                    }
+                    _mutationState.value = ScheduleMutationState.Error(it.message ?: "随记删除失败")
+                },
             )
         }
     }
 
     fun saveEvent(draft: ScheduleEventDraft) {
+        if (_mutationState.value is ScheduleMutationState.Saving) return
         if (draft.title.isBlank()) {
             _mutationState.value = ScheduleMutationState.Error("请填写日程标题")
             return
@@ -112,12 +127,19 @@ class ScheduleViewModel(
                     onEventsChanged()
                     _mutationState.value = ScheduleMutationState.Success
                 },
-                onFailure = { _mutationState.value = ScheduleMutationState.Error(it.message ?: "日程保存失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) {
+                        _mutationState.value = ScheduleMutationState.Idle
+                        throw it
+                    }
+                    _mutationState.value = ScheduleMutationState.Error(it.message ?: "日程保存失败")
+                },
             )
         }
     }
 
     fun deleteEvent(id: String) {
+        if (_mutationState.value is ScheduleMutationState.Saving) return
         _mutationState.value = ScheduleMutationState.Saving
         viewModelScope.launch {
             runCatching { repository.deleteEvent(id) }.fold(
@@ -125,12 +147,19 @@ class ScheduleViewModel(
                     onEventsChanged()
                     _mutationState.value = ScheduleMutationState.Success
                 },
-                onFailure = { _mutationState.value = ScheduleMutationState.Error(it.message ?: "日程删除失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) {
+                        _mutationState.value = ScheduleMutationState.Idle
+                        throw it
+                    }
+                    _mutationState.value = ScheduleMutationState.Error(it.message ?: "日程删除失败")
+                },
             )
         }
     }
 
     fun consumeMutation() {
+        if (_mutationState.value is ScheduleMutationState.Saving) return
         _mutationState.value = ScheduleMutationState.Idle
     }
 }

@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -119,8 +120,8 @@ fun ScheduleScreen(
         mutableStateOf(if (initialSection == "reports") ScheduleSection.REPORTS else ScheduleSection.EVENTS)
     }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
-    var memoDraft by remember { mutableStateOf<MemoDraft?>(null) }
-    var eventDraft by remember { mutableStateOf<ScheduleEventDraft?>(null) }
+    var memoDraft by rememberSaveable(stateSaver = memoDraftSaver) { mutableStateOf<MemoDraft?>(null) }
+    var eventDraft by rememberSaveable(stateSaver = scheduleDraftSaver) { mutableStateOf<ScheduleEventDraft?>(null) }
     var pendingNotificationMode by remember { mutableStateOf<ScheduleReportSetting?>(null) }
     var notificationPermissionDenied by rememberSaveable { mutableStateOf(false) }
     var consumedInitialEvent by rememberSaveable(initialEventId) { mutableStateOf(false) }
@@ -162,17 +163,6 @@ fun ScheduleScreen(
             LeafyRootTopBar(
                 title = "日迹",
                 actions = {
-                    if (selectedSection != ScheduleSection.REPORTS) {
-                        LeafyActionIconButton(
-                            onClick = {
-                                if (selectedSection == ScheduleSection.MEMOS) {
-                                    memoDraft = MemoDraft()
-                                } else {
-                                    eventDraft = defaultScheduleDraft()
-                                }
-                            },
-                        ) { Icon(Icons.Filled.Add, contentDescription = "新建${selectedSection.label}") }
-                    }
                     Box {
                         LeafyActionIconButton(onClick = { menuExpanded = true }) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "日迹菜单")
@@ -304,6 +294,7 @@ private fun AnimatedScheduleContent(
     onToggleReport: (ScheduleReportSetting, Boolean) -> Unit,
     onSetEventReminder: (String, Boolean, Int) -> Unit,
 ) {
+    val sectionState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
     AnimatedContent(
         targetState = selectedSection,
         transitionSpec = {
@@ -313,6 +304,7 @@ private fun AnimatedScheduleContent(
         contentKey = { it },
         label = "schedule-section",
     ) { section ->
+        sectionState.SaveableStateProvider(section.name) {
         ScheduleContent(
             section = section,
             memos = memos,
@@ -327,6 +319,7 @@ private fun AnimatedScheduleContent(
             onToggleReport = onToggleReport,
             onSetEventReminder = onSetEventReminder,
         )
+        }
     }
 }
 
@@ -358,23 +351,18 @@ internal fun ScheduleContent(
     onToggleReport: (ScheduleReportSetting, Boolean) -> Unit,
     onSetEventReminder: (String, Boolean, Int) -> Unit,
 ) {
+    Box(Modifier.fillMaxSize()) {
     when (section) {
         ScheduleSection.MEMOS -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = LeafySpacing.page),
+            contentPadding = PaddingValues(bottom = androidx.compose.ui.unit.Dp(104f)),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
-            item {
-                LeafyPrimaryButton(onClick = onNewMemo, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("新建随记", modifier = Modifier.padding(start = LeafySpacing.micro))
-                }
-            }
             if (memos.isEmpty()) {
                 item {
                     LeafyEmptyState(
                         title = "还没有随记",
-                        message = "随记只保存在当前 Android 身份作用域。",
+                        message = "记下一句话或一个想法。",
                         icon = Icons.AutoMirrored.Outlined.Notes,
                     )
                 }
@@ -387,15 +375,9 @@ internal fun ScheduleContent(
 
         ScheduleSection.EVENTS -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = LeafySpacing.page),
+            contentPadding = PaddingValues(bottom = androidx.compose.ui.unit.Dp(104f)),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
-            item {
-                LeafyPrimaryButton(onClick = onNewEvent, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("添加个人日程", modifier = Modifier.padding(start = LeafySpacing.micro))
-                }
-            }
             if (events.isEmpty()) {
                 item {
                     LeafyEmptyState(
@@ -418,6 +400,15 @@ internal fun ScheduleContent(
             onToggleReport = onToggleReport,
             onSetEventReminder = onSetEventReminder,
         )
+    }
+    if (section != ScheduleSection.REPORTS) {
+        androidx.compose.material3.ExtendedFloatingActionButton(
+            onClick = if (section == ScheduleSection.MEMOS) onNewMemo else onNewEvent,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(LeafySpacing.card).testTag("schedule-create"),
+            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            text = { Text(if (section == ScheduleSection.MEMOS) "新建随记" else "添加个人日程") },
+        )
+    }
     }
 }
 

@@ -86,19 +86,24 @@ class ComprehensiveQualityViewModel(
     private val repository: ComprehensiveQualityRepository,
 ) : ViewModel() {
 
-    val uiState: StateFlow<ComprehensiveQualityUiState> = repository.current()
-        .catch { emit(null) }
-        .map { record ->
-            ComprehensiveQualityUiState(
-                record = record,
-                components = repository.decodeComponents(record),
-                loading = false,
-            )
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ComprehensiveQualityUiState())
-
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _loadFailed = MutableStateFlow(false)
+    val loadFailed: StateFlow<Boolean> = _loadFailed.asStateFlow()
+    private val retry = MutableStateFlow(0)
+    val uiState: StateFlow<ComprehensiveQualityUiState> = com.myleafy.android.core.flow.retryableFlow(
+        retry,
+        repository.current().map { record ->
+            ComprehensiveQualityUiState(record, repository.decodeComponents(record), loading = false)
+        },
+        onError = { error ->
+            _loadFailed.value = true
+            _message.value = error.message ?: "读取失败"
+            ComprehensiveQualityUiState(loading = false)
+        },
+    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ComprehensiveQualityUiState())
+
+    fun retryLoad() { _loadFailed.value = false; _message.value = null; retry.value += 1 }
 
     fun save(
         collegeName: String,
@@ -120,14 +125,16 @@ class ComprehensiveQualityViewModel(
                     note = note,
                     components = components,
                 )
-            }.onFailure { _message.value = it.message ?: "保存失败" }
+            }.onSuccess { _message.value = null }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "保存失败" }
         }
     }
 
     fun clear() {
         viewModelScope.launch {
             runCatching { repository.clear() }
-                .onFailure { _message.value = it.message ?: "清除失败" }
+                .onSuccess { _message.value = null }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "清除失败" }
         }
     }
 

@@ -18,7 +18,7 @@ import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -88,7 +88,7 @@ fun CatalogRatingsScreen(
                         )
                     }
                 }
-                OutlinedTextField(
+                LeafyTextField(
                     value = state.search,
                     onValueChange = viewModel::search,
                     label = { Text("搜索${state.kind.title()}") },
@@ -97,7 +97,7 @@ fun CatalogRatingsScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                LeafyTextField(
                     value = state.filterValue.orEmpty(),
                     onValueChange = { viewModel.setFilter(it.takeIf(String::isNotBlank)) },
                     label = { Text(state.kind.filterLabel()) },
@@ -232,7 +232,7 @@ private fun CatalogSuggestionDialog(
 
 @Composable
 private fun RatingField(value: String, onValueChange: (String) -> Unit, label: String) {
-    OutlinedTextField(value, onValueChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    LeafyTextField(value, onValueChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 }
 
 private fun RatingCatalogKind.title() = when (this) {

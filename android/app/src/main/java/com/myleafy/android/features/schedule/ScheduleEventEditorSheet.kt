@@ -11,7 +11,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,9 +46,9 @@ fun ScheduleEventEditorSheet(
     onDismiss: () -> Unit,
 ) {
     var title by rememberSaveable(initial.id) { mutableStateOf(initial.title) }
-    var date by remember(initial.id) { mutableStateOf(initial.date) }
-    var startsAt by remember(initial.id) { mutableStateOf(initial.startsAt) }
-    var endsAt by remember(initial.id) { mutableStateOf(initial.endsAt) }
+    var date by rememberSaveable(initial.id) { mutableStateOf(initial.date) }
+    var startsAt by rememberSaveable(initial.id) { mutableStateOf(initial.startsAt) }
+    var endsAt by rememberSaveable(initial.id) { mutableStateOf(initial.endsAt) }
     var location by rememberSaveable(initial.id) { mutableStateOf(initial.location) }
     var note by rememberSaveable(initial.id) { mutableStateOf(initial.note) }
     var confirmsDelete by rememberSaveable { mutableStateOf(false) }
@@ -67,8 +67,20 @@ fun ScheduleEventEditorSheet(
         }
     }
 
+    val dirty = title != initial.title || date != initial.date || startsAt != initial.startsAt || endsAt != initial.endsAt || location != initial.location || note != initial.note
+    val requestExit = com.myleafy.android.ui.components.rememberEditorExit(dirty, isSaving, onDismiss)
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { target ->
+            if (target == androidx.compose.material3.SheetValue.Hidden && (dirty || isSaving)) {
+                requestExit()
+                false
+            } else true
+        },
+    )
     LeafyModalBottomSheet(
-        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        onDismissRequest = requestExit,
     ) {
         LeafySheetContent(
             modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -79,7 +91,8 @@ fun ScheduleEventEditorSheet(
                 )
             },
         ) {
-            OutlinedTextField(
+            LeafyTextField(
+                enabled = !isSaving,
                 value = title,
                 onValueChange = { title = it },
                 modifier = Modifier.fillMaxWidth(),
@@ -87,6 +100,7 @@ fun ScheduleEventEditorSheet(
                 singleLine = true,
             )
             FilledTonalButton(
+                enabled = !isSaving,
                 onClick = {
                     DatePickerDialog(
                         context,
@@ -102,6 +116,7 @@ fun ScheduleEventEditorSheet(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                 OutlinedButton(
+                    enabled = !isSaving,
                     onClick = {
                         TimePickerDialog(
                             context,
@@ -114,6 +129,7 @@ fun ScheduleEventEditorSheet(
                     modifier = Modifier.weight(1f),
                 ) { Text("开始 ${startsAt.format(timeFormatter)}") }
                 OutlinedButton(
+                    enabled = !isSaving,
                     onClick = {
                         TimePickerDialog(
                             context,
@@ -126,14 +142,16 @@ fun ScheduleEventEditorSheet(
                     modifier = Modifier.weight(1f),
                 ) { Text("结束 ${endsAt.format(timeFormatter)}") }
             }
-            OutlinedTextField(
+            LeafyTextField(
+                enabled = !isSaving,
                 value = location,
                 onValueChange = { location = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("地点") },
                 singleLine = true,
             )
-            OutlinedTextField(
+            LeafyTextField(
+                enabled = !isSaving,
                 value = note,
                 onValueChange = { note = it },
                 modifier = Modifier.fillMaxWidth(),

@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -80,6 +81,7 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isSigningOut by viewModel.isSigningOut.collectAsStateWithLifecycle()
+    val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         viewModel.refreshProfile()
         onPauseOrDispose { }
@@ -88,6 +90,7 @@ fun ProfileScreen(
     ProfileContent(
         state = uiState,
         isSigningOut = isSigningOut,
+        appearance = appearance,
         onLoginClick = onLoginClick,
         onEditProfileClick = onEditProfileClick,
         onFeatureClick = onFeatureClick,
@@ -110,13 +113,14 @@ fun ProfileContent(
     onFeatureClick: (FeatureDestination) -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
+    appearance: com.myleafy.android.core.prefs.Settings = com.myleafy.android.core.prefs.Settings(),
 ) {
     var confirmLogout by remember { mutableStateOf(false) }
     if (confirmLogout) {
         LeafyAlertDialog(
             onDismissRequest = { confirmLogout = false },
-            title = { Text("退出登录") },
-            text = { Text("将清理学校和社区会话及本机保存的登录凭据；课表、日程、随记和学业缓存会按当前身份保留。") },
+            title = { Text("确认退出？") },
+            text = { Text("退出后需重新登录，本地缓存的课表和成绩数据将保留。") },
             confirmButton = {
                 LeafyTextButton(onClick = {
                     confirmLogout = false
@@ -146,13 +150,13 @@ fun ProfileContent(
                     is ProfileUiState.Local -> {
                         val eduId = profileState.eduId?.takeIf { it.isNotBlank() }
                         ProfileEntry(
-                            title = if (eduId != null) "MyLeafy" else "登录学校账号",
+                            title = if (eduId != null) "MyLeafy" else if (profileState.campusId == "guest") "免登录模式" else "选择入口",
                             subtitle = if (eduId != null) {
-                                "校园 ${profileState.campusId} · 学号 $eduId"
+                                "${schoolLabel(profileState.campusId)} · 学号 ${maskedStudentId(eduId)}"
                             } else {
-                                "尚未绑定学校身份，登录后可同步课表与成绩"
+                                if (profileState.campusId == "guest") "免登录使用 · 数据仅保存在本机" else "北林登录或免登录使用"
                             },
-                            avatarLabel = eduId ?: "我",
+                            avatarLabel = "我",
                             onClick = if (eduId == null) onLoginClick else null,
                         )
                     }
@@ -171,7 +175,7 @@ fun ProfileContent(
                         ProfileEntry(
                             title = name,
                             subtitle = buildString {
-                                append("校园 ${profileState.campusId} · 学号 ${profileState.eduId}")
+                                append("${schoolLabel(profileState.campusId)} · 学号 ${maskedStudentId(profileState.eduId)}")
                                 if (!profileState.profile.is_profile_complete) append(" · 资料待完善")
                             },
                             avatarLabel = name,
@@ -183,10 +187,10 @@ fun ProfileContent(
                             ProfileEntry(
                                 title = "MyLeafy",
                                 subtitle = buildString {
-                                    append("校园 ${profileState.campusId}")
-                                    profileState.eduId?.takeIf { it.isNotBlank() }?.let { append(" · 学号 $it") }
+                                    append(schoolLabel(profileState.campusId))
+                                    profileState.eduId?.takeIf { it.isNotBlank() }?.let { append(" · 学号 ${maskedStudentId(it)}") }
                                 },
-                                avatarLabel = profileState.eduId ?: "我",
+                                avatarLabel = "我",
                                 onClick = null,
                             )
                             LeafyStatusBanner(message = profileState.message, isError = true)
@@ -197,31 +201,44 @@ fun ProfileContent(
 
 
             item {
-                LeafySettingsGroup(title = "数据与偏好") {
+                LeafySettingsGroup(title = "账户") {
+                    ProfileDestinationRow("切换入口", "北林登录 / 免登录使用", Icons.Outlined.People, onLoginClick)
+                }
+            }
+            item {
+                LeafySettingsGroup(title = "数据") {
                     ProfileDestinationRow(
                         title = "缓存与同步",
                         description = "检查本地数据与学校同步状态",
                         icon = Icons.Outlined.CloudSync,
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_SYNC) },
                     )
-                    LeafySettingsDivider()
-                    ProfileDestinationRow(
-                        title = "共享课表",
-                        description = "邀请同学查看课程安排",
-                        icon = Icons.Outlined.People,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
-                    )
-                    LeafySettingsDivider()
+                    if (state !is ProfileUiState.Local || state.campusId != "guest") {
+                        LeafySettingsDivider()
+                        ProfileDestinationRow(
+                            title = "共享课表",
+                            description = "邀请同学查看课程安排",
+                            icon = Icons.Outlined.People,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
+                        )
+                    }
+                }
+            }
+            item {
+                LeafySettingsGroup(title = "外观") {
                     ProfileDestinationRow(
                         title = "课表背景",
-                        description = "照片、纯色、模糊与课程块透明度",
+                        description = if (!appearance.timetableBackground.enabled) "关闭" else if (appearance.timetableBackground.kind == "photo") "照片" else "纯色",
                         icon = Icons.Outlined.Wallpaper,
                         onClick = { onFeatureClick(FeatureDestination.TIMETABLE_BACKGROUND) },
                     )
                     LeafySettingsDivider()
                     ProfileDestinationRow(
                         title = "个性化",
-                        description = "主题、文字与课表列数",
+                        description = listOf(
+                            when (appearance.themeMode) { "dark" -> "深色"; "light" -> "浅色"; else -> "跟随系统" },
+                            if (appearance.hideWeekends) "五日课表" else "七日课表",
+                        ).joinToString(" · "),
                         icon = Icons.Outlined.AutoAwesome,
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_PERSONALIZATION) },
                     )
@@ -304,6 +321,7 @@ private fun ProfileEntry(
     onClick: (() -> Unit)?,
 ) {
     LeafySettingsRow(
+        modifier = Modifier.clip(MaterialTheme.shapes.medium),
         headlineContent = { Text(title, style = MaterialTheme.typography.titleSmall) },
         supportingContent = {
             Text(
@@ -315,7 +333,7 @@ private fun ProfileEntry(
         leadingContent = { ProfileAvatar(avatarLabel) },
         trailingContent = {
             if (onClick != null) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
             }
         },
         onClick = onClick,
@@ -358,17 +376,26 @@ private fun ProfileDestinationRow(
         leadingContent = {
             Surface(
                 modifier = Modifier.size(LeafyComponentSize.settingsIconContainer),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.leafySurfaces.accentSoft,
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(LeafyIconSize.standard))
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(LeafyIconSize.compact))
                 }
             }
         },
         trailingContent = {
-            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
         },
         onClick = onClick,
     )
 }
+
+private fun schoolLabel(id: String) = when (id) {
+    "bjfu" -> "北京林业大学"
+    "guest" -> "免登录模式"
+    else -> "未选择学校"
+}
+
+internal fun maskedStudentId(id: String): String = if (id.length <= 4) "•".repeat(id.length) else id.take(2) + "••••" + id.takeLast(2)

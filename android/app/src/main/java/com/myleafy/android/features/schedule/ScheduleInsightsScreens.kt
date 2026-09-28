@@ -215,8 +215,7 @@ fun ScheduleStatisticsScreen(
         ) {
             shareError?.let { message ->
                 item {
-                    LeafyStatusBanner(message = message, isError = true)
-                    LaunchedEffect(message) { shareError = null }
+                    LeafyStatusBanner(message = message, isError = true, onDismiss = { shareError = null })
                 }
             }
             item {
@@ -496,8 +495,7 @@ fun ScheduleTrashScreen(
     ) { contentModifier ->
         Column(modifier = contentModifier.fillMaxSize()) {
             message?.let { value ->
-                LeafyStatusBanner(message = value, isError = true)
-                LaunchedEffect(value) { viewModel.consumeMessage() }
+                LeafyStatusBanner(message = value, isError = true, onDismiss = viewModel::consumeMessage)
             }
             if (trashed.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -647,8 +645,7 @@ fun ScheduleExportScreen(
         ) {
             error?.let { message ->
                 item {
-                    LeafyStatusBanner(message = message, isError = true)
-                    LaunchedEffect(message) { error = null }
+                    LeafyStatusBanner(message = message, isError = true, onDismiss = { error = null })
                 }
             }
             item {

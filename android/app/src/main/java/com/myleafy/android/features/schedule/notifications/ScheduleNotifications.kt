@@ -272,7 +272,9 @@ class ScheduleNotificationScheduler(
 
 class ScheduleReconcileWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = runCatching {
-        (applicationContext as MyLeafyApplication).container.scheduleNotificationScheduler.reconcile()
+        val container = (applicationContext as MyLeafyApplication).container
+        container.restoreIdentity()
+        container.scheduleNotificationScheduler.reconcile()
         Result.success()
     }.getOrElse { Result.retry() }
 }

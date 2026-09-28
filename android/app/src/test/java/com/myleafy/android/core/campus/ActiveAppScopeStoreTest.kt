@@ -9,6 +9,26 @@ import org.junit.Test
 
 class ActiveAppScopeStoreTest {
     @Test
+    fun localModeRetainsTheOriginalLocalScopeAcrossSchoolSwitches() {
+        val store = ActiveAppScopeStore()
+        val originalLocalKey = store.current.scopeKey
+        store.activateGuest()
+        assertEquals(originalLocalKey, store.current.scopeKey)
+        val school = CampusIdentity(CampusID.bjfu, "20260001", null, SchoolPortal.UNDERGRADUATE, CampusIdentity.IdentityKind.SCHOOL_PORTAL)
+        store.activate(school)
+        assertFalse(originalLocalKey == store.current.scopeKey)
+        store.activateGuest()
+        assertEquals(originalLocalKey, store.current.scopeKey)
+        assertEquals(null, store.current.eduId)
+        listOf(CampusCapabilities.COMMUNITY, CampusCapabilities.WEATHER, CampusCapabilities.AUTHENTICATION,
+            CampusCapabilities.SHARED_TIMETABLE).forEach { assertFalse(store.current.supports(it)) }
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun unsupportedCampusFailsExplicitly() {
+        CampusDescriptor.forCampus(CampusID("custom"))
+    }
+    @Test
     fun schoolIdentityActivatesItsCapabilitiesAndStableScope() {
         val identity = CampusIdentity(
             campusId = CampusID.bjfu,

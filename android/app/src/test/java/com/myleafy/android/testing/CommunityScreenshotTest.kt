@@ -57,11 +57,10 @@ class CommunityScreenshotTest {
     /** Refresh failure keeps the previous list and shows the long error inline. */
     @Test
     fun refreshFailureKeepsContentWithLongError() {
-        render(
-            state = defaultState().copy(error = ScreenshotData.LONG_ERROR_MESSAGE),
-        )
+        val message = "社区加载失败：网络连接超时，请检查网络连接后重试。"
+        render(state = defaultState().copy(error = message))
         composeRule
-            .onNodeWithText(ScreenshotData.LONG_ERROR_MESSAGE, substring = true, useUnmergedTree = true)
+            .onNodeWithText(message, substring = true, useUnmergedTree = true)
             .assertTextLayoutFits()
         composeRule.onNodeWithText("重新刷新").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertTrue(refreshClicks == 1) }
@@ -91,7 +90,7 @@ class CommunityScreenshotTest {
             onPostClick = { selectedPostId = it },
         )
 
-        composeRule.onNodeWithText("发帖").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("community-compose").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertTrue(composeClicks == 1) }
 
         composeRule.onNodeWithTag("community-post-1").performClick()

@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -156,7 +156,7 @@ private fun ColorSettings(settings: TimetableBackgroundSettings, viewModel: Time
             )
         }
     }
-    OutlinedTextField(
+    LeafyTextField(
         value = hex,
         onValueChange = { hex = it },
         label = { Text("十六进制颜色") },

@@ -43,6 +43,18 @@ class ProfileLoginScreenshotTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun firstLaunchEntryLight() {
+        composeRule.setContent {
+            LeafyScreenshotTheme {
+                com.myleafy.android.features.auth.EntryContent(false, null, {}, {})
+            }
+        }
+        composeRule.onNodeWithText("北京林业大学").assertIsDisplayed()
+        composeRule.onNodeWithText("免登录入口").assertIsDisplayed()
+        capture()
+    }
+
+    @Test
     fun profileLocalLight() {
         renderProfile(ProfileUiState.Local(campusId = "bjfu", eduId = null))
         capture()
@@ -84,7 +96,7 @@ class ProfileLoginScreenshotTest {
 
         composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("退出登录"))
         composeRule.onNodeWithText("退出登录").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("将清理学校和社区会话及本机保存的登录凭据；课表、日程、随记和学业缓存会按当前身份保留。")
+        composeRule.onNodeWithText("退出后需重新登录，本地缓存的课表和成绩数据将保留。")
             .assertIsDisplayed()
         capture()
 

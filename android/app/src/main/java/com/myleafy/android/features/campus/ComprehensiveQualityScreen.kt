@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -19,7 +20,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -76,6 +77,7 @@ fun ComprehensiveQualityScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var collegeName by rememberSaveable { mutableStateOf("园林学院") }
     var academic by rememberSaveable { mutableStateOf("") }
@@ -86,6 +88,25 @@ fun ComprehensiveQualityScreen(
     var confirmClear by remember { mutableStateOf(false) }
 
     val loadedRecord = uiState.record
+    val savedComponents = uiState.components.associateBy { it.kind }
+    val dirty = !uiState.loading && (
+        collegeName != (loadedRecord?.collegeName ?: "园林学院") ||
+        academic != loadedRecord?.academicStandardScore?.toPlainString().orEmpty() ||
+        officialQuality != loadedRecord?.officialQualityScore?.toPlainString().orEmpty() ||
+        officialComposite != loadedRecord?.officialCompositeScore?.toPlainString().orEmpty() ||
+        note != loadedRecord?.note.orEmpty() ||
+        drafts.any { (kind, draft) ->
+            val saved = savedComponents[kind.name]
+            draft != ComponentDraft(
+                raw = saved?.rawScore?.toPlainString().orEmpty(),
+                peer = saved?.peerMaxScore?.toPlainString().orEmpty(),
+                official = saved?.officialStandardScore?.toPlainString().orEmpty(),
+                materialReady = saved?.materialReady ?: false,
+                note = saved?.note.orEmpty(),
+            )
+        }
+    )
+    val requestExit = com.myleafy.android.ui.components.rememberEditorExit(dirty, false, onBack)
     LaunchedEffect(loadedRecord?.updatedAt) {
         val record = loadedRecord ?: return@LaunchedEffect
         collegeName = record.collegeName
@@ -167,7 +188,7 @@ fun ComprehensiveQualityScreen(
 
     LeafySecondaryScaffold(
         title = "综素测算",
-        onBack = onBack,
+        onBack = requestExit,
         actions = {
             if (available) {
                 LeafyActionIconButton(onClick = exportCsv) {
@@ -187,14 +208,14 @@ fun ComprehensiveQualityScreen(
             return@LeafySecondaryScaffold
         }
         LazyColumn(
-            modifier = contentModifier.fillMaxSize(),
+            modifier = contentModifier.fillMaxSize().imePadding(),
             contentPadding = PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             message?.let { value ->
                 item {
-                    LeafyStatusBanner(message = value, isError = true)
-                    LaunchedEffect(value) { viewModel.consumeMessage() }
+                    LeafyStatusBanner(message = value, isError = true, onDismiss = viewModel::consumeMessage,
+                        actionLabel = if (loadFailed) "重试" else null, onAction = if (loadFailed) viewModel::retryLoad else null)
                 }
             }
             item {
@@ -227,7 +248,7 @@ fun ComprehensiveQualityScreen(
                 LeafySectionHeader(title = "学业部分", supportingText = "全学程学分积标准分（0–100）")
             }
             item {
-                OutlinedTextField(
+                LeafyTextField(
                     value = academic,
                     onValueChange = { academic = it.filter { ch -> ch.isDigit() || ch == '.' } },
                     modifier = Modifier.fillMaxWidth(),
@@ -254,14 +275,14 @@ fun ComprehensiveQualityScreen(
                             Text(it.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                            OutlinedTextField(
+                            LeafyTextField(
                                 value = draft.raw,
                                 onValueChange = { value -> drafts = drafts.updated(kind, draft.copy(raw = value.filter { it.isDigit() || it == '.' })) },
                                 modifier = Modifier.weight(1f),
                                 label = { Text("原始分") },
                                 singleLine = true,
                             )
-                            OutlinedTextField(
+                            LeafyTextField(
                                 value = draft.peer,
                                 onValueChange = { value -> drafts = drafts.updated(kind, draft.copy(peer = value.filter { it.isDigit() || it == '.' })) },
                                 modifier = Modifier.weight(1f),
@@ -269,7 +290,7 @@ fun ComprehensiveQualityScreen(
                                 singleLine = true,
                             )
                         }
-                        OutlinedTextField(
+                        LeafyTextField(
                             value = draft.official,
                             onValueChange = { value -> drafts = drafts.updated(kind, draft.copy(official = value.filter { it.isDigit() || it == '.' })) },
                             modifier = Modifier.fillMaxWidth(),
@@ -327,14 +348,14 @@ fun ComprehensiveQualityScreen(
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                    OutlinedTextField(
+                    LeafyTextField(
                         value = officialQuality,
                         onValueChange = { officialQuality = it.filter { ch -> ch.isDigit() || ch == '.' } },
                         modifier = Modifier.weight(1f),
                         label = { Text("官方综素分") },
                         singleLine = true,
                     )
-                    OutlinedTextField(
+                    LeafyTextField(
                         value = officialComposite,
                         onValueChange = { officialComposite = it.filter { ch -> ch.isDigit() || ch == '.' } },
                         modifier = Modifier.weight(1f),
@@ -344,7 +365,7 @@ fun ComprehensiveQualityScreen(
                 }
             }
             item {
-                OutlinedTextField(
+                LeafyTextField(
                     value = note,
                     onValueChange = { note = it },
                     modifier = Modifier.fillMaxWidth(),

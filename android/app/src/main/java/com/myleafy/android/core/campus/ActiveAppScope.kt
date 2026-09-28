@@ -45,7 +45,7 @@ class ActiveAppScopeStore(initial: ActiveAppScope = ActiveAppScope.SignedOut) {
         )
     }
 
-    fun activateGuest(scopeKey: String) {
+    fun activateGuest(scopeKey: String = ActiveAppScope.SignedOut.scopeKey) {
         require(scopeKey.isNotBlank()) { "Guest scopeKey must not be blank" }
         mutableScope.value = ActiveAppScope(
             campusId = CampusID.guest,

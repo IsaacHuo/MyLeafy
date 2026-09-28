@@ -31,6 +31,7 @@ import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyPrimaryButton
 import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyErrorState
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.LeafyStroke
@@ -107,6 +108,14 @@ fun ClassroomScreen(
                 LeafyErrorState(
                     title = "查询失败",
                     message = state.message,
+                    // 原地重试沿用当前周次与星期，不扩大查询范围。
+                    action = {
+                        LeafyTextButton(
+                            onClick = { viewModel.query(week, day, startPeriod = 1, endPeriod = 12) },
+                        ) {
+                            Text("重试")
+                        }
+                    },
                 )
             }
 

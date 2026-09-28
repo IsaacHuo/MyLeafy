@@ -88,7 +88,7 @@ leafy/
 ├── Parsers/                # SwiftSoup 教务 HTML 解析
 ├── Shared/                 # 跨功能模型、平台兼容、扩展共享数据
 └── WidgetSupport/          # Widget 展示数据构建
-android/                    # Android 原生客户端（单 app module，Compose Design System、Material 3 Adaptive 根导航与功能分层）
+android/                    # Android 原生客户端（单 app module，Compose Design System、自适应根导航与功能分层）
 ```
 
 ## 4. 分层与依赖方向
@@ -230,17 +230,19 @@ React-admin → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 - 根 Tab：`TabView`，顺序 `课表 / 社区 / 日迹 / 校园 / 我的`，默认课表；社区按校园 capability 隐藏（`ContentView.swift`，iOS 26 用系统 `Tab` API，低版本用 `tabItem`）。
 - 层级详情使用 `NavigationStack`；轻量编辑/筛选/详情使用 sheet。
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
-- Android 使用 `MyLeafyNavHost` + `RootTab` 始终呈现 `课表 / 社区 / 日迹 / 校园 / 我的`，默认直接进入课表；未登录或不具备 capability 时社区页只展示门槛说明，不初始化社区请求。根目的地由 Material 3 Adaptive Navigation Suite 按窗口宽度呈现 Compact Bottom Navigation 或 Medium/Expanded Navigation Rail，二级目的地隐藏根导航；两种 chrome 复用同一目的地集合、选择状态与状态恢复。
+- Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`。启动先恢复本机身份；无身份显示「北京林业大学 / 免登录入口」，完成选择后进入课表。免登录仍保留五个根 Tab，社区只展示门槛说明，不初始化社区请求。根目的地在小于 600dp 时使用轻透圆角底部导航，宽屏使用 Material 3 Adaptive Navigation Suite 的 Navigation Rail，二级目的地隐藏根导航；两种导航复用目的地集合、选择状态与状态恢复。根 Tab 以课表路由作为返回栈锚点，首次选择入口后也保留各 Tab 的状态。
+- Android 根窗口与导航外层明确绘制主题背景，系统导航栏透明且图标随应用主题变化，圆角导航周边不暴露黑色窗口底。根 Tab 不执行横向整页动画，二级详情进场约 240ms。
 - Android 二级真实页面与 `FeatureDestination` 占位页面统一使用 48dp 紧凑返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；资料编辑、缓存同步、个性化、帮助中心、权限说明、反馈、关于与内置校历均为真实页面。
 - Android `MyLeafyTheme` 是 Compose 视觉语义的单一入口：`LeafyTypography`、`LeafySpacing`、`LeafyElevation`、`LeafyIconSize`、`LeafyMotion`、`LeafySurfaceColors` 与 `LeafyCourseColors` 由共享组件消费；progress/gesture 等状态值使用语义 Token，课表几何、校园断点和验证码尺寸使用功能级 Token。根壳拥有导航区域 Insets，页面 Scaffold 拥有状态栏/TopBar Insets，编辑表单与 Sheet 拥有 navigation bar/IME Insets；应用 padding 后必须消费，避免系统栏遮挡或重复留白。课表照片由应用私有文件读取，显示中的 Bitmap 所有权交给 Compose/运行时，不在 composable disposal 中手动回收。
-- Android 启动阶段不强制登录；学校登录从“我的”进入。Room、教务和 Supabase 页面只展示各自真实数据，未登录、未配置或校园网不可达时进入明确的 Empty/Error 状态。
+- Android 只有北林与免登录两个入口，没有通用学校和 Demo。`AppContainer.restoreIdentity()` 异步恢复持久化选择，恢复完成前不创建页面 ViewModel；选择 guest 时不会因仍有旧学校凭据而自动恢复北林身份。`enterLocalMode()` 清理本地学校会话并关闭已创建的社区客户端、自动刷新和连接，不发起学校或社区请求；guest 使用稳定的 `signed-out` 本机数据空间，保留原有本地记录，无新增数据库迁移。免登录不提供天气、教务查询/同步和共享入口，原有本地记录功能继续使用。
 - Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 标志和 capabilities；Room v6 的全部业务实体使用 `scopeKey` 隔离。schema 4→5 保留既有课程、成绩、考试、随记和日程并增加通知、阳光长跑、体测及医疗台账；schema 5→6 增加荣誉记录、综素测算与教务文档（教学计划/培养方案）缓存；仅预发布 schema 1–3 允许破坏性重建，未来缺 migration 时直接失败。
 - Android Supabase 客户端按活动 capability 延迟创建；guest、未登录或无社区 capability 时社区页仍可发现，但不会初始化客户端或社区任务。共享课表与评价也在仓储边界检查学校身份、profile 和各自 capability。
-- Android 社区数据以 Supabase 为权威且不落 Room：`CommunityRepository` 统一执行 profile bootstrap、资料完整度和自定义校园准入检查；UI 不直接操作 PostgREST。Feed 查询支持普通分类/搜索与独立的近七日热门模式，下拉刷新失败时 ViewModel 保留最近成功列表。通知通过 recipient RLS 表查询/更新，收藏、本人内容软删除、举报与屏蔽只调用既有 RPC；屏蔽关系同时过滤已有通知。图片帖在客户端压缩为 full（≤1600px / ≤800KB）与 thumb（≤480px / ≤120KB）两档 JPEG，上传到公开 `community-images` 后经 `community-validate-upload` 生成收据、再调用 `attach_community_post_image_v1` 挂载；单帖最多 4 张，读取使用公开 URL，本地上传为同步流程（无断点续传/后台队列）。
+- Android 社区数据以 Supabase 为权威且不落 Room：`CommunityRepository` 统一执行 profile bootstrap 与资料完整度检查；UI 不直接操作 PostgREST。Feed 查询支持普通分类/搜索与独立的近七日热门模式，同一查询刷新失败时 ViewModel 保留最近成功列表；切换分类立即清除旧分类内容，`loadedSelection` 标明已加载内容归属。请求代次与取消检查阻止过期成功或错误覆盖当前状态；未读计数失败保留上次结果并记录诊断。通知通过 recipient RLS 表查询/更新，收藏、本人内容软删除、举报与屏蔽只调用既有 RPC；屏蔽关系同时过滤已有通知。图片帖在客户端压缩为 full（≤1600px / ≤800KB）与 thumb（≤480px / ≤120KB）两档 JPEG，上传到公开 `community-images` 后经 `community-validate-upload` 生成收据、再调用 `attach_community_post_image_v1` 挂载；单帖最多 4 张，读取使用公开 URL，本地上传为同步流程（无断点续传/后台队列）。
 - Android 本科验证码阶段使用只驻留内存的匿名 Cookie；key、验证码与登录提交复用同一会话，认证成功后才按 `CampusIdentity.scopeKey` 迁移到 Keystore。登录失败原因与验证码加载错误是独立 UI 状态，自动刷新验证码不得清空登录错误。同步 OkHttp 请求由客户端统一切换到 `Dispatchers.IO`，Compose ViewModel 不执行阻塞网络 I/O。
 - Android 教务和社区网络必须保留平台 TLS 证书与主机名校验；校园网、代理或 VPN 返回目标域名以外的证书时 fail closed，并向用户提示切换网络，不得加入 trust-all 或 hostname verifier 绕过。
 - Android 当前仅实现直接 HTML 课表解析；学校返回未识别页面时 fail-fast 为 `TimetableDataUnavailable` 并保留 Room 最近成功缓存，不把未知页面当空课表。教学计划与培养方案使用同一 jsoup 契约解析并缓存到 `academic_documents`，解析失败分别报 `TeachingPlanDataUnavailable` / `TrainingProgramDataUnavailable`。iOS 的表单/WebView bootstrap 回退尚未迁移。
-- Android `TimetableGridProjection` 是课表几何的单一纯 Domain 投影：按 20 个教学周预投影课程、考试和 scoped Room 个人日程的 day/period span/lane/stable ID；稳定 Compose `Layout` 只消费投影。`HorizontalPager` 左滑下一周、右滑上一周，网格以 5/7 列 × 13 节完整适配可用高度且没有纵向滚动。
+- Android `TimetableGridProjection` 是课表几何的单一纯 Domain 投影：按 20 个教学周预投影课程、考试和 scoped Room 个人日程的 day/period span/lane/stable ID；稳定 Compose `Layout` 只消费投影。`HorizontalPager` 左滑下一周、右滑上一周，网格以 5/7 列 × 13 节完整适配可用高度且没有纵向滚动；无课程时不插入常驻说明卡片，周次栏下直接排列日期表头与网格。
+- Android 随记/日程保存、删除和社区发布在 ViewModel 层阻止重复提交；取消继续传播，不转换为业务失败。编辑失败保留输入、成功才关闭；编辑器返回、遮罩与下滑共用未保存确认。日迹分区通过 SaveableStateHolder 保留各自滚动状态，编辑草稿和课表编辑草稿使用共享 Saver 恢复。
 - Android 课表与日迹日程列表共用 `ScheduleEventEntity`/`ScheduleRepository`；新增、编辑与删除按活动 `scopeKey` 持久化并触发通知重排。ICS 导出按学期首日展开课程周次，并包含学期范围内个人日程，固定 `Asia/Shanghai`，文件仅暴露给 Android FileProvider Sharesheet。WorkManager 以四小时协调任务和稳定唯一工作名调度早晚报、考试及个人日程提醒，不申请精确闹钟权限。
 - Android 校园学业仓储将成绩/排名与考试拆成独立刷新边界；校园根页按学校教学、自习安排、体育相关、医疗事项、评价相关和周末去哪分组。学校教学含成绩、考试、教学与培养、校历（含作息）、综素测算与本机荣誉记录；自习安排含空闲教室与图书馆座位预约外链。体育、体测、医疗台账及照片按 `scopeKey` 保存在 Room/私有目录；医疗需 `medicalServices`，评价使用 Supabase 既有 catalog/ratings 表和 RLS；周末去哪为内置静态推荐，仅北林校园可见。
 - Android `SettingsStore` 持久化 system/light/dark 主题、系统/更大文字、隐藏周末与课表背景偏好，`MainActivity` 在根 Composition 应用。背景原图和 API 29–30 模糊缓存位于 App 私有目录，不进入 ICS、共享课表或系统分享内容。资料更新只写 Supabase `profiles` 中允许用户编辑的昵称、简介、专业和年级字段。退出登录必须清理学校 Cookie、Keystore 保存凭据、DataStore 身份和 Supabase 匿名会话，同时保留 scoped Room 本地数据。

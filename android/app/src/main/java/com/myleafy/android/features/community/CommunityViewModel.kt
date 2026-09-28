@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myleafy.android.shared.model.FeedQuery
 import com.myleafy.android.shared.model.PostDto
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.util.logging.Logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +39,7 @@ data class CommunityUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val unreadCount: Int = 0,
+    val loadedSelection: CommunityFeedSelection? = null,
 )
 
 /** 社区 Feed 状态持有者；刷新失败时保留最近一次成功列表。 */
@@ -46,61 +51,72 @@ class CommunityViewModel(
     private val _uiState = MutableStateFlow(CommunityUiState())
     val uiState: StateFlow<CommunityUiState> = _uiState.asStateFlow()
     private var loadJob: Job? = null
+    private var unreadJob: Job? = null
+    private var requestGeneration = 0L
 
     init {
-        refresh(initial = true)
+        refresh()
     }
 
     fun selectLatest(category: String?) {
         val selection = CommunityFeedSelection(mode = CommunityFeedMode.LATEST, category = category)
         if (_uiState.value.selection == selection) return
-        _uiState.value = _uiState.value.copy(selection = selection, error = null)
-        refresh(initial = _uiState.value.posts.isEmpty())
+        _uiState.value = _uiState.value.copy(selection = selection, posts = emptyList(), loadedSelection = null, error = null)
+        refresh()
     }
 
     fun selectHot() {
         val selection = CommunityFeedSelection(mode = CommunityFeedMode.HOT)
         if (_uiState.value.selection == selection) return
-        _uiState.value = _uiState.value.copy(selection = selection, error = null)
-        refresh(initial = _uiState.value.posts.isEmpty())
+        _uiState.value = _uiState.value.copy(selection = selection, posts = emptyList(), loadedSelection = null, error = null)
+        refresh()
     }
 
-    fun refresh(initial: Boolean = false) {
+    fun refresh() {
+        val generation = ++requestGeneration
         loadJob?.cancel()
         val current = _uiState.value
+        val selection = current.selection
         _uiState.value = current.copy(
-            isInitialLoading = initial && current.posts.isEmpty(),
-            isRefreshing = !initial || current.posts.isNotEmpty(),
+            isInitialLoading = current.posts.isEmpty(),
+            isRefreshing = current.posts.isNotEmpty(),
             error = null,
         )
         loadJob = viewModelScope.launch {
-            runCatching {
-                repository.feed(_uiState.value.selection.toQuery(campusId)).first()
-            }.fold(
-                onSuccess = { posts ->
+            try {
+                val posts = repository.feed(selection.toQuery(campusId)).first()
+                currentCoroutineContext().ensureActive()
+                if (generation != requestGeneration) return@launch
+                _uiState.value = _uiState.value.copy(
+                    posts = posts, loadedSelection = selection,
+                    isInitialLoading = false, isRefreshing = false, error = null,
+                )
+                refreshUnreadCount()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (generation == requestGeneration) {
                     _uiState.value = _uiState.value.copy(
-                        posts = posts,
-                        isInitialLoading = false,
-                        isRefreshing = false,
-                        error = null,
-                    )
-                    refreshUnreadCount()
-                },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isInitialLoading = false,
-                        isRefreshing = false,
+                        isInitialLoading = false, isRefreshing = false,
                         error = error.toCommunityMessage("社区加载失败"),
                     )
-                },
-            )
+                }
+            }
         }
     }
 
     fun refreshUnreadCount() {
-        viewModelScope.launch {
-            runCatching { repository.unreadNotificationCount() }
-                .onSuccess { count -> _uiState.value = _uiState.value.copy(unreadCount = count) }
+        if (unreadJob?.isActive == true) return
+        unreadJob = viewModelScope.launch {
+            try {
+                val count = repository.unreadNotificationCount()
+                currentCoroutineContext().ensureActive()
+                _uiState.value = _uiState.value.copy(unreadCount = count)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Logger.getLogger("CommunityViewModel").warning("Unread refresh failed: ${error.javaClass.simpleName}")
+            }
         }
     }
 }

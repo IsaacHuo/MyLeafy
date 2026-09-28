@@ -7,7 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,8 +54,20 @@ fun MemoEditorSheet(
         }
     }
 
+    val dirty = title != initial.title || body != initial.body || tags != initial.tags.joinToString("、")
+    val requestExit = com.myleafy.android.ui.components.rememberEditorExit(dirty, isSaving, onDismiss)
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { target ->
+            if (target == androidx.compose.material3.SheetValue.Hidden && (dirty || isSaving)) {
+                requestExit()
+                false
+            } else true
+        },
+    )
     LeafyModalBottomSheet(
-        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        onDismissRequest = requestExit,
     ) {
         LeafySheetContent(
             modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -66,21 +78,24 @@ fun MemoEditorSheet(
                 )
             },
         ) {
-            OutlinedTextField(
+            LeafyTextField(
+                enabled = !isSaving,
                 value = title,
                 onValueChange = { title = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("标题") },
                 singleLine = true,
             )
-            OutlinedTextField(
+            LeafyTextField(
+                enabled = !isSaving,
                 value = body,
                 onValueChange = { body = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("正文") },
                 minLines = 6,
             )
-            OutlinedTextField(
+            LeafyTextField(
+                enabled = !isSaving,
                 value = tags,
                 onValueChange = { tags = it },
                 modifier = Modifier.fillMaxWidth(),
@@ -125,17 +140,22 @@ fun MemoEditorSheet(
     if (confirmsDelete && initial.id != null && onDelete != null) {
         LeafyAlertDialog(
             onDismissRequest = { confirmsDelete = false },
-            title = { Text("删除这条随记？") },
-            text = { Text("随记会移入软删除状态，本阶段暂不提供回收站恢复。") },
+            title = { Text("移到回收站？") },
+            text = { Text("这条随记会移到回收站，你可以稍后恢复。") },
             confirmButton = {
                 LeafyTextButton(
                     onClick = {
                         confirmsDelete = false
                         onDelete(initial.id)
                     },
-                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                ) { Text("移到回收站", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { LeafyTextButton(onClick = { confirmsDelete = false }) { Text("取消") } },
         )
     }
 }
+
+internal val memoDraftSaver = androidx.compose.runtime.saveable.Saver<MemoDraft?, List<String>>(
+    save = { draft -> draft?.let { listOf(it.id.orEmpty(), it.title, it.body) + it.tags } },
+    restore = { values -> MemoDraft(values[0].ifBlank { null }, values[1], values[2], values.drop(3)) },
+)

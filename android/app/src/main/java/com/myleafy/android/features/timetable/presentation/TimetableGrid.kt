@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -36,12 +38,17 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.myleafy.android.core.prefs.TimetableBackgroundSettings
@@ -71,12 +78,10 @@ private val GridCellShape = RoundedCornerShape(LeafyTimetableTokens.cellCornerRa
  * 冲突窄列与矮行下地点会整段省略，完整信息仍由 semantics 提供。
  */
 private object CourseCardText {
-    val padding = LeafySpacing.tiny
+    val padding = 2.dp
     val lineSpacing = LeafySpacing.hairline
     const val titleMaxLines = 3
     const val titleMaxLinesNarrowLane = 4
-    const val subtitleMaxLines = 2
-    const val subtitleMaxLinesNarrowLane = 1
 }
 
 fun stableCourseColorIndex(name: String, colorCount: Int): Int {
@@ -98,6 +103,13 @@ fun TimetableGrid(
     background: TimetableBackgroundSettings = TimetableBackgroundSettings(),
 ) {
     val headerHeight = timetableHeaderHeight()
+    val axisWidth = timetableAxisWidth()
+    val viewConfiguration = LocalViewConfiguration.current
+    val gridViewConfiguration = remember(viewConfiguration) {
+        object : ViewConfiguration by viewConfiguration {
+            override val minimumTouchTargetSize = DpSize.Zero
+        }
+    }
     BoxWithConstraints(modifier = modifier.fillMaxSize().testTag("timetable-grid")) {
         val visibleDayCount = if (showWeekends) 7 else 5
         val contentWidth = maxWidth
@@ -113,20 +125,41 @@ fun TimetableGrid(
             contentAlignment = Alignment.TopCenter,
         ) {
             TimetableBackground(background, Modifier.fillMaxSize())
-            TimetableGridLayout(
-                snapshot = snapshot,
-                today = today,
-                currentTime = currentTime,
-                onEmptyCellClick = onEmptyCellClick,
-                onItemClick = onItemClick,
-                headerHeight = headerHeight,
-                periodRowHeight = periodRowHeight,
-                visibleDayCount = visibleDayCount,
-                background = background,
-                modifier = Modifier.width(contentWidth).height(contentHeight),
-            )
+            // 密集格子的触摸范围以可见边界为准，避免相邻课程的 48dp 扩展区域互相覆盖。
+            CompositionLocalProvider(
+                LocalViewConfiguration provides gridViewConfiguration,
+                LocalMinimumInteractiveComponentSize provides 0.dp,
+            ) {
+                TimetableGridLayout(
+                    snapshot = snapshot,
+                    today = today,
+                    currentTime = currentTime,
+                    onEmptyCellClick = onEmptyCellClick,
+                    onItemClick = onItemClick,
+                    headerHeight = headerHeight,
+                    periodRowHeight = periodRowHeight,
+                    visibleDayCount = visibleDayCount,
+                    axisWidth = axisWidth,
+                    background = background,
+                    modifier = Modifier.width(contentWidth).height(contentHeight),
+                )
+            }
         }
     }
+}
+
+/** 按系统字体的实际字宽分配时间轴，保留节次、时间间隔，避免挤占课程列。 */
+@Composable
+private fun timetableAxisWidth(): Dp {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val periodWidth = (1..PeriodCount).maxOf {
+        measurer.measure(it.toString(), LeafyTimetableType.axisPeriod).size.width
+    }
+    val timeWidth = (1..PeriodCount).flatMap { period ->
+        TimetablePeriodSchedule.slot(period)?.let { listOf(it.startText, it.endText) }.orEmpty()
+    }.maxOf { measurer.measure(it, LeafyTimetableType.axisTime).size.width }
+    return maxOf(LeafyTimetableTokens.axisWidth, with(density) { maxOf(periodWidth, timeWidth).toDp() } + 6.dp)
 }
 
 /**
@@ -150,7 +183,7 @@ private fun timetableHeaderHeight(): Dp {
 private fun timetableDateIndicatorSize(): Dp {
     val density = LocalDensity.current
     val numberLineHeight = with(density) { LeafyTimetableType.dayNumber.lineHeight.toDp() }
-    return maxOf(numberLineHeight, LeafyTimetableTokens.dateIndicatorSize)
+    return maxOf(numberLineHeight + LeafySpacing.tiny * 2, LeafyTimetableTokens.dateIndicatorSize)
 }
 
 @Composable
@@ -230,6 +263,7 @@ private fun TimetableGridLayout(
     headerHeight: Dp,
     periodRowHeight: Dp,
     visibleDayCount: Int,
+    axisWidth: Dp,
     background: TimetableBackgroundSettings,
     modifier: Modifier,
 ) {
@@ -255,7 +289,10 @@ private fun TimetableGridLayout(
             for (period in 1..PeriodCount) {
                 PeriodAxis(
                     period = period,
-                    modifier = Modifier.layoutId(GridSlot.Axis(period)),
+                    rowHeight = periodRowHeight,
+                    modifier = Modifier.layoutId(GridSlot.Axis(period)).then(
+                        if (background.enabled) Modifier.background(MaterialTheme.leafySurfaces.page.copy(alpha = 0.9f)) else Modifier,
+                    ),
                 )
                 for (day in 0 until visibleDayCount) {
                     val date = snapshot.weekRange.startDate.plusDays(day.toLong())
@@ -295,17 +332,17 @@ private fun TimetableGridLayout(
     ) { measurables, constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
-        val axisWidth = LeafyTimetableTokens.axisWidth.roundToPx()
+        val axisWidthPx = axisWidth.roundToPx()
         val headerHeightPx = headerHeight.roundToPx()
         val rowHeight = periodRowHeight.roundToPx()
         val gap = LeafyTimetableTokens.gridGap.roundToPx()
-        val dayWidth = (width - axisWidth) / visibleDayCount.toFloat()
+        val dayWidth = (width - axisWidthPx) / visibleDayCount.toFloat()
 
         val placements = measurables.map { measurable ->
             val slot = measurable.layoutId as GridSlot
             val childConstraints = when (slot) {
                 is GridSlot.Header -> Constraints.fixed(dayWidth.roundToInt(), headerHeightPx)
-                is GridSlot.Axis -> Constraints.fixed(axisWidth, rowHeight)
+                is GridSlot.Axis -> Constraints.fixed(axisWidthPx, rowHeight)
                 is GridSlot.Cell -> Constraints.fixed(
                     (dayWidth.roundToInt() - gap * 2).coerceAtLeast(1),
                     (rowHeight - gap * 2).coerceAtLeast(1),
@@ -331,7 +368,7 @@ private fun TimetableGridLayout(
                 val y: Int
                 when (slot) {
                     is GridSlot.Header -> {
-                        x = axisWidth + (slot.day * dayWidth).roundToInt()
+                        x = axisWidthPx + (slot.day * dayWidth).roundToInt()
                         y = 0
                     }
                     is GridSlot.Axis -> {
@@ -339,17 +376,17 @@ private fun TimetableGridLayout(
                         y = headerHeightPx + (slot.period - 1) * rowHeight
                     }
                     is GridSlot.Cell -> {
-                        x = axisWidth + (slot.day * dayWidth).roundToInt() + gap
+                        x = axisWidthPx + (slot.day * dayWidth).roundToInt() + gap
                         y = headerHeightPx + (slot.period - 1) * rowHeight + gap
                     }
                     is GridSlot.Item -> {
                         val laneWidth = dayWidth / slot.item.laneCount
-                        x = axisWidth + (slot.item.dayIndex * dayWidth).roundToInt() +
+                        x = axisWidthPx + (slot.item.dayIndex * dayWidth).roundToInt() +
                             (slot.item.lane * laneWidth).roundToInt() + gap
                         y = headerHeightPx + (slot.item.startPeriod - 1) * rowHeight + gap
                     }
                     is GridSlot.Timeline -> {
-                        x = axisWidth + gap
+                        x = axisWidthPx + gap
                         y = headerHeightPx + (slot.rowPosition * rowHeight).roundToInt()
                     }
                 }
@@ -401,22 +438,47 @@ private fun DayHeader(
 }
 
 @Composable
-private fun PeriodAxis(period: Int, modifier: Modifier = Modifier) {
+private fun PeriodAxis(period: Int, rowHeight: Dp, modifier: Modifier = Modifier) {
     val slot = TimetablePeriodSchedule.slot(period)
+    val startText = slot?.startText.orEmpty()
+    val endText = slot?.endText.orEmpty()
+    val density = LocalDensity.current
+    val timeLineHeight = with(density) { LeafyTimetableType.axisTime.lineHeight.toDp() }
+    val periodLineHeight = with(density) { LeafyTimetableType.axisPeriod.lineHeight.toDp() }
+    // 短屏配合大字体时省略视觉上的结束时间，完整区间始终可由 TalkBack 和课程详情读取。
+    val showEnd = endText.isNotEmpty() && rowHeight >= periodLineHeight + timeLineHeight * 2
     Column(
-        modifier = modifier.padding(top = LeafySpacing.tiny, end = LeafySpacing.tiny),
-        horizontalAlignment = Alignment.End,
+        modifier = modifier
+            .padding(horizontal = 3.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = if (slot == null) "第${period}节" else "第${period}节，$startText 至 $endText"
+            },
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = period.toString(),
-            // 节次序号与课程名共用同一个 11sp / SemiBold 紧凑数字角色。
-            style = LeafyTimetableType.courseTitle,
+            style = LeafyTimetableType.axisPeriod,
+            maxLines = 1,
+            modifier = Modifier.testTag("timetable-axis-period-$period"),
         )
-        Text(
-            text = slot?.startText.orEmpty(),
-            style = LeafyTimetableType.axisTime,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        if (startText.isNotEmpty()) {
+            Text(
+                text = startText,
+                style = LeafyTimetableType.axisTime,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.testTag("timetable-axis-start-$period"),
+            )
+        }
+        if (showEnd) {
+            Text(
+                text = endText,
+                style = LeafyTimetableType.axisTime,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.testTag("timetable-axis-end-$period"),
+            )
+        }
     }
 }
 
@@ -429,16 +491,24 @@ private fun EmptyGridCell(
     hasBackground: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // 每个空格都用浅色表面 + 极细描边呈现，让 7×13 的网格结构始终清晰可见；
-    // 有自定义背景时改用半透明填充压住照片，“今天”列用强调色区分。
+    // 空白格只保留对齐参照：填充与描边都比课程块更弱，让课程块、今天和当前时间
+    // 继续当视觉重点。有自定义背景时进一步降低存在感，“今天”列用强调色区分。
     val fill = when {
-        isToday -> MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.5f else 0.6f)
-        hasBackground -> MaterialTheme.leafySurfaces.content.copy(alpha = 0.32f)
-        else -> MaterialTheme.leafySurfaces.content
+        isToday -> MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.42f else 0.5f)
+        hasBackground -> MaterialTheme.leafySurfaces.content.copy(
+            alpha = LeafyTimetableTokens.emptyCellFillAlphaOnBackground,
+        )
+        else -> MaterialTheme.leafySurfaces.page
     }
     val border = BorderStroke(
         width = LeafySpacing.hairline,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (hasBackground) 0.5f else 0.65f),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(
+            alpha = if (hasBackground) {
+                LeafyTimetableTokens.emptyCellBorderAlphaOnBackground
+            } else {
+                LeafyTimetableTokens.emptyCellBorderAlpha
+            },
+        ),
     )
     Surface(
         onClick = onClick,
@@ -474,6 +544,8 @@ private fun TimetableItemCard(
     val subtitle = item.subtitle?.takeIf { it.isNotBlank() }
     val cardHeight = rowHeight * item.periodSpan - LeafyTimetableTokens.gridGap * 2
     val density = LocalDensity.current
+    // 课名在所有格子里都用同一个紧凑角色：单屏 5/7 天 × 13 节没有“宽裕到换大字号”
+    // 的空间，跨节与冲突格靠行数分配，而不是靠字号。
     val titleLineHeight = with(density) { LeafyTimetableType.courseTitle.lineHeight.toDp() }
     val subtitleLineHeight = with(density) { LeafyTimetableType.courseSubtitle.lineHeight.toDp() }
     val lines = courseCardLines(
@@ -489,11 +561,7 @@ private fun TimetableItemCard(
         } else {
             CourseCardText.titleMaxLines
         },
-        maxSubtitleLines = if (item.laneCount > 1) {
-            CourseCardText.subtitleMaxLinesNarrowLane
-        } else {
-            CourseCardText.subtitleMaxLines
-        },
+        maxSubtitleLines = 1,
     )
     Surface(
         onClick = onClick,
@@ -516,6 +584,7 @@ private fun TimetableItemCard(
         ) {
             Text(
                 text = item.title,
+                modifier = Modifier.weight(1f, fill = false),
                 style = LeafyTimetableType.courseTitle,
                 maxLines = lines.title,
                 overflow = TextOverflow.Ellipsis,
@@ -550,14 +619,22 @@ private fun courseCardLines(
     maxSubtitleLines: Int,
 ): CourseCardLines {
     val verticalSpace = cardHeight - CourseCardText.padding * 2
-    val titleLines = if (titleLineHeight <= 0.dp) {
-        1
-    } else {
-        (verticalSpace / titleLineHeight).toInt().coerceIn(1, maxTitleLines)
+    if (verticalSpace <= 0.dp || titleLineHeight <= 0.dp) return CourseCardLines(1, 0)
+    val maxTitleByHeight = (verticalSpace / titleLineHeight).toInt().coerceAtLeast(1)
+    if (!hasSubtitle || subtitleLineHeight <= 0.dp) {
+        return CourseCardLines(maxTitleByHeight.coerceAtMost(maxTitleLines).coerceAtLeast(1), 0)
     }
-    if (!hasSubtitle || subtitleLineHeight <= 0.dp) return CourseCardLines(titleLines, 0)
     // 标题与副文之间还有一条 lineSpacing，分配副文行数前必须先扣掉，
     // 否则最后一行会顶出卡片被裁掉。
+    val maxTitleKeepingSubtitle =
+        ((verticalSpace - lineSpacing - subtitleLineHeight) / titleLineHeight).toInt()
+    // 课名少一行仍然可以用省略号表达，地点整段消失就没有线索了：
+    // 只要“一行课名 + 一行地点”放得下，就先留出地点，再把剩下的行数给课名。
+    val titleLines = if (maxTitleKeepingSubtitle >= 1) {
+        minOf(maxTitleLines, maxTitleByHeight, maxTitleKeepingSubtitle).coerceAtLeast(1)
+    } else {
+        maxTitleByHeight.coerceAtMost(maxTitleLines).coerceAtLeast(1)
+    }
     val remaining = verticalSpace - titleLineHeight * titleLines - lineSpacing
     val subtitleLines = if (remaining <= 0.dp) {
         0

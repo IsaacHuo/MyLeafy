@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class SportsUiState(
     val runs: List<SunshineRunRecordEntity> = emptyList(),
@@ -23,6 +26,16 @@ data class SportsUiState(
 )
 
 class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel() {
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    fun dismissError() { _error.value = null }
+    fun reportError(error: String) { _error.value = error }
+    private fun mutate(block: suspend () -> Unit) = viewModelScope.launch {
+        try { block(); _error.value = null }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
+    }
+
     val uiState: StateFlow<SportsUiState> = combine(
         repository.sunshineRuns,
         repository.sunshineSettings,
@@ -30,20 +43,20 @@ class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel(
         ::SportsUiState,
     ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsUiState())
 
-    fun addRun(date: LocalDate, startWeek: Int, endWeek: Int) = viewModelScope.launch {
+    fun addRun(date: LocalDate, startWeek: Int, endWeek: Int) = mutate {
         repository.saveRun(date, startWeek, endWeek)
     }
 
-    fun deleteRun(record: SunshineRunRecordEntity) = viewModelScope.launch { repository.deleteRun(record) }
+    fun deleteRun(record: SunshineRunRecordEntity) = mutate { repository.deleteRun(record) }
 
-    fun saveRules(total: Int, weeks: Int, perPeriod: Int, excludedWeeks: String) = viewModelScope.launch {
+    fun saveRules(total: Int, weeks: Int, perPeriod: Int, excludedWeeks: String) = mutate {
         repository.saveSunshineSettings(total, weeks, perPeriod, excludedWeeks)
     }
 
     fun saveFitness(date: LocalDate, item: String, value: Double, unit: String, note: String) =
-        viewModelScope.launch { repository.saveFitnessTest(date = date, item = item, value = value, unit = unit, note = note) }
+        mutate { repository.saveFitnessTest(date = date, item = item, value = value, unit = unit, note = note) }
 
-    fun deleteFitness(record: FitnessTestRecordEntity) = viewModelScope.launch {
+    fun deleteFitness(record: FitnessTestRecordEntity) = mutate {
         repository.deleteFitnessTest(record)
     }
 }
@@ -55,6 +68,16 @@ data class MedicalUiState(
 )
 
 class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel() {
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    fun dismissError() { _error.value = null }
+    fun reportError(error: String) { _error.value = error }
+    private fun mutate(block: suspend () -> Unit) = viewModelScope.launch {
+        try { block(); _error.value = null }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
+    }
+
     private val exportedFile = kotlinx.coroutines.flow.MutableStateFlow<File?>(null)
     val uiState: StateFlow<MedicalUiState> = combine(
         repository.medicalEntries,
@@ -67,9 +90,9 @@ class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel
         MedicalUiState(),
     )
 
-    fun save(draft: MedicalLedgerDraft) = viewModelScope.launch { repository.saveMedicalEntry(draft) }
-    fun delete(entry: MedicalLedgerEntryEntity) = viewModelScope.launch { repository.deleteMedicalEntry(entry) }
-    fun importPhoto(entryId: String, uri: Uri) = viewModelScope.launch { repository.importMedicalPhoto(entryId, uri) }
-    fun export() = viewModelScope.launch { exportedFile.value = repository.exportMedicalLedger(uiState.value.entries) }
+    fun save(draft: MedicalLedgerDraft) = mutate { repository.saveMedicalEntry(draft) }
+    fun delete(entry: MedicalLedgerEntryEntity) = mutate { repository.deleteMedicalEntry(entry) }
+    fun importPhoto(entryId: String, uri: Uri) = mutate { repository.importMedicalPhoto(entryId, uri) }
+    fun export() = mutate { exportedFile.value = repository.exportMedicalLedger(uiState.value.entries) }
     fun consumeExport() { exportedFile.value = null }
 }

@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 
 data class TimetableSharingUiState(
     val loading: Boolean = true,
+    val loaded: Boolean = false,
     val mutating: Boolean = false,
     val mine: SharedTimetableSnapshotDto? = null,
     val viewable: List<SharedTimetableSnapshotDto> = emptyList(),
@@ -48,6 +49,7 @@ class TimetableSharingViewModel(private val repository: TimetableSharingReposito
             onSuccess = { snapshot ->
                 mutableState.value = mutableState.value.copy(
                     loading = false,
+                    loaded = true,
                     mine = snapshot.mine,
                     viewable = snapshot.viewable,
                     members = snapshot.members,

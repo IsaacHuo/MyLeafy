@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -57,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -72,6 +74,7 @@ import com.myleafy.android.core.data.local.CourseEntity
 import com.myleafy.android.core.data.local.ExamEntity
 import com.myleafy.android.core.data.local.ScheduleEventEntity
 import com.myleafy.android.core.di.appViewModelFactory
+import com.myleafy.android.features.schedule.scheduleDraftSaver
 import com.myleafy.android.features.schedule.ScheduleEventDraft
 import com.myleafy.android.features.schedule.ScheduleEventEditorSheet
 import com.myleafy.android.features.timetable.domain.SemesterConfig
@@ -109,6 +112,7 @@ import kotlin.math.roundToInt
 @Composable
 fun TimetableScreen(
     onShareClick: () -> Unit = {},
+    identity: TimetableIdentity,
     viewModel: TimetableViewModel = viewModel(
         factory = appViewModelFactory { container ->
             TimetableViewModel(
@@ -117,6 +121,7 @@ fun TimetableScreen(
                 scheduleRepository = container.scheduleRepository,
                 settingsStore = container.settingsStore,
                 weatherRepository = container.weatherRepository,
+                canUseWeather = { container.activeAppScopeStore.current.supports(com.myleafy.android.core.campus.CampusCapabilities.WEATHER) },
                 onScheduleEventsChanged = container.scheduleNotificationScheduler::requestReconcile,
                 semesterId = SemesterConfig.currentSemesterId,
             )
@@ -169,8 +174,8 @@ fun TimetableScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+    LaunchedEffect(identity) {
+        if (identity.canSyncFromSchool && ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
         ) {
             viewModel.refreshWeather()
@@ -184,7 +189,8 @@ fun TimetableScreen(
         topBar = {
             LeafyRootTopBar(
                 titleContent = {
-                    TimetableWeatherTitle(
+                    if (!identity.canSyncFromSchool) Text("课表", style = MaterialTheme.typography.titleLarge)
+                    else TimetableWeatherTitle(
                         state = weatherState,
                         hasPermission = ContextCompat.checkSelfPermission(
                             context,
@@ -273,10 +279,16 @@ fun TimetableScreen(
                 title = "课表暂时无法加载",
                 message = state.message,
                 modifier = Modifier.fillMaxSize().padding(contentPadding),
+                // 这是本机数据读取失败，不是教务同步失败：重新订阅本地数据流即可，
+                // 不去请求教务，也不扩大原来的数据范围。
+                action = {
+                    LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
+                },
             )
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
                 syncState = syncState,
+                onRetrySync = viewModel::refresh,
                 onSelectWeek = viewModel::selectWeek,
                 onEmptyCellClick = { date, period -> editorDraft = draftForCell(date, period) },
                 onItemClick = { item ->
@@ -421,6 +433,7 @@ private fun TimetableWeatherTitle(
 private fun TimetableScreenContent(
     state: TimetableUiState.Loaded,
     syncState: TimetableSyncState,
+    onRetrySync: () -> Unit,
     onSelectWeek: (Int) -> Unit,
     onEmptyCellClick: (LocalDate, Int) -> Unit,
     onItemClick: (TimetableGridItem) -> Unit,
@@ -475,7 +488,7 @@ private fun TimetableScreenContent(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).testTag("timetable-week"),
                 )
                 Text(
                     text = formatWeekRange(visiblePage.weekRange.startDate),
@@ -497,13 +510,13 @@ private fun TimetableScreenContent(
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
             }
         }
-        TimetableSyncBanner(syncState = syncState, onConsume = onConsumeSync)
+        TimetableSyncBanner(syncState = syncState, onRetry = onRetrySync, onConsume = onConsumeSync)
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .clipToBounds(),
+                .clipToBounds().testTag("timetable-pager"),
             key = { state.pages[it].week },
         ) { page ->
             TimetableGrid(
@@ -521,26 +534,60 @@ private fun TimetableScreenContent(
 }
 
 @Composable
-private fun TimetableSyncBanner(syncState: TimetableSyncState, onConsume: () -> Unit) {
-    val message = when (syncState) {
-        is TimetableSyncState.Success -> if (syncState.count == 0) {
-            "教务已连接；学校暂未公布或尚未安排本学期课表"
-        } else {
-            "同步成功：${syncState.count} 门课程"
+private fun TimetableSyncBanner(
+    syncState: TimetableSyncState,
+    onRetry: () -> Unit,
+    onConsume: () -> Unit,
+) {
+    when (syncState) {
+        is TimetableSyncState.Success -> {
+            LeafyStatusBanner(
+                message = if (syncState.count == 0) {
+                    "教务已连接；学校暂未公布或尚未安排本学期课表"
+                } else {
+                    "同步成功：${syncState.count} 门课程"
+                },
+                isError = false,
+                modifier = Modifier.padding(top = LeafySpacing.tiny),
+            )
+            // 成功提示可以短暂出现后自动收起。
+            LaunchedEffect(syncState) {
+                delay(3_000)
+                onConsume()
+            }
         }
-        is TimetableSyncState.Error -> "同步失败：${syncState.message}"
-        else -> null
-    }
-    if (message != null) {
-        LeafyStatusBanner(
-            message = message,
-            isError = syncState is TimetableSyncState.Error,
+        // 失败一直留在屏幕上，直到用户重试、同步成功或主动关闭。
+        is TimetableSyncState.Error -> LeafyStatusBanner(
+            message = "同步失败：${syncState.message}",
+            isError = true,
             modifier = Modifier.padding(top = LeafySpacing.tiny),
+            actionLabel = "重试",
+            onAction = onRetry,
+            onDismiss = onConsume,
         )
-        LaunchedEffect(syncState) {
-            delay(3_000)
-            onConsume()
-        }
+        TimetableSyncState.Idle, TimetableSyncState.Syncing -> Unit
+    }
+}
+
+/**
+ * 课表学校同步与天气入口依赖的身份能力，由根导航壳注入。
+ * 页面不自行读取全局身份状态，截图测试可以直接构造需要的组合。
+ */
+data class TimetableIdentity(
+    val signedOut: Boolean,
+    val isGuest: Boolean,
+    val canSyncFromSchool: Boolean,
+) {
+    companion object {
+        /**
+         * 未登录：没有任何校园能力，不授予学校同步和天气请求权限。
+         * 默认值必须是这个安全组合，不能默认授予教务同步能力。
+         */
+        fun signedOut(): TimetableIdentity = TimetableIdentity(
+            signedOut = true,
+            isGuest = false,
+            canSyncFromSchool = false,
+        )
     }
 }
 
@@ -596,30 +643,3 @@ private fun formatWeekRange(start: LocalDate): String {
 }
 
 private val shortDateFormatter = DateTimeFormatter.ofPattern("M/d")
-
-private val scheduleDraftSaver = androidx.compose.runtime.saveable.Saver<ScheduleEventDraft?, List<String>>(
-    save = { draft ->
-        draft?.let {
-            listOf(
-                it.id.orEmpty(),
-                it.title,
-                it.date.toString(),
-                it.startsAt.toString(),
-                it.endsAt.toString(),
-                it.location,
-                it.note,
-            )
-        }
-    },
-    restore = { values ->
-        ScheduleEventDraft(
-            id = values[0].ifBlank { null },
-            title = values[1],
-            date = LocalDate.parse(values[2]),
-            startsAt = LocalTime.parse(values[3]),
-            endsAt = LocalTime.parse(values[4]),
-            location = values[5],
-            note = values[6],
-        )
-    },
-)

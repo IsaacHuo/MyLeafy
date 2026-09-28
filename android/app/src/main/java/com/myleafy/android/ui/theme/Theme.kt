@@ -11,11 +11,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 private val LightColorScheme = lightColorScheme(
-    primary = LeafyGreen,
-    onPrimary = LeafyGreenTextOnAccent,
+    primary = Color(0xFF49643B),
+    onPrimary = Color.White,
     primaryContainer = LeafyGreenSoft,
     onPrimaryContainer = LeafyGreenTextOnAccent,
-    secondary = LeafyGreenEmphasis,
+    secondary = Color(0xFF49643B),
     onSecondary = Color.White,
     secondaryContainer = LeafyGreenSoft,
     onSecondaryContainer = LeafyGreenTextOnAccent,
@@ -23,7 +23,7 @@ private val LightColorScheme = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFEDE5F3),
     onTertiaryContainer = Color(0xFF2A2430),
-    background = Color(0xFFF7F8F5),
+    background = Color(0xFFF5F5F7),
     onBackground = Color(0xFF1B1C1A),
     surface = Color.White,
     onSurface = Color(0xFF1B1C1A),
@@ -62,7 +62,7 @@ private val DarkColorScheme = darkColorScheme(
     onTertiary = Color(0xFF382D43),
     tertiaryContainer = Color(0xFF4F435A),
     onTertiaryContainer = Color(0xFFEEDDFB),
-    background = Color(0xFF121310),
+    background = Color(0xFF121214),
     onBackground = Color(0xFFE3E4DF),
     surface = Color(0xFF1A1C18),
     onSurface = Color(0xFFE3E4DF),
@@ -80,28 +80,28 @@ private val DarkColorScheme = darkColorScheme(
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
     surfaceBright = Color(0xFF383A35),
-    surfaceDim = Color(0xFF121310),
+    surfaceDim = Color(0xFF121214),
     surfaceContainerLowest = Color(0xFF0D0F0C),
     surfaceContainerLow = Color(0xFF1A1C18),
-    surfaceContainer = Color(0xFF1E201C),
-    surfaceContainerHigh = Color(0xFF282A26),
+    surfaceContainer = Color(0xFF202023),
+    surfaceContainerHigh = Color(0xFF2B2B2F),
     surfaceContainerHighest = Color(0xFF333531),
 )
 
 private val LightSurfaces = LeafySurfaceColors(
-    page = Color(0xFFF7F8F5),
-    grouped = Color(0xFFF1F4EE),
+    page = Color(0xFFF5F5F7),
+    grouped = Color(0xFFF0F0F3),
     content = Color.White,
-    elevated = Color(0xFFFBFCF9),
+    elevated = Color(0xFFFCFCFD),
     modal = Color.White,
     accentSoft = LeafyGreenSoft,
 )
 
 private val DarkSurfaces = LeafySurfaceColors(
-    page = Color(0xFF121310),
-    grouped = Color(0xFF171915),
-    content = Color(0xFF1E201C),
-    elevated = Color(0xFF282A26),
+    page = Color(0xFF121214),
+    grouped = Color(0xFF18181B),
+    content = Color(0xFF202023),
+    elevated = Color(0xFF2B2B2F),
     modal = Color(0xFF20221E),
     accentSoft = Color(0xFF2D4A22),
 )

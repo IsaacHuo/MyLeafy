@@ -19,7 +19,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -85,11 +85,15 @@ fun TimetableSharingScreen(
             }
             state.error?.let { LeafyStatusBanner(it, isError = true) }
             state.message?.let { LeafyStatusBanner(it, isError = false) }
-            if (state.loading) {
+            if (state.loading && !state.loaded) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else if (!state.loaded && state.error != null) {
+                LeafyPrimaryButton(onClick = viewModel::refresh) { Text("重试") }
             } else if (section == SharingSection.MINE) {
+                if (state.loading) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
                 MySharingContent(state, viewModel, Modifier.weight(1f))
             } else {
+                if (state.loading) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
                 ReceivedSharingContent(state, viewModel, Modifier.weight(1f))
             }
         }
@@ -99,6 +103,7 @@ fun TimetableSharingScreen(
 @Composable
 private fun MySharingContent(state: TimetableSharingUiState, viewModel: TimetableSharingViewModel, modifier: Modifier) {
     val context = LocalContext.current
+    val stopSharing = sharingConfirmation("停止共享课表？", "这会撤销所有同学的查看权限，并让已生成的邀请码立即失效。已发布的课表仍只对你自己可见。", viewModel::stopSharing)
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(vertical = LeafySpacing.compact),
@@ -130,6 +135,7 @@ private fun MySharingContent(state: TimetableSharingUiState, viewModel: Timetabl
                         LeafyActionIconButton(onClick = {
                             val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
                             clipboard.setPrimaryClip(ClipData.newPlainText("MyLeafy 课表邀请码", code))
+                            android.widget.Toast.makeText(context, "邀请码已复制", android.widget.Toast.LENGTH_SHORT).show()
                         }) { Icon(Icons.Outlined.ContentCopy, "复制邀请码") }
                     }
                 }
@@ -140,12 +146,16 @@ private fun MySharingContent(state: TimetableSharingUiState, viewModel: Timetabl
             item { LeafyEmptyState("还没有访问成员", "生成邀请码并由同学接受后会显示在这里。", icon = Icons.Outlined.Groups) }
         } else {
             items(state.members, key = { it.id }) { member ->
+                val revoke = sharingConfirmation("撤销访问权限？", "这位成员将无法继续查看你的课表。", { viewModel.revoke(member.viewer_id) })
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("成员 ${member.viewer_id.take(8)}", modifier = Modifier.weight(1f))
-                    LeafyTextButton(onClick = { viewModel.revoke(member.viewer_id) }, enabled = !state.mutating) { Text("撤销") }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("访问成员 ${state.members.indexOf(member) + 1}")
+                        Text("加入于 ${member.created_at.take(10)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    LeafyTextButton(onClick = revoke, enabled = !state.mutating) { Text("撤销") }
                 }
             }
-            item { LeafySecondaryButton(onClick = viewModel::stopSharing, enabled = !state.mutating, modifier = Modifier.fillMaxWidth()) { Text("停止全部共享") } }
+            item { LeafySecondaryButton(onClick = stopSharing, enabled = !state.mutating, modifier = Modifier.fillMaxWidth()) { Text("停止共享") } }
         }
     }
 }
@@ -158,7 +168,7 @@ private fun ReceivedSharingContent(state: TimetableSharingUiState, viewModel: Ti
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
         item {
-            OutlinedTextField(
+            LeafyTextField(
                 value = state.acceptCode,
                 onValueChange = viewModel::setAcceptCode,
                 label = { Text("12 位邀请码") },
@@ -178,15 +188,32 @@ private fun ReceivedSharingContent(state: TimetableSharingUiState, viewModel: Ti
 
 @Composable
 private fun SharedSnapshotCard(snapshot: SharedTimetableSnapshotDto, onLeave: () -> Unit) {
+    val leave = sharingConfirmation("离开共享课表？", "离开后将无法查看，需要新的邀请码才能重新加入。", onLeave)
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable(snapshot.id) { androidx.compose.runtime.mutableStateOf(false) }
     Surface(color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
         Column(modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
-            Text("共享者 ${snapshot.owner_id.take(8)}", style = MaterialTheme.typography.titleMedium)
+            Text("共享课表", style = MaterialTheme.typography.titleMedium)
             Text("${snapshot.semester_id} · ${snapshot.course_count} 门课程", style = MaterialTheme.typography.bodySmall)
-            snapshot.courses.sortedWith(compareBy({ it.day_of_week }, { it.duration.firstOrNull() ?: 0 })).take(8).forEach { course ->
+            snapshot.courses.sortedWith(compareBy({ it.day_of_week }, { it.duration.firstOrNull() ?: 0 })).take(if (expanded) Int.MAX_VALUE else 8).forEach { course ->
                 Text("周${course.day_of_week} ${course.duration.joinToString("-")}节 · ${course.course_name} · ${course.location.ifBlank { course.room }}", style = MaterialTheme.typography.bodySmall)
             }
-            if (snapshot.courses.size > 8) Text("另有 ${snapshot.courses.size - 8} 门课程", style = MaterialTheme.typography.bodySmall)
-            LeafyTextButton(onClick = onLeave, modifier = Modifier.align(Alignment.End)) { Text("离开共享") }
+            if (snapshot.courses.size > 8) LeafyTextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起课程" else "查看全部 ${snapshot.courses.size} 门课程") }
+            LeafyTextButton(onClick = leave, modifier = Modifier.align(Alignment.End)) { Text("离开共享") }
         }
     }
+}
+
+@Composable
+private fun sharingConfirmation(title: String, message: String, onConfirm: () -> Unit): () -> Unit {
+    var visible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (visible) {
+        com.myleafy.android.ui.components.LeafyAlertDialog(
+            onDismissRequest = { visible = false },
+            title = { Text(title) },
+            text = { Text(message) },
+            confirmButton = { LeafyTextButton(onClick = { visible = false; onConfirm() }) { Text("确认", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { LeafyTextButton(onClick = { visible = false }) { Text("取消") } },
+        )
+    }
+    return { visible = true }
 }

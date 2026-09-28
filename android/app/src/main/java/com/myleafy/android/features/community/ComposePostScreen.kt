@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
@@ -30,7 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,18 +87,23 @@ fun ComposePostScreen(
         LaunchedEffect(Unit) { onPublished() }
     }
 
-    LeafySecondaryScaffold(title = "发帖", onBack = onBack, modifier = modifier) { contentModifier ->
+    val requestExit = com.myleafy.android.ui.components.rememberEditorExit(
+        uiState.title.isNotBlank() || uiState.body.isNotBlank() || uiState.category.isNotBlank() || uiState.images.isNotEmpty() || uiState.isAnonymous,
+        uiState.isSubmitting, onBack,
+    )
+    LeafySecondaryScaffold(title = "发帖", onBack = requestExit, modifier = modifier) { contentModifier ->
         Box(modifier = contentModifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .widthIn(max = LeafyComponentSize.formMaxWidth)
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .imePadding()
                     .padding(horizontal = LeafySpacing.page),
             ) {
                 Spacer(modifier = Modifier.height(LeafySpacing.micro))
-                OutlinedTextField(
+                LeafyTextField(
+                    enabled = !uiState.isSubmitting,
                     value = uiState.title,
                     onValueChange = viewModel::updateTitle,
                     modifier = Modifier.fillMaxWidth(),
@@ -106,7 +113,8 @@ fun ComposePostScreen(
                     keyboardActions = KeyboardActions(onNext = { categoryFocus.requestFocus() }),
                 )
                 Spacer(modifier = Modifier.height(LeafySpacing.compact))
-                OutlinedTextField(
+                LeafyTextField(
+                    enabled = !uiState.isSubmitting,
                     value = uiState.category,
                     onValueChange = viewModel::updateCategory,
                     modifier = Modifier.fillMaxWidth().focusRequester(categoryFocus),
@@ -116,7 +124,8 @@ fun ComposePostScreen(
                     keyboardActions = KeyboardActions(onNext = { bodyFocus.requestFocus() }),
                 )
                 Spacer(modifier = Modifier.height(LeafySpacing.compact))
-                OutlinedTextField(
+                LeafyTextField(
+                    enabled = !uiState.isSubmitting,
                     value = uiState.body,
                     onValueChange = viewModel::updateBody,
                     modifier = Modifier.fillMaxWidth().focusRequester(bodyFocus),
@@ -145,7 +154,8 @@ fun ComposePostScreen(
                                 )
                                 IconButton(
                                     onClick = { viewModel.removeImage(image.id) },
-                                    modifier = Modifier.align(Alignment.TopEnd).size(32.dp),
+                                    enabled = !uiState.isSubmitting,
+                                    modifier = Modifier.align(Alignment.TopEnd).size(48.dp).background(Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape),
                                 ) {
                                     Icon(Icons.Outlined.Close, contentDescription = "移除图片", tint = Color.White)
                                 }
@@ -167,10 +177,17 @@ fun ComposePostScreen(
                     Text("添加图片", modifier = Modifier.padding(start = LeafySpacing.micro))
                 }
                 Spacer(modifier = Modifier.height(LeafySpacing.micro))
-                androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().toggleable(
+                        value = uiState.isAnonymous, enabled = !uiState.isSubmitting,
+                        role = androidx.compose.ui.semantics.Role.Checkbox,
+                        onValueChange = { viewModel.toggleAnonymous() },
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Checkbox(
                         checked = uiState.isAnonymous,
-                        onCheckedChange = { viewModel.toggleAnonymous() },
+                        onCheckedChange = null,
                     )
                     Text(
                         text = "匿名发布",
@@ -191,7 +208,8 @@ fun ComposePostScreen(
                     enabled = !uiState.isSubmitting,
                 ) {
                     if (uiState.isSubmitting) {
-                        CircularProgressIndicator(modifier = Modifier.height(LeafyIconSize.compact), strokeWidth = LeafyStroke.progress)
+                        CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.compact), strokeWidth = LeafyStroke.progress)
+                        Text("发布中…", modifier = Modifier.padding(start = LeafySpacing.micro))
                     } else {
                         Text("发布")
                     }

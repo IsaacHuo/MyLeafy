@@ -34,13 +34,23 @@ object LeafyGesture {
 }
 
 object LeafyTimetableTokens {
-    val axisWidth = 40.dp
+    /** 竖排时间轴的最小宽度，实际宽度由系统字体测量得出。 */
+    val axisWidth = 32.dp
     val minimumPeriodRowHeight = 1.dp
     val maximumPeriodRowHeight = 56.dp
     val gridGap = 2.dp
     val cellCornerRadius = 8.dp
     val dateIndicatorSize = 28.dp
     val currentTimeIndicator = 2.dp
+
+    /**
+     * 空白格只作为对齐参照，不再和课程块争夺注意力。
+     * 无自定义背景时空格与页面同色，只留一条更淡的描边画出网格；
+     * 有照片/纯色背景时才用半透明填充压住背景。
+     */
+    const val emptyCellBorderAlpha = 0.18f
+    const val emptyCellFillAlphaOnBackground = 0.22f
+    const val emptyCellBorderAlphaOnBackground = 0.25f
 }
 
 object LeafyAdaptiveTokens {
@@ -65,9 +75,11 @@ object LeafyComponentSize {
     val topBarCompact = 48.dp
     val minimumTouchTarget = 48.dp
     val featureIconContainer = 40.dp
-    val settingsIconContainer = 48.dp
-    val settingsRowMinHeight = 64.dp
+    val settingsIconContainer = 32.dp
+    val settingsRowMinHeight = 56.dp
     val toolRowMinHeight = 72.dp
+    /** 校园紧凑入口行：24dp 图标 + 标题，行高最低 64dp，大字体自然增高。 */
+    val compactToolRowMinHeight = 64.dp
     val contentMaxWidth = 720.dp
     val formMaxWidth = 420.dp
     val floatingActionClearance = 96.dp
@@ -78,8 +90,8 @@ object LeafyComponentSize {
 object LeafyMotion {
     const val quick = 120
     const val standard = 220
-    const val emphasized = 320
-    val easing = FastOutSlowInEasing
+    const val emphasized = 240
+    val easing = androidx.compose.animation.core.CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 }
 
 @Immutable
