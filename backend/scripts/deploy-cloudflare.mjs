@@ -2,7 +2,7 @@ import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
-import {deploymentTarget,currentDeployment,platform} from './deployment-platform.mjs';
+import {deploymentTarget,currentDeployment,platform,waitForDeploymentJSON} from './deployment-platform.mjs';
 
 const environment=process.argv[2],sha=process.env.RELEASE_COMMIT,project=process.env.CLOUDFLARE_PAGES_PROJECT;
 assert(['staging','production'].includes(environment)&&/^[a-f0-9]{40}$/.test(sha??'')&&/^[a-z0-9-]+$/.test(project??''),'Explicit environment, commit and Pages project are required');
@@ -32,8 +32,7 @@ wrangle(['d1','migrations','apply',`myleafy-${environment}`,'--env',environment,
 const siteOrigin=target.site;
 wrangle(['deploy','--env',environment,'--var',`DEPLOY_COMMIT:${sha}`,'--var',`SITE_ORIGIN:${siteOrigin}`]);
 const api=target.api;
-const health=await fetch(api+'/health',{signal:AbortSignal.timeout(20000)});assert(health.ok);
-const data=await health.json();assert.equal(data.status,'ok');assert.equal(data.environment,environment);assert.equal(data.commit,sha);report.checks.push('worker-health-and-commit');
+await waitForDeploymentJSON(api+'/health',{status:'ok',environment,commit:sha});report.checks.push('worker-health-and-commit');
 if(environment==='staging'){
   command(process.execPath,['backend/scripts/staging-smoke.mjs']);report.checks.push('isolated-community-smoke');
 }
@@ -42,7 +41,7 @@ report.pagesOutput=wrangle(['pages','deploy','dist','--config',`wrangler.${envir
 report.current=await currentDeployment(target);
 const deployedPage=await platform(`pages/projects/${project}/deployments/${report.current.pagesDeployment}`);
 assert.equal(deployedPage.deployment_trigger.metadata.commit_hash,sha);
-const site=await fetch(siteOrigin+'/release.json',{signal:AbortSignal.timeout(20000)});assert(site.ok);assert.deepEqual(await site.json(),{commit:sha,environment});report.checks.push('site-commit');
+await waitForDeploymentJSON(siteOrigin+'/release.json',{commit:sha,environment});report.checks.push('site-commit');
 const denied=await fetch(siteOrigin+'/api/admin/me',{headers:{Origin:siteOrigin,'X-Leafy-Admin-CSRF':'1'},signal:AbortSignal.timeout(20000)});assert.equal(denied.status,401);report.checks.push('admin-unauthenticated-denied');
 const latest=await fetch(api+'/v1/releases/android/latest',{signal:AbortSignal.timeout(20000)});assert(latest.ok);const catalogue=await latest.json();assert('release' in catalogue);report.checks.push('android-catalogue');
 const websiteLatest=await fetch(siteOrigin+'/api/releases/android/latest',{signal:AbortSignal.timeout(20000)});assert(websiteLatest.ok);assert.deepEqual(await websiteLatest.json(),catalogue);report.checks.push('website-android-environment-binding');

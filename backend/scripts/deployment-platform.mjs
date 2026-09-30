@@ -29,3 +29,25 @@ export async function currentDeployment(target){
   assert(versions?.length===1&&versions[0].percentage===100,'Expected one active Worker version');
   return {workerVersion:versions[0].version_id,pagesDeployment:project.canonical_deployment?.id??null,siteOrigin:target.site};
 }
+
+// Deploy/rollback completion can precede propagation to the HTTP edge we read.
+export async function waitForDeploymentJSON(url,expected,{attempts=20,intervalMs=3000}={}){
+  let observed='no response';
+  for(let attempt=0;attempt<attempts;attempt++){
+    const response=await fetch(url,{signal:AbortSignal.timeout(5000)});
+    observed=`HTTP ${response.status}`;
+    if(response.ok){
+      const data=await response.json();
+      assert(!data.environment||data.environment===expected.environment,'Deployment environment mismatch');
+      assert(data.status!=='error','Deployed service reported unhealthy');
+      if(Object.entries(expected).every(([key,value])=>data[key]===value))return data;
+      observed=`commit ${data.commit??'unavailable'}`;
+    }else{
+      await response.body?.cancel();
+      assert([404,502,503,504].includes(response.status),`Deployment verification: ${observed}`);
+    }
+    console.log(JSON.stringify({event:'deployment_propagation_pending',url,attempt:attempt+1,observed}));
+    if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,intervalMs));
+  }
+  throw new Error(`Deployment did not propagate: ${url}, expected commit ${expected.commit}, observed ${observed}`);
+}
