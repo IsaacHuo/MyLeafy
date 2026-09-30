@@ -11,7 +11,7 @@ npm test
 npm run build
 ```
 
-Vite 开发服务器适合公开页面或 mock API 下的后台界面。`npm run dev:pages` 会构建网站并启动 Pages Functions；真实后台请求还需要绑定正在运行的 Worker。未绑定时代理明确返回服务不可用，不回退到旧 Supabase。
+Vite 开发服务器适合公开页面或 mock API 下的后台界面。`npm run build` 同时检查类型、静态网站和 Pages Functions 编译。`npm run dev:pages` 会构建网站并启动 Pages Functions；真实后台请求还需要绑定正在运行的 Worker。未绑定时代理明确返回服务不可用，不回退到旧 Supabase。
 
 ## 服务边界
 

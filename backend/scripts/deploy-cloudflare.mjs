@@ -37,7 +37,10 @@ if(environment==='staging'){
   command(process.execPath,['backend/scripts/staging-smoke.mjs']);report.checks.push('isolated-community-smoke');
 }
 writeFileSync(resolve(root,'site/dist/release.json'),JSON.stringify({commit:sha,environment})+'\n');
-report.pagesOutput=wrangle(['pages','deploy','dist','--config',`wrangler.${environment}.jsonc`,'--project-name',project,'--branch','main','--commit-hash',sha],resolve(root,'site'));
+// Pages rejects --config; select the checked-in config using Wrangler's supported redirect.
+mkdirSync(resolve(root,'site/.wrangler/deploy'),{recursive:true});
+writeFileSync(resolve(root,'site/.wrangler/deploy/config.json'),JSON.stringify({configPath:`../../wrangler.${environment}.jsonc`})+'\n');
+report.pagesOutput=wrangle(['pages','deploy','dist','--project-name',project,'--branch','main','--commit-hash',sha],resolve(root,'site'));
 report.current=await currentDeployment(target);
 const deployedPage=await platform(`pages/projects/${project}/deployments/${report.current.pagesDeployment}`);
 assert.equal(deployedPage.deployment_trigger.metadata.commit_hash,sha);
