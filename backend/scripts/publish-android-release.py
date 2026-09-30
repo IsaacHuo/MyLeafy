@@ -15,7 +15,7 @@ def gh(*arguments):
 
 
 def request(url, method='GET', data=None, token=None, headers=None):
-    values = dict(headers or {})
+    values = {'User-Agent':'MyLeafyReleasePublisher/1.0', **dict(headers or {})}
     if token:
         values['Authorization'] = f'Bearer {token}'
     try:

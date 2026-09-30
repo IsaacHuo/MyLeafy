@@ -54,9 +54,11 @@ jobs:
             APK_NAME="MyLeafy-Android-${VERSION_INPUT}.apk"
             if jq -e --arg name "$APK_NAME" '.assets | any(.name == $name)' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
               echo "reuse=true" >> "$GITHUB_OUTPUT"
-              gh release download "$TAG" --pattern "$APK_NAME" --dir "$RUNNER_TEMP"
+              APK_ASSET_ID="$(jq -r --arg name "$APK_NAME" '.assets[] | select(.name == $name) | .id' "$RUNNER_TEMP/existing-release.json")"
+              gh api "repos/$GITHUB_REPOSITORY/releases/assets/$APK_ASSET_ID" -H 'Accept: application/octet-stream' > "$RUNNER_TEMP/$APK_NAME"
               if jq -e --arg name "$APK_NAME-build-info.txt" '.assets | any(.name == $name)' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
-                gh release download "$TAG" --pattern "$APK_NAME-build-info.txt" --dir "$RUNNER_TEMP"
+                MANIFEST_ASSET_ID="$(jq -r --arg name "$APK_NAME-build-info.txt" '.assets[] | select(.name == $name) | .id' "$RUNNER_TEMP/existing-release.json")"
+                gh api "repos/$GITHUB_REPOSITORY/releases/assets/$MANIFEST_ASSET_ID" -H 'Accept: application/octet-stream' > "$RUNNER_TEMP/$APK_NAME-build-info.txt"
               fi
             fi
           elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
@@ -73,7 +75,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       - name: Verify tests and lint
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug
+        run: |
+          python -m unittest discover -s ../backend/scripts -p 'test_*.py'
+          ./gradlew :app:testDebugUnitTest :app:lintDebug
 
       - name: Restore release key
         if: steps.meta.outputs.reuse != 'true'
