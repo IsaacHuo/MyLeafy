@@ -14,7 +14,7 @@ export function DownloadSection() {
   const [release, setRelease] = useState<{versionName:string;githubReleaseUrl:string}|null>(null);
   useEffect(()=>{
     const controller=new AbortController();
-    fetch('https://api.myleafy.space/v1/releases/android/latest',{signal:controller.signal})
+    fetch('/api/releases/android/latest',{signal:controller.signal})
       .then(response=>{if(!response.ok)throw new Error('版本信息暂不可用');return response.json();})
       .then(body=>setRelease(body.release)).catch(()=>setRelease(null));
     return ()=>controller.abort();

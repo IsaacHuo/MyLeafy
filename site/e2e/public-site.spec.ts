@@ -14,10 +14,20 @@ for (const width of [320, 390, 768, 1440]) {
     await page.goto("/");
     const hero = page.locator(".home-hero");
     await expect(hero.getByRole("link", { name: "App Store 下载" })).toHaveAttribute("href", "https://apps.apple.com/cn/app/myleafy/id6763968535");
-    await expect(hero.getByRole("link", { name: "Android 下载" })).toHaveAttribute("href", "https://api.myleafy.space/v1/releases/android/download");
+    await expect(hero.getByRole("link", { name: "Android 下载" })).toHaveAttribute("href", "/api/releases/android/download");
     await expect(hero.getByRole("link", { name: "Android 下载" })).toBeInViewport();
   });
 }
+
+test('website release details use the local environment route',async({page})=>{
+  const productionRequests:string[]=[];
+  page.on('request',request=>{if(request.url().startsWith('https://api.myleafy.space/'))productionRequests.push(request.url());});
+  await page.route('**/api/releases/android/latest',route=>route.fulfill({json:{release:{versionName:'9.9.9',githubReleaseUrl:'https://github.com/IsaacHuo/MyLeafy/releases/tag/test-only'}}}));
+  await page.goto('/');
+  await expect(page.locator('.download-meta')).toContainText('Android 9.9.9');
+  await expect(page.getByRole('link',{name:'SHA-256 校验文件'})).toHaveAttribute('href','/api/releases/android/download?file=checksum');
+  expect(productionRequests).toEqual([]);
+});
 
 test("tabs respond to keyboard and rapid switches without changing section height", async ({ page }) => {
   await page.goto("/#explore");

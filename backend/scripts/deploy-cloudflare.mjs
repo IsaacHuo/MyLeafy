@@ -44,6 +44,7 @@ const deployedPage=await platform(`pages/projects/${project}/deployments/${repor
 assert.equal(deployedPage.deployment_trigger.metadata.commit_hash,sha);
 const site=await fetch(siteOrigin+'/release.json',{signal:AbortSignal.timeout(20000)});assert(site.ok);assert.deepEqual(await site.json(),{commit:sha,environment});report.checks.push('site-commit');
 const denied=await fetch(siteOrigin+'/api/admin/me',{headers:{Origin:siteOrigin,'X-Leafy-Admin-CSRF':'1'},signal:AbortSignal.timeout(20000)});assert.equal(denied.status,401);report.checks.push('admin-unauthenticated-denied');
-const latest=await fetch(api+'/v1/releases/android/latest',{signal:AbortSignal.timeout(20000)});assert(latest.ok);assert('release' in await latest.json());report.checks.push('android-catalogue');
+const latest=await fetch(api+'/v1/releases/android/latest',{signal:AbortSignal.timeout(20000)});assert(latest.ok);const catalogue=await latest.json();assert('release' in catalogue);report.checks.push('android-catalogue');
+const websiteLatest=await fetch(siteOrigin+'/api/releases/android/latest',{signal:AbortSignal.timeout(20000)});assert(websiteLatest.ok);assert.deepEqual(await websiteLatest.json(),catalogue);report.checks.push('website-android-environment-binding');
 report.success=true;report.completedAt=new Date().toISOString();writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify({environment,commit:sha,success:true,checks:report.checks}));

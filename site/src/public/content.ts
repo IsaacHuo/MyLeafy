@@ -5,9 +5,9 @@ export const downloads = {
   },
   android: {
     version: "",
-    url: "https://api.myleafy.space/v1/releases/android/download",
+    url: "/api/releases/android/download",
     releaseUrl: "https://github.com/IsaacHuo/MyLeafy/releases",
-    checksumUrl: "https://api.myleafy.space/v1/releases/android/download?file=checksum",
+    checksumUrl: "/api/releases/android/download?file=checksum",
     requirement: "Android 10 或更新版本",
   },
 } as const;

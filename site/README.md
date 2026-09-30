@@ -17,7 +17,7 @@ Vite 开发服务器适合公开页面或 mock API 下的后台界面。`npm run
 
 - 浏览器只调用同域 `/api/admin/*`。管理 token 保存在 HttpOnly、Secure、SameSite Cookie，写入校验 Origin 和 CSRF。
 - `MYLEAFY_ADMIN_API` 服务绑定连接 Worker 的 `AdminAPI` entrypoint。管理 API 不在 Worker 的公开 HTTP 路由暴露。
-- `MYLEAFY_PUBLIC_API` 服务绑定连接同一 Worker 的默认入口，提供分享预览与可访问的文件。
+- `MYLEAFY_PUBLIC_API` 服务绑定连接同一 Worker 的默认入口，提供分享预览与可访问的文件。官网下载区通过同域 `/api/releases/android/{latest,download}` 读取此绑定的发行信息；测试网站不会调用生产下载接口。
 - 生产两项绑定均指向 `myleafy-api-production`；隔离预览环境应指向 `myleafy-api-staging`。
 - 网站运行时无需 Supabase URL、publishable key 或旧 `ADMIN_PROXY_SECRET`。数据库、邮件和签名密钥仅配置在 Worker Secrets，禁止以 `VITE_` 变量注入浏览器。
 

@@ -361,7 +361,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 
 iOS CI 固定 macOS 26 / Xcode 26.6，保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
 
-Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
+Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
 
 iOS `release.yml` 仅在 Apple 正式发布后记录源码、版本/build 与 annotated tag，不生成未签名归档。完整操作入口为 `docs/operations/delivery.md`。
 
