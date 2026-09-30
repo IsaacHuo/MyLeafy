@@ -30,6 +30,14 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def find_release(repository, tag):
+    # GitHub's by-tag endpoint only returns published releases, not our resumable draft.
+    pages = json.loads(gh('api', f'repos/{repository}/releases', '--paginate', '--slurp'))
+    matches = [release for page in pages for release in page if release['tag_name'] == tag]
+    assert len(matches) <= 1, 'Multiple releases use the same tag'
+    return matches[0] if matches else None
+
+
 def publish(apk: Path, manifest: Path, origin: str):
     info = json.loads(manifest.read_text(encoding='utf-8'))
     token = os.environ['MYLEAFY_RELEASE_PUBLISH_TOKEN']
@@ -43,11 +51,11 @@ def publish(apk: Path, manifest: Path, origin: str):
     notes = apk.parent / 'release-notes.md'
     notes.write_text(info['releaseNotes'], encoding='utf-8')
     files = [apk, checksum, manifest]
-    try:
-        release = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
-    except subprocess.CalledProcessError:
+    release = find_release(repository, tag)
+    if release is None:
         gh('release', 'create', tag, '--draft', '--target', info['commit'], '--title', f"MyLeafy Android {info['versionName']}", '--notes-file', str(notes))
-        release = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
+        release = find_release(repository, tag)
+        assert release is not None, 'Created draft is missing'
     assert release['target_commitish'] == info['commit'], 'Release tag belongs to another commit'
     assert release['body'].strip() == info['releaseNotes'].strip(), 'Release notes differ'
     present = {asset['name'] for asset in release['assets']}
@@ -87,7 +95,7 @@ def publish(apk: Path, manifest: Path, origin: str):
             if opened:
                 gh('release', 'edit', tag, '--draft=true')
             raise
-    published = json.loads(gh('api', f'repos/{repository}/releases/tags/{tag}'))
+    published = json.loads(gh('api', f"repos/{repository}/releases/{release['id']}"))
     latest = json.loads(request(f"{origin}/v1/releases/android/latest?package={info['packageName']}"))['release']
     assert not published['draft'] and latest['versionCode'] == info['versionCode'] and latest['sha256'] == info['sha256']
     print(f"Published {tag}: Cloudflare and GitHub verified identical APK ({info['sha256']}).")

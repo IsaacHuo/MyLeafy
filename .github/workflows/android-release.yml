@@ -43,7 +43,8 @@ jobs:
           EXPECTED="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)"
           test "$VERSION_INPUT" = "$EXPECTED"
           TAG="android-v${VERSION_INPUT}"
-          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --slurp | jq --arg tag "$TAG" '[.[][] | select(.tag_name == $tag)] | if length > 1 then error("Duplicate release tag") else (first // null) end' > "$RUNNER_TEMP/existing-release.json"
+          if jq -e '. != null' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
             test "$(jq -r '.target_commitish' "$RUNNER_TEMP/existing-release.json")" = "$GITHUB_SHA"
             APK_NAME="MyLeafy-Android-${VERSION_INPUT}.apk"
             if jq -e --arg name "$APK_NAME" '.assets | any(.name == $name)' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
