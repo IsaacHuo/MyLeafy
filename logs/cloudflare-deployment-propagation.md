@@ -9,3 +9,5 @@
 另外，固定版本 Wrangler 4.110.0 的 Pages deploy 不支持 `--config` 自定义路径，即使全局帮助包含这个参数。使用 Cloudflare 支持的 [配置重定向](https://developers.cloudflare.com/workers/wrangler/configuration/#generated-wrangler-configuration)：项目 `.wrangler/deploy/config.json` 的 `configPath` 相对该文件定位所选配置，再运行不含 `--config` 的 Pages deploy。网站 build 同时编译 Pages Functions，防止仅有 Vite 构建成功却遗漏函数编译问题。
 
 自动 staging 的变化基线不能只读 Worker `/health.commit`：网站失败时 Worker 已更新，再次运行会误判“无变化”。`stagingBase` 只在 Worker 与网站同属 staging 且源码提交一致时使用该基线；缺少网站版本标识或两者不同则重新准备。错误环境及权限错误仍直接失败。
+
+新增 Pages Function 还必须进入 `site/public/_routes.json` 的 include。只编译函数文件、只在 Vite 下 mock API 都无法发现遗漏：真实 Pages 会把未覆盖的 API 路径交给 SPA，返回 HTML 200。官网下载地址与路由清单现有交叉检查；部署另行比较真实网站与 Worker 的发行 JSON，防止把 HTML 或错误环境当作成功。
