@@ -4,6 +4,9 @@ import androidx.compose.runtime.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -25,7 +28,7 @@ fun UpdatePromptHost(manager: AppUpdateManager, navController: NavHostController
         AlertDialog(
             onDismissRequest = { manager.later(offered) },
             title = { Text("发现新版本 ${offered.versionName}") },
-            text = { androidx.compose.foundation.layout.Column {
+            text = { androidx.compose.foundation.layout.Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text("${"%.1f".format(offered.sizeBytes / 1048576.0)} MB")
                 Text(offered.releaseNotes)
             } },
