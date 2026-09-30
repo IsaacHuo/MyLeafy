@@ -3,10 +3,10 @@ package com.myleafy.android.features.campus
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.features.community.CommunityRepository
-import com.myleafy.android.services.supabase.CatalogRatingService
-import com.myleafy.android.services.supabase.CatalogSuggestionInsert
-import com.myleafy.android.services.supabase.RatingCatalogItemDto
-import com.myleafy.android.services.supabase.RatingCatalogKind
+import com.myleafy.android.services.cloudflare.CatalogRatingService
+import com.myleafy.android.services.cloudflare.CatalogSuggestionInsert
+import com.myleafy.android.services.cloudflare.RatingCatalogItemDto
+import com.myleafy.android.services.cloudflare.RatingCatalogKind
 
 data class CatalogRatingItem(
     val profile: RatingCatalogItemDto,

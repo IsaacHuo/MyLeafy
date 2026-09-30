@@ -10,6 +10,7 @@ import com.myleafy.android.core.data.local.GradeSummaryDao
 import com.myleafy.android.core.data.local.GradeSummaryEntity
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.network.SchoolNetworkClient
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +30,7 @@ interface AcademicRepository {
     suspend fun refresh(semesterId: String): AcademicRefreshResult
     suspend fun refreshGradesAndRankings(): AcademicRefreshResult
     suspend fun refreshExams(semesterId: String): AcademicRefreshResult
+    suspend fun refreshRankings(): AcademicRefreshResult
 }
 
 data class AcademicRefreshResult(
@@ -88,25 +90,28 @@ class LiveAcademicRepository(
 
         runCatching { client.fetchAcademicResults() }
             .onSuccess { result ->
-                gradeDao.clearAll(scopeKey)
-                gradeDao.upsertAll(
+                ensureScope(scopeKey)
+                gradeDao.replaceAll(scopeKey,
                     result.grades.map { g ->
                 GradeEntity(
                     scopeKey = scopeKey,
-                    id = "${g.term}|${g.courseName}|${g.credit}|${g.type}",
+                    id = "${g.term}|${g.courseCode}|${g.courseName}|${g.credit}|${g.examNature}|${g.score}",
                     term = g.term,
                     courseName = g.courseName,
                     credit = g.credit,
                     score = g.score,
                     type = g.type,
+                    courseCode = g.courseCode,
+                    courseAttribute = g.courseAttribute,
+                    courseCategory = g.courseCategory,
+                    examNature = g.examNature,
                 )
             },
                 )
                 gradeCount = result.grades.size
 
                 result.rankings?.let { rankings ->
-                    gradeRankingDao.clearAll(scopeKey)
-                    gradeRankingDao.upsertAll(
+                    gradeRankingDao.replaceAll(scopeKey,
                         rankings.map { ranking ->
                             GradeRankingEntity(
                                 scopeKey = scopeKey,
@@ -132,7 +137,7 @@ class LiveAcademicRepository(
                     )
                 }
             }
-            .onFailure { failures += "成绩与排名：${it.message ?: "拉取失败"}" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; failures += "成绩与排名：${it.message ?: "拉取失败"}" }
 
         return AcademicRefreshResult(
             grades = gradeCount,
@@ -149,8 +154,8 @@ class LiveAcademicRepository(
 
         runCatching { client.fetchExams(semesterId) }
             .onSuccess { exams ->
-                examDao.clearAll(scopeKey)
-                examDao.upsertAll(
+                ensureScope(scopeKey)
+                examDao.replaceAll(scopeKey,
                     exams.map { e ->
                         ExamEntity(
                             scopeKey = scopeKey,
@@ -166,7 +171,7 @@ class LiveAcademicRepository(
                 )
                 examCount = exams.size
             }
-            .onFailure { failures += "考试安排：${it.message ?: "拉取失败"}" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; failures += "考试安排：${it.message ?: "拉取失败"}" }
 
         return AcademicRefreshResult(
             grades = null,
@@ -175,4 +180,25 @@ class LiveAcademicRepository(
             failures = failures,
         )
     }
+    override suspend fun refreshRankings(): AcademicRefreshResult {
+        val scopeKey = activeAppScopeStore.current.scopeKey
+        return try {
+            val rankings = client.fetchGradeRankings()
+            ensureScope(scopeKey)
+            gradeRankingDao.replaceAll(scopeKey, rankings.map { ranking ->
+                GradeRankingEntity(scopeKey, "${ranking.term}|${ranking.rankingRange}|${ranking.rank}|${ranking.metricText}",
+                    ranking.term, ranking.rankingRange, ranking.rank, ranking.totalCount, ranking.metricText)
+            })
+            AcademicRefreshResult(null, rankings.size, null, emptyList())
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            AcademicRefreshResult(null, null, null, listOf(error.message ?: "排名刷新失败"))
+        }
+    }
+
+    private suspend fun ensureScope(scopeKey: String) {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        if (activeAppScopeStore.current.scopeKey != scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+    }
+
 }

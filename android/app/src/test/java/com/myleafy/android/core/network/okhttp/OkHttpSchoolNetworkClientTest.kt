@@ -138,7 +138,7 @@ class OkHttpSchoolNetworkClientTest {
 
     @Test
     fun fetchTimetableParsesRecords() {
-        val html = fixture("timetable_kbcontent_div.html")
+        val html = "<input name='xnxq01id' value='2025-2026-2'>" + fixture("timetable_kbcontent_div.html")
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path?.startsWith("/jsxsd/xskb/xskb_list.do") == true ->
@@ -154,11 +154,37 @@ class OkHttpSchoolNetworkClientTest {
     }
 
     @Test
+    fun timetableFollowsSchoolPostFormAndRejectsThePreviouslySelectedSemester() {
+        val requested = "2025-2026-2"
+        val initial = """<form method="post" action="/jsxsd/xskb/current.do">
+            <input name="token" value="school-value"><select name="xnxq01id">
+            <option selected value="2025-2026-1">上学期</option>
+            <option value="$requested">本学期</option></select></form>""" + fixture("timetable_kbcontent_div.html")
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path?.startsWith("/jsxsd/xskb/xskb_list.do") == true -> MockResponse().setBody(initial)
+                request.path == "/jsxsd/xskb/current.do" && request.method == "POST" -> {
+                    val body = request.body.readUtf8()
+                    assertTrue(body.contains("token=school-value"))
+                    assertTrue(body.contains("xnxq01id=$requested"))
+                    MockResponse().setBody("<input name='xnxq01id' value='$requested'>" + fixture("timetable_kbcontent_div.html"))
+                }
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+        val stages = mutableListOf<com.myleafy.android.core.network.AcademicStage>()
+        val records = runBlocking { client.fetchTimetable(requested, stages::add) }
+        assertEquals(2, records.size)
+        assertTrue(stages.contains(com.myleafy.android.core.network.AcademicStage.PROCESSING_TIMETABLE))
+    }
+
+    @Test
     fun fetchTimetableThrowsSessionExpiredOnLoginPage() {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path?.startsWith("/jsxsd/xskb/xskb_list.do") == true ->
                     MockResponse().setBody("<html>验证码</html>")
+                request.path == "/jsxsd/framework/xsMain.jsp" -> MockResponse().setBody("<html>验证码</html>")
                 else -> MockResponse().setResponseCode(404)
             }
         }

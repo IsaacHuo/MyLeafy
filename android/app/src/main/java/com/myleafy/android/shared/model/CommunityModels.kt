@@ -3,8 +3,8 @@ package com.myleafy.android.shared.model
 import kotlinx.serialization.Serializable
 
 /**
- * 社区 DTO（Supabase 表，snake_case 字段名与线格式一致，跨平台契约）。
- * 权威来源为 Supabase；Android 用 supabase-kt（kotlinx-serialization）对接。
+ * 社区 DTO（Cloudflare API，snake_case 字段名与线格式一致，跨平台契约）。
+ * 权威来源为 Cloudflare；使用 kotlinx-serialization 解码 snake_case 契约。
  */
 
 /** 社区准入状态（profiles.community_access_status）。 */
@@ -19,6 +19,7 @@ data class ProfileDto(
     val nickname: String = "北林同学",
     val display_name: String? = null,
     val avatar_url: String? = null,
+    val signed_avatar_url: String? = null,
     val bio: String? = null,
     val major: String? = null,
     val grade: String? = null,
@@ -38,6 +39,8 @@ data class PostImageDto(
     val post_id: String = "",
     val path: String = "",
     val thumbnail_path: String? = null,
+    val thumbnail_url: String? = null,
+    val full_url: String? = null,
     val sort_order: Int = 0,
     val width: Int? = null,
     val height: Int? = null,

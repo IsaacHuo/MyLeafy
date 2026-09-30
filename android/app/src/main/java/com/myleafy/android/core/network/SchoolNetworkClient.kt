@@ -34,11 +34,14 @@ interface SchoolNetworkClient {
 
     /** 抓取并解析课表（强智本科）。需已登录；返回解析后的课程记录。 */
     suspend fun fetchTimetable(semesterId: String): List<CourseRecord>
+    suspend fun fetchTimetable(semesterId: String, onStage: (AcademicStage) -> Unit): List<CourseRecord> = fetchTimetable(semesterId)
 
     /** 抓取并解析成绩（强智 /jsxsd/kscj/cjcx_list）。 */
     suspend fun fetchGrades(): List<ParsedGradeRecord>
 
     /** 单次成绩页请求同时解析成绩、官方排名与官方汇总。 */
+    suspend fun fetchGradeRankings(): List<ParsedGradeRanking>
+
     suspend fun fetchAcademicResults(): AcademicResult
 
     /** 抓取并解析考试安排（强智 /jsxsd/xsks/xsksap_list）。 */

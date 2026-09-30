@@ -57,11 +57,17 @@ class MemoEditorFlowTest {
         }
         rule.onNodeWithText("正文").performTextInput("待保存的随记")
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        rule.waitUntil(5_000) {
+            rule.activity.window.decorView.rootWindowInsets
+                ?.isVisible(android.view.WindowInsets.Type.ime()) != true
+        }
         rule.waitForIdle()
-        // A visible system keyboard consumes the first Back; the sheet receives the next one.
         if (rule.onAllNodesWithText("放弃未保存的更改？").fetchSemanticsNodes().isEmpty()) {
             rule.runOnIdle { assertFalse(dismissed); assertEquals(null, saved) }
             InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        }
+        rule.waitUntil(5_000) {
+            rule.onAllNodesWithText("放弃未保存的更改？").fetchSemanticsNodes().isNotEmpty()
         }
         rule.onNodeWithText("放弃未保存的更改？").assertIsDisplayed()
         rule.onNodeWithText("继续编辑").performClick()

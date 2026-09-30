@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.campus.CampusCapabilities
+import com.myleafy.android.features.auth.LoginScreen
 import com.myleafy.android.features.auth.EntryScreen
 import com.myleafy.android.features.campus.CampusScreen
 import com.myleafy.android.features.campus.CatalogRatingsScreen
@@ -52,6 +53,7 @@ import com.myleafy.android.features.campus.HonorRecordsScreen
 import com.myleafy.android.features.campus.TrainingProgramScreen
 import com.myleafy.android.features.campus.ClassroomScreen
 import com.myleafy.android.features.campus.ExamsScreen
+import com.myleafy.android.features.campus.GradeAnalysisScreen
 import com.myleafy.android.features.campus.GradesScreen
 import com.myleafy.android.features.campus.FitnessTestScreen
 import com.myleafy.android.features.campus.MedicalScreen
@@ -90,6 +92,7 @@ object Routes {
     const val COMMUNITY_POST_DETAIL = "community/post/{postId}"
     const val COMMUNITY_COMPOSE = "community/compose"
     const val CLASSROOM = "campus/classroom"
+    const val GRADE_ANALYSIS = "campus/grades/analysis"
     const val GRADES = "campus/grades"
     const val EXAMS = "campus/exams"
     const val PROFILE_EDIT = "profile/edit"
@@ -149,8 +152,12 @@ fun MyLeafyNavHost(
             },
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(RootTab.TIMETABLE.route) {
+            composable(RootTab.TIMETABLE.route) { entry ->
+                val reauthenticated by entry.savedStateHandle.getStateFlow("schoolReauthenticated", false).collectAsStateWithLifecycle()
                 TimetableScreen(
+                    reauthenticated = reauthenticated,
+                    onConsumeReauthentication = { entry.savedStateHandle["schoolReauthenticated"] = false },
+                    onReauthenticate = { navController.navigate("school-reauth") },
                     onShareClick = { navController.navigate(FeatureDestination.TIMETABLE_SHARE.route) },
                     identity = TimetableIdentity(
                         signedOut = activeScope.campusId == null,
@@ -247,8 +254,11 @@ fun MyLeafyNavHost(
             composable(Routes.CLASSROOM) {
                 ClassroomScreen(onBack = { navController.popBackStack() })
             }
+            composable(Routes.GRADE_ANALYSIS) {
+                GradeAnalysisScreen(onBack = { navController.popBackStack() }, canSync = activeScope.campusId == CampusID.bjfu)
+            }
             composable(Routes.GRADES) {
-                GradesScreen(onBack = { navController.popBackStack() }, canSync = activeScope.campusId == CampusID.bjfu)
+                GradesScreen(onBack = { navController.popBackStack() }, onAnalysis = { navController.navigate(Routes.GRADE_ANALYSIS) }, canSync = activeScope.campusId == CampusID.bjfu)
             }
             composable(Routes.EXAMS) {
                 ExamsScreen(onBack = { navController.popBackStack() }, canSync = activeScope.campusId == CampusID.bjfu)
@@ -265,6 +275,12 @@ fun MyLeafyNavHost(
                     onBack = { navController.popBackStack() },
                     onSaved = { navController.popBackStack() },
                 )
+            }
+            composable("school-reauth") {
+                LoginScreen(onBack = { navController.popBackStack() }, onLoggedIn = {
+                    navController.previousBackStackEntry?.savedStateHandle?.set("schoolReauthenticated", true)
+                    navController.popBackStack()
+                })
             }
             composable(Routes.LOGIN) {
                 EntryScreen(

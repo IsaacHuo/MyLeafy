@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,11 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.roborazzi)
-}
-
-val localProperties = Properties().apply {
-    val file = rootProject.file("secrets.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 val releaseSigning = mapOf(
@@ -28,12 +21,7 @@ if (requestsReleaseBuild) {
     require(isReleaseSigningConfigured) {
         "Release build requires MYLEAFY_RELEASE_STORE_FILE, STORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD."
     }
-    require(!localProperties.getProperty("SUPABASE_URL").isNullOrBlank()) {
-        "Release build requires SUPABASE_URL in android/secrets.properties."
-    }
-    require(!localProperties.getProperty("SUPABASE_ANON_KEY").isNullOrBlank()) {
-        "Release build requires SUPABASE_ANON_KEY in android/secrets.properties."
-    }
+
 }
 
 android {
@@ -48,16 +36,7 @@ android {
         versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField(
-            "String",
-            "SUPABASE_URL",
-            "\"${localProperties.getProperty("SUPABASE_URL", "")}\"",
-        )
-        buildConfigField(
-            "String",
-            "SUPABASE_ANON_KEY",
-            "\"${localProperties.getProperty("SUPABASE_ANON_KEY", "")}\"",
-        )
+        buildConfigField("String", "MYLEAFY_API_ORIGIN", "\"${providers.gradleProperty("myleafyApiOrigin").getOrElse("https://api.myleafy.space")}\"")
     }
 
     signingConfigs {
@@ -73,7 +52,7 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
+            applicationIdSuffix = ".next"
             versionNameSuffix = "-debug"
         }
         release {
@@ -111,6 +90,7 @@ android {
                 it.systemProperties["user.language"] = "zh"
                 it.systemProperties["user.country"] = "CN"
                 it.systemProperties["user.timezone"] = "Asia/Shanghai"
+                it.systemProperties["cloudflareStagingCheck"] = project.hasProperty("cloudflareStagingCheck").toString()
                 it.useJUnit {
                     if (project.hasProperty("screenshot")) {
                         includeCategories("com.myleafy.android.testing.ScreenshotTests")
@@ -171,11 +151,6 @@ implementation(libs.okhttp)
 implementation(libs.coil)
 implementation(libs.jsoup)
 
-    implementation(platform(libs.supabase.bom))
-    implementation(libs.supabase.auth)
-    implementation(libs.supabase.postgrest)
-    implementation(libs.supabase.functions)
-    implementation(libs.ktor.client.android)
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)

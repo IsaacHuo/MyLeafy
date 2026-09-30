@@ -63,16 +63,6 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Prepare public service configuration
-        shell: bash
-        env:
-          SUPABASE_URL: ${{ secrets.ANDROID_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.ANDROID_SUPABASE_ANON_KEY }}
-        run: |
-          test -n "$SUPABASE_URL"
-          test -n "$SUPABASE_ANON_KEY"
-          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > secrets.properties
-
       - name: Restore Android release key
         shell: bash
         env:

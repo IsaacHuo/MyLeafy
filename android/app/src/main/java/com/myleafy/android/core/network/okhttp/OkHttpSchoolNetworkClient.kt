@@ -2,6 +2,10 @@ package com.myleafy.android.core.network.okhttp
 
 import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.CampusIdentity
+import com.myleafy.android.core.network.AcademicStage
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import com.myleafy.android.core.network.AcademicResult
 import com.myleafy.android.core.network.CourseRecord
 import com.myleafy.android.core.network.SchoolCookies
@@ -46,6 +50,7 @@ class OkHttpSchoolNetworkClient(
     private val baseUrl: String,
     private val graduateBaseUrl: String?,
     private val parser: HtmlParser,
+    private val renderTimetable: (suspend (String, Map<String, String>) -> RenderedSchoolPage)? = null,
 ) : SchoolNetworkClient {
 
     /** 登录前的验证码会话。成功认证后才迁移到按身份隔离的持久化 Cookie。 */
@@ -70,6 +75,16 @@ class OkHttpSchoolNetworkClient(
         .callTimeout(18, TimeUnit.SECONDS)
         .build()
 
+    private val authenticationClient = client.newBuilder().apply {
+        interceptors().clear()
+        addInterceptor(SchoolCookieInterceptor(cookieStore, { null }, { preAuthenticationCookies.toMap() }) { cookies ->
+            preAuthenticationCookies.clear()
+            preAuthenticationCookies.putAll(cookies)
+        })
+    }.build()
+
+    private fun executeAuthentication(request: Request): Response = authenticationClient.newCall(request).execute()
+
     override val cookies: Map<String, String>
         get() = loadCookies()
 
@@ -93,10 +108,10 @@ class OkHttpSchoolNetworkClient(
     internal fun execute(request: Request): Response = client.newCall(request).execute()
 
     override suspend fun fetchUndergraduateCaptcha(): ByteArray = withContext(Dispatchers.IO) {
-        clearSession()
+        preAuthenticationCookies.clear()
         fetchLoginKey()
         val request = requestBuilder("/verifycode.servlet").get().build()
-        return@withContext execute(request).use { it.body?.bytes() ?: byteArrayOf() }
+        return@withContext executeAuthentication(request).use { it.body?.bytes() ?: byteArrayOf() }
     }
 
     override suspend fun loginUndergraduate(
@@ -106,9 +121,7 @@ class OkHttpSchoolNetworkClient(
     ) = withContext(Dispatchers.IO) {
         // 验证码与登录提交必须复用同一个匿名 JSESSIONID。若调用方未先取验证码，
         // 才建立一个新的登录会话，以继续支持仓库层和测试中的直接登录调用。
-        if (preAuthenticationCookies.isEmpty()) {
-            clearSession()
-        }
+        try {
         val key = fetchLoginKey()
         val encoded = SchoolLoginEncoder.encodeKey(key, account, password)
         if (encoded.isEmpty()) {
@@ -120,10 +133,8 @@ class OkHttpSchoolNetworkClient(
         val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
         val request = requestBuilder("/Logon.do?method=logon", referer = baseUrl).post(body).build()
 
-        val response = execute(request)
+        val response = executeAuthentication(request)
         val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
-        val responseUrl = response.request.url.toString()
-        val loginSetCookies = response.headers.values("Set-Cookie")
         response.close()
 
         SchoolPageDetector.extractLoginMessage(html)?.let {
@@ -132,50 +143,34 @@ class OkHttpSchoolNetworkClient(
         if (SchoolPageDetector.isLoginPage(html)) {
             throw SchoolNetworkError.LoginFailed("登录失败，请检查学号与验证码")
         }
-        val loginResponseAuthenticated = SchoolPageDetector.isAuthenticatedResponse(responseUrl, html)
-
-        // 提交身份与登录 Cookie，供会话验证请求携带。登录前 Cookie（尤其
-        // JSESSIONID）在匿名阶段只驻留内存，认证成功前不会写入 Keystore。
-        val authenticatedCookies = SchoolCookies.mergeSetCookie(
-            preAuthenticationCookies.toMap(),
-            loginSetCookies,
-        )
+        // Verify the candidate cookie jar before committing identity or touching the old session.
+        val verification = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
+        executeAuthentication(verification).use {
+            val page = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+            if (!SchoolPageDetector.isAuthenticatedResponse(it.request.url.toString(), page)) {
+                throw SchoolNetworkError.LoginFailed("登录失败，请重试")
+            }
+        }
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val identity = undergraduateIdentity(account)
-        sessionState.identity = identity
-        if (authenticatedCookies.isNotEmpty()) {
-            cookieStore.save(authenticatedCookies, identity.scopeKey, identity.portal.rawValue)
-        }
+        cookieStore.save(preAuthenticationCookies.toMap(), identity.scopeKey, identity.portal.rawValue)
         preAuthenticationCookies.clear()
-
-        val sessionAuthenticated = verifyAuthenticatedSession().isSuccess
-        val success = loginResponseAuthenticated && sessionAuthenticated || sessionAuthenticated
-        if (!success) {
-            sessionState.clear()
-            cookieStore.delete(identity.scopeKey, identity.portal.rawValue)
-            throw SchoolNetworkError.LoginFailed("登录失败，请重试")
-        }
-
         sessionState.markLoggedIn(identity)
+        } finally {
+            preAuthenticationCookies.clear()
+        }
     }
 
     override suspend fun verifyAuthenticatedSession(): Result<Unit> = withContext(Dispatchers.IO) {
-        val retryCount = 1
-        for (attempt in 0..retryCount) {
-            try {
-                val request = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
-                val response = execute(request)
+        try {
+            execute(requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()).use { response ->
+                if (!response.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${response.code}）")
                 val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
-                val responseUrl = response.request.url.toString()
-                response.close()
-                if (SchoolPageDetector.isAuthenticatedResponse(responseUrl, html)) {
-                    return@withContext Result.success(Unit)
-                }
-            } catch (_: Exception) {
-                // 重试
+                if (SchoolPageDetector.isAuthenticatedResponse(response.request.url.toString(), html)) Result.success(Unit)
+                else Result.failure(SchoolNetworkError.SessionExpired)
             }
-            if (attempt < retryCount) delay(300)
-        }
-        Result.failure(SchoolNetworkError.SessionExpired)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (failure: Exception) { Result.failure(failure) }
     }
 
     override suspend fun fetchGraduatePublicKey(): String = notYet("研究生登录（RSA）")
@@ -184,34 +179,62 @@ class OkHttpSchoolNetworkClient(
         notYet("研究生登录（AES）")
     }
 
-    override suspend fun fetchTimetable(semesterId: String): List<CourseRecord> = withContext(Dispatchers.IO) {
-        val request = requestBuilder(
-            "/jsxsd/xskb/xskb_list.do?xnxq01id=$semesterId",
-            referer = "${baseUrl}/Logon.do?method=logon",
-        ).get().build()
-        val html = execute(request).use {
-            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+    override suspend fun fetchTimetable(semesterId: String): List<CourseRecord> = fetchTimetable(semesterId) {}
+
+    override suspend fun fetchTimetable(semesterId: String, onStage: (AcademicStage) -> Unit): List<CourseRecord> = withContext(Dispatchers.IO) {
+        val identity = sessionState.identity ?: throw SchoolNetworkError.SessionExpired
+        val origin = baseUrl.toHttpUrl()
+        val pending = java.util.ArrayDeque<Request>()
+        listOf("/jsxsd/xskb/xskb_list.do?xnxq01id=$semesterId", "/jsxsd/xskb/xskb_list.do",
+            "/jsxsd/framework/xsMain.jsp", "/jsxsd/framework/xSMain.jsp").forEach {
+            pending.add(requestBuilder(it, referer = "$baseUrl/Logon.do?method=logon").get().build())
         }
-        if (SchoolPageDetector.isLoginPage(html)) {
-            throw SchoolNetworkError.SessionExpired
+        val seen = mutableSetOf<String>()
+        var rendered = false
+        var loginPageSeen = false
+        var lastFailure: Exception? = null
+        var lastPage: Pair<String, String>? = null
+        onStage(AcademicStage.FETCHING_TIMETABLE)
+        while (pending.isNotEmpty() || (!rendered && renderTimetable != null && lastPage != null)) {
+            currentCoroutineContext().ensureActive()
+            if (sessionState.identity?.scopeKey != identity.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+            val page = if (pending.isEmpty()) {
+                rendered = true
+                onStage(AcademicStage.INITIALIZING_TIMETABLE)
+                val result = try { renderTimetable!!.invoke(lastPage!!.first, loadCookies()) }
+                catch (failure: kotlinx.coroutines.TimeoutCancellationException) { throw SchoolNetworkError.TimetableDataUnavailable }
+                if (sessionState.identity?.scopeKey != identity.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+                cookieStore.save(result.cookies, identity.scopeKey, identity.portal.rawValue)
+                result.url to result.html
+            } else {
+                val request = pending.removeFirst()
+                val body = okio.Buffer().also { request.body?.writeTo(it) }.readUtf8()
+                if (!seen.add("${request.method}:${request.url}:$body")) continue
+                if (seen.size > 16) throw SchoolNetworkError.TimetableDataUnavailable
+                try {
+                    execute(request).use {
+                        if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("获取课表失败（HTTP ${it.code}）")
+                        it.request.url.toString() to SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (failure: Exception) { lastFailure = failure; continue }
+            }
+            val (url, html) = page
+            if (SchoolPageDetector.isLoginPage(html)) { loginPageSeen = true; continue }
+            val matchingSemester = if (TimetablePageResolver.isTimetable(html)) {
+                try { TimetablePageResolver.verifySemester(html, semesterId); true }
+                catch (failure: SchoolNetworkError) { lastFailure = failure; false }
+            } else false
+            if (matchingSemester) {
+                onStage(AcademicStage.PROCESSING_TIMETABLE)
+                val records = parser.parseTimetable(html)
+                return@withContext records.map { r -> CourseRecord(r.courseName, r.teacher, r.classInfo, r.room, r.location, r.dayOfWeek, r.weeks, r.duration) }
+            }
+            if (html.contains("培养管理") || html.contains("学生个人中心")) lastPage = page
+            TimetablePageResolver.candidates(html, url.toHttpUrl(), origin, semesterId).forEach(pending::add)
         }
-        val records = try {
-            parser.parseTimetable(html)
-        } catch (e: HtmlParseError) {
-            throw SchoolNetworkError.TimetableDataUnavailable
-        }
-        return@withContext records.map { r ->
-            CourseRecord(
-                courseName = r.courseName,
-                teacher = r.teacher,
-                classInfo = r.classInfo,
-                room = r.room,
-                location = r.location,
-                dayOfWeek = r.dayOfWeek,
-                weeks = r.weeks,
-                duration = r.duration,
-            )
-        }
+        if (loginPageSeen) verifyAuthenticatedSession().getOrThrow()
+        throw lastFailure ?: SchoolNetworkError.TimetableDataUnavailable
     }
 
     override suspend fun fetchGrades(): List<ParsedGradeRecord> = fetchAcademicResults().grades
@@ -237,6 +260,41 @@ class OkHttpSchoolNetworkClient(
             rankings = runCatching { parser.parseGradeRankings(html) }.getOrNull(),
             summary = runCatching { parser.parseGradeSummary(html) }.getOrNull(),
         )
+    }
+
+    override suspend fun fetchGradeRankings(): List<com.myleafy.android.parsers.ParsedGradeRanking> = withContext(Dispatchers.IO) {
+        val origin = baseUrl.toHttpUrl()
+        val candidates = ArrayDeque<Request>()
+        candidates.add(requestBuilder("/jsxsd/kscj/cjcx_list").get().build())
+        val seen = mutableSetOf<String>()
+        var loginPageSeen = false
+        while (candidates.isNotEmpty() && seen.size < 16) {
+            currentCoroutineContext().ensureActive()
+            val request = candidates.removeFirst()
+            if (!seen.add(request.url.toString())) continue
+            val html = execute(request).use { response ->
+                if (!response.isSuccessful) return@use null
+                SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
+            } ?: continue
+            if (SchoolPageDetector.isLoginPage(html)) { loginPageSeen = true; continue }
+            try { return@withContext parser.parseGradeRankings(html) } catch (_: HtmlParseError) { /* try the school's ranking entry */ }
+            if (seen.size == 1) {
+                val document = org.jsoup.Jsoup.parse(html)
+                val links = document.select("a[href],iframe[src]").map { it.attr(if (it.hasAttr("href")) "href" else "src") }
+                links.forEach { raw ->
+                    val target = request.url.resolve(raw) ?: return@forEach
+                    if (target.host == origin.host && target.port == origin.port && target.scheme == origin.scheme &&
+                        target.encodedPath.contains("kscj") && (target.encodedPath.contains("pm") || target.encodedPath.contains("rank"))) {
+                        candidates.add(SchoolRequests.builder(target.toString(), request.url.toString()).build())
+                    }
+                }
+                listOf("cjpm_query", "cjpm_list", "cjpmcx_query", "cjpmcx_list", "cjcx_pm").forEach {
+                    candidates.add(requestBuilder("/jsxsd/kscj/$it", referer = request.url.toString()).get().build())
+                }
+            }
+        }
+        if (loginPageSeen && verifyAuthenticatedSession().isFailure) throw SchoolNetworkError.SessionExpired
+        throw java.io.IOException("教务暂未开放成绩排名。")
     }
 
     override suspend fun fetchExams(semesterId: String): List<ParsedExamRecord> = withContext(Dispatchers.IO) {
@@ -329,7 +387,7 @@ class OkHttpSchoolNetworkClient(
 
     private fun fetchLoginKey(): String {
         val request = requestBuilder("/Logon.do?method=logon&flag=sess").get().build()
-        return execute(request).use {
+        return executeAuthentication(request).use {
             val text = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()).trim()
             check(text.isNotBlank()) { "未获取到登录 key" }
             text

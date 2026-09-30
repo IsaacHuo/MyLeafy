@@ -25,7 +25,7 @@ import java.util.UUID
 
 /**
  * 荣誉记录（奖状证书文件）本地仓储。文件保存在 App 私有目录，按身份 scopeKey 隔离，
- * 不连接教务或 Supabase。
+ * 不连接教务或 后台。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HonorRecordRepository(
@@ -127,11 +127,20 @@ class HonorRecordsViewModel(
         }
     }
 
-    fun update(record: HonorRecordEntity, title: String, note: String, awardedAt: Long?) {
+    private val _saving = MutableStateFlow(false)
+    val saving = _saving.asStateFlow()
+
+    fun update(record: HonorRecordEntity, title: String, note: String, awardedAt: Long?, onSaved: () -> Unit = {}) {
+        if (_saving.value) return
+        _saving.value = true
         viewModelScope.launch {
-            runCatching { repository.update(record, title, note, awardedAt) }
-                .onSuccess { _message.value = null }
-                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "保存失败" }
+            try {
+                repository.update(record, title, note, awardedAt)
+                _message.value = null
+                onSaved()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { _message.value = failure.message ?: "保存失败" }
+            finally { _saving.value = false }
         }
     }
 

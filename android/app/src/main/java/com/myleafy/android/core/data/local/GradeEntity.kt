@@ -15,4 +15,8 @@ data class GradeEntity(
     val credit: String,
     val score: String,
     val type: String,
+    val courseCode: String? = null,
+    val courseAttribute: String? = null,
+    val courseCategory: String? = null,
+    val examNature: String? = null,
 )

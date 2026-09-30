@@ -1,4 +1,4 @@
-package com.myleafy.android.services.supabase
+package com.myleafy.android.services.cloudflare
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

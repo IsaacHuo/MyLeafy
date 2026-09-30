@@ -211,6 +211,9 @@ class ComposePostViewModelTest {
 }
 
 private class FakeCommunityRepository : CommunityRepository {
+    override fun events(scope: String): Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
+    override suspend fun hasAcceptedTerms() = true
+    override suspend fun acceptTerms() = Unit
     var feedResult: Result<List<PostDto>> = Result.success(emptyList())
     var lastQuery: FeedQuery? = null
     var feedLoader: (suspend (FeedQuery) -> List<PostDto>)? = null
@@ -222,7 +225,6 @@ private class FakeCommunityRepository : CommunityRepository {
     val postRequests = mutableListOf<Pair<String, String>>()
     var postCreator: suspend () -> PostDto = { error("unused") }
     override val isAvailable = true
-    override val isPlaceholder = false
 
     override fun feed(query: FeedQuery): Flow<List<PostDto>> = flow {
         lastQuery = query

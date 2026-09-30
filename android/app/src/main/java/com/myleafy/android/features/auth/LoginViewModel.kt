@@ -37,19 +37,23 @@ class LoginViewModel(
     )
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
+    private var captchaJob: kotlinx.coroutines.Job? = null
+
     init {
         refreshCaptcha()
     }
 
     fun refreshCaptcha() {
+        if (_uiState.value.isCaptchaLoading || _uiState.value.isSubmitting) return
         _uiState.value = _uiState.value.copy(
             isCaptchaLoading = true,
             captchaBytes = null,
             captchaErrorMessage = null,
         )
-        viewModelScope.launch {
+        captchaJob = viewModelScope.launch {
             val result = runCatching { repository.fetchUndergraduateCaptcha() }
             val failure = result.exceptionOrNull()
+            if (failure is kotlinx.coroutines.CancellationException) throw failure
             if (failure != null) {
                 Log.e(TAG, "Failed to fetch undergraduate captcha", failure)
             }
@@ -63,7 +67,18 @@ class LoginViewModel(
         }
     }
 
+    fun resumeCaptcha() {
+        if (_uiState.value.captchaBytes == null && _uiState.value.captchaErrorMessage == null) refreshCaptcha()
+    }
+
+    fun pauseCaptcha() {
+        captchaJob?.cancel()
+        captchaJob = null
+        _uiState.value = _uiState.value.copy(isCaptchaLoading = false)
+    }
+
     fun submit(account: String, password: String, captcha: String) {
+        if (_uiState.value.isSubmitting || _uiState.value.isCaptchaLoading) return
         if (account.isBlank() || password.isBlank() || captcha.isBlank()) {
             _uiState.value = _uiState.value.copy(
                 loginErrorMessage = "请填写完整的学号、密码与验证码",
@@ -86,6 +101,7 @@ class LoginViewModel(
                     _uiState.value = _uiState.value.copy(isSubmitting = false, loginSucceeded = true)
                 },
                 onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
                     _uiState.value = _uiState.value.copy(
                         isSubmitting = false,
                         loginErrorMessage = it.message ?: "登录失败",

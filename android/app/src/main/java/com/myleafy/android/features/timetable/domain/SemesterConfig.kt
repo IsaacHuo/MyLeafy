@@ -5,7 +5,7 @@ import java.time.temporal.ChronoUnit
 
 /**
  * 学期运行配置（对应 iOS `SemesterRuntimeConfig` / `semester_runtime_configs` 表）。
- * 阶段 1.5 使用内置配置；阶段 2 从 Supabase 拉取远程 active 配置覆盖。
+ * 当前使用内置学期配置，与学校响应中的学期字段严格校验。
  */
 data class SemesterRuntimeConfig(
     val semesterId: String,

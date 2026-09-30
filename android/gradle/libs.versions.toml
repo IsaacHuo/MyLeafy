@@ -28,10 +28,7 @@ androidxTestRunner = "1.6.2"
 roborazzi = "1.56.0"
 robolectric = "4.16"
 
-# 阶段 4 社区（supabase-kt，io.github.jan-tennert.supabase）。
 # 3.6.0 用 Kotlin 2.3 stdlib（元数据 2.2.21 可读）；3.7.0 需 Kotlin 2.4 编译器。
-supabaseKt = "3.6.0"
-ktor = "3.4.3"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.10.2"
 
@@ -75,12 +72,7 @@ roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi
 roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
-supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabaseKt" }
-supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
-supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
-supabase-functions = { group = "io.github.jan-tennert.supabase", name = "functions-kt" }
 # Android 引擎使用平台 TLS 栈，兼容 Android 16 的主机名感知证书校验。
-ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 

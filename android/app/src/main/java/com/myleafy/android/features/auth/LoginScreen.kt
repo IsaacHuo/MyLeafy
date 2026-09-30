@@ -74,14 +74,21 @@ fun LoginScreen(
         },
     ),
     modifier: Modifier = Modifier,
+    entryHeader: (@Composable () -> Unit)? = null,
+    onBusyChanged: (Boolean) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    androidx.compose.runtime.DisposableEffect(viewModel) {
+        viewModel.resumeCaptcha()
+        onDispose { viewModel.pauseCaptcha() }
+    }
+    LaunchedEffect(uiState.isSubmitting) { onBusyChanged(uiState.isSubmitting) }
     var account by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var captcha by rememberSaveable { mutableStateOf("") }
 
     if (uiState.loginSucceeded) {
-        LaunchedEffect(Unit) { onLoggedIn() }
+        LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { onLoggedIn() } }
     }
 
     LoginContent(
@@ -96,6 +103,7 @@ fun LoginScreen(
         onRefreshCaptcha = viewModel::refreshCaptcha,
         onBack = onBack,
         modifier = modifier,
+        entryHeader = entryHeader,
     )
 }
 
@@ -117,24 +125,24 @@ fun LoginContent(
     onRefreshCaptcha: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    entryHeader: (@Composable () -> Unit)? = null,
 ) {
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     val passwordFocus = remember { FocusRequester() }
     val captchaFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
-    LeafySecondaryScaffold(title = "北林登录", onBack = onBack, modifier = modifier) { contentModifier ->
-        Box(modifier = contentModifier.fillMaxSize().imePadding()) {
+    val form: @Composable (Modifier) -> Unit = { formModifier ->
+        Box(formModifier.fillMaxSize().imePadding()) {
             Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .widthIn(max = LeafyComponentSize.formMaxWidth)
-                    .fillMaxWidth()
+                Modifier.align(if (entryHeader == null) Alignment.TopCenter else Alignment.Center)
+                    .widthIn(max = LeafyComponentSize.formMaxWidth).fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = LeafySpacing.page, vertical = LeafySpacing.card),
             ) {
-
+                entryHeader?.invoke()
         LeafyTextField(
+            enabled = !state.isSubmitting,
             value = account,
             onValueChange = onAccountChange,
             modifier = Modifier.fillMaxWidth(),
@@ -145,6 +153,7 @@ fun LoginContent(
         )
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
         LeafyTextField(
+            enabled = !state.isSubmitting,
             value = password,
             onValueChange = onPasswordChange,
             modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
@@ -167,6 +176,7 @@ fun LoginContent(
         Spacer(modifier = Modifier.height(LeafySpacing.compact))
         Row(verticalAlignment = Alignment.CenterVertically) {
             LeafyTextField(
+                enabled = !state.isSubmitting,
                 value = captcha,
                 onValueChange = onCaptchaChange,
                 modifier = Modifier.weight(1f).focusRequester(captchaFocus),
@@ -197,7 +207,7 @@ fun LoginContent(
             LeafyPrimaryButton(
                 onClick = onSubmit,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !state.isSubmitting,
+                enabled = !state.isSubmitting && !state.isCaptchaLoading && account.isNotBlank() && password.isNotBlank() && captcha.isNotBlank(),
             ) {
                 if (state.isSubmitting) {
                     CircularProgressIndicator(
@@ -212,6 +222,11 @@ fun LoginContent(
             Spacer(modifier = Modifier.height(LeafySpacing.section))
             }
         }
+    }
+    if (entryHeader == null) {
+        LeafySecondaryScaffold(title = "北林登录", onBack = onBack, modifier = modifier) { form(it) }
+    } else {
+        form(modifier)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.myleafy.android.features.campus
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,6 +54,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun GradesScreen(
     onBack: () -> Unit,
+    onAnalysis: () -> Unit = {},
     canSync: Boolean = false,
     viewModel: CampusViewModel = academicViewModel(),
 ) {
@@ -60,7 +62,7 @@ fun GradesScreen(
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 
     AcademicDetailScaffold(
-        title = "成绩与排名",
+        title = "成绩查询",
         syncState = syncState,
         canSync = canSync,
         onBack = onBack,
@@ -78,7 +80,7 @@ fun GradesScreen(
                     LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
                 },
             )
-            is CampusUiState.Loaded -> GradesContent(state, modifier)
+            is CampusUiState.Loaded -> GradesContent(state, modifier, onAnalysis)
         }
     }
 }
@@ -117,7 +119,7 @@ fun ExamsScreen(
             ) {
                 item {
                     Text(
-                        text = "${SemesterConfig.currentSemesterId} · ${state.exams.size} 场",
+                        text = "共 ${state.exams.size} 场考试",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -129,12 +131,15 @@ fun ExamsScreen(
                     item {
                         LeafyEmptyState(
                             title = "学校暂未返回考试安排",
-                            message = "已登录时可点右上角刷新；可信空结果不会被当作错误。",
+                            message = "刷新后查看考试时间和地点。",
                             icon = Icons.Outlined.CalendarMonth,
                         )
                     }
                 } else {
-                    items(state.exams, key = { it.id }) { ExamRow(it) }
+                    state.exams.groupBy { it.date }.toSortedMap().forEach { (date, exams) ->
+                        item(key = "date:$date") { LeafySectionHeader(date) }
+                        items(exams.sortedBy { it.start }, key = { it.id }) { ExamRow(it) }
+                    }
                 }
             }
         }
@@ -142,126 +147,48 @@ fun ExamsScreen(
 }
 
 @Composable
-private fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier) {
-    var selectedTerm by rememberSaveable(state.terms) { mutableStateOf("全部") }
-    val displayedGrades = if (selectedTerm == "全部") state.grades else state.grades.filter { it.term == selectedTerm }
-    val overallRankings = state.rankings.filter { it.term == "全部学期" }
-
+internal fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier, onAnalysis: () -> Unit) {
+    var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val groups = remember(state.grades) { state.grades.groupBy { it.term }.toSortedMap(reverseOrder()) }
     LazyColumn(
         modifier = modifier,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
-        item {
-            LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(LeafySpacing.card),
-                    verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
-                ) {
-                    Text("成绩概览", style = MaterialTheme.typography.titleMedium)
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        AcademicMetric("GPA", state.gradeSummary?.officialGpa?.let { "%.2f".format(it) } ?: "--")
-                        AcademicMetric("学分积", state.gradeSummary?.officialCreditPoint?.let { "%.2f".format(it) } ?: "--")
-                        AcademicMetric("成绩数", state.grades.size.toString())
+        item(key = "summary") {
+            LeafyContentSurface(modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "查看成绩分析详情", onClick = onAnalysis)) {
+                Column(Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("成绩分析", style = MaterialTheme.typography.titleMedium)
+                        Text("查看分析", color = MaterialTheme.colorScheme.primary)
                     }
-                    Text(
-                        "共 ${state.grades.size} 条成绩 · ${state.terms.size} 个学期",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "GPA 与排名只展示学校官方值；未解析到时不自行推算。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    GradeOverview(state.analytics)
                 }
             }
         }
-
-        item { LeafySectionHeader("官方排名") }
-        if (overallRankings.isEmpty()) {
-            item {
-                LeafyEmptyState(
-                    title = "暂无官方排名",
-                    message = "学校未返回排名结构时保留最近一次成功缓存。",
-                    icon = Icons.Outlined.Assessment,
-                )
-            }
-        } else {
-            items(overallRankings, key = { it.id }) { ranking ->
-                Surface(
+        if (groups.isEmpty()) item {
+            LeafyEmptyState(title = "暂无成绩", message = "刷新后查看课程成绩。", icon = Icons.Outlined.Assessment)
+        }
+        groups.forEach { (term, grades) ->
+            item(key = "term:$term") {
+                androidx.compose.material3.TextButton(
+                    onClick = { collapsed = if (term in collapsed) collapsed - term else collapsed + term },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    tonalElevation = LeafyElevation.flat,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(ranking.rankingRange, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                ranking.metricText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Text(
-                            ranking.totalCount?.let { "${ranking.rank} / $it" } ?: "第 ${ranking.rank} 名",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(term, modifier = Modifier.padding(end = 12.dp), style = MaterialTheme.typography.titleSmall)
+                        Text("${grades.size} 门 · ${if (term in collapsed) "展开" else "收起"}")
                     }
                 }
             }
-        }
-
-        // 顺序固定为 摘要 → 条件与同步状态 → 明细：同步状态在上方横幅，
-        // 这里先给学期条件，再给明细，避免用同样的大标题重复三遍。
-        item {
-            LeafySectionHeader(
-                title = "筛选条件",
-                supportingText = if (selectedTerm == "全部") "全部学期" else selectedTerm,
-            )
-        }
-        if (state.terms.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
-                ) {
-                    (listOf("全部") + state.terms).forEach { term ->
-                        FilterChip(
-                            selected = selectedTerm == term,
-                            onClick = { selectedTerm = term },
-                            label = { Text(term) },
-                        )
-                    }
-                }
-            }
-        }
-        item { LeafySectionHeader("成绩明细", supportingText = "${displayedGrades.size} 条") }
-        if (displayedGrades.isEmpty()) {
-            item {
-                LeafyEmptyState(
-                    title = "没有成绩记录",
-                    message = "登录教务并刷新后显示学校真实成绩。",
-                    icon = Icons.Outlined.Assessment,
-                )
-            }
-        } else {
-            items(displayedGrades, key = { it.id }) { GradeRow(it) }
+            if (term !in collapsed) items(grades, key = { "grade:${it.id}" }) { GradeRow(it) }
         }
     }
 }
 
 @Composable
-private fun AcademicMetric(label: String, value: String) {
+internal fun AcademicMetric(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -269,7 +196,7 @@ private fun AcademicMetric(label: String, value: String) {
 }
 
 @Composable
-private fun AcademicDetailScaffold(
+internal fun AcademicDetailScaffold(
     title: String,
     syncState: CampusSyncState,
     onBack: () -> Unit,
@@ -345,7 +272,7 @@ private fun LoadingAcademicState(modifier: Modifier) {
 }
 
 @Composable
-private fun academicViewModel(): CampusViewModel = viewModel(
+internal fun academicViewModel(): CampusViewModel = viewModel(
     factory = appViewModelFactory { container ->
         CampusViewModel(container.academicRepository, SemesterConfig.currentSemesterId)
     },

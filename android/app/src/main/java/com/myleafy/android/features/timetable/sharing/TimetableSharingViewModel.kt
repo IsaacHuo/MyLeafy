@@ -2,10 +2,10 @@ package com.myleafy.android.features.timetable.sharing
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.myleafy.android.services.supabase.SharedTimetableSnapshotDto
-import com.myleafy.android.services.supabase.TimetableInviteDto
-import com.myleafy.android.services.supabase.TimetableShareMemberDto
-import com.myleafy.android.services.supabase.TimetableSharingService
+import com.myleafy.android.services.cloudflare.SharedTimetableSnapshotDto
+import com.myleafy.android.services.cloudflare.TimetableInviteDto
+import com.myleafy.android.services.cloudflare.TimetableShareMemberDto
+import com.myleafy.android.services.cloudflare.TimetableSharingService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

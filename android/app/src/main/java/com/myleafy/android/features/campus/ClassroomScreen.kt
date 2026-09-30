@@ -62,7 +62,7 @@ fun ClassroomScreen(
             items((1..SemesterConfig.supportedWeeks).toList()) { candidate ->
                 FilterChip(
                     selected = candidate == week,
-                    onClick = { week = candidate },
+                    onClick = { if (week != candidate) { viewModel.clearResults(); week = candidate } },
                     label = { Text("第 $candidate 周") },
                 )
             }
@@ -73,7 +73,7 @@ fun ClassroomScreen(
             items(listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日").withIndex().toList()) { (index, label) ->
                 FilterChip(
                     selected = (index + 1) == day,
-                    onClick = { day = index + 1 },
+                    onClick = { if (day != index + 1) { viewModel.clearResults(); day = index + 1 } },
                     label = { Text(label) },
                 )
             }

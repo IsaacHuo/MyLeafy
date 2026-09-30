@@ -11,7 +11,7 @@ import androidx.room.TypeConverters
  * - 教务副本（学校为权威）：Course / Grade / Exam
  * - 用户本地数据（本地为权威）：ScheduleMemo / ScheduleEvent
  *
- * 社区数据以 Supabase 为权威，不落 Room（见 docs/engineering/android-migration.md）。
+ * 社区数据以 Cloudflare 为权威，不落 Room（见 docs/engineering/android-migration.md）。
  */
 @Database(
     entities = [
@@ -33,7 +33,7 @@ import androidx.room.TypeConverters
         ComprehensiveQualityRecordEntity::class,
         AcademicDocumentEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

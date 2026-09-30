@@ -4,8 +4,6 @@ import android.content.Context
 import androidx.room.Room
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
-import com.myleafy.android.core.data.local.MIGRATION_4_5
-import com.myleafy.android.core.data.local.MIGRATION_5_6
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolNetworkClient
@@ -43,8 +41,11 @@ import com.myleafy.android.features.timetable.TimetableRepository
 import com.myleafy.android.features.timetable.weather.WeatherRepository
 import com.myleafy.android.features.timetable.background.TimetableBackgroundRepository
 import com.myleafy.android.features.timetable.sharing.TimetableSharingRepository
-import com.myleafy.android.services.supabase.CommunityService
-import com.myleafy.android.services.supabase.SupabaseClientProvider
+import com.myleafy.android.services.cloudflare.CommunityService
+import com.myleafy.android.services.cloudflare.BackendClient
+import com.myleafy.android.services.cloudflare.SecureBackendSessionStore
+import com.myleafy.android.BuildConfig
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -66,11 +67,8 @@ class AppContainer(context: Context) {
         AppDatabase::class.java,
         "myleafy.db",
     )
-        // Android 尚未发布，仅已知的预发布 schema 1–3 可破坏性重建。
-        // 未来版本缺少 migration 时必须直接失败，不能静默丢数据。
-        .fallbackToDestructiveMigrationFrom(true, 1, 2, 3)
-        .addMigrations(MIGRATION_4_5)
-        .addMigrations(MIGRATION_5_6)
+        // The new Cloudflare Android release deliberately starts a new local schema.
+        .fallbackToDestructiveMigration(dropAllTables = true)
         .build()
 
     val courseDao: CourseDao get() = database.courseDao()
@@ -128,6 +126,7 @@ class AppContainer(context: Context) {
         baseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.undergraduateBaseUrl,
         graduateBaseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.graduateBaseUrl,
         parser = htmlParser,
+        renderTimetable = { url, cookies -> com.myleafy.android.core.network.okhttp.TimetableWebBootstrap(applicationContext).load(url, cookies) },
     )
 
     val timetableRepository: TimetableRepository =
@@ -162,19 +161,45 @@ class AppContainer(context: Context) {
         scheduleRepository,
     )
 
-    // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化 Supabase。
+    // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化后台会话。
     private var cachedCommunityService: CommunityService? = null
+    private var backendScopeKey: String? = null
 
+    @Synchronized
     private fun communityServiceForActiveScope(): CommunityService? {
         val scope = activeAppScopeStore.current
         if (scope.isGuest || !scope.supports(CampusCapabilities.COMMUNITY)) return null
-        return cachedCommunityService
-            ?: SupabaseClientProvider.create()?.let(::CommunityService)?.also { cachedCommunityService = it }
+        if (backendScopeKey != scope.scopeKey) {
+            cachedCommunityService?.closeLocally()
+            cachedCommunityService = null
+            backendScopeKey = scope.scopeKey
+        }
+        return cachedCommunityService ?: CommunityService(BackendClient(
+            BuildConfig.MYLEAFY_API_ORIGIN,
+            SecureBackendSessionStore(secureStorage, BuildConfig.MYLEAFY_API_ORIGIN, scope.scopeKey),
+            isScopeActive = { activeAppScopeStore.current.scopeKey == scope.scopeKey },
+        )).also { cachedCommunityService = it }
     }
 
     private val liveCommunityRepository =
         LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
     val communityRepository: CommunityRepository = liveCommunityRepository
+    private val backendLifecycle = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
+    init {
+        backendLifecycle.launch {
+            activeAppScopeStore.scope.collect { scope ->
+                synchronized(this@AppContainer) {
+                    if (backendScopeKey != null && backendScopeKey != scope.scopeKey) {
+                        cachedCommunityService?.closeLocally()
+                        cachedCommunityService = null
+                        backendScopeKey = null
+                        liveCommunityRepository.clearProfileCache()
+                    }
+                }
+            }
+        }
+    }
+
     val catalogRatingRepository = CatalogRatingRepository(
         serviceProvider = { communityServiceForActiveScope()?.catalogRatings },
         communityRepository = communityRepository,

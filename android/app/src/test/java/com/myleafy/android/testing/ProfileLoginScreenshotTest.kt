@@ -46,7 +46,8 @@ class ProfileLoginScreenshotTest {
     fun firstLaunchEntryLight() {
         composeRule.setContent {
             LeafyScreenshotTheme {
-                com.myleafy.android.features.auth.EntryContent(false, null, {}, {})
+                LoginContent(LoginUiState(), "", "", "", {}, {}, {}, {}, {}, {},
+                    entryHeader = { com.myleafy.android.features.auth.EntryHeader(true, false) {} })
             }
         }
         composeRule.onNodeWithText("北京林业大学").assertIsDisplayed()

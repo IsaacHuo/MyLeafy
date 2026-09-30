@@ -17,20 +17,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.SubcomposeAsyncImage
-import com.myleafy.android.services.SupabaseConfig
 import com.myleafy.android.shared.model.PostImageDto
 import com.myleafy.android.ui.theme.LeafySpacing
 
-/** `community-images` 为公开 bucket，客户端按公开 URL 读取，无需签名。 */
-fun postImagePublicUrl(path: String?): String? {
-    val trimmed = path?.trim().orEmpty()
-    if (trimmed.isEmpty() || !SupabaseConfig.isConfigured) return null
-    return "${SupabaseConfig.supabaseUrl}/storage/v1/object/public/community-images/$trimmed"
-}
-
-fun PostImageDto.thumbnailPublicUrl(): String? = postImagePublicUrl(thumbnail_path ?: path)
-
-fun PostImageDto.fullPublicUrl(): String? = postImagePublicUrl(path)
+/** Only use server-authorized signed media URLs. */
+fun PostImageDto.thumbnailPublicUrl(): String? = thumbnail_url ?: full_url
+fun PostImageDto.fullPublicUrl(): String? = full_url
 
 private fun PostImageDto.displayAspectRatio(): Float {
     val width = (full_width ?: width)?.toFloat() ?: 0f

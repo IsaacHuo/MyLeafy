@@ -2,6 +2,7 @@ package com.myleafy.android.features.timetable.presentation
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assert
@@ -139,20 +140,14 @@ class TimetableGridInteractionTest {
         try {
             composeRule.setContent {
                 MyLeafyTheme {
-                    TimetableGrid(
-                        snapshot = TimetableGridSnapshot(
-                            weekRange = TimetableWeekRange(1, LocalDate.of(2026, 9, 7)),
-                            items = emptyList(),
-                        ),
-                        onEmptyCellClick = { _, _ -> },
-                        onItemClick = {},
-                        modifier = Modifier.fillMaxSize(),
-                        background = if (showPhoto) {
-                            TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = photo.absolutePath)
-                        } else {
-                            TimetableBackgroundSettings()
-                        },
-                    )
+                    val background = if (showPhoto) TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = photo.absolutePath) else TimetableBackgroundSettings()
+                    Box(Modifier.fillMaxSize()) {
+                        TimetableBackground(background, Modifier.matchParentSize())
+                        TimetableGrid(
+                            snapshot = TimetableGridSnapshot(TimetableWeekRange(1, LocalDate.of(2026, 9, 7)), emptyList()),
+                            onEmptyCellClick = { _, _ -> }, onItemClick = {}, modifier = Modifier.fillMaxSize(), background = background,
+                        )
+                    }
                 }
             }
             composeRule.waitForIdle()

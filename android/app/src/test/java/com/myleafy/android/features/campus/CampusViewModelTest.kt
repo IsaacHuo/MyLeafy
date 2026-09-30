@@ -41,6 +41,10 @@ class CampusViewModelTest {
         viewModel.refresh(AcademicSyncScope.EXAMS)
         advanceUntilIdle()
         assertEquals(listOf("grades", "exams:2025-2026-2"), repository.calls)
+        viewModel.consumeSyncResult()
+        viewModel.refresh(AcademicSyncScope.RANKINGS)
+        advanceUntilIdle()
+        assertEquals(listOf("grades", "exams:2025-2026-2", "rankings"), repository.calls)
     }
 }
 
@@ -62,6 +66,11 @@ private class FakeAcademicRepository : AcademicRepository {
     override suspend fun refreshGradesAndRankings(): AcademicRefreshResult {
         calls += "grades"
         return AcademicRefreshResult(grades = 0, rankings = 0, exams = null, failures = emptyList())
+    }
+
+    override suspend fun refreshRankings(): AcademicRefreshResult {
+        calls += "rankings"
+        return AcademicRefreshResult(null, 0, null, emptyList())
     }
 
     override suspend fun refreshExams(semesterId: String): AcademicRefreshResult {

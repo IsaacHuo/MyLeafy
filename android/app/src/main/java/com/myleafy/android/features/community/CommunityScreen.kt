@@ -79,7 +79,8 @@ fun CommunityScreen(
 
     LifecycleResumeEffect(Unit) {
         if (!uiState.isInitialLoading && !uiState.isRefreshing) viewModel.refresh()
-        onPauseOrDispose { }
+        viewModel.startSignals()
+        onPauseOrDispose { viewModel.stopSignals() }
     }
 
     CommunityContent(
@@ -155,6 +156,9 @@ fun CommunityContent(
                         onSelectHot = onSelectHot,
                         onSelectLatest = onSelectLatest,
                     )
+                }
+                if (state.hasNewPosts) item {
+                    LeafyStatusBanner(message = "有新动态", isError = false, actionLabel = "查看", onAction = onRefresh)
                 }
                 if (state.isInitialLoading) {
                     item { LeafyLoadingState(message = "正在加载校园动态") }

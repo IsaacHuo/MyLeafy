@@ -76,6 +76,7 @@ fun ComposePostScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val writeAction = rememberCommunityWriteAction()
     val categoryFocus = remember { FocusRequester() }
     val bodyFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -103,7 +104,7 @@ fun ComposePostScreen(
             ) {
                 Spacer(modifier = Modifier.height(LeafySpacing.micro))
                 LeafyTextField(
-                    enabled = !uiState.isSubmitting,
+                    enabled = !uiState.isSubmitting && !uiState.submissionStarted,
                     value = uiState.title,
                     onValueChange = viewModel::updateTitle,
                     modifier = Modifier.fillMaxWidth(),
@@ -114,7 +115,7 @@ fun ComposePostScreen(
                 )
                 Spacer(modifier = Modifier.height(LeafySpacing.compact))
                 LeafyTextField(
-                    enabled = !uiState.isSubmitting,
+                    enabled = !uiState.isSubmitting && !uiState.submissionStarted,
                     value = uiState.category,
                     onValueChange = viewModel::updateCategory,
                     modifier = Modifier.fillMaxWidth().focusRequester(categoryFocus),
@@ -125,7 +126,7 @@ fun ComposePostScreen(
                 )
                 Spacer(modifier = Modifier.height(LeafySpacing.compact))
                 LeafyTextField(
-                    enabled = !uiState.isSubmitting,
+                    enabled = !uiState.isSubmitting && !uiState.submissionStarted,
                     value = uiState.body,
                     onValueChange = viewModel::updateBody,
                     modifier = Modifier.fillMaxWidth().focusRequester(bodyFocus),
@@ -154,7 +155,7 @@ fun ComposePostScreen(
                                 )
                                 IconButton(
                                     onClick = { viewModel.removeImage(image.id) },
-                                    enabled = !uiState.isSubmitting,
+                                    enabled = !uiState.isSubmitting && !uiState.submissionStarted,
                                     modifier = Modifier.align(Alignment.TopEnd).size(48.dp).background(Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape),
                                 ) {
                                     Icon(Icons.Outlined.Close, contentDescription = "移除图片", tint = Color.White)
@@ -169,7 +170,7 @@ fun ComposePostScreen(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
                     },
-                    enabled = !uiState.isSubmitting &&
+                    enabled = !uiState.isSubmitting && !uiState.submissionStarted &&
                         uiState.images.size < CommunityImageProcessing.postImageLimit,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -179,7 +180,7 @@ fun ComposePostScreen(
                 Spacer(modifier = Modifier.height(LeafySpacing.micro))
                 Row(
                     modifier = Modifier.fillMaxWidth().toggleable(
-                        value = uiState.isAnonymous, enabled = !uiState.isSubmitting,
+                        value = uiState.isAnonymous, enabled = !uiState.isSubmitting && !uiState.submissionStarted,
                         role = androidx.compose.ui.semantics.Role.Checkbox,
                         onValueChange = { viewModel.toggleAnonymous() },
                     ),
@@ -203,7 +204,7 @@ fun ComposePostScreen(
                 }
 
                 LeafyPrimaryButton(
-                    onClick = viewModel::submit,
+                    onClick = { writeAction(viewModel::submit) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isSubmitting,
                 ) {

@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import com.myleafy.android.ui.components.LeafyTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +83,7 @@ fun HonorRecordsScreen(
 ) {
     val records by viewModel.records.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val saving by viewModel.saving.collectAsStateWithLifecycle()
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editing by remember { mutableStateOf<HonorRecordEntity?>(null) }
@@ -158,7 +159,7 @@ fun HonorRecordsScreen(
                                             )
                                         }.onFailure { viewModel.reportError(it.message ?: "无法打开文件") }
                                     }) {
-                                        Icon(Icons.Outlined.OpenInNew, contentDescription = null)
+                                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
                                         Text("打开", modifier = Modifier.padding(start = LeafySpacing.tiny))
                                     }
                                     LeafyTextButton(onClick = { editing = record }) {
@@ -181,10 +182,10 @@ fun HonorRecordsScreen(
     editing?.let { record ->
         HonorRecordEditor(
             record = record,
+            saving = saving, error = message,
             onDismiss = { editing = null },
             onSave = { title, note, awardedAt ->
-                viewModel.update(record, title, note, awardedAt)
-                editing = null
+                viewModel.update(record, title, note, awardedAt) { editing = null }
             },
         )
     }
@@ -209,6 +210,7 @@ fun HonorRecordsScreen(
 @Composable
 private fun HonorRecordEditor(
     record: HonorRecordEntity,
+    saving: Boolean, error: String?,
     onDismiss: () -> Unit,
     onSave: (String, String, Long?) -> Unit,
 ) {
@@ -217,7 +219,7 @@ private fun HonorRecordEditor(
     var note by rememberSaveable(record.id) { mutableStateOf(record.note) }
     var awardedAt by rememberSaveable(record.id) { mutableStateOf(record.awardedAt) }
     val dirty = title != record.title || note != record.note || awardedAt != record.awardedAt
-    val requestExit = rememberEditorExit(dirty, false, onDismiss)
+    val requestExit = rememberEditorExit(dirty, saving, onDismiss)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = {
         if (it == SheetValue.Hidden && dirty) { requestExit(); false } else true
     })
@@ -254,8 +256,9 @@ private fun HonorRecordEditor(
             }) {
                 Text(current?.let { "获奖时间：${it.format(honorDateFormatter)}" } ?: "选择获奖时间")
             }
-            LeafyPrimaryButton(onClick = { onSave(title, note, awardedAt) }, enabled = title.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                Text("保存")
+            error?.let { LeafyStatusBanner(it, isError = true) }
+            LeafyPrimaryButton(onClick = { onSave(title, note, awardedAt) }, enabled = title.isNotBlank() && !saving, modifier = Modifier.fillMaxWidth()) {
+                Text(if (saving) "保存中" else "保存")
             }
         }
     }

@@ -23,6 +23,7 @@ data class ComposePostUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val published: Boolean = false,
+    val submissionStarted: Boolean = false,
 )
 
 /**
@@ -43,27 +44,27 @@ class ComposePostViewModel(
     val uiState: StateFlow<ComposePostUiState> = _uiState.asStateFlow()
 
     fun updateTitle(title: String) {
-        if (_uiState.value.isSubmitting || _uiState.value.published) return
+        if (_uiState.value.isSubmitting || _uiState.value.published || _uiState.value.submissionStarted) return
         _uiState.value = _uiState.value.copy(title = title, errorMessage = null)
     }
 
     fun updateBody(body: String) {
-        if (_uiState.value.isSubmitting || _uiState.value.published) return
+        if (_uiState.value.isSubmitting || _uiState.value.published || _uiState.value.submissionStarted) return
         _uiState.value = _uiState.value.copy(body = body, errorMessage = null)
     }
 
     fun updateCategory(category: String) {
-        if (_uiState.value.isSubmitting || _uiState.value.published) return
+        if (_uiState.value.isSubmitting || _uiState.value.published || _uiState.value.submissionStarted) return
         _uiState.value = _uiState.value.copy(category = category, errorMessage = null)
     }
 
     fun toggleAnonymous() {
-        if (_uiState.value.isSubmitting || _uiState.value.published) return
+        if (_uiState.value.isSubmitting || _uiState.value.published || _uiState.value.submissionStarted) return
         _uiState.value = _uiState.value.copy(isAnonymous = !_uiState.value.isAnonymous)
     }
 
     fun addImages(uris: List<Uri>) {
-        if (_uiState.value.isSubmitting || _uiState.value.published) return
+        if (_uiState.value.isSubmitting || _uiState.value.published || _uiState.value.submissionStarted) return
         if (uris.isEmpty()) return
         val current = _uiState.value.images
         val remaining = CommunityImageProcessing.postImageLimit - current.size
@@ -85,7 +86,7 @@ class ComposePostViewModel(
     }
 
     fun removeImage(id: String) {
-        if (_uiState.value.isSubmitting || _uiState.value.published) return
+        if (_uiState.value.isSubmitting || _uiState.value.published || _uiState.value.submissionStarted) return
         _uiState.value = _uiState.value.copy(
             images = _uiState.value.images.filterNot { it.id == id },
             errorMessage = null,
@@ -111,6 +112,7 @@ class ComposePostViewModel(
                         }
                     }
                 }
+                _uiState.value = _uiState.value.copy(submissionStarted = true)
                 repository.createPost(
                     postId = postId,
                     requestId = requestId,

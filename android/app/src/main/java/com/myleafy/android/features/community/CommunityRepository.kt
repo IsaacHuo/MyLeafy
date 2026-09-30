@@ -1,6 +1,6 @@
 package com.myleafy.android.features.community
 
-import com.myleafy.android.services.supabase.CommunityService
+import com.myleafy.android.services.cloudflare.CommunityService
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.core.network.SchoolSessionState
@@ -18,13 +18,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * 社区仓储接口。Supabase 为权威来源（RLS + campus 作用域）。
+ * 社区仓储接口。Cloudflare 为权威来源（服务端授权 + campus 作用域）。
  */
 interface CommunityRepository {
+    fun events(scope: String): Flow<Unit>
+    suspend fun hasAcceptedTerms(): Boolean
+    suspend fun acceptTerms()
+
     val isAvailable: Boolean
 
     /** 占位实现标识：true 时 UI 提示功能未接入，避免误导。 */
-    val isPlaceholder: Boolean
 
     fun feed(query: FeedQuery): Flow<List<PostDto>>
 
@@ -85,7 +88,7 @@ interface CommunityRepository {
     ): CommentDto
 }
 
-/** 线上仓储：匿名 Auth + community-feed + postgrest RPC。 */
+/** 线上仓储：Cloudflare 匿名会话与 /v1 API。 */
 class LiveCommunityRepository(
     private val serviceProvider: () -> CommunityService?,
     private val sessionState: SchoolSessionState,
@@ -97,21 +100,37 @@ class LiveCommunityRepository(
 
     override val isAvailable: Boolean
         get() = activeAppScopeStore.current.supports(CampusCapabilities.COMMUNITY)
-    override val isPlaceholder: Boolean = false
+
+    override fun events(scope: String): Flow<Unit> = flow {
+        currentProfile()
+        requireService().events(scope).collect { emit(it) }
+    }
+
+    override suspend fun hasAcceptedTerms(): Boolean {
+        currentProfile()
+        return requireService().hasAcceptedTerms()
+    }
+    override suspend fun acceptTerms() {
+        currentProfile()
+        requireService().acceptTerms()
+    }
 
     private fun requireService(): CommunityService =
-        serviceProvider() ?: throw IllegalStateException("当前身份不可使用社区，或 Supabase 未配置")
+        serviceProvider() ?: throw IllegalStateException("当前身份不可使用社区，请稍后重试")
 
     private suspend fun requireCommunityProfile(requireComplete: Boolean = false): ProfileDto {
         val identity = sessionState.identity
             ?: throw IllegalStateException("请先登录教务，再使用社区互动功能")
         val profile = profileMutex.withLock {
-            cachedProfile?.takeIf { it.first == identity.scopeKey }?.second
+            cachedProfile?.takeIf { it.first == identity.scopeKey && requireService().hasSession }?.second
                 ?: requireService().bootstrapCommunityUser(
                     eduId = identity.eduId,
                     displayName = identity.displayName ?: identity.eduId,
                     campusId = identity.campusId.rawValue,
-                ).profile.also { cachedProfile = identity.scopeKey to it }
+                ).profile.also {
+                    if (sessionState.identity?.scopeKey != identity.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+                    cachedProfile = identity.scopeKey to it
+                }
         }
         if (requireComplete && (!profile.is_profile_complete || profile.nickname.isBlank())) {
             throw IllegalStateException("请先在“我的”中完善社区资料")
@@ -160,8 +179,10 @@ class LiveCommunityRepository(
         return requireService().fetchNotifications(profile.id, limit)
     }
 
-    override suspend fun unreadNotificationCount(limit: Int): Int =
-        notifications(limit).count { !it.is_read }
+    override suspend fun unreadNotificationCount(limit: Int): Int {
+        requireCommunityProfile()
+        return requireService().unreadNotificationCount()
+    }
 
     override suspend fun markNotificationRead(notificationId: String) {
         requireCommunityProfile(requireComplete = true)
@@ -253,58 +274,4 @@ class LiveCommunityRepository(
             replyToCommentId,
         )
     }
-}
-
-/** 占位实现（如无 Supabase 配置时兜底）。 */
-class PlaceholderCommunityRepository : CommunityRepository {
-    override val isAvailable: Boolean = true
-    override val isPlaceholder: Boolean = true
-    override fun feed(query: FeedQuery): Flow<List<PostDto>> = flow { emit(emptyList()) }
-
-    override suspend fun currentProfile(): ProfileDto = throw NotImplementedError("社区功能未接入")
-    override fun cacheCurrentProfile(profile: ProfileDto) = Unit
-    override fun clearProfileCache() = Unit
-
-    override suspend fun post(postId: String): PostDto? = null
-
-    override suspend fun commentThreads(postId: String, limit: Int): List<CommentThread> = emptyList()
-
-    override suspend fun togglePostLike(postId: String): PostDto =
-        throw NotImplementedError("社区功能未接入")
-
-    override suspend fun togglePostFavorite(postId: String): PostDto =
-        throw NotImplementedError("社区功能未接入")
-
-    override suspend fun notifications(limit: Int): List<NotificationDto> = emptyList()
-    override suspend fun unreadNotificationCount(limit: Int): Int = 0
-    override suspend fun markNotificationRead(notificationId: String) = Unit
-    override suspend fun markAllNotificationsRead() = Unit
-    override suspend fun deletePost(postId: String) = throw NotImplementedError("社区功能未接入")
-    override suspend fun deleteComment(commentId: String) = throw NotImplementedError("社区功能未接入")
-    override suspend fun reportPost(postId: String, reason: String, detail: String?) =
-        throw NotImplementedError("社区功能未接入")
-    override suspend fun reportComment(commentId: String, reason: String, detail: String?) =
-        throw NotImplementedError("社区功能未接入")
-    override suspend fun blockUser(userId: String, reason: String?) =
-        throw NotImplementedError("社区功能未接入")
-
-    override suspend fun createPost(
-        postId: String,
-        requestId: String,
-        title: String,
-        body: String,
-        category: String?,
-        isAnonymous: Boolean,
-        images: List<CommunityPostImageUpload>,
-    ): PostDto =
-        throw NotImplementedError("社区功能未接入")
-
-    override suspend fun createComment(
-        commentId: String,
-        requestId: String,
-        postId: String,
-        body: String,
-        parentCommentId: String?,
-        replyToCommentId: String?,
-    ): CommentDto = throw NotImplementedError("社区功能未接入")
 }

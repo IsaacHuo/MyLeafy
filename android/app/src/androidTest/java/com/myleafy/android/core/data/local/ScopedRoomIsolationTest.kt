@@ -52,6 +52,18 @@ class ScopedRoomIsolationTest {
     }
 
     @Test
+    fun timetableReplacementRollsBackOnSaveFailure() = runBlocking {
+        val original = course("scope-a", "原课表")
+        database.courseDao().upsertAll(listOf(original))
+        database.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_course BEFORE INSERT ON courses WHEN NEW.courseName = '失败' BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+        val failure = runCatching {
+            database.courseDao().replaceForSemester("scope-a", TERM, listOf(original.copy(courseName = "失败")))
+        }.exceptionOrNull()
+        org.junit.Assert.assertNotNull(failure)
+        assertEquals(listOf(original), database.courseDao().coursesForSemester("scope-a", TERM).first())
+    }
+
+    @Test
     fun scheduleEventsSupportScopedCrudAndOverlappingRanges() = runBlocking {
         val dao = database.scheduleEventDao()
         val sharedA = scheduleEvent("scope-a", "shared", 1_100, 1_200, "A 日程")

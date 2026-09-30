@@ -22,85 +22,64 @@ import kotlinx.coroutines.launch
 @Composable
 fun EntryScreen(onComplete: () -> Unit, onBack: (() -> Unit)? = null) {
     val container = (LocalContext.current.applicationContext as MyLeafyApplication).container
-    var schoolForm by rememberSaveable { mutableStateOf(false) }
+    var schoolSelected by rememberSaveable { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    if (schoolForm) {
-        BackHandler { schoolForm = false }
-        LoginScreen(onBack = { schoolForm = false }, onLoggedIn = onComplete)
-    } else {
-        EntryContent(
-            busy = busy,
-            error = error,
-            onBack = onBack,
-            onSchool = {
-                scope.launch(Dispatchers.Main.immediate) {
-                    busy = true
-                    error = null
-                    try {
-                        if (container.schoolSessionState.identity != null) container.signOut()
-                        schoolForm = true
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (failure: Exception) {
-                        error = failure.message ?: "无法切换学校账号，请重试"
-                    } finally {
-                        busy = false
-                    }
+    val header: @Composable () -> Unit = {
+        EntryHeader(schoolSelected, busy) { schoolSelected = it }
+    }
+    Scaffold(containerColor = MaterialTheme.leafySurfaces.page) { padding ->
+        val contentModifier = Modifier.fillMaxSize().padding(padding)
+        if (schoolSelected) {
+            LoginScreen(onBack = { onBack?.invoke() }, onLoggedIn = onComplete,
+                entryHeader = header, modifier = contentModifier, onBusyChanged = { busy = it })
+        } else {
+            Box(contentModifier, contentAlignment = Alignment.Center) {
+                Column(Modifier.widthIn(max = LeafyComponentSize.formMaxWidth).fillMaxWidth()
+                    .verticalScroll(rememberScrollState()).padding(LeafySpacing.page)) {
+                    header()
+                    LeafyPrimaryButton(enabled = !busy, modifier = Modifier.fillMaxWidth(), onClick = {
+                        scope.launch(Dispatchers.Main.immediate) {
+                            busy = true
+                            error = null
+                            try { container.enterLocalMode(); onComplete() }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (failure: Exception) {
+                                android.util.Log.e("EntryScreen", "Local entry failed", failure)
+                                error = "无法进入免登录模式，请重试"
+                            }
+                            finally { busy = false }
+                        }
+                    }) { Text(if (busy) "正在进入…" else "直接进入") }
+                    error?.let { LeafyStatusBanner(it, isError = true) }
                 }
-            },
-            onLocal = {
-                scope.launch(Dispatchers.Main.immediate) {
-                    busy = true
-                    error = null
-                    try {
-                        container.enterLocalMode()
-                        onComplete()
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (failure: Exception) {
-                        error = failure.message ?: "无法进入免登录模式，请重试"
-                    } finally {
-                        busy = false
-                    }
-                }
-            },
-        )
+            }
+        }
     }
 }
 
 @Composable
-fun EntryContent(
-    busy: Boolean,
-    error: String?,
-    onSchool: () -> Unit,
-    onLocal: () -> Unit,
-    onBack: (() -> Unit)? = null,
-) {
-    Scaffold(containerColor = MaterialTheme.leafySurfaces.page) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-            Column(
-                Modifier.widthIn(max = LeafyComponentSize.formMaxWidth).fillMaxWidth()
-                    .verticalScroll(rememberScrollState()).padding(LeafySpacing.page),
-                verticalArrangement = Arrangement.spacedBy(LeafySpacing.card),
+internal fun EntryHeader(schoolSelected: Boolean, busy: Boolean, onSelectSchool: (Boolean) -> Unit) {
+        Text("MyLeafy", style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(LeafySpacing.section))
+        Text("选择入口", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        listOf(true to "北京林业大学", false to "免登录入口").forEach { (school, title) ->
+            Surface(
+                onClick = { onSelectSchool(school) }, enabled = !busy,
+                shape = MaterialTheme.shapes.medium,
+                color = if (schoolSelected == school) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.leafySurfaces.content,
+                modifier = Modifier.fillMaxWidth().padding(vertical = LeafySpacing.tiny),
             ) {
-                Text("MyLeafy", style = MaterialTheme.typography.headlineLarge)
-                Text("选择入口", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(LeafySpacing.card))
-                LeafyPrimaryButton(onClick = onSchool, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                    Text("北京林业大学")
+                Row(Modifier.padding(LeafySpacing.card), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = schoolSelected == school, onClick = null)
+                    Column(Modifier.weight(1f).padding(start = LeafySpacing.compact)) {
+                        Text(title, style = MaterialTheme.typography.titleMedium)
+                        Text(if (school) "已接入教务系统，可使用校园账号登录。" else "无需账号和密码，数据全部保存在本机，不连接任何后台。",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                Text("已接入教务系统，可使用校园账号登录。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LeafySecondaryButton(onClick = onLocal, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (busy) "正在进入…" else "免登录入口")
-                }
-                Text("无需账号和密码，数据全部保存在本机，不连接任何后台。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                error?.let { LeafyStatusBanner(it, isError = true) }
-                onBack?.let { LeafyTextButton(onClick = it, enabled = !busy) { Text("返回") } }
             }
         }
-    }
+        Spacer(Modifier.height(LeafySpacing.section))
 }

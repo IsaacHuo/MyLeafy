@@ -31,18 +31,27 @@ class ClassroomViewModel(
     /** 当前周（默认本周）。 */
     val currentWeek: Int = SemesterConfig.currentWeek(LocalDate.now())
 
+    private var queryJob: kotlinx.coroutines.Job? = null
+    private var generation = 0
+
+    fun clearResults() {
+        generation += 1
+        queryJob?.cancel()
+        _uiState.value = ClassroomUiState.Idle
+    }
+
     fun query(week: Int, day: Int, startPeriod: Int, endPeriod: Int) {
+        val request = ++generation
+        queryJob?.cancel()
         _uiState.value = ClassroomUiState.Loading
-        viewModelScope.launch {
-            val result = runCatching {
-                repository.emptyClassrooms(semesterId, week, day, startPeriod, endPeriod)
+        queryJob = viewModelScope.launch {
+            try {
+                val rooms = repository.emptyClassrooms(semesterId, week, day, startPeriod, endPeriod)
+                if (request == generation) _uiState.value = ClassroomUiState.Loaded(rooms)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (request == generation) _uiState.value = ClassroomUiState.Error(failure.message ?: "查询失败")
             }
-            _uiState.value = result.fold(
-                onSuccess = { rooms ->
-                    if (rooms.isEmpty()) ClassroomUiState.Loaded(emptyList()) else ClassroomUiState.Loaded(rooms)
-                },
-                onFailure = { ClassroomUiState.Error(it.message ?: "查询失败") },
-            )
         }
     }
 }

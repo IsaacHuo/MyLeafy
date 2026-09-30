@@ -1,5 +1,7 @@
 package com.myleafy.android.features.timetable
 
+import com.myleafy.android.core.network.AcademicStage
+import com.myleafy.android.core.network.SchoolNetworkError
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myleafy.android.core.data.local.CourseEntity
@@ -30,6 +32,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -73,9 +76,9 @@ data class TimetableWeekPage(
 
 sealed interface TimetableSyncState {
     data object Idle : TimetableSyncState
-    data object Syncing : TimetableSyncState
-    data class Success(val count: Int) : TimetableSyncState
-    data class Error(val message: String) : TimetableSyncState
+    data class Syncing(val stage: AcademicStage = AcademicStage.FETCHING_TIMETABLE) : TimetableSyncState
+    data class Success(val count: Int, val message: String = "同步完成") : TimetableSyncState
+    data class Error(val message: String, val needsAuthentication: Boolean = false) : TimetableSyncState
 }
 
 sealed interface TimetableExportState {
@@ -103,6 +106,12 @@ class TimetableViewModel(
     private val today: LocalDate
         get() = LocalDate.now(TimetableGridProjection.campusZone)
     private val selectedWeek = MutableStateFlow(weekForDate(today))
+    private val _weekNavigation = MutableStateFlow<Pair<Int, Int>?>(null)
+    val weekNavigation = _weekNavigation.asStateFlow()
+    fun consumeWeekNavigation(request: Pair<Int, Int>) {
+        _weekNavigation.compareAndSet(request, null)
+    }
+    private fun navigateWeek(week: Int) { _weekNavigation.value = week to ((_weekNavigation.value?.second ?: 0) + 1) }
     private val _syncState = MutableStateFlow<TimetableSyncState>(TimetableSyncState.Idle)
     val syncState: StateFlow<TimetableSyncState> = _syncState.asStateFlow()
     private val _scheduleMutationState = MutableStateFlow<ScheduleMutationState>(ScheduleMutationState.Idle)
@@ -112,13 +121,12 @@ class TimetableViewModel(
     private val _weatherState = MutableStateFlow<WeatherUiState>(WeatherUiState.Idle)
     val weatherState: StateFlow<WeatherUiState> = _weatherState.asStateFlow()
 
-    private val mapped: Flow<TimetableUiState> = combine(
-        repository.coursesForSemester(semesterId),
-        academicRepository.exams(),
-        scheduleRepository.events(),
-        selectedWeek,
-        settingsStore.settings,
-    ) { courses, exams, scheduleEvents, week, settings ->
+    private data class TimetableData(val courses: List<CourseEntity>, val exams: List<ExamEntity>,
+        val events: List<ScheduleEventEntity>, val pages: List<TimetableWeekPage>)
+
+    private val timetableData = combine(
+        repository.coursesForSemester(semesterId), academicRepository.exams(), scheduleRepository.events(),
+    ) { courses, exams, scheduleEvents ->
         val gridCourses = courses.map { it.toGridCourse() }
         val gridExams = exams.mapNotNull { it.toGridExamOrNull() }
         val gridEvents = scheduleEvents.map { it.toGridScheduleEvent() }
@@ -138,18 +146,22 @@ class TimetableViewModel(
                 ),
             )
         }
-        val selectedPage = pages[week - 1]
+        TimetableData(courses, exams, scheduleEvents, pages)
+    }.flowOn(Dispatchers.Default)
+
+    private val mapped: Flow<TimetableUiState> = combine(timetableData, selectedWeek, settingsStore.settings) { data, week, settings ->
+        val selectedPage = data.pages[week - 1]
         TimetableUiState.Loaded(
             semesterId = semesterId,
             currentWeek = weekForDate(today),
             selectedWeek = week,
             weekRange = selectedPage.weekRange,
-            courses = courses,
-            exams = exams,
-            scheduleEvents = scheduleEvents,
+            courses = data.courses,
+            exams = data.exams,
+            scheduleEvents = data.events,
             grid = selectedPage.grid,
             supportedWeeks = semesterConfig.supportedWeeks,
-            pages = pages,
+            pages = data.pages,
             showWeekends = !settings.hideWeekends,
             background = settings.timetableBackground,
         )
@@ -187,7 +199,7 @@ class TimetableViewModel(
     }
 
     fun goToCurrentWeek() {
-        selectedWeek.value = weekForDate(today)
+        navigateWeek(weekForDate(today))
     }
 
     fun selectWeek(week: Int) {
@@ -196,15 +208,14 @@ class TimetableViewModel(
 
     fun refresh() {
         if (_syncState.value is TimetableSyncState.Syncing) return
-        _syncState.value = TimetableSyncState.Syncing
+        _syncState.value = TimetableSyncState.Syncing()
         viewModelScope.launch {
-            val result = runCatching { repository.refresh(semesterId) }
+            val result = runCatching { repository.refresh(semesterId) { stage -> _syncState.value = TimetableSyncState.Syncing(stage) } }
             _syncState.value = result.fold(
                 onSuccess = {
-                    val count = (uiState.value as? TimetableUiState.Loaded)?.courses?.size ?: 0
-                    TimetableSyncState.Success(count)
+                    TimetableSyncState.Success(it.courseCount, it.message)
                 },
-                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TimetableSyncState.Error(it.message ?: "同步失败") },
+                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TimetableSyncState.Error("获取课表失败，已继续显示本地课表：${it.message ?: "请重试"}", it is SchoolNetworkError.SessionExpired) },
             )
         }
     }

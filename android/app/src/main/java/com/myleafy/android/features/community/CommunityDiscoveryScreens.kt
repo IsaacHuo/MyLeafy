@@ -23,6 +23,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -179,7 +184,7 @@ class CommunityNotificationsViewModel(
     }
 
     fun open(notification: NotificationDto, onReady: (String) -> Unit) {
-        val postId = notification.post_id ?: return
+        val postId = notification.post_id
         viewModelScope.launch {
             if (!notification.is_read) {
                 runCatching { repository.markNotificationRead(notification.id) }
@@ -193,7 +198,7 @@ class CommunityNotificationsViewModel(
                     },
                 )
             }
-            onReady(postId)
+            postId?.let(onReady)
         }
     }
 
@@ -201,7 +206,9 @@ class CommunityNotificationsViewModel(
         if (_uiState.value.isMutating || _uiState.value.notifications.none { !it.is_read }) return
         _uiState.value = _uiState.value.copy(isMutating = true, error = null)
         viewModelScope.launch {
-            runCatching { repository.markAllNotificationsRead() }.fold(
+            runCatching {
+                _uiState.value.notifications.filterNot { it.is_read }.forEach { repository.markNotificationRead(it.id) }
+            }.fold(
                 onSuccess = {
                     _uiState.value = _uiState.value.copy(
                         notifications = _uiState.value.notifications.map { it.copy(is_read = true) },
@@ -230,6 +237,13 @@ fun CommunityNotificationsScreen(
     ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var detail by remember { mutableStateOf<NotificationDto?>(null) }
+    detail?.let { notice ->
+        com.myleafy.android.ui.components.LeafyAlertDialog(onDismissRequest = { detail = null },
+            title = { Text(notice.title) },
+            text = { Text(notice.body.orEmpty(), Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = { TextButton(onClick = { detail = null }) { Text("关闭") } })
+    }
     LifecycleResumeEffect(Unit) {
         viewModel.load()
         onPauseOrDispose { }
@@ -241,7 +255,7 @@ fun CommunityNotificationsScreen(
             TextButton(
                 onClick = viewModel::markAllRead,
                 enabled = !state.isMutating && state.notifications.any { !it.is_read },
-            ) { Text(if (state.isMutating) "处理中" else "全部已读") }
+            ) { Text(if (state.isMutating) "处理中" else "本页已读") }
         },
     ) { contentModifier ->
         when {
@@ -269,7 +283,10 @@ fun CommunityNotificationsScreen(
                 items(state.notifications, key = { it.id }) { notification ->
                     NotificationCard(
                         notification = notification,
-                        onClick = { viewModel.open(notification, onPostClick) },
+                        onClick = {
+                            if (notification.post_id == null) detail = notification
+                            viewModel.open(notification, onPostClick)
+                        },
                     )
                 }
             }
@@ -281,7 +298,7 @@ fun CommunityNotificationsScreen(
 private fun NotificationCard(notification: NotificationDto, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        enabled = notification.post_id != null,
+
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.leafySurfaces.content,
         shape = MaterialTheme.shapes.medium,

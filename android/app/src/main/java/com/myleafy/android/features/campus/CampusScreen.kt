@@ -91,7 +91,6 @@ fun CampusScreen(
     ),
     modifier: Modifier = Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -118,42 +117,22 @@ fun CampusScreen(
             )
         },
     ) { contentPadding ->
-        when (val state = uiState) {
-            is CampusUiState.Loading -> {
-                LeafyLoadingState(modifier = Modifier.fillMaxSize().padding(contentPadding))
-            }
-            is CampusUiState.Error -> {
-                LeafyErrorState(
-                    title = "校园数据暂不可用",
-                    message = state.message,
-                    modifier = Modifier.fillMaxSize().padding(contentPadding),
-                    // 本地读取失败：重新订阅本地数据流，不去请求教务。
-                    action = {
-                        LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
-                    },
-                )
-            }
-            is CampusUiState.Loaded -> {
-                CampusDashboard(
-                    state = state,
-                    syncState = syncState,
-                    campusId = campusId,
-                    onRetrySync = viewModel::refresh,
-                    onConsumeSync = viewModel::consumeSyncResult,
-                    onGradesClick = onGradesClick,
-                    onExamsClick = onExamsClick,
-                    onClassroomClick = onClassroomClick,
-                    onFeatureClick = onFeatureClick,
-                    modifier = Modifier.fillMaxSize().padding(contentPadding),
-                )
-            }
-        }
+        CampusDashboard(
+            syncState = syncState,
+            campusId = campusId,
+            onRetrySync = viewModel::refresh,
+            onConsumeSync = viewModel::consumeSyncResult,
+            onGradesClick = onGradesClick,
+            onExamsClick = onExamsClick,
+            onClassroomClick = onClassroomClick,
+            onFeatureClick = onFeatureClick,
+            modifier = Modifier.fillMaxSize().padding(contentPadding),
+        )
     }
 }
 
 @Composable
 internal fun CampusDashboard(
-    state: CampusUiState.Loaded,
     syncState: CampusSyncState,
     campusId: CampusID?,
     onRetrySync: () -> Unit,
@@ -186,7 +165,6 @@ internal fun CampusDashboard(
                 )
                 CampusDomainContent(
                     domain = selectedDomain,
-                    state = state,
                     syncState = syncState,
                     campusId = campusId,
                     onRetrySync = onRetrySync,
@@ -207,7 +185,6 @@ internal fun CampusDashboard(
                 )
                 CampusDomainContent(
                     domain = selectedDomain,
-                    state = state,
                     syncState = syncState,
                     campusId = campusId,
                     onRetrySync = onRetrySync,
@@ -291,7 +268,6 @@ private fun CampusDomainSidebar(
 @Composable
 private fun CampusDomainContent(
     domain: CampusDomain,
-    state: CampusUiState.Loaded,
     syncState: CampusSyncState,
     campusId: CampusID?,
     onRetrySync: () -> Unit,
@@ -346,7 +322,7 @@ private fun CampusDomainContent(
                 // 失败保留在屏幕上，直到用户重试、同步成功或主动关闭。
                 is CampusSyncState.Error -> item {
                     LeafyStatusBanner(
-                        message = "同步失败：${syncState.message}",
+                        message = syncState.message,
                         isError = true,
                         actionLabel = "重试",
                         onAction = onRetrySync,
@@ -360,7 +336,7 @@ private fun CampusDomainContent(
         if (domain == CampusDomain.Teaching) {
             item {
                 CampusToolRow(
-                    title = "成绩与排名",
+                    title = "成绩查询",
                     description = "查看个人课程成绩",
                     icon = Icons.Outlined.Assessment,
                     onClick = onGradesClick,

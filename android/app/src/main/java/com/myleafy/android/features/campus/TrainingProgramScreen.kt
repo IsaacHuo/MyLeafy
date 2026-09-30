@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +25,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -281,8 +284,16 @@ private fun TrainingProgramContent(
                             .padding(LeafySpacing.card),
                         verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
                     ) {
-                        table.rows.forEach { row ->
-                            Text(row.joinToString("  |  "), style = MaterialTheme.typography.bodySmall)
+                        val columns = table.rows.maxOfOrNull { it.size } ?: 0
+                        table.rows.forEachIndexed { index, row ->
+                            Surface(color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface) {
+                                Row {
+                                    repeat(columns) { column ->
+                                        Text(row.getOrNull(column).orEmpty(), modifier = Modifier.width(144.dp).padding(10.dp),
+                                            style = if (index == 0) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

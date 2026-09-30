@@ -30,10 +30,17 @@ class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel(
     val error: StateFlow<String?> = _error.asStateFlow()
     fun dismissError() { _error.value = null }
     fun reportError(error: String) { _error.value = error }
-    private fun mutate(block: suspend () -> Unit) = viewModelScope.launch {
-        try { block(); _error.value = null }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
+    private val _saving = MutableStateFlow(false)
+    val saving = _saving.asStateFlow()
+    private fun mutate(onSaved: () -> Unit = {}, block: suspend () -> Unit) {
+        if (_saving.value) return
+        _saving.value = true
+        viewModelScope.launch {
+            try { block(); _error.value = null; onSaved() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
+            finally { _saving.value = false }
+        }
     }
 
     val uiState: StateFlow<SportsUiState> = combine(
@@ -49,12 +56,12 @@ class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel(
 
     fun deleteRun(record: SunshineRunRecordEntity) = mutate { repository.deleteRun(record) }
 
-    fun saveRules(total: Int, weeks: Int, perPeriod: Int, excludedWeeks: String) = mutate {
+    fun saveRules(total: Int, weeks: Int, perPeriod: Int, excludedWeeks: String, onSaved: () -> Unit = {}) = mutate(onSaved) {
         repository.saveSunshineSettings(total, weeks, perPeriod, excludedWeeks)
     }
 
-    fun saveFitness(date: LocalDate, item: String, value: Double, unit: String, note: String) =
-        mutate { repository.saveFitnessTest(date = date, item = item, value = value, unit = unit, note = note) }
+    fun saveFitness(date: LocalDate, item: String, value: Double, unit: String, note: String, onSaved: () -> Unit = {}) =
+        mutate(onSaved) { repository.saveFitnessTest(date = date, item = item, value = value, unit = unit, note = note) }
 
     fun deleteFitness(record: FitnessTestRecordEntity) = mutate {
         repository.deleteFitnessTest(record)
@@ -72,10 +79,17 @@ class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel
     val error: StateFlow<String?> = _error.asStateFlow()
     fun dismissError() { _error.value = null }
     fun reportError(error: String) { _error.value = error }
-    private fun mutate(block: suspend () -> Unit) = viewModelScope.launch {
-        try { block(); _error.value = null }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
+    private val _saving = MutableStateFlow(false)
+    val saving = _saving.asStateFlow()
+    private fun mutate(onSaved: () -> Unit = {}, block: suspend () -> Unit) {
+        if (_saving.value) return
+        _saving.value = true
+        viewModelScope.launch {
+            try { block(); _error.value = null; onSaved() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
+            finally { _saving.value = false }
+        }
     }
 
     private val exportedFile = kotlinx.coroutines.flow.MutableStateFlow<File?>(null)
@@ -90,7 +104,7 @@ class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel
         MedicalUiState(),
     )
 
-    fun save(draft: MedicalLedgerDraft) = mutate { repository.saveMedicalEntry(draft) }
+    fun save(draft: MedicalLedgerDraft, onSaved: () -> Unit = {}) = mutate(onSaved) { repository.saveMedicalEntry(draft) }
     fun delete(entry: MedicalLedgerEntryEntity) = mutate { repository.deleteMedicalEntry(entry) }
     fun importPhoto(entryId: String, uri: Uri) = mutate { repository.importMedicalPhoto(entryId, uri) }
     fun export() = mutate { exportedFile.value = repository.exportMedicalLedger(uiState.value.entries) }

@@ -15,7 +15,6 @@ import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.myleafy.android.features.campus.CampusDashboard
 import com.myleafy.android.features.campus.CampusSyncState
-import com.myleafy.android.features.campus.CampusUiState
 import com.myleafy.android.features.schedule.ScheduleContent
 import com.myleafy.android.features.schedule.ScheduleSection
 import com.myleafy.android.features.schedule.notifications.ScheduleReportsUiState
@@ -108,15 +107,15 @@ class RootContentScreenshotTest {
     }
 
     @Test
-    fun campusCompactLight() = captureCampus(emptyCampusState())
+    fun campusCompactLight() = captureCampus()
 
     @Test
     @Config(sdk = [36], qualifiers = "w700dp-h900dp-xxhdpi", application = Application::class)
-    fun campusMediumLight() = captureCampus(emptyCampusState())
+    fun campusMediumLight() = captureCampus()
 
     @Test
     @Config(sdk = [36], qualifiers = "w840dp-h900dp-xxhdpi", application = Application::class)
-    fun campusWide840Dark() = captureCampus(loadedCampusState(), darkTheme = true)
+    fun campusWide840Dark() = captureCampus(darkTheme = true)
 
     /**
      * 600dp + 200% font: the sidebar layout has a single scrollable region, so the
@@ -129,7 +128,6 @@ class RootContentScreenshotTest {
         composeRule.setContent {
             LeafyScreenshotTheme(fontScale = 2f) {
                 CampusDashboard(
-                    state = loadedCampusState(),
                     syncState = CampusSyncState.Idle,
                     campusId = com.myleafy.android.core.campus.CampusID.bjfu,
                     onRetrySync = {},
@@ -152,30 +150,10 @@ class RootContentScreenshotTest {
         capture()
     }
 
-    private fun emptyCampusState() = CampusUiState.Loaded(
-        terms = emptyList(),
-        grades = emptyList(),
-        rankings = emptyList(),
-        gradeSummary = null,
-        exams = emptyList(),
-    )
-
-    private fun loadedCampusState() = CampusUiState.Loaded(
-        terms = listOf("2025-2026-2", "2025-2026-1"),
-        grades = listOf(
-            gradeEntity("g1", "森林生态学", credit = "3.0", score = "92"),
-            gradeEntity("g2", "高等数学 B", credit = "5.0", score = "88"),
-        ),
-        rankings = listOf(rankingEntity()),
-        gradeSummary = gradeSummary(),
-        exams = listOf(examEntity(id = 1), examEntity(id = 2, name = "大学英语", date = "2026-01-15")),
-    )
-
-    private fun captureCampus(state: CampusUiState.Loaded, darkTheme: Boolean = false) {
+    private fun captureCampus(darkTheme: Boolean = false) {
         composeRule.setContent {
             LeafyScreenshotTheme(darkTheme = darkTheme) {
                 CampusDashboard(
-                    state = state,
                     syncState = CampusSyncState.Idle,
                     campusId = com.myleafy.android.core.campus.CampusID.bjfu,
                     onRetrySync = {},

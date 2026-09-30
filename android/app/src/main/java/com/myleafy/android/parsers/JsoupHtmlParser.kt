@@ -332,46 +332,35 @@ class JsoupHtmlParser : HtmlParser {
 
     override fun parseGrades(html: String): List<ParsedGradeRecord> {
         val document = Jsoup.parse(html)
-        val gradeTables = candidateDataTables(document).filter { table ->
-            val headerText = table.select("th").joinToString(" ") { it.text().trim() }
-            headerText.contains("课程名称") &&
-                headerText.contains("成绩") &&
-                headerText.contains("学分") &&
-                (headerText.contains("开课学期") || headerText.contains("课程编号"))
-        }
-        val gradeTable = gradeTables.firstOrNull() ?: document.select("#dataList").firstOrNull()
-            ?: throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "成绩")
-        val rows = gradeTable.select("tr")
-        val dataRows = rows.filter { it.select("td").isNotEmpty() }
-        val parsed = mutableListOf<ParsedGradeRecord>()
-
-        for (row in rows) {
-            val tds = row.select("td")
-            if (tds.size < 6) continue
-            val term = tds[1].text().trim()
-            val courseName = tds[3].text().trim()
-            var score = tds[4].text().trim()
-            val credit = tds[5].text().trim()
-            if (term.isEmpty() || courseName.isEmpty() || courseName == "课程名称" || parseCredit(credit) == null) {
-                continue
+        val tables = candidateDataTables(document)
+        for (table in tables) {
+            val rows = table.select("tr")
+            val headerIndex = rows.indexOfFirst { row ->
+                val labels = row.select("th,td").map { it.text().trim() }
+                labels.containsAll(listOf("课程名称", "成绩", "学分"))
             }
-            val courseAttribute = if (tds.size > 7) tds[7].text().trim() else ""
-            val courseCategory = if (tds.size > 10) tds[10].text().trim() else ""
-            val type = listOf(courseAttribute, courseCategory).filter { it.isNotEmpty() }.joinToString(" · ")
-
-            if (score.isEmpty() || score == " ") {
-                score = tds[4].select("a").text().trim()
+            if (headerIndex < 0) continue
+            val headings = rows[headerIndex].select("th,td").map { it.text().trim() }
+            val parsed = mutableListOf<ParsedGradeRecord>()
+            for (row in rows.drop(headerIndex + 1)) {
+                val cells = row.select("td").map { it.text().trim() }
+                if (cells.isEmpty() || cells.all { it.isEmpty() } || cells.joinToString("").let { it.contains("暂无数据") || it.contains("无记录") }) continue
+                fun value(vararg names: String): String = cells.getOrNull(headings.indexOfFirst { it in names }).orEmpty()
+                val term = value("开课学期", "学期")
+                val name = value("课程名称")
+                val credit = value("学分")
+                if (term.isEmpty() || name.isEmpty() || parseCredit(credit) == null) {
+                    throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "成绩")
+                }
+                val attribute = value("课程属性")
+                val category = value("课程分类", "课程性质", "课程类别")
+                parsed += ParsedGradeRecord(term, name, credit, value("成绩"),
+                    listOf(attribute, category).filter(String::isNotEmpty).joinToString(" · "),
+                    value("课程编号", "课程代码").ifBlank { null }, attribute, category, value("考试性质"))
             }
-            if (score.isEmpty() || score == " ") {
-                score = tds[4].select("font").text().trim()
-            }
-            parsed.add(ParsedGradeRecord(term = term, courseName = courseName, credit = credit, score = score, type = type))
+            return parsed
         }
-
-        if (dataRows.isNotEmpty() && parsed.isEmpty()) {
-            throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "成绩")
-        }
-        return parsed
+        throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "成绩")
     }
 
     override fun parseGradeRankings(html: String): List<ParsedGradeRanking> {

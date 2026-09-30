@@ -5,11 +5,11 @@ import com.myleafy.android.core.campus.CampusCapabilities
 import com.myleafy.android.features.community.CommunityRepository
 import com.myleafy.android.features.timetable.TimetableRepository
 import com.myleafy.android.features.timetable.domain.SemesterConfig
-import com.myleafy.android.services.supabase.SharedTimetableCourseDto
-import com.myleafy.android.services.supabase.SharedTimetableSnapshotDto
-import com.myleafy.android.services.supabase.TimetableInviteDto
-import com.myleafy.android.services.supabase.TimetableShareMemberDto
-import com.myleafy.android.services.supabase.TimetableSharingService
+import com.myleafy.android.services.cloudflare.SharedTimetableCourseDto
+import com.myleafy.android.services.cloudflare.SharedTimetableSnapshotDto
+import com.myleafy.android.services.cloudflare.TimetableInviteDto
+import com.myleafy.android.services.cloudflare.TimetableShareMemberDto
+import com.myleafy.android.services.cloudflare.TimetableSharingService
 import kotlinx.coroutines.flow.first
 
 data class TimetableSharingSnapshot(

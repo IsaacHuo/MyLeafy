@@ -11,6 +11,13 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
+import com.myleafy.android.ui.components.leafyPullRefresh
+import com.myleafy.android.ui.components.rememberLeafyPullRefreshState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,6 +91,7 @@ import com.myleafy.android.features.timetable.domain.TimetableGridProjection
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.features.timetable.presentation.CourseDetailsDialog
 import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
+import com.myleafy.android.features.timetable.presentation.TimetableBackground
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
 import com.myleafy.android.features.timetable.weather.WeatherCondition
 import com.myleafy.android.features.timetable.weather.WeatherUiState
@@ -112,6 +120,9 @@ import kotlin.math.roundToInt
 @Composable
 fun TimetableScreen(
     onShareClick: () -> Unit = {},
+    onReauthenticate: () -> Unit = {},
+    reauthenticated: Boolean = false,
+    onConsumeReauthentication: () -> Unit = {},
     identity: TimetableIdentity,
     viewModel: TimetableViewModel = viewModel(
         factory = appViewModelFactory { container ->
@@ -131,9 +142,13 @@ fun TimetableScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val weekNavigation by viewModel.weekNavigation.collectAsStateWithLifecycle()
     val mutationState by viewModel.scheduleMutationState.collectAsStateWithLifecycle()
     val exportState by viewModel.exportState.collectAsStateWithLifecycle()
     val weatherState by viewModel.weatherState.collectAsStateWithLifecycle()
+    LaunchedEffect(reauthenticated) {
+        if (reauthenticated) { onConsumeReauthentication(); viewModel.refresh() }
+    }
     val context = LocalContext.current
     val activity = context.findActivity()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -287,6 +302,10 @@ fun TimetableScreen(
             )
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
+                weekNavigation = weekNavigation,
+                onConsumeWeekNavigation = viewModel::consumeWeekNavigation,
+                canRefresh = identity.canSyncFromSchool,
+                onReauthenticate = onReauthenticate,
                 syncState = syncState,
                 onRetrySync = viewModel::refresh,
                 onSelectWeek = viewModel::selectWeek,
@@ -364,7 +383,7 @@ fun TimetableScreen(
         LeafyAlertDialog(
             onDismissRequest = { showWeatherPermissionDialog = false },
             title = { Text("显示当地天气") },
-            text = { Text("MyLeafy 只使用设备提供的粗略位置直接请求 Open-Meteo；位置不会上传到 MyLeafy 或 Supabase，也不会影响课表使用。") },
+            text = { Text("MyLeafy 只使用设备提供的粗略位置直接请求 Open-Meteo；位置不会上传到 MyLeafy 后台，也不会影响课表使用。") },
             confirmButton = {
                 LeafyTextButton(onClick = {
                     showWeatherPermissionDialog = false
@@ -430,7 +449,7 @@ private fun TimetableWeatherTitle(
 }
 
 @Composable
-private fun TimetableScreenContent(
+internal fun TimetableScreenContent(
     state: TimetableUiState.Loaded,
     syncState: TimetableSyncState,
     onRetrySync: () -> Unit,
@@ -439,6 +458,10 @@ private fun TimetableScreenContent(
     onItemClick: (TimetableGridItem) -> Unit,
     onConsumeSync: () -> Unit,
     modifier: Modifier = Modifier,
+    weekNavigation: Pair<Int, Int>? = null,
+    onConsumeWeekNavigation: (Pair<Int, Int>) -> Unit = {},
+    canRefresh: Boolean = false,
+    onReauthenticate: () -> Unit = {},
 ) {
     val pagerState = rememberPagerState(
         initialPage = (state.selectedWeek - 1).coerceIn(0, state.supportedWeeks - 1),
@@ -451,13 +474,36 @@ private fun TimetableScreenContent(
             .distinctUntilChanged()
             .collect { page -> onSelectWeek(page + 1) }
     }
-    LaunchedEffect(state.selectedWeek) {
-        val targetPage = (state.selectedWeek - 1).coerceIn(0, state.supportedWeeks - 1)
-        if (pagerState.settledPage != targetPage) pagerState.animateScrollToPage(targetPage)
+    LaunchedEffect(weekNavigation) {
+        weekNavigation?.let {
+            pagerState.scrollToPage((it.first - 1).coerceIn(0, state.supportedWeeks - 1))
+            onSelectWeek(it.first)
+            onConsumeWeekNavigation(it)
+        }
     }
+    var choosingWeek by remember { mutableStateOf(false) }
+    if (choosingWeek) LeafyAlertDialog(
+        onDismissRequest = { choosingWeek = false }, title = { Text("选择周次") },
+        text = {
+            androidx.compose.foundation.lazy.LazyColumn {
+                items(state.supportedWeeks) { index ->
+                    LeafyTextButton(onClick = {
+                        choosingWeek = false
+                        coroutineScope.launch { pagerState.scrollToPage(index) }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("第 ${index + 1} 周") }
+                }
+            }
+        },
+        confirmButton = { LeafyTextButton(onClick = { choosingWeek = false }) { Text("关闭") } },
+    )
 
+    val pullRefresh = rememberLeafyPullRefreshState(syncState is TimetableSyncState.Syncing, onRetrySync)
     val visiblePage = state.pages[pagerState.currentPage]
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
+    Box(modifier.fillMaxSize()
+        .leafyPullRefresh(pullRefresh, enabled = canRefresh && syncState is TimetableSyncState.Idle)
+        .scrollable(rememberScrollableState { 0f }, Orientation.Vertical, enabled = canRefresh)) {
+    TimetableBackground(state.background, Modifier.matchParentSize())
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth(),
@@ -488,7 +534,7 @@ private fun TimetableScreenContent(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).testTag("timetable-week"),
+                    modifier = Modifier.weight(1f).clickable(onClickLabel = "选择周次") { choosingWeek = true }.testTag("timetable-week"),
                 )
                 Text(
                     text = formatWeekRange(visiblePage.weekRange.startDate),
@@ -510,7 +556,11 @@ private fun TimetableScreenContent(
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
             }
         }
-        TimetableSyncBanner(syncState = syncState, onRetry = onRetrySync, onConsume = onConsumeSync)
+        if (pullRefresh.progress > 0f) {
+            LinearProgressIndicator(progress = { pullRefresh.progress }, modifier = Modifier.fillMaxWidth())
+            Text(if (pullRefresh.progress >= 1f) "松开刷新" else "下拉刷新", style = MaterialTheme.typography.labelSmall)
+        }
+        TimetableSyncDialog(syncState, onRetrySync, onConsumeSync, onReauthenticate)
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -533,40 +583,36 @@ private fun TimetableScreenContent(
     }
 }
 
+}
+
 @Composable
-private fun TimetableSyncBanner(
-    syncState: TimetableSyncState,
-    onRetry: () -> Unit,
-    onConsume: () -> Unit,
-) {
-    when (syncState) {
-        is TimetableSyncState.Success -> {
-            LeafyStatusBanner(
-                message = if (syncState.count == 0) {
-                    "教务已连接；学校暂未公布或尚未安排本学期课表"
-                } else {
-                    "同步成功：${syncState.count} 门课程"
-                },
-                isError = false,
-                modifier = Modifier.padding(top = LeafySpacing.tiny),
-            )
-            // 成功提示可以短暂出现后自动收起。
-            LaunchedEffect(syncState) {
-                delay(3_000)
-                onConsume()
+private fun TimetableSyncDialog(syncState: TimetableSyncState, onRetry: () -> Unit, onConsume: () -> Unit, onReauthenticate: () -> Unit) {
+    if (syncState is TimetableSyncState.Idle) return
+    val running = syncState is TimetableSyncState.Syncing
+    LeafyAlertDialog(
+        onDismissRequest = { if (!running) onConsume() },
+        title = { Text(if (running) "同步课表" else "提示") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.card)) {
+                when (syncState) {
+                    is TimetableSyncState.Syncing -> { CircularProgressIndicator(); Text(syncState.stage.label) }
+                    is TimetableSyncState.Success -> Text(syncState.message)
+                    is TimetableSyncState.Error -> Text(syncState.message)
+                    TimetableSyncState.Idle -> Unit
+                }
             }
-        }
-        // 失败一直留在屏幕上，直到用户重试、同步成功或主动关闭。
-        is TimetableSyncState.Error -> LeafyStatusBanner(
-            message = "同步失败：${syncState.message}",
-            isError = true,
-            modifier = Modifier.padding(top = LeafySpacing.tiny),
-            actionLabel = "重试",
-            onAction = onRetry,
-            onDismiss = onConsume,
-        )
-        TimetableSyncState.Idle, TimetableSyncState.Syncing -> Unit
-    }
+        },
+        confirmButton = {
+            when (syncState) {
+                is TimetableSyncState.Error -> LeafyTextButton(onClick = {
+                    if (syncState.needsAuthentication) { onConsume(); onReauthenticate() } else onRetry()
+                }) { Text(if (syncState.needsAuthentication) "重新登录" else "重试") }
+                is TimetableSyncState.Success -> LeafyTextButton(onClick = onConsume) { Text("确定") }
+                else -> Unit
+            }
+        },
+        dismissButton = { if (syncState is TimetableSyncState.Error) LeafyTextButton(onClick = onConsume) { Text("关闭") } },
+    )
 }
 
 /**

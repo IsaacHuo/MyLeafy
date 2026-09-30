@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
-import com.myleafy.android.services.supabase.SharedTimetableSnapshotDto
+import com.myleafy.android.services.cloudflare.SharedTimetableSnapshotDto
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyPrimaryButton
@@ -149,7 +149,7 @@ private fun MySharingContent(state: TimetableSharingUiState, viewModel: Timetabl
                 val revoke = sharingConfirmation("撤销访问权限？", "这位成员将无法继续查看你的课表。", { viewModel.revoke(member.viewer_id) })
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("访问成员 ${state.members.indexOf(member) + 1}")
+                        Text(member.viewer?.nickname?.takeIf { it.isNotBlank() } ?: "访问成员")
                         Text("加入于 ${member.created_at.take(10)}", style = MaterialTheme.typography.bodySmall)
                     }
                     LeafyTextButton(onClick = revoke, enabled = !state.mutating) { Text("撤销") }
@@ -192,7 +192,7 @@ private fun SharedSnapshotCard(snapshot: SharedTimetableSnapshotDto, onLeave: ()
     var expanded by androidx.compose.runtime.saveable.rememberSaveable(snapshot.id) { androidx.compose.runtime.mutableStateOf(false) }
     Surface(color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
         Column(modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
-            Text("共享课表", style = MaterialTheme.typography.titleMedium)
+            Text(snapshot.owner?.nickname?.takeIf { it.isNotBlank() }?.let { "$it 的课表" } ?: "共享课表", style = MaterialTheme.typography.titleMedium)
             Text("${snapshot.semester_id} · ${snapshot.course_count} 门课程", style = MaterialTheme.typography.bodySmall)
             snapshot.courses.sortedWith(compareBy({ it.day_of_week }, { it.duration.firstOrNull() ?: 0 })).take(if (expanded) Int.MAX_VALUE else 8).forEach { course ->
                 Text("周${course.day_of_week} ${course.duration.joinToString("-")}节 · ${course.course_name} · ${course.location.ifBlank { course.room }}", style = MaterialTheme.typography.bodySmall)

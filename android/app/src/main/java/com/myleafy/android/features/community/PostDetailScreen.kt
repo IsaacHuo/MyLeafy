@@ -64,6 +64,7 @@ fun PostDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val writeAction = rememberCommunityWriteAction()
     var confirmation by remember { mutableStateOf<PendingConfirmation?>(null) }
 
     LaunchedEffect((uiState as? PostDetailUiState.Loaded)?.shouldClose) {
@@ -114,9 +115,9 @@ fun PostDetailScreen(
 
             is PostDetailUiState.Loaded -> PostDetailContent(
                 state = state,
-                onLike = viewModel::toggleLike,
-                onFavorite = viewModel::toggleFavorite,
-                onComment = viewModel::createComment,
+                onLike = { writeAction(viewModel::toggleLike) },
+                onFavorite = { writeAction(viewModel::toggleFavorite) },
+                onComment = { body, parent, reply -> writeAction { viewModel.createComment(body, parent, reply) } },
                 onConfirm = { confirmation = it },
                 onClearMessage = viewModel::clearMessage,
                 modifier = contentModifier,

@@ -60,7 +60,6 @@ class ProfileEditViewModelTest {
 }
 
 private class FakeProfileRepository : ProfileRepository {
-    override val isPlaceholder = false
     var lastUpdate: List<String>? = null
 
     override suspend fun fetchProfile(): ProfileDto = ProfileDto(

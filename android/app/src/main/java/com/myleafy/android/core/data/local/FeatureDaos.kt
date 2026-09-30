@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -22,6 +23,13 @@ interface GradeDao {
 
     @Query("DELETE FROM grades WHERE scopeKey = :scopeKey")
     suspend fun clearAll(scopeKey: String)
+    @Transaction
+    suspend fun replaceAll(scopeKey: String, values: List<GradeEntity>) {
+        require(values.all { it.scopeKey == scopeKey })
+        clearAll(scopeKey)
+        upsertAll(values)
+    }
+
 }
 
 @Dao
@@ -34,6 +42,13 @@ interface GradeRankingDao {
 
     @Query("DELETE FROM grade_rankings WHERE scopeKey = :scopeKey")
     suspend fun clearAll(scopeKey: String)
+    @Transaction
+    suspend fun replaceAll(scopeKey: String, values: List<GradeRankingEntity>) {
+        require(values.all { it.scopeKey == scopeKey })
+        clearAll(scopeKey)
+        upsertAll(values)
+    }
+
 }
 
 @Dao
@@ -55,6 +70,13 @@ interface ExamDao {
 
     @Query("DELETE FROM exams WHERE scopeKey = :scopeKey")
     suspend fun clearAll(scopeKey: String)
+    @Transaction
+    suspend fun replaceAll(scopeKey: String, values: List<ExamEntity>) {
+        require(values.all { it.scopeKey == scopeKey })
+        clearAll(scopeKey)
+        upsertAll(values)
+    }
+
 }
 
 @Dao

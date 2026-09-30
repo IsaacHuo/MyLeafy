@@ -55,6 +55,7 @@ class AcademicDocumentRepository(
         val scopeKey = scopeStore.current.scopeKey
         runCatching { client.fetchTeachingPlan() }
             .onSuccess { plan ->
+                ensureScope(scopeKey)
                 dao.upsert(
                     AcademicDocumentEntity(
                         scopeKey = scopeKey,
@@ -65,9 +66,10 @@ class AcademicDocumentRepository(
                 )
                 planSaved = true
             }
-            .onFailure { failures += it.message ?: "教学计划获取失败" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; failures += it.message ?: "教学计划获取失败" }
         runCatching { client.fetchTrainingProgram() }
             .onSuccess { program ->
+                ensureScope(scopeKey)
                 dao.upsert(
                     AcademicDocumentEntity(
                         scopeKey = scopeKey,
@@ -78,15 +80,19 @@ class AcademicDocumentRepository(
                 )
                 programSaved = true
             }
-            .onFailure { failures += it.message ?: "培养方案获取失败" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; failures += it.message ?: "培养方案获取失败" }
         return AcademicDocumentRefreshResult(planSaved, programSaved, failures)
     }
 
+    private fun ensureScope(scopeKey: String) {
+        if (scopeStore.current.scopeKey != scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+    }
+
     private fun decodeTeachingPlan(payload: String): List<ParsedTeachingPlanSection> =
-        runCatching { json.decodeFromString<List<ParsedTeachingPlanSection>>(payload) }.getOrDefault(emptyList())
+        json.decodeFromString<List<ParsedTeachingPlanSection>>(payload)
 
     private fun decodeTrainingProgram(payload: String): ParsedTrainingProgram? =
-        runCatching { json.decodeFromString<ParsedTrainingProgram>(payload) }.getOrNull()
+        json.decodeFromString<ParsedTrainingProgram>(payload)
 
     private companion object {
         const val KIND_TEACHING_PLAN = "teachingPlan"
@@ -166,7 +172,7 @@ class TrainingProgramViewModel(
                         TrainingProgramRefreshState.Error(message)
                     }
                 },
-                onFailure = { TrainingProgramRefreshState.Error(it.message ?: "刷新失败") },
+                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TrainingProgramRefreshState.Error(it.message ?: "刷新失败") },
             )
         }
     }

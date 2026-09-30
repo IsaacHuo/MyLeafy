@@ -124,7 +124,6 @@ fun TimetableGrid(
                 .fillMaxSize(),
             contentAlignment = Alignment.TopCenter,
         ) {
-            TimetableBackground(background, Modifier.fillMaxSize())
             // 密集格子的触摸范围以可见边界为准，避免相邻课程的 48dp 扩展区域互相覆盖。
             CompositionLocalProvider(
                 LocalViewConfiguration provides gridViewConfiguration,
@@ -187,10 +186,10 @@ private fun timetableDateIndicatorSize(): Dp {
 }
 
 @Composable
-private fun TimetableBackground(settings: TimetableBackgroundSettings, modifier: Modifier = Modifier) {
+fun TimetableBackground(settings: TimetableBackgroundSettings, modifier: Modifier = Modifier) {
     if (!settings.enabled) return
     val pageColor = MaterialTheme.leafySurfaces.page
-    Box(modifier = modifier) {
+    Box(modifier = modifier.testTag("timetable-background")) {
         if (settings.kind == "color") {
             Box(
                 modifier = Modifier.fillMaxSize().background(
@@ -212,7 +211,7 @@ private fun TimetableBackground(settings: TimetableBackgroundSettings, modifier:
                     contentDescription = null,
                     contentScale = if (settings.contentScale == "fit") ContentScale.Fit else ContentScale.Crop,
                     alpha = settings.visibilityPercent / 100f,
-                    modifier = Modifier.fillMaxSize().then(
+                    modifier = Modifier.fillMaxSize().testTag("timetable-photo").then(
                         if (Build.VERSION.SDK_INT >= 31 && settings.blurRadius > 0) {
                             Modifier.graphicsLayer {
                                 renderEffect = RenderEffect.createBlurEffect(

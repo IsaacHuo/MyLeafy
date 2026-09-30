@@ -4,6 +4,9 @@ import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.data.local.CourseEntity
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.network.SchoolNetworkClient
+import com.myleafy.android.core.network.AcademicStage
+import com.myleafy.android.core.network.TimetableRefreshResult
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -17,7 +20,7 @@ interface TimetableRepository {
     fun coursesForSemester(semesterId: String): Flow<List<CourseEntity>>
 
     /** 从教务抓取当前学期课表并写入 Room。失败时抛出 [Exception]。 */
-    suspend fun refresh(semesterId: String)
+    suspend fun refresh(semesterId: String, onStage: (AcademicStage) -> Unit = {}): TimetableRefreshResult
 }
 
 /** 线上仓储：教务抓取（OkHttp + jsoup）→ 解析 → Room 落库。 */
@@ -33,9 +36,10 @@ class LiveTimetableRepository(
             courseDao.coursesForSemester(scope.scopeKey, semesterId)
         }
 
-    override suspend fun refresh(semesterId: String) {
+    override suspend fun refresh(semesterId: String, onStage: (AcademicStage) -> Unit): TimetableRefreshResult {
         val scopeKey = activeAppScopeStore.current.scopeKey
-        val records = client.fetchTimetable(semesterId)
+        val previous = courseDao.coursesForSemester(scopeKey, semesterId).first()
+        val records = client.fetchTimetable(semesterId, onStage)
         val entities = records.map { r ->
             CourseEntity(
                 scopeKey = scopeKey,
@@ -63,7 +67,10 @@ class LiveTimetableRepository(
                 duration = r.duration,
             )
         }
-        courseDao.clearForSemester(scopeKey, semesterId)
-        courseDao.upsertAll(entities)
+        if (activeAppScopeStore.current.scopeKey != scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+        onStage(AcademicStage.SAVING_TIMETABLE)
+        courseDao.replaceForSemester(scopeKey, semesterId, entities)
+        return TimetableRefreshResult(entities.map { it.courseName }.distinct().size, entities.size,
+            previous.sortedBy { it.id } != entities.sortedBy { it.id })
     }
 }

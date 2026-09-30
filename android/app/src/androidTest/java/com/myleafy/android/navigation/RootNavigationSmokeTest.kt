@@ -46,6 +46,7 @@ class RootNavigationSmokeTest {
         }
         if (composeRule.onAllNodes(androidx.compose.ui.test.hasText("免登录入口")).fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onNodeWithText("免登录入口").performClick()
+            composeRule.onNodeWithText("直接进入").performClick()
         }
         try {
             composeRule.waitUntil(10_000) {

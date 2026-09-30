@@ -2,7 +2,7 @@ package com.myleafy.android.features.campus
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.myleafy.android.services.supabase.RatingCatalogKind
+import com.myleafy.android.services.cloudflare.RatingCatalogKind
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

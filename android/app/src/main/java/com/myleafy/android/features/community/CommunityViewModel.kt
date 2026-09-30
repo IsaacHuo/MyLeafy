@@ -26,7 +26,7 @@ data class CommunityFeedSelection(
         campus_id = campusId,
         mode = if (mode == CommunityFeedMode.HOT) "hot" else null,
         days = if (mode == CommunityFeedMode.HOT) 7 else null,
-        // community-feed 的 hot RPC 不接受分类或搜索，切换热门时必须清空二者。
+        // Cloudflare feed 的 hot 模式 不接受分类或搜索，切换热门时必须清空二者。
         category = category.takeIf { mode == CommunityFeedMode.LATEST },
         search = search?.trim()?.takeIf { it.isNotEmpty() && mode == CommunityFeedMode.LATEST },
     )
@@ -39,6 +39,7 @@ data class CommunityUiState(
     val isRefreshing: Boolean = false,
     val error: String? = null,
     val unreadCount: Int = 0,
+    val hasNewPosts: Boolean = false,
     val loadedSelection: CommunityFeedSelection? = null,
 )
 
@@ -53,6 +54,32 @@ class CommunityViewModel(
     private var loadJob: Job? = null
     private var unreadJob: Job? = null
     private var requestGeneration = 0L
+    private var signalJobs = emptyList<Job>()
+    fun startSignals() {
+        if (signalJobs.any { it.isActive }) return
+        signalJobs = listOf("feed", "notifications").map { kind ->
+            viewModelScope.launch {
+                var retries = 0
+                while (true) {
+                    try {
+                        repository.events(kind).collect {
+                            if (kind == "feed") _uiState.value = _uiState.value.copy(hasNewPosts = true)
+                            else refreshUnreadCount()
+                            retries = 0
+                        }
+                        break
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: Exception) {
+                        Logger.getLogger("CommunityViewModel").warning("$kind subscription interrupted: ${failure.javaClass.simpleName}")
+                        kotlinx.coroutines.delay((1_000L shl retries.coerceAtMost(5)).coerceAtMost(30_000L))
+                        retries++
+                    }
+                }
+            }
+        }
+    }
+    fun stopSignals() { signalJobs.forEach(Job::cancel); signalJobs = emptyList() }
+
 
     init {
         refresh()
@@ -88,7 +115,7 @@ class CommunityViewModel(
                 currentCoroutineContext().ensureActive()
                 if (generation != requestGeneration) return@launch
                 _uiState.value = _uiState.value.copy(
-                    posts = posts, loadedSelection = selection,
+                    posts = posts, loadedSelection = selection, hasNewPosts = false,
                     isInitialLoading = false, isRefreshing = false, error = null,
                 )
                 refreshUnreadCount()

@@ -24,6 +24,7 @@ sealed interface CampusUiState {
         val rankings: List<GradeRankingEntity>,
         val gradeSummary: GradeSummaryEntity?,
         val exams: List<ExamEntity>,
+        val analytics: GradeAnalytics = GradeAnalytics.calculate(grades, gradeSummary),
     ) : CampusUiState
 
     data class Error(val message: String) : CampusUiState
@@ -41,7 +42,7 @@ sealed interface CampusSyncState {
     data class Error(val message: String) : CampusSyncState
 }
 
-enum class AcademicSyncScope { ALL, GRADES_AND_RANKINGS, EXAMS }
+enum class AcademicSyncScope { ALL, GRADES_AND_RANKINGS, EXAMS, RANKINGS }
 
 /**
  * 校园 ViewModel（成绩/考试入口）。教务为权威来源，Room 为缓存。
@@ -110,6 +111,7 @@ class CampusViewModel(
                 when (scope) {
                     AcademicSyncScope.ALL -> repository.refresh(semesterId)
                     AcademicSyncScope.GRADES_AND_RANKINGS -> repository.refreshGradesAndRankings()
+                    AcademicSyncScope.RANKINGS -> repository.refreshRankings()
                     AcademicSyncScope.EXAMS -> repository.refreshExams(semesterId)
                 }
             }
@@ -126,7 +128,7 @@ class CampusViewModel(
                         )
                     }
                 },
-                onFailure = { CampusSyncState.Error(it.message ?: "同步失败") },
+                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; CampusSyncState.Error(it.message ?: "同步失败") },
             )
         }
     }
