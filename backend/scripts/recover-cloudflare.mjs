@@ -1,0 +1,31 @@
+import {execFileSync} from 'node:child_process';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import {deploymentTarget,platform,currentDeployment} from './deployment-platform.mjs';
+
+const root=resolve(import.meta.dirname,'../..');
+const target=deploymentTarget(process.argv[2],process.env.CLOUDFLARE_PAGES_PROJECT);
+const selected=JSON.parse(readFileSync(resolve(root,'acceptance/deployment.json'),'utf8'));
+assert.equal(selected.environment,target.environment);assert.equal(selected.pagesProject,target.project);
+const previous=selected.previous;
+assert(/^[a-f0-9-]{36}$/.test(previous?.workerVersion??'')&&/^[a-f0-9-]{36}$/.test(previous?.pagesDeployment??''),'Both recorded recovery targets are required');
+// Validate every target before changing either service. D1 is deliberately untouched.
+await currentDeployment(target);
+await platform(`workers/scripts/${target.worker}/versions/${previous.workerVersion}`);
+const page=await platform(`pages/projects/${target.project}/deployments/${previous.pagesDeployment}`);
+assert.equal(page.environment,'production');assert.equal(page.latest_stage.status,'success');
+const report={environment:target.environment,pagesProject:target.project,restored:previous,startedAt:new Date().toISOString(),databaseRestored:false};
+mkdirSync(resolve(root,'deployment-report'),{recursive:true});
+const save=()=>writeFileSync(resolve(root,'deployment-report/recovery.json'),JSON.stringify(report,null,2)+'\n');save();
+execFileSync(process.execPath,[resolve(root,'backend/node_modules/wrangler/bin/wrangler.js'),'rollback',previous.workerVersion,'--env',target.environment,'--message','Recover to recorded known working deployment','--yes'],{cwd:resolve(root,'backend'),stdio:'inherit',env:{...process.env,WRANGLER_SEND_METRICS:'false'}});
+report.workerRestored=true;save();
+await platform(`pages/projects/${target.project}/deployments/${previous.pagesDeployment}/rollback`,{});
+report.siteRestored=true;save();
+const current=await currentDeployment(target);assert.equal(current.workerVersion,previous.workerVersion);assert.equal(current.pagesDeployment,previous.pagesDeployment);
+const response=await fetch(target.api+'/health',{signal:AbortSignal.timeout(20000)});assert(response.ok);
+const health=await response.json();assert.equal(health.environment,target.environment);assert.equal(health.status,'ok');
+if(previous.commit)assert.equal(health.commit,previous.commit);
+const denied=await fetch(target.site+'/api/admin/me',{headers:{Origin:target.site,'X-Leafy-Admin-CSRF':'1'},signal:AbortSignal.timeout(20000)});assert.equal(denied.status,401);
+report.success=true;report.completedAt=new Date().toISOString();save();
+console.log(JSON.stringify(report));

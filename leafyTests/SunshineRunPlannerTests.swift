@@ -81,7 +81,7 @@ final class SunshineRunPlannerTests: XCTestCase {
             )
         }
 
-        let summary = SunshineRunPlanner.progressSummary(records: records, excludedWeeks: [], calendar: calendar)
+        let summary = SunshineRunPlanner.progressSummary(records: records, semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar)
 
         XCTAssertEqual(summary.totalCount, 36)
         XCTAssertEqual(summary.cappedTotalCount, 34)

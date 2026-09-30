@@ -63,7 +63,14 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(cache.buildCount, 3)
     }
 
+    @MainActor
     func testTimetableScheduleProjectionSnapshotIndexesAndSortsByWeekDay() {
+        let savedConfig = SemesterRuntimeConfigCache.load()
+        SemesterRuntimeConfigCache.save(.previousSpring)
+        defer {
+            if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
+            else { SemesterRuntimeConfigCache.clear() }
+        }
         let earlyCountdown = CustomCountdownEvent(
             id: "early",
             title: "Early",
@@ -146,6 +153,12 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testWeeklyTimetableProjectionPrecomputesVisibleLayoutsAndMetadata() {
+        let savedConfig = SemesterRuntimeConfigCache.load()
+        SemesterRuntimeConfigCache.save(.previousSpring)
+        defer {
+            if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
+            else { SemesterRuntimeConfigCache.clear() }
+        }
         let selection = TimetableDaySelection(
             week: 1,
             day: 1,

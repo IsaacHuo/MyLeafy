@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {Datagrid, DateField, FunctionField, List, TextField, useCanAccess, useListContext, useNotify, useRecordContext, useRefresh} from 'react-admin';
+import {Datagrid, DateField, FunctionField, List, Pagination, TextField, useCanAccess, useListContext, useNotify, useRecordContext, useRefresh} from 'react-admin';
 import {Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Typography} from '@mui/material';
 import {actionRequest} from '../providers/client';
 
@@ -10,7 +10,7 @@ export function AndroidReleasesPage(){
   return <Box>
     <Typography variant="h5" sx={{my:2}}>Android 版本</Typography>
     <Alert severity="info" sx={{mb:2}}>先下载候选包验收，再决定发布。正式发布使用同一份安装包；iOS 继续在 App Store Connect 发布。</Alert>
-    <List title="Android 版本" perPage={20} sort={{field:'versionCode',order:'DESC'}} exporter={false} empty={<Typography sx={{p:3}}>暂无候选或正式版本。主线版本更新并通过检查后，候选包会显示在这里。</Typography>}>
+    <List title="Android 版本" perPage={20} pagination={<Pagination rowsPerPageOptions={[20,50,100]} />} sort={{field:'versionCode',order:'DESC'}} exporter={false} empty={<Typography sx={{p:3}}>暂无候选或正式版本。主线版本更新并通过检查后，候选包会显示在这里。</Typography>}>
       <PublicationPolling />
       <Datagrid bulkActionButtons={false} rowClick={false}>
         <TextField source="versionName" label="版本" />

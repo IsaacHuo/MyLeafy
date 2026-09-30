@@ -301,7 +301,11 @@ final class CommunityAccessGateTests: XCTestCase {
     }
 
     func testActivePollPercentagesAreAvailableBeforeViewerVotes() {
-        let pendingVotePoll = makeTestCommunityPoll(totalVoteCount: 4)
+        let id = UUID()
+        let options = ["图书馆", "教学楼"].enumerated().map { index, title in
+            CommunityPollOption(id: UUID(), pollID: id, text: title, sortOrder: index, voteCount: 2, createdAt: "2026-05-28T00:00:00Z")
+        }
+        let pendingVotePoll = makeTestCommunityPoll(id: id, options: options, totalVoteCount: 4)
         XCTAssertEqual(
             pendingVotePoll.options.map { $0.percentageText(totalVotes: pendingVotePoll.totalVoteCount) },
             ["50%", "50%"]

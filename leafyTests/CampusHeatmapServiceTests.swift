@@ -153,8 +153,8 @@ final class CampusHeatmapServiceTests: XCTestCase {
         let fetchCount = await recorder.fetchCount
         let lastStartPeriod = await recorder.lastStartPeriod
         let lastEndPeriod = await recorder.lastEndPeriod
-        let cachedData = await cache.storedData
-        let saveCount = await cache.saveCount
+        let cachedData = cache.storedData
+        let saveCount = cache.saveCount
 
         XCTAssertNil(outcome.errorMessage)
         XCTAssertEqual(outcome.storedData?.availableRooms, rooms)
@@ -184,7 +184,7 @@ final class CampusHeatmapServiceTests: XCTestCase {
         )
 
         let outcome = await service.update(CampusHeatmapRequest(date: date, startPeriod: 3, endPeriod: 4))
-        let saveCount = await cache.saveCount
+        let saveCount = cache.saveCount
 
         XCTAssertEqual(outcome.storedData, storedData)
         XCTAssertEqual(outcome.errorMessage, "更新失败：远程请求失败")
@@ -208,7 +208,7 @@ final class CampusHeatmapServiceTests: XCTestCase {
 
         let outcome = await service.update(CampusHeatmapRequest(date: date, startPeriod: 1, endPeriod: 2))
         let fetchCount = await recorder.fetchCount
-        let saveCount = await cache.saveCount
+        let saveCount = cache.saveCount
 
         XCTAssertEqual(outcome.storedData?.availableRooms, rooms)
         XCTAssertEqual(fetchCount, 0)

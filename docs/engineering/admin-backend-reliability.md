@@ -22,7 +22,7 @@ Expected validation and state failures return 400/404/409 responses, with saniti
 
 Run backend type checks, client contract checks, business tests, migration tests and the Worker dry-run build. Deploy required forward D1 migrations before the Worker and dependent website. Never overwrite active data with an old import snapshot or automatically approve real pending content as a test.
 
-The old Supabase service remains independent for old clients. Current backend deployment instructions are in [Cloudflare migration](cloudflare-migration.md).
+The old Supabase service remains independent for old clients. It exposes exactly 73 `admin-community` actions, tracked by its own action audit matrix and schema ledger. Its Deno contract and database tests remain required when legacy code or shared CI changes. Current backend deployment instructions are in [Cloudflare migration](cloudflare-migration.md).
 
 ## User counting scope
 

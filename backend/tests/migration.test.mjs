@@ -10,6 +10,23 @@ import { encodeRow, identityRows, timestamp, upsertSQL } from '../scripts/migrat
 import { materialize } from '../scripts/migration/materialize.mjs';
 import { rowSQL, transferSQL } from '../scripts/migration/d1-transfer.mjs';
 
+test('candidate migration preserves existing users, published releases and revoked releases',async()=>{
+  const db=new DatabaseSync(':memory:');
+  const migrations=new URL('../migrations/',import.meta.url);
+  try{
+    for(const name of (await readdir(migrations)).filter(n=>n.endsWith('.sql')&&n<'0011').sort())db.exec(await readFile(new URL(name,migrations),'utf8'));
+    db.prepare('INSERT INTO admin_accounts(id,username,password_hash,display_name) VALUES(?,?,?,?)').run('existing-admin','existing-admin','synthetic-only','Existing');
+    for(const [code,status] of [[4,'revoked'],[5,'published']])db.prepare('INSERT INTO android_releases(id,package_name,channel,version_code,artifact_key,metadata,status,published_at) VALUES(?,?,?,?,?,?,?,?)')
+      .run(`release-${code}`,'com.myleafy.android','official',code,`android/official/${code}/existing.apk`,JSON.stringify({versionCode:code,sha256:'unchanged'}),status,'2026-09-30T00:00:00Z');
+    const releases=db.prepare('SELECT * FROM android_releases ORDER BY version_code').all(),admins=db.prepare('SELECT * FROM admin_accounts').all();
+    db.exec(await readFile(new URL('0011_android_candidates.sql',migrations),'utf8'));
+    assert.deepEqual(db.prepare('SELECT * FROM android_releases ORDER BY version_code').all(),releases);
+    assert.deepEqual(db.prepare('SELECT * FROM admin_accounts').all(),admins);
+    assert.equal(db.prepare('SELECT count(*) n FROM android_release_candidates').get().n,0);
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
+  }finally{db.close();}
+});
+
 test('full comparison detects hard deletes and changes with unchanged timestamps; reverse preserves all rows', () => {
   const before = [{ id: 'a', body: '甲', updated_at: 'same' }, { id: 'b', body: '乙' }];
   const after = [{ id: 'a', body: '修改', updated_at: 'same' }, { id: 'c', body: '新用户内容' }];

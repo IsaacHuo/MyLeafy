@@ -642,12 +642,15 @@ extension PerformanceRefactorTests {
         XCTAssertNil(failingCourse?.score)
         XCTAssertEqual(failingCourse?.isPassed, false)
         XCTAssertEqual(failingCourse?.isIncludedInStatistics, false)
-        XCTAssertEqual(gradedCourse?.score, 85)
+        XCTAssertNil(gradedCourse?.score)
+        XCTAssertEqual(gradedCourse?.rawScore, "良好")
+        XCTAssertEqual(gradedCourse?.isPassed, true)
+        XCTAssertEqual(gradedCourse?.isIncludedInStatistics, false)
         XCTAssertEqual(analytics.totalCredits, 3.0)
         XCTAssertEqual(analytics.passedCredits, 2.0)
         XCTAssertEqual(analytics.passRate, 0.5)
         XCTAssertEqual(analytics.riskCourseCount, 1)
-        XCTAssertEqual(analytics.weightedAverage, 85.0)
+        XCTAssertNil(analytics.weightedAverage)
     }
 
     func testLearningProjectContentRelocationMovesProjectContentToUnfiled() throws {

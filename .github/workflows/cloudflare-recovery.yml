@@ -1,0 +1,65 @@
+name: Recover Cloudflare services
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to restore'
+        required: true
+        type: choice
+        options: [staging, production]
+      deployment_run:
+        description: 'Deployment run containing the previous known working deployment IDs'
+        required: true
+        type: string
+      commit:
+        description: 'Commit of that deployment report'
+        required: true
+        type: string
+      compatible:
+        description: 'I checked that the previous code can use the current database schema'
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cloudflare-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  recover:
+    if: github.ref == 'refs/heads/main' && inputs.compatible
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: be7d850d4b5046381fb909251b4df675
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      GH_TOKEN: ${{ github.token }}
+      DEPLOYMENT_RUN: ${{ inputs.deployment_run }}
+      TARGET_ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify deployment report source
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DEPLOYMENT_RUN" --jq "(.path == \".github/workflows/cloudflare-$TARGET_ENVIRONMENT.yml\") and .head_branch == \"main\"" | grep -qx true
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloudflare-${{ inputs.environment }}-${{ inputs.commit }}
+          path: acceptance
+          run-id: ${{ inputs.deployment_run }}
+          github-token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25.6.1
+      - run: npm --prefix backend ci
+      - name: Restore recorded Worker and Pages deployments
+        run: node backend/scripts/recover-cloudflare.mjs "$TARGET_ENVIRONMENT"
+      - name: Preserve recovery result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-recovery-${{ github.run_id }}
+          path: deployment-report/
+          if-no-files-found: ignore

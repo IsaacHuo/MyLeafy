@@ -22,8 +22,19 @@ if __name__ == '__main__':
     tag='v'+args.version
     subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
     subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
-    subprocess.run(['git','tag','-a',tag,args.commit,'-m',f'MyLeafy iOS {args.version}, build {args.build}, Apple release confirmed; source {args.commit}'],check=True)
+    existing=subprocess.run(['git','rev-parse','--verify',f'refs/tags/{tag}'],capture_output=True,text=True)
+    if existing.returncode == 0:
+        assert subprocess.check_output(['git','cat-file','-t',f'refs/tags/{tag}'],text=True).strip()=='tag', 'Release tag must be annotated'
+        assert subprocess.check_output(['git','rev-parse',f'{tag}^{{commit}}'],text=True).strip()==args.commit, 'Release tag is immutable'
+    else:
+        subprocess.run(['git','tag','-a',tag,args.commit,'-m',f'MyLeafy iOS {args.version}, build {args.build}, Apple release confirmed; source {args.commit}'],check=True)
     subprocess.run(['git','push','origin',tag],check=True)
     body=Path(os.environ['RUNNER_TEMP'])/'ios-release-notes.md'
     body.write_text(f'iOS {args.version} / build {args.build}\n\nReleased through App Store Connect.\nSource: {args.commit}\n\nNo unsigned archive or signing material is attached.\n',encoding='utf-8')
-    subprocess.run(['gh','release','create',tag,'--verify-tag','--title',f'MyLeafy iOS {args.version}','--notes-file',str(body)],check=True)
+    releases=json.loads(subprocess.check_output(['gh','api',f"repos/{os.environ['GITHUB_REPOSITORY']}/releases?per_page=100"],text=True))
+    released=next((r for r in releases if r['tag_name']==tag),None)
+    if released:
+        assert not released['draft'] and not released['prerelease'] and not released['assets'], 'Existing iOS release does not match the source-only record'
+        assert args.commit in released['body'] and f'build {args.build}' in released['body'], 'Existing release identifies different source or build'
+    else:
+        subprocess.run(['gh','release','create',tag,'--verify-tag','--title',f'MyLeafy iOS {args.version}','--notes-file',str(body)],check=True)

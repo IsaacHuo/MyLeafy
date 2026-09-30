@@ -23,10 +23,10 @@ async function call(path,body,token,method=body===undefined?'GET':'POST'){
   if(!response.ok)throw new Error(`${path}: HTTP ${response.status} (${payload.errorEnvelope?.code??payload.code??'unknown'})`);
   return {payload,token:response.headers.get('set-auth-token')};
 }
-let ownToken;
+let ownToken,ownUserId;
 try{
   assert.equal((await call('/health')).payload.status,'ok');checks.push('health');
-  const session=await call('/v1/auth/sign-in/anonymous',{});assert.ok(session.token);ownToken=session.token;checks.push('anonymous-auth');
+  const session=await call('/v1/auth/sign-in/anonymous',{});assert.ok(session.token);ownToken=session.token;ownUserId=session.payload.user.id;assert.ok(ownUserId);checks.push('anonymous-auth');
   const identity=`cf-smoke-${randomUUID()}`;
   const profile=(await call('/v1/profile/bootstrap',{campus_id:'bjfu',edu_id:identity},session.token)).payload.profile;
   const repeated=(await call('/v1/profile/bootstrap',{campus_id:'bjfu',edu_id:identity},session.token)).payload.profile;
@@ -49,5 +49,9 @@ try{
   console.log(JSON.stringify(report,null,2));
 }finally{
   // Only this run's generated identity is deleted; manual tester data and switches remain untouched.
-  if(ownToken)await call('/v1/account',undefined,ownToken,'DELETE');
+  if(ownUserId){
+    const linked=await sql('SELECT profile_id FROM profile_auth_links WHERE auth_user_id=?',[ownUserId]);
+    if(linked.length)await call('/v1/account',undefined,ownToken,'DELETE');
+    else await sql('DELETE FROM identity_user WHERE id=? AND isAnonymous=1 AND NOT EXISTS(SELECT 1 FROM profile_auth_links WHERE auth_user_id=identity_user.id)',[ownUserId]);
+  }
 }

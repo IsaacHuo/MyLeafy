@@ -49,8 +49,8 @@ export async function registerAndroidCandidate(env:BackendEnv,request:Request,bo
   const run=await (await github(env,`actions/runs/${row.preparation_run_id}`)).json() as {head_sha:string;event:string;path:string;head_branch:string};
   if(run.head_branch!=='main'||!['workflow_run','workflow_dispatch'].includes(run.event)||run.path!=='.github/workflows/android-prepare.yml')
     throw new ApiError(409,'unverified_candidate','候选必须来自主线的准备工作流。');
-  const checks=await (await github(env,`commits/${info.commit}/check-runs?per_page=100`)).json() as {check_runs:{name:string;conclusion:string|null;app:{slug:string}}[]};
-  if(!checks.check_runs.some(check=>check.name==='CI result'&&check.conclusion==='success'&&check.app.slug==='github-actions'))throw new ApiError(409,'unverified_candidate','该提交尚未通过 CI 总检查。');
+  const checks=await (await github(env,`actions/workflows/ci.yml/runs?head_sha=${info.commit}&per_page=100`)).json() as {workflow_runs:{head_sha:string;head_branch:string;conclusion:string|null;path:string}[]};
+  if(!checks.workflow_runs.some(run=>run.head_sha===info.commit&&run.head_branch==='main'&&run.path==='.github/workflows/ci.yml'&&run.conclusion==='success'))throw new ApiError(409,'unverified_candidate','该提交尚未通过主线 CI 总检查。');
   const existing=await env.DB.prepare('SELECT * FROM android_release_candidates WHERE id=?').bind(info.id).first<Candidate>();
   if(existing){if(existing.metadata!==row.metadata||existing.github_asset_id!==row.github_asset_id||existing.github_release_id!==row.github_release_id)throw new ApiError(409,'candidate_conflict','同一版本不能覆盖不同候选包。');return {id:info.id};}
   const highest=await env.DB.prepare('SELECT max(version_code) code FROM android_releases').first<{code:number|null}>();

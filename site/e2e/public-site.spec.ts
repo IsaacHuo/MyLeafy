@@ -14,7 +14,7 @@ for (const width of [320, 390, 768, 1440]) {
     await page.goto("/");
     const hero = page.locator(".home-hero");
     await expect(hero.getByRole("link", { name: "App Store 下载" })).toHaveAttribute("href", "https://apps.apple.com/cn/app/myleafy/id6763968535");
-    await expect(hero.getByRole("link", { name: "Android 下载" })).toHaveAttribute("href", /android-v1\.1\.0\/MyLeafy-Android-1\.1\.0\.apk$/);
+    await expect(hero.getByRole("link", { name: "Android 下载" })).toHaveAttribute("href", "https://api.myleafy.space/v1/releases/android/download");
     await expect(hero.getByRole("link", { name: "Android 下载" })).toBeInViewport();
   });
 }

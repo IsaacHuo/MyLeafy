@@ -20,7 +20,7 @@ function fixture(){
   const fetchMock=vi.fn(async(url:unknown)=>{
     const path=String(url);
     if(path.endsWith('/releases/1'))return Response.json(draft);
-    if(path.includes('/check-runs'))return Response.json({check_runs:[{name:'CI result',conclusion:'success',app:{slug:'github-actions'}}]});
+    if(path.includes('/ci.yml/runs'))return Response.json({workflow_runs:[{head_sha:body.commit,head_branch:'main',path:'.github/workflows/ci.yml',conclusion:'success'}]});
     if(path.endsWith('/actions/runs/3'))return Response.json({head_sha:body.commit,head_branch:'main',event:'workflow_run',path:'.github/workflows/android-prepare.yml'});
     if(path.endsWith('/dispatches'))return new Response(null,{status:204});
     if(path.endsWith('/releases/assets/2'))return new Response(null,{status:302,headers:{location:'https://release-assets.githubusercontent.com/test.apk'}});
@@ -71,6 +71,6 @@ it('untrusted signing certificates and failed CI cannot register a candidate',as
   const {env,body,request,fetchMock}=fixture();
   await expect(registerAndroidCandidate(env,request,{...body,certificateSha256:'e'.repeat(64)})).rejects.toMatchObject({code:'certificate_mismatch'});
   const normal=fetchMock.getMockImplementation()!;
-  fetchMock.mockImplementation(async url=>String(url).includes('check-runs')?Response.json({check_runs:[]}):normal(url));
+  fetchMock.mockImplementation(async url=>String(url).includes('/ci.yml/runs')?Response.json({workflow_runs:[]}):normal(url));
   await expect(registerAndroidCandidate(env,request,body)).rejects.toMatchObject({code:'unverified_candidate'});
 });
