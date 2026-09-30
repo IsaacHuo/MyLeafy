@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import urllib.error
 import urllib.request
+import urllib.parse
 
 
 def gh(*arguments):
@@ -31,11 +32,12 @@ def digest(path):
 
 
 def find_release(repository, tag):
-    # GitHub's by-tag endpoint only returns published releases, not our resumable draft.
-    pages = json.loads(gh('api', f'repos/{repository}/releases', '--paginate', '--slurp'))
-    matches = [release for page in pages for release in page if release['tag_name'] == tag]
-    assert len(matches) <= 1, 'Multiple releases use the same tag'
-    return matches[0] if matches else None
+    # An Actions token can create a draft that REST's list/by-tag endpoints omit.
+    owner, name = repository.split('/')
+    query = 'query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){databaseId}}}'
+    result = json.loads(gh('api', 'graphql', '-f', f'query={query}', '-F', f'owner={owner}', '-F', f'name={name}', '-F', f'tag={tag}'))
+    node = result['data']['repository']['release']
+    return json.loads(gh('api', f"repos/{repository}/releases/{node['databaseId']}")) if node else None
 
 
 def publish(apk: Path, manifest: Path, origin: str):
@@ -53,20 +55,25 @@ def publish(apk: Path, manifest: Path, origin: str):
     files = [apk, checksum, manifest]
     release = find_release(repository, tag)
     if release is None:
-        gh('release', 'create', tag, '--draft', '--target', info['commit'], '--title', f"MyLeafy Android {info['versionName']}", '--notes-file', str(notes))
-        release = find_release(repository, tag)
-        assert release is not None, 'Created draft is missing'
+        payload = apk.parent / 'github-release.json'
+        payload.write_text(json.dumps(dict(tag_name=tag,target_commitish=info['commit'],draft=True,
+            name=f"MyLeafy Android {info['versionName']}",body=info['releaseNotes'])),encoding='utf-8')
+        release = json.loads(gh('api', f'repos/{repository}/releases', '-X', 'POST', '--input', str(payload)))
     assert release['target_commitish'] == info['commit'], 'Release tag belongs to another commit'
     assert release['body'].strip() == info['releaseNotes'].strip(), 'Release notes differ'
-    present = {asset['name'] for asset in release['assets']}
-    missing = [str(path) for path in files if path.name not in present]
-    if missing:
-        gh('release', 'upload', tag, *missing)
+    assets = {asset['name']:asset for asset in release['assets']}
+    for path in files:
+        if path.name not in assets:
+            url = release['upload_url'].split('{')[0] + '?name=' + urllib.parse.quote(path.name)
+            assets[path.name] = json.loads(request(url,'POST',path.read_bytes(),os.environ['GH_TOKEN'],
+                {'Content-Type':'application/octet-stream','Content-Length':str(path.stat().st_size)}))
     # Verify GitHub assets before opening its draft, including resumed runs.
     verification = apk.parent / 'github-verification'
     verification.mkdir(exist_ok=True)
     for path in files:
-        gh('release', 'download', tag, '--pattern', path.name, '--dir', str(verification), '--clobber')
+        with (verification / path.name).open('wb') as output:
+            subprocess.run(['gh','api',f"repos/{repository}/releases/assets/{assets[path.name]['id']}",
+                '-H','Accept: application/octet-stream'],stdout=output,check=True)
         assert digest(verification / path.name) == digest(path), f'GitHub artifact mismatch: {path.name}'
     download_origin = 'https://downloads.myleafy.space' if origin == 'https://api.myleafy.space' else 'https://downloads-staging.myleafy.space'
     for path in files:
@@ -79,7 +86,7 @@ def publish(apk: Path, manifest: Path, origin: str):
     opened = False
     try:
         if release['draft']:
-            gh('release', 'edit', tag, '--draft=false')
+            gh('api', f"repos/{repository}/releases/{release['id']}", '-X', 'PATCH', '-F', 'draft=false')
             opened = True
         registered = json.loads(request(f'{origin}/v1/releases/android/publish', 'POST', json.dumps(info).encode(), token, {'Content-Type':'application/json'}))
         assert registered['sha256'] == info['sha256']
@@ -93,7 +100,7 @@ def publish(apk: Path, manifest: Path, origin: str):
             registered = None
         if registered is None:
             if opened:
-                gh('release', 'edit', tag, '--draft=true')
+                gh('api', f"repos/{repository}/releases/{release['id']}", '-X', 'PATCH', '-F', 'draft=true')
             raise
     published = json.loads(gh('api', f"repos/{repository}/releases/{release['id']}"))
     latest = json.loads(request(f"{origin}/v1/releases/android/latest?package={info['packageName']}"))['release']

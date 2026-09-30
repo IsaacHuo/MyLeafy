@@ -43,7 +43,12 @@ jobs:
           EXPECTED="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)"
           test "$VERSION_INPUT" = "$EXPECTED"
           TAG="android-v${VERSION_INPUT}"
-          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --slurp | jq --arg tag "$TAG" '[.[][] | select(.tag_name == $tag)] | if length > 1 then error("Duplicate release tag") else (first // null) end' > "$RUNNER_TEMP/existing-release.json"
+          RELEASE_ID="$(gh api graphql -f query='query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){databaseId}}}' -F owner="${GITHUB_REPOSITORY%/*}" -F name="${GITHUB_REPOSITORY#*/}" -F tag="$TAG" --jq '.data.repository.release.databaseId // empty')"
+          if test -n "$RELEASE_ID"; then
+            gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$RUNNER_TEMP/existing-release.json"
+          else
+            echo null > "$RUNNER_TEMP/existing-release.json"
+          fi
           if jq -e '. != null' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
             test "$(jq -r '.target_commitish' "$RUNNER_TEMP/existing-release.json")" = "$GITHUB_SHA"
             APK_NAME="MyLeafy-Android-${VERSION_INPUT}.apk"
