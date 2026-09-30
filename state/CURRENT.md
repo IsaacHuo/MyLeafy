@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-09-30 (Android auth/release checks; production installation acceptance in progress)
+Last verified: 2026-09-30 (Android manual-captcha authentication; production 1.2.0 → 1.2.1 update acceptance)
 
 ## Current Focus
 
@@ -9,8 +9,9 @@ Last verified: 2026-09-30 (Android auth/release checks; production installation 
 - **iOS 比较**：以当前主线 SwiftUI 结构、文案及计算规则为参照；本机没有同期 iOS 运行测量，不能给出虚构 FPS 或“已同等流畅”的结论。评审记录与下一步见 `docs/design/android-core-review.md`。
 - **真实学校核对与数据保护**：保留已登录模拟器数据；v7→v8 增量升级后 31 条课程、92 条成绩仍在。用户重新认证后首次队列继续，可信空考试完成检查点；成绩及官方排名已刷新，培养方案核对毕业总学分 167 和 8 类要求，空闲教室当前周/当天返回 76 间。自动化迁移、编辑、权限等测试只在独立模拟器执行。
 - **Android 重新认证**：验证码/key/匿名 Cookie 绑定同一挑战，Keystore 凭据 JSON 按当前账号预填；用户手动填写验证码并提交，成功后继续原查询。身份作用域去重获取挑战，网络失败不触发认证，身份切换取消旧任务。按用户最新要求移除 ML Kit、离线 OCR 模型及所有自动识别/提交路径。Room 保持 v8。
-- **Android 版本管理**：生产/staging 独立 R2 APK bucket 与下载域名、D1 0010、公开发行 API 已上线。Actions 使用现有正式签名，Cloudflare/GitHub Releases 发布同一 APK/校验文件/构建信息并公开核验；“我的 → 检查更新”使用匿名 Cloudflare 接口与 versionCode，DownloadManager 持久下载和系统安装流程已实现。staging 上传/回读/幂等/撤回验证通过；生产 1.2.0 已双发布并公开核验，1.2.1（移除 OCR）覆盖安装测试进行中。详见 `docs/engineering/android-auth-updates.md`。
-- **剩余外部验收**：官网/后台构建与 59 项测试通过，部署等待 Pages token 权限补充。大陆校园网/移动网络下载测速未执行。隔离社区写入、系统课程通知投递/重启恢复仍未完整验收；截图最新批次位于 `android/app/build/emulator-latest/`。
+- **Android 版本管理**：生产/staging 独立 R2 APK bucket 与下载域名、D1 0010、公开发行 API 已上线。Actions 使用现有正式签名，Cloudflare/GitHub Releases 发布同一 APK/校验文件/构建信息并公开核验；“我的 → 检查更新”使用匿名 Cloudflare 接口与 versionCode。生产 1.2.1（code 5，移除 OCR，51.4 MB）已双发布，独立模拟器通过 App 内下载及系统安装器从 1.2.0 覆盖升级，免登录身份、测试随记和日程保留。拒绝来源授权、授权返回、取消后继续安装、已下载任务进程恢复及安装后清理均实测通过；staging 上传/回读/幂等/撤回通过。详见 `docs/engineering/android-auth-updates.md`。
+- **官网与后台**：构建和 59 项测试通过；既有 Pages Git 自动生产部署已更新官网 Cloudflare 下载入口、隐私说明及版本管理页面，公开 index/admin bundle 与本地构建 hash 一致，私有管理接口未登录返回 401。无需新增 Pages token 即可通过 Git 发布。
+- **剩余外部验收**：大陆校园网/移动网络下载测速、下载中断续传、存储不足及真实学校账号覆盖安装尚未现场验收。学校预填/手动验证码/恢复行为有回归覆盖，未把单元测试等同真实会话过期验收。隔离社区写入、系统课程通知投递/重启恢复仍未完整验收；本轮 6 张升级截图已逐张审阅，位于 `android/app/build/emulator-update-latest/`，此前核心 UI 最新批次为 `android/app/build/emulator-latest/`。
 
 ## Recently Completed
 
