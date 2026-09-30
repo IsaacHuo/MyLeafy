@@ -8,13 +8,13 @@ Android 不使用离线 OCR 或验证码自动识别，验证码由用户填写�
 
 ## 发布操作
 
-1. 从 `main` 的已验证 commit 手动运行 **Cut Android Release**，填写与源码一致的版本名。版本 code 必须高于历史正式记录。
-2. Actions 执行 JVM、lint 和签名构建，检查包名 `com.myleafy.android`、版本、最低 API 29 及证书。正式签名仍使用原有四个 Android release secrets。
-3. `MYLEAFY_RELEASE_PUBLISH_TOKEN` 只用于发行上传/登记，不包含通用 Cloudflare 管理权限。生产和 staging 使用独立 token、R2 bucket 与下载域名。
-4. 同一 APK、`.apk.sha256`、`.apk-build-info.txt` 上传 GitHub draft 和 R2；逐个公开回读核验。GitHub Releases 公开与 D1 发布登记都成功、最新 code/hash 一致后才报告发布成功。失败保留不可变文件以重试，不覆盖同版文件。
-5. App 和官网均读取 Cloudflare，GitHub 同步归档。版本查询无需账号，不受社区维护状态影响。官网稳定入口：`https://api.myleafy.space/v1/releases/android/download`，校验文件加 `?file=checksum`。
+main CI 通过后，更新后的版本名/versionCode 自动准备正式签名候选；普通提交不制造候选。候选放在 GitHub draft Release，通过管理员认证的下载入口验收，不提前上传到公开 R2。超级管理员在 admin → Android 版本确认验收、保存授权并触发固定发布工作流，发布时读取原 APK，不重新构建。
 
-接口：`GET /v1/releases/android/latest?package=com.myleafy.android`、`GET /v1/releases/android/:id`、`GET /v1/releases/android/download`；CI 的 `PUT /v1/releases/artifacts/*` 与 `POST /v1/releases/android/publish` 独立授权。管理员通过现有后台发行列表撤回，保留审计。撤回版本查询返回 410，App 不提示/安装；已安装的问题版通过更高 code 修复。
+D1 0011 保存不可变候选和发布授权，0010 正式发行数据保留。发布核对包名、版本、最低 API 29、正式证书、大小和 SHA-256，将同一 APK、校验文件、build-info 发布到 Cloudflare/GitHub，回读一致后登记正式发行。重复点击复用进行中授权；失败重试仍用原候选，旧授权失效。仅 publisher token 不能绕过管理员公开新版本。
+
+公开接口保持 `GET /v1/releases/android/latest`、`GET /v1/releases/android/:id`、`GET /v1/releases/android/download` 的格式，只返回正式发行，不受社区维护影响。官网稳定入口为 `https://api.myleafy.space/v1/releases/android/download`，校验文件加 `?file=checksum`。撤回仅停止官方推荐并保留历史与审计，已安装版本由更高 code 修复。
+
+配置、状态、验收、失败重试和恢复详见 [交付与发布](../operations/delivery.md)。以下 1.2.1 验收记录对应切换前的发布流程，不代表新候选流程已完成线上验收。
 
 ## 更新安装
 

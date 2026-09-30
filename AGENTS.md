@@ -100,8 +100,9 @@ The behavioral invariants that must hold while editing code live in `state/ARCHI
 ## Git branch workflow
 
 - Before every new task, fetch `origin`, switch to `main`, update it with a fast-forward-only merge from `origin/main`, verify that local `main` matches `origin/main`, and create a dedicated `codex/<task>` branch from that commit. Do not implement task changes directly on `main`.
-- After a task is verified, integrate it into `main`, push `origin/main`, switch back to `main`, and verify that local and remote `main` match.
-- Pull requests are optional. Verified task branches may be fast-forwarded directly into `main`; CI must run on pushes to `main` so direct integration keeps automated checks without requiring a PR.
+- After relevant local verification, push the task branch and wait for **CI result** to pass on its exact current commit. Only then fast-forward it into `main`, push `origin/main`, switch back to `main`, and verify that local and remote `main` match. A failed or cancelled required job cannot be waived by a later unrelated commit.
+- Pull requests are optional; larger changes should use a PR for review. Issues and second-person approval are optional. Both task branches and `main` run the same CI gate; the task branch checks its cumulative changes from `main`.
+- Mainline integration prepares staging and private Android candidates. Formal Android publication requires super-admin acceptance in the Android versions page; iOS remains in Xcode / App Store Connect; Cloudflare production deployment requires the owner's approval in GitHub Actions. Follow `docs/operations/delivery.md`.
 - Delete the completed task's local branch and any same-name remote branch created for that task. Do not delete unrelated collaborators' branches. The maintained long-lived branch is `main`.
 - If the worktree is dirty, `main` has diverged, or a fast-forward update is not possible, preserve existing work and stop for explicit resolution instead of resetting, overwriting, or force-updating `main`.
 

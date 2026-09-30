@@ -22,7 +22,44 @@ concurrency:
   group: cloudflare-production
   cancel-in-progress: false
 jobs:
+  review:
+    if: github.ref == 'refs/heads/main' && inputs.accepted
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit }}
+      STAGING_RUN: ${{ inputs.staging_run }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.commit }}
+      - name: Verify acceptance evidence before approval
+        run: |
+          [[ "$RELEASE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$STAGING_RUN" =~ ^[0-9]+$ ]]
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN" --jq '.path == ".github/workflows/cloudflare-staging.yml" and .head_branch == "main" and .conclusion == "success"' | grep -qx true
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloudflare-staging-${{ inputs.commit }}
+          path: acceptance
+          run-id: ${{ inputs.staging_run }}
+          github-token: ${{ github.token }}
+      - name: Show source, migrations and staging checks for approval
+        run: |
+          jq -e '.environment == "staging" and .commit == env.RELEASE_COMMIT and .success == true' acceptance/deployment.json
+          {
+            echo '## Selected Cloudflare publication'
+            git show -s --format='%H%n%n%s' "$RELEASE_COMMIT"
+            echo '### Staging checks'
+            jq -r '.checks[]' acceptance/deployment.json
+            echo '### Migration files in the selected source (D1 applies only pending files)'
+            git ls-tree -r --name-only "$RELEASE_COMMIT" backend/migrations
+            echo 'Order: D1 migration → Worker → website → public verification.'
+          } >> "$GITHUB_STEP_SUMMARY"
   deploy:
+    needs: review
     if: github.ref == 'refs/heads/main' && inputs.accepted
     runs-on: ubuntu-24.04
     environment: production

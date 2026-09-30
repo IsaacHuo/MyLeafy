@@ -4,6 +4,8 @@ MyLeafy 运营后台是与官网同仓部署的受保护 Web 应用，生产路�
 
 后台前端位于 `site/src/admin/`，使用 React-admin 5、MUI、ECharts、Vite 与 TypeScript。管理 API 由 Cloudflare Pages Functions 代理到 Cloudflare Worker AdminAPI。
 
+Android 版本页是独立资源页面，管理私有候选、下载验收、超级管理员发布授权、失败重试与撤回。只有正式发行进入公开更新接口；iOS 继续由 App Store Connect 管理。操作和首次部署条件见 [交付与发布](../operations/delivery.md)。
+
 ## 1. 架构与信任边界
 
 ```mermaid

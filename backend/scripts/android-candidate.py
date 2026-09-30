@@ -36,7 +36,7 @@ def download_asset(release, name, output):
     return asset['id']
 
 
-def prepare(apk, source):
+def describe(apk, source):
     identity = verify(apk)
     version, code = identity['versionName'], identity['versionCode']
     manifest = apk.with_name(apk.name+'-build-info.txt')
@@ -48,6 +48,17 @@ def prepare(apk, source):
         stored=json.loads(manifest.read_text(encoding='utf-8'))
         assert stored['commit']==source and all(stored[key]==value for key,value in identity.items())
         info=stored
+    manifest.write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    checksum = apk.with_suffix('.apk.sha256')
+    checksum.write_text(f"{info['sha256']}  {apk.name}\n",encoding='utf-8')
+    return info
+
+
+def prepare(apk, source):
+    info=describe(apk,source)
+    version,code=info['versionName'],info['versionCode']
+    manifest=apk.with_name(apk.name+'-build-info.txt')
+    checksum=apk.with_suffix('.apk.sha256')
     tag = f'android-candidate-{code}'
     repo = os.environ['GITHUB_REPOSITORY']
     release = publisher.find_release(repo, tag)
@@ -56,11 +67,8 @@ def prepare(apk, source):
     else:
         payload = apk.parent / 'candidate-release.json'
         payload.write_text(json.dumps(dict(tag_name=tag,target_commitish=source,draft=True,
-            name=f'MyLeafy Android {version} candidate',body=info['releaseNotes'])),encoding='utf-8')
+            name=f'MyLeafy Android {version} candidate',body=info['releaseNotes']+f"\n\n[candidate-run-id: {os.environ['GITHUB_RUN_ID']}]")),encoding='utf-8')
         release = json.loads(publisher.gh('api',f'repos/{repo}/releases','-X','POST','--input',str(payload)))
-    manifest.write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-    checksum = apk.with_suffix('.apk.sha256')
-    checksum.write_text(f"{info['sha256']}  {apk.name}\n",encoding='utf-8')
     for path in (apk,manifest,checksum):
         if not any(asset['name']==path.name for asset in release['assets']):
             publisher.gh('release','upload',tag,str(path))
@@ -85,6 +93,8 @@ def select(source, output):
     code=int(re.search(r'versionCode = (\d+)',gradle).group(1))
     latest=json.loads(publisher.request(origin+'/v1/releases/android/latest'))['release']
     skip=latest is not None and latest['versionCode']>=code
+    formal=publisher.find_release(os.environ['GITHUB_REPOSITORY'],f'android-v{version}')
+    skip=skip or (formal is not None and not formal['draft'])
     reuse=False;output.mkdir(parents=True,exist_ok=True)
     apk=output/f'MyLeafy-Android-{version}.apk'
     if not skip:
@@ -93,13 +103,21 @@ def select(source, output):
             assert existing['draft']
             source=existing['target_commitish']
             subprocess.run(['git','merge-base','--is-ancestor',source,'origin/main'],check=True)
-            download_asset(existing,apk.name,apk)
-            download_asset(existing,apk.name+'-build-info.txt',apk.with_name(apk.name+'-build-info.txt'))
+            names={asset['name'] for asset in existing['assets']}
+            if {apk.name,apk.name+'-build-info.txt'}<=names:
+                download_asset(existing,apk.name,apk)
+                download_asset(existing,apk.name+'-build-info.txt',apk.with_name(apk.name+'-build-info.txt'))
+            else:
+                run=re.search(r'\[candidate-run-id: (\d+)\]',existing['body'])
+                assert run, 'Incomplete candidate has no original build reference'
+                publisher.gh('run','download',run.group(1),'-n',f'android-candidate-bytes-{code}','-D',str(output))
+                stored=json.loads(apk.with_name(apk.name+'-build-info.txt').read_text(encoding='utf-8'))
+                assert stored['commit']==source and stored['versionCode']==code and publisher.digest(apk)==stored['sha256']
             reuse=True
     with open(os.environ['GITHUB_OUTPUT'],'a') as values:
         values.write(f'skip={str(skip).lower()}\nreuse={str(reuse).lower()}\n')
     with open(os.environ['GITHUB_ENV'],'a') as values:
-        values.write(f'RELEASE_SOURCE_SHA={source}\nRELEASE_APK={apk}\n')
+        values.write(f'RELEASE_SOURCE_SHA={source}\nRELEASE_APK={apk}\nRELEASE_VERSION_CODE={code}\n')
 
 
 def claim(operation, output):
@@ -121,10 +139,11 @@ def claim(operation, output):
 
 
 if __name__ == '__main__':
-    parser=argparse.ArgumentParser(); parser.add_argument('mode',choices=['select','prepare','claim','fail'])
+    parser=argparse.ArgumentParser(); parser.add_argument('mode',choices=['select','describe','prepare','claim','fail'])
     parser.add_argument('--apk',type=Path);parser.add_argument('--source');parser.add_argument('--operation');parser.add_argument('--output',type=Path)
     args=parser.parse_args()
     if args.mode=='select': select(args.source,args.output)
+    elif args.mode=='describe': describe(args.apk,args.source)
     elif args.mode=='prepare': prepare(args.apk,args.source)
     elif args.mode=='claim': claim(args.operation,args.output)
     else: publisher.request(origin+f'/v1/releases/android/operations/{args.operation}/fail','POST',

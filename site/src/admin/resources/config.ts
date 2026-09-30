@@ -47,11 +47,6 @@ const reasonField = (label = "原因"): FormFieldConfig => ({ source: "reason", 
 const idParams = (record: Record<string, any>, values: Record<string, unknown>) => ({ id: record.id, ...values });
 
 export const resourceConfigs: Record<string, ResourceConfig> = {
-  "android-releases": {
-    label: "Android 版本", searchable: false, defaultSort: {field:"versionCode",order:"DESC"},
-    columns: columns(["versionName","版本"],["versionCode","版本号","number"],["packageName","包名"],["status","状态"],["sizeBytes","文件大小","number"],["published_at","发布时间","date"],["sha256","SHA-256"],["commit","提交"]),
-    actions: [{label:"撤回版本",action:"revokeAndroidRelease",tone:"danger",permissionAction:"edit",visible:r=>r.status==='published',build:r=>({id:r.id})}],
-  },
   campuses: { label: "学校空间", columns: columns(["id", "ID"], ["display_name", "学校"], ["connector_kind", "连接器"], ["is_community_enabled", "社区开放", "boolean"], ["status", "状态"]), searchable: false },
   "campus-requests": {
     label: "学校归属申请", columns: columns(["request_type", "类型"], ["school_name", "学校"], ["requester.nickname", "用户"], ["status", "状态"], ["admin_note", "审核备注"], ["created_at", "时间", "date"]), statusChoices: status("pending", "approved", "rejected", "all"),

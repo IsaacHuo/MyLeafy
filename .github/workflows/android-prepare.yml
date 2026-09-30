@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   checks: read
+  actions: read
 concurrency:
   group: android-candidate
   cancel-in-progress: false
@@ -55,6 +56,17 @@ jobs:
         run: |
           ./gradlew :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$RELEASE_APK"
+      - name: Lock candidate identity before upload
+        if: steps.candidate.outputs.skip != 'true'
+        run: python backend/scripts/android-candidate.py describe --apk "$RELEASE_APK" --source "$RELEASE_SOURCE_SHA"
+      - name: Preserve original bytes for interrupted preparation
+        if: steps.candidate.outputs.skip != 'true' && steps.candidate.outputs.reuse != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-candidate-bytes-${{ env.RELEASE_VERSION_CODE }}
+          path: ${{ runner.temp }}/candidate/MyLeafy-Android-*
+          retention-days: 90
+          if-no-files-found: error
       - name: Verify and register private candidate
         if: steps.candidate.outputs.skip != 'true'
         run: python backend/scripts/android-candidate.py prepare --apk "$RELEASE_APK" --source "$RELEASE_SOURCE_SHA"

@@ -3,8 +3,9 @@ import {Datagrid, DateField, FunctionField, List, Pagination, TextField, useCanA
 import {Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Typography} from '@mui/material';
 import {actionRequest} from '../providers/client';
 
-type Release={id:string;versionName:string;versionCode:number;status:string;releaseNotes:string;sizeBytes:number;commit:string;sha256:string;certificateSha256:string;errorCode?:string;runUrl?:string;githubReleaseUrl:string};
+type Release={id:string;versionName:string;versionCode:number;status:string;releaseNotes:string;sizeBytes:number;commit:string;sha256:string;certificateSha256:string;errorCode?:string;runUrl?:string;preparationRunUrl?:string;ciVerified?:boolean;approvedBy?:string;approvedAt?:string;githubReleaseUrl:string};
 const statuses:Record<string,string>={ready:'待发布',publishing:'发布中',published:'已发布',failed:'发布失败',revoked:'已撤回'};
+const failures:Record<string,string>={dispatch_unconfirmed:'任务是否启动尚未确认，系统会继续核对。',dispatch_not_found:'GitHub 没有启动发布任务，请检查发行权限后重试。',workflow_incomplete:'发布任务已结束，正式发行尚未完成。请查看任务结果后重试。',publication_failed:'安装包校验或上传未完成，请查看发布任务的失败步骤。'};
 
 export function AndroidReleasesPage(){
   return <Box>
@@ -16,6 +17,7 @@ export function AndroidReleasesPage(){
         <TextField source="versionName" label="版本" />
         <FunctionField label="状态" render={(r:Release)=><Chip size="small" label={statuses[r.status]??r.status} color={r.status==='failed'?'error':r.status==='published'?'success':'default'} />} />
         <FunctionField label="安装包" render={(r:Release)=>`${(r.sizeBytes/1024/1024).toFixed(1)} MB`} />
+        <FunctionField label="检查" render={(r:Release)=>r.ciVerified?'已通过':'历史发行'} />
         <DateField source="published_at" label="发布时间" showTime />
         <FunctionField label="操作" render={()=><ReleaseActions />} />
       </Datagrid>
@@ -55,9 +57,11 @@ function ReleaseActions(){
         {dialog==='revoke'&&<Alert severity="warning">撤回后，官网和 App 不再推荐此版本。已安装的版本需要通过后续更新修复。</Alert>}
         {dialog==='details'&&<Stack spacing={1} sx={{overflowWrap:'anywhere'}}>
           <Typography>状态：{statuses[record.status]}</Typography><Typography>版本号：{record.versionCode}</Typography>
-          {record.errorCode&&<Alert severity="error">发布未完成（{record.errorCode}）。请查看任务结果后重试。</Alert>}
+          {record.errorCode&&<Alert severity="error">{failures[record.errorCode]??`发布未完成（${record.errorCode}），请查看任务结果。`}</Alert>}
           <Typography variant="body2">源码：{record.commit}</Typography><Typography variant="body2">SHA-256：{record.sha256}</Typography>
           <Typography variant="body2">签名：{record.certificateSha256}</Typography>
+          {record.approvedBy&&<Typography variant="body2">发布决定人：{record.approvedBy} · {record.approvedAt}</Typography>}
+          {record.preparationRunUrl&&<Button component="a" href={record.preparationRunUrl} target="_blank" rel="noreferrer">查看候选检查与构建</Button>}
           {record.runUrl&&<Button component="a" href={record.runUrl} target="_blank" rel="noreferrer">查看发布任务</Button>}
           {record.status==='published'&&<Button component="a" href={record.githubReleaseUrl} target="_blank" rel="noreferrer">GitHub 镜像</Button>}
         </Stack>}

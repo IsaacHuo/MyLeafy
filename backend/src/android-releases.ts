@@ -99,12 +99,16 @@ export async function getAndroidRelease(env:BackendEnv,id:string){
 export async function listAndroidReleases(env:BackendEnv,params:Record<string,unknown>={}){
   await reconcileAndroidPublications(env);
   const page=integer(params.page??0,0,100000),pageSize=integer(params.pageSize??20,1,100);
-  const source=`SELECT r.id,r.metadata,r.status,r.published_at,r.revoked_at,NULL error_code,NULL run_id FROM android_releases r
-    UNION ALL SELECT c.id,c.metadata,CASE WHEN o.status IN('pending','running') THEN 'publishing' WHEN o.status='failed' THEN 'failed' ELSE 'ready' END,NULL,NULL,o.error_code,o.run_id
+  const source=`SELECT r.id,r.metadata,r.status,r.published_at,r.revoked_at,o.error_code,o.run_id,c.preparation_run_id,o.approved_by,o.approved_at
+    FROM android_releases r LEFT JOIN android_release_candidates c ON c.id=r.id LEFT JOIN android_release_operations o ON o.id=c.operation_id
+    UNION ALL SELECT c.id,c.metadata,CASE WHEN o.status IN('pending','running') THEN 'publishing' WHEN o.status='failed' THEN 'failed' ELSE 'ready' END,NULL,NULL,o.error_code,o.run_id,c.preparation_run_id,o.approved_by,o.approved_at
     FROM android_release_candidates c LEFT JOIN android_release_operations o ON o.id=c.operation_id WHERE NOT EXISTS(SELECT 1 FROM android_releases r WHERE r.id=c.id)`;
-  const rows=(await env.DB.prepare(`SELECT * FROM (${source}) ORDER BY json_extract(metadata,'$.versionCode') DESC LIMIT ? OFFSET ?`).bind(pageSize,page*pageSize).all<{id:string;metadata:string;status:string;published_at:string|null;revoked_at:string|null;error_code:string|null;run_id:number|null}>()).results;
+  const rows=(await env.DB.prepare(`SELECT * FROM (${source}) ORDER BY json_extract(metadata,'$.versionCode') DESC LIMIT ? OFFSET ?`).bind(pageSize,page*pageSize).all<{id:string;metadata:string;status:string;published_at:string|null;revoked_at:string|null;error_code:string|null;run_id:number|null;preparation_run_id:number|null;approved_by:string|null;approved_at:string|null}>()).results;
   const total=(await env.DB.prepare(`SELECT count(*) n FROM (${source})`).first<{n:number}>())!.n;
-  return {items:rows.map(row=>({...JSON.parse(row.metadata),status:row.status,published_at:row.published_at,revoked_at:row.revoked_at,errorCode:row.error_code,runUrl:row.run_id?`https://github.com/IsaacHuo/MyLeafy/actions/runs/${row.run_id}`:null})),total,page,pageSize};
+  return {items:rows.map(row=>({...JSON.parse(row.metadata),status:row.status,published_at:row.published_at,revoked_at:row.revoked_at,errorCode:row.error_code,
+    ciVerified:row.preparation_run_id!==null,approvedBy:row.approved_by,approvedAt:row.approved_at,
+    preparationRunUrl:row.preparation_run_id?`https://github.com/IsaacHuo/MyLeafy/actions/runs/${row.preparation_run_id}`:null,
+    runUrl:row.run_id?`https://github.com/IsaacHuo/MyLeafy/actions/runs/${row.run_id}`:null})),total,page,pageSize};
 }
 export async function revokeAndroidRelease(env:BackendEnv,context:AdminContext,params:Record<string,unknown>){
   const id=text(params.id,120),now=new Date().toISOString();

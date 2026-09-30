@@ -1,8 +1,12 @@
 # Current State
 
-Last verified: 2026-09-30 (Android manual-captcha authentication; production 1.2.0 → 1.2.1 update acceptance)
+Last verified: 2026-09-30 (delivery pipeline implementation and full CI; production rollout status below)
 
 ## Current Focus
+
+- **开发与交付门槛**：统一 CI 按跨目录依赖运行，main 必需 `CI result` 已配置。完整远程 CI 全绿：iOS 578 项中 577 通过、1 跳过，Android/后端/网站/旧 Supabase 通过；网站 60 项单元及三个浏览器配置通过，D1 增量迁移保留原管理员与发行记录的用例通过。AGENTS/贡献规范统一为任务分支当前提交通过 CI 后快进合入 main，PR 可选。
+- **发布流程代码**：Android 私有 draft 候选、超级管理员验收授权、原 APK 发布/失败重试、公开发行隔离和审计已实现；D1 0011 尚待部署，新候选后台还未在生产接通，生产正式 App 仍为 1.2.1/code 5。iOS 仅通过 Apple 发布，GitHub 工作流只补记源码/version/build。
+- **Cloudflare 接通状态**：已通过 API 核对 `leafy` 生产自动部署关闭，创建 `myleafy-site-staging` 隔离 Pages 项目；GitHub staging/production 的 Cloudflare Secret 与 Pages 项目变量已配置，production 由 IsaacHuo 批准。production Worker 已登记 `GITHUB_RELEASE_TOKEN`，实际 GitHub 权限仍在核对。首次受控 staging 部署、恢复演练和用户批准的 production 部署尚未完成，不能将代码检查等同上线验收。
 
 - **Android 第二轮体验完善**：已修复综素初始化闪退、校园返回分类丢失和培养方案误取课程编号；首次教务同步由身份作用域管理。课表背景/左轴固定、月份补齐，详情改为 Sheet，支持本机备注与课前提醒；底栏圆形选中底、日迹圆形加号、等宽场馆卡片、医疗/评价直接展开，移除安卓“周末去哪”。仅北林与免登录，调试包后缀 `.next`。
 - **验收边界**：模拟器优先，小米真机延后。完整 JVM 共 149 项，142 通过、7 项外部探测跳过；构建和 lint 通过（104 条 warning、3 条 hint）。隔离模拟器完整 32 项中 31 通过，屏外学院选项测试修正后单项通过；顶部返回另行复跑通过。6 张导航基线逐张审阅后验证通过。未把分批复跑表述为一次全绿，也未声称全设备/全字号验收。
@@ -10,7 +14,7 @@ Last verified: 2026-09-30 (Android manual-captcha authentication; production 1.2
 - **真实学校核对与数据保护**：保留已登录模拟器数据；v7→v8 增量升级后 31 条课程、92 条成绩仍在。用户重新认证后首次队列继续，可信空考试完成检查点；成绩及官方排名已刷新，培养方案核对毕业总学分 167 和 8 类要求，空闲教室当前周/当天返回 76 间。自动化迁移、编辑、权限等测试只在独立模拟器执行。
 - **Android 重新认证**：验证码/key/匿名 Cookie 绑定同一挑战，Keystore 凭据 JSON 按当前账号预填；用户手动填写验证码并提交，成功后继续原查询。身份作用域去重获取挑战，网络失败不触发认证，身份切换取消旧任务。按用户最新要求移除 ML Kit、离线 OCR 模型及所有自动识别/提交路径。Room 保持 v8。
 - **Android 版本管理**：生产/staging 独立 R2 APK bucket 与下载域名、D1 0010、公开发行 API 已上线。Actions 使用现有正式签名，Cloudflare/GitHub Releases 发布同一 APK/校验文件/构建信息并公开核验；“我的 → 检查更新”使用匿名 Cloudflare 接口与 versionCode。生产 1.2.1（code 5，移除 OCR，51.4 MB）已双发布，独立模拟器通过 App 内下载及系统安装器从 1.2.0 覆盖升级，免登录身份、测试随记和日程保留。拒绝来源授权、授权返回、取消后继续安装、已下载任务进程恢复及安装后清理均实测通过；staging 上传/回读/幂等/撤回通过。详见 `docs/engineering/android-auth-updates.md`。
-- **官网与后台**：构建和 59 项测试通过；既有 Pages Git 自动生产部署已更新官网 Cloudflare 下载入口、隐私说明及版本管理页面，公开 index/admin bundle 与本地构建 hash 一致，私有管理接口未登录返回 401。无需新增 Pages token 即可通过 Git 发布。
+- **官网与后台**：既有生产提供 Cloudflare 下载入口、隐私说明和正式版本列表，私有管理接口未登录返回 401。新增候选/授权页面已通过构建、单元及 mock 浏览器验证；正式上线改由受控工作流，不能再假定 push main 会直接更新网站。
 - **剩余外部验收**：大陆校园网/移动网络下载测速、下载中断续传、存储不足及真实学校账号覆盖安装尚未现场验收。学校预填/手动验证码/恢复行为有回归覆盖，未把单元测试等同真实会话过期验收。隔离社区写入、系统课程通知投递/重启恢复仍未完整验收；本轮 6 张升级截图已逐张审阅，位于 `android/app/build/emulator-update-latest/`，此前核心 UI 最新批次为 `android/app/build/emulator-latest/`。
 
 ## Recently Completed
@@ -62,7 +66,7 @@ Last verified: 2026-09-30 (Android manual-captcha authentication; production 1.2
 
 ## Known Problems
 
-- **iOS 测试目标隔离声明**：当前 Xcode 下 build-for-testing 被 CampusHeatmapCaching / ClassroomLookupCaching 的 MainActor 协议与测试 actor 冲突阻断；App 与真机签名构建通过。本轮按用户后续要求只做静态与构建验收，未运行 XCTest。
+- **交付流程线上验收**：受控 staging、恢复演练、新候选 admin 与 GitHub dispatch 尚待接通验收；已有 CI 结果只证明代码/合成流程，不证明实际签名新候选或生产发布。
 
 - **教务系统不稳定**：HTML、登录流程或网络策略变化可能使解析暂时失效（持续风险，见 `docs/product/overview.md` §7）。
 - **Android 尚待完整验收**：真实学校数据读取与重新认证后续传已核对；首次干净账号的完整启动、真实断网/保存失败链路尚未逐项现场复现（本地回归覆盖相关行为）。Cloudflare 隔离环境写入与共享权限、系统通知实际投递/重启恢复、TalkBack 和两端 Release 帧时比较未完成。

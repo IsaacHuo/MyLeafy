@@ -1,7 +1,7 @@
 # Admin backend reliability
 
 The current `/admin` site calls the private Worker `AdminAPI` through a Pages service binding.
-`backend/src/admin-router.ts` registers 73 actions; `backend/scripts/check-client-contracts.ts` checks the website's action names against that registry. Registration checks complement business tests and do not prove all behavior.
+`backend/src/admin-router.ts` supports the website's 76 registered actions; `backend/scripts/check-client-contracts.ts` checks their names against that registry. Registration checks complement business tests and do not prove all behavior.
 
 ## Write boundaries
 

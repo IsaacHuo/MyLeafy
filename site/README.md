@@ -31,8 +31,8 @@ Vite 开发服务器适合公开页面或 mock API 下的后台界面。`npm run
 - Support URL: `https://myleafy.space/support`
 - Privacy Policy URL: `https://myleafy.space/privacy`
 - Admin URL: `https://myleafy.space/admin`
-- Git 自动生产部署保持开启。
+- 发布切换时关闭 Git 自动生产部署，使用 GitHub 的 **Publish accepted Cloudflare version** 部署到原项目；项目变量为 `CLOUDFLARE_PAGES_PROJECT=leafy`。未完成 Cloudflare 设置核对前不能假定已关闭。
 
-先部署通过验证的 Worker，再发布依赖其接口的网站。服务绑定在 Pages 项目中配置，发布后确认绑定目标与环境一致。完整说明见 [运营后台](../docs/engineering/admin-console.md) 和 [Cloudflare 后端](../docs/engineering/cloudflare-migration.md)。
+先在 staging 验收指定提交，正式部署依次运行数据库迁移、Worker、网站，并回读部署身份。`wrangler.staging.jsonc` / `wrangler.production.jsonc` 指定相应服务绑定，发布后核对环境一致。admin 仅管理 Android 的候选、发布、重试和撤回；iOS 由 Apple 管理。完整说明见 [交付与发布](../docs/operations/delivery.md)、[运营后台](../docs/engineering/admin-console.md) 和 [Cloudflare 后端](../docs/engineering/cloudflare-migration.md)。
 
 `support@myleafy.space` 通过 Cloudflare Email Routing 转发；App 验证码由 Worker 调用 Resend 发送。

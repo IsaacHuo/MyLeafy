@@ -18,7 +18,7 @@ MyLeafy 的 Android 原生客户端（单 `app` module）。迁移方案与教�
 ./gradlew connectedDebugAndroidTest # 运行 5 Tab / 二级导航设备烟雾测试
 ```
 
-release 构建必须同时提供 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE_STORE_PASSWORD`、`MYLEAFY_RELEASE_KEY_ALIAS` 和 `MYLEAFY_RELEASE_KEY_PASSWORD`，并在 `secrets.properties` 中提供公开的 Supabase URL/anon key；缺任一项会直接失败，不会生成 unsigned APK。正式产物由 GitHub Actions 的 `Cut Android Release` 发布到独立的 `android-vX.Y.Z` Release。
+release 构建必须同时提供 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE_STORE_PASSWORD`、`MYLEAFY_RELEASE_KEY_ALIAS` 和 `MYLEAFY_RELEASE_KEY_PASSWORD`；缺任一项会直接失败，不会生成 unsigned APK。main CI 通过后，新 versionCode 由 Actions 准备私有签名候选；超级管理员在 admin 下载验收并手动决定发布到 Cloudflare 与 `android-vX.Y.Z` GitHub Release。发布使用原 APK，不重新构建。详见 [交付与发布](../docs/operations/delivery.md)。
 
 要求：JDK 17+，Android SDK Platform 36（`local.properties` 中 `sdk.dir`）。Windows 本地可直接使用 Android Studio 自带 JBR；本仓库的 wrapper 下载超时已放宽，适合首次获取 Gradle 分发包。
 
@@ -28,14 +28,7 @@ release 构建必须同时提供 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE
 
 ## 配置
 
-Supabase 公开配置位于 git-ignored `secrets.properties`（从
-`secrets.properties.example` 复制并填写 publishable/anon key）：
-
-```bash
-cp secrets.properties.example secrets.properties
-```
-
-> 只允许公开的 project URL 与 anon key；严禁 service_role 或任何私密凭据。
+客户端默认使用 `https://api.myleafy.space`；隔离测试可传 Gradle 属性 `-PmyleafyApiOrigin=https://api-staging.myleafy.space`。新版源码不需要 Supabase 配置。服务端 Secret 与签名材料禁止写入客户端配置或提交到 Git。
 
 ## 目录
 

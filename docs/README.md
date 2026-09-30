@@ -56,6 +56,7 @@ git     → What changed.                       （普通改动历史）
 | 文档 | 内容 |
 |---|---|
 | [贡献规范](../CONTRIBUTING.md) | 分支、PR、日常 CI 和发布前验证 |
+| [交付与发布](operations/delivery.md) | CI 门槛、Android 候选验收、受控部署与独立恢复 |
 | [发布记录](operations/release-notes.md) | 正式版本、Git tag、发布源码和用户可见更新摘要 |
 | [App Store 记录](operations/app-store/) | 特定版本的审核、元数据和重新提交记录 |
 

@@ -1,7 +1,7 @@
 import {expect,test} from '@playwright/test';
 
 test('admin verifies a candidate before publishing and keeps iOS outside version management',async({page})=>{
-  const release={id:'com.myleafy.android-6',versionName:'1.2.2',versionCode:6,status:'ready',releaseNotes:'改进手动验证码体验',sizeBytes:50000000,commit:'a'.repeat(40),sha256:'b'.repeat(64),certificateSha256:'c'.repeat(64)};
+  const release={id:'com.myleafy.android-6',versionName:'1.2.2',versionCode:6,status:'ready',ciVerified:true,releaseNotes:'改进手动验证码体验',sizeBytes:50000000,commit:'a'.repeat(40),sha256:'b'.repeat(64),certificateSha256:'c'.repeat(64)};
   let published=false;
   await page.route('**/api/admin/**',async route=>{
     const path=new URL(route.request().url()).pathname;
@@ -18,6 +18,7 @@ test('admin verifies a candidate before publishing and keeps iOS outside version
   });
   await page.goto('/admin/android-releases');
   await expect(page.getByText('待发布',{exact:true})).toBeVisible();
+  await expect(page.getByText('已通过',{exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'下载验收'})).toHaveAttribute('href','/api/admin/android-candidate?id=com.myleafy.android-6');
   await page.getByRole('button',{name:'发布',exact:true}).click();
   await expect(page.getByRole('button',{name:'确认发布',exact:true})).toBeDisabled();

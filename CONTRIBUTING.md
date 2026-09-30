@@ -1,67 +1,43 @@
 # 贡献规范
 
-这个项目的协作流程保持轻量：先开 Issue 说明问题或需求，再从 `main` 拉分支，提交 PR，等 GitHub Actions 通过后合并。
+日常流程：**说明任务 → 从 main 建短期分支 → 本地验证 → 推送并等待 CI result → 快进合入 main → 验收 → 手动发布**。
 
-## 分支命名
+任务至少说明问题、验收标准和影响范围。小改动在聊天中说明即可；较大功能或架构决策写入 `docs/`。Issue 和 PR 可选，较大改动建议用 PR 展示结果，不要求第二个人批准。
 
-建议从 `main` 拉新分支并使用小写短横线或数字；这是协作约定，不是 CI 阻断条件：
+## 分支与合并
 
-- `feature/<short-slug>`：新功能
-- `fix/<short-slug>`：缺陷修复
-- `docs/<short-slug>`：文档变更
-- `chore/<short-slug>`：配置、依赖、脚本维护
-- `refactor/<short-slug>`：不改变行为的重构
-- `test/<short-slug>`：测试补充
-- `release/<version>`：发布准备
-- `codex/<short-slug>`：Codex 生成或整理的工作分支
+1. 确认工作区干净，fetch origin，将 main 快进到 origin/main，核对两者一致。
+2. 从这个提交创建 `codex/<task>` 短期分支，不在 main 写任务代码。
+3. 运行与风险相称的本地检查，推送分支。**当前提交的 CI result 通过后才合入 main**；失败或取消不能算通过。
+4. 快进合入 main，推送并核对本地/远程 main 一致，完成后删除本任务分支。
 
-示例：`feature/timetable-export`、`fix/admin-login-state`、`docs/supabase-setup`。
+工作区有未提交改动、main 分叉或无法快进时，保留现场并请求明确解决，不 reset、覆盖或强推。详细规则以 [AGENTS.md](AGENTS.md) 为准。
 
-## Issue 规范
+## 验证与文档
 
-Bug 使用 Bug report 模板，至少写清楚复现步骤、期望行为、实际行为和环境。功能建议使用 Feature request 模板，说明要解决的问题、最小可用方案和影响范围。
+`CI result` 汇总按依赖选择的各端检查。任务分支检查相对 main 的累计改动；PR 检查相对目标分支；main 检查本次提交范围。后台和 admin 契约、共享 fixtures、工作流修改会触发相关端检查。手动运行 CI 检查全部范围。
 
-不要在 Issue 里粘贴密码、token、cookie、真实学生个人信息或生产数据库内容。需要说明配置时，只写环境变量名或占位值。
+| 范围 | 日常自动验证 |
+|---|---|
+| 仓库 | 私有文件/密钥、分层边界、范围选择规则 |
+| iOS | Xcode 26.6、iOS 17 最低目标构建、离线 XCTest；中文测试环境，英文行为由显式语言用例验证 |
+| Android | JDK 17、受版本控制的 Gradle、构建、JVM、lint、截图差异 |
+| 后端 | 锁定 Node 与 npm 依赖、类型/客户端契约、业务/迁移/发行脚本、Worker dry-run |
+| 官网/admin | 类型、单元、生产构建、Chromium/WebKit/iPad WebKit 关键浏览器流程 |
+| 旧 Supabase | Deno 类型/业务契约、本地数据库迁移与权限测试 |
 
-## PR 规范
+自动化使用合成数据和离线样本，不依赖真实学校账号、验证码或校园网络。失败时在 Actions 下载 XCTest、浏览器或 Android 诊断产物。真实学校会话与手机覆盖升级按发布清单人工验收。
 
-PR 应该保持小而清晰，标题用一句话说明结果，例如 `Add timetable widget refresh tests`。正文按模板填写 Summary、Linked Issue、Changes 和 Validation。
+不提交 `.env`、本地配置、签名材料、token、cookie、学生个人信息或管理员凭据。设计及理由写 `docs/`，已实现结构与状态写 `state/`，可复用根因写 `logs/`，普通历史留给 Git。
 
-合并前至少满足：
+## 发布
 
-- PR 关联了对应 Issue，纯文档或很小的维护变更可以例外。
-- 本地跑过相关构建或测试；UI 改动看过模拟器、截图或浏览器效果。
-- 没有提交 `.env`、本地 xcconfig、证书、profile、服务账号 JSON、Xcode 用户状态或临时脚本。
-- 行为、配置或部署方式变化时，同步更新 `docs/`。
+Android 版本名与 versionCode 更新后，经过 main CI 的正式签名 APK 进入私有 draft 候选。超级管理员在 **admin → Android 版本** 下载验收并决定发布；发布复用同一 APK。不要从 Actions 绕过验收公开新包。
 
-## GitHub Actions
+iOS 在 Xcode 归档和上传，在 App Store Connect 使用 TestFlight、送审和发布。Apple 正式发布后，运行 **Record released iOS version**，记录对应提交、版本和 build。主 App、Widget 和 Share Extension 版本必须一致；GitHub Release 只记录源码，不生成未签名安装包。
 
-PR 和推送到 `main` 会按改动范围触发 CI：
+Cloudflare 合入主线后准备 staging；验收通过后运行 **Publish accepted Cloudflare version**，指定提交和 staging 运行，等待 production 人工批准。数据库迁移、Worker、网站依次进行，前一步失败停止后续步骤。Pages 自动生产部署必须先关闭。
 
-- Repository safety：所有改动都检查不应跟踪的私有文件和明显密钥格式。
-- Site CI：仅 `site/**` 变化时运行单元测试和生产构建；`npm run build` 已包含 TypeScript 检查。
-- Cloudflare 后端 CI：`backend/**` 变化时运行 TypeScript 检查、客户端契约检查、业务与迁移测试及 Worker dry-run 构建。
-- 旧 Supabase CI：仅 `supabase/**` 变化时检查和测试 Edge Functions，并从零应用 migration 后运行数据库测试。
-- iOS CI：仅 App、扩展、测试、配置或 Xcode 工程变化时执行 iOS 17 build-only 检查。
+正式 tag 和安装包路径不可覆盖。撤回 Android 仅停止推荐，已安装版本通过更高 versionCode 修复；Worker/网站恢复和 D1 数据恢复分别处理。
 
-同一分支连续推送时只保留最新运行。Playwright 双浏览器 E2E、完整 iOS 测试、真机验证和发布检查不属于每次提交的日常门槛，应在重大交互改动或发布前按相关文档执行。
-
-常用发布前命令：
-
-```bash
-npm --prefix site run test:e2e
-bash scripts/test-ios17-compatibility.sh
-```
-
-## 正式版本与 Git tag
-
-正式发布保持轻量，但版本、源码和 App Store 构建必须能够互相追溯：
-
-1. 确认主 App、Widget 和 Share Extension 的 `MARKETING_VERSION` 与 `CURRENT_PROJECT_VERSION` 一致。
-2. 完成与发布风险相称的构建、测试、真机和 App Store 验收，并锁定实际上架二进制对应的提交。
-3. 在 [`release-notes.md`](docs/operations/release-notes.md) 记录版本、build、发布源码和用户可见摘要。
-4. 对发布提交创建 `v<marketing-version>` 形式的 annotated tag；tag message 记录版本、build、源码定版或发布日期，以及是否为历史补录。
-5. 单独推送每个 tag，并在 GitHub 创建同名正式 Release。Release 不默认附加 IPA、dSYM、证书或签名材料。
-6. 分别验证本地 tag、远端 tag、GitHub Release 和 Xcode 工程中的版本/build 完全一致。
-
-正式 tag 是不可变的发布锚点。创建后不得移动、覆盖、删除后重建或强制推送；如果发布内容有误，应创建后续版本或明确的修正记录。候选构建需要标记时使用独立的 prerelease 命名，不提前占用正式版本 tag。
+配置、验收、失败重试及恢复操作见 [交付与发布手册](docs/operations/delivery.md)。
