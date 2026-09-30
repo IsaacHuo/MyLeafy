@@ -86,7 +86,7 @@ class InitialAcademicSync(
                         } catch (cancelled: CancellationException) { throw cancelled }
                         catch (error: Exception) {
                             failed[label] = error.message ?: "同步失败，请重试"
-                            if (error is SchoolNetworkError.SessionExpired) {
+                            if (error is SchoolNetworkError.AuthenticationExpired) {
                                 mutable.value = InitialSyncState(null, succeeded.toList(), failed.toMap(), true)
                                 return@withLock
                             }

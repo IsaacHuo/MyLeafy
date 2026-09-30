@@ -19,6 +19,7 @@ import { activityPosts, activityComments, profileDetail, profileStats, polls, ge
 import { unreadNotificationCount, announcements, announcementRead, notificationSettings, dismissNotification, banner, postgraduateSources, submitFeedback } from './notices';
 import { toggleCommentLike, pendingPost } from './interactions';
 import { sharePreview } from './share-preview';
+import { latestAndroidRelease, getAndroidRelease, publishAndroidRelease, uploadReleaseArtifact } from './android-releases';
 import { currentMembership, requestMembership, runtimeConfiguration, searchCampuses, selectCampus } from './campus';
 export { ChangeSignals } from './signals';
 export { AdminAPI } from './admin-entrypoint';
@@ -38,6 +39,16 @@ app.get('/health',async c=>{
   return c.json({status:check?.ok===1?'ok':'error',environment:c.env.ENVIRONMENT});
 });
 app.get('/v1/share-preview',async c=>c.json(await sharePreview(c.env,new URL(c.req.url))));
+// Release-only CI writes and public reads are independent of community maintenance.
+app.get('/v1/releases/android/latest',async c=>c.json(await latestAndroidRelease(c.env,c.req.query('package'))));
+app.get('/v1/releases/android/download',async c=>{
+  const latest=await latestAndroidRelease(c.env);
+  if(!latest.release)throw new ApiError(404,'release_unavailable','暂无可下载版本。');
+  return c.redirect(latest.release.apkUrl+(c.req.query('file')==='checksum'?'.sha256':''),302);
+});
+app.get('/v1/releases/android/:id',async c=>c.json(await getAndroidRelease(c.env,c.req.param('id'))));
+app.put('/v1/releases/artifacts/*',async c=>c.json(await uploadReleaseArtifact(c.env,c.req.raw,new URL(c.req.url).pathname.slice('/v1/releases/artifacts/'.length))));
+app.post('/v1/releases/android/publish',async c=>c.json(await publishAndroidRelease(c.env,c.req.raw,await readJSON(c.req.raw))));
 app.use('/v1/*',async(c,next)=>{
   const state=await c.env.DB.prepare('SELECT mode FROM backend_control WHERE id=1').first<{mode:string}>();
   if(!state||state.mode==='importing')throw new ApiError(503,'maintenance','服务维护中，请稍后重试。',true);

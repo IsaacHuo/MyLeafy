@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.myleafy.android.MyLeafyApplication
 import com.myleafy.android.navigation.MyLeafyNavHost
@@ -58,10 +59,18 @@ fun MyLeafyApp(deepLinkIntent: Intent? = null) {
     }
     val navController = rememberNavController()
 
+    val updateGate = remember { com.myleafy.android.ui.components.UpdatePresentationGate() }
+    val recoveryProgress by application.container.schoolAuthenticationRecovery.progress.collectAsStateWithLifecycle()
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.myleafy.android.ui.components.LocalUpdatePresentationGate provides updateGate,
+        com.myleafy.android.ui.components.LocalSchoolRecoveryProgress provides recoveryProgress,
+    ) {
     MyLeafyNavHost(
         navController = navController,
         activeAppScopeStore = application.container.activeAppScopeStore,
     )
+    if (recoveryProgress == null) com.myleafy.android.features.profile.UpdatePromptHost(application.container.appUpdateManager, navController, updateGate)
+    }
 
     LaunchedEffect(deepLinkIntent) {
         if (deepLinkIntent?.getBooleanExtra("courseReminder", false) == true) {

@@ -20,13 +20,12 @@ interface SchoolNetworkClient {
     /** 教务会话 Cookie 字典（按当前身份持久化）。 */
     val cookies: Map<String, String>
 
-    /** 请求本科生验证码：返回验证码图片字节。需先调用 [startSession] 获得登录 key。 */
-    suspend fun fetchUndergraduateCaptcha(): ByteArray
+    suspend fun prepareUndergraduateChallenge(): SchoolCaptchaChallenge
 
     /** 研究生登录公钥（RSA），来自 /home/stulogin 的 #pubkey。 */
     suspend fun fetchGraduatePublicKey(): String
 
-    suspend fun loginUndergraduate(account: String, password: String, captcha: String)
+    suspend fun loginUndergraduate(challenge: SchoolCaptchaChallenge, account: String, password: String, captcha: String)
 
     suspend fun loginGraduate(account: String, password: String, captcha: String)
 

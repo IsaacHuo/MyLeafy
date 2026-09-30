@@ -49,7 +49,7 @@ class SchoolAuthFlowTest {
     fun loginSucceedsPersistsCookiesAndMarksSession() = runBlocking {
         server.dispatcher = authenticDispatcher()
 
-        client.loginUndergraduate("2012", "pw", "1234")
+        client.loginUndergraduate(client.prepareUndergraduateChallenge(), "2012", "pw", "1234")
 
         assertTrue(session.isLoggedIn)
         assertEquals("2012", session.identity?.eduId)
@@ -57,8 +57,9 @@ class SchoolAuthFlowTest {
         assertEquals(mapOf("JSESSIONID" to "xyz"), store.load(identity.scopeKey, identity.portal.rawValue))
         assertEquals(mapOf("JSESSIONID" to "xyz"), client.cookies)
 
-        // 请求顺序：key → 登录 POST → 会话验证
+        // One challenge: key → captcha → login → verify, no second key request.
         val keyRequest = server.takeRequest(5, TimeUnit.SECONDS)
+        val captchaRequest = server.takeRequest(5, TimeUnit.SECONDS)
         val loginRequest = server.takeRequest(5, TimeUnit.SECONDS)
         val verifyRequest = server.takeRequest(5, TimeUnit.SECONDS)
         assertEquals("/Logon.do?method=logon&flag=sess", keyRequest?.path)
@@ -81,6 +82,7 @@ class SchoolAuthFlowTest {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path == "/Logon.do?method=logon&flag=sess" ->
                     MockResponse().setBody("SECRETCODE#12345")
+                request.path == "/verifycode.servlet" -> MockResponse().setBody("CAPTCHA-IMG")
                 request.path == "/Logon.do?method=logon" ->
                     MockResponse().setBody("""<script>alert('验证码错误')</script>""")
                 else -> MockResponse().setResponseCode(404)
@@ -88,7 +90,7 @@ class SchoolAuthFlowTest {
         }
 
         val error = assertThrows(SchoolNetworkError.LoginFailed::class.java) {
-            runBlocking { client.loginUndergraduate("2012", "pw", "0000") }
+            runBlocking { client.loginUndergraduate(client.prepareUndergraduateChallenge(), "2012", "pw", "0000") }
         }
         assertEquals("验证码错误", error.message)
         assertEquals(false, session.isLoggedIn)
@@ -101,6 +103,7 @@ class SchoolAuthFlowTest {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path == "/Logon.do?method=logon&flag=sess" ->
                     MockResponse().setBody("SECRETCODE#12345")
+                request.path == "/verifycode.servlet" -> MockResponse().setBody("CAPTCHA-IMG")
                 request.path == "/Logon.do?method=logon" ->
                     MockResponse().setResponseCode(200)
                         .addHeader("Set-Cookie", "JSESSIONID=xyz; Path=/")
@@ -113,7 +116,7 @@ class SchoolAuthFlowTest {
         }
 
         assertThrows(SchoolNetworkError.LoginFailed::class.java) {
-            runBlocking { client.loginUndergraduate("2012", "pw", "1234") }
+            runBlocking { client.loginUndergraduate(client.prepareUndergraduateChallenge(), "2012", "pw", "1234") }
         }
         assertEquals(false, session.isLoggedIn)
         assertEquals(null, session.identity)
@@ -135,7 +138,7 @@ class SchoolAuthFlowTest {
             }
         }
 
-        val bytes = client.fetchUndergraduateCaptcha()
+        val bytes = client.prepareUndergraduateChallenge().imageBytes
         assertEquals("CAPTCHA-IMG", String(bytes))
         val keyRequest = server.takeRequest(5, TimeUnit.SECONDS)
         val captchaRequest = server.takeRequest(5, TimeUnit.SECONDS)
@@ -161,15 +164,13 @@ class SchoolAuthFlowTest {
             }
         }
 
-        client.fetchUndergraduateCaptcha()
-        client.loginUndergraduate("2012", "pw", "1234")
+        val challenge = client.prepareUndergraduateChallenge()
+        client.loginUndergraduate(challenge, "2012", "pw", "1234")
 
         server.takeRequest(5, TimeUnit.SECONDS)
         val captchaRequest = server.takeRequest(5, TimeUnit.SECONDS)
-        val refreshedKeyRequest = server.takeRequest(5, TimeUnit.SECONDS)
         val loginRequest = server.takeRequest(5, TimeUnit.SECONDS)
         assertEquals("JSESSIONID=pre-auth", captchaRequest?.getHeader("Cookie"))
-        assertEquals("JSESSIONID=pre-auth", refreshedKeyRequest?.getHeader("Cookie"))
         assertEquals("JSESSIONID=pre-auth", loginRequest?.getHeader("Cookie"))
         assertTrue(session.isLoggedIn)
         val identity = checkNotNull(session.identity)

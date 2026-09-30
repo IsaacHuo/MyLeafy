@@ -93,6 +93,8 @@ class AppContainer(context: Context) {
     // 教务会话状态：身份驱动 Cookie 作用域（M2.2 登录成功后写入）
     val activeAppScopeStore = ActiveAppScopeStore()
     val schoolSessionState = SchoolSessionState(activeAppScopeStore)
+    private val backendLifecycle = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
+    val appUpdateManager = com.myleafy.android.features.profile.AppUpdateManager(applicationContext, backendLifecycle)
 
     private val identityMutex = Mutex()
     private var identityRestored = false
@@ -104,7 +106,7 @@ class AppContainer(context: Context) {
         if (settings.campusId == CampusID.guest.rawValue) {
             activeAppScopeStore.activateGuest()
         } else withContext(Dispatchers.IO) {
-            schoolLoginCredentialStore.loadMostRecent(CampusID.bjfu.rawValue)?.let { cached ->
+            schoolLoginCredentialStore.load(CampusID.bjfu.rawValue, "undergraduate", settings.eduId)?.let { cached ->
             schoolSessionState.identity = CampusIdentity(
                 campusId = CampusID.bjfu,
                 eduId = cached.account,
@@ -122,7 +124,7 @@ class AppContainer(context: Context) {
     val htmlParser: HtmlParser = JsoupHtmlParser()
 
     // 教务 OkHttp 客户端：登录（M2.2）+ 课表抓取（M2.3）
-    val schoolNetworkClient: SchoolNetworkClient = OkHttpSchoolNetworkClient(
+    private val rawSchoolNetworkClient: SchoolNetworkClient = OkHttpSchoolNetworkClient(
         cookieStore = schoolSessionCookieStore,
         sessionState = schoolSessionState,
         baseUrl = com.myleafy.android.core.campus.ActiveCampusContext.descriptor.undergraduateBaseUrl,
@@ -130,6 +132,11 @@ class AppContainer(context: Context) {
         parser = htmlParser,
         renderTimetable = { url, cookies -> com.myleafy.android.core.network.okhttp.TimetableWebBootstrap(applicationContext).load(url, cookies) },
     )
+    val schoolAuthenticationRecovery = com.myleafy.android.features.auth.SchoolAuthenticationRecovery(
+        rawSchoolNetworkClient, schoolLoginCredentialStore, activeAppScopeStore, backendLifecycle,
+        com.myleafy.android.features.auth.MlKitCaptchaRecognizer())
+    val schoolNetworkClient: SchoolNetworkClient = com.myleafy.android.features.auth.RecoveringSchoolNetworkClient(
+        rawSchoolNetworkClient, schoolAuthenticationRecovery, activeAppScopeStore)
 
     val timetableRepository: TimetableRepository =
         LiveTimetableRepository(schoolNetworkClient, database.courseDao(), activeAppScopeStore,
@@ -199,7 +206,6 @@ class AppContainer(context: Context) {
     private val liveCommunityRepository =
         LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
     val communityRepository: CommunityRepository = liveCommunityRepository
-    private val backendLifecycle = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
     val initialAcademicSync = com.myleafy.android.features.campus.InitialAcademicSync(activeAppScopeStore, timetablePersonalDao, timetableRepository, academicRepository, backendLifecycle)
     init {
         backendLifecycle.launch { activeAppScopeStore.scope.collectLatest { courseReminderScheduler.reconcile() } }
@@ -240,6 +246,7 @@ class AppContainer(context: Context) {
         sessionState = schoolSessionState,
         credentialStore = schoolLoginCredentialStore,
         settingsStore = settingsStore,
+        recovery = schoolAuthenticationRecovery,
     )
 
     suspend fun enterLocalMode() = identityMutex.withLock {

@@ -5,12 +5,13 @@ package com.myleafy.android.features.auth
  */
 interface AuthRepository {
     val hasCachedIdentity: Boolean
+    fun cachedCredential(): com.myleafy.android.core.security.StoredSchoolCredential? = null
 
     /** 获取本科生验证码图片字节（自动完成 key 刷新与 Cookie 清理）。 */
-    suspend fun fetchUndergraduateCaptcha(): ByteArray
+    suspend fun prepareUndergraduateChallenge(): com.myleafy.android.core.network.SchoolCaptchaChallenge
 
     /** 返回 Result.failure 表示登录失败；Success 表示登录成功（已建立会话）。 */
-    suspend fun loginUndergraduate(account: String, password: String, captcha: String): Result<Unit>
+    suspend fun loginUndergraduate(challenge: com.myleafy.android.core.network.SchoolCaptchaChallenge, account: String, password: String, captcha: String): Result<Unit>
 
     suspend fun logout()
 }
@@ -18,10 +19,10 @@ interface AuthRepository {
 class PlaceholderAuthRepository : AuthRepository {
     override val hasCachedIdentity: Boolean = false
 
-    override suspend fun fetchUndergraduateCaptcha(): ByteArray =
+    override suspend fun prepareUndergraduateChallenge(): com.myleafy.android.core.network.SchoolCaptchaChallenge =
         throw NotImplementedError("教务登录将在 M2.2 接入")
 
-    override suspend fun loginUndergraduate(account: String, password: String, captcha: String): Result<Unit> =
+    override suspend fun loginUndergraduate(challenge: com.myleafy.android.core.network.SchoolCaptchaChallenge, account: String, password: String, captcha: String): Result<Unit> =
         Result.failure(IllegalStateException("教务登录将在 M2.2 接入"))
 
     override suspend fun logout() = Unit

@@ -6,7 +6,6 @@ on:
       version:
         description: "Android versionName to release"
         required: true
-        default: "1.0.0"
         type: string
 
 permissions:
@@ -18,53 +17,60 @@ concurrency:
 
 jobs:
   release:
-    name: Verify, sign and publish APK
+    name: Verify, sign and publish to Cloudflare and GitHub
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
       run:
         working-directory: android
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Resolve release metadata
+      - name: Verify main and resolve immutable release
         id: meta
-        shell: bash
         env:
           VERSION_INPUT: ${{ inputs.version }}
+        shell: bash
         run: |
-          VERSION="$VERSION_INPUT"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Version must use X.Y.Z numeric format." >&2
-            exit 1
-          fi
+          set -euo pipefail
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+          [[ "$VERSION_INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           EXPECTED="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)"/\1/p' app/build.gradle.kts | head -n 1)"
-          if [ "$VERSION" != "$EXPECTED" ]; then
-            echo "Requested version $VERSION does not match app versionName $EXPECTED." >&2
+          test "$VERSION_INPUT" = "$EXPECTED"
+          TAG="android-v${VERSION_INPUT}"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > "$RUNNER_TEMP/existing-release.json" 2>/dev/null; then
+            test "$(jq -r '.target_commitish' "$RUNNER_TEMP/existing-release.json")" = "$GITHUB_SHA"
+            APK_NAME="MyLeafy-Android-${VERSION_INPUT}.apk"
+            if jq -e --arg name "$APK_NAME" '.assets | any(.name == $name)' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
+              echo "reuse=true" >> "$GITHUB_OUTPUT"
+              gh release download "$TAG" --pattern "$APK_NAME" --dir "$RUNNER_TEMP"
+              if jq -e --arg name "$APK_NAME-build-info.txt" '.assets | any(.name == $name)' "$RUNNER_TEMP/existing-release.json" >/dev/null; then
+                gh release download "$TAG" --pattern "$APK_NAME-build-info.txt" --dir "$RUNNER_TEMP"
+              fi
+            fi
+          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo 'Existing tag has no matching release. Resolve it explicitly.' >&2
             exit 1
           fi
-          TAG="android-v${VERSION}"
-          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "Tag ${TAG} already exists; release tags are immutable." >&2
-            exit 1
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION_INPUT" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v6
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
+      - name: Verify tests and lint
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug
 
-      - name: Restore Android release key
-        shell: bash
+      - name: Restore release key
+        if: steps.meta.outputs.reuse != 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
         run: |
@@ -72,47 +78,56 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/myleafy-release.jks"
           echo "MYLEAFY_RELEASE_STORE_FILE=$RUNNER_TEMP/myleafy-release.jks" >> "$GITHUB_ENV"
 
-      - name: Verify and build signed release
-        shell: bash
+      - name: Build signed official APK
+        if: steps.meta.outputs.reuse != 'true'
         env:
           MYLEAFY_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
           MYLEAFY_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           MYLEAFY_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-        run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
+        run: |
+          ./gradlew :app:assembleRelease :app:lintRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/MyLeafy-Android-${{ steps.meta.outputs.version }}.apk"
 
-      - name: Verify APK signature and write build manifest
+      - name: Verify APK identity, certificate and manifest
         id: artifact
-        shell: bash
-        run: |
-          APK="$RUNNER_TEMP/MyLeafy-Android-${{ steps.meta.outputs.version }}.apk"
-          cp app/build/outputs/apk/release/app-release.apk "$APK"
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/apksigner-report.txt"
-          APK_DIRECTORY="$(dirname "$APK")"
-          APK_NAME="$(basename "$APK")"
-          (cd "$APK_DIRECTORY" && sha256sum "$APK_NAME" > "${APK_NAME}.sha256")
-          {
-            echo "version=${{ steps.meta.outputs.version }}"
-            echo "tag=${{ steps.meta.outputs.tag }}"
-            echo "commit=${GITHUB_SHA}"
-            echo "runner=${RUNNER_OS}"
-            echo "java=$(java -version 2>&1 | head -n 1)"
-            echo "sha256=$(cut -d ' ' -f 1 "${APK}.sha256")"
-            echo
-            cat "$RUNNER_TEMP/apksigner-report.txt"
-          } > "$RUNNER_TEMP/MyLeafy-Android-${{ steps.meta.outputs.version }}-build-info.txt"
-          echo "apk=${APK}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish Android GitHub Release
-        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          REUSE: ${{ steps.meta.outputs.reuse }}
         run: |
-          gh release create "${{ steps.meta.outputs.tag }}" \
-            "${{ steps.artifact.outputs.apk }}" \
-            "${{ steps.artifact.outputs.apk }}.sha256" \
-            "$RUNNER_TEMP/MyLeafy-Android-${{ steps.meta.outputs.version }}-build-info.txt" \
-            --target "$GITHUB_SHA" \
-            --title "MyLeafy Android ${{ steps.meta.outputs.version }}" \
-            --notes-file ../docs/operations/android-release-notes.md
+          set -euo pipefail
+          APK="$RUNNER_TEMP/MyLeafy-Android-$VERSION.apk"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/apksigner-report.txt"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          python - <<'PY'
+          import hashlib,json,os,pathlib,re
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          version=os.environ['VERSION']; apk=root/f'MyLeafy-Android-{version}.apk'
+          manifest=apk.with_name(apk.name+'-build-info.txt')
+          badging=(root/'apk-badging.txt').read_text()
+          package,code,name=re.search(r"package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'",badging).groups()
+          minimum=int(re.search(r"sdkVersion:'(\d+)'",badging).group(1))
+          certificate=re.search(r'Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]+)',(root/'apksigner-report.txt').read_text()).group(1).lower()
+          assert package=='com.myleafy.android' and name==version and minimum==29
+          actual=hashlib.sha256(apk.read_bytes()).hexdigest()
+          notes=pathlib.Path('../docs/operations/android-release-notes.md').read_text().strip()
+          info=dict(packageName=package,channel='official',versionCode=int(code),versionName=version,minSdk=minimum,
+              releaseNotes=notes,commit=os.environ['GITHUB_SHA'],artifactKey=f'android/official/{code}/{apk.name}',
+              sizeBytes=apk.stat().st_size,sha256=actual,certificateSha256=certificate,
+              githubReleaseUrl=f'https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v{version}')
+          if os.environ.get('REUSE')=='true' and manifest.exists():
+              assert json.loads(manifest.read_text())==info, 'Stored release does not match verified commit and artifact'
+          else:
+              manifest.write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write(f'apk={apk}\nmanifest={manifest}\n')
+          PY
+
+      - name: Publish and verify both production catalogues
+        env:
+          MYLEAFY_RELEASE_PUBLISH_TOKEN: ${{ secrets.MYLEAFY_RELEASE_PUBLISH_TOKEN }}
+        run: python ../backend/scripts/publish-android-release.py --apk '${{ steps.artifact.outputs.apk }}' --manifest '${{ steps.artifact.outputs.manifest }}'
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/myleafy-release.jks"

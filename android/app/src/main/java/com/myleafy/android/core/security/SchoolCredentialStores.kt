@@ -4,17 +4,22 @@ package com.myleafy.android.core.security
  * 学校登录凭据存储（对应 iOS `SchoolLoginCredentialStore`，Keychain）。
  * 按校园 + 门户隔离。
  */
+@kotlinx.serialization.Serializable
 data class StoredSchoolCredential(
     val campusId: String,
     val portal: String,
     val account: String,
     val password: String,
     val savedAt: Long,
-)
+) {
+    override fun toString() = "StoredSchoolCredential($campusId, $portal, redacted)"
+}
 
 interface SchoolLoginCredentialStore {
     fun save(credential: StoredSchoolCredential)
     fun loadMostRecent(campusId: String): StoredSchoolCredential?
+    fun load(campusId: String, portal: String, account: String?): StoredSchoolCredential? =
+        loadMostRecent(campusId)?.takeIf { it.portal == portal && (account == null || it.account == account) }
     fun delete(campusId: String)
 }
 

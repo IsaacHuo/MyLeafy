@@ -151,3 +151,5 @@ android/secrets.properties
 # Backend local runtime data and dependencies
 /backend/.local/
 /backend/node_modules/
+
+/backend/scripts/__pycache__/

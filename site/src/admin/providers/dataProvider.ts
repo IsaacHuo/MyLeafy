@@ -16,6 +16,7 @@ import { readCampusScope } from "./session";
 type ListResult = { items: RaRecord[]; total: number; page: number; pageSize: number };
 
 const listActions: Record<string, string> = {
+  "android-releases": "listAndroidReleases",
   campuses: "listCampuses",
   "campus-requests": "listCampusRequests",
   posts: "listPosts",
@@ -48,6 +49,7 @@ const getOneActions: Record<string, string> = {
 };
 
 const unscopedActions = new Set([
+  "listAndroidReleases", "revokeAndroidRelease",
   "listCampuses", "listCampusRequests", "approveCampusRequest", "rejectCampusRequest",
   "listPostgraduateSources", "listPostgraduateSuggestions", "upsertPostgraduateSource",
   "setPostgraduateSourceStatus", "approvePostgraduateSuggestion", "rejectPostgraduateSuggestion",

@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-09-30 (Android second-round emulator/local checks and live school reads; staging acceptance incomplete)
+Last verified: 2026-09-30 (Android auth/release checks; production installation acceptance in progress)
 
 ## Current Focus
 
@@ -8,7 +8,9 @@ Last verified: 2026-09-30 (Android second-round emulator/local checks and live s
 - **验收边界**：模拟器优先，小米真机延后。完整 JVM 共 149 项，142 通过、7 项外部探测跳过；构建和 lint 通过（104 条 warning、3 条 hint）。隔离模拟器完整 32 项中 31 通过，屏外学院选项测试修正后单项通过；顶部返回另行复跑通过。6 张导航基线逐张审阅后验证通过。未把分批复跑表述为一次全绿，也未声称全设备/全字号验收。
 - **iOS 比较**：以当前主线 SwiftUI 结构、文案及计算规则为参照；本机没有同期 iOS 运行测量，不能给出虚构 FPS 或“已同等流畅”的结论。评审记录与下一步见 `docs/design/android-core-review.md`。
 - **真实学校核对与数据保护**：保留已登录模拟器数据；v7→v8 增量升级后 31 条课程、92 条成绩仍在。用户重新认证后首次队列继续，可信空考试完成检查点；成绩及官方排名已刷新，培养方案核对毕业总学分 167 和 8 类要求，空闲教室当前周/当天返回 76 间。自动化迁移、编辑、权限等测试只在独立模拟器执行。
-- **本轮收尾**：实现与验收结果保存在任务分支，最新截图/翻周录屏位于 `android/app/build/emulator-latest/`。调试 APK 指向 staging；隔离后台写入、系统实际通知投递与重启恢复仍未完整验收，暂不并入可发布主线，不创建 release tag。
+- **Android 自动重登**：验证码/key/匿名 Cookie 绑定同一挑战，Keystore 凭据 JSON 按当前账号预填。身份作用域单飞恢复，原查询最多重试一次；网络失败不触发认证。ML Kit 随 APK 打包，三路识别至少两路一致且置信度 ≥0.85。实际学校匿名样本 6 张均低于门槛，0/6 自动采纳、6/6 转人工，不能宣称真实自动重登通过。Room 保持 v8。
+- **Android 版本管理**：生产/staging 独立 R2 APK bucket 与下载域名、D1 0010、公开发行 API 已上线。Actions 使用现有正式签名，Cloudflare/GitHub Releases 发布同一 APK/校验文件/构建信息并公开核验；“我的 → 检查更新”使用匿名 Cloudflare 接口与 versionCode，DownloadManager 持久下载和系统安装流程已实现。staging 上传/回读/幂等/撤回验证通过；生产 1.2.0→1.2.1 覆盖安装测试进行中。详见 `docs/engineering/android-auth-updates.md`。
+- **剩余外部验收**：官网/后台构建与 59 项测试通过，部署等待 Pages token 权限补充。大陆校园网/移动网络下载测速未执行。隔离社区写入、系统课程通知投递/重启恢复仍未完整验收；截图最新批次位于 `android/app/build/emulator-latest/`。
 
 ## Recently Completed
 

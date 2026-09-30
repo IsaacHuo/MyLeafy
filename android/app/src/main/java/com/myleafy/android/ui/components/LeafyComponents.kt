@@ -750,6 +750,7 @@ fun LeafyAlertDialog(
     title: (@Composable () -> Unit)? = null,
     text: (@Composable () -> Unit)? = null,
 ) {
+    DeferUpdatePrompt()
     AlertDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = confirmButton,
@@ -773,6 +774,7 @@ fun LeafyModalBottomSheet(
     dragHandle: @Composable (() -> Unit)? = { BottomSheetDefaults.DragHandle() },
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    DeferUpdatePrompt()
     val resolvedSheetState = sheetState ?: rememberModalBottomSheetState()
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,

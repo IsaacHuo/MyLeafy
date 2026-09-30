@@ -4,10 +4,10 @@ export const downloads = {
     requirement: "iOS / iPadOS 17 或更新版本",
   },
   android: {
-    version: "1.1.0",
-    url: "https://github.com/IsaacHuo/MyLeafy/releases/download/android-v1.1.0/MyLeafy-Android-1.1.0.apk",
-    releaseUrl: "https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.1.0",
-    checksumUrl: "https://github.com/IsaacHuo/MyLeafy/releases/download/android-v1.1.0/MyLeafy-Android-1.1.0.apk.sha256",
+    version: "",
+    url: "https://api.myleafy.space/v1/releases/android/download",
+    releaseUrl: "https://github.com/IsaacHuo/MyLeafy/releases",
+    checksumUrl: "https://api.myleafy.space/v1/releases/android/download?file=checksum",
     requirement: "Android 10 或更新版本",
   },
 } as const;
@@ -22,7 +22,7 @@ export const features = [
 
 export const faqs = [
   { question: "支持哪些学校？", answer: "目前接入北京林业大学教务系统。通用学校入口和免登录入口可用于本机手动添加或导入数据，不代表已接入其他学校的教务系统；社区可用性取决于校园身份。" },
-  { question: "Android 版怎么下载和更新？", answer: "通过本页的 Android 下载入口获取官方 GitHub Release 中的 APK。安装时按系统提示允许当前下载来源安装应用。更新可使用 App 内“检查更新”，也可下载新版 APK 覆盖安装，无需先卸载。" },
+  { question: "Android 版怎么下载和更新？", answer: "通过本页下载官方 APK，GitHub Releases 同步提供相同安装包。安装时按系统提示允许当前下载来源安装应用。更新可使用 App 内“我的 → 检查更新”，也可下载新版 APK 覆盖安装，无需先卸载。" },
   { question: "为什么课表或成绩没有更新？", answer: "最近一次成功同步的数据可以离线查看，更新数据需要连接学校教务系统。请先检查校园网或北林 VPN，再在对应页面发起同步；如果 App 提示登录已过期，按提示重新验证。" },
   { question: "iOS 和 Android 的功能完全一样吗？", answer: "两个平台都提供课表、社区、日迹与校园工具。系统集成和部分扩展功能有差异：iOS 提供系统小组件及原生日历集成；Android 通过 ICS 文件导出日程。具体可用功能以当前平台和校园身份为准。" },
   { question: "换设备后，随记会自动同步吗？", answer: "随记与个人日程保存在当前设备，不通过 MyLeafy 服务跨设备同步。换机或卸载前，请使用已有导出能力妥善保存需要的内容。社区资料与内容由独立的社区服务保存。" },

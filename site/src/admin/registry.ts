@@ -1,4 +1,6 @@
 export const adminActionNames = [
+  "listAndroidReleases",
+  "revokeAndroidRelease",
   "overview",
   "listCampuses",
   "listCampusRequests",

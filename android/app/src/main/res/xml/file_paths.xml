@@ -5,5 +5,6 @@
     <cache-path name="schedule_exports" path="schedule-exports/" />
     <cache-path name="comprehensive_exports" path="comprehensive-exports/" />
     <cache-path name="apk_updates" path="updates/" />
+    <external-files-path name="downloaded_updates" path="Download/updates/" />
     <files-path name="honor_records" path="HonorRecords/" />
 </paths>

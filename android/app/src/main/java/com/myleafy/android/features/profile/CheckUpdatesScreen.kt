@@ -40,10 +40,7 @@ fun CheckUpdatesScreen(
     onBack: () -> Unit,
     viewModel: CheckUpdatesViewModel = viewModel(
         factory = appViewModelFactory { container ->
-            CheckUpdatesViewModel(
-                repository = AppUpdateRepository(container.applicationContext),
-                currentVersionName = BuildConfig.VERSION_NAME,
-            )
+            CheckUpdatesViewModel(container.appUpdateManager)
         },
     ),
 ) {
@@ -51,11 +48,7 @@ fun CheckUpdatesScreen(
     val context = LocalContext.current
     var installError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(state) {
-        val downloaded = state as? UpdateUiState.Downloaded ?: return@LaunchedEffect
-        runCatching { launchInstaller(context, downloaded.file) }
-            .onFailure { installError = it.message ?: "无法打开安装程序，请确认已允许安装未知来源应用" }
-    }
+    UpdateInstallationHost(viewModel.manager) { installError = it }
 
     LeafySecondaryScaffold(title = "检查更新", onBack = onBack) { contentModifier ->
         LazyColumn(
@@ -69,7 +62,7 @@ fun CheckUpdatesScreen(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = "MyLeafy Android 通过 GitHub Releases 分发，发布页包含签名安装包与校验信息。",
+                    text = "通过 MyLeafy 下载服务获取更新，GitHub Releases 同步提供安装包与发布说明。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -79,6 +72,7 @@ fun CheckUpdatesScreen(
             }
             when (val current = state) {
                 UpdateUiState.Idle -> Unit
+                UpdateUiState.Unpublished -> item { LeafyStatusBanner(message = "暂未发布适用于当前应用的版本。", isError = false) }
                 UpdateUiState.Checking -> item {
                     LeafyLoadingState(message = "正在检查更新", modifier = Modifier.fillMaxWidth())
                 }
@@ -92,7 +86,8 @@ fun CheckUpdatesScreen(
                             verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
                         ) {
                             Text("发现新版本 ${current.info.versionName}", style = MaterialTheme.typography.titleMedium)
-                            current.info.releaseNotes?.let {
+                            Text("${"%.1f".format(current.info.sizeBytes / 1048576.0)} MB", style = MaterialTheme.typography.labelMedium)
+                            current.info.releaseNotes.let {
                                 Text(
                                     text = it,
                                     style = MaterialTheme.typography.bodySmall,
@@ -113,7 +108,7 @@ fun CheckUpdatesScreen(
                             modifier = Modifier.padding(LeafySpacing.card),
                             verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
                         ) {
-                            Text("正在下载 ${current.info.versionName}", style = MaterialTheme.typography.titleSmall)
+                            Text("${current.message} ${current.info.versionName}", style = MaterialTheme.typography.titleSmall)
                             LinearProgressIndicator(
                                 progress = { current.progress },
                                 modifier = Modifier.fillMaxWidth(),
@@ -128,9 +123,10 @@ fun CheckUpdatesScreen(
                 }
                 is UpdateUiState.Downloaded -> item {
                     LeafyStatusBanner(
-                        message = "${current.info.versionName} 已下载，正在打开系统安装程序。",
+                        message = "${current.info.versionName} 已下载并通过校验。安装需要系统确认。",
                         isError = false,
                     )
+                    LeafyPrimaryButton(onClick = { viewModel.manager.requestInstall() }) { Text("继续安装") }
                 }
                 is UpdateUiState.Error -> item {
                     LeafyStatusBanner(message = current.message, isError = true)
@@ -147,7 +143,7 @@ fun CheckUpdatesScreen(
     }
 }
 
-private fun launchInstaller(context: android.content.Context, file: File) {
+internal fun launchInstaller(context: android.content.Context, file: File) {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     context.startActivity(
         Intent(Intent.ACTION_VIEW).apply {

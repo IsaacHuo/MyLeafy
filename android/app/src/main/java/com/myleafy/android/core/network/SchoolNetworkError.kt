@@ -5,7 +5,9 @@ package com.myleafy.android.core.network
  */
 sealed class SchoolNetworkError(message: String) : Exception(message) {
     class LoginFailed(reason: String) : SchoolNetworkError(reason)
-    object SessionExpired : SchoolNetworkError("教务会话已失效")
+    open class AuthenticationExpired(reason: String) : SchoolNetworkError(reason)
+    object SessionExpired : AuthenticationExpired("教务会话已失效")
+    class AuthenticationRequired(reason: String) : AuthenticationExpired(reason)
     object TimetableDataUnavailable : SchoolNetworkError("课表数据不可用")
     object GradeDataUnavailable : SchoolNetworkError("成绩数据不可用")
     object ExamDataUnavailable : SchoolNetworkError("考试安排数据不可用")

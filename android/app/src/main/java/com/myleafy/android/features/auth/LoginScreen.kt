@@ -70,7 +70,7 @@ fun LoginScreen(
     onLoggedIn: () -> Unit = onBack,
     viewModel: LoginViewModel = viewModel(
         factory = appViewModelFactory { container ->
-            LoginViewModel(repository = container.authRepository)
+            LoginViewModel(repository = container.authRepository, recognizer = MlKitCaptchaRecognizer())
         },
     ),
     modifier: Modifier = Modifier,
@@ -83,9 +83,9 @@ fun LoginScreen(
         onDispose { viewModel.pauseCaptcha() }
     }
     LaunchedEffect(uiState.isSubmitting) { onBusyChanged(uiState.isSubmitting) }
-    var account by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var captcha by rememberSaveable { mutableStateOf("") }
+    val account by viewModel.account.collectAsState()
+    val password by viewModel.password.collectAsState()
+    val captcha by viewModel.captcha.collectAsState()
 
     if (uiState.loginSucceeded) {
         LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) { onLoggedIn() } }
@@ -96,9 +96,9 @@ fun LoginScreen(
         account = account,
         password = password,
         captcha = captcha,
-        onAccountChange = { account = it },
-        onPasswordChange = { password = it },
-        onCaptchaChange = { captcha = it },
+        onAccountChange = viewModel::setAccount,
+        onPasswordChange = viewModel::setPassword,
+        onCaptchaChange = viewModel::setCaptcha,
         onSubmit = { viewModel.submit(account, password, captcha) },
         onRefreshCaptcha = viewModel::refreshCaptcha,
         onBack = onBack,
@@ -196,6 +196,7 @@ fun LoginContent(
             )
         }
         Spacer(modifier = Modifier.height(LeafySpacing.card))
+        if (state.isRecognizing) Text("正在识别验证码…", style = MaterialTheme.typography.bodySmall)
 
         val errorMessage = state.errorMessage
         Box(modifier = Modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.minimumTouchTarget)) {

@@ -6,6 +6,7 @@ import { adminGuard, adminLogin, adminLogout, adminMe, authenticateAdmin, audit,
 import { adminGet, adminList, adminLists } from './admin-data';
 import { exportAdminData } from './admin-export';
 import { overview } from './admin-overview';
+import { listAndroidReleases, revokeAndroidRelease } from './android-releases';
 import { moderate, mute, retryPostPublish, reviewPollDeletion, setCatalogStatus, updateAdminAccount, upsertCatalog, upsertRuntime } from './admin-write';
 import { ApiError, readJSON, text } from './http';
 import { requireWritable, type Row } from './db';
@@ -13,6 +14,7 @@ import { announcement, deleteRating, pinPost, resolveModerationReport, revokeAdm
 
 type Handler=(env:BackendEnv,context:AdminContext,params:Row)=>Promise<unknown>;
 const mutations:Record<string,Handler>={
+  revokeAndroidRelease,
   prepareCommunityBannerImageUpload,publishCommunityBanner,archiveCommunityBanner,upsertPostgraduateSource,
   createCommunityBanner:(env,context,params)=>saveCommunityBanner(env,context,params,true),
   updateCommunityBanner:(env,context,params)=>saveCommunityBanner(env,context,params,false),
@@ -38,7 +40,7 @@ const mutations:Record<string,Handler>={
   upsertNationalCalendarRuntimeConfig:(env,context,params)=>upsertRuntime(env,context,params,true),
 };
 
-export const supportedAdminActions = new Set(['overview','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
+export const supportedAdminActions = new Set(['listAndroidReleases','overview','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
 
 /** Invoked only by the dedicated AdminAPI service-binding entrypoint. */
 export async function handleAdminRequest(request:Request,env:BackendEnv):Promise<Response>{
@@ -66,7 +68,8 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
     if(!supportedAdminActions.has(action))throw new ApiError(400,'bad_request','未知管理操作。');
     if(!params||typeof params!=='object'||Array.isArray(params))throw new ApiError(400,'bad_request','管理操作参数必须是对象。');
     let data:unknown;
-    if(action==='overview')data=await overview(env,context,params as Row);
+    if(action==='listAndroidReleases')data=await listAndroidReleases(env,params as Row);
+    else if(action==='overview')data=await overview(env,context,params as Row);
     else if(action==='globalSearch')data=await globalSearch(env,context,params as Row);
     else if(action==='previewCommunityFeed')data=await previewCommunityFeed(env,context,params as Row);
     else if(adminLists[action])data=await adminList(env,context,action,params as Row);

@@ -32,8 +32,8 @@ android {
         applicationId = "com.myleafy.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "MYLEAFY_API_ORIGIN", "\"${providers.gradleProperty("myleafyApiOrigin").getOrElse("https://api.myleafy.space")}\"")
@@ -122,6 +122,7 @@ ksp {
 }
 
 dependencies {
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)

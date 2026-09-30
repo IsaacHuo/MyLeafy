@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth';
 import { authSchema } from './auth-schema';
 import { ApiError } from './http';
 
-export type Secrets = { AUTH_SECRET?:string; EMAIL_API_KEY?:string; EMAIL_FROM?:string; TEST_EMAIL_RECIPIENT?:string; MEDIA_SIGNING_SECRET?:string };
+export type Secrets = { AUTH_SECRET?:string; EMAIL_API_KEY?:string; EMAIL_FROM?:string; TEST_EMAIL_RECIPIENT?:string; MEDIA_SIGNING_SECRET?:string; RELEASE_PUBLISH_TOKEN?:string };
 export type BackendEnv=Omit<Env,'ENVIRONMENT'|'API_ORIGIN'|'SITE_ORIGIN'> & Secrets & {
   ENVIRONMENT:'staging'|'production'; API_ORIGIN:string; SITE_ORIGIN:string;
 };

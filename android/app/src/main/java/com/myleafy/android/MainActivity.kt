@@ -74,4 +74,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         incomingIntent.value = intent
     }
+
+    override fun onResume() {
+        super.onResume()
+        (application as MyLeafyApplication).container.appUpdateManager.check(manual = false)
+    }
 }

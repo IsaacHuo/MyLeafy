@@ -1,8 +1,7 @@
 package com.myleafy.android.core.security
 
 /**
- * Keystore 实现的学校凭据存储。明文以 `|` 拼接加密，兼容任意包含该字符的
- * 值通过转义处理（值中的 `|` 编码为 `||`）。
+ * Keystore 加密的结构化凭据；可可靠读取的旧分隔符记录在读取时迁移。
  */
 class KeystoreSchoolLoginCredentialStore(
     private val secureStorage: SecureStorage,
@@ -10,36 +9,22 @@ class KeystoreSchoolLoginCredentialStore(
 
     override fun save(credential: StoredSchoolCredential) {
         val key = keyFor(credential.campusId, credential.portal)
-        secureStorage.save(
-            key,
-            listOf(
-                credential.campusId,
-                credential.portal,
-                credential.account.escape(),
-                credential.password.escape(),
-                credential.savedAt.toString(),
-            ).joinToString(SEPARATOR),
-        )
+        secureStorage.save(key, SchoolCredentialCodec.encode(credential))
     }
 
     override fun loadMostRecent(campusId: String): StoredSchoolCredential? {
-        val candidates = listOf(PORTAL_UNDERGRAD, PORTAL_GRADUATE)
-            .mapNotNull { portal ->
-                secureStorage.read(keyFor(campusId, portal))?.let { it to portal }
-            }
-            .sortedByDescending { (raw, _) ->
-                raw.split(SEPARATOR).lastOrNull()?.toLongOrNull() ?: 0L
-            }
-        val (raw, portal) = candidates.firstOrNull() ?: return null
-        val parts = raw.split(SEPARATOR).map { it.unescape() }
-        if (parts.size != 5) return null
-        return StoredSchoolCredential(
-            campusId = parts[0],
-            portal = portal,
-            account = parts[2],
-            password = parts[3],
-            savedAt = parts[4].toLongOrNull() ?: 0L,
-        )
+        return listOf(PORTAL_UNDERGRAD, PORTAL_GRADUATE).mapNotNull { read(campusId, it) }.maxByOrNull { it.savedAt }
+    }
+
+    override fun load(campusId: String, portal: String, account: String?) =
+        read(campusId, portal)?.takeIf { account == null || it.account == account }
+
+    private fun read(campusId: String, portal: String): StoredSchoolCredential? {
+        val key = keyFor(campusId, portal)
+        val raw = secureStorage.read(key) ?: return null
+        val value = SchoolCredentialCodec.decode(raw)?.takeIf { it.campusId == campusId && it.portal == portal } ?: return null
+        if (!raw.startsWith("{")) secureStorage.save(key, SchoolCredentialCodec.encode(value))
+        return value
     }
 
     override fun delete(campusId: String) {
@@ -50,13 +35,8 @@ class KeystoreSchoolLoginCredentialStore(
 
     private fun keyFor(campusId: String, portal: String) = "$PREFIX:$campusId:$portal"
 
-    private fun String.escape() = replace(SEPARATOR, SEPARATOR + SEPARATOR)
-
-    private fun String.unescape() = replace(SEPARATOR + SEPARATOR, SEPARATOR)
-
     private companion object {
         const val PREFIX = "school-login"
-        const val SEPARATOR = "|"
         const val PORTAL_UNDERGRAD = "undergraduate"
         const val PORTAL_GRADUATE = "graduate"
     }

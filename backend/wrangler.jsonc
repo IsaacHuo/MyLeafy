@@ -35,6 +35,10 @@
         {
           "binding": "FILES",
           "bucket_name": "myleafy-staging-files"
+        },
+        {
+          "binding": "RELEASES",
+          "bucket_name": "myleafy-staging-releases"
         }
       ],
       "durable_objects": {
@@ -88,6 +92,10 @@
         {
           "binding": "FILES",
           "bucket_name": "myleafy-production-files"
+        },
+        {
+          "binding": "RELEASES",
+          "bucket_name": "myleafy-production-releases"
         }
       ],
       "durable_objects": {

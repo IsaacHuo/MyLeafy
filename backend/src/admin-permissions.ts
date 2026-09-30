@@ -6,6 +6,7 @@ export type AdminPermission = {
 };
 
 const readableResources = [
+  "android-releases",
   "dashboard",
   "manual",
   "campuses",
@@ -44,6 +45,7 @@ const operatorExportResources = new Set([
 ]);
 
 const operatorResourceActions: Record<string, string[]> = {
+  "android-releases": ["edit"],
   "campus-requests": ["edit"],
   posts: ["edit", "bulk", "export"],
   polls: ["edit", "export"],

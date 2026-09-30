@@ -215,7 +215,7 @@ class TimetableViewModel(
                 onSuccess = {
                     TimetableSyncState.Success(it.courseCount, it.message)
                 },
-                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TimetableSyncState.Error("获取课表失败，已继续显示本地课表：${it.message ?: "请重试"}", it is SchoolNetworkError.SessionExpired) },
+                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TimetableSyncState.Error("获取课表失败，已继续显示本地课表：${it.message ?: "请重试"}", it is SchoolNetworkError.AuthenticationExpired) },
             )
         }
     }

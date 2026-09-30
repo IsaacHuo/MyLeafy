@@ -17,17 +17,22 @@ class SchoolAuthRepository(
     private val sessionState: SchoolSessionState,
     private val credentialStore: SchoolLoginCredentialStore,
     private val settingsStore: SettingsStore,
+    private val recovery: SchoolAuthenticationRecovery? = null,
 ) : AuthRepository {
 
     override val hasCachedIdentity: Boolean
         get() = sessionState.identity != null
 
-    override suspend fun fetchUndergraduateCaptcha(): ByteArray =
-        client.fetchUndergraduateCaptcha()
+    override fun cachedCredential(): StoredSchoolCredential? = credentialStore.load(
+        CampusID.bjfu.rawValue, "undergraduate", sessionState.identity?.eduId)
 
-    override suspend fun loginUndergraduate(account: String, password: String, captcha: String): Result<Unit> =
+    override suspend fun prepareUndergraduateChallenge() =
+        recovery?.manualChallenge() ?: client.prepareUndergraduateChallenge()
+
+    override suspend fun loginUndergraduate(challenge: com.myleafy.android.core.network.SchoolCaptchaChallenge, account: String, password: String, captcha: String): Result<Unit> =
         runCatching {
-            client.loginUndergraduate(account, password, captcha)
+            client.loginUndergraduate(challenge, account, password, captcha)
+            recovery?.manualAuthenticationCompleted()
             credentialStore.save(
                 StoredSchoolCredential(
                     campusId = CampusID.bjfu.rawValue,

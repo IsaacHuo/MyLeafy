@@ -3,6 +3,9 @@ package com.myleafy.android.core.network.okhttp
 import com.myleafy.android.core.campus.CampusID
 import com.myleafy.android.core.network.CampusIdentity
 import com.myleafy.android.core.network.AcademicStage
+import com.myleafy.android.core.network.SchoolCaptchaChallenge
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -107,22 +110,41 @@ class OkHttpSchoolNetworkClient(
     /** 执行请求并解析响应 Set-Cookie。 */
     internal fun execute(request: Request): Response = client.newCall(request).execute()
 
-    override suspend fun fetchUndergraduateCaptcha(): ByteArray = withContext(Dispatchers.IO) {
-        preAuthenticationCookies.clear()
-        fetchLoginKey()
-        val request = requestBuilder("/verifycode.servlet").get().build()
-        return@withContext executeAuthentication(request).use { it.body?.bytes() ?: byteArrayOf() }
+    private val authenticationMutex = Mutex()
+    private val authenticationGeneration = java.util.concurrent.atomic.AtomicLong()
+
+    override suspend fun prepareUndergraduateChallenge(): SchoolCaptchaChallenge = withContext(Dispatchers.IO) {
+        authenticationMutex.withLock {
+            val generation = authenticationGeneration.get()
+            val scope = sessionState.identity?.scopeKey
+            preAuthenticationCookies.clear()
+            try {
+                val key = fetchLoginKey()
+                val request = requestBuilder("/verifycode.servlet").get().build()
+                val bytes = executeAuthentication(request).use {
+                    if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("验证码获取失败（HTTP ${it.code}）")
+                    it.body?.bytes()?.takeIf { image -> image.isNotEmpty() } ?: throw SchoolNetworkError.Unexpected("验证码为空")
+                }
+                currentCoroutineContext().ensureActive()
+                if (generation != authenticationGeneration.get() || scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+                SchoolCaptchaChallenge(bytes, key, preAuthenticationCookies.toMap(), scope, generation, this@OkHttpSchoolNetworkClient)
+            } finally { preAuthenticationCookies.clear() }
+        }
     }
 
     override suspend fun loginUndergraduate(
+        challenge: SchoolCaptchaChallenge,
         account: String,
         password: String,
         captcha: String,
     ) = withContext(Dispatchers.IO) {
-        // 验证码与登录提交必须复用同一个匿名 JSESSIONID。若调用方未先取验证码，
-        // 才建立一个新的登录会话，以继续支持仓库层和测试中的直接登录调用。
+        authenticationMutex.withLock {
+        require(challenge.owner === this@OkHttpSchoolNetworkClient && challenge.consumed.compareAndSet(false, true)) { "验证码已失效，请刷新" }
+        if (challenge.generation != authenticationGeneration.get() || challenge.scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+        preAuthenticationCookies.clear()
+        preAuthenticationCookies.putAll(challenge.candidateCookies)
         try {
-        val key = fetchLoginKey()
+        val key = challenge.key
         val encoded = SchoolLoginEncoder.encodeKey(key, account, password)
         if (encoded.isEmpty()) {
             throw SchoolNetworkError.LoginFailed("登录密钥无效，请重试")
@@ -134,6 +156,7 @@ class OkHttpSchoolNetworkClient(
         val request = requestBuilder("/Logon.do?method=logon", referer = baseUrl).post(body).build()
 
         val response = executeAuthentication(request)
+        if (!response.isSuccessful) { val code = response.code; response.close(); throw SchoolNetworkError.Unexpected("学校连接失败（HTTP $code）") }
         val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
         response.close()
 
@@ -146,18 +169,21 @@ class OkHttpSchoolNetworkClient(
         // Verify the candidate cookie jar before committing identity or touching the old session.
         val verification = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
         executeAuthentication(verification).use {
+            if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
             val page = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
             if (!SchoolPageDetector.isAuthenticatedResponse(it.request.url.toString(), page)) {
                 throw SchoolNetworkError.LoginFailed("登录失败，请重试")
             }
         }
         kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        if (challenge.generation != authenticationGeneration.get() || challenge.scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
         val identity = undergraduateIdentity(account)
         cookieStore.save(preAuthenticationCookies.toMap(), identity.scopeKey, identity.portal.rawValue)
         preAuthenticationCookies.clear()
         sessionState.markLoggedIn(identity)
         } finally {
             preAuthenticationCookies.clear()
+        }
         }
     }
 
@@ -377,6 +403,7 @@ class OkHttpSchoolNetworkClient(
     }
 
     override fun clearSession() {
+        authenticationGeneration.incrementAndGet()
         val identity = sessionState.identity
         if (identity != null) {
             cookieStore.delete(identity.scopeKey, identity.portal.rawValue)
@@ -388,6 +415,7 @@ class OkHttpSchoolNetworkClient(
     private fun fetchLoginKey(): String {
         val request = requestBuilder("/Logon.do?method=logon&flag=sess").get().build()
         return executeAuthentication(request).use {
+            if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
             val text = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()).trim()
             check(text.isNotBlank()) { "未获取到登录 key" }
             text

@@ -140,7 +140,7 @@ class LiveAcademicRepository(
                     )
                 }
             }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.SessionExpired; failures += "成绩与排名：${it.message ?: "拉取失败"}" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.AuthenticationExpired; failures += "成绩与排名：${it.message ?: "拉取失败"}" }
 
         return AcademicRefreshResult(
             grades = gradeCount,
@@ -176,7 +176,7 @@ class LiveAcademicRepository(
                 )
                 examCount = exams.size
             }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.SessionExpired; failures += "考试安排：${it.message ?: "拉取失败"}" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.AuthenticationExpired; failures += "考试安排：${it.message ?: "拉取失败"}" }
 
         return AcademicRefreshResult(
             grades = null,

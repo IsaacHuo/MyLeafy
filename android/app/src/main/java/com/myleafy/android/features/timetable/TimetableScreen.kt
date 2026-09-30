@@ -623,6 +623,7 @@ internal fun TimetableScreenContent(
 
 @Composable
 private fun TimetableSyncDialog(syncState: TimetableSyncState, onRetry: () -> Unit, onConsume: () -> Unit, onReauthenticate: () -> Unit) {
+    val authenticationProgress = com.myleafy.android.ui.components.LocalSchoolRecoveryProgress.current
     if (syncState is TimetableSyncState.Idle) return
     val running = syncState is TimetableSyncState.Syncing
     LeafyAlertDialog(
@@ -631,7 +632,7 @@ private fun TimetableSyncDialog(syncState: TimetableSyncState, onRetry: () -> Un
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.card)) {
                 when (syncState) {
-                    is TimetableSyncState.Syncing -> { CircularProgressIndicator(); Text(syncState.stage.label) }
+                    is TimetableSyncState.Syncing -> { CircularProgressIndicator(); Text(authenticationProgress ?: syncState.stage.label) }
                     is TimetableSyncState.Success -> Text(syncState.message)
                     is TimetableSyncState.Error -> Text(syncState.message)
                     TimetableSyncState.Idle -> Unit
