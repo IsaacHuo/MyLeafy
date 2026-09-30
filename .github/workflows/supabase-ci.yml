@@ -1,28 +1,15 @@
 name: Supabase CI
 
 on:
-  pull_request:
-    paths:
-      - "supabase/**"
-      - ".github/workflows/supabase-ci.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/**"
-      - ".github/workflows/supabase-ci.yml"
+  workflow_call:
 
 permissions:
   contents: read
 
-concurrency:
-  group: supabase-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   functions:
     name: Function contracts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -43,7 +30,7 @@ jobs:
 
   database:
     name: Database migrations and tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

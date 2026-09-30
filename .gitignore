@@ -153,3 +153,6 @@ android/secrets.properties
 /backend/node_modules/
 
 /backend/scripts/__pycache__/
+__pycache__/
+/deployment-report/
+/acceptance/

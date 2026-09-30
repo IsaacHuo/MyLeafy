@@ -49,7 +49,7 @@ const getOneActions: Record<string, string> = {
 };
 
 const unscopedActions = new Set([
-  "listAndroidReleases", "revokeAndroidRelease",
+  "listAndroidReleases", "requestAndroidPublication", "revokeAndroidRelease",
   "listCampuses", "listCampusRequests", "approveCampusRequest", "rejectCampusRequest",
   "listPostgraduateSources", "listPostgraduateSuggestions", "upsertPostgraduateSource",
   "setPostgraduateSourceStatus", "approvePostgraduateSuggestion", "rejectPostgraduateSuggestion",

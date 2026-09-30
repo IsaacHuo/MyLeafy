@@ -28,7 +28,9 @@ def request(url, method='GET', data=None, token=None, headers=None):
 
 def digest(path):
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''): digest.update(chunk)
+        return digest.hexdigest()
 
 
 def find_release(repository, tag):
@@ -40,13 +42,13 @@ def find_release(repository, tag):
     return json.loads(gh('api', f"repos/{repository}/releases/{node['databaseId']}")) if node else None
 
 
-def publish(apk: Path, manifest: Path, origin: str):
+def publish(apk: Path, manifest: Path, origin: str, operation: str):
     info = json.loads(manifest.read_text(encoding='utf-8'))
     token = os.environ['MYLEAFY_RELEASE_PUBLISH_TOKEN']
     tag = f"android-v{info['versionName']}"
     repository = os.environ['GITHUB_REPOSITORY']
     assert origin in ('https://api.myleafy.space', 'https://api-staging.myleafy.space')
-    assert info['commit'] == os.environ['GITHUB_SHA']
+    assert info['commit'] == os.environ['RELEASE_SOURCE_SHA']
     assert info['sizeBytes'] == apk.stat().st_size and info['sha256'] == digest(apk)
     checksum = apk.with_suffix('.apk.sha256')
     checksum.write_text(f"{info['sha256']}  {apk.name}\n", encoding='utf-8')
@@ -79,7 +81,7 @@ def publish(apk: Path, manifest: Path, origin: str):
     for path in files:
         key = info['artifactKey'] if path == apk else info['artifactKey'] + ('.sha256' if path == checksum else '-build-info.txt')
         data = path.read_bytes()
-        request(f'{origin}/v1/releases/artifacts/{key}', 'PUT', data, token,
+        request(f'{origin}/v1/releases/artifacts/{key}?operation={urllib.parse.quote(operation)}', 'PUT', data, token,
                 {'Content-Type':'application/octet-stream', 'Content-Length':str(len(data)), 'X-Artifact-SHA256':digest(path)})
         received = request(f'{download_origin}/{key}')
         assert len(received) == len(data) and hashlib.sha256(received).hexdigest() == digest(path), f'Cloudflare readback mismatch: {path.name}'
@@ -88,7 +90,7 @@ def publish(apk: Path, manifest: Path, origin: str):
         if release['draft']:
             gh('api', f"repos/{repository}/releases/{release['id']}", '-X', 'PATCH', '-F', 'draft=false')
             opened = True
-        registered = json.loads(request(f'{origin}/v1/releases/android/publish', 'POST', json.dumps(info).encode(), token, {'Content-Type':'application/json'}))
+        registered = json.loads(request(f'{origin}/v1/releases/android/publish?operation={urllib.parse.quote(operation)}', 'POST', json.dumps(info).encode(), token, {'Content-Type':'application/json'}))
         assert registered['sha256'] == info['sha256']
     except Exception:
         # Never report success with only one catalogue published. Keep bytes for a safe retry.
@@ -113,5 +115,6 @@ if __name__ == '__main__':
     parser.add_argument('--apk', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--origin', default='https://api.myleafy.space')
+    parser.add_argument('--operation', required=True)
     args = parser.parse_args()
-    publish(args.apk, args.manifest, args.origin)
+    publish(args.apk, args.manifest, args.origin, args.operation)

@@ -6,6 +6,18 @@ afterEach(() => vi.unstubAllGlobals());
 const env = { MYLEAFY_ADMIN_API: { fetch: (...args) => fetch(...args) } };
 
 describe("admin BFF security helpers", () => {
+  it('requires a session for candidate downloads and streams the authenticated response', async () => {
+    const fetch=vi.fn(async request=>{
+      expect(request.method).toBe('GET');expect(new URL(request.url).searchParams.get('id')).toBe('com.myleafy.android-6');
+      expect(request.headers.get('authorization')).toBe('Bearer session');
+      return new Response('signed apk fixture',{headers:{'content-type':'application/vnd.android.package-archive','content-disposition':'attachment; filename="candidate.apk"'}});
+    });
+    const make=cookie=>new Request('https://myleafy.space/api/admin/android-candidate?id=com.myleafy.android-6',{headers:{Referer:'https://myleafy.space/admin/android-releases',...(cookie?{Cookie:cookie}:{})}});
+    const env={MYLEAFY_ADMIN_API:{fetch}};
+    expect((await onRequest({request:make(null),env})).status).toBe(401);
+    const response=await onRequest({request:make('leafy_admin_session=session'),env});expect(await response.text()).toBe('signed apk fixture');
+    expect(response.headers.get('cache-control')).toBe('no-store');expect(fetch).toHaveBeenCalledOnce();
+  });
   it('forwards bounded multipart banner uploads only with same-origin provenance and a session', async () => {
     const fetch = vi.fn(async request => {
       expect(request.method).toBe('PUT');

@@ -45,7 +45,7 @@ const operatorExportResources = new Set([
 ]);
 
 const operatorResourceActions: Record<string, string[]> = {
-  "android-releases": ["edit"],
+  "android-releases": [],
   "campus-requests": ["edit"],
   posts: ["edit", "bulk", "export"],
   polls: ["edit", "export"],
@@ -78,6 +78,7 @@ export function permissionsForRole(role: AdminRole): AdminPermission[] {
 
   if (role === "super_admin") {
     permissions.push(
+      { resource: "android-releases", actions: ["list", "show", "edit"] },
       { resource: "profiles", actions: ["list", "show", "edit", "bulk", "export"] },
       { resource: "feedback", actions: ["list", "show", "edit", "bulk", "export"] },
       { resource: "admins", actions: ["list", "show", "create", "edit", "delete", "export"] },

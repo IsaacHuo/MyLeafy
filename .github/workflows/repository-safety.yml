@@ -1,22 +1,15 @@
 name: Repository safety
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_call:
 
 permissions:
   contents: read
 
-concurrency:
-  group: repository-safety-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   safety:
     name: Private files and secrets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -38,3 +31,6 @@ jobs:
             echo "Possible secret found. Remove it and rotate the credential if it was real."
             exit 1
           fi
+
+      - name: Check layer boundaries
+        run: bash scripts/check-layer-boundaries.sh

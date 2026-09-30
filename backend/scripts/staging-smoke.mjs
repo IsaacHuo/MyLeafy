@@ -14,10 +14,8 @@ async function sql(query,params=[]){
   if(!response.ok||!data.success)throw new Error(`D1 fixture query failed (HTTP ${response.status})`);
   return data.result.flatMap(r=>r.results);
 }
-const [foreignData]=await sql("SELECT count(*) AS n FROM profiles WHERE edu_id NOT LIKE 'cf-smoke-%'");
-if(foreignData.n!==0)throw new Error('Staging contains non-smoke profiles; refusing to enable writes or insert fixtures');
-await sql("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind,is_community_enabled) VALUES('bjfu','北京林业大学','北林','北京林业大学','qiangzhi',1) ON CONFLICT(id) DO NOTHING");
-await sql("UPDATE backend_control SET mode='active' WHERE id=1");
+const [control]=await sql('SELECT mode FROM backend_control WHERE id=1');
+if(control?.mode!=='active')throw new Error('Staging must be explicitly enabled by an operator before acceptance; smoke tests never change global write switches');
 const base=staging.vars.API_ORIGIN,checks=[];
 async function call(path,body,token,method=body===undefined?'GET':'POST'){
   const response=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});
@@ -25,9 +23,10 @@ async function call(path,body,token,method=body===undefined?'GET':'POST'){
   if(!response.ok)throw new Error(`${path}: HTTP ${response.status} (${payload.errorEnvelope?.code??payload.code??'unknown'})`);
   return {payload,token:response.headers.get('set-auth-token')};
 }
+let ownToken;
 try{
   assert.equal((await call('/health')).payload.status,'ok');checks.push('health');
-  const session=await call('/v1/auth/sign-in/anonymous',{});assert.ok(session.token);checks.push('anonymous-auth');
+  const session=await call('/v1/auth/sign-in/anonymous',{});assert.ok(session.token);ownToken=session.token;checks.push('anonymous-auth');
   const identity=`cf-smoke-${randomUUID()}`;
   const profile=(await call('/v1/profile/bootstrap',{campus_id:'bjfu',edu_id:identity},session.token)).payload.profile;
   const repeated=(await call('/v1/profile/bootstrap',{campus_id:'bjfu',edu_id:identity},session.token)).payload.profile;
@@ -49,6 +48,6 @@ try{
   await writeFile(new URL('../.local/staging-smoke.json',import.meta.url),JSON.stringify(report,null,2)+'\n',{mode:0o600});
   console.log(JSON.stringify(report,null,2));
 }finally{
-  // Keep incomplete staging deployments unavailable for writes between operator runs.
-  await sql("UPDATE backend_control SET mode='read_only' WHERE id=1");
+  // Only this run's generated identity is deleted; manual tester data and switches remain untouched.
+  if(ownToken)await call('/v1/account',undefined,ownToken,'DELETE');
 }

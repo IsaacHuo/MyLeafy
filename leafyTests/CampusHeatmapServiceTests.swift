@@ -254,7 +254,8 @@ private actor CampusHeatmapFetchRecorder {
     }
 }
 
-private actor InMemoryCampusHeatmapCache: CampusHeatmapCaching {
+@MainActor
+private final class InMemoryCampusHeatmapCache: CampusHeatmapCaching {
     private(set) var storedData: CachedCampusHeatmapData?
     private(set) var saveCount = 0
 

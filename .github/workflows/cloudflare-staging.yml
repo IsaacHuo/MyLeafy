@@ -1,0 +1,59 @@
+name: Prepare Cloudflare staging
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  checks: read
+concurrency:
+  group: cloudflare-staging
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    environment: staging
+    timeout-minutes: 30
+    env:
+      RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+      CLOUDFLARE_ACCOUNT_ID: be7d850d4b5046381fb909251b4df675
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_COMMIT }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25.6.1
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            site/package-lock.json
+      - name: Verify selected commit and identify changes
+        id: changes
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/check-runs?per_page=100" --jq '.check_runs | any(.name == "CI result" and .conclusion == "success" and .app.slug == "github-actions")' | grep -qx true
+          BASE_SHA=$(node --input-type=module -e 'const r=await fetch("https://api-staging.myleafy.space/health");if(!r.ok)throw new Error("Staging health unavailable");const h=await r.json();if(h.environment!=="staging")throw new Error("Environment mismatch");console.log(h.commit||"0000000000000000000000000000000000000000")')
+          python scripts/ci-changes.py --base "$BASE_SHA" --head "$RELEASE_COMMIT"
+      - name: Install locked dependencies
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true' || steps.changes.outputs.site == 'true'
+        run: |
+          npm --prefix backend ci
+          npm --prefix site ci
+          npm --prefix site run build
+      - name: Deploy and accept staging
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true' || steps.changes.outputs.site == 'true'
+        run: node backend/scripts/deploy-cloudflare.mjs staging
+      - name: Preserve deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-staging-${{ env.RELEASE_COMMIT }}
+          path: deployment-report/
+          if-no-files-found: ignore

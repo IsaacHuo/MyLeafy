@@ -17,7 +17,12 @@ function setup(){
   }} as unknown as BackendEnv;
   const body={packageName:'com.myleafy.android',channel:'official',versionCode:4,versionName:'1.2.0',minSdk:29,releaseNotes:'测试版本',commit:'a'.repeat(40),artifactKey:'android/official/4/MyLeafy-Android-1.2.0.apk',sizeBytes:7,sha256:'b'.repeat(64),certificateSha256:'c'.repeat(64),githubReleaseUrl:'https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.0'};
   objects.set(body.artifactKey,{size:7,customMetadata:{sha256:body.sha256}});
-  const request=()=>new Request(`${env.API_ORIGIN}/v1/releases/android/publish`,{method:'POST',headers:{Authorization:`Bearer ${env.RELEASE_PUBLISH_TOKEN}`}});
+  db.sqlite.prepare('INSERT INTO admin_accounts(id,username,password_hash,display_name) VALUES(?,?,?,?)').run('release-admin','release-admin','test-only','测试管理员');
+  db.sqlite.prepare('INSERT INTO android_release_candidates(id,metadata,version_code,github_release_id,github_asset_id,preparation_run_id,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?)')
+    .run('com.myleafy.android-4',JSON.stringify(releaseMetadata(body)),4,1,2,3,new Date().toISOString(),'approved-test');
+  db.sqlite.prepare("INSERT INTO android_release_operations(id,candidate_id,approved_by,approved_at,status,run_id,updated_at) VALUES(?,?,?,?,'running',?,?)")
+    .run('approved-test','com.myleafy.android-4','release-admin',new Date().toISOString(),4,new Date().toISOString());
+  const request=()=>new Request(`${env.API_ORIGIN}/v1/releases/android/publish?operation=approved-test`,{method:'POST',headers:{Authorization:`Bearer ${env.RELEASE_PUBLISH_TOKEN}`}});
   return {db,env,body,request,objects};
 }
 it('public anonymous updates and release-only publishing work during community maintenance',async()=>{
@@ -49,7 +54,13 @@ it('invalid credentials, unverified files, invalid paths and disabled publishing
 });
 it('immutable artifact retries accept only identical hash and size',async()=>{
   const {env,body}=setup();
-  const upload=(hash:string)=>new Request(env.API_ORIGIN,{method:'PUT',headers:{Authorization:`Bearer ${env.RELEASE_PUBLISH_TOKEN}`,'content-length':'7','x-artifact-sha256':hash},body:'1234567'});
+  const upload=(hash:string)=>new Request(env.API_ORIGIN+'?operation=approved-test',{method:'PUT',headers:{Authorization:`Bearer ${env.RELEASE_PUBLISH_TOKEN}`,'content-length':'7','x-artifact-sha256':hash},body:'1234567'});
   await expect(uploadReleaseArtifact(env,upload(body.sha256),body.artifactKey)).resolves.toMatchObject({sha256:body.sha256});
   await expect(uploadReleaseArtifact(env,upload('d'.repeat(64)),body.artifactKey)).rejects.toMatchObject({status:409});
+});
+it('CI token alone cannot publish or upload an official APK',async()=>{
+  const {env,body}=setup();
+  const request=new Request(env.API_ORIGIN,{method:'POST',headers:{Authorization:`Bearer ${env.RELEASE_PUBLISH_TOKEN}`}});
+  await expect(publishAndroidRelease(env,request,body)).rejects.toMatchObject({status:403,code:'approval_required'});
+  await expect(uploadReleaseArtifact(env,request,body.artifactKey)).rejects.toMatchObject({status:403});
 });

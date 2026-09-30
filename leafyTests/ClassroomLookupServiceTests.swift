@@ -404,7 +404,8 @@ private actor ClassroomLookupCallRecorder {
     }
 }
 
-private actor InMemoryClassroomLookupCache: ClassroomLookupCaching {
+@MainActor
+private final class InMemoryClassroomLookupCache: ClassroomLookupCaching {
     private var roomsByKey: [String: [EmptyClassroom]] = [:]
     private var usageByKey: [String: [ClassroomUsageSlot]] = [:]
 

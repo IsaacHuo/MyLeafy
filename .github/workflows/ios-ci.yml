@@ -1,22 +1,15 @@
 name: iOS CI
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_call:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ios-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     name: iOS 17 build
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - name: Check out repository
@@ -24,22 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check patch and detect iOS changes
-        id: changes
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: |
-          git diff --check "${BASE_SHA}...${HEAD_SHA}"
-          if git diff --name-only "${BASE_SHA}...${HEAD_SHA}" | grep -Eq '^(leafy/|leafyTests/|leafyWidget/|LeafyWidgetShared/|LeafyShareExtension/|LeafyExternalImportShared/|Config/|leafy\.xcodeproj/|\.github/workflows/ios-ci\.yml$)'; then
-            echo "ios_changed=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "ios_changed=false" >> "${GITHUB_OUTPUT}"
-          fi
-
       - name: Cache Swift packages
-        if: steps.changes.outputs.ios_changed == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -50,7 +28,6 @@ jobs:
             swiftpm-${{ runner.os }}-
 
       - name: Build for the iOS 17 deployment target
-        if: steps.changes.outputs.ios_changed == 'true'
         run: |
           xcodebuild -quiet build \
             -project leafy.xcodeproj \
@@ -61,3 +38,21 @@ jobs:
             IPHONEOS_DEPLOYMENT_TARGET=17.0 \
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Offline XCTest suite
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; print(next(d["udid"] for devices in json.load(sys.stdin)["devices"].values() for d in devices if d["name"].startswith("iPhone")))')
+          xcodebuild -quiet test -project leafy.xcodeproj -scheme leafy \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -clonedSourcePackagesDirPath "${RUNNER_TEMP}/leafy-source-packages" \
+            -resultBundlePath "${RUNNER_TEMP}/leafy-tests.xcresult" \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+      - name: Preserve XCTest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-tests-${{ github.sha }}
+          path: ${{ runner.temp }}/leafy-tests.xcresult
+          if-no-files-found: ignore

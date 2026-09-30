@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      ios: ${{ steps.changes.outputs.ios }}
+      android: ${{ steps.changes.outputs.android }}
+      backend: ${{ steps.changes.outputs.backend }}
+      site: ${{ steps.changes.outputs.site }}
+      supabase: ${{ steps.changes.outputs.supabase }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changes
+        env:
+          BASE_SHA: ${{ github.event_name == 'workflow_dispatch' && '0000000000000000000000000000000000000000' || github.event.pull_request.base.sha || github.event.before || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/ci-changes.py --base "$BASE_SHA" --head "$HEAD_SHA"
+      - run: python -m unittest discover -s scripts -p 'test_ci_*.py'
+  safety:
+    uses: ./.github/workflows/repository-safety.yml
+  ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    uses: ./.github/workflows/ios-ci.yml
+  android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    uses: ./.github/workflows/android-ci.yml
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-ci.yml
+  site:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    uses: ./.github/workflows/site-ci.yml
+  supabase:
+    needs: changes
+    if: needs.changes.outputs.supabase == 'true'
+    uses: ./.github/workflows/supabase-ci.yml
+  result:
+    name: CI result
+    if: always()
+    needs: [changes, safety, ios, android, backend, site, supabase]
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json, os
+          jobs = json.loads(os.environ['RESULTS'])
+          assert jobs['changes']['result'] == jobs['safety']['result'] == 'success'
+          for name in ('ios', 'android', 'backend', 'site', 'supabase'):
+              selected = jobs['changes']['outputs'][name] == 'true'
+              assert jobs[name]['result'] == ('success' if selected else 'skipped'), (name, jobs[name]['result'])
+          PY

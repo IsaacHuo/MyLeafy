@@ -11,6 +11,7 @@ import { purgeLegacyAdminSession } from "./providers/session";
 import { CampusesPage, ManualPage, PostgraduatePage } from "./resources/CompositePages";
 import { createResourcePages } from "./resources/ResourcePages";
 import { resourceConfigs } from "./resources/config";
+import {AndroidReleasesPage} from './resources/AndroidReleasesPage';
 import "./admin.css";
 
 const theme = createTheme({
@@ -109,7 +110,6 @@ function translateMessage(template: string, options: Record<string, unknown>) {
 }
 
 const regularResources = [
-  "android-releases",
   "posts", "polls", "comments", "reports", "profiles", "feedback", "announcements", "community-banners",
   "suggestions", "teachers", "courses", "dishes", "ratings", "semester-configs",
   "national-calendar", "admins", "sessions", "audit-logs",
@@ -137,6 +137,7 @@ export default function AdminConsole() {
       title="MyLeafy 管理后台"
     >
       <Resource name="manual" list={ManualPage} options={{ label: "手册" }} />
+      <Resource name="android-releases" list={AndroidReleasesPage} options={{label:"Android 版本"}} />
       <Resource name="campuses" list={CampusesPage} options={{ label: "学校" }} />
       <Resource name="campus-requests" options={{ label: "学校归属申请" }} />
       <Resource name="postgraduate" list={PostgraduatePage} create={createResourcePages("postgraduate").create} options={{ label: "考研信息" }} />

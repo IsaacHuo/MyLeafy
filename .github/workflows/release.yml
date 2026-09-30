@@ -1,89 +1,45 @@
-name: Cut iOS Release
-
+name: Record released iOS version
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version, e.g. 3.0. Leave empty to read MARKETING_VERSION from the project.'
-        required: false
-        default: ''
+      commit:
+        description: 'Full source commit of the Apple-released binary'
+        required: true
         type: string
-
+      version:
+        description: 'Apple marketing version'
+        required: true
+        type: string
+      build:
+        description: 'Apple build number'
+        required: true
+        type: string
+      apple_released:
+        description: 'This version has actually been released through App Store Connect'
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: write
-
+  checks: read
 concurrency:
-  group: cut-release
+  group: record-ios-release
   cancel-in-progress: false
-
 jobs:
-  cut-release:
-    name: Build archive and create release
-    runs-on: macos-latest
-    timeout-minutes: 60
+  record:
+    if: github.ref == 'refs/heads/main' && inputs.apple_released
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_COMMIT: ${{ inputs.commit }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_BUILD: ${{ inputs.build }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Resolve version and tag
-        id: meta
-        shell: bash
-        run: |
-          VERSION="${{ inputs.version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION="$(sed -n 's/.*MARKETING_VERSION = \([0-9][0-9.]*\);.*/\1/p' leafy.xcodeproj/project.pbxproj | head -n 1)"
-          fi
-          if [ -z "$VERSION" ]; then
-            echo "Could not resolve a release version." >&2
-            exit 1
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Fail if tag already exists
-        shell: bash
-        run: |
-          if git rev-parse -q --verify "refs/tags/${{ steps.meta.outputs.tag }}" >/dev/null; then
-            echo "Tag ${{ steps.meta.outputs.tag }} already exists; aborting." >&2
-            exit 1
-          fi
-
-      - name: Archive app without code signing
-        shell: bash
-        run: |
-          xcodebuild -quiet archive \
-            -project leafy.xcodeproj \
-            -scheme leafy \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "${RUNNER_TEMP}/MyLeafy.xcarchive" \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
-
-      - name: Package archive
-        shell: bash
-        run: |
-          ditto -c -k --sequesterRsrc --keepParent \
-            "${RUNNER_TEMP}/MyLeafy.xcarchive" \
-            "${RUNNER_TEMP}/MyLeafy-${{ steps.meta.outputs.version }}.xcarchive.zip"
-
-      - name: Create tag
-        shell: bash
-        run: |
-          git tag "${{ steps.meta.outputs.tag }}"
-          git push origin "${{ steps.meta.outputs.tag }}"
-
-      - name: Create draft release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ steps.meta.outputs.tag }}" \
-            "${RUNNER_TEMP}/MyLeafy-${{ steps.meta.outputs.version }}.xcarchive.zip" \
-            --target main \
-            --title "MyLeafy ${{ steps.meta.outputs.version }}" \
-            --generate-notes \
-            --draft
+          ref: ${{ inputs.commit }}
+      - name: Verify source checks
+        run: gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/check-runs?per_page=100" --jq '.check_runs | any(.name == "CI result" and .conclusion == "success" and .app.slug == "github-actions")' | grep -qx true
+      - name: Record immutable source and release
+        run: python scripts/record-ios-release.py --commit "$RELEASE_COMMIT" --version "$RELEASE_VERSION" --build "$RELEASE_BUILD"

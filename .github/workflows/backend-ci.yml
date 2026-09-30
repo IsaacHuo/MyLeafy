@@ -1,22 +1,14 @@
 name: Cloudflare backend CI
 
 on:
-  pull_request:
-    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
-  push:
-    branches: [main]
-    paths: ["backend/**", ".github/workflows/backend-ci.yml"]
+  workflow_call:
 
 permissions:
   contents: read
 
-concurrency:
-  group: backend-ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   contracts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: backend

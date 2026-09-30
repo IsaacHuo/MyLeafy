@@ -7,6 +7,7 @@ import { adminGet, adminList, adminLists } from './admin-data';
 import { exportAdminData } from './admin-export';
 import { overview } from './admin-overview';
 import { listAndroidReleases, revokeAndroidRelease } from './android-releases';
+import {requestAndroidPublication,downloadAndroidCandidate} from './android-candidates';
 import { moderate, mute, retryPostPublish, reviewPollDeletion, setCatalogStatus, updateAdminAccount, upsertCatalog, upsertRuntime } from './admin-write';
 import { ApiError, readJSON, text } from './http';
 import { requireWritable, type Row } from './db';
@@ -14,6 +15,7 @@ import { announcement, deleteRating, pinPost, resolveModerationReport, revokeAdm
 
 type Handler=(env:BackendEnv,context:AdminContext,params:Row)=>Promise<unknown>;
 const mutations:Record<string,Handler>={
+  requestAndroidPublication,
   revokeAndroidRelease,
   prepareCommunityBannerImageUpload,publishCommunityBanner,archiveCommunityBanner,upsertPostgraduateSource,
   createCommunityBanner:(env,context,params)=>saveCommunityBanner(env,context,params,true),
@@ -55,6 +57,11 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
       if(request.method!=='PUT')throw new ApiError(405,'method_not_allowed','请求方法无效。');
       await authenticateAdmin(env,request);
       return json(await uploadCommunityBanner(env,request,requestId));
+    }
+    if(path==='/admin/android-candidate'){
+      if(request.method!=='GET')throw new ApiError(405,'method_not_allowed','请求方法无效。');
+      const context=await authenticateAdmin(env,request);
+      return downloadAndroidCandidate(env,context,text(new URL(request.url).searchParams.get('id'),120));
     }
     if(!['/admin/login','/admin/me','/admin/logout','/admin/actions','/admin/export'].includes(path))throw new ApiError(404,'not_found','管理接口不存在。');
     if(request.method!==(path==='/admin/me'?'GET':'POST'))throw new ApiError(405,'method_not_allowed','请求方法无效。');

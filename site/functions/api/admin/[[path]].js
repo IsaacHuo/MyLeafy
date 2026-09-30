@@ -7,10 +7,10 @@ export async function onRequest(context) {
   const route = routeName(new URL(context.request.url).pathname);
   if (!route) return apiError(404, "not_found", "Admin API route not found.", requestID);
 
-  const originError = validateSameOrigin(context.request, route !== 'banner-upload');
+  const originError = validateSameOrigin(context.request, !['banner-upload', 'android-candidate'].includes(route));
   if (originError) return apiError(403, "forbidden", originError, requestID);
 
-  const expectedMethod = route === "me" ? "GET" : route === 'banner-upload' ? 'PUT' : "POST";
+  const expectedMethod = ["me", "android-candidate"].includes(route) ? "GET" : route === 'banner-upload' ? 'PUT' : "POST";
   if (context.request.method !== expectedMethod) {
     return apiError(405, "method_not_allowed", "Method not allowed.", requestID);
   }
@@ -68,7 +68,7 @@ export async function onRequest(context) {
       },
       ...(body !== undefined ? { body: body || "{}" } : {}),
     };
-    upstream = await binding.fetch(new Request(`https://myleafy-admin.internal/admin/${route}`, options));
+    upstream = await binding.fetch(new Request(`https://myleafy-admin.internal/admin/${route}${route === "android-candidate" ? "?id=" + encodeURIComponent(new URL(context.request.url).searchParams.get("id") || "") : ""}`, options));
   } catch (error) {
     console.error(JSON.stringify({ event: "admin_bff_upstream_failed", request_id: requestID }));
     return apiError(502, "backend_unavailable", "Unable to reach the admin backend.", requestID, true);
@@ -80,7 +80,7 @@ export async function onRequest(context) {
 }
 
 function routeName(pathname) {
-  const match = pathname.match(/^\/api\/admin\/(login|me|logout|actions|export|banner-upload)\/?$/);
+  const match = pathname.match(/^\/api\/admin\/(login|me|logout|actions|export|banner-upload|android-candidate)\/?$/);
   return match?.[1] || null;
 }
 

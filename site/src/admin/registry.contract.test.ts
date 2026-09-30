@@ -79,6 +79,6 @@ const legacyAdminActionNames = [
 
 describe("admin action registry contract", () => {
   it("preserves every legacy action and registers the approved additions", () => {
-    expect(adminActionNames).toEqual(["listAndroidReleases", "revokeAndroidRelease", ...legacyAdminActionNames]);
+    expect(adminActionNames).toEqual(["requestAndroidPublication", "listAndroidReleases", "revokeAndroidRelease", ...legacyAdminActionNames]);
   });
 });

@@ -43,7 +43,7 @@ class ReleaseCoordinatorTest(unittest.TestCase):
                     identifier = len(uploaded)+1
                     uploaded[identifier] = data
                     return json.dumps({'id':identifier}).encode()
-                if method == 'PUT': cloud[url.split('/artifacts/')[1]] = data; return b'{}'
+                if method == 'PUT': cloud[url.split('/artifacts/')[1].split('?')[0]] = data; return b'{}'
                 if url.startswith('https://downloads.myleafy.space/'): return cloud[url.split('space/')[1]]
                 if method == 'POST' and failure: raise RuntimeError('Lost registration response')
                 if url.endswith('/com.myleafy.android-4') and failure == 'uncommitted': raise RuntimeError('Not published')
@@ -54,15 +54,15 @@ class ReleaseCoordinatorTest(unittest.TestCase):
                 stdout.write(uploaded[int(arguments[2].split('/')[-1])])
 
             with patch.dict(os.environ, {'GH_TOKEN':'test-only','MYLEAFY_RELEASE_PUBLISH_TOKEN':'test-only',
-                'GITHUB_SHA':'a'*40,'GITHUB_REPOSITORY':'IsaacHuo/MyLeafy'}), \
+                'RELEASE_SOURCE_SHA':'a'*40,'GITHUB_REPOSITORY':'IsaacHuo/MyLeafy'}), \
                 patch.object(publisher,'gh',gh), patch.object(publisher,'request',request), \
                 patch.object(publisher.subprocess,'run',download), \
                 patch.object(publisher,'digest',lambda path:hashlib.sha256(path.read_bytes()).hexdigest()):
                 if failure == 'uncommitted':
-                    with self.assertRaises(RuntimeError): publisher.publish(apk,manifest,'https://api.myleafy.space')
+                    with self.assertRaises(RuntimeError): publisher.publish(apk,manifest,'https://api.myleafy.space','approved-test-operation')
                     self.assertEqual([False,True],transitions)
                 else:
-                    publisher.publish(apk,manifest,'https://api.myleafy.space')
+                    publisher.publish(apk,manifest,'https://api.myleafy.space','approved-test-operation')
                     self.assertEqual([False],transitions)
                 self.assertEqual(3,len(uploaded))
                 self.assertEqual(3,len(cloud))

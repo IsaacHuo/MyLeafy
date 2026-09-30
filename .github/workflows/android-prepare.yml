@@ -1,0 +1,66 @@
+name: Prepare Android candidate
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+  checks: read
+concurrency:
+  group: android-candidate
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: android-candidates
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MYLEAFY_RELEASE_PUBLISH_TOKEN: ${{ secrets.MYLEAFY_RELEASE_PUBLISH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Resolve candidate and reuse existing bytes
+        id: candidate
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: python backend/scripts/android-candidate.py select --source "$SOURCE_SHA" --output "$RUNNER_TEMP/candidate"
+      - uses: actions/setup-java@v6
+        if: steps.candidate.outputs.skip != 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.candidate.outputs.skip != 'true'
+      - name: Restore release key
+        if: steps.candidate.outputs.skip != 'true' && steps.candidate.outputs.reuse != 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/myleafy-release.jks"
+          echo "MYLEAFY_RELEASE_STORE_FILE=$RUNNER_TEMP/myleafy-release.jks" >> "$GITHUB_ENV"
+      - name: Verify and build official candidate
+        if: steps.candidate.outputs.skip != 'true' && steps.candidate.outputs.reuse != 'true'
+        working-directory: android
+        env:
+          MYLEAFY_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          MYLEAFY_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          MYLEAFY_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          ./gradlew :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RELEASE_APK"
+      - name: Verify and register private candidate
+        if: steps.candidate.outputs.skip != 'true'
+        run: python backend/scripts/android-candidate.py prepare --apk "$RELEASE_APK" --source "$RELEASE_SOURCE_SHA"
+      - name: Candidate summary
+        if: steps.candidate.outputs.skip != 'true'
+        run: echo 'Private signed candidate prepared. Download and authorize publication in admin → Android 版本.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/myleafy-release.jks"

@@ -20,6 +20,7 @@ import { unreadNotificationCount, announcements, announcementRead, notificationS
 import { toggleCommentLike, pendingPost } from './interactions';
 import { sharePreview } from './share-preview';
 import { latestAndroidRelease, getAndroidRelease, publishAndroidRelease, uploadReleaseArtifact } from './android-releases';
+import {registerAndroidCandidate,claimAndroidPublication,failAndroidPublication} from './android-candidates';
 import { currentMembership, requestMembership, runtimeConfiguration, searchCampuses, selectCampus } from './campus';
 export { ChangeSignals } from './signals';
 export { AdminAPI } from './admin-entrypoint';
@@ -36,7 +37,7 @@ app.use('*',async(c,next)=>{
 });
 app.get('/health',async c=>{
   const check=await c.env.DB.prepare('SELECT 1 AS ok').first<{ok:number}>();
-  return c.json({status:check?.ok===1?'ok':'error',environment:c.env.ENVIRONMENT});
+  return c.json({status:check?.ok===1?'ok':'error',environment:c.env.ENVIRONMENT,commit:c.env.DEPLOY_COMMIT??null});
 });
 app.get('/v1/share-preview',async c=>c.json(await sharePreview(c.env,new URL(c.req.url))));
 // Release-only CI writes and public reads are independent of community maintenance.
@@ -49,6 +50,9 @@ app.get('/v1/releases/android/download',async c=>{
 app.get('/v1/releases/android/:id',async c=>c.json(await getAndroidRelease(c.env,c.req.param('id'))));
 app.put('/v1/releases/artifacts/*',async c=>c.json(await uploadReleaseArtifact(c.env,c.req.raw,new URL(c.req.url).pathname.slice('/v1/releases/artifacts/'.length))));
 app.post('/v1/releases/android/publish',async c=>c.json(await publishAndroidRelease(c.env,c.req.raw,await readJSON(c.req.raw))));
+app.post('/v1/releases/android/candidates',async c=>c.json(await registerAndroidCandidate(c.env,c.req.raw,await readJSON(c.req.raw))));
+app.post('/v1/releases/android/operations/:id/claim',async c=>c.json(await claimAndroidPublication(c.env,c.req.raw,c.req.param('id'),await readJSON(c.req.raw))));
+app.post('/v1/releases/android/operations/:id/fail',async c=>c.json(await failAndroidPublication(c.env,c.req.raw,c.req.param('id'),await readJSON(c.req.raw))));
 app.use('/v1/*',async(c,next)=>{
   const state=await c.env.DB.prepare('SELECT mode FROM backend_control WHERE id=1').first<{mode:string}>();
   if(!state||state.mode==='importing')throw new ApiError(503,'maintenance','服务维护中，请稍后重试。',true);
