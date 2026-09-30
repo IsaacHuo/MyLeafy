@@ -6,7 +6,7 @@ Last verified: 2026-09-30 (delivery pipeline implementation and full CI; product
 
 - **开发与交付门槛**：统一 CI 按跨目录依赖运行，main 必需 `CI result` 已配置。完整远程 CI 全绿：iOS 578 项中 577 通过、1 跳过，Android/后端/网站/旧 Supabase 通过；网站 60 项单元及三个浏览器配置通过，D1 增量迁移保留原管理员与发行记录的用例通过。AGENTS/贡献规范统一为任务分支当前提交通过 CI 后快进合入 main，PR 可选。
 - **发布流程代码**：Android 私有 draft 候选、超级管理员验收授权、原 APK 发布/失败重试、公开发行隔离和审计已实现；D1 0011 尚待部署，新候选后台还未在生产接通，生产正式 App 仍为 1.2.1/code 5。iOS 仅通过 Apple 发布，GitHub 工作流只补记源码/version/build。
-- **Cloudflare 接通状态**：已通过 API 核对 `leafy` 生产自动部署关闭，创建 `myleafy-site-staging` 隔离 Pages 项目；GitHub staging/production 的 Cloudflare Secret 与 Pages 项目变量已配置，production 由 IsaacHuo 批准。production Worker 已登记 `GITHUB_RELEASE_TOKEN`，实际 GitHub 权限仍在核对。首次受控 staging 部署、恢复演练和用户批准的 production 部署尚未完成，不能将代码检查等同上线验收。
+- **Cloudflare 接通状态**：已通过 API 核对 `leafy` 生产自动部署关闭，创建 `myleafy-site-staging` 隔离 Pages 项目；GitHub staging/production 的 Cloudflare Secret 与 Pages 项目变量已配置，production 由 IsaacHuo 批准。production Worker 的 `GITHUB_RELEASE_TOKEN` 已在临时远程预览验证：Release/Actions 读取 200，dispatch 权限有效（不存在分支返回 422，未启动发布）。首次受控 staging 部署、恢复演练和用户批准的 production 部署尚未完成，不能将代码检查等同上线验收。
 
 - **Android 第二轮体验完善**：已修复综素初始化闪退、校园返回分类丢失和培养方案误取课程编号；首次教务同步由身份作用域管理。课表背景/左轴固定、月份补齐，详情改为 Sheet，支持本机备注与课前提醒；底栏圆形选中底、日迹圆形加号、等宽场馆卡片、医疗/评价直接展开，移除安卓“周末去哪”。仅北林与免登录，调试包后缀 `.next`。
 - **验收边界**：模拟器优先，小米真机延后。完整 JVM 共 149 项，142 通过、7 项外部探测跳过；构建和 lint 通过（104 条 warning、3 条 hint）。隔离模拟器完整 32 项中 31 通过，屏外学院选项测试修正后单项通过；顶部返回另行复跑通过。6 张导航基线逐张审阅后验证通过。未把分批复跑表述为一次全绿，也未声称全设备/全字号验收。

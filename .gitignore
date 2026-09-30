@@ -149,6 +149,7 @@ android/secrets.properties
 *.jks
 
 # Backend local runtime data and dependencies
+.wrangler/
 /backend/.local/
 /backend/node_modules/
 
