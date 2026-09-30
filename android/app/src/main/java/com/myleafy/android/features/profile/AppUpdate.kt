@@ -121,7 +121,7 @@ class AppUpdateManager(private val context: Context, private val owner: Coroutin
     init { owner.launch { restoreDownload() } }
 
     fun check(manual: Boolean = true) {
-        if (checkJob?.isActive == true || state.value is UpdateUiState.Downloading || state.value is UpdateUiState.Downloaded) return
+        if (checkJob?.isActive == true || state.value is UpdateUiState.Downloading || (!manual && state.value is UpdateUiState.Downloaded)) return
         val now = System.currentTimeMillis()
         if (!manual && now - prefs.getLong("last_check", 0) in 0 until DAY) return
         prefs.edit().putLong("last_check", now).apply()

@@ -135,7 +135,7 @@ fun CheckUpdatesScreen(
             item {
                 LeafySecondaryButton(
                     onClick = viewModel::check,
-                    enabled = state !is UpdateUiState.Checking && state !is UpdateUiState.Downloading && state !is UpdateUiState.Downloaded,
+                    enabled = state !is UpdateUiState.Checking && state !is UpdateUiState.Downloading,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("重新检查") }
             }
