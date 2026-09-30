@@ -95,7 +95,9 @@ class SchoolAuthenticationRecovery(
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: SchoolNetworkError.LoginFailed) {
                 val message = error.message.orEmpty()
-                val captchaRejected = listOf("验证码", "随机码", "校验码", "captcha", "verification code").any { message.contains(it, true) }
+                val captchaRejected = listOf("验证码", "随机码", "校验码", "captcha", "verification code").any { message.contains(it, true) } &&
+                    listOf("错误", "不正确", "有误", "不对", "invalid", "incorrect").any { message.contains(it, true) } &&
+                    listOf("密码", "账号", "学号", "锁", "次数", "请检查", "password", "account", "locked").none { message.contains(it, true) }
                 if (!captchaRejected || attempt == 3) return SchoolRecoveryResult.Manual(null, message.ifBlank { "请重新登录教务系统。" })
             }
         }

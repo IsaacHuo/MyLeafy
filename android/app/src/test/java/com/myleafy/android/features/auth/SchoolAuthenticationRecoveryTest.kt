@@ -82,6 +82,21 @@ class SchoolAuthenticationRecoveryTest {
         assertTrue(failure is java.io.IOException)
     }
 
+    @Test fun ambiguousLoginErrorsCannotStartAnotherCaptchaSubmission() = runTest {
+        for (message in listOf("登录失败，请检查学号与验证码", "密码或验证码错误")) {
+            val scopes = ActiveAppScopeStore().apply { activate(identity) }
+            var logins = 0
+            val raw = client { name,_ -> when(name) {
+                "prepareUndergraduateChallenge" -> SchoolCaptchaChallenge(byteArrayOf(1))
+                "loginUndergraduate" -> { logins++; throw SchoolNetworkError.LoginFailed(message) }
+                else -> error(name)
+            } }
+            val recovery = SchoolAuthenticationRecovery(raw,credentials,scopes,backgroundScope,CaptchaRecognizer { "abcd" })
+            assertTrue(recovery.recover(0) is SchoolRecoveryResult.Manual)
+            assertEquals(1,logins)
+        }
+    }
+
     @Test fun credentialsFromAnotherAccountAreNeverSubmitted() = runTest {
         val scopes=ActiveAppScopeStore().apply { activate(identity.copy(eduId="another")) }
         val raw=client { _,_->error("Must not contact school") }
