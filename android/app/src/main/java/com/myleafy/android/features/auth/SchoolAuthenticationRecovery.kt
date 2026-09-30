@@ -2,7 +2,6 @@ package com.myleafy.android.features.auth
 
 import com.myleafy.android.core.campus.ActiveAppScopeStore
 import com.myleafy.android.core.network.*
-import com.myleafy.android.core.security.SchoolLoginCredentialStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -15,10 +14,8 @@ sealed interface SchoolRecoveryResult {
 
 class SchoolAuthenticationRecovery(
     private val client: SchoolNetworkClient,
-    private val credentials: SchoolLoginCredentialStore,
     private val scopes: ActiveAppScopeStore,
     private val owner: CoroutineScope,
-    private val recognizer: CaptchaRecognizer,
 ) {
     private val mutex = Mutex()
     private var flight: Deferred<SchoolRecoveryResult>? = null
@@ -32,6 +29,7 @@ class SchoolAuthenticationRecovery(
 
     suspend fun manualAuthenticationCompleted() = mutex.withLock {
         revision++
+        flight?.cancel()
         flight = null
         manual = null
     }
@@ -61,7 +59,7 @@ class SchoolAuthenticationRecovery(
                 try {
                     recoverOnce(key).also { result -> mutex.withLock {
                         if (scopes.current.scopeKey != key) throw CancellationException("Identity changed")
-                        if (result == SchoolRecoveryResult.Authenticated) revision++ else manual = result as SchoolRecoveryResult.Manual
+                        manual = result
                     } }
                 } finally { if (scopes.current.scopeKey == key) mutableProgress.value = null }
             }.also { flight = it; flightScope = key; flightRevision = expectedRevision }
@@ -69,39 +67,13 @@ class SchoolAuthenticationRecovery(
         return task.await()
     }
 
-    private suspend fun recoverOnce(scopeKey: String): SchoolRecoveryResult {
+    private suspend fun recoverOnce(scopeKey: String): SchoolRecoveryResult.Manual {
         val scope = scopes.current
         if (scope.isGuest || scope.campusId?.rawValue != "bjfu" || scope.eduId.isNullOrBlank()) throw SchoolNetworkError.SessionExpired
-        val credential = withContext(Dispatchers.IO) { credentials.load("bjfu", "undergraduate", scope.eduId) }
-            ?: return SchoolRecoveryResult.Manual(null, "请重新登录教务系统。")
-        for (attempt in 1..3) {
-            currentCoroutineContext().ensureActive()
-            if (scopeKey != scopes.current.scopeKey) throw CancellationException("Identity changed")
-            if (attempt > 1) delay(300)
-            mutableProgress.value = "正在连接教务系统"
-            val challenge = client.prepareUndergraduateChallenge()
-            mutableProgress.value = "正在识别验证码（$attempt/3）"
-            val captcha = try { recognizer.recognize(challenge.imageBytes) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (error: Exception) { android.util.Log.w("SchoolRecovery", "Captcha recognition failed: ${error.javaClass.simpleName}"); null }
-            if (captcha == null) {
-                if (attempt == 3) return SchoolRecoveryResult.Manual(challenge, "自动识别未通过，请手动输入验证码。")
-                continue
-            }
-            mutableProgress.value = "正在验证登录"
-            try {
-                client.loginUndergraduate(challenge, credential.account, credential.password, captcha)
-                return SchoolRecoveryResult.Authenticated
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: SchoolNetworkError.LoginFailed) {
-                val message = error.message.orEmpty()
-                val captchaRejected = listOf("验证码", "随机码", "校验码", "captcha", "verification code").any { message.contains(it, true) } &&
-                    listOf("错误", "不正确", "有误", "不对", "invalid", "incorrect").any { message.contains(it, true) } &&
-                    listOf("密码", "账号", "学号", "锁", "次数", "请检查", "password", "account", "locked").none { message.contains(it, true) }
-                if (!captchaRejected || attempt == 3) return SchoolRecoveryResult.Manual(null, message.ifBlank { "请重新登录教务系统。" })
-            }
-        }
-        error("Unreachable")
+        if (scopeKey != scopes.current.scopeKey) throw CancellationException("Identity changed")
+        mutableProgress.value = "正在获取验证码"
+        val challenge = client.prepareUndergraduateChallenge()
+        return SchoolRecoveryResult.Manual(challenge, "请填写验证码，重新登录教务系统。")
     }
 }
 

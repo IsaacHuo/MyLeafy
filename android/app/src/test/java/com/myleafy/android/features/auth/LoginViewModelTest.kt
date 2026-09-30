@@ -1,7 +1,8 @@
 package com.myleafy.android.features.auth
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
+import com.myleafy.android.core.security.StoredSchoolCredential
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -42,41 +43,41 @@ class LoginViewModelTest {
     }
 
     @Test
-    fun lateRecognitionCannotOverwriteManualInputOrSubmitLogin() = runTest(dispatcher) {
-        val reading = CompletableDeferred<String?>()
-        val repository = FakeAuthRepository(Result.success(Unit))
-        val viewModel = LoginViewModel(repository, CaptchaRecognizer { reading.await() })
-        testScheduler.advanceUntilIdle()
-        viewModel.setCaptcha("manual")
-        reading.complete("ab12")
-        testScheduler.advanceUntilIdle()
-        assertEquals("manual", viewModel.captcha.value)
-        assertFalse(viewModel.uiState.value.loginSucceeded)
+    fun savedCredentialsPrefillAndCaptchaStaysManual() = runTest(dispatcher) {
+        val stored = StoredSchoolCredential("bjfu", "undergraduate", "student", "p|a\"ss", 1)
+        val repository = FakeAuthRepository(Result.success(Unit), stored)
+        val viewModel = LoginViewModel(repository)
+        assertEquals(stored.password, viewModel.password.first { it.isNotEmpty() })
+        assertEquals(stored.account, viewModel.account.value)
+        assertEquals("", viewModel.captcha.value)
         assertEquals(0, repository.loginCount)
     }
 
     @Test
-    fun refreshedChallengeRejectsAnOlderRecognitionResult() = runTest(dispatcher) {
-        val first = CompletableDeferred<String?>()
-        var reads = 0
-        val repository = FakeAuthRepository(Result.success(Unit))
-        val viewModel = LoginViewModel(repository, CaptchaRecognizer { if (++reads == 1) first.await() else "cd34" })
+    fun failedLoginRetainsAccountAndPasswordAfterRefreshingCaptcha() = runTest(dispatcher) {
+        val repository = FakeAuthRepository(Result.failure(IllegalStateException("验证码错误")))
+        val viewModel = LoginViewModel(repository)
         testScheduler.advanceUntilIdle()
-        viewModel.refreshCaptcha()
+        viewModel.setAccount("student")
+        viewModel.setPassword("p|a\"ss")
+        viewModel.setCaptcha("1234")
+        viewModel.submit()
         testScheduler.advanceUntilIdle()
-        first.complete("ab12")
-        testScheduler.advanceUntilIdle()
-        assertEquals("cd34", viewModel.captcha.value)
-        assertEquals(2, repository.captchaFetchCount)
-        assertEquals(0, repository.loginCount)
+        assertEquals("student", viewModel.account.value)
+        assertEquals("p|a\"ss", viewModel.password.value)
+        assertEquals("", viewModel.captcha.value)
+        assertEquals("验证码错误", viewModel.uiState.value.errorMessage)
     }
+
 }
 
 private class FakeAuthRepository(
     private val loginResult: Result<Unit>,
+    private val storedCredential: StoredSchoolCredential? = null,
 ) : AuthRepository {
     var captchaFetchCount = 0
     var loginCount = 0
+    override fun cachedCredential() = storedCredential
     override val hasCachedIdentity = false
 
     override suspend fun prepareUndergraduateChallenge(): com.myleafy.android.core.network.SchoolCaptchaChallenge {

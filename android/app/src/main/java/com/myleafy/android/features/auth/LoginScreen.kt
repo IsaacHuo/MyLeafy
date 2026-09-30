@@ -70,7 +70,7 @@ fun LoginScreen(
     onLoggedIn: () -> Unit = onBack,
     viewModel: LoginViewModel = viewModel(
         factory = appViewModelFactory { container ->
-            LoginViewModel(repository = container.authRepository, recognizer = MlKitCaptchaRecognizer())
+            LoginViewModel(repository = container.authRepository)
         },
     ),
     modifier: Modifier = Modifier,
@@ -196,7 +196,6 @@ fun LoginContent(
             )
         }
         Spacer(modifier = Modifier.height(LeafySpacing.card))
-        if (state.isRecognizing) Text("正在识别验证码…", style = MaterialTheme.typography.bodySmall)
 
         val errorMessage = state.errorMessage
         Box(modifier = Modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.minimumTouchTarget)) {

@@ -133,8 +133,7 @@ class AppContainer(context: Context) {
         renderTimetable = { url, cookies -> com.myleafy.android.core.network.okhttp.TimetableWebBootstrap(applicationContext).load(url, cookies) },
     )
     val schoolAuthenticationRecovery = com.myleafy.android.features.auth.SchoolAuthenticationRecovery(
-        rawSchoolNetworkClient, schoolLoginCredentialStore, activeAppScopeStore, backendLifecycle,
-        com.myleafy.android.features.auth.MlKitCaptchaRecognizer())
+        rawSchoolNetworkClient, activeAppScopeStore, backendLifecycle)
     val schoolNetworkClient: SchoolNetworkClient = com.myleafy.android.features.auth.RecoveringSchoolNetworkClient(
         rawSchoolNetworkClient, schoolAuthenticationRecovery, activeAppScopeStore)
 

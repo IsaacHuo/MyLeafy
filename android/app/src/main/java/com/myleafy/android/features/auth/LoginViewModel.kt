@@ -14,7 +14,6 @@ data class LoginUiState(
     val loginSucceeded: Boolean = false,
     val captchaBytes: ByteArray? = null,
     val isCaptchaLoading: Boolean = false,
-    val isRecognizing: Boolean = false,
 ) {
     val errorMessage: String? get() = listOfNotNull(loginErrorMessage, captchaErrorMessage)
         .distinct().takeIf { it.isNotEmpty() }?.joinToString("\n")
@@ -23,7 +22,6 @@ data class LoginUiState(
 /** Passwords live only in this ViewModel and encrypted storage, never saved instance state. */
 class LoginViewModel(
     private val repository: AuthRepository,
-    private val recognizer: CaptchaRecognizer = CaptchaRecognizer { null },
 ) : ViewModel() {
     private val state = MutableStateFlow(LoginUiState(hasCachedIdentity = repository.hasCachedIdentity))
     val uiState = state.asStateFlow()
@@ -35,7 +33,6 @@ class LoginViewModel(
     val captcha = captchaState.asStateFlow()
     private var challenge: SchoolCaptchaChallenge? = null
     private var captchaJob: Job? = null
-    private var generation = 0L
     private var credentialsEdited = false
 
     init {
@@ -49,34 +46,26 @@ class LoginViewModel(
         refreshCaptcha()
     }
 
-    fun setAccount(value: String) { credentialsEdited = true; generation++; accountState.value = value }
-    fun setPassword(value: String) { credentialsEdited = true; generation++; passwordState.value = value }
-    fun setCaptcha(value: String) { generation++; captchaState.value = value }
+    fun setAccount(value: String) { credentialsEdited = true; accountState.value = value }
+    fun setPassword(value: String) { credentialsEdited = true; passwordState.value = value }
+    fun setCaptcha(value: String) { captchaState.value = value }
 
     fun refreshCaptcha() {
         if (state.value.isSubmitting) return
         captchaJob?.cancel()
-        val request = ++generation
         challenge = null
         captchaState.value = ""
-        state.value = state.value.copy(isCaptchaLoading = true, isRecognizing = false,
+        state.value = state.value.copy(isCaptchaLoading = true,
             captchaBytes = null, captchaErrorMessage = null)
         captchaJob = viewModelScope.launch {
             try {
                 val next = repository.prepareUndergraduateChallenge()
                 ensureActive()
                 challenge = next
-                state.value = state.value.copy(isCaptchaLoading = false, captchaBytes = next.imageBytes, isRecognizing = true)
-                val recognized = try { recognizer.recognize(next.imageBytes) }
-                    catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { null }
-                if (generation == request && challenge === next && captchaState.value.isEmpty()) {
-                    captchaState.value = recognized.orEmpty()
-                }
-                state.value = state.value.copy(isRecognizing = false)
+                state.value = state.value.copy(isCaptchaLoading = false, captchaBytes = next.imageBytes)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
-                state.value = state.value.copy(isCaptchaLoading = false, isRecognizing = false,
+                state.value = state.value.copy(isCaptchaLoading = false,
                     captchaErrorMessage = "验证码获取失败：${error.message ?: "请检查校园网与代理设置"}")
             }
         }
@@ -85,8 +74,7 @@ class LoginViewModel(
     fun resumeCaptcha() { if (challenge == null && !state.value.isCaptchaLoading && state.value.captchaErrorMessage == null) refreshCaptcha() }
     fun pauseCaptcha() {
         captchaJob?.cancel()
-        generation++
-        state.value = state.value.copy(isCaptchaLoading = false, isRecognizing = false)
+        state.value = state.value.copy(isCaptchaLoading = false)
     }
 
     fun submit(account: String = accountState.value, password: String = passwordState.value, captcha: String = captchaState.value) {
@@ -96,9 +84,8 @@ class LoginViewModel(
             state.value = state.value.copy(loginErrorMessage = "请填写完整的学号、密码与验证码")
             return
         }
-        generation++
         captchaJob?.cancel()
-        state.value = state.value.copy(isSubmitting = true, isRecognizing = false, loginErrorMessage = null, captchaErrorMessage = null)
+        state.value = state.value.copy(isSubmitting = true, loginErrorMessage = null, captchaErrorMessage = null)
         viewModelScope.launch {
             val result = repository.loginUndergraduate(current, account.trim(), password, captcha.trim())
             val error = result.exceptionOrNull()

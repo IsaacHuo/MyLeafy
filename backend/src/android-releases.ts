@@ -11,7 +11,7 @@ export type AndroidRelease = {
   certificateSha256:string;githubReleaseUrl:string;
 };
 const hex=/^[a-f0-9]{64}$/;
-// The official universal APK includes the offline OCR model and native libraries.
+// Official universal APKs include libraries for multiple CPU architectures.
 // Stay within Cloudflare's 100 MB request limit; stream bytes directly to R2.
 const maxArtifactSize=100_000_000;
 function downloadOrigin(env:BackendEnv){return env.ENVIRONMENT==='production'?'https://downloads.myleafy.space':'https://downloads-staging.myleafy.space';}
