@@ -154,7 +154,11 @@ fun MyLeafyNavHost(
         ) {
             composable(RootTab.TIMETABLE.route) { entry ->
                 val reauthenticated by entry.savedStateHandle.getStateFlow("schoolReauthenticated", false).collectAsStateWithLifecycle()
+                val reminder by entry.savedStateHandle.getStateFlow<String?>("courseReminder", null).collectAsStateWithLifecycle()
                 TimetableScreen(
+                    reminderRequest = reminder,
+                    onConsumeReminder = { entry.savedStateHandle["courseReminder"] = null },
+                    onTeacher = { navController.navigate("campus/teacher?name=${android.net.Uri.encode(it)}") },
                     reauthenticated = reauthenticated,
                     onConsumeReauthentication = { entry.savedStateHandle["schoolReauthenticated"] = false },
                     onReauthenticate = { navController.navigate("school-reauth") },
@@ -251,6 +255,10 @@ fun MyLeafyNavHost(
                     campusId = activeScope.campusId,
                 )
             }
+            composable("campus/teacher?name={name}", arguments = listOf(navArgument("name") { defaultValue = "" })) { entry ->
+                CatalogRatingsScreen(onBack = { navController.popBackStack() }, available = activeScope.campusId == CampusID.bjfu,
+                    initialSearch = entry.arguments?.getString("name").orEmpty())
+            }
             composable(Routes.CLASSROOM) {
                 ClassroomScreen(onBack = { navController.popBackStack() })
             }
@@ -278,7 +286,9 @@ fun MyLeafyNavHost(
             }
             composable("school-reauth") {
                 LoginScreen(onBack = { navController.popBackStack() }, onLoggedIn = {
-                    navController.previousBackStackEntry?.savedStateHandle?.set("schoolReauthenticated", true)
+                    val sync = (navController.context.applicationContext as com.myleafy.android.MyLeafyApplication).container.initialAcademicSync
+                    if (sync.state.value.needsAuthentication) sync.resumeAfterAuthentication()
+                    else navController.previousBackStackEntry?.savedStateHandle?.set("schoolReauthenticated", true)
                     navController.popBackStack()
                 })
             }
@@ -409,9 +419,9 @@ fun MyLeafyNavHost(
         }
     }
 
-    if (showsBottomBar && selectedTab != null) {
-        LeafyNavigationScaffold(
-            selectedTab = selectedTab,
+    LeafyNavigationScaffold(
+            selectedTab = selectedTab ?: RootTab.TIMETABLE,
+            showNavigation = showsBottomBar && selectedTab != null,
             onTabSelected = { tab ->
                 navController.navigate(tab.route) {
                     popUpTo(RootTab.TIMETABLE.route) {
@@ -423,11 +433,6 @@ fun MyLeafyNavHost(
             },
             content = navigationContent,
         )
-    } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-            navigationContent()
-        }
-    }
 }
 
 /**
@@ -440,13 +445,14 @@ fun LeafyNavigationScaffold(
     selectedTab: RootTab,
     onTabSelected: (RootTab) -> Unit,
     modifier: Modifier = Modifier,
+    showNavigation: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.leafySurfaces.page)) {
         if (maxWidth < 600.dp) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { content() }
-                Surface(
+                if (showNavigation) Surface(
                     modifier = Modifier.navigationBarsPadding().padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.micro),
                     shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.96f),
@@ -460,12 +466,17 @@ fun LeafyNavigationScaffold(
                             Column(
                                 Modifier.weight(1f).heightIn(min = 52.dp)
                                     .testTag("root-tab-${tab.route}")
-                                    .selectable(selected = selected, role = Role.Tab, onClick = { onTabSelected(tab) })
+                                    .selectable(selected = selected, role = Role.Tab, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = { onTabSelected(tab) })
                                     .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                             ) {
-                                Icon(if (selected) tab.selectedIcon else tab.icon, null, Modifier.size(22.dp), tint)
+                                Box(Modifier.size(36.dp).background(
+                                    if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,
+                                    androidx.compose.foundation.shape.CircleShape,
+                                ), contentAlignment = Alignment.Center) {
+                                    Icon(if (selected) tab.selectedIcon else tab.icon, null, Modifier.size(22.dp), tint)
+                                }
                                 Text(stringResource(tab.labelRes), color = tint, style = MaterialTheme.typography.labelSmall)
                             }
                         }
@@ -475,7 +486,7 @@ fun LeafyNavigationScaffold(
         } else {
             NavigationSuiteScaffold(
                 navigationSuiteItems = {
-                    RootTab.entries.forEach { tab ->
+                    if (showNavigation) RootTab.entries.forEach { tab ->
                         val selected = tab == selectedTab
                         item(
                             modifier = Modifier.testTag("root-tab-${tab.route}"),

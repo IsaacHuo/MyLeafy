@@ -113,7 +113,7 @@ fun SunshineRunScreen(
         ) {
             error?.let { message -> item { LeafyStatusBanner(message, isError = true, onDismiss = viewModel::dismissError) } }
             item {
-                Surface(color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
+                Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
                         verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
@@ -330,7 +330,7 @@ fun VenueOpeningsScreen(onBack: () -> Unit) {
         ) {
             item { LeafyStatusBanner("以下为北林静态说明，不代表实时占用情况；出发前请以场馆现场和学校通知为准。", isError = false) }
             items(venues, key = { it.name }) { venue ->
-                Surface(color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
+                Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
                     Column(modifier = Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
                         Text(venue.name, style = MaterialTheme.typography.titleMedium)
                         Text(venue.hours)
@@ -349,6 +349,8 @@ private enum class MedicalSection(val title: String) { POLICY("政策"), GUIDE("
 @Composable
 fun MedicalScreen(
     onBack: () -> Unit,
+    embedded: Boolean = false,
+    modifier: Modifier = Modifier,
     available: Boolean,
     viewModel: MedicalViewModel = viewModel(factory = appViewModelFactory { MedicalViewModel(it.campusLifeRepository) }),
 ) {
@@ -379,6 +381,8 @@ fun MedicalScreen(
     }
     LeafySecondaryScaffold(
         title = "医疗事项",
+        embedded = embedded,
+        modifier = modifier,
         onBack = onBack,
         actions = {
             if (available && section == MedicalSection.LEDGER) {
@@ -389,7 +393,7 @@ fun MedicalScreen(
     ) { contentModifier ->
         if (!available) {
             Box(modifier = contentModifier, contentAlignment = Alignment.Center) {
-                LeafyEmptyState("当前校园暂不支持医疗事项", "该页面仅在校园提供 medicalServices 能力时开放。", icon = Icons.Outlined.LocalHospital)
+                LeafyEmptyState("当前校园暂不支持医疗事项", "该服务目前仅面向北京林业大学。", icon = Icons.Outlined.LocalHospital)
             }
         } else {
             Column(modifier = contentModifier.padding(horizontal = LeafySpacing.page)) {

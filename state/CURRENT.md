@@ -1,13 +1,14 @@
 # Current State
 
-Last verified: 2026-09-30 (Android emulator and local checks; live school/staging acceptance incomplete)
+Last verified: 2026-09-30 (Android second-round emulator/local checks and live school reads; staging acceptance incomplete)
 
 ## Current Focus
 
-- **Android Cloudflare 与核心体验对齐**：已整合主线，保留原 Android 改动。当前实现为 Cloudflare REST/媒体/实时通知客户端、双入口登录、固定背景周课表、事务同步、成绩分析与校园子页改进；仅北林与免登录，调试包后缀 `.next`。
-- **验收边界**：用户已改为先验收模拟器，不再要求本轮小米真机截图。API 36 根导航 7 项已通过；固定背景翻周/单次下拉、Room 作用域与升级/回滚已通过。完整 JVM 129 项通过、7 项依赖外部环境的测试跳过；Debug 构建、lint 通过（97 条 warning、3 条 hint）。学校真实会话和 staging 写入验收尚未完成，不能宣称全部交付。
+- **Android 第二轮体验完善**：已修复综素初始化闪退、校园返回分类丢失和培养方案误取课程编号；首次教务同步由身份作用域管理。课表背景/左轴固定、月份补齐，详情改为 Sheet，支持本机备注与课前提醒；底栏圆形选中底、日迹圆形加号、等宽场馆卡片、医疗/评价直接展开，移除安卓“周末去哪”。仅北林与免登录，调试包后缀 `.next`。
+- **验收边界**：模拟器优先，小米真机延后。完整 JVM 共 149 项，142 通过、7 项外部探测跳过；构建和 lint 通过（104 条 warning、3 条 hint）。隔离模拟器完整 32 项中 31 通过，屏外学院选项测试修正后单项通过；顶部返回另行复跑通过。6 张导航基线逐张审阅后验证通过。未把分批复跑表述为一次全绿，也未声称全设备/全字号验收。
 - **iOS 比较**：以当前主线 SwiftUI 结构、文案及计算规则为参照；本机没有同期 iOS 运行测量，不能给出虚构 FPS 或“已同等流畅”的结论。评审记录与下一步见 `docs/design/android-core-review.md`。
-- **本轮收尾**：27 项模拟器检查中的随记返回时序失败经修正后，所属 3 项编辑测试复跑通过；最新布局测试和 8 张已审阅截图基线验证通过。调试 APK 指向 staging。由于学校真实闭环和隔离后台写入仍未验收，任务分支保留，暂不并入可发布主线。
+- **真实学校核对与数据保护**：保留已登录模拟器数据；v7→v8 增量升级后 31 条课程、92 条成绩仍在。用户重新认证后首次队列继续，可信空考试完成检查点；成绩及官方排名已刷新，培养方案核对毕业总学分 167 和 8 类要求，空闲教室当前周/当天返回 76 间。自动化迁移、编辑、权限等测试只在独立模拟器执行。
+- **本轮收尾**：实现与验收结果保存在任务分支，最新截图/翻周录屏位于 `android/app/build/emulator-latest/`。调试 APK 指向 staging；隔离后台写入、系统实际通知投递与重启恢复仍未完整验收，暂不并入可发布主线，不创建 release tag。
 
 ## Recently Completed
 
@@ -61,7 +62,7 @@ Last verified: 2026-09-30 (Android emulator and local checks; live school/stagin
 - **iOS 测试目标隔离声明**：当前 Xcode 下 build-for-testing 被 CampusHeatmapCaching / ClassroomLookupCaching 的 MainActor 协议与测试 actor 冲突阻断；App 与真机签名构建通过。本轮按用户后续要求只做静态与构建验收，未运行 XCTest。
 
 - **教务系统不稳定**：HTML、登录流程或网络策略变化可能使解析暂时失效（持续风险，见 `docs/product/overview.md` §7）。
-- **学校端到端验收**：新 form/WebView 课表路径已实现，但本轮尚未以真实学校会话验证当前线上页面；Cloudflare 写入与共享权限的隔离环境端到端验收也未完成。
+- **Android 尚待完整验收**：真实学校数据读取与重新认证后续传已核对；首次干净账号的完整启动、真实断网/保存失败链路尚未逐项现场复现（本地回归覆盖相关行为）。Cloudflare 隔离环境写入与共享权限、系统通知实际投递/重启恢复、TalkBack 和两端 Release 帧时比较未完成。
 - **模拟器与全局代理**：Clash 等全局代理可能接管模拟器 NAT，使教务 HTTP 返回 `502`，而宿主机直连仍为 `200`；验收时需为学校域名/IP 配置直连，不能在 App 中硬编码个人代理。
 - **校园 Wi-Fi TLS 拦截**：2026-08-31 真机确认 `bjfu-wifi` 对 Supabase HTTPS 连接返回校园域名证书，Android 必须拒绝该连接；切换网络后社区恢复。不得通过关闭 TLS 主机名校验绕过，详见 `logs/2026-08-31-android-campus-wifi-tls-interception.md`。
 - **身份绑定强度**：教务身份由已修改的客户端提交，服务端无法独立证明来源；高价值权益需要可信服务端验证。

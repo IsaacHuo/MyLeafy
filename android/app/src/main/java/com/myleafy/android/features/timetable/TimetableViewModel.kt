@@ -111,7 +111,7 @@ class TimetableViewModel(
     fun consumeWeekNavigation(request: Pair<Int, Int>) {
         _weekNavigation.compareAndSet(request, null)
     }
-    private fun navigateWeek(week: Int) { _weekNavigation.value = week to ((_weekNavigation.value?.second ?: 0) + 1) }
+    fun navigateWeek(week: Int) { _weekNavigation.value = week to ((_weekNavigation.value?.second ?: 0) + 1) }
     private val _syncState = MutableStateFlow<TimetableSyncState>(TimetableSyncState.Idle)
     val syncState: StateFlow<TimetableSyncState> = _syncState.asStateFlow()
     private val _scheduleMutationState = MutableStateFlow<ScheduleMutationState>(ScheduleMutationState.Idle)

@@ -143,10 +143,9 @@ internal fun CampusDashboard(
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 领域顺序固定；只有北林提供周末出行内容，其他身份不显示这一项，
-    // 避免出现“通用入口却在推荐北林周边”的内容错配。
     val domains = remember(campusId) { CampusDomain.entries.filter { it.isAvailableFor(campusId) } }
     var selectedDomain by rememberSaveable { androidx.compose.runtime.mutableStateOf(CampusDomain.Teaching) }
+    val listStates = CampusDomain.entries.associateWith { androidx.compose.foundation.lazy.rememberLazyListState() }
     LaunchedEffect(domains) {
         if (selectedDomain !in domains) selectedDomain = domains.first()
     }
@@ -165,6 +164,7 @@ internal fun CampusDashboard(
                 )
                 CampusDomainContent(
                     domain = selectedDomain,
+                    listState = listStates.getValue(selectedDomain),
                     syncState = syncState,
                     campusId = campusId,
                     onRetrySync = onRetrySync,
@@ -185,6 +185,7 @@ internal fun CampusDashboard(
                 )
                 CampusDomainContent(
                     domain = selectedDomain,
+                    listState = listStates.getValue(selectedDomain),
                     syncState = syncState,
                     campusId = campusId,
                     onRetrySync = onRetrySync,
@@ -205,10 +206,9 @@ private enum class CampusDomain(val label: String, val supportingText: String) {
     SelfStudy("自习安排", "查询当前可用的学习地点"),
     Sports("体育相关", "长跑、体测与场馆信息"),
     Medical("医疗事项", "政策、报销指引与本机台账"),
-    Ratings("评价相关", "评教、评课与评菜"),
-    Weekend("周末去哪", "北京周边周末出行推荐");
+    Ratings("评价相关", "评教、评课与评菜");
 
-    /** 周末出行是北林专属内容，其他校园入口不展示。 */
+    /** 学校服务按当前身份的适用范围展示。 */
     fun isAvailableFor(campusId: CampusID?): Boolean =
         campusId == CampusID.bjfu || this == Teaching || this == Sports
 }
@@ -268,6 +268,7 @@ private fun CampusDomainSidebar(
 @Composable
 private fun CampusDomainContent(
     domain: CampusDomain,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     syncState: CampusSyncState,
     campusId: CampusID?,
     onRetrySync: () -> Unit,
@@ -278,12 +279,17 @@ private fun CampusDomainContent(
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (domain == CampusDomain.Weekend) {
-        WeekendTravelSection(modifier = modifier)
+    if (domain == CampusDomain.Medical) {
+        MedicalScreen(onBack = {}, embedded = true, modifier = modifier, available = campusId == CampusID.bjfu)
+        return
+    }
+    if (domain == CampusDomain.Ratings) {
+        CatalogRatingsScreen(onBack = {}, embedded = true, modifier = modifier, available = campusId == CampusID.bjfu)
         return
     }
     val context = LocalContext.current
     LazyColumn(
+        state = listState,
         modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth),
         contentPadding = PaddingValues(
             start = LeafySpacing.page,
@@ -435,26 +441,7 @@ private fun CampusDomainContent(
                 }
             }
         }
-        if (domain == CampusDomain.Medical) {
-            item {
-                CampusToolRow(
-                    title = "医疗政策与报销台账",
-                    description = "按就诊情景查看材料，并在本机管理报销记录",
-                    icon = Icons.Outlined.LocalHospital,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_MEDICAL) },
-                )
-            }
-        }
-        if (domain == CampusDomain.Ratings) {
-            item {
-                CampusToolRow(
-                    title = "评教、评课、评菜",
-                    description = "需要社区身份与校园评价服务支持",
-                    icon = Icons.Outlined.RateReview,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_RATINGS) },
-                )
-            }
-        }
+
     }
 }
 

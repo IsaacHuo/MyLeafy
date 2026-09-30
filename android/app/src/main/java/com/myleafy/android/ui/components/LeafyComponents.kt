@@ -138,8 +138,17 @@ fun LeafySecondaryScaffold(
     actions: @Composable RowScope.() -> Unit = {},
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
     snackbarHost: @Composable () -> Unit = {},
+    embedded: Boolean = false,
     content: @Composable (Modifier) -> Unit,
 ) {
+    if (embedded) {
+        Column(modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, content = actions)
+            content(Modifier.weight(1f).fillMaxWidth())
+            snackbarHost()
+        }
+        return
+    }
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.leafySurfaces.page,

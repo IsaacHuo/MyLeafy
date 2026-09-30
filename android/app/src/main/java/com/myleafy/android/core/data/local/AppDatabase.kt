@@ -16,6 +16,9 @@ import androidx.room.TypeConverters
 @Database(
     entities = [
         CourseEntity::class,
+        CourseNoteEntity::class,
+        CourseReminderEntity::class,
+        AcademicSyncCheckpoint::class,
         GradeEntity::class,
         GradeRankingEntity::class,
         GradeSummaryEntity::class,
@@ -33,11 +36,13 @@ import androidx.room.TypeConverters
         ComprehensiveQualityRecordEntity::class,
         AcademicDocumentEntity::class,
     ],
-    version = 7,
+    version = 8,
+    autoMigrations = [androidx.room.AutoMigration(from = 7, to = 8)],
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun timetablePersonalDao(): TimetablePersonalDao
     abstract fun courseDao(): CourseDao
     abstract fun gradeDao(): GradeDao
     abstract fun gradeRankingDao(): GradeRankingDao

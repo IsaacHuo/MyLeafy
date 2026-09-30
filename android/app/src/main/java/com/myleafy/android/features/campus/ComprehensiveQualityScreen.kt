@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -220,7 +221,7 @@ fun ComprehensiveQualityScreen(
             }
             item {
                 Text("选择学院", style = MaterialTheme.typography.titleSmall)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+                LazyRow(modifier = Modifier.testTag("comprehensive-colleges"), horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                     items(ComprehensiveQualityRuleCatalog.participatingCollegeNames) { name ->
                         FilterChip(
                             selected = name == collegeName,

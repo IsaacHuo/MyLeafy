@@ -275,6 +275,7 @@ class ScheduleReconcileWorker(context: Context, params: WorkerParameters) : Coro
         val container = (applicationContext as MyLeafyApplication).container
         container.restoreIdentity()
         container.scheduleNotificationScheduler.reconcile()
+        container.courseReminderScheduler.reconcile()
         Result.success()
     }.getOrElse { Result.retry() }
 }

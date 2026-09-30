@@ -17,7 +17,6 @@ import com.myleafy.android.features.schedule.MemoEditorSheet
 import com.myleafy.android.features.schedule.ScheduleEventDraft
 import com.myleafy.android.features.schedule.ScheduleEventEditorSheet
 import com.myleafy.android.features.schedule.ScheduleMutationState
-import com.myleafy.android.features.timetable.presentation.CourseDetailsDialog
 import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
 import java.time.LocalDate
 import java.time.LocalTime
@@ -43,21 +42,6 @@ import org.robolectric.annotation.GraphicsMode
 class OverlayScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
-
-    @Test
-    fun courseDetailsDialogLongNameLight() {
-        composeRule.setContent {
-            LeafyScreenshotTheme {
-                CourseDetailsDialog(
-                    course = courseEntity(courseName = ScreenshotData.LONG_COURSE_TITLE),
-                    onDismiss = {},
-                )
-            }
-        }
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText(ScreenshotData.LONG_COURSE_TITLE).assertIsDisplayed()
-        capture()
-    }
 
     @Test
     fun examDetailsDialogDarkFontScale130() {

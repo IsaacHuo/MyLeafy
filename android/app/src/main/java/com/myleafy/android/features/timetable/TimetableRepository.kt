@@ -29,6 +29,8 @@ class LiveTimetableRepository(
     private val client: SchoolNetworkClient,
     private val courseDao: CourseDao,
     private val activeAppScopeStore: ActiveAppScopeStore,
+    private val persist: suspend (String, String, List<CourseEntity>) -> Unit = courseDao::replaceForSemester,
+    private val onRefreshed: suspend () -> Unit = {},
 ) : TimetableRepository {
 
     override fun coursesForSemester(semesterId: String): Flow<List<CourseEntity>> =
@@ -69,7 +71,8 @@ class LiveTimetableRepository(
         }
         if (activeAppScopeStore.current.scopeKey != scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
         onStage(AcademicStage.SAVING_TIMETABLE)
-        courseDao.replaceForSemester(scopeKey, semesterId, entities)
+        persist(scopeKey, semesterId, entities)
+        onRefreshed()
         return TimetableRefreshResult(entities.map { it.courseName }.distinct().size, entities.size,
             previous.sortedBy { it.id } != entities.sortedBy { it.id })
     }

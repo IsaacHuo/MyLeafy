@@ -50,6 +50,9 @@ class TimetablePagerTest {
             }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("timetable-photo").fetchSemanticsNodes().size == 1 }
             val bounds = compose.onNodeWithTag("timetable-photo").fetchSemanticsNode().boundsInRoot
+            val axisBounds = compose.onNodeWithTag("timetable-fixed-axis").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithTag("timetable-month").assertTextEquals("9月")
+            (1..13).forEach { compose.onNodeWithTag("timetable-axis-end-$it", useUnmergedTree = true).assertIsDisplayed() }
             val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
             val recording = if (InstrumentationRegistry.getArguments().getString("recordReview") == "true") {
                 android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand("mkdir -p /data/local/tmp/myleafy-review")).use { it.readBytes() }
@@ -60,6 +63,7 @@ class TimetablePagerTest {
                 compose.waitForIdle()
                 compose.onAllNodesWithTag("timetable-photo").assertCountEquals(1)
                 assertEquals(bounds, compose.onNodeWithTag("timetable-photo").fetchSemanticsNode().boundsInRoot)
+                assertEquals(axisBounds, compose.onNodeWithTag("timetable-fixed-axis").fetchSemanticsNode().boundsInRoot)
                 compose.onNodeWithTag("timetable-pager").performTouchInput { swipeRight() }
                 compose.waitForIdle()
                 assertEquals(1, selected)

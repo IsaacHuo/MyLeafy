@@ -2,6 +2,9 @@ package com.myleafy.android.core.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.withTransaction
+import com.myleafy.android.core.data.local.stableCourseKey
+import kotlinx.coroutines.flow.collectLatest
 import com.myleafy.android.core.data.local.AppDatabase
 import com.myleafy.android.core.data.local.CourseDao
 import com.myleafy.android.core.campus.ActiveAppScopeStore
@@ -67,10 +70,9 @@ class AppContainer(context: Context) {
         AppDatabase::class.java,
         "myleafy.db",
     )
-        // The new Cloudflare Android release deliberately starts a new local schema.
-        .fallbackToDestructiveMigration(dropAllTables = true)
         .build()
 
+    val timetablePersonalDao get() = database.timetablePersonalDao()
     val courseDao: CourseDao get() = database.courseDao()
     val honorRecordDao: com.myleafy.android.core.data.local.HonorRecordDao get() = database.honorRecordDao()
     val comprehensiveQualityDao: com.myleafy.android.core.data.local.ComprehensiveQualityDao
@@ -130,7 +132,18 @@ class AppContainer(context: Context) {
     )
 
     val timetableRepository: TimetableRepository =
-        LiveTimetableRepository(schoolNetworkClient, database.courseDao(), activeAppScopeStore)
+        LiveTimetableRepository(schoolNetworkClient, database.courseDao(), activeAppScopeStore,
+            persist = { scope, semester, courses ->
+                database.withTransaction {
+                    val personal = com.myleafy.android.features.timetable.TimetablePersonalRefresh.prepare(
+                        database.courseDao().coursesForSemester(scope, semester).first(), courses,
+                        timetablePersonalDao.notes(scope, semester).first(), timetablePersonalDao.reminders(scope, semester).first())
+                    database.courseDao().replaceForSemester(scope, semester, courses)
+                    personal.notes.forEach { timetablePersonalDao.save(it) }
+                    personal.reminders.forEach { timetablePersonalDao.save(it) }
+                    timetablePersonalDao.checkpoint(com.myleafy.android.core.data.local.AcademicSyncCheckpoint(scope, semester, "timetable", System.currentTimeMillis()))
+                }
+            }, onRefreshed = { courseReminderScheduler.reconcile() })
     val scheduleRepository: ScheduleRepository =
         RoomScheduleRepository(database.scheduleMemoDao(), database.scheduleEventDao(), activeAppScopeStore)
     val scheduleNotificationRepository = ScheduleNotificationRepository(
@@ -161,6 +174,8 @@ class AppContainer(context: Context) {
         scheduleRepository,
     )
 
+    val courseReminderScheduler by lazy { com.myleafy.android.features.timetable.CourseReminderScheduler(applicationContext, activeAppScopeStore, timetablePersonalDao, timetableRepository) }
+
     // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化后台会话。
     private var cachedCommunityService: CommunityService? = null
     private var backendScopeKey: String? = null
@@ -185,7 +200,9 @@ class AppContainer(context: Context) {
         LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
     val communityRepository: CommunityRepository = liveCommunityRepository
     private val backendLifecycle = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
+    val initialAcademicSync = com.myleafy.android.features.campus.InitialAcademicSync(activeAppScopeStore, timetablePersonalDao, timetableRepository, academicRepository, backendLifecycle)
     init {
+        backendLifecycle.launch { activeAppScopeStore.scope.collectLatest { courseReminderScheduler.reconcile() } }
         backendLifecycle.launch {
             activeAppScopeStore.scope.collect { scope ->
                 synchronized(this@AppContainer) {

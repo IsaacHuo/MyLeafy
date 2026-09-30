@@ -149,6 +149,14 @@ object ComprehensiveQualityRuleCatalog {
         "马克思主义学院",
     )
 
+    private val commonComponentTemplate = listOf(
+        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.VOLUNTEER_SERVICE, 2.0, "通常对应志愿服务、社会活动、荣誉和文体活动等条目，具体口径以学院当年细则为准。"),
+        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.INTERNATIONAL_INTERNSHIP, 0.5, "通常对应国际组织实习或任职经历，证明材料和时长档位以学院当年细则为准。"),
+        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.RESEARCH_ACHIEVEMENT, 1.0, "通常对应论文著作、科研项目、专利和软著等成果，认定范围以学院当年细则为准。"),
+        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.COMPETITION_AWARD, 1.5, "通常对应竞赛获奖、等级考试、文体竞赛等项目，认定目录以学院当年细则为准。"),
+    )
+
+
     val allRules: List<ComprehensiveQualityCollegeRule> =
         listOf(
             readyRule("林学院", "北京林业大学林学院推荐2026届优秀应届本科毕业生免试攻读研究生工作方案", "https://lxy.bjfu.edu.cn/rcpy/bkspy/aeb8e3cab7c44a54b9417959459644e2.htm", "适用于林学院 2026 届普通推免生测算。", "2025-09-09"),
@@ -178,13 +186,6 @@ object ComprehensiveQualityRuleCatalog {
 
     private const val readyCalculationNote =
         "综合成绩 = 全学程学分积标准分 * 95% + 四项综素标准分按 2%、0.5%、1%、1.5%折算；未填满四项时不出最终综合成绩。"
-
-    private val commonComponentTemplate = listOf(
-        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.VOLUNTEER_SERVICE, 2.0, "通常对应志愿服务、社会活动、荣誉和文体活动等条目，具体口径以学院当年细则为准。"),
-        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.INTERNATIONAL_INTERNSHIP, 0.5, "通常对应国际组织实习或任职经历，证明材料和时长档位以学院当年细则为准。"),
-        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.RESEARCH_ACHIEVEMENT, 1.0, "通常对应论文著作、科研项目、专利和软著等成果，认定范围以学院当年细则为准。"),
-        ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.COMPETITION_AWARD, 1.5, "通常对应竞赛获奖、等级考试、文体竞赛等项目，认定目录以学院当年细则为准。"),
-    )
 
     private fun readyRule(
         collegeName: String,

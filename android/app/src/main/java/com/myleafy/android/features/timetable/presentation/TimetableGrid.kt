@@ -100,10 +100,11 @@ fun TimetableGrid(
     today: LocalDate = LocalDate.now(),
     currentTime: LocalTime = LocalTime.now(),
     showWeekends: Boolean = true,
+    showAxis: Boolean = true,
     background: TimetableBackgroundSettings = TimetableBackgroundSettings(),
 ) {
     val headerHeight = timetableHeaderHeight()
-    val axisWidth = timetableAxisWidth()
+    val axisWidth = if (showAxis) timetableAxisWidth() else 0.dp
     val viewConfiguration = LocalViewConfiguration.current
     val gridViewConfiguration = remember(viewConfiguration) {
         object : ViewConfiguration by viewConfiguration {
@@ -149,7 +150,7 @@ fun TimetableGrid(
 
 /** 按系统字体的实际字宽分配时间轴，保留节次、时间间隔，避免挤占课程列。 */
 @Composable
-private fun timetableAxisWidth(): Dp {
+internal fun timetableAxisWidth(): Dp {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val periodWidth = (1..PeriodCount).maxOf {
@@ -168,7 +169,7 @@ private fun timetableAxisWidth(): Dp {
  * 课表其余高度仍按 13 节压缩，不抵消 fontScale。
  */
 @Composable
-private fun timetableHeaderHeight(): Dp {
+internal fun timetableHeaderHeight(): Dp {
     val density = LocalDensity.current
     val weekdayHeight = with(density) { MaterialTheme.typography.labelSmall.lineHeight.toDp() }
     return weekdayHeight + timetableDateIndicatorSize() + LeafySpacing.tiny * 2
@@ -286,7 +287,7 @@ private fun TimetableGridLayout(
                 )
             }
             for (period in 1..PeriodCount) {
-                PeriodAxis(
+                if (axisWidth > 0.dp) PeriodAxis(
                     period = period,
                     rowHeight = periodRowHeight,
                     modifier = Modifier.layoutId(GridSlot.Axis(period)).then(
@@ -390,6 +391,30 @@ private fun TimetableGridLayout(
                     }
                 }
                 placeable.placeRelative(x, y)
+            }
+        }
+    }
+}
+
+/** One axis shared by every week; geometry matches TimetableGridLayout pixel rounding. */
+@Composable
+internal fun TimetableFixedAxis(month: Int, background: TimetableBackgroundSettings, modifier: Modifier = Modifier) {
+    val header = timetableHeaderHeight()
+    BoxWithConstraints(modifier.width(timetableAxisWidth()).testTag("timetable-fixed-axis")) {
+        val row = ((maxHeight - header).coerceAtLeast(LeafyTimetableTokens.minimumPeriodRowHeight * PeriodCount) / PeriodCount)
+            .coerceAtMost(LeafyTimetableTokens.maximumPeriodRowHeight)
+        Layout(content = {
+            Box(Modifier.testTag("timetable-month").semantics(mergeDescendants = true) {}, contentAlignment = Alignment.Center) {
+                Text("${month}月", style = LeafyTimetableType.axisTime)
+            }
+            for (period in 1..PeriodCount) PeriodAxis(period, row,
+                Modifier.then(if (background.enabled) Modifier.background(MaterialTheme.leafySurfaces.page.copy(alpha = 0.9f)) else Modifier))
+        }) { children, constraints ->
+            val headerPx = header.roundToPx()
+            val rowPx = row.roundToPx()
+            val measured = children.mapIndexed { i, child -> child.measure(Constraints.fixed(constraints.maxWidth, if (i == 0) headerPx else rowPx)) }
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                measured.forEachIndexed { i, child -> child.placeRelative(0, if (i == 0) 0 else headerPx + (i - 1) * rowPx) }
             }
         }
     }

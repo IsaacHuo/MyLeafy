@@ -646,9 +646,9 @@ class JsoupHtmlParser : HtmlParser {
     override fun parseTeachingPlan(html: String): List<ParsedTeachingPlanSection> {
         val document = Jsoup.parse(html)
         for (table in candidateDataTables(document)) {
-            val rows = table.select("tr")
+            val rows = expandedTableRows(table)
             if (rows.isEmpty()) continue
-            val headers = rows[0].select("th,td").map { normalizedTableCellText(it) }
+            val headers = rows[0]
             val termIndex = headers.indexOfFirst { it.contains("开课学期") || it == "学期" }
             val nameIndex = headers.indexOfFirst { it.contains("课程名称") }
             val creditIndex = headers.indexOfFirst { it.contains("学分") }
@@ -668,7 +668,7 @@ class JsoupHtmlParser : HtmlParser {
             var currentTerm = ""
             var parsedAny = false
             for (row in rows.drop(1)) {
-                val cells = row.select("td").map { normalizedTableCellText(it) }
+                val cells = row
                 if (cells.isEmpty()) continue
                 val rowText = cells.joinToString("")
                 if (rowText.contains("暂无数据") || rowText.contains("无记录")) continue
@@ -712,12 +712,10 @@ class JsoupHtmlParser : HtmlParser {
             throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "培养方案明细")
         }
         val rawTables = tables
-            .filter { it.select("table").isEmpty() }
+            .filter { it.select("table").size == 1 }
             .map { table ->
                 ParsedTrainingProgramTable(
-                    table.select("tr").map { row ->
-                        row.select("th,td").map { normalizedTableCellText(it) }
-                    }.filter { it.any(String::isNotBlank) },
+                    expandedTableRows(table).filter { it.any(String::isNotBlank) },
                 )
             }
             .filter { it.rows.isNotEmpty() }
@@ -783,38 +781,74 @@ class JsoupHtmlParser : HtmlParser {
         return result
     }
 
-    private fun parseTrainingCreditRequirements(
-        tables: List<Element>,
-    ): List<ParsedGraduationCreditRequirement> {
+    /** Resolve merged cells before reading a column; never treat the first number as credits. */
+    private fun expandedTableRows(table: Element): List<List<String>> {
+        val spans = mutableMapOf<Int, Pair<String, Int>>()
+        return table.select("tr").filter { it.parents().firstOrNull { p -> p.tagName() == "table" } === table }.map { row ->
+            val values = mutableMapOf<Int, String>()
+            spans.toMap().forEach { (column, span) ->
+                values[column] = span.first
+                if (span.second <= 1) spans.remove(column) else spans[column] = span.first to span.second - 1
+            }
+            var column = 0
+            row.children().filter { it.tagName() in listOf("td", "th") }.forEach { cell ->
+                while (column in values) column++
+                val text = normalizedTableCellText(cell)
+                val width = (cell.attr("colspan").toIntOrNull() ?: 1).coerceIn(1, 100)
+                val height = (cell.attr("rowspan").toIntOrNull() ?: 1).coerceIn(1, 1000)
+                repeat(width) {
+                    values[column] = text
+                    if (height > 1) spans[column] = text to height - 1
+                    column++
+                }
+            }
+            (0..(values.keys.maxOrNull() ?: -1)).map { values[it].orEmpty() }
+        }
+    }
+
+    private fun parseTrainingCreditRequirements(tables: List<Element>): List<ParsedGraduationCreditRequirement> {
         val requirements = mutableListOf<ParsedGraduationCreditRequirement>()
         for (table in tables) {
-            for (row in table.select("tr")) {
-                val cells = row.select("th,td").map { normalizedTableCellText(it) }
-                val labelCell = cells.firstOrNull { it.isNotBlank() } ?: continue
-                val otherCells = cells.filter { it != labelCell }
-                val isTotal = labelCell.contains("毕业生应取得总学分") ||
-                    labelCell.contains("应取得总学分")
-                if (isTotal) {
-                    val credits = otherCells.firstNotNullOfOrNull { parseCredit(it) } ?: continue
-                    requirements.add(
-                        ParsedGraduationCreditRequirement(
-                            label = "毕业生应取得总学分",
-                            credits = credits,
-                            isTotal = true,
-                        ),
-                    )
-                    continue
+            val rows = expandedTableRows(table)
+            val totalLabel: (String) -> Boolean = { it.replace(" ", "").let { label -> label.contains("应取得总学分") || label.contains("毕业总学分") } }
+            val footerStart = rows.indexOfFirst { row -> row.any(totalLabel) }
+            if (footerStart < 0) continue
+            // The school's course catalogue has a merged-cell requirements footer. Its columns
+            // differ from the catalogue header: only read adjacent label/value runs below the total.
+            if (rows.take(4).any { row -> row.any { it.contains("课程编号") || it.contains("课程名称") || it.contains("课程代码") } }) {
+                for (row in rows.drop(footerStart)) {
+                    val runs = row.filter(String::isNotBlank).fold(mutableListOf<String>()) { result, cell ->
+                        if (result.lastOrNull() != cell) result += cell
+                        result
+                    }
+                    for (index in 0 until runs.lastIndex) {
+                        val label = runs[index].replace(" ", "")
+                        if (!totalLabel(label) && !(label.endsWith("学分") && trainingCreditLabels.any { label.contains(it) })) continue
+                        val raw = runs[index + 1].trim()
+                        if (!raw.matches(Regex("[0-9]+(?:\\.[0-9]+)?"))) continue
+                        val credits = raw.toDoubleOrNull()?.takeIf { it in 0.0..500.0 } ?: continue
+                        requirements += ParsedGraduationCreditRequirement(if (totalLabel(label)) "毕业生应取得总学分" else cleanTrainingCreditLabel(label), credits, totalLabel(label))
+                    }
                 }
-                val label = trainingCreditLabels.firstOrNull { labelCell.contains(it) } ?: continue
-                if (labelCell.contains("学时") || labelCell.contains("占比")) continue
-                if (labelCell.length >= 45) continue
-                val credits = otherCells.firstNotNullOfOrNull { parseCredit(it) } ?: continue
-                requirements.add(
-                    ParsedGraduationCreditRequirement(
-                        label = cleanTrainingCreditLabel(label),
-                        credits = credits,
-                        isTotal = false,
-                    ),
+                continue
+            }
+            val header = rows.firstOrNull { row -> row.any { it == "学分" || it.contains("学分要求") || it.contains("最低学分") } }
+            val creditColumn = header?.indexOfFirst { it == "学分" || it.contains("学分要求") || it.contains("最低学分") } ?: -1
+            for (row in rows) {
+                val labelIndex = row.indexOfFirst { text -> totalLabel(text) || trainingCreditLabels.any { text.contains(it) } }
+                if (labelIndex < 0) continue
+                val label = row[labelIndex]
+                if (label.length >= 45 || label.contains("学时") || label.contains("占比")) continue
+                val distinct = row.distinct().filter(String::isNotBlank)
+                val value = if (creditColumn >= 0 && creditColumn != labelIndex) row.getOrNull(creditColumn)
+                    else if (distinct.size == 2 && distinct.first() == label) distinct.last() else null
+                // Credits are a whole cell, never a number extracted from a code or a prose sentence.
+                val raw = value?.removeSuffix("学分")?.trim() ?: continue
+                if (!raw.matches(Regex("[0-9]+(?:\\.[0-9]+)?"))) continue
+                val credits = raw.toDoubleOrNull()?.takeIf { it in 0.0..500.0 } ?: continue
+                requirements += ParsedGraduationCreditRequirement(
+                    label = if (totalLabel(label)) "毕业生应取得总学分" else cleanTrainingCreditLabel(label),
+                    credits = credits, isTotal = totalLabel(label),
                 )
             }
         }

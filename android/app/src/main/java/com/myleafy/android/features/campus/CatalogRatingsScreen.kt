@@ -50,6 +50,9 @@ import com.myleafy.android.ui.theme.leafySurfaces
 @Composable
 fun CatalogRatingsScreen(
     onBack: () -> Unit,
+    embedded: Boolean = false,
+    initialSearch: String = "",
+    modifier: Modifier = Modifier,
     available: Boolean,
     viewModel: CatalogRatingsViewModel = viewModel(
         factory = appViewModelFactory { CatalogRatingsViewModel(it.catalogRatingRepository) },
@@ -57,9 +60,11 @@ fun CatalogRatingsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var suggestionVisible by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(available) { if (available) viewModel.refresh() }
+    LaunchedEffect(available, initialSearch) { if (available) viewModel.initialize(initialSearch) }
     LeafySecondaryScaffold(
         title = "评价相关",
+        embedded = embedded,
+        modifier = modifier,
         onBack = onBack,
         actions = {
             if (available) LeafyActionIconButton(onClick = { suggestionVisible = true }) {
@@ -71,7 +76,7 @@ fun CatalogRatingsScreen(
             Box(modifier = contentModifier, contentAlignment = Alignment.Center) {
                 LeafyEmptyState(
                     title = "评价服务暂不可用",
-                    message = "需要已登录、已完善资料的社区身份，且后端 catalog_ratings capability 可用。",
+                    message = "登录并完善个人资料后，可查看和参与评价。",
                     icon = Icons.Outlined.StarBorder,
                 )
             }

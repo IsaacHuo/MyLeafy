@@ -28,6 +28,7 @@ fun MyLeafyApp(deepLinkIntent: Intent? = null) {
         error = null
         try {
             application.container.restoreIdentity()
+            application.container.initialAcademicSync.start()
             ready = true
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -62,10 +63,20 @@ fun MyLeafyApp(deepLinkIntent: Intent? = null) {
         activeAppScopeStore = application.container.activeAppScopeStore,
     )
 
+    LaunchedEffect(deepLinkIntent) {
+        if (deepLinkIntent?.getBooleanExtra("courseReminder", false) == true) {
+            val uri = android.net.Uri.Builder().scheme("myleafy-internal").authority("course")
+            listOf("scope", "semester", "course").forEach { uri.appendQueryParameter(it, deepLinkIntent.getStringExtra(it)) }
+            uri.appendQueryParameter("week", deepLinkIntent.getIntExtra("week", 0).toString())
+            navController.navigate(com.myleafy.android.navigation.RootTab.TIMETABLE.route) { launchSingleTop = true }
+            navController.currentBackStackEntry?.savedStateHandle?.set("courseReminder", uri.build().toString())
+        }
+    }
+
     // 普通 Launcher Intent 没有 data，不应进入深链分发。把 effect 放在
     // NavHost 之后也确保导航图已经安装，避免冷启动时访问空 topGraph。
     LaunchedEffect(deepLinkIntent?.data) {
-        if (deepLinkIntent?.data != null) {
+        if (deepLinkIntent?.data != null && !deepLinkIntent.getBooleanExtra("courseReminder", false)) {
             navController.handleDeepLink(deepLinkIntent)
         }
     }

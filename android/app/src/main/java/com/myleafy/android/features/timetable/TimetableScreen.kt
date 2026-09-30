@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -57,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,6 +78,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.first
 import androidx.core.content.FileProvider
 import com.myleafy.android.core.data.local.CourseEntity
 import com.myleafy.android.core.data.local.ExamEntity
@@ -89,9 +92,11 @@ import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.domain.TimetableGridItemType
 import com.myleafy.android.features.timetable.domain.TimetableGridProjection
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
-import com.myleafy.android.features.timetable.presentation.CourseDetailsDialog
+import com.myleafy.android.features.timetable.presentation.CourseDetailSheet
+import com.myleafy.android.core.data.local.stableCourseKey
 import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
 import com.myleafy.android.features.timetable.presentation.TimetableBackground
+import com.myleafy.android.features.timetable.presentation.TimetableFixedAxis
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
 import com.myleafy.android.features.timetable.weather.WeatherCondition
 import com.myleafy.android.features.timetable.weather.WeatherUiState
@@ -120,6 +125,9 @@ import kotlin.math.roundToInt
 @Composable
 fun TimetableScreen(
     onShareClick: () -> Unit = {},
+    onTeacher: (String) -> Unit = {},
+    reminderRequest: String? = null,
+    onConsumeReminder: () -> Unit = {},
     onReauthenticate: () -> Unit = {},
     reauthenticated: Boolean = false,
     onConsumeReauthentication: () -> Unit = {},
@@ -150,6 +158,8 @@ fun TimetableScreen(
         if (reauthenticated) { onConsumeReauthentication(); viewModel.refresh() }
     }
     val context = LocalContext.current
+    val initialSync = (context.applicationContext as com.myleafy.android.MyLeafyApplication).container.initialAcademicSync
+    val initialSyncState by initialSync.state.collectAsStateWithLifecycle()
     val activity = context.findActivity()
     val snackbarHostState = remember { SnackbarHostState() }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -157,6 +167,8 @@ fun TimetableScreen(
         mutableStateOf<ScheduleEventDraft?>(null)
     }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
+    var detailWeek by rememberSaveable { mutableIntStateOf(1) }
+    var showPendingPersonalData by rememberSaveable { mutableStateOf(false) }
     var selectedExam by rememberSaveable { mutableStateOf<Int?>(null) }
     var showWeatherPermissionDialog by rememberSaveable { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -239,6 +251,9 @@ fun TimetableScreen(
                             Icon(Icons.Filled.MoreVert, contentDescription = "课表操作")
                         }
                         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("待关联备注与提醒") }, onClick = {
+                                menuExpanded = false; showPendingPersonalData = true
+                            })
                             DropdownMenuItem(
                                 text = { Text("回到本周") },
                                 leadingIcon = { Icon(Icons.Outlined.Today, contentDescription = null) },
@@ -256,7 +271,7 @@ fun TimetableScreen(
                                 },
                                 leadingIcon = { Icon(Icons.Outlined.CloudSync, contentDescription = null) },
                                 enabled = uiState is TimetableUiState.Loaded &&
-                                    syncState !is TimetableSyncState.Syncing,
+                                    syncState !is TimetableSyncState.Syncing && initialSyncState.running == null,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.refresh()
@@ -302,9 +317,12 @@ fun TimetableScreen(
             )
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
+                initialization = initialSyncState,
+                onRetryInitialization = { if (initialSyncState.needsAuthentication) onReauthenticate() else initialSync.retry() },
+                onDismissInitialization = initialSync::dismiss,
                 weekNavigation = weekNavigation,
                 onConsumeWeekNavigation = viewModel::consumeWeekNavigation,
-                canRefresh = identity.canSyncFromSchool,
+                canRefresh = identity.canSyncFromSchool && initialSyncState.running == null,
                 onReauthenticate = onReauthenticate,
                 syncState = syncState,
                 onRetrySync = viewModel::refresh,
@@ -312,7 +330,7 @@ fun TimetableScreen(
                 onEmptyCellClick = { date, period -> editorDraft = draftForCell(date, period) },
                 onItemClick = { item ->
                     when (item.type) {
-                        TimetableGridItemType.COURSE -> selectedCourse = item.sourceId
+                        TimetableGridItemType.COURSE -> { detailWeek = item.stableId.substringAfterLast(':').toIntOrNull() ?: state.selectedWeek; selectedCourse = item.sourceId }
                         TimetableGridItemType.EXAM -> selectedExam = item.sourceId.toIntOrNull()
                         TimetableGridItemType.SCHEDULE -> {
                             editorDraft = state.scheduleEvents.firstOrNull { it.id == item.sourceId }?.toDraft()
@@ -356,9 +374,31 @@ fun TimetableScreen(
     }
 
     val loaded = uiState as? TimetableUiState.Loaded
+    if (showPendingPersonalData) com.myleafy.android.features.timetable.presentation.PendingCoursePersonalSheet(onDismiss = { showPendingPersonalData = false })
+    var reminderError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(reminderRequest, loaded != null) {
+        if (reminderRequest != null && loaded != null) {
+            val uri = android.net.Uri.parse(reminderRequest)
+            val appScope = (context.applicationContext as com.myleafy.android.MyLeafyApplication).container.activeAppScopeStore.current
+            val week = uri.getQueryParameter("week")?.toIntOrNull()
+            // Read the committed copy: a running screen can briefly still hold its previous Room emission.
+            val course = (context.applicationContext as com.myleafy.android.MyLeafyApplication).container
+                .courseDao.coursesForSemester(appScope.scopeKey, SemesterConfig.currentSemesterId).first()
+                .firstOrNull { it.stableCourseKey() == uri.getQueryParameter("course") }
+            when {
+                uri.getQueryParameter("scope") != appScope.scopeKey -> reminderError = "提醒属于其他账号，请切换到对应账号后查看"
+                uri.getQueryParameter("semester") != SemesterConfig.currentSemesterId -> reminderError = "这条提醒所属学期已结束"
+                course == null || week == null || week !in course.weeks -> reminderError = "这次课程安排已变更或移除"
+                else -> { detailWeek = week; viewModel.navigateWeek(week); selectedCourse = course.id }
+            }
+            onConsumeReminder()
+        }
+    }
+    reminderError?.let { message -> LeafyAlertDialog(onDismissRequest = { reminderError = null }, title = { Text("课程提醒") }, text = { Text(message) }, confirmButton = { LeafyTextButton(onClick = { reminderError = null }) { Text("完成") } }) }
     selectedCourse?.let { id ->
         loaded?.courses?.firstOrNull { it.id == id }?.let { course ->
-            CourseDetailsDialog(course = course, onDismiss = { selectedCourse = null })
+            CourseDetailSheet(course = course, week = detailWeek, courses = loaded.courses,
+                onTeacher = { selectedCourse = null; onTeacher(it) }, onDismiss = { selectedCourse = null })
         }
     }
     selectedExam?.let { id ->
@@ -458,6 +498,9 @@ internal fun TimetableScreenContent(
     onItemClick: (TimetableGridItem) -> Unit,
     onConsumeSync: () -> Unit,
     modifier: Modifier = Modifier,
+    initialization: com.myleafy.android.features.campus.InitialSyncState = com.myleafy.android.features.campus.InitialSyncState(),
+    onRetryInitialization: () -> Unit = {},
+    onDismissInitialization: () -> Unit = {},
     weekNavigation: Pair<Int, Int>? = null,
     onConsumeWeekNavigation: (Pair<Int, Int>) -> Unit = {},
     canRefresh: Boolean = false,
@@ -498,26 +541,23 @@ internal fun TimetableScreenContent(
     )
 
     val pullRefresh = rememberLeafyPullRefreshState(syncState is TimetableSyncState.Syncing, onRetrySync)
-    val visiblePage = state.pages[pagerState.currentPage]
+    val visiblePage = state.pages[pagerState.settledPage]
     Box(modifier.fillMaxSize()
         .leafyPullRefresh(pullRefresh, enabled = canRefresh && syncState is TimetableSyncState.Idle)
         .scrollable(rememberScrollableState { 0f }, Orientation.Vertical, enabled = canRefresh)) {
     TimetableBackground(state.background, Modifier.matchParentSize())
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
+        if (initialization.visible) com.myleafy.android.ui.components.LeafyStatusBanner(
+            message = initialization.message, isError = initialization.failures.isNotEmpty(),
+            actionLabel = if (initialization.running != null) null else if (initialization.needsAuthentication) "重新登录" else if (initialization.failures.isNotEmpty()) "重试" else null,
+            onAction = if (initialization.running == null && initialization.failures.isNotEmpty()) onRetryInitialization else null,
+            onDismiss = if (initialization.running == null) onDismissInitialization else null,
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(
-                onClick = {
-                    coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
-                },
-                enabled = pagerState.currentPage > 0,
-                modifier = Modifier.size(LeafyComponentSize.timetableNavigation),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "上一周")
-            }
             // 周次与日期同一行：左侧“本周 · 第 N 周”，右侧日期范围，
             // 为课表让出纵向空间。两端各占一半宽度，字体放大时各自省略而不互相挤压。
             Row(
@@ -546,26 +586,20 @@ internal fun TimetableScreenContent(
                     modifier = Modifier.weight(1f),
                 )
             }
-            IconButton(
-                onClick = {
-                    coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                },
-                enabled = pagerState.currentPage < state.supportedWeeks - 1,
-                modifier = Modifier.size(LeafyComponentSize.timetableNavigation),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "下一周")
-            }
+
         }
         if (pullRefresh.progress > 0f) {
             LinearProgressIndicator(progress = { pullRefresh.progress }, modifier = Modifier.fillMaxWidth())
             Text(if (pullRefresh.progress >= 1f) "松开刷新" else "下拉刷新", style = MaterialTheme.typography.labelSmall)
         }
         TimetableSyncDialog(syncState, onRetrySync, onConsumeSync, onReauthenticate)
+        Row(Modifier.fillMaxWidth().weight(1f)) {
+        TimetableFixedAxis(visiblePage.weekRange.startDate.monthValue, state.background, Modifier.fillMaxHeight())
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
-                .fillMaxWidth()
                 .weight(1f)
+                .fillMaxHeight()
                 .clipToBounds().testTag("timetable-pager"),
             key = { state.pages[it].week },
         ) { page ->
@@ -577,10 +611,12 @@ internal fun TimetableScreenContent(
                 today = LocalDate.now(TimetableGridProjection.campusZone),
                 currentTime = LocalTime.now(TimetableGridProjection.campusZone),
                 showWeekends = state.showWeekends,
+                showAxis = false,
                 background = state.background,
             )
         }
     }
+}
 }
 
 }

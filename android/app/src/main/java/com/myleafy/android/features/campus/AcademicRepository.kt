@@ -38,6 +38,7 @@ data class AcademicRefreshResult(
     val rankings: Int?,
     val exams: Int?,
     val failures: List<String>,
+    val needsAuthentication: Boolean = false,
 ) {
     val hasAnySuccess: Boolean get() = grades != null || rankings != null || exams != null
 }
@@ -79,12 +80,14 @@ class LiveAcademicRepository(
             rankings = grades.rankings,
             exams = exams.exams,
             failures = grades.failures + exams.failures,
+            needsAuthentication = grades.needsAuthentication || exams.needsAuthentication,
         )
     }
 
     override suspend fun refreshGradesAndRankings(): AcademicRefreshResult {
         val scopeKey = activeAppScopeStore.current.scopeKey
         val failures = mutableListOf<String>()
+        var needsAuthentication = false
         var gradeCount: Int? = null
         var rankingCount: Int? = null
 
@@ -137,19 +140,21 @@ class LiveAcademicRepository(
                     )
                 }
             }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; failures += "成绩与排名：${it.message ?: "拉取失败"}" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.SessionExpired; failures += "成绩与排名：${it.message ?: "拉取失败"}" }
 
         return AcademicRefreshResult(
             grades = gradeCount,
             rankings = rankingCount,
             exams = null,
             failures = failures,
+            needsAuthentication = needsAuthentication,
         )
     }
 
     override suspend fun refreshExams(semesterId: String): AcademicRefreshResult {
         val scopeKey = activeAppScopeStore.current.scopeKey
         val failures = mutableListOf<String>()
+        var needsAuthentication = false
         var examCount: Int? = null
 
         runCatching { client.fetchExams(semesterId) }
@@ -171,13 +176,14 @@ class LiveAcademicRepository(
                 )
                 examCount = exams.size
             }
-            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; failures += "考试安排：${it.message ?: "拉取失败"}" }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.SessionExpired; failures += "考试安排：${it.message ?: "拉取失败"}" }
 
         return AcademicRefreshResult(
             grades = null,
             rankings = null,
             exams = examCount,
             failures = failures,
+            needsAuthentication = needsAuthentication,
         )
     }
     override suspend fun refreshRankings(): AcademicRefreshResult {

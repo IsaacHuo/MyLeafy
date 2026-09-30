@@ -45,6 +45,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -402,12 +404,11 @@ internal fun ScheduleContent(
         )
     }
     if (section != ScheduleSection.REPORTS) {
-        androidx.compose.material3.ExtendedFloatingActionButton(
+        androidx.compose.material3.FloatingActionButton(
             onClick = if (section == ScheduleSection.MEMOS) onNewMemo else onNewEvent,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(LeafySpacing.card).testTag("schedule-create"),
-            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text(if (section == ScheduleSection.MEMOS) "新建随记" else "添加个人日程") },
-        )
+            modifier = Modifier.align(Alignment.BottomEnd).padding(LeafySpacing.card).size(56.dp).testTag("schedule-create"),
+            shape = androidx.compose.foundation.shape.CircleShape,
+        ) { Icon(Icons.Filled.Add, contentDescription = if (section == ScheduleSection.MEMOS) "新建随记" else "添加个人日程") }
     }
     }
 }

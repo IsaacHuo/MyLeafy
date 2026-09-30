@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 data class CatalogRatingsUiState(
     val kind: RatingCatalogKind = RatingCatalogKind.TEACHER,
@@ -22,6 +24,14 @@ class CatalogRatingsViewModel(private val repository: CatalogRatingRepository) :
     private val mutableState = MutableStateFlow(CatalogRatingsUiState())
     val uiState: StateFlow<CatalogRatingsUiState> = mutableState.asStateFlow()
     val available: Boolean get() = repository.isAvailable
+
+    private var initialized = false
+    fun initialize(search: String) {
+        if (initialized) return
+        initialized = true
+        mutableState.value = mutableState.value.copy(search = search)
+        refresh()
+    }
 
     fun selectKind(kind: RatingCatalogKind) {
         mutableState.value = CatalogRatingsUiState(kind = kind)
@@ -53,22 +63,32 @@ class CatalogRatingsViewModel(private val repository: CatalogRatingRepository) :
                 .onFailure { mutableState.value = mutableState.value.copy(error = it.message ?: "建议提交失败") }
         }
 
-    private fun load(append: Boolean) = viewModelScope.launch {
+    private var request: Job? = null
+    private var generation = 0
+    private fun load(append: Boolean) {
+        if (append && mutableState.value.loading) return
+        request?.cancel()
+        val version = ++generation
+        request = viewModelScope.launch {
         val snapshot = mutableState.value
-        if (snapshot.loading || !available) return@launch
+        if (!available) return@launch
         mutableState.value = snapshot.copy(loading = true, error = null)
         val offset = if (append) snapshot.items.size else 0
         runCatching {
             repository.page(snapshot.kind, snapshot.search, snapshot.filterValue, offset)
         }.onSuccess { page ->
-            mutableState.value = snapshot.copy(
+            if (version != generation) return@onSuccess
+            mutableState.value = mutableState.value.copy(
                 items = if (append) snapshot.items + page else page,
                 loading = false,
                 hasMore = page.size == 20,
                 error = null,
             )
         }.onFailure {
-            mutableState.value = snapshot.copy(loading = false, error = it.message ?: "评价列表加载失败")
+            if (it is CancellationException) throw it
+            if (version != generation) return@onFailure
+            mutableState.value = mutableState.value.copy(loading = false, error = it.message ?: "评价列表加载失败")
+        }
         }
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudSync
@@ -68,7 +69,7 @@ fun TrainingProgramScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    LaunchedEffect(Unit) { viewModel.refresh() }
+    LaunchedEffect(Unit) { viewModel.initialize() }
 
     LeafySecondaryScaffold(
         title = "教学与培养",
@@ -201,6 +202,7 @@ private fun TeachingPlanContent(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun TrainingProgramContent(
     program: ParsedTrainingProgram?,
@@ -226,6 +228,7 @@ private fun TrainingProgramContent(
         return
     }
     val context = LocalContext.current
+    val tableScrolls = program.tables.map { rememberScrollState() }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(LeafySpacing.page),
@@ -234,7 +237,9 @@ private fun TrainingProgramContent(
         item {
             Text(program.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
-        if (program.creditRequirements.isNotEmpty()) {
+        if (program.creditRequirements.any { it.credits !in 0.0..500.0 }) {
+            item { LeafyStatusBanner("培养方案包含异常学分，请重新获取", isError = true, actionLabel = "刷新", onAction = onRetry) }
+        } else if (program.creditRequirements.isNotEmpty()) {
             item { LeafySectionHeader(title = "毕业学分要求") }
             item {
                 LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
@@ -275,33 +280,22 @@ private fun TrainingProgramContent(
             }
         }
         if (program.tables.isNotEmpty()) {
-            item { LeafySectionHeader(title = "原始表格", supportingText = "保留学校页面原表，可左右滑动查看。") }
-            items(program.tables) { table ->
-                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(LeafySpacing.card),
-                        verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
-                    ) {
-                        val columns = table.rows.maxOfOrNull { it.size } ?: 0
-                        table.rows.forEachIndexed { index, row ->
-                            Surface(color = if (index == 0) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface) {
-                                Row {
-                                    repeat(columns) { column ->
-                                        Text(row.getOrNull(column).orEmpty(), modifier = Modifier.width(144.dp).padding(10.dp),
-                                            style = if (index == 0) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyMedium)
-                                    }
-                                }
-                            }
-                        }
-                    }
+            item { LeafySectionHeader(title = "课程明细", supportingText = "左右滑动查看完整表格") }
+            program.tables.forEachIndexed { tableIndex, table ->
+                val columns = table.rows.maxOfOrNull { it.size } ?: 0
+                val scroll = tableScrolls[tableIndex]
+                stickyHeader(key = "table-$tableIndex-header") {
+                    TrainingTableRow(table.rows.firstOrNull().orEmpty(), columns, scroll, header = true)
+                }
+                itemsIndexed(table.rows.drop(1), key = { row, _ -> "table-$tableIndex-row-$row" }) { _, cells ->
+                    TrainingTableRow(cells, columns, scroll, header = false)
                 }
             }
         }
+
         item {
             Text(
-                "培养信息为学校页面原文的本地副本；类别学分不可直接相加，最终以学校官方为准。",
+                "类别学分不可直接相加，毕业要求以学校公布的培养方案为准。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -311,3 +305,15 @@ private fun TrainingProgramContent(
 
 private fun trimNumber(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+
+@Composable
+private fun TrainingTableRow(cells: List<String>, columns: Int, scroll: androidx.compose.foundation.ScrollState, header: Boolean) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = if (header) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface) {
+        Row(Modifier.horizontalScroll(scroll)) {
+            repeat(columns) { column ->
+                Text(cells.getOrNull(column).orEmpty(), modifier = Modifier.width(144.dp).padding(10.dp),
+                    style = if (header) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
