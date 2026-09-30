@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {currentDeployment,deploymentTarget,account,waitForDeploymentJSON} from '../scripts/deployment-platform.mjs';
+import {currentDeployment,deploymentTarget,account,waitForDeploymentJSON,stagingBase} from '../scripts/deployment-platform.mjs';
 
 test('Pages permission and automatic-deployment failures stop before Worker operations',async()=>{
   const original=globalThis.fetch,token=process.env.CLOUDFLARE_API_TOKEN,configuredAccount=process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -29,13 +29,22 @@ test('staging uses the actual Pages subdomain and records exact prior deployment
   }finally{globalThis.fetch=original;if(token===undefined)delete process.env.CLOUDFLARE_API_TOKEN;else process.env.CLOUDFLARE_API_TOKEN=token;if(configuredAccount===undefined)delete process.env.CLOUDFLARE_ACCOUNT_ID;else process.env.CLOUDFLARE_ACCOUNT_ID=configuredAccount;}
 });
 
-test('verification waits for missing Pages or a previous Worker to propagate, then checks the selected commit',async()=>{
+test('verification waits for a warming Pages edge or previous Worker, then checks the selected commit',async()=>{
   const original=globalThis.fetch;let calls=0;
   const expected={environment:'staging',commit:'selected'};
   try{
-    globalThis.fetch=async()=>{calls++;return calls===1?new Response(null,{status:404}):Response.json(calls===2?{environment:'staging',commit:'previous'}:expected);};
+    globalThis.fetch=async()=>{calls++;return calls===1?new Response(null,{status:522}):Response.json(calls===2?{environment:'staging',commit:'previous'}:expected);};
     assert.deepEqual(await waitForDeploymentJSON('https://test.pages.dev/release.json',expected,{attempts:3,intervalMs:0}),expected);
     assert.equal(calls,3);
+  }finally{globalThis.fetch=original;}
+});
+
+test('a transient verification timeout can recover within the attempt limit',async()=>{
+  const original=globalThis.fetch;let calls=0;const expected={environment:'staging',commit:'selected'};
+  try{
+    globalThis.fetch=async()=>{calls++;if(calls===1)throw new DOMException('Timed out','TimeoutError');return Response.json(expected);};
+    assert.deepEqual(await waitForDeploymentJSON('https://test.pages.dev/release.json',expected,{attempts:2,intervalMs:0}),expected);
+    assert.equal(calls,2);
   }finally{globalThis.fetch=original;}
 });
 
@@ -58,4 +67,26 @@ test('wrong environments and authorization failures stop immediately',async()=>{
     await assert.rejects(waitForDeploymentJSON('https://test.pages.dev/release.json',{environment:'staging',commit:'selected'},{intervalMs:0}),/HTTP 403/);
     assert.equal(calls,2);
   }finally{globalThis.fetch=original;}
+});
+
+test('staging change selection includes incomplete website deployments and rejects cross-environment evidence',async()=>{
+  const original=globalThis.fetch,token=process.env.CLOUDFLARE_API_TOKEN,configuredAccount=process.env.CLOUDFLARE_ACCOUNT_ID;
+  process.env.CLOUDFLARE_API_TOKEN='synthetic-test-only';process.env.CLOUDFLARE_ACCOUNT_ID=account;
+  const commit='a'.repeat(40);let website=null;
+  try{
+    globalThis.fetch=async url=>{
+      if(String(url).includes('api.cloudflare.com'))return Response.json({success:true,result:String(url).includes('/pages/')
+        ?{production_branch:'main',subdomain:'actual-staging.pages.dev'}
+        :{deployments:[{versions:[{percentage:100,version_id:'current-worker'}]}]}});
+      if(String(url).endsWith('/health'))return Response.json({status:'ok',environment:'staging',commit});
+      assert.equal(String(url),'https://actual-staging.pages.dev/release.json');
+      return website?Response.json(website):new Response(null,{status:404});
+    };
+    assert.equal(await stagingBase('test'),'0'.repeat(40));
+    website={environment:'staging',commit:'b'.repeat(40)};
+    assert.equal(await stagingBase('test'),'0'.repeat(40));
+    website={commit};assert.equal(await stagingBase('test'),'0'.repeat(40));
+    website={environment:'staging',commit};assert.equal(await stagingBase('test'),commit);
+    website={environment:'production',commit};await assert.rejects(stagingBase('test'),/environment mismatch/);
+  }finally{globalThis.fetch=original;if(token===undefined)delete process.env.CLOUDFLARE_API_TOKEN;else process.env.CLOUDFLARE_API_TOKEN=token;if(configuredAccount===undefined)delete process.env.CLOUDFLARE_ACCOUNT_ID;else process.env.CLOUDFLARE_ACCOUNT_ID=configuredAccount;}
 });

@@ -44,7 +44,7 @@ GitHub Environments 为 `staging`、`production`、`android-candidates`、`andro
 
 ## Cloudflare：验收指定提交
 
-staging 与 production 的部署按环境分别串行，恢复使用同一串行锁。相关 main 提交检查通过后，staging 依次执行：Pages 权限预检、记录旧部署 ID 与 D1 恢复书签、迁移、Worker、隔离社区冒烟、网站、公开核对。提交对比从当前 staging 的 `/health.commit` 开始，避免遗漏此前未部署的提交。Pages 使用 `.wrangler/deploy/config.json` 指向选定的环境配置，避免 Wrangler Pages 不支持的 `--config` 参数；生成文件不进 Git。
+staging 与 production 的部署按环境分别串行，恢复使用同一串行锁。相关 main 提交检查通过后，staging 依次执行：Pages 权限预检、记录旧部署 ID 与 D1 恢复书签、迁移、Worker、隔离社区冒烟、网站、公开核对。只有 Worker `/health` 与网站 `/release.json` 同属 staging、同一提交，才从该提交计算变化；网站尚未部署或提交不一致时重新准备，避免中途失败后的再次运行错误跳过。Pages 使用 `.wrangler/deploy/config.json` 指向选定的环境配置，避免 Wrangler Pages 不支持的 `--config` 参数；生成文件不进 Git。
 
 验收完毕，在 Actions 运行 **Publish accepted Cloudflare version**：
 

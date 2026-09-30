@@ -39,7 +39,7 @@ jobs:
         id: changes
         run: |
           gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/check-runs?per_page=100" --jq '.check_runs | any(.name == "CI result" and .conclusion == "success" and .app.slug == "github-actions")' | grep -qx true
-          BASE_SHA=$(node --input-type=module -e 'const r=await fetch("https://api-staging.myleafy.space/health");if(!r.ok)throw new Error("Staging health unavailable");const h=await r.json();if(h.environment!=="staging")throw new Error("Environment mismatch");console.log(h.commit||"0000000000000000000000000000000000000000")')
+          BASE_SHA=$(node --input-type=module -e 'import {stagingBase} from "./backend/scripts/deployment-platform.mjs";console.log(await stagingBase(process.env.CLOUDFLARE_PAGES_PROJECT))')
           python scripts/ci-changes.py --base "$BASE_SHA" --head "$RELEASE_COMMIT"
       - name: Install locked dependencies
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.backend == 'true' || steps.changes.outputs.site == 'true'
