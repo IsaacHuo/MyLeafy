@@ -96,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           APK="$RUNNER_TEMP/MyLeafy-Android-$VERSION.apk"
-          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/apksigner-report.txt"
           "$BUILD_TOOLS/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
           python - <<'PY'
@@ -107,7 +107,10 @@ jobs:
           badging=(root/'apk-badging.txt').read_text()
           package,code,name=re.search(r"package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'",badging).groups()
           minimum=int(re.search(r"sdkVersion:'(\d+)'",badging).group(1))
-          certificate=re.search(r'Signer #1 certificate SHA-256 digest: ([a-fA-F0-9]+)',(root/'apksigner-report.txt').read_text()).group(1).lower()
+          certificate_report=(root/'apksigner-report.txt').read_text()
+          certificates=set(value.lower() for value in re.findall(r'^Signer (?:#\d+|\(.+\)) certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*$',certificate_report,re.MULTILINE))
+          assert len(certificates)==1, 'Expected one consistent APK signing certificate across Android SDK ranges'
+          certificate=certificates.pop()
           assert package=='com.myleafy.android' and name==version and minimum==29
           actual=hashlib.sha256(apk.read_bytes()).hexdigest()
           notes=pathlib.Path('../docs/operations/android-release-notes.md').read_text().strip()
@@ -122,6 +125,16 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:
               output.write(f'apk={apk}\nmanifest={manifest}\n')
           PY
+
+      - name: Keep package validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-validation-${{ inputs.version }}
+          path: |
+            ${{ runner.temp }}/apksigner-report.txt
+            ${{ runner.temp }}/apk-badging.txt
+          if-no-files-found: ignore
 
       - name: Publish and verify both production catalogues
         env:
