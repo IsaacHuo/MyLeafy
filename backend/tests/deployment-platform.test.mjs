@@ -48,6 +48,15 @@ test('a transient verification timeout can recover within the attempt limit',asy
   }finally{globalThis.fetch=original;}
 });
 
+test('an initial Pages SPA fallback is not accepted as a deployment marker',async()=>{
+  const original=globalThis.fetch;let calls=0;const expected={environment:'staging',commit:'selected'};
+  try{
+    globalThis.fetch=async()=>{calls++;return calls===1?new Response('<html>Previous SPA</html>',{headers:{'Content-Type':'text/html'}}):Response.json(expected);};
+    assert.deepEqual(await waitForDeploymentJSON('https://test.pages.dev/release.json',expected,{attempts:2,intervalMs:0}),expected);
+    assert.equal(calls,2);
+  }finally{globalThis.fetch=original;}
+});
+
 test('propagation timeout remains a failure with the expected and observed commit',async()=>{
   const original=globalThis.fetch;let calls=0;
   try{

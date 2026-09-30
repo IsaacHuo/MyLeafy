@@ -57,11 +57,15 @@ export async function waitForDeploymentJSON(url,expected,{attempts=20,intervalMs
     }
     if(response)observed=`HTTP ${response.status}`;
     if(response?.ok){
-      const data=await response.json();
-      assert(!data.environment||data.environment===expected.environment,'Deployment environment mismatch');
-      assert(data.status!=='error','Deployed service reported unhealthy');
-      if(Object.entries(expected).every(([key,value])=>data[key]===value))return data;
-      observed=`commit ${data.commit??'unavailable'}`;
+      if(!response.headers.get('content-type')?.includes('application/json')){
+        await response.body?.cancel();observed='HTTP 200 without deployment JSON';
+      }else{
+        const data=await response.json();
+        assert(!data.environment||data.environment===expected.environment,'Deployment environment mismatch');
+        assert(data.status!=='error','Deployed service reported unhealthy');
+        if(Object.entries(expected).every(([key,value])=>data[key]===value))return data;
+        observed=`commit ${data.commit??'unavailable'}`;
+      }
     }else if(response){
       await response.body?.cancel();
       assert(response.status===404||response.status>=500,`Deployment verification: ${observed}`);

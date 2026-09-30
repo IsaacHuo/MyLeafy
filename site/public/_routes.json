@@ -2,6 +2,7 @@
   "version": 1,
   "include": [
     "/api/admin/*",
+    "/api/releases/android/*",
     "/share/community/post/*",
     "/share/timetable/*"
   ],

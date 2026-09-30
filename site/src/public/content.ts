@@ -5,6 +5,7 @@ export const downloads = {
   },
   android: {
     version: "",
+    latestUrl: "/api/releases/android/latest",
     url: "/api/releases/android/download",
     releaseUrl: "https://github.com/IsaacHuo/MyLeafy/releases",
     checksumUrl: "/api/releases/android/download?file=checksum",
