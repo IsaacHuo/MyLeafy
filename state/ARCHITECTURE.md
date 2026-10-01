@@ -371,6 +371,8 @@ Cloudflare 工作流将已验证 main 提交准备到 staging，production 手�
 
 iOS `release.yml` 仅在 Apple 正式发布后记录源码、版本/build 与 annotated tag，不生成未签名归档。完整操作入口为 `docs/operations/delivery.md`。
 
+Cloudflare 日常代码发布先以账号级 Workers Domains 接口核对现有 API 域名绑定，再使用 `versions upload` / `versions deploy` 发布指定版本；Cron 用账号级 schedules 接口更新。流程不重新配置 Zone 路由，域名不存在或绑定错误时在迁移前失败。发行 HTTP 诊断仅显示契约错误 code、request_id 和固定 GitHub 上游状态码，不打印响应正文或凭据。实际生产接通结果仍以 CURRENT 为准。
+
 ## 13. 与其他文档的关系
 
 - 详细工程设计与决策 rationale：`docs/engineering/`（`cloudflare-migration.md`、`admin-console.md`、`admin-backend-reliability.md`）。
