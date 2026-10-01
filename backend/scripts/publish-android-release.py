@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import urllib.error
 import urllib.request
@@ -22,8 +23,28 @@ def request(url, method='GET', data=None, token=None, headers=None):
         with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=values, method=method), timeout=120) as response:
             return response.read()
     except urllib.error.HTTPError as error:
-        # Deliberately omit response bodies/headers and credentials from CI diagnostics.
-        raise RuntimeError(f'{method} {url}: HTTP {error.code}') from None
+        # Only expose contract identifiers and a fixed GitHub status message.
+        # Never print arbitrary response bodies/headers or credentials.
+        details = []
+        try:
+            body = json.loads(error.read(4096))
+            envelope = body.get('errorEnvelope', {})
+            code = envelope.get('code', '')
+            if re.fullmatch(r'[a-z_]{1,64}', code):
+                details.append(f'API code={code}')
+            request_id = body.get('request_id', '')
+            if re.fullmatch(r'[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', request_id):
+                details.append(f'request_id={request_id}')
+            if code == 'github_unavailable':
+                status = re.fullmatch(r'GitHub 发行请求失败（([1-5][0-9]{2})）。', envelope.get('message', ''))
+                if status:
+                    details.append(f'GitHub HTTP {status.group(1)}')
+        except (ValueError, TypeError, AttributeError):
+            pass  # A non-contract error still reports the original HTTP failure.
+        finally:
+            error.close()
+        suffix = f" ({'; '.join(details)})" if details else ''
+        raise RuntimeError(f'{method} {url}: HTTP {error.code}{suffix}') from None
 
 
 def digest(path):

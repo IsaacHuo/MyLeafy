@@ -13,7 +13,7 @@ Cloudflare 上传曾返回 403；同一接口使用默认 Python User-Agent 得�
 - 创建 draft 后直接使用返回 ID；恢复任务使用 GraphQL 查 ID、REST 按 ID 读取，资产按 asset ID 回读。
 - APK 不可变：同版重试只接受相同文件和元数据，不能重建签名包后覆盖已有资产。
 - 两边资产回读校验后才公开并登记；登记失败回退新公开的 GitHub draft。响应丢失时通过指定版本及 hash 确认是否已提交，不能误撤回成功发布。
-- 发布请求使用明确 User-Agent，错误日志不包含认证 headers 或响应敏感内容。
+- 发布请求使用明确 User-Agent，错误日志不包含认证 headers 或响应敏感内容。HTTP 失败仅提取契约中的错误 code、UUID request_id；固定格式的 GitHub 错误可显示上游状态码。不能凭一个 502 判断令牌权限不足，也不能为了排查直接打印任意响应正文。
 
 ## 验证与边界
 

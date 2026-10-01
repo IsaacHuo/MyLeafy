@@ -1,16 +1,48 @@
 """Release coordinator tests: no network, real temporary artifact bytes."""
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('publisher', Path(__file__).with_name('publish-android-release.py'))
 publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
+
+
+class ReleaseRequestDiagnosticsTest(unittest.TestCase):
+    def test_github_error_reports_status_and_request_id_without_response_secrets(self):
+        request_id = '11111111-2222-3333-4444-555555555555'
+        body = json.dumps(dict(errorEnvelope=dict(code='github_unavailable', message='GitHub 发行请求失败（403）。'),
+                               request_id=request_id, token='private-response-secret')).encode()
+        failure = urllib.error.HTTPError('https://api.myleafy.space/v1/releases/android/candidates', 502,
+                                         'Bad gateway', {'Authorization':'private-header-secret'}, io.BytesIO(body))
+        with patch.object(publisher.urllib.request, 'urlopen', side_effect=failure):
+            with self.assertRaises(RuntimeError) as caught:
+                publisher.request(failure.url, 'POST', token='private-request-secret')
+        message = str(caught.exception)
+        self.assertIn('GitHub HTTP 403', message)
+        self.assertIn('API code=github_unavailable', message)
+        self.assertIn(request_id, message)
+        self.assertNotIn('private-', message)
+
+    def test_untrusted_messages_and_non_contract_bodies_are_not_logged(self):
+        for body in (b'<html>private-response-secret</html>', b'[]', b'{}',
+                     b'{"errorEnvelope":{"code":"github_unavailable","message":"private-response-secret"}}',
+                     b'{"errorEnvelope":{"code":[],"message":null},"request_id":{}}'):
+            with self.subTest(body=body):
+                failure = urllib.error.HTTPError('https://api.myleafy.space/v1/releases/android/candidates', 502,
+                                                 'Bad gateway', {}, io.BytesIO(body))
+                with patch.object(publisher.urllib.request, 'urlopen', side_effect=failure):
+                    with self.assertRaises(RuntimeError) as caught:
+                        publisher.request(failure.url)
+                self.assertIn('HTTP 502', str(caught.exception))
+                self.assertNotIn('private-', str(caught.exception))
 
 
 class ReleaseCoordinatorTest(unittest.TestCase):
