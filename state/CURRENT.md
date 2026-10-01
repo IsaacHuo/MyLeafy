@@ -9,7 +9,9 @@ Last verified: 2026-10-01 (Android campus parity and portrait verification; publ
 
 - **开发与交付门槛**：统一 CI 按跨目录依赖运行，main 必需 `CI result` 已配置。完整远程 CI 全绿：iOS 578 项中 577 通过、1 跳过，Android/后端/网站/旧 Supabase 通过；网站 60 项单元及三个浏览器配置通过，D1 增量迁移保留原管理员与发行记录的用例通过。AGENTS/贡献规范统一为任务分支当前提交通过 CI 后快进合入 main，PR 可选。
 - **1.2.2 发布阻碍**：实现源码 `39af5c96df85fcb1284cfc33a2e38ac77b211d26` 已快进合入 main，主线 [CI 36833067334](https://github.com/IsaacHuo/MyLeafy/actions/runs/36833067334) 全部通过。正式签名包保存在私有 `android-candidate-6`，54,634,846 字节，SHA-256 `47f07f0d044beb104fef6ef6510a255cfa09cf602a0632d8bc9024d99f418f3c`，证书与 1.2.1 一致。候选 [准备运行 36833693876](https://github.com/IsaacHuo/MyLeafy/actions/runs/36833693876) 构建成功，但登记返回 HTTP 502；复用原 APK 重试仍失败，尚未产生管理员发布授权。生产 latest 仍为 1.2.1/code 5，正式覆盖升级验收待权限阻碍解除，不能记为已发布。
-- **Cloudflare 接通状态**：[staging 36833693623](https://github.com/IsaacHuo/MyLeafy/actions/runs/36833693623) 成功部署上述源码，六项检查通过，包括隔离社区写入、匿名管理拒绝及网站/后台 Android 发行绑定。[production 36833951133](https://github.com/IsaacHuo/MyLeafy/actions/runs/36833951133) 经现有 Environment 审批后执行迁移与 Worker 上传，随后访问 `myleafy.space` 的 Workers routes 被拒绝，Pages 步骤未执行，运行失败。生产 `/health.commit` 已是上述源码，D1 0011 已应用；生产网站仍是之前部署。需要修复 production 部署令牌的路由权限，并诊断候选登记 502 对应的 GitHub 发行请求；此前临时预览的 Release/Actions 权限检查成功不能证明本次生产请求成功。恢复演练仍未完成。
+- **Cloudflare 接通状态**：日常部署改用 versions upload/deploy 更新代码，核对现有域名但不改写 Zone 路由；Cron 用账号级接口更新，未扩大凭据权限。修正源码 `d4cee8eb71431a1e7b9d6efff948661c2bb9c44e` 的主线 [CI 36836830287](https://github.com/IsaacHuo/MyLeafy/actions/runs/36836830287) 全绿，[staging 36836832940](https://github.com/IsaacHuo/MyLeafy/actions/runs/36836832940) 六项检查通过，[production 36837149706](https://github.com/IsaacHuo/MyLeafy/actions/runs/36837149706) 经现有审批后成功部署并核对 Worker、网站及发行绑定，D1 0011 已应用。新 admin Android 页面已实际加载；1.2.2 候选登记仍失败，不能将网站部署成功等同 Android 已发行。恢复演练仍未完成。
+
+- **候选登记准确诊断**：[准备运行 36836837334](https://github.com/IsaacHuo/MyLeafy/actions/runs/36836837334) 复用原 1.2.2 APK，安全诊断确认登记 HTTP 502 对应 `github_unavailable` / GitHub HTTP 403。首次后台读取私有候选被拒绝，尚未产生管理员发布授权；不能凭外层 502 推断具体权限配置。公开 latest 仍为 1.2.1/code 5。用户最新要求最后的确认发布由本人点击。
 
 - **Android 第二轮体验完善**：已修复综素初始化闪退、校园返回分类丢失和培养方案误取课程编号；首次教务同步由身份作用域管理。课表背景/左轴固定、月份补齐，详情改为 Sheet，支持本机备注与课前提醒；底栏圆形选中底、日迹圆形加号、等宽场馆卡片、医疗/评价直接展开，移除安卓“周末去哪”。仅北林与免登录，调试包后缀 `.next`。
 - **上一轮验收边界（2026-09-30）**：模拟器优先，小米真机延后。完整 JVM 共 149 项，142 通过、7 项外部探测跳过；构建和 lint 通过（104 条 warning、3 条 hint）。隔离模拟器完整 32 项中 31 通过，屏外学院选项测试修正后单项通过；顶部返回另行复跑通过。6 张导航基线逐张审阅后验证通过。未把分批复跑表述为一次全绿，也未声称全设备/全字号验收。
@@ -69,7 +71,7 @@ Last verified: 2026-10-01 (Android campus parity and portrait verification; publ
 
 ## Known Problems
 
-- **交付流程线上验收**：受控 staging 已通过，1.2.2 正式签名候选已保存；production 路由权限与候选登记 502 阻止后续公开发行。新版 admin、实际发布 dispatch 和恢复演练尚待接通验收。
+- **交付流程线上验收**：受控 staging/production 已通过，1.2.2 正式签名候选已保存，新 admin 页面已上线；后台读取私有候选的 GitHub 403 阻止后续公开发行。实际发布 dispatch 和恢复演练尚待接通验收。
 
 - **教务系统不稳定**：HTML、登录流程或网络策略变化可能使解析暂时失效（持续风险，见 `docs/product/overview.md` §7）。
 - **Android 尚待完整验收**：真实学校数据读取与重新认证后续传已核对；首次干净账号的完整启动、真实断网/保存失败链路尚未逐项现场复现（本地回归覆盖相关行为）。Cloudflare 隔离环境写入与共享权限、系统通知实际投递/重启恢复、TalkBack 和两端 Release 帧时比较未完成。
