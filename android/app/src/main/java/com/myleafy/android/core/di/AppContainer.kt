@@ -51,6 +51,7 @@ import com.myleafy.android.BuildConfig
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -61,6 +62,7 @@ import kotlinx.coroutines.withContext
  * 阶段 1.5：完整组装各功能仓储。不引入 Hilt/Koin（单 app module 足够），
  * 后续如出现多模块/多入口再评估 DI 框架。
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AppContainer(context: Context) {
 
     val applicationContext: Context = context.applicationContext
@@ -73,6 +75,9 @@ class AppContainer(context: Context) {
         .build()
 
     val timetablePersonalDao get() = database.timetablePersonalDao()
+    val campusPersonalDao get() = database.campusPersonalDao()
+    val gradeDao get() = database.gradeDao()
+    val examDao get() = database.examDao()
     val courseDao: CourseDao get() = database.courseDao()
     val honorRecordDao: com.myleafy.android.core.data.local.HonorRecordDao get() = database.honorRecordDao()
     val comprehensiveQualityDao: com.myleafy.android.core.data.local.ComprehensiveQualityDao
@@ -181,6 +186,15 @@ class AppContainer(context: Context) {
     )
 
     val courseReminderScheduler by lazy { com.myleafy.android.features.timetable.CourseReminderScheduler(applicationContext, activeAppScopeStore, timetablePersonalDao, timetableRepository) }
+    val sunshineReminderScheduler by lazy { com.myleafy.android.features.campus.SunshineReminderScheduler(applicationContext, activeAppScopeStore, campusPersonalDao, campusLifeRepository) }
+    init {
+        backendLifecycle.launch {
+            kotlinx.coroutines.flow.combine(activeAppScopeStore.scope, campusLifeRepository.sunshineRuns, campusLifeRepository.sunshineSettings,
+                activeAppScopeStore.scope.flatMapLatest { campusPersonalDao.reminder(it.scopeKey) }) { scope, runs, settings, reminder -> scope.scopeKey to Triple(runs, settings, reminder) }
+                .collect { try { sunshineReminderScheduler.reconcile() } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (failure: Exception) { android.util.Log.e("SunshineReminder", "Reminder reconciliation failed", failure) } }
+        }
+    }
 
     // 社区客户端按 capability 延迟创建；guest/无权限身份不会初始化后台会话。
     private var cachedCommunityService: CommunityService? = null
@@ -226,6 +240,7 @@ class AppContainer(context: Context) {
         serviceProvider = { communityServiceForActiveScope()?.catalogRatings },
         communityRepository = communityRepository,
         scopeStore = activeAppScopeStore,
+        localCourses = { timetableRepository.coursesForSemester(com.myleafy.android.features.timetable.domain.SemesterConfig.currentSemesterId).first() },
     )
     val timetableSharingRepository = TimetableSharingRepository(
         serviceProvider = { communityServiceForActiveScope()?.timetableSharing },

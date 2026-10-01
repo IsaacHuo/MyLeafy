@@ -25,6 +25,7 @@ private val calendarDateFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日
 
 @Composable
 fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val configurations = SemesterConfig.timelineConfigurations
     LeafySecondaryScaffold(title = "校历", onBack = onBack, modifier = modifier) { contentModifier ->
         LazyColumn(
@@ -32,6 +33,10 @@ fun CampusCalendarScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
+            item {
+                com.myleafy.android.ui.components.LeafyTextButton(onClick = { openExternalUrl(context, "https://jwc.bjfu.edu.cn/images/xiaoli.jpg") }) { Text("查看官方校历") }
+                com.myleafy.android.ui.components.LeafyTextButton(onClick = { openExternalUrl(context, "https://myleafy.space/campus/timetable/") }) { Text("查看课程时间表") }
+            }
             item {
                 Text(
                     text = "学期与重要日期",

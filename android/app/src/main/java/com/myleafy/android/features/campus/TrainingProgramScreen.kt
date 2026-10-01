@@ -31,6 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +68,7 @@ fun TrainingProgramScreen(
                     container.academicDocumentDao,
                     container.activeAppScopeStore,
                 ),
+                container.academicRepository,
             )
         },
     ),
@@ -134,6 +140,7 @@ fun TrainingProgramScreen(
                 )
                 TrainingProgramMode.TRAINING_PROGRAM -> TrainingProgramContent(
                     program = state.trainingProgram,
+                    progress = state.graduationProgress,
                     loading = state.loading,
                     onRetry = viewModel::refresh,
                     modifier = Modifier.weight(1f),
@@ -150,6 +157,7 @@ private fun TeachingPlanContent(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var collapsed by rememberSaveable(sections.map { it.term }) { mutableStateOf(sections.map { it.term }) }
     if (sections.isEmpty() && loading) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -174,22 +182,26 @@ private fun TeachingPlanContent(
     ) {
         sections.forEach { section ->
             item(key = "term-${section.term}") {
-                LeafySectionHeader(title = section.term, supportingText = "${section.courses.size} 门课程")
+                Column(Modifier.fillMaxWidth().clickable { collapsed = if (section.term in collapsed) collapsed - section.term else collapsed + section.term }) {
+                    LeafySectionHeader(title = "${section.term} ${if (section.term in collapsed) "›" else "⌄"}", supportingText = "${section.courses.size} 门课程 · ${trimNumber(section.courses.sumOf { it.credit.toDoubleOrNull() ?: 0.0 })} 学分")
+                }
             }
+            if (section.term !in collapsed) {
             items(section.courses, key = { "${section.term}-${it.courseCode}-${it.name}" }) { course ->
                 LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(LeafySpacing.card)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(course.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                            Text(course.credit, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("${course.credit} 学分", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                         }
+                        if (course.courseCode.isNotBlank()) Text("课程编号：${course.courseCode}", style = MaterialTheme.typography.bodySmall)
                         val meta = listOf(course.type, course.courseCategory, course.exam)
                             .filter { it.isNotBlank() }
                             .joinToString(" · ")
                         if (meta.isNotBlank()) {
                             Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        val detail = listOf(course.unit.takeIf { it.isNotBlank() }, course.duration.takeIf { it.isNotBlank() })
+                        val detail = listOf(course.unit.takeIf { it.isNotBlank() }, course.duration.takeIf { it.isNotBlank() }?.let { "学时：$it" })
                             .filterNotNull()
                             .joinToString(" · ")
                         if (detail.isNotBlank()) {
@@ -197,6 +209,7 @@ private fun TeachingPlanContent(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -206,6 +219,7 @@ private fun TeachingPlanContent(
 @Composable
 private fun TrainingProgramContent(
     program: ParsedTrainingProgram?,
+    progress: GraduationProgress?,
     loading: Boolean,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
@@ -228,6 +242,7 @@ private fun TrainingProgramContent(
         return
     }
     val context = LocalContext.current
+    var expanded by rememberSaveable(program.title) { mutableStateOf(emptyList<String>()) }
     val tableScrolls = program.tables.map { rememberScrollState() }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -237,6 +252,7 @@ private fun TrainingProgramContent(
         item {
             Text(program.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         }
+        progress?.let { value -> item { GraduationProgressCard(value) } }
         if (program.creditRequirements.any { it.credits !in 0.0..500.0 }) {
             item { LeafyStatusBanner("培养方案包含异常学分，请重新获取", isError = true, actionLabel = "刷新", onAction = onRetry) }
         } else if (program.creditRequirements.isNotEmpty()) {
@@ -265,15 +281,18 @@ private fun TrainingProgramContent(
         }
         if (program.sections.isNotEmpty()) {
             item { LeafySectionHeader(title = "培养方案正文") }
-            items(program.sections, key = { it.title }) { section ->
+            itemsIndexed(program.sections, key = { index, section -> "$index-${section.title}" }) { _, section ->
                 LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(LeafySpacing.card)) {
-                        Text(section.title, style = MaterialTheme.typography.titleSmall)
+                        Text("${section.title} ${if (section.title in expanded) "⌄" else "›"}", style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.fillMaxWidth().clickable { expanded = if (section.title in expanded) expanded - section.title else expanded + section.title })
+                        if (section.title in expanded) {
                         if (section.body.isNotBlank()) {
                             Text(section.body, style = MaterialTheme.typography.bodyMedium)
                         }
                         section.links.forEach { link ->
                             LeafyTextButton(onClick = { openExternalUrl(context, link.url) }) { Text(link.title) }
+                        }
                         }
                     }
                 }
@@ -299,6 +318,32 @@ private fun TrainingProgramContent(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun GraduationProgressCard(progress: GraduationProgress) {
+    LeafyContentSurface(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("毕业进度", style = MaterialTheme.typography.titleLarge)
+            Text("${trimNumber(progress.completed)} / ${progress.required?.let(::trimNumber) ?: "未确认"} 学分", style = MaterialTheme.typography.headlineSmall)
+            progress.required?.takeIf { it > 0 }?.let { required ->
+                LinearProgressIndicator(progress = { (progress.completed / required).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                Text("还需 ${trimNumber(progress.remaining ?: 0.0)} 学分")
+            }
+            Text(if (progress.official) "官方所得学分" else "成绩估算", color = MaterialTheme.colorScheme.primary)
+            progress.categories.forEach { category ->
+                Row(Modifier.fillMaxWidth()) {
+                    Text(category.name, Modifier.weight(1f))
+                    Text("${category.completed?.let(::trimNumber) ?: "未确认"} / ${trimNumber(category.required)}")
+                }
+                category.completed?.let { earned -> Text(if (earned >= category.required) "已满足学分要求" else "还需 ${trimNumber(category.required - earned)} 学分", style = MaterialTheme.typography.bodySmall) }
+            }
+            if (progress.publicBuckets.isNotEmpty()) Text("公共选修明细", style = MaterialTheme.typography.titleSmall)
+            progress.publicBuckets.forEach { (name, credits) -> Text("$name · ${trimNumber(credits)} 学分${if (credits <= 0) " · 尚未覆盖" else ""}") }
+            Text(progress.syncedAt?.let { "官方同步：${java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDateTime()}" } ?: "更新时间未确认", style = MaterialTheme.typography.bodySmall)
+            Text("总学分达标不代表已满足全部毕业条件；未确认的分类以教务及培养方案核验为准。", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

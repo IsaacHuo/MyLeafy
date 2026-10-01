@@ -37,15 +37,16 @@ class ComprehensiveQualityRepository(
     private val scopeStore: ActiveAppScopeStore,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val college = MutableStateFlow("园林学院")
+    fun selectCollege(value: String) { college.value = value }
 
     fun current(): Flow<ComprehensiveQualityRecordEntity?> =
-        scopeStore.scope.flatMapLatest { dao.current(it.scopeKey) }
+        kotlinx.coroutines.flow.combine(scopeStore.scope, college) { scope, selected -> scope.scopeKey to selected }
+            .flatMapLatest { (scope, selected) -> dao.current(scope, selected) }
 
     fun decodeComponents(record: ComprehensiveQualityRecordEntity?): List<StoredComprehensiveComponent> {
         if (record == null || record.componentsJson.isBlank()) return emptyList()
-        return runCatching {
-            json.decodeFromString<List<StoredComprehensiveComponent>>(record.componentsJson)
-        }.getOrDefault(emptyList())
+        return json.decodeFromString<List<StoredComprehensiveComponent>>(record.componentsJson)
     }
 
     suspend fun save(
@@ -57,10 +58,10 @@ class ComprehensiveQualityRepository(
         note: String,
         components: List<StoredComprehensiveComponent>,
     ) {
-        dao.upsert(
+        dao.saveForCollege(
             ComprehensiveQualityRecordEntity(
                 scopeKey = scopeStore.current.scopeKey,
-                id = "current",
+                id = "$collegeName|$cohort",
                 collegeName = collegeName,
                 cohort = cohort,
                 academicStandardScore = academicStandardScore,
@@ -73,7 +74,7 @@ class ComprehensiveQualityRepository(
         )
     }
 
-    suspend fun clear() = dao.clear(scopeStore.current.scopeKey)
+    suspend fun clear() = dao.clear(scopeStore.current.scopeKey, college.value)
 }
 
 data class ComprehensiveQualityUiState(
@@ -85,6 +86,7 @@ data class ComprehensiveQualityUiState(
 class ComprehensiveQualityViewModel(
     private val repository: ComprehensiveQualityRepository,
 ) : ViewModel() {
+    fun selectCollege(value: String) { repository.selectCollege(value) }
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()

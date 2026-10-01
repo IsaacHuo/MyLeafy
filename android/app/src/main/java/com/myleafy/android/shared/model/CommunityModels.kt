@@ -123,12 +123,14 @@ data class FeedQuery(
     val days: Int? = null,
     val category: String? = null,
     val search: String? = null,
+    val cursor: String? = null,
 )
 
 /** community-feed 响应：{ generated_at, posts }。 */
 @Serializable
 data class FeedResponse(
     val generated_at: String? = null,
+    val next_cursor: String? = null,
     val posts: List<PostDto> = emptyList(),
 )
 

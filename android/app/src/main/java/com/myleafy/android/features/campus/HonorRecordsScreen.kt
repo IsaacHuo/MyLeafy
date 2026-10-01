@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -86,12 +87,13 @@ fun HonorRecordsScreen(
     val saving by viewModel.saving.collectAsStateWithLifecycle()
     val loadFailed by viewModel.loadFailed.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var preview by remember { mutableStateOf<HonorRecordEntity?>(null) }
     var editing by remember { mutableStateOf<HonorRecordEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<HonorRecordEntity?>(null) }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
-        uris.forEach { uri -> viewModel.import(uri, "") }
+        viewModel.importAll(uris)
     }
 
     LeafySecondaryScaffold(
@@ -129,6 +131,7 @@ fun HonorRecordsScreen(
                             color = MaterialTheme.colorScheme.surface,
                         ) {
                             Column(modifier = Modifier.padding(LeafySpacing.card)) {
+                                if (record.contentType.startsWith("image/")) coil.compose.AsyncImage(model = viewModel.fileFor(record), contentDescription = record.title, modifier = Modifier.fillMaxWidth().height(140.dp), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
                                 Text(record.title, style = MaterialTheme.typography.titleSmall)
                                 Text(
                                     text = record.originalFilename,
@@ -148,20 +151,12 @@ fun HonorRecordsScreen(
                                 Spacer(Modifier.height(LeafySpacing.micro))
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                                     LeafyTextButton(onClick = {
-                                        val file = viewModel.fileFor(record)
-                                        runCatching {
-                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                            context.startActivity(
-                                                Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(uri, record.contentType)
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                },
-                                            )
-                                        }.onFailure { viewModel.reportError(it.message ?: "无法打开文件") }
+                                        preview = record
                                     }) {
                                         Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
                                         Text("打开", modifier = Modifier.padding(start = LeafySpacing.tiny))
                                     }
+                                    LeafyTextButton(onClick = { try { shareCampusFile(context, viewModel.fileFor(record), record.contentType) } catch (failure: Exception) { viewModel.reportError(failure.message ?: "分享失败") } }) { Text("分享原文件") }
                                     LeafyTextButton(onClick = { editing = record }) {
                                         Icon(Icons.Outlined.Edit, contentDescription = null)
                                         Text("编辑", modifier = Modifier.padding(start = LeafySpacing.tiny))
@@ -179,6 +174,7 @@ fun HonorRecordsScreen(
         }
     }
 
+    preview?.let { record -> CampusFilePreview(viewModel.fileFor(record), record.contentType) { preview = null } }
     editing?.let { record ->
         HonorRecordEditor(
             record = record,

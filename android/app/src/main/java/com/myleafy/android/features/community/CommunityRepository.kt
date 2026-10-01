@@ -13,6 +13,7 @@ import com.myleafy.android.shared.model.PostDto
 import com.myleafy.android.shared.model.ProfileDto
 import com.myleafy.android.shared.model.groupCommentThreads
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,6 +31,8 @@ interface CommunityRepository {
     /** 占位实现标识：true 时 UI 提示功能未接入，避免误导。 */
 
     fun feed(query: FeedQuery): Flow<List<PostDto>>
+    suspend fun feedPage(query: FeedQuery): com.myleafy.android.shared.model.FeedResponse =
+        com.myleafy.android.shared.model.FeedResponse(posts = feed(query).first())
 
     suspend fun currentProfile(): ProfileDto
 
@@ -141,6 +144,15 @@ class LiveCommunityRepository(
     override fun feed(query: FeedQuery): Flow<List<PostDto>> = flow {
         requireCommunityProfile()
         emit(requireService().fetchFeed(query))
+    }
+
+    override suspend fun feedPage(query: FeedQuery): com.myleafy.android.shared.model.FeedResponse {
+        val scope = activeAppScopeStore.current.scopeKey
+        requireCommunityProfile()
+        if (scope != activeAppScopeStore.current.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+        val result = requireService().fetchFeedPage(query)
+        if (scope != activeAppScopeStore.current.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+        return result
     }
 
     override suspend fun currentProfile(): ProfileDto = requireCommunityProfile()

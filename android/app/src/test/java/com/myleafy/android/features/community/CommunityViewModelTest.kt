@@ -9,6 +9,7 @@ import com.myleafy.android.shared.model.ProfileDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -33,6 +34,23 @@ class CommunityViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test fun cursorPagingKeepsPinsDeduplicatesAndRetainsCursorOnFailure() = runTest(dispatcher) {
+        val repository = FakeCommunityRepository().apply { feedResult = Result.success(listOf(samplePost("pin"), samplePost("first"))); nextCursor = "server-cursor" }
+        val model = CommunityViewModel(repository, "bjfu")
+        testScheduler.advanceUntilIdle()
+        repository.feedResult = Result.failure(IllegalStateException("offline"))
+        model.loadMore(); testScheduler.advanceUntilIdle()
+        assertEquals("server-cursor", model.uiState.value.nextCursor)
+        assertEquals(listOf("pin", "first"), model.uiState.value.posts.map { it.id })
+        repository.feedResult = Result.success(listOf(samplePost("pin"), samplePost("second"))); repository.nextCursor = null
+        model.loadMore(); testScheduler.advanceUntilIdle()
+        assertEquals("server-cursor", repository.lastQuery?.cursor)
+        assertEquals(listOf("pin", "first", "second"), model.uiState.value.posts.map { it.id })
+        assertEquals(null, model.uiState.value.nextCursor)
+        model.selectHot(); testScheduler.advanceUntilIdle()
+        assertEquals(null, repository.lastQuery?.cursor)
     }
 
     @Test
@@ -214,6 +232,8 @@ private class FakeCommunityRepository : CommunityRepository {
     override fun events(scope: String): Flow<Unit> = kotlinx.coroutines.flow.emptyFlow()
     override suspend fun hasAcceptedTerms() = true
     override suspend fun acceptTerms() = Unit
+    var nextCursor: String? = null
+    override suspend fun feedPage(query: FeedQuery) = com.myleafy.android.shared.model.FeedResponse(posts = feed(query).first(), next_cursor = nextCursor)
     var feedResult: Result<List<PostDto>> = Result.success(emptyList())
     var lastQuery: FeedQuery? = null
     var feedLoader: (suspend (FeedQuery) -> List<PostDto>)? = null

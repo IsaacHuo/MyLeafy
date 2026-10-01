@@ -1,5 +1,7 @@
 package com.myleafy.android.features.campus
 
+import com.myleafy.android.ui.components.LeafyLoadingState
+
 import android.content.ClipData
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -75,130 +77,23 @@ import java.time.temporal.ChronoUnit
 import kotlin.math.ceil
 
 @Composable
-fun SunshineRunScreen(
-    onBack: () -> Unit,
-    viewModel: SportsViewModel = sportsViewModel(),
-) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
-    val saving by viewModel.saving.collectAsStateWithLifecycle()
-    var showRules by rememberSaveable { mutableStateOf(false) }
-    val today = LocalDate.now()
-    val currentWeek = (ChronoUnit.DAYS.between(SemesterConfig.current.semesterStartDate, today) / 7 + 1)
-        .toInt().coerceIn(1, SemesterConfig.supportedWeeks)
-    val excluded = parseWeekSet(state.settings.excludedWeeks)
-    val effectiveWeeks = (1..SemesterConfig.supportedWeeks).filterNot(excluded::contains)
-    val effectiveIndex = effectiveWeeks.indexOf(currentWeek)
-    val periodWeeks = if (effectiveIndex >= 0) {
-        val start = (effectiveIndex / state.settings.weeksPerPeriod) * state.settings.weeksPerPeriod
-        effectiveWeeks.drop(start).take(state.settings.weeksPerPeriod)
-    } else {
-        emptyList()
-    }
-    val periodStart = periodWeeks.firstOrNull() ?: currentWeek
-    val periodEnd = periodWeeks.lastOrNull() ?: currentWeek
-    val periodRuns = state.runs.count {
-        it.periodStartWeek == periodStart && weekForDate(LocalDate.ofEpochDay(it.dateEpochDay)) !in excluded
-    }
-
-    LeafySecondaryScaffold(
-        title = "阳光长跑",
-        onBack = onBack,
-        actions = { LeafyTextButton(onClick = { showRules = true }) { Text("规则") } },
-    ) { contentModifier ->
-        LazyColumn(
-            modifier = contentModifier,
-            contentPadding = PaddingValues(LeafySpacing.page),
-            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-        ) {
-            error?.let { message -> item { LeafyStatusBanner(message, isError = true, onDismiss = viewModel::dismissError) } }
-            item {
-                Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(LeafySpacing.card),
-                        verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
-                    ) {
-                        Text(
-                            if (periodWeeks.isEmpty()) "第 $currentWeek 周为排除周" else "有效周 ${periodWeeks.joinToString("、")}",
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        Text(
-                            "本周期 $periodRuns / ${state.settings.periodTarget} 次 · 全学期 ${state.runs.size} / ${state.settings.totalTarget} 次",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        LinearProgressIndicator(
-                            progress = { (state.runs.size.toFloat() / state.settings.totalTarget).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        LeafyPrimaryButton(
-                            onClick = { viewModel.addRun(today, periodStart, periodEnd) },
-                            enabled = currentWeek !in excluded,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(Icons.AutoMirrored.Outlined.DirectionsRun, contentDescription = null)
-                            Text(if (state.runs.any { it.dateEpochDay == today.toEpochDay() }) "今日已记录" else "记录今天")
-                        }
-                        if (currentWeek in excluded) {
-                            Text("第 $currentWeek 周已排除，不计入周期进度。", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-            item { LeafySectionHeader("跑步记录", supportingText = "同一天只保留一条记录，数据仅保存在当前身份作用域。") }
-            if (state.runs.isEmpty()) {
-                item { LeafyEmptyState("还没有跑步记录", "完成一次后点击“记录今天”。", icon = Icons.AutoMirrored.Outlined.DirectionsRun) }
-            } else {
-                items(state.runs, key = { it.id }) { run -> RunRow(run, viewModel::deleteRun) }
-            }
-        }
-    }
-    if (showRules) {
-        SunshineRulesDialog(
-            saving = saving, error = error,
-            total = state.settings.totalTarget,
-            periodWeeks = state.settings.weeksPerPeriod,
-            periodTarget = state.settings.periodTarget,
-            excludedWeeks = state.settings.excludedWeeks,
-            onDismiss = { showRules = false },
-            onSave = { total, weeks, target, excludedWeeks ->
-                viewModel.saveRules(total, weeks, target, excludedWeeks) { showRules = false }
-            },
-        )
-    }
-}
-
-@Composable
-private fun RunRow(record: SunshineRunRecordEntity, onDelete: (SunshineRunRecordEntity) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = LeafySpacing.micro),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(LocalDate.ofEpochDay(record.dateEpochDay).format(DateTimeFormatter.ISO_LOCAL_DATE))
-            Text("第 ${record.periodStartWeek}–${record.periodEndWeek} 周周期", style = MaterialTheme.typography.bodySmall)
-        }
-        LeafyActionIconButton(onClick = { onDelete(record) }) {
-            Icon(Icons.Outlined.Delete, contentDescription = "删除跑步记录")
-        }
-    }
-}
-
-@Composable
-private fun SunshineRulesDialog(
+internal fun SunshineRulesDialog(
     saving: Boolean, error: String?,
     total: Int,
     periodWeeks: Int,
     periodTarget: Int,
     excludedWeeks: String,
+    skipsExcludedWeeks: Boolean,
     onDismiss: () -> Unit,
-    onSave: (Int, Int, Int, String) -> Unit,
+    onSave: (Int, Int, Int, String, Boolean) -> Unit,
 ) {
     var totalText by rememberSaveable(total) { mutableStateOf(total.toString()) }
     var weeksText by rememberSaveable(periodWeeks) { mutableStateOf(periodWeeks.toString()) }
     var targetText by rememberSaveable(periodTarget) { mutableStateOf(periodTarget.toString()) }
     var excludedText by rememberSaveable(excludedWeeks) { mutableStateOf(excludedWeeks) }
-    val valid = totalText.toIntOrNull()?.let { it > 0 } == true && weeksText.toIntOrNull()?.let { it in 1..20 } == true && targetText.toIntOrNull()?.let { it > 0 } == true && excludedText.split(',').all { it.isBlank() || it.trim().toIntOrNull()?.let { week -> week in 1..20 } == true }
-    val dirty = totalText != total.toString() || weeksText != periodWeeks.toString() || targetText != periodTarget.toString() || excludedText != excludedWeeks
+    var skipExcluded by rememberSaveable { mutableStateOf(skipsExcludedWeeks) }
+    val valid = totalText.toIntOrNull()?.let { it in 1..200 } == true && weeksText.toIntOrNull()?.let { it in 1..8 } == true && targetText.toIntOrNull()?.let { it in 1..30 } == true && excludedText.split(',').all { it.isBlank() || it.trim().toIntOrNull()?.let { week -> week in 1..20 } == true }
+    val dirty = totalText != total.toString() || weeksText != periodWeeks.toString() || targetText != periodTarget.toString() || excludedText != excludedWeeks || skipExcluded != skipsExcludedWeeks
     val requestExit = rememberEditorExit(dirty, saving, onDismiss)
     LeafyAlertDialog(
         onDismissRequest = requestExit,
@@ -206,6 +101,7 @@ private fun SunshineRulesDialog(
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
                 error?.let { LeafyStatusBanner(it, isError = true) }
+                Row { androidx.compose.material3.Switch(skipExcluded, { skipExcluded = it }); Text("跳过排除周") }
                 NumberField(totalText, { totalText = it }, "全学期目标次数")
                 NumberField(weeksText, { weeksText = it }, "每周期周数")
                 NumberField(targetText, { targetText = it }, "每周期目标次数")
@@ -220,128 +116,11 @@ private fun SunshineRulesDialog(
         },
         confirmButton = {
             LeafyTextButton(enabled = valid && !saving, onClick = {
-                onSave(totalText.toInt(), weeksText.toInt(), targetText.toInt(), excludedText)
+                onSave(totalText.toInt(), weeksText.toInt(), targetText.toInt(), excludedText, skipExcluded)
             }) { Text(if (saving) "保存中" else "保存") }
         },
         dismissButton = { LeafyTextButton(onClick = requestExit) { Text("取消") } },
     )
-}
-
-@Composable
-fun FitnessTestScreen(onBack: () -> Unit, viewModel: SportsViewModel = sportsViewModel()) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
-    val saving by viewModel.saving.collectAsStateWithLifecycle()
-    var editorVisible by rememberSaveable { mutableStateOf(false) }
-    var filter by rememberSaveable { mutableStateOf("") }
-    val items = state.fitnessTests.filter { filter.isBlank() || it.item == filter }
-    LeafySecondaryScaffold(
-        title = "体测记录",
-        onBack = onBack,
-        actions = { LeafyActionIconButton(onClick = { editorVisible = true }) { Icon(Icons.Filled.Add, "新增体测") } },
-    ) { contentModifier ->
-        LazyColumn(
-            modifier = contentModifier,
-            contentPadding = PaddingValues(LeafySpacing.page),
-            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-        ) {
-            error?.let { message -> item { LeafyStatusBanner(message, isError = true, onDismiss = viewModel::dismissError) } }
-            item {
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                    listOf("", "1000 米", "立定跳远", "肺活量").forEach { item ->
-                        FilterChip(selected = filter == item, onClick = { filter = item }, label = { Text(item.ifBlank { "全部" }) })
-                    }
-                }
-            }
-            if (items.isEmpty()) {
-                item { LeafyEmptyState("没有符合条件的记录", "新增体测后可按项目筛选。", icon = Icons.Outlined.FitnessCenter) }
-            } else {
-                items(items, key = { it.id }) { record -> FitnessRow(record, viewModel::deleteFitness) }
-            }
-        }
-    }
-    if (editorVisible) {
-        FitnessEditorDialog(
-            saving = saving, error = error,
-            onDismiss = { editorVisible = false },
-            onSave = { date, item, value, unit, note ->
-                viewModel.saveFitness(date, item, value, unit, note) { editorVisible = false }
-            },
-        )
-    }
-}
-
-@Composable
-private fun FitnessRow(record: FitnessTestRecordEntity, onDelete: (FitnessTestRecordEntity) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = LeafySpacing.micro), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(record.item, style = MaterialTheme.typography.titleSmall)
-            Text("${record.value} ${record.unit} · ${LocalDate.ofEpochDay(record.testedAt)}", style = MaterialTheme.typography.bodySmall)
-            if (record.note.isNotBlank()) Text(record.note, style = MaterialTheme.typography.bodySmall)
-        }
-        LeafyActionIconButton(onClick = { onDelete(record) }) { Icon(Icons.Outlined.Delete, "删除体测记录") }
-    }
-}
-
-@Composable
-private fun FitnessEditorDialog(saving: Boolean, error: String?, onDismiss: () -> Unit, onSave: (LocalDate, String, Double, String, String) -> Unit) {
-    val initialDate = rememberSaveable { LocalDate.now().toString() }
-    var date by rememberSaveable { mutableStateOf(initialDate) }
-    var item by rememberSaveable { mutableStateOf("1000 米") }
-    var value by rememberSaveable { mutableStateOf("") }
-    var unit by rememberSaveable { mutableStateOf("秒") }
-    var note by rememberSaveable { mutableStateOf("") }
-    val valid = runCatching { LocalDate.parse(date) }.isSuccess && item.isNotBlank() && value.toDoubleOrNull()?.let { it.isFinite() && it >= 0 } == true && unit.isNotBlank()
-    val requestExit = rememberEditorExit(date != initialDate || item != "1000 米" || value.isNotBlank() || unit != "秒" || note.isNotBlank(), saving, onDismiss)
-    LeafyAlertDialog(
-        onDismissRequest = requestExit,
-        title = { Text("新增体测记录") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
-                error?.let { LeafyStatusBanner(it, isError = true) }
-                TextFieldValue(date, { date = it }, "日期（YYYY-MM-DD）")
-                TextFieldValue(item, { item = it }, "项目")
-                TextFieldValue(value, { value = it }, "数值")
-                TextFieldValue(unit, { unit = it }, "单位")
-                TextFieldValue(note, { note = it }, "备注")
-            }
-        },
-        confirmButton = { LeafyTextButton(enabled = valid && !saving, onClick = { onSave(LocalDate.parse(date), item, value.toDouble(), unit, note) }) { Text(if (saving) "保存中" else "保存") } },
-        dismissButton = { LeafyTextButton(onClick = requestExit) { Text("取消") } },
-    )
-}
-
-private data class VenueInfo(val name: String, val hours: String, val booking: String, val fee: String, val note: String)
-
-@Composable
-fun VenueOpeningsScreen(onBack: () -> Unit) {
-    val venues = listOf(
-        VenueInfo("西区操场", "全天开放，上课时段封闭", "操场、篮球、网球和排球场日常无需预约", "校内师生免费", "课程和大型活动期间以现场安排为准"),
-        VenueInfo("西区看台乒乓球", "工作日 17:30–22:00；周末 15:30–22:00", "无需预约", "以现场公示为准", "开放时间可能随教学安排调整"),
-        VenueInfo("田家炳体育馆羽毛球", "按预约场次开放", "需通过企业微信预约", "设免费与收费时段", "预约规则和价格以企业微信页面为准"),
-        VenueInfo("昊海健身房", "08:30–22:00", "到场前确认当日安排", "以现场公示为准", "节假日开放时间可能调整"),
-        VenueInfo("东四多功能大厅", "工作日 08:00–22:00；周末 09:00–22:00", "羽毛球 6 块、乒乓球 12 块，部分时段需预约", "设免费与收费时段", "具体价格和预约链路以学校最新通知为准"),
-    )
-    LeafySecondaryScaffold(title = "场馆开放", onBack = onBack) { contentModifier ->
-        LazyColumn(
-            modifier = contentModifier,
-            contentPadding = PaddingValues(LeafySpacing.page),
-            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-        ) {
-            item { LeafyStatusBanner("以下为北林静态说明，不代表实时占用情况；出发前请以场馆现场和学校通知为准。", isError = false) }
-            items(venues, key = { it.name }) { venue ->
-                Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large) {
-                    Column(modifier = Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
-                        Text(venue.name, style = MaterialTheme.typography.titleMedium)
-                        Text(venue.hours)
-                        Text(venue.booking, style = MaterialTheme.typography.bodySmall)
-                        Text(venue.fee, style = MaterialTheme.typography.bodySmall)
-                        Text(venue.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-    }
 }
 
 private enum class MedicalSection(val title: String) { POLICY("政策"), GUIDE("报销指引"), LEDGER("台账") }
@@ -360,18 +139,19 @@ fun MedicalScreen(
     val context = LocalContext.current
     var section by rememberSaveable { mutableStateOf(MedicalSection.POLICY) }
     var editorVisible by rememberSaveable { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<MedicalLedgerEntryEntity?>(null) }
     var photoEntryId by rememberSaveable { mutableStateOf<String?>(null) }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
         val entryId = photoEntryId
         photoEntryId = null
-        if (uri != null && entryId != null) viewModel.importPhoto(entryId, uri)
+        if (uris.isNotEmpty() && entryId != null) viewModel.importPhotos(entryId, uris)
     }
     LaunchedEffect(state.exportedFile) {
         val file = state.exportedFile ?: return@LaunchedEffect
         runCatching {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
+                type = "application/zip"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 clipData = ClipData.newRawUri("医疗报销台账", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -386,8 +166,8 @@ fun MedicalScreen(
         onBack = onBack,
         actions = {
             if (available && section == MedicalSection.LEDGER) {
-                LeafyActionIconButton(onClick = viewModel::export) { Icon(Icons.Outlined.FileUpload, "导出医疗台账") }
-                LeafyActionIconButton(onClick = { editorVisible = true }) { Icon(Icons.Filled.Add, "新增医疗台账") }
+                LeafyActionIconButton(enabled = !state.loading && !state.loadFailed && !saving, onClick = viewModel::export) { Icon(Icons.Outlined.FileUpload, "导出医疗台账") }
+                LeafyActionIconButton(enabled = !state.loading && !state.loadFailed && !saving, onClick = { editing = null; editorVisible = true }) { Icon(Icons.Filled.Add, "新增医疗台账") }
             }
         },
     ) { contentModifier ->
@@ -412,10 +192,14 @@ fun MedicalScreen(
                 when (section) {
                     MedicalSection.POLICY -> MedicalPolicyContent(Modifier.weight(1f))
                     MedicalSection.GUIDE -> MedicalGuideContent(Modifier.weight(1f))
-                    MedicalSection.LEDGER -> MedicalLedgerContent(
+                    MedicalSection.LEDGER -> if (state.loading) LeafyLoadingState(Modifier.weight(1f))
+                    else if (state.loadFailed) LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载医疗台账") }
+                    else MedicalLedgerContent(
                         entries = state.entries,
                         photos = state.photos,
                         onDelete = viewModel::delete,
+                        onEdit = { editing = it; editorVisible = true },
+                        onDeletePhoto = viewModel::deletePhoto,
                         onAddPhoto = { entryId ->
                             photoEntryId = entryId
                             photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -428,120 +212,12 @@ fun MedicalScreen(
     }
     if (editorVisible) {
         MedicalEditorDialog(
+            initial = editing,
             saving = saving, error = error,
             onDismiss = { editorVisible = false },
             onSave = { viewModel.save(it) { editorVisible = false } },
         )
     }
-}
-
-@Composable
-private fun MedicalPolicyContent(modifier: Modifier) {
-    LazyColumn(modifier = modifier, contentPadding = PaddingValues(vertical = LeafySpacing.page), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
-        item { LeafyStatusBanner("政策会随学校和医保规则变化。这里提供办事整理，办理前请以校医院、学校通知与医保经办机构最新口径为准。", isError = false) }
-        item { LeafySectionHeader("信息来源", supportingText = "北京林业大学校医院公开说明、学校通知及北京市医保办事指南。") }
-        item { Text("应用不判断医学诊断，也不会把台账上传到 MyLeafy 后台。紧急情况请直接联系 120。") }
-    }
-}
-
-@Composable
-private fun MedicalGuideContent(modifier: Modifier) {
-    var scenario by rememberSaveable { mutableStateOf("校医院门急诊") }
-    var amount by rememberSaveable { mutableStateOf("") }
-    val scenarios = listOf("校医院门急诊", "合同医院门急诊", "非合同/专科门急诊", "住院", "急危重症", "异地急诊")
-    val ratio = when (scenario) {
-        "校医院门急诊" -> 0.90
-        "合同医院门急诊" -> 0.80
-        "非合同/专科门急诊" -> 0.70
-        "住院" -> 0.95
-        else -> null
-    }
-    val detail = when (scenario) {
-        "校医院门急诊" -> "先使用校园身份就诊；保留收费票据、费用明细、处方和门急诊病历。"
-        "合同医院门急诊" -> "通常先取得校医院转诊单；准备转诊单、病历、处方、票据和费用明细。"
-        "非合同/专科门急诊" -> "确认专科或转诊条件；准备诊断证明、病历、票据、费用明细和相关说明。"
-        "住院" -> "保留住院病案首页、出院记录、费用清单、住院票据和医保结算材料。"
-        else -> "优先救治并完整留存急诊诊断、病历、票据和费用明细；此情景按政策审核，不在应用内承诺比例。"
-    }
-    LazyColumn(modifier = modifier, contentPadding = PaddingValues(vertical = LeafySpacing.page), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
-        item { LazyRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) { items(scenarios) { FilterChip(scenario == it, { scenario = it }, { Text(it) }) } } }
-        item { LeafySectionHeader(scenario, supportingText = "办事清单会随情景变化") }
-        item {
-            TextFieldValue(amount, { amount = it.filter { char -> char.isDigit() || char == '.' } }, "费用金额（可选）")
-        }
-        item {
-            Text(
-                ratio?.let { value ->
-                    val estimate = amount.toDoubleOrNull()?.times(value)
-                    "政策参考比例 ${(value * 100).toInt()}%" + (estimate?.let { " · 预计报销 ¥%.2f".format(it) } ?: "")
-                } ?: "此情景无固定比例，需按政策材料审核",
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        item { Text(detail) }
-        item { Text("通用材料：校园身份证明、本人银行卡信息、就诊病历、有效票据、费用明细。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
-}
-
-@Composable
-private fun MedicalLedgerContent(
-    entries: List<MedicalLedgerEntryEntity>,
-    photos: List<MedicalLedgerPhotoEntity>,
-    onDelete: (MedicalLedgerEntryEntity) -> Unit,
-    onAddPhoto: (String) -> Unit,
-    modifier: Modifier,
-) {
-    LazyColumn(modifier = modifier, contentPadding = PaddingValues(vertical = LeafySpacing.page), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
-        if (entries.isEmpty()) item { LeafyEmptyState("还没有报销台账", "点击右上角添加，本机保存就诊与材料进度。", icon = Icons.Outlined.LocalHospital) }
-        items(entries, key = { it.id }) { entry ->
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = LeafySpacing.micro), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(entry.hospitalName, style = MaterialTheme.typography.titleSmall)
-                    Text("${LocalDate.ofEpochDay(entry.visitDate)} · ${entry.scenario} · ¥${entry.totalExpense}", style = MaterialTheme.typography.bodySmall)
-                    Text(entry.status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-                    Text("凭证照片 ${photos.count { it.entryId == entry.id }} 张", style = MaterialTheme.typography.bodySmall)
-                }
-                LeafyTextButton(onClick = { onAddPhoto(entry.id) }) { Text("加照片") }
-                LeafyActionIconButton(onClick = { onDelete(entry) }) { Icon(Icons.Outlined.Delete, "删除医疗台账") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MedicalEditorDialog(saving: Boolean, error: String?, onDismiss: () -> Unit, onSave: (MedicalLedgerDraft) -> Unit) {
-    val initialDate = rememberSaveable { LocalDate.now().toString() }
-    var date by rememberSaveable { mutableStateOf(initialDate) }
-    var hospital by rememberSaveable { mutableStateOf("") }
-    var department by rememberSaveable { mutableStateOf("") }
-    var diagnosis by rememberSaveable { mutableStateOf("") }
-    var expense by rememberSaveable { mutableStateOf("") }
-    var materials by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
-    val valid = runCatching { LocalDate.parse(date) }.isSuccess && hospital.isNotBlank() && expense.toDoubleOrNull()?.let { it.isFinite() && it >= 0 } == true
-    val requestExit = rememberEditorExit(date != initialDate || hospital.isNotBlank() || department.isNotBlank() || diagnosis.isNotBlank() || expense.isNotBlank() || materials.isNotBlank() || note.isNotBlank(), saving, onDismiss)
-    LeafyAlertDialog(
-        onDismissRequest = requestExit,
-        title = { Text("新增医疗台账") },
-        text = {
-            LazyColumn(modifier = Modifier, verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
-                error?.let { item { LeafyStatusBanner(it, isError = true) } }
-                item { TextFieldValue(date, { date = it }, "就诊日期（YYYY-MM-DD）") }
-                item { TextFieldValue(hospital, { hospital = it }, "医院") }
-                item { TextFieldValue(department, { department = it }, "科室") }
-                item { TextFieldValue(diagnosis, { diagnosis = it }, "诊断摘要") }
-                item { TextFieldValue(expense, { expense = it }, "总费用") }
-                item { TextFieldValue(materials, { materials = it }, "材料清单") }
-                item { TextFieldValue(note, { note = it }, "备注") }
-            }
-        },
-        confirmButton = {
-            LeafyTextButton(enabled = valid && !saving, onClick = {
-                onSave(MedicalLedgerDraft(visitDate = LocalDate.parse(date), hospitalName = hospital, department = department, diagnosis = diagnosis, totalExpense = expense.toDouble(), materials = materials, note = note))
-            }) { Text(if (saving) "保存中" else "保存") }
-        },
-        dismissButton = { LeafyTextButton(onClick = requestExit) { Text("取消") } },
-    )
 }
 
 @Composable
@@ -555,7 +231,7 @@ private fun NumberField(value: String, onValueChange: (String) -> Unit, label: S
 }
 
 @Composable
-private fun sportsViewModel(): SportsViewModel = viewModel(
+internal fun sportsViewModel(): SportsViewModel = viewModel(
     factory = appViewModelFactory { SportsViewModel(it.campusLifeRepository) },
 )
 

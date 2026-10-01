@@ -40,6 +40,7 @@ interface SchoolNetworkClient {
 
     /** 单次成绩页请求同时解析成绩、官方排名与官方汇总。 */
     suspend fun fetchGradeRankings(): List<ParsedGradeRanking>
+    suspend fun fetchGradeSupplemental(): AcademicSupplementalResult = AcademicSupplementalResult(fetchGradeRankings(), null)
 
     suspend fun fetchAcademicResults(): AcademicResult
 
@@ -54,6 +55,7 @@ interface SchoolNetworkClient {
         startPeriod: Int,
         endPeriod: Int,
     ): List<EmptyClassroom>
+    suspend fun fetchClassroomAvailability(semesterId: String, week: Int, day: Int): com.myleafy.android.parsers.ClassroomAvailability = error("教室占用矩阵暂不可用")
 
     /** 抓取并解析教学计划（强智 /jsxsd/pyfa/pyfa_query）。 */
     suspend fun fetchTeachingPlan(): List<ParsedTeachingPlanSection>
@@ -80,4 +82,7 @@ data class AcademicResult(
     val grades: List<ParsedGradeRecord>,
     val rankings: List<ParsedGradeRanking>?,
     val summary: ParsedGradeSummary?,
+    val failures: List<String> = emptyList(),
 )
+
+data class AcademicSupplementalResult(val rankings: List<ParsedGradeRanking>, val summary: ParsedGradeSummary?, val failures: List<String> = emptyList())

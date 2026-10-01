@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -49,6 +52,7 @@ import com.myleafy.android.ui.components.LeafyErrorState
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyPrimaryButton
+import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.components.leafyPullRefresh
@@ -90,6 +94,7 @@ fun CommunityScreen(
         onSearchClick = onSearchClick,
         onNotificationsClick = onNotificationsClick,
         onRefresh = viewModel::refresh,
+        onLoadMore = viewModel::loadMore,
         onSelectHot = viewModel::selectHot,
         onSelectLatest = viewModel::selectLatest,
         modifier = modifier,
@@ -107,6 +112,7 @@ fun CommunityContent(
     onSelectHot: () -> Unit,
     onSelectLatest: (String?) -> Unit,
     modifier: Modifier = Modifier,
+    onLoadMore: () -> Unit = {},
 ) {
     val pullRefreshState = rememberLeafyPullRefreshState(state.isRefreshing, onRefresh)
     Scaffold(
@@ -138,7 +144,9 @@ fun CommunityContent(
             )
         },
     ) { contentPadding ->
-            LazyColumn(
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(contentPadding)
@@ -148,23 +156,23 @@ fun CommunityContent(
                     end = LeafySpacing.page,
                     bottom = LeafyComponentSize.floatingActionClearance,
                 ),
-                verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+                verticalItemSpacing = LeafySpacing.compact,
             ) {
-                item {
+                item(span = StaggeredGridItemSpan.FullLine) {
                     CommunityFilters(
                         selection = state.selection,
                         onSelectHot = onSelectHot,
                         onSelectLatest = onSelectLatest,
                     )
                 }
-                if (state.hasNewPosts) item {
+                if (state.hasNewPosts) item(span = StaggeredGridItemSpan.FullLine) {
                     LeafyStatusBanner(message = "有新动态", isError = false, actionLabel = "查看", onAction = onRefresh)
                 }
                 if (state.isInitialLoading) {
-                    item { LeafyLoadingState(message = "正在加载校园动态") }
+                    item(span = StaggeredGridItemSpan.FullLine) { LeafyLoadingState(message = "正在加载校园动态") }
                 }
                 if (state.isRefreshing || pullRefreshState.progress > 0f) {
-                    item {
+                    item(span = StaggeredGridItemSpan.FullLine) {
                         LinearProgressIndicator(
                             progress = { if (state.isRefreshing) 1f else pullRefreshState.progress },
                             modifier = Modifier.fillMaxWidth(),
@@ -172,7 +180,7 @@ fun CommunityContent(
                     }
                 }
                 state.error?.let { message ->
-                    item {
+                    item(span = StaggeredGridItemSpan.FullLine) {
                         Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
                             LeafyStatusBanner(message = if (state.posts.isEmpty()) message else "刷新失败，已保留上次内容：$message", isError = true)
                             LeafyPrimaryButton(onClick = onRefresh) { Text("重新刷新") }
@@ -180,7 +188,7 @@ fun CommunityContent(
                     }
                 }
                 if (state.posts.isEmpty() && !state.isInitialLoading && state.error == null) {
-                    item {
+                    item(span = StaggeredGridItemSpan.FullLine) {
                         LeafyEmptyState(
                             title = "没有找到内容",
                             message = "换一个分类，或发布第一条校园动态。",
@@ -191,6 +199,9 @@ fun CommunityContent(
                 } else {
                     items(state.posts, key = { it.id }) { post ->
                         CommunityPostCard(post, onClick = { onPostClick(post.id) })
+                    }
+                    if (state.nextCursor != null) item(span = StaggeredGridItemSpan.FullLine) {
+                        LeafyTextButton(onClick = onLoadMore, enabled = !state.loadingMore) { Text(if (state.loadingMore) "加载中…" else "加载更多") }
                     }
                 }
             }
@@ -269,85 +280,27 @@ private fun CommunityFilterChip(
 
 @Composable
 fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("community-post-${post.id}"),
-        color = MaterialTheme.leafySurfaces.page,
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = LeafySpacing.micro, vertical = LeafySpacing.compact)) {
-            // 帖首：作者保留在阅读起点，分类紧随其后。
-            // 用 FlowRow 而不是定宽 Row：大字体或长分类时分类换到下一行，
-            // 作者因此始终保留可见宽度，不会被分类挤没。
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
-                verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(shape = CircleShape, color = MaterialTheme.leafySurfaces.accentSoft) {
-                    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-                        Text(if (post.is_anonymous) "匿" else post.author?.nickname?.take(1).orEmpty().ifBlank { "同" },
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    }
+    Surface(onClick = onClick, modifier = modifier.fillMaxWidth().testTag("community-post-${post.id}"),
+        color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column {
+            if (post.images.isNotEmpty()) CommunityPostCoverImage(post.images)
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(post.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (post.images.isEmpty() && post.body.isNotBlank()) Text(post.body, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学", style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    post.category?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+                    Text(post.created_at.substringBefore('T').replace('-', '.'), style = MaterialTheme.typography.labelSmall)
                 }
-                Text(
-                    text = if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                post.category?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${post.like_count} 赞", style = MaterialTheme.typography.labelSmall)
+                    Text("${post.comment_count} 评论", style = MaterialTheme.typography.labelSmall)
+                    if (post.viewer_has_favorited) Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
-            Spacer(modifier = Modifier.height(LeafySpacing.micro))
-            Text(post.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Spacer(modifier = Modifier.height(LeafySpacing.tiny))
-            Text(
-                post.body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (post.images.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(LeafySpacing.micro))
-                CommunityPostCoverImage(images = post.images)
-            }
-            Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            // 帖尾：时间与互动计数是一组元信息，给每篇帖子一个稳定的阅读落点。
-            // 同样用 FlowRow：200% 字体或长计数时换行，而不是把这一行挤到溢出。
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-                verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
-                val date = post.created_at.substringBefore('T').replace('-', '.')
-                if (date.isNotBlank()) {
-                    Text(
-                        date,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
-                }
-                Text("${post.like_count} 赞", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${post.comment_count} 评论", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (post.viewer_has_favorited) {
-                    Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-            Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
     }
 }

@@ -119,30 +119,35 @@ data class TrainingProgramUiState(
     val trainingProgram: ParsedTrainingProgram? = null,
     val loading: Boolean = true,
     val refreshState: TrainingProgramRefreshState = TrainingProgramRefreshState.Idle,
+    val graduationProgress: GraduationProgress? = null,
 )
 
 class TrainingProgramViewModel(
     private val repository: AcademicDocumentRepository,
+    private val academicRepository: AcademicRepository? = null,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(TrainingProgramMode.TRAINING_PROGRAM)
     private val refreshState = MutableStateFlow<TrainingProgramRefreshState>(TrainingProgramRefreshState.Idle)
+    private val retry = MutableStateFlow(0)
 
-    val uiState: StateFlow<TrainingProgramUiState> = combine(
-        repository.teachingPlan(),
-        repository.trainingProgram(),
+    val uiState: StateFlow<TrainingProgramUiState> = com.myleafy.android.core.flow.retryableFlow(retry, combine(
+        repository.teachingPlan().catch { failure -> refreshState.value = TrainingProgramRefreshState.Error(failure.message ?: "教学计划读取失败"); emit(emptyList()) },
+        repository.trainingProgram().catch { failure -> refreshState.value = TrainingProgramRefreshState.Error(failure.message ?: "培养方案读取失败"); emit(null) },
         mode,
         refreshState,
-    ) { teachingPlan, trainingProgram, currentMode, currentRefresh ->
+        combine(academicRepository?.grades() ?: kotlinx.coroutines.flow.flowOf(emptyList()),
+            academicRepository?.gradeSummary() ?: kotlinx.coroutines.flow.flowOf(null)) { grades, summary -> grades to summary },
+    ) { teachingPlan, trainingProgram, currentMode, currentRefresh, academic ->
         TrainingProgramUiState(
             mode = currentMode,
             teachingPlan = teachingPlan,
             trainingProgram = trainingProgram,
             loading = currentRefresh is TrainingProgramRefreshState.Loading,
             refreshState = currentRefresh,
+            graduationProgress = trainingProgram?.let { GraduationProgress.calculate(it, academic.first, academic.second) },
         )
-    }
-        .catch { emit(TrainingProgramUiState(refreshState = TrainingProgramRefreshState.Error(it.message ?: "教学与培养加载失败"))) }
+    }, onError = { TrainingProgramUiState(loading = false, refreshState = TrainingProgramRefreshState.Error(it.message ?: "教学与培养加载失败")) })
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TrainingProgramUiState())
 
     private var initialized = false
@@ -165,6 +170,7 @@ class TrainingProgramViewModel(
     fun refresh() {
         if (refreshState.value is TrainingProgramRefreshState.Loading) return
         refreshState.value = TrainingProgramRefreshState.Loading
+        retry.value += 1
         viewModelScope.launch {
             val result = runCatching { repository.refresh() }
             refreshState.value = result.fold(

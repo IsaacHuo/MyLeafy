@@ -22,6 +22,15 @@ data class GradeSummaryEntity(
     val officialGpa: Double?,
     val officialWeightedAverage: Double?,
     val officialCreditPoint: Double?,
+    val totalCredits: Double? = null,
+    val requiredCredits: Double? = null,
+    val professionalElectiveCredits: Double? = null,
+    val professionalMajorElectiveCredits: Double? = null,
+    val professionalCrossMajorElectiveCredits: Double? = null,
+    val publicElectiveCredits: Double? = null,
+    val publicElectiveBucketsJson: String? = null,
+    val rawFieldsJson: String? = null,
+    val syncedAt: Long? = null,
 ) {
     companion object {
         const val OFFICIAL_ID = "official"

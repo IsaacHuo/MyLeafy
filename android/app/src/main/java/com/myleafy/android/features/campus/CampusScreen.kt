@@ -504,6 +504,11 @@ internal fun ExamRow(exam: ExamEntity) {
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = exam.name, style = MaterialTheme.typography.titleSmall)
+            Text("课程编号：${exam.courseId.ifBlank { "未填写" }}", style = MaterialTheme.typography.bodySmall)
+            val examStart = runCatching { java.time.LocalDateTime.of(java.time.LocalDate.parse(exam.date), java.time.LocalTime.parse(exam.start)) }.getOrNull()
+            val examEnd = runCatching { java.time.LocalDateTime.of(java.time.LocalDate.parse(exam.date), java.time.LocalTime.parse(exam.end)) }.getOrNull()
+            val now = java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"))
+            Text(when { examStart == null || examEnd == null -> "时间待确认"; now < examStart -> "待开始"; now >= examEnd -> "已结束"; else -> "进行中" }, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(LeafySpacing.tiny))
             Text(
                 text = "${exam.date} ${exam.start}–${exam.end}",
@@ -521,9 +526,13 @@ internal fun ExamRow(exam: ExamEntity) {
 
 /** 打开外部链接（图书馆座位预约等）。链接由系统浏览器或对应应用处理。 */
 internal fun openExternalUrl(context: android.content.Context, url: String) {
-    runCatching {
+    try {
+        require(Uri.parse(url).scheme in listOf("http", "https")) { "链接格式无效" }
         context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
+    } catch (failure: Exception) {
+        android.util.Log.e("CampusLink", "Unable to open campus reference", failure)
+        android.widget.Toast.makeText(context, failure.message ?: "无法打开链接，请检查浏览器", android.widget.Toast.LENGTH_LONG).show()
     }
 }

@@ -276,6 +276,7 @@ class ScheduleReconcileWorker(context: Context, params: WorkerParameters) : Coro
         container.restoreIdentity()
         container.scheduleNotificationScheduler.reconcile()
         container.courseReminderScheduler.reconcile()
+        container.sunshineReminderScheduler.reconcile()
         Result.success()
     }.getOrElse { Result.retry() }
 }

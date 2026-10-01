@@ -29,6 +29,7 @@ interface HtmlParser {
 
     /** 解析空教室页面（空闲教室，占用行会被跳过）。 */
     fun parseEmptyClassrooms(html: String): List<EmptyClassroom>
+    fun parseClassroomAvailability(html: String): ClassroomAvailability = throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "教室占用矩阵")
 
     /** 解析教学计划页面（/jsxsd/pyfa/pyfa_query）。 */
     fun parseTeachingPlan(html: String): List<ParsedTeachingPlanSection>
@@ -74,6 +75,14 @@ data class ParsedGradeSummary(
     val officialGpa: Double?,
     val officialWeightedAverage: Double?,
     val officialCreditPoint: Double?,
+    val totalCredits: Double? = null,
+    val requiredCredits: Double? = null,
+    val professionalElectiveCredits: Double? = null,
+    val professionalMajorElectiveCredits: Double? = null,
+    val professionalCrossMajorElectiveCredits: Double? = null,
+    val publicElectiveCredits: Double? = null,
+    val publicElectiveBuckets: Map<String, Double> = emptyMap(),
+    val rawFields: Map<String, String> = emptyMap(),
 )
 
 /** 考试安排记录。 */
@@ -92,6 +101,21 @@ data class EmptyClassroom(
     val building: String,
     val room: String,
 )
+
+enum class ClassroomStatus(val title: String) { AVAILABLE("空闲"), OCCUPIED("占用"), UNKNOWN("待确认") }
+data class ClassroomSlot(val period: Int, val status: ClassroomStatus)
+data class ClassroomAvailabilityRow(val room: EmptyClassroom, val slots: List<ClassroomSlot>)
+data class ClassroomAvailability(val periods: List<Int>, val rows: List<ClassroomAvailabilityRow>) {
+    fun available(start: Int, end: Int): List<EmptyClassroom> {
+        require(start in 1..12 && end in start..12) { "请选择有效的起止节次" }
+        check((start..end).all { it in periods }) { "学校结果缺少所选节次" }
+        return rows.filter { row ->
+            val slots = row.slots.filter { it.period in start..end }
+            check(slots.size == end - start + 1 && slots.none { it.status == ClassroomStatus.UNKNOWN }) { "学校结果包含无法识别的占用状态" }
+            slots.all { it.status == ClassroomStatus.AVAILABLE }
+        }.map { it.room }
+    }
+}
 
 @Serializable
 data class ParsedTeachingPlanCourse(
@@ -134,6 +158,9 @@ data class ParsedGraduationCreditRequirement(
     val label: String,
     val credits: Double,
     val isTotal: Boolean,
+    val courseName: String = "",
+    val plannedCredits: Double? = null,
+    val isAggregate: Boolean = true,
 )
 
 @Serializable

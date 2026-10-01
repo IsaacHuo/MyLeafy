@@ -4,7 +4,7 @@
 
 iOS 发布通过 GitHub Actions 的 `Cut iOS Release` workflow（`workflow_dispatch`）完成：它会用当前 `main` 构建未签名的 `.xcarchive`，在 `main` 上创建 `vX.Y` tag，并生成一个挂载归档的 draft Release。确认草稿内容后手动发布即可；App Store 提交流程仍为人工操作。
 
-Android 使用独立的 `Cut Android Release` workflow 和 `android-vX.Y.Z` tag。该流程先执行 JVM tests、lint 和 release assemble，再校验 APK 签名，最后发布 APK、SHA-256 与构建信息；不会构建或修改 iOS 归档。
+Android 使用独立候选准备与管理员验收发布流程，以及 `android-vX.Y.Z` tag。主线 CI 通过后构建正式签名候选；管理员验收并授权后，发布同一 APK、SHA-256 与构建信息。具体流程见 [交付与发布](delivery.md)；不会构建或修改 iOS 归档。
 
 ## Android 1.0.1
 

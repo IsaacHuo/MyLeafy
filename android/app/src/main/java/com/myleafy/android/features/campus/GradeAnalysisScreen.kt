@@ -15,6 +15,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.ui.components.*
 import com.myleafy.android.ui.theme.LeafySpacing
 import java.util.Locale
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 internal fun Double?.gradeNumber(): String = this?.let { String.format(Locale.getDefault(), "%.2f", it) } ?: "--"
 
@@ -39,21 +41,39 @@ fun GradeAnalysisScreen(onBack: () -> Unit, canSync: Boolean, viewModel: CampusV
 internal fun GradeAnalysisContent(state: CampusUiState.Loaded, modifier: Modifier = Modifier,
     canSync: Boolean = false, syncing: Boolean = false, onRankingsRefresh: () -> Unit = {}) {
     val analysis = state.analytics
-    var sort by rememberSaveable { mutableStateOf("学期") }
+    var sort by rememberSaveable { mutableStateOf("低分优先") }
+    val context = LocalContext.current
+    val owner = rememberCoroutineScope()
+    var exportError by remember { mutableStateOf<String?>(null) }
+    var image by remember { mutableStateOf<java.io.File?>(null) }
     val courses = when (sort) { "低分优先" -> analysis.lowScoreFirst; "影响" -> analysis.highImpact; else -> analysis.courses }
     LazyColumn(modifier, contentPadding = PaddingValues(LeafySpacing.page), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (state.warnings.isNotEmpty()) item { LeafyStatusBanner(state.warnings.joinToString("；"), isError = true) }
+        item {
+            Row {
+                TextButton(onClick = { owner.launch { try {
+                    image = campusTextImage(context, "grades-overview", "成绩分析概览", listOf("${analysis.effectiveCourseCount} 门有效课程 · ${analysis.rawRecordCount} 条记录", "官方 GPA ${analysis.officialGpa.gradeNumber()}", "加权均分 ${analysis.displayWeightedAverage.gradeNumber()}（${analysis.weightedAverageSource}）", "已获学分 ${analysis.passedCredits.gradeNumber()} · 风险课程 ${analysis.riskCourseCount}") + analysis.terms.map { "${it.name}：加权均分 ${it.average.gradeNumber()} · ${it.credits.gradeNumber()} 学分" } + "统计为本地分析，官方 GPA 只使用学校值")
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { exportError = failure.message } } }) { Text("概览图片") }
+                TextButton(onClick = { owner.launch { try {
+                    val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { java.io.File(context.cacheDir, "campus-exports/grades.csv").apply {
+                        parentFile?.mkdirs(); writeText("\uFEFFterm,courseName,credit,score,type,courseCode\n" + state.grades.joinToString("\n") { row -> listOf(row.term, row.courseName, row.credit, row.score, row.type, row.courseCode.orEmpty()).joinToString(",") { "\"${it.replace("\"", "\"\"")}\"" } }, Charsets.UTF_8)
+                    } }; shareCampusFile(context, file, "text/csv")
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { exportError = failure.message } } }) { Text("导出 CSV") }
+            }
+            exportError?.let { LeafyStatusBanner(it, isError = true, onDismiss = { exportError = null }) }
+        }
         item {
             LeafySectionHeader("概览", supportingText = "${analysis.effectiveCourseCount} 门课程 · ${analysis.rawRecordCount} 条成绩")
             GradeOverview(analysis)
             Text("已获学分 ${analysis.passedCredits.gradeNumber()} · 通过率 ${analysis.passRate?.let { "${(it * 100).gradeNumber()}%" } ?: "--"}",
                 Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        item { LeafySectionHeader("学期趋势") }
+        item { LeafySectionHeader("学期加权均分趋势"); AcademicLineChart(analysis.terms.reversed().mapNotNull { term -> term.average?.let { term.name to it } }) }
         items(analysis.terms.reversed(), key = { "term:${it.name}" }) { term ->
             AnalysisValueRow(term.name, term.average.gradeNumber(), "${term.courses.size} 门 · ${term.credits.gradeNumber()} 学分")
             term.average?.let { AnalysisBar((it / 100).toFloat()) }
         }
-        item { LeafySectionHeader("分数分布") }
+        item { LeafySectionHeader("分数分布"); AcademicBarChart(analysis.distribution.map { it.range to it.count.toDouble() }) }
         items(analysis.distribution, key = { "bucket:${it.range}" }) { bucket ->
             AnalysisValueRow(bucket.range, "${bucket.count} 门", "${bucket.credits.gradeNumber()} 学分")
             AnalysisBar(if (analysis.scoredCourseCount == 0) 0f else bucket.count.toFloat() / analysis.scoredCourseCount)
@@ -65,10 +85,17 @@ internal fun GradeAnalysisContent(state: CampusUiState.Loaded, modifier: Modifie
             }
             if (state.rankings.isEmpty()) Text("暂无官方排名", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        items(state.rankings, key = { "ranking:${it.id}" }) { ranking ->
-            AnalysisValueRow("${ranking.term} · ${ranking.rankingRange}", ranking.totalCount?.let { "${ranking.rank} / $it" } ?: "第 ${ranking.rank} 名", ranking.metricText)
+        state.rankings.groupBy { it.rankingRange }.forEach { (range, rankings) ->
+            item(key = "ranking-group:$range") {
+                LeafySectionHeader(range)
+                AcademicLineChart(rankings.filter { Regex("\\d{4}-\\d{4}(-[12])?").matches(it.term) }.sortedBy { it.term }.map { it.term to it.rank.toDouble() }, lowerIsBetter = true)
+            }
+            items(rankings, key = { "ranking:${it.id}" }) { ranking ->
+                val share = ranking.totalCount?.takeIf { it > 0 }?.let { " · 前 ${ (ranking.rank.toDouble() / it * 100).gradeNumber() }%（排名占比）" }.orEmpty()
+                AnalysisValueRow(ranking.term.ifBlank { "全学程" }, ranking.totalCount?.let { "${ranking.rank} / $it" } ?: "第 ${ranking.rank} 名", ranking.metricText + share)
+            }
         }
-        item { LeafySectionHeader("课程结构") }
+        item { LeafySectionHeader("学分结构"); AcademicBarChart(analysis.categories.map { it.name to it.credits }) }
         items(analysis.categories, key = { "category:${it.name}" }) { category ->
             AnalysisValueRow(category.name, "${category.credits.gradeNumber()} 学分", "${category.courses.size} 门 · 加权均分 ${category.average.gradeNumber()}")
         }
@@ -93,6 +120,7 @@ internal fun GradeAnalysisContent(state: CampusUiState.Loaded, modifier: Modifie
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    image?.let { CampusFilePreview(it, "image/png") { image = null } }
 }
 
 @Composable

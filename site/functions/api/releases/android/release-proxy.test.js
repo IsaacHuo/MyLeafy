@@ -1,5 +1,15 @@
 import {expect,it,vi} from 'vitest';
 import {onRequest} from './[[path]].js';
+import {readFileSync} from 'node:fs';
+
+it('deploys public Android release endpoints through Pages Functions',()=>{
+  const routes=JSON.parse(readFileSync('public/_routes.json','utf8'));
+  const matches=(pattern,path)=>new RegExp('^'+pattern.replaceAll('*','.*')+'$').test(path);
+  for(const path of ['/api/releases/android/latest','/api/releases/android/download']){
+    expect(routes.include.some(pattern=>matches(pattern,path))).toBe(true);
+    expect(routes.exclude.some(pattern=>matches(pattern,path))).toBe(false);
+  }
+});
 
 it('reads the bound environment without sending browser credentials or invoking a production URL',async()=>{
   const binding=vi.fn(async request=>{

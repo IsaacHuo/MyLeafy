@@ -14,6 +14,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.flow.first
 
 /**
  * 校园学业仓储（成绩/考试）。学校教务为权威来源，Room 为本地缓存副本。
@@ -94,6 +96,7 @@ class LiveAcademicRepository(
         runCatching { client.fetchAcademicResults() }
             .onSuccess { result ->
                 ensureScope(scopeKey)
+                failures += result.failures
                 gradeDao.replaceAll(scopeKey,
                     result.grades.map { g ->
                 GradeEntity(
@@ -129,16 +132,7 @@ class LiveAcademicRepository(
                     )
                     rankingCount = rankings.size
                 }
-                result.summary?.let { summary ->
-                    gradeSummaryDao.upsert(
-                        GradeSummaryEntity(
-                            scopeKey = scopeKey,
-                            officialGpa = summary.officialGpa,
-                            officialWeightedAverage = summary.officialWeightedAverage,
-                            officialCreditPoint = summary.officialCreditPoint,
-                        ),
-                    )
-                }
+                result.summary?.let { saveSummary(scopeKey, it) }
             }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; needsAuthentication = it is com.myleafy.android.core.network.SchoolNetworkError.AuthenticationExpired; failures += "成绩与排名：${it.message ?: "拉取失败"}" }
 
@@ -189,17 +183,40 @@ class LiveAcademicRepository(
     override suspend fun refreshRankings(): AcademicRefreshResult {
         val scopeKey = activeAppScopeStore.current.scopeKey
         return try {
-            val rankings = client.fetchGradeRankings()
+            val supplemental = client.fetchGradeSupplemental()
+            val rankings = supplemental.rankings
             ensureScope(scopeKey)
             gradeRankingDao.replaceAll(scopeKey, rankings.map { ranking ->
                 GradeRankingEntity(scopeKey, "${ranking.term}|${ranking.rankingRange}|${ranking.rank}|${ranking.metricText}",
                     ranking.term, ranking.rankingRange, ranking.rank, ranking.totalCount, ranking.metricText)
             })
-            AcademicRefreshResult(null, rankings.size, null, emptyList())
+            supplemental.summary?.let { saveSummary(scopeKey, it) }
+            AcademicRefreshResult(null, rankings.size, null, supplemental.failures)
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             AcademicRefreshResult(null, null, null, listOf(error.message ?: "排名刷新失败"))
         }
+    }
+
+    private suspend fun saveSummary(scopeKey: String, summary: com.myleafy.android.parsers.ParsedGradeSummary) {
+        val old = gradeSummaryDao.official(scopeKey).first()
+        ensureScope(scopeKey)
+        val full = summary.totalCredits != null
+        gradeSummaryDao.upsert(GradeSummaryEntity(
+            scopeKey = scopeKey,
+            officialGpa = summary.officialGpa,
+            officialWeightedAverage = summary.officialWeightedAverage,
+            officialCreditPoint = summary.officialCreditPoint,
+            totalCredits = if (full) summary.totalCredits else old?.totalCredits,
+            requiredCredits = if (full) summary.requiredCredits else old?.requiredCredits,
+            professionalElectiveCredits = if (full) summary.professionalElectiveCredits else old?.professionalElectiveCredits,
+            professionalMajorElectiveCredits = if (full) summary.professionalMajorElectiveCredits else old?.professionalMajorElectiveCredits,
+            professionalCrossMajorElectiveCredits = if (full) summary.professionalCrossMajorElectiveCredits else old?.professionalCrossMajorElectiveCredits,
+            publicElectiveCredits = if (full) summary.publicElectiveCredits else old?.publicElectiveCredits,
+            publicElectiveBucketsJson = if (full) kotlinx.serialization.json.Json.encodeToString(summary.publicElectiveBuckets) else old?.publicElectiveBucketsJson,
+            rawFieldsJson = if (full) kotlinx.serialization.json.Json.encodeToString(summary.rawFields) else old?.rawFieldsJson,
+            syncedAt = if (full) System.currentTimeMillis() else old?.syncedAt,
+        ))
     }
 
     private suspend fun ensureScope(scopeKey: String) {

@@ -23,6 +23,8 @@ data class SportsUiState(
     val runs: List<SunshineRunRecordEntity> = emptyList(),
     val settings: SunshineRunSettingsEntity = SunshineRunSettingsEntity("signed-out"),
     val fitnessTests: List<FitnessTestRecordEntity> = emptyList(),
+    val loading: Boolean = false,
+    val loadFailed: Boolean = false,
 )
 
 class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel() {
@@ -43,12 +45,14 @@ class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel(
         }
     }
 
-    val uiState: StateFlow<SportsUiState> = combine(
+    private val loadRetry = MutableStateFlow(0)
+    fun retryLoad() { loadRetry.value += 1; _error.value = null }
+    val uiState: StateFlow<SportsUiState> = com.myleafy.android.core.flow.retryableFlow(loadRetry, combine(
         repository.sunshineRuns,
         repository.sunshineSettings,
         repository.fitnessTests,
-        ::SportsUiState,
-    ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsUiState())
+        { runs, settings, tests -> SportsUiState(runs, settings, tests) },
+    ), onError = { _error.value = it.message ?: "体育记录读取失败"; SportsUiState(loadFailed = true) }).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsUiState(loading = true))
 
     fun addRun(date: LocalDate, startWeek: Int, endWeek: Int) = mutate {
         repository.saveRun(date, startWeek, endWeek)
@@ -56,12 +60,12 @@ class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel(
 
     fun deleteRun(record: SunshineRunRecordEntity) = mutate { repository.deleteRun(record) }
 
-    fun saveRules(total: Int, weeks: Int, perPeriod: Int, excludedWeeks: String, onSaved: () -> Unit = {}) = mutate(onSaved) {
-        repository.saveSunshineSettings(total, weeks, perPeriod, excludedWeeks)
+    fun saveRules(total: Int, weeks: Int, perPeriod: Int, excludedWeeks: String, skipsExcludedWeeks: Boolean = true, onSaved: () -> Unit = {}) = mutate(onSaved) {
+        repository.saveSunshineSettings(total, weeks, perPeriod, excludedWeeks, skipsExcludedWeeks)
     }
 
-    fun saveFitness(date: LocalDate, item: String, value: Double, unit: String, note: String, onSaved: () -> Unit = {}) =
-        mutate(onSaved) { repository.saveFitnessTest(date = date, item = item, value = value, unit = unit, note = note) }
+    fun saveFitness(date: LocalDate, item: String, value: Double, unit: String, note: String, id: String? = null, onSaved: () -> Unit = {}) =
+        mutate(onSaved) { repository.saveFitnessTest(id = id, date = date, item = item, value = value, unit = unit, note = note) }
 
     fun deleteFitness(record: FitnessTestRecordEntity) = mutate {
         repository.deleteFitnessTest(record)
@@ -72,6 +76,8 @@ data class MedicalUiState(
     val entries: List<MedicalLedgerEntryEntity> = emptyList(),
     val photos: List<MedicalLedgerPhotoEntity> = emptyList(),
     val exportedFile: File? = null,
+    val loading: Boolean = false,
+    val loadFailed: Boolean = false,
 )
 
 class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel() {
@@ -93,20 +99,32 @@ class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel
     }
 
     private val exportedFile = kotlinx.coroutines.flow.MutableStateFlow<File?>(null)
-    val uiState: StateFlow<MedicalUiState> = combine(
+    private val loadRetry = MutableStateFlow(0)
+    fun retryLoad() { loadRetry.value += 1; _error.value = null }
+    val uiState: StateFlow<MedicalUiState> = com.myleafy.android.core.flow.retryableFlow(loadRetry, combine(
         repository.medicalEntries,
         repository.medicalPhotos,
         exportedFile,
-        ::MedicalUiState,
-    ).stateIn(
+        { entries, photos, exported -> MedicalUiState(entries, photos, exported) },
+    ), onError = { _error.value = it.message ?: "医疗台账读取失败"; MedicalUiState(loadFailed = true) }).stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        MedicalUiState(),
+        MedicalUiState(loading = true),
     )
 
     fun save(draft: MedicalLedgerDraft, onSaved: () -> Unit = {}) = mutate(onSaved) { repository.saveMedicalEntry(draft) }
     fun delete(entry: MedicalLedgerEntryEntity) = mutate { repository.deleteMedicalEntry(entry) }
     fun importPhoto(entryId: String, uri: Uri) = mutate { repository.importMedicalPhoto(entryId, uri) }
+    fun importPhotos(entryId: String, uris: List<Uri>) = mutate {
+        val failures = mutableListOf<String>()
+        uris.forEachIndexed { index, uri ->
+            try { repository.importMedicalPhoto(entryId, uri) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { failures += "第 ${index + 1} 张照片：${failure.message ?: "导入失败"}" }
+        }
+        check(failures.isEmpty()) { failures.joinToString("；") }
+    }
+    fun deletePhoto(photo: MedicalLedgerPhotoEntity) = mutate { repository.deleteMedicalPhoto(photo) }
     fun export() = mutate { exportedFile.value = repository.exportMedicalLedger(uiState.value.entries) }
     fun consumeExport() { exportedFile.value = null }
 }

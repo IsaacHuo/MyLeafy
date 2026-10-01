@@ -46,6 +46,16 @@ class CommunityScreenshotTest {
         render(state = defaultState(), darkTheme = true)
         capture()
     }
+    @Test fun mixedCoverProportionsAndTextCards() {
+        render(state = loadedState(
+            postFixture("1", "竖向封面", "校园生活").copy(images = listOf(com.myleafy.android.shared.model.PostImageDto("portrait", width = 360, height = 480))),
+            postFixture("2", "横向封面", "学习交流").copy(images = listOf(com.myleafy.android.shared.model.PostImageDto("landscape", width = 1280, height = 720))),
+            postFixture("3", "纯文字卡片", "活动社团"),
+        ))
+        composeRule.onNodeWithTag("community-post-1").assertIsDisplayed()
+        composeRule.onNodeWithTag("community-post-2").assertIsDisplayed()
+        capture()
+    }
 
     @Test
     @Config(sdk = [36], qualifiers = "w840dp-h900dp-xxhdpi", application = Application::class)

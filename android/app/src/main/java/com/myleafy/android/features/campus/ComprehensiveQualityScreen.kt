@@ -30,6 +30,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +55,7 @@ import com.myleafy.android.ui.components.LeafyTextButton
 import com.myleafy.android.ui.theme.LeafySpacing
 import java.io.File
 
+@kotlinx.serialization.Serializable
 private data class ComponentDraft(
     val raw: String = "",
     val peer: String = "",
@@ -85,13 +88,23 @@ fun ComprehensiveQualityScreen(
     var officialQuality by rememberSaveable { mutableStateOf("") }
     var officialComposite by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
-    var drafts by remember { mutableStateOf(ComprehensiveQualityComponentKind.entries.associateWith { ComponentDraft() }) }
+    val draftSaver = remember {
+        androidx.compose.runtime.saveable.Saver<Map<ComprehensiveQualityComponentKind, ComponentDraft>, String>(
+            save = { kotlinx.serialization.json.Json.encodeToString(kotlinx.serialization.builtins.ListSerializer(ComponentDraft.serializer()), ComprehensiveQualityComponentKind.entries.map { kind -> it.getValue(kind) }) },
+            restore = { encoded -> kotlinx.serialization.json.Json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(ComponentDraft.serializer()), encoded).let { values -> ComprehensiveQualityComponentKind.entries.mapIndexed { index, kind -> kind to values[index] }.toMap() } },
+        )
+    }
+    var drafts by rememberSaveable(stateSaver = draftSaver) { mutableStateOf(ComprehensiveQualityComponentKind.entries.associateWith { ComponentDraft() }) }
+    var appliedRecord by rememberSaveable { mutableStateOf<String?>(null) }
+    val owner = rememberCoroutineScope()
+    var previewImage by remember { mutableStateOf<File?>(null) }
+    var pendingCollege by remember { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
 
     val loadedRecord = uiState.record
     val savedComponents = uiState.components.associateBy { it.kind }
     val dirty = !uiState.loading && (
-        collegeName != (loadedRecord?.collegeName ?: "园林学院") ||
+        collegeName != (loadedRecord?.collegeName ?: collegeName) ||
         academic != loadedRecord?.academicStandardScore?.toPlainString().orEmpty() ||
         officialQuality != loadedRecord?.officialQualityScore?.toPlainString().orEmpty() ||
         officialComposite != loadedRecord?.officialCompositeScore?.toPlainString().orEmpty() ||
@@ -108,13 +121,17 @@ fun ComprehensiveQualityScreen(
         }
     )
     val requestExit = com.myleafy.android.ui.components.rememberEditorExit(dirty, false, onBack)
-    LaunchedEffect(loadedRecord?.updatedAt) {
-        val record = loadedRecord ?: return@LaunchedEffect
-        collegeName = record.collegeName
-        academic = record.academicStandardScore?.toPlainString().orEmpty()
-        officialQuality = record.officialQualityScore?.toPlainString().orEmpty()
-        officialComposite = record.officialCompositeScore?.toPlainString().orEmpty()
-        note = record.note
+    LaunchedEffect(collegeName, loadedRecord?.scopeKey, loadedRecord?.updatedAt, uiState.loading) {
+        if (uiState.loading) return@LaunchedEffect
+        val record = loadedRecord
+        if (record != null && record.collegeName != collegeName) return@LaunchedEffect
+        val token = "$collegeName|${record?.scopeKey}|${record?.updatedAt}"
+        if (appliedRecord == token) return@LaunchedEffect
+        appliedRecord = token
+        academic = record?.academicStandardScore?.toPlainString().orEmpty()
+        officialQuality = record?.officialQualityScore?.toPlainString().orEmpty()
+        officialComposite = record?.officialCompositeScore?.toPlainString().orEmpty()
+        note = record?.note.orEmpty()
         drafts = ComprehensiveQualityComponentKind.entries.associateWith { kind ->
             val stored = uiState.components.firstOrNull { it.kind == kind.name }
             ComponentDraft(
@@ -192,6 +209,11 @@ fun ComprehensiveQualityScreen(
         onBack = requestExit,
         actions = {
             if (available) {
+                LeafyTextButton(enabled = result.isComplete, onClick = { owner.launch {
+                    try { previewImage = campusTextImage(context, "comprehensive", "$collegeName · 综素测算", listOf("2026届 · ${rule.sourceTitle}", "学业标准分 $academic", "综合成绩 ${result.compositeScore?.toPlainString()}", "综素贡献 ${result.qualityContribution?.toPlainString()}") + result.componentResults.map { "${it.kind.title}：标准分 ${it.standardScore?.toPlainString() ?: "未确认"} · 贡献 ${it.contribution?.toPlainString() ?: "未确认"}" } + "结果仅为本地测算，官方公示结果优先") }
+                    catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (failure: Exception) { viewModel.reportError(failure.message ?: "图片导出失败") }
+                } }) { Text("图片") }
                 LeafyActionIconButton(onClick = exportCsv) {
                     Icon(Icons.Outlined.Share, contentDescription = "导出综素测算 CSV")
                 }
@@ -225,7 +247,7 @@ fun ComprehensiveQualityScreen(
                     items(ComprehensiveQualityRuleCatalog.participatingCollegeNames) { name ->
                         FilterChip(
                             selected = name == collegeName,
-                            onClick = { collegeName = name },
+                            onClick = { if (name != collegeName) { if (dirty) pendingCollege = name else { collegeName = name; viewModel.selectCollege(name) } } },
                             label = { Text(name) },
                         )
                     }
@@ -239,6 +261,7 @@ fun ComprehensiveQualityScreen(
                         Text(rule.applicableText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(rule.calculationNote, style = MaterialTheme.typography.bodySmall)
                         Text("更新时间：${rule.updatedAtText}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        rule.attachmentUrl?.let { url -> LeafyTextButton(onClick = { openExternalUrl(context, url) }) { Text("查看规则附件") } }
                         if (rule.sourceUrl.isNotBlank()) {
                             LeafyTextButton(onClick = { openExternalUrl(context, rule.sourceUrl) }) { Text("打开来源") }
                         }
@@ -305,6 +328,7 @@ fun ComprehensiveQualityScreen(
                                 onCheckedChange = { drafts = drafts.updated(kind, draft.copy(materialReady = it)) },
                             )
                         }
+                        ComprehensiveEvidencePanel(collegeName, "2026届", kind.name)
                         val componentResult = result.componentResults.firstOrNull { it.kind == kind }
                         Text(
                             text = when {
@@ -392,6 +416,8 @@ fun ComprehensiveQualityScreen(
             }
         }
     }
+    previewImage?.let { CampusFilePreview(it, "image/png") { previewImage = null } }
+    pendingCollege?.let { target -> LeafyAlertDialog(onDismissRequest = { pendingCollege = null }, title = { Text("放弃当前未保存草稿并切换学院？") }, confirmButton = { LeafyTextButton(onClick = { pendingCollege = null; collegeName = target; viewModel.selectCollege(target) }) { Text("切换学院") } }, dismissButton = { LeafyTextButton(onClick = { pendingCollege = null }) { Text("继续编辑") } }) }
     if (confirmClear) {
         LeafyAlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -401,7 +427,6 @@ fun ComprehensiveQualityScreen(
                 LeafyTextButton(onClick = {
                     confirmClear = false
                     viewModel.clear()
-                    collegeName = "园林学院"
                     academic = ""
                     officialQuality = ""
                     officialComposite = ""

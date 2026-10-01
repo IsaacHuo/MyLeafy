@@ -1,5 +1,7 @@
 package com.myleafy.android.features.community
 
+import androidx.compose.ui.unit.dp
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NotificationsNone
@@ -58,6 +64,8 @@ data class CommunitySearchUiState(
     val query: String = "",
     val posts: List<PostDto> = emptyList(),
     val hasSearched: Boolean = false,
+    val nextCursor: String? = null,
+    val loadingMore: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -69,26 +77,27 @@ class CommunitySearchViewModel(
     private val _uiState = MutableStateFlow(CommunitySearchUiState())
     val uiState: StateFlow<CommunitySearchUiState> = _uiState.asStateFlow()
 
+    private var request: kotlinx.coroutines.Job? = null
+    private var generation = 0
     fun updateQuery(value: String) {
-        _uiState.value = _uiState.value.copy(query = value, error = null)
+        generation++; request?.cancel()
+        _uiState.value = CommunitySearchUiState(query = value)
     }
-
-    fun search() {
-        val query = _uiState.value.query.trim()
-        if (query.isEmpty() || _uiState.value.isLoading) return
-        _uiState.value = _uiState.value.copy(isLoading = true, hasSearched = true, error = null)
-        viewModelScope.launch {
-            runCatching {
-                repository.feed(FeedQuery(limit = 30, campus_id = campusId, search = query)).first()
-            }.fold(
-                onSuccess = { posts -> _uiState.value = _uiState.value.copy(posts = posts, isLoading = false) },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = error.toCommunityMessage("搜索失败"),
-                    )
-                },
-            )
+    fun search() = load(false)
+    fun loadMore() = load(true)
+    private fun load(append: Boolean) {
+        val snapshot = _uiState.value
+        val query = snapshot.query.trim()
+        if (query.isEmpty() || snapshot.isLoading || snapshot.loadingMore || append && snapshot.nextCursor == null) return
+        request?.cancel(); val version = ++generation
+        _uiState.value = snapshot.copy(isLoading = !append, loadingMore = append, hasSearched = true, error = null)
+        request = viewModelScope.launch {
+            try {
+                val page = repository.feedPage(FeedQuery(limit = 20, campus_id = campusId, search = query, cursor = if (append) snapshot.nextCursor else null))
+                if (version != generation) return@launch
+                _uiState.value = _uiState.value.copy(posts = (if (append) snapshot.posts + page.posts else page.posts).distinctBy { it.id }, nextCursor = page.next_cursor, isLoading = false, loadingMore = false)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { if (version == generation) _uiState.value = _uiState.value.copy(isLoading = false, loadingMore = false, error = failure.toCommunityMessage("搜索失败")) }
         }
     }
 }
@@ -127,8 +136,8 @@ fun CommunitySearchScreen(
             }
             Spacer(Modifier.height(LeafySpacing.compact))
             when {
-                state.isLoading -> LeafyLoadingState(message = "正在搜索校园动态")
-                state.error != null -> LeafyStatusBanner(message = state.error.orEmpty(), isError = true)
+                state.isLoading && state.posts.isEmpty() -> LeafyLoadingState(message = "正在搜索校园动态")
+                state.error != null && state.posts.isEmpty() -> LeafyStatusBanner(message = state.error.orEmpty(), isError = true)
                 !state.hasSearched -> LeafyEmptyState(
                     title = "查找校园动态",
                     message = "输入课程、活动或校园生活关键词。",
@@ -141,10 +150,12 @@ fun CommunitySearchScreen(
                     icon = Icons.Outlined.Search,
                     modifier = Modifier.fillMaxSize(),
                 )
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+                else -> LazyVerticalStaggeredGrid(columns = StaggeredGridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalItemSpacing = LeafySpacing.compact) {
+                    state.error?.let { message -> item(span = StaggeredGridItemSpan.FullLine) { LeafyStatusBanner(message = message, isError = true) } }
                     items(state.posts, key = { it.id }) { post ->
                         CommunityPostCard(post, onClick = { onPostClick(post.id) })
                     }
+                    if (state.nextCursor != null) item(span = StaggeredGridItemSpan.FullLine) { com.myleafy.android.ui.components.LeafyTextButton(onClick = viewModel::loadMore, enabled = !state.loadingMore) { Text(if (state.loadingMore) "加载中…" else "加载更多") } }
                 }
             }
         }

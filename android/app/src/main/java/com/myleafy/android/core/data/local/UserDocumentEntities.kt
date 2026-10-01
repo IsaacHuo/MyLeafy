@@ -69,17 +69,20 @@ interface HonorRecordDao {
 
 @Dao
 interface ComprehensiveQualityDao {
-    @Query("SELECT * FROM comprehensive_quality_records WHERE scopeKey = :scopeKey AND id = 'current' LIMIT 1")
-    fun current(scopeKey: String): Flow<ComprehensiveQualityRecordEntity?>
-
-    @Query("SELECT * FROM comprehensive_quality_records WHERE scopeKey = :scopeKey AND id = 'current' LIMIT 1")
-    suspend fun currentOnce(scopeKey: String): ComprehensiveQualityRecordEntity?
+    @Query("SELECT * FROM comprehensive_quality_records WHERE scopeKey = :scopeKey AND collegeName = :college AND cohort = :cohort ORDER BY updatedAt DESC LIMIT 1")
+    fun current(scopeKey: String, college: String = "园林学院", cohort: String = "2026届"): Flow<ComprehensiveQualityRecordEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(record: ComprehensiveQualityRecordEntity)
 
-    @Query("DELETE FROM comprehensive_quality_records WHERE scopeKey = :scopeKey AND id = 'current'")
-    suspend fun clear(scopeKey: String)
+    @Query("DELETE FROM comprehensive_quality_records WHERE scopeKey = :scopeKey AND collegeName = :college AND cohort = :cohort")
+    suspend fun clear(scopeKey: String, college: String = "园林学院", cohort: String = "2026届")
+    @Query("DELETE FROM comprehensive_quality_records WHERE scopeKey = :scopeKey AND id = 'current' AND collegeName = :college AND cohort = :cohort")
+    suspend fun deleteLegacy(scopeKey: String, college: String, cohort: String)
+    @androidx.room.Transaction suspend fun saveForCollege(record: ComprehensiveQualityRecordEntity) {
+        upsert(record)
+        deleteLegacy(record.scopeKey, record.collegeName, record.cohort)
+    }
 }
 
 @Dao

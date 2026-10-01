@@ -45,9 +45,12 @@ class HonorRecordRepository(
         val extension = displayName.substringAfterLast('.', "").ifBlank { extensionFor(mime) }
         val localFilename = if (extension.isBlank()) id else "$id.$extension"
         val directory = File(context.filesDir, "HonorRecords/$scopeKey").apply { mkdirs() }
+        val target = File(directory, localFilename)
+        try {
         resolver.openInputStream(uri)?.use { input ->
-            File(directory, localFilename).outputStream().use { input.copyTo(it) }
+            target.outputStream().use { input.copyTo(it) }
         } ?: error("无法读取所选文件")
+        check(scopeKey == scopeStore.current.scopeKey) { "账号已切换" }
         val now = System.currentTimeMillis()
         dao.upsert(
             HonorRecordEntity(
@@ -64,9 +67,11 @@ class HonorRecordRepository(
             ),
         )
         id
+        } catch (failure: Exception) { target.delete(); throw failure }
     }
 
     suspend fun update(record: HonorRecordEntity, title: String, note: String, awardedAt: Long?) {
+        check(record.scopeKey == scopeStore.current.scopeKey) { "账号已切换" }
         dao.upsert(
             record.copy(
                 title = title.ifBlank { record.originalFilename },
@@ -78,7 +83,9 @@ class HonorRecordRepository(
     }
 
     suspend fun delete(record: HonorRecordEntity) = withContext(Dispatchers.IO) {
-        fileFor(record).delete()
+        check(record.scopeKey == scopeStore.current.scopeKey) { "账号已切换" }
+        val file = fileFor(record)
+        check(!file.exists() || file.delete()) { "文件删除失败" }
         dao.delete(record.scopeKey, record.id)
     }
 
@@ -124,6 +131,19 @@ class HonorRecordsViewModel(
             runCatching { repository.importFile(uri, title) }
                 .onSuccess { _message.value = null }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; _message.value = it.message ?: "导入失败" }
+        }
+    }
+    fun importAll(uris: List<Uri>) {
+        if (_saving.value) return
+        _saving.value = true
+        viewModelScope.launch {
+            val failures = mutableListOf<String>()
+            try { uris.forEachIndexed { index, uri ->
+                try { repository.importFile(uri, "") }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (failure: Exception) { failures += "第 ${index + 1} 个文件：${failure.message ?: "导入失败"}" }
+            }; _message.value = failures.takeIf { it.isNotEmpty() }?.joinToString("；") }
+            finally { _saving.value = false }
         }
     }
 

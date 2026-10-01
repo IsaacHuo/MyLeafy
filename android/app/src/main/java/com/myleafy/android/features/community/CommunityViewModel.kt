@@ -34,6 +34,8 @@ data class CommunityFeedSelection(
 
 data class CommunityUiState(
     val posts: List<PostDto> = emptyList(),
+    val nextCursor: String? = null,
+    val loadingMore: Boolean = false,
     val selection: CommunityFeedSelection = CommunityFeedSelection(),
     val isInitialLoading: Boolean = true,
     val isRefreshing: Boolean = false,
@@ -88,14 +90,14 @@ class CommunityViewModel(
     fun selectLatest(category: String?) {
         val selection = CommunityFeedSelection(mode = CommunityFeedMode.LATEST, category = category)
         if (_uiState.value.selection == selection) return
-        _uiState.value = _uiState.value.copy(selection = selection, posts = emptyList(), loadedSelection = null, error = null)
+        _uiState.value = _uiState.value.copy(selection = selection, posts = emptyList(), nextCursor = null, loadingMore = false, loadedSelection = null, error = null)
         refresh()
     }
 
     fun selectHot() {
         val selection = CommunityFeedSelection(mode = CommunityFeedMode.HOT)
         if (_uiState.value.selection == selection) return
-        _uiState.value = _uiState.value.copy(selection = selection, posts = emptyList(), loadedSelection = null, error = null)
+        _uiState.value = _uiState.value.copy(selection = selection, posts = emptyList(), nextCursor = null, loadingMore = false, loadedSelection = null, error = null)
         refresh()
     }
 
@@ -107,15 +109,15 @@ class CommunityViewModel(
         _uiState.value = current.copy(
             isInitialLoading = current.posts.isEmpty(),
             isRefreshing = current.posts.isNotEmpty(),
-            error = null,
+            error = null, loadingMore = false,
         )
         loadJob = viewModelScope.launch {
             try {
-                val posts = repository.feed(selection.toQuery(campusId)).first()
+                val page = repository.feedPage(selection.toQuery(campusId))
                 currentCoroutineContext().ensureActive()
                 if (generation != requestGeneration) return@launch
                 _uiState.value = _uiState.value.copy(
-                    posts = posts, loadedSelection = selection, hasNewPosts = false,
+                    posts = page.posts, nextCursor = page.next_cursor, loadedSelection = selection, hasNewPosts = false,
                     isInitialLoading = false, isRefreshing = false, error = null,
                 )
                 refreshUnreadCount()
@@ -129,6 +131,24 @@ class CommunityViewModel(
                     )
                 }
             }
+        }
+    }
+
+    fun loadMore() {
+        val snapshot = _uiState.value
+        val cursor = snapshot.nextCursor ?: return
+        if (snapshot.loadingMore || snapshot.isRefreshing || snapshot.isInitialLoading || snapshot.selection != snapshot.loadedSelection) return
+        val generation = ++requestGeneration
+        loadJob?.cancel()
+        _uiState.value = snapshot.copy(loadingMore = true, error = null)
+        loadJob = viewModelScope.launch {
+            try {
+                val page = repository.feedPage(snapshot.selection.toQuery(campusId).copy(cursor = cursor))
+                currentCoroutineContext().ensureActive()
+                if (generation != requestGeneration) return@launch
+                _uiState.value = _uiState.value.copy(posts = (snapshot.posts + page.posts).distinctBy { it.id }, nextCursor = page.next_cursor, loadingMore = false)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { if (generation == requestGeneration) _uiState.value = _uiState.value.copy(loadingMore = false, error = failure.toCommunityMessage("加载更多失败")) }
         }
     }
 

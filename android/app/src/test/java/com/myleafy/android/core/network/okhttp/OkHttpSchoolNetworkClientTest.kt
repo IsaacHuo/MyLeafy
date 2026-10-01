@@ -72,6 +72,13 @@ class OkHttpSchoolNetworkClientTest {
         assertNotNull(recorded)
         assertEquals("Auth=1; Campus=bjfu; JSESSIONID=abc", recorded?.getHeader("Cookie"))
     }
+    @Test fun malformedCreditSummaryKeepsValidRankingsAndReportsFailure() = runBlocking {
+        server.enqueue(MockResponse().setBody("""<p>学分积为 271.5，班级排名第 8 名，专业排名第 20 名，专业总人数 120 人。</p><table><tr><th>所得学分</th><th>必修学分</th></tr><tr><td>140</td><td>无法识别</td></tr></table>"""))
+        val result = client.fetchGradeSupplemental()
+        assertTrue(result.rankings.isNotEmpty())
+        assertNull(result.summary)
+        assertTrue(result.failures.single().contains("官方汇总解析失败"))
+    }
 
     @Test
     fun sendsUserAgentAndNoCacheHeaders() {
@@ -253,7 +260,7 @@ class OkHttpSchoolNetworkClientTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path?.startsWith("/jsxsd/kbxx/jsjy_query2") == true ->
-                    MockResponse().setBody(fixture("empty_classrooms.html"))
+                    MockResponse().setBody(requireNotNull(javaClass.getResource("/school/classroom-day-matrix.html")).readText())
                 else -> MockResponse().setResponseCode(404)
             }
         }
@@ -264,11 +271,14 @@ class OkHttpSchoolNetworkClientTest {
         assertEquals("0304", rooms[0].room)
 
         val recorded = server.takeRequest(5, TimeUnit.SECONDS)
-        val path = recorded?.path ?: ""
-        assertTrue(path.contains("zc=1"))
-        assertTrue(path.contains("xq=1"))
-        assertTrue(path.contains("jszt=5"))
-        assertTrue(path.contains("xnxqh=2025-2026-2"))
+        assertEquals("POST", recorded?.method)
+        val body = recorded?.body?.readUtf8().orEmpty()
+        assertTrue(body.contains("zc=1"))
+        assertTrue(body.contains("zc2=1"))
+        assertTrue(body.contains("xq=1"))
+        assertTrue(body.contains("jc=01"))
+        assertTrue(body.contains("jc2=12"))
+        assertTrue(body.contains("xnxqh=2025-2026-2"))
     }
 
     private fun fixture(name: String): String {

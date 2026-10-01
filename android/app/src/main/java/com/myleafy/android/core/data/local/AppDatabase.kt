@@ -35,9 +35,12 @@ import androidx.room.TypeConverters
         HonorRecordEntity::class,
         ComprehensiveQualityRecordEntity::class,
         AcademicDocumentEntity::class,
+        FavoriteClassroomEntity::class,
+        ComprehensiveEvidenceEntity::class,
+        SunshineReminderEntity::class,
     ],
-    version = 8,
-    autoMigrations = [androidx.room.AutoMigration(from = 7, to = 8)],
+    version = 9,
+    autoMigrations = [androidx.room.AutoMigration(from = 7, to = 8), androidx.room.AutoMigration(from = 8, to = 9)],
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -56,4 +59,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun honorRecordDao(): HonorRecordDao
     abstract fun comprehensiveQualityDao(): ComprehensiveQualityDao
     abstract fun academicDocumentDao(): AcademicDocumentDao
+    abstract fun campusPersonalDao(): CampusPersonalDao
 }

@@ -182,7 +182,7 @@ class JsoupHtmlParserTest {
 
     @Test
     fun parsesEmptyClassroomsWithBuildingAliases() {
-        val rooms = parser.parseEmptyClassrooms(fixture("empty_classrooms.html"))
+        val rooms = parser.parseEmptyClassrooms(requireNotNull(javaClass.getResource("/school/classroom-day-matrix.html")).readText())
         assertEquals(3, rooms.size)
         assertEquals(EmptyClassroom(building = "学研A座", room = "0304"), rooms[0])
         assertEquals(EmptyClassroom(building = "学研B座", room = "0405"), rooms[1])

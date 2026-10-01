@@ -29,10 +29,11 @@ class CommunityService(private val client: BackendClient) {
     suspend fun signOut() = client.signOut()
     fun closeLocally() = client.close()
 
-    suspend fun fetchFeed(query: FeedQuery): List<PostDto> = client.request<FeedResponse>("/v1/community/feed", query = mapOf(
+    suspend fun fetchFeed(query: FeedQuery): List<PostDto> = fetchFeedPage(query).posts
+    suspend fun fetchFeedPage(query: FeedQuery): FeedResponse = client.request<FeedResponse>("/v1/community/feed", query = mapOf(
         "limit" to query.limit.toString(), "campus_id" to query.campus_id, "mode" to query.mode,
-        "days" to query.days?.toString(), "category" to query.category, "search" to query.search,
-    )).posts
+        "days" to query.days?.toString(), "category" to query.category, "search" to query.search, "cursor" to query.cursor,
+    ))
 
     suspend fun fetchPost(postId: String): PostDto? = try {
         client.request<PostDto>("/v1/community/posts/$postId")

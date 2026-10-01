@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onRoot
@@ -228,11 +230,19 @@ class RootNavigationSmokeTest {
         open(scope, "myleafy-internal://course/fixture-valid")
         composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText("第 1 / 1 次课 · 第 7 周").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNodeWithText("第 1 / 1 次课 · 第 7 周").assertIsDisplayed()
-        composeRule.onNodeWithText("完成").performClick()
+        composeRule.onNodeWithText("作业、考试、分组或老师要求").performTextInput("竖屏课程备注草稿")
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        composeRule.onNodeWithText("作业、考试、分组或老师要求").assertTextContains("竖屏课程备注草稿")
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand("input keyevent 4")).use { it.readBytes() }
+        composeRule.onNodeWithText("完成").performScrollTo().performClick()
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText("放弃更改").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("放弃更改").performClick()
         open("other-identity", "myleafy-internal://course/fixture-invalid")
         composeRule.onNodeWithText("提醒属于其他账号，请切换到对应账号后查看").assertIsDisplayed()
         // ActivityScenario identifies its activity by the original launch intent during teardown.
-        } finally { composeRule.runOnUiThread { composeRule.activity.intent = launcherIntent } }
+        } finally {
+            composeRule.runOnUiThread { composeRule.activity.intent = launcherIntent }
+        }
     }
 
     @Test fun allComprehensiveCollegeRulesRenderWithoutCrashing() {

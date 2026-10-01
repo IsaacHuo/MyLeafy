@@ -434,20 +434,74 @@ class JsoupHtmlParser : HtmlParser {
     }
 
     override fun parseGradeSummary(html: String): ParsedGradeSummary {
-        val pageText = Jsoup.parse(html).text().replace(Regex("\\s+"), " ").trim()
+        val document = Jsoup.parse(html)
+        val visible = document.clone()
+        visible.select("table,script,style,template,[hidden],[aria-hidden=true]").remove()
+        val pageText = visible.text().replace(Regex("\\s+"), " ").trim()
+        fun official(labels: List<String>, max: Double?): Double? {
+            document.select("tr").forEach { row ->
+                val cells = row.select("th,td").map { it.text().replace("（", "(").replace("）", ")").trim() }
+                cells.forEachIndexed { index, text ->
+                    if (labels.any { text.equals(it, ignoreCase = true) }) {
+                        cells.getOrNull(index + 1)?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 && (max == null || it <= max) }?.let { return it }
+                    }
+                }
+            }
+            return parseOfficialDecimal(pageText, labels, max)
+        }
         val summary = ParsedGradeSummary(
-            officialGpa = parseOfficialDecimal(
-                pageText,
-                labels = listOf("平均学分绩点", "平均绩点", "学分绩点", "绩点", "GPA"),
-                maxValue = 5.0,
+            officialGpa = official(
+                labels = listOf("平均学分绩点(GPA)", "平均绩点(GPA)", "平均学分绩点", "平均绩点", "学分绩点", "GPA"),
+                max = 5.0,
             ),
-            officialWeightedAverage = parseOfficialDecimal(
-                pageText,
-                labels = listOf("加权平均分", "加权均分", "平均成绩", "平均分"),
-                maxValue = 100.0,
+            officialWeightedAverage = official(
+                labels = listOf("加权平均分", "加权均分"),
+                max = 100.0,
             ),
-            officialCreditPoint = parseOfficialDecimal(pageText, labels = listOf("学分积"), maxValue = null),
+            officialCreditPoint = official(labels = listOf("学分积"), max = null),
         )
+        for (table in Jsoup.parse(html).select("table")) {
+            val rows = expandedTableRows(table)
+            val header = rows.indexOfFirst { row -> row.any { it.replace(" ", "") == "所得学分" } && row.any { it.replace(" ", "") == "必修学分" } }
+            if (header < 0) continue
+            val top = rows[header].map { it.replace(" ", "") }
+            val totalColumn = top.indexOf("所得学分")
+            val dataIndex = (header + 1 until rows.size).firstOrNull { rows[it].getOrNull(totalColumn)?.toDoubleOrNull() != null }
+                ?: throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "所得学分详情")
+            val cells = rows[dataIndex]
+            if (cells.size != top.size) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "所得学分详情")
+            val bottom = rows[dataIndex - 1]
+            val raw = linkedMapOf<String, String>()
+            val buckets = linkedMapOf<String, Double>()
+            var required: Double? = null
+            var professional: Double? = null
+            var major: Double? = null
+            var cross: Double? = null
+            var publicTotal: Double? = null
+            top.forEachIndexed { index, group ->
+                if (group == "序号") return@forEachIndexed
+                val text = cells[index].trim()
+                val value = if (text.isEmpty()) 0.0 else text.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
+                if (value == null) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "所得学分详情：$group")
+                val leaf = bottom.getOrNull(index).orEmpty().replace(" ", "")
+                raw[if (group == leaf) group else "$group/$leaf"] = text
+                if (group == "必修学分") required = value
+                if (group.contains("专业选修")) {
+                    if (leaf in listOf("总计", "合计") || leaf == group) professional = value
+                    if (leaf == "本专业") { major = value; raw["本专业选修"] = text }
+                    if (leaf == "外专业") cross = value
+                }
+                if (group.contains("公共选修") || group.contains("通识选修")) {
+                    if (leaf in listOf("总计", "合计") || leaf == group) { publicTotal = value; raw["公共选修总计"] = text }
+                    else buckets[bottom.getOrNull(index).orEmpty()] = value
+                }
+            }
+            raw["所得学分"] = cells[totalColumn]
+            return summary.copy(totalCredits = cells[totalColumn].toDouble(), requiredCredits = required,
+                professionalElectiveCredits = professional, professionalMajorElectiveCredits = major,
+                professionalCrossMajorElectiveCredits = cross, publicElectiveCredits = publicTotal,
+                publicElectiveBuckets = buckets, rawFields = raw)
+        }
         if (summary.officialGpa == null &&
             summary.officialWeightedAverage == null &&
             summary.officialCreditPoint == null
@@ -603,23 +657,35 @@ class JsoupHtmlParser : HtmlParser {
 
     // MARK: - 空教室
 
-    override fun parseEmptyClassrooms(html: String): List<EmptyClassroom> {
-        val document = Jsoup.parse(html)
-        val rows = document.select("#dataList tr")
-        if (rows.size <= 4) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "空教室")
-
-        val dataRows = rows.subList(2, rows.size - 2)
-        val result = mutableListOf<Pair<Int, EmptyClassroom>>()
-        for (row in dataRows) {
-            val texts = row.select("td").map { normalizedClassroomCellText(it.text()) }
-            if (texts.size <= 1) continue
-            if (texts.drop(1).any { it.isNotEmpty() }) continue
-            parseClassroomRow(texts[0])?.let { result.add(it) }
+    override fun parseClassroomAvailability(html: String): ClassroomAvailability {
+        val table = Jsoup.parse(html).selectFirst("#dataList")
+            ?: throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "教室占用矩阵")
+        if (!table.select("th").text().contains("星期")) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_NOT_FOUND, "教室占用矩阵")
+        val columns = table.select("td[tdvalue]").map { cell ->
+            val value = cell.attr("tdvalue").trim()
+            if (value.isEmpty() || value.length % 2 != 0 || !value.all(Char::isDigit)) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "教室节次")
+            value.chunked(2).map { part -> part.toInt().also { if (it !in 1..12) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "教室节次") } }
         }
-        return result
-            .sortedWith(compareByDescending<Pair<Int, EmptyClassroom>> { it.first }.thenBy { it.second.room })
-            .map { it.second }
+        val periods = columns.flatten()
+        if (periods.isEmpty() || periods.distinct().size != periods.size) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "教室节次")
+        val rows = table.select("tr[jsbh]").mapNotNull { row ->
+            val cells = row.select("td")
+            if (cells.size != columns.size + 1) throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "教室占用行")
+            val room = parseClassroomRow(cells[0].text()) ?: return@mapNotNull null
+            val slots = columns.flatMapIndexed { index, column ->
+                val symbols = java.text.Normalizer.normalize(cells[index + 1].text(), java.text.Normalizer.Form.NFKC).filterNot(Char::isWhitespace)
+                val status = when { symbols.isEmpty() -> ClassroomStatus.AVAILABLE; symbols.all { it in "◆LGKΚXJ" } -> ClassroomStatus.OCCUPIED; else -> ClassroomStatus.UNKNOWN }
+                column.map { ClassroomSlot(it, status) }
+            }
+            room.first to ClassroomAvailabilityRow(room.second, slots.sortedBy { it.period })
+        }
+        if (table.select("tr[jsbh]").isEmpty() && table.select("tr").any { row -> row.select("td").size > 1 && row.select("td[tdvalue]").isEmpty() && listOf("暂无", "无数据", "符号说明").none { row.text().contains(it) } })
+            throw HtmlParseError(HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE, "教室占用矩阵")
+        return ClassroomAvailability(periods, rows.sortedWith(compareByDescending<Pair<Int, ClassroomAvailabilityRow>> { it.first }.thenBy { it.second.room.room }).map { it.second })
     }
+
+    override fun parseEmptyClassrooms(html: String): List<EmptyClassroom> =
+        parseClassroomAvailability(html).available(1, 12)
 
     private fun parseClassroomRow(text: String): Pair<Int, EmptyClassroom>? {
         val normalized = normalizedClassroomCellText(text)
@@ -810,6 +876,26 @@ class JsoupHtmlParser : HtmlParser {
         val requirements = mutableListOf<ParsedGraduationCreditRequirement>()
         for (table in tables) {
             val rows = expandedTableRows(table)
+            val richHeader = rows.indexOfFirst { row -> row.any { it.contains("应修学分") || it.contains("学分要求") || it.contains("要求学分") } }
+            if (richHeader >= 0) {
+                val headers = rows[richHeader]
+                val requiredIndex = headers.indexOfFirst { it.contains("应修学分") || it.contains("学分要求") || it.contains("要求学分") }
+                val plannedIndex = headers.indexOfFirst { it.contains("计划学分") }
+                val categoryIndex = headers.indexOfFirst { it.contains("类别") || it.contains("性质") || it.contains("分类") }
+                val nameIndex = headers.indexOfFirst { it.contains("课程名称") || it == "名称" }
+                rows.drop(richHeader + 1).forEach { cells ->
+                    val required = cells.getOrNull(requiredIndex)?.removeSuffix("学分")?.trim()?.toDoubleOrNull()?.takeIf { it in 0.0..500.0 } ?: return@forEach
+                    val courseName = cells.getOrNull(nameIndex).orEmpty()
+                    val label = cells.getOrNull(categoryIndex)?.takeIf(String::isNotBlank) ?: courseName
+                    if (label.isBlank()) return@forEach
+                    val aggregate = nameIndex < 0 || listOf("总计", "合计", "小计", "毕业", "应修", "要求").any { courseName.contains(it) || label.contains(it) }
+                    val total = label.contains("总学分") || courseName.contains("总学分") || label.trim() in listOf("合计", "总计")
+                    requirements += ParsedGraduationCreditRequirement(if (total) "毕业生应取得总学分" else cleanTrainingCreditLabel(label), required,
+                        total, courseName,
+                        cells.getOrNull(plannedIndex)?.toDoubleOrNull()?.takeIf { it in 0.0..500.0 }, aggregate)
+                }
+                if (nameIndex < 0) continue
+            }
             val totalLabel: (String) -> Boolean = { it.replace(" ", "").let { label -> label.contains("应取得总学分") || label.contains("毕业总学分") } }
             val footerStart = rows.indexOfFirst { row -> row.any(totalLabel) }
             if (footerStart < 0) continue
@@ -852,7 +938,7 @@ class JsoupHtmlParser : HtmlParser {
                 )
             }
         }
-        return requirements.distinctBy { it.label }
+        return requirements.distinctBy { "${it.label}|${it.courseName}|${it.isAggregate}" }
     }
 
     private fun cleanTrainingCreditLabel(label: String): String =

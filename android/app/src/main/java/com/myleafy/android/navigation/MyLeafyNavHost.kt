@@ -26,7 +26,10 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -126,8 +129,17 @@ fun MyLeafyNavHost(
         RootTab.entries.firstOrNull { tab -> destination.hierarchy.any { it.route == tab.route } }
     }
 
-    LaunchedEffect(activeScope.campusId, currentDestination?.route) {
-        if (activeScope.campusId == null && currentDestination?.route != null && currentDestination.route != Routes.LOGIN) {
+    var navigationIdentity by remember { androidx.compose.runtime.mutableStateOf(activeScope.campusId to activeScope.scopeKey) }
+    LaunchedEffect(activeScope.campusId, activeScope.scopeKey, currentDestination?.route) {
+        val identity = activeScope.campusId to activeScope.scopeKey
+        if (navigationIdentity != identity) {
+            navigationIdentity = identity
+            RootTab.entries.forEach { navController.clearBackStack(it.route) }
+            navController.navigate(if (activeScope.campusId == null) Routes.LOGIN else RootTab.TIMETABLE.route) {
+                popUpTo(navController.graph.id) { inclusive = false }
+                launchSingleTop = true
+            }
+        } else if (activeScope.campusId == null && currentDestination?.route != null && currentDestination.route != Routes.LOGIN) {
             navController.navigate(Routes.LOGIN) {
                 popUpTo(navController.graph.id) { inclusive = false }
                 launchSingleTop = true
@@ -448,10 +460,13 @@ fun LeafyNavigationScaffold(
     showNavigation: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val currentContent by rememberUpdatedState(content)
+    // Keep the NavHost and open editors alive when rotation crosses the rail breakpoint.
+    val stableContent = remember { movableContentOf { currentContent() } }
     BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.leafySurfaces.page)) {
         if (maxWidth < 600.dp) {
             Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { content() }
+                Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { stableContent() }
                 if (showNavigation) Surface(
                     modifier = Modifier.navigationBarsPadding().padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.micro),
                     shape = RoundedCornerShape(28.dp),
@@ -505,7 +520,7 @@ fun LeafyNavigationScaffold(
                 modifier = modifier,
                 containerColor = MaterialTheme.leafySurfaces.page,
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                content = content,
+                content = stableContent,
             )
         }
     }

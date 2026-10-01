@@ -9,12 +9,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.Lifecycle
@@ -74,9 +80,17 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
     val noteDirty = edited && draft != savedNote
     val dirty = noteDirty || reminderDirty
     val requestExit = rememberEditorExit(dirty, saving, onDismiss)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = {
-        if (it == SheetValue.Hidden && (dirty || saving)) { requestExit(); false } else true
-    })
+    val currentDirty by rememberUpdatedState(dirty)
+    val currentSaving by rememberUpdatedState(saving)
+    val currentRequestExit by rememberUpdatedState(requestExit)
+    // confirmValueChange is a SheetState identity key. Editing must not reset it to Hidden.
+    val confirmSheetValueChange: (SheetValue) -> Boolean = remember {
+        { value -> if (value == SheetValue.Hidden && (currentDirty || currentSaving)) { currentRequestExit(); false } else true }
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false, confirmValueChange = confirmSheetValueChange)
+    val noteIntoView = remember { BringIntoViewRequester() }
+    val reminderIntoView = remember { BringIntoViewRequester() }
+    var focusedField by remember { mutableIntStateOf(0) }
     var permissionProblem by remember { mutableStateOf(container.courseReminderScheduler.permissionProblem()) }
     val schedulingError by container.courseReminderScheduler.error.collectAsStateWithLifecycle()
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -106,26 +120,43 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
     }
     val occurrence = Triple(week, course.dayOfWeek, course.duration.minOrNull() ?: 1)
     val ordinal = occurrences.indexOf(occurrence) + 1
-    val date = SemesterConfig.current.semesterStartDate.plusWeeks((week - 1).toLong()).plusDays((course.dayOfWeek - 1).toLong())
+    val courseConfig = SemesterConfig.timelineConfigurations.firstOrNull { it.semesterId == course.sourceSemesterID }
+    val date = courseConfig?.semesterStartDate?.plusWeeks((week - 1).toLong())?.plusDays((course.dayOfWeek - 1).toLong())
     LeafyModalBottomSheet(sheetState = sheetState, onDismissRequest = requestExit) {
-        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // ModalBottomSheet owns a separate window; observe its IME after the viewport resizes.
+        val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+        LaunchedEffect(focusedField, imeBottom) {
+            if (focusedField != 0) {
+                sheetState.expand()
+                (if (focusedField == 1) noteIntoView else reminderIntoView).bringIntoView()
+            }
+        }
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("课程详情", style = MaterialTheme.typography.titleLarge)
                 LeafyTextButton(onClick = requestExit, enabled = !saving) { Text("完成") }
             }
             Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(course.courseName, style = MaterialTheme.typography.headlineSmall)
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(course.courseName, style = MaterialTheme.typography.titleLarge)
                     Text(if (ordinal > 0) "第 $ordinal / ${occurrences.size} 次课 · 第 $week 周" else "第 $week 周", style = MaterialTheme.typography.bodyMedium)
                     if (occurrences.isNotEmpty()) LinearProgressIndicator(progress = { (ordinal.toFloat() / occurrences.size).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                 }
             }
             CourseDetailValue("教室", listOf(course.location, course.room).filter(String::isNotBlank).distinct().joinToString(" ").ifBlank { "未填写" })
-            CourseDetailValue("节次", "$date · ${courseTimeDescription(course)}")
-            Text("教师", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            CourseDetailValue("节次", "${date ?: "学期日期未确认"} · ${courseTimeDescription(course)}")
             val teachers = course.teacher.split(Regex("[、,，;；/\\n]+")).map(String::trim).filter(String::isNotBlank).distinct()
-            if (teachers.isEmpty()) Text("未填写") else teachers.forEach { teacher ->
-                LeafyTextButton(onClick = { if (!dirty && !saving) onTeacher(teacher) else error = "请先保存或放弃更改" }, modifier = Modifier.fillMaxWidth()) { Text("$teacher  ›") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("教师", Modifier.width(44.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (teachers.isEmpty()) Text("未填写", style = MaterialTheme.typography.bodyMedium)
+                    else teachers.forEach { teacher ->
+                        Text("$teacher ›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                                if (!dirty && !saving) onTeacher(teacher) else error = "请先保存或放弃更改"
+                            })
+                    }
+                }
             }
             CourseDetailValue("周次", compactWeeks(course.weeks))
             if (course.classInfo.isNotBlank()) CourseDetailValue("班级", course.classInfo)
@@ -139,7 +170,7 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
                 }
             }
             LeafyTextField(value = draft, onValueChange = { draft = it; edited = true }, enabled = !saving && notes != null,
-                label = { Text("作业、考试、分组或老师要求") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                label = { Text("作业、考试、分组或老师要求") }, minLines = 2, modifier = Modifier.fillMaxWidth().bringIntoViewRequester(noteIntoView).onFocusChanged { if (it.isFocused) focusedField = 1 else if (focusedField == 1) focusedField = 0 })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LeafyPrimaryButton(enabled = !saving && notes != null, onClick = { mutate {
                     if (draft.isBlank()) dao.deleteNote(course.scopeKey, course.sourceSemesterID, key, noteWeek)
@@ -160,7 +191,7 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
                 FilterChip(selected = selectingCustom, enabled = !saving, onClick = { selectingCustom = true }, label = { Text("自定义") })
             }
             if (selectingCustom) LeafyTextField(value = custom, onValueChange = { custom = it }, label = { Text("提前分钟数（1–180）") }, singleLine = true,
-                isError = custom.toIntOrNull() !in 1..180, modifier = Modifier.fillMaxWidth())
+                isError = custom.toIntOrNull() !in 1..180, modifier = Modifier.fillMaxWidth().bringIntoViewRequester(reminderIntoView).onFocusChanged { if (it.isFocused) focusedField = 2 else if (focusedField == 2) focusedField = 0 })
             if (course.duration.size > 1 && (selectingCustom || minutes > 0)) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 course.duration.distinct().sorted().forEach { period -> FilterChip(selected = anchor == period, onClick = { anchor = period }, label = { Text("第 $period 节开始前") }) }
             }
@@ -194,9 +225,9 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
 
 @Composable
 private fun CourseDetailValue(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Text(value, style = MaterialTheme.typography.bodyLarge)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, Modifier.width(44.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
     }
 }
 

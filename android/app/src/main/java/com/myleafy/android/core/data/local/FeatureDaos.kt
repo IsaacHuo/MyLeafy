@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface GradeDao {
+    @Query("DELETE FROM grades WHERE scopeKey = :scope AND id = :id") suspend fun delete(scope: String, id: String)
     @Query("SELECT * FROM grades WHERE scopeKey = :scopeKey ORDER BY term DESC, courseName")
     fun all(scopeKey: String): Flow<List<GradeEntity>>
 
@@ -62,6 +63,7 @@ interface GradeSummaryDao {
 
 @Dao
 interface ExamDao {
+    @Query("DELETE FROM exams WHERE scopeKey = :scope AND id = :id") suspend fun delete(scope: String, id: Int)
     @Query("SELECT * FROM exams WHERE scopeKey = :scopeKey ORDER BY date, start")
     fun all(scopeKey: String): Flow<List<ExamEntity>>
 

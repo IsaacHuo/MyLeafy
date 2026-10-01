@@ -281,14 +281,26 @@ class OkHttpSchoolNetworkClient(
         } catch (e: HtmlParseError) {
             throw SchoolNetworkError.GradeDataUnavailable
         }
+        val failures = mutableListOf<String>()
+        val summary = try { parser.parseGradeSummary(html) } catch (failure: HtmlParseError) {
+            if (failure.kind == HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE) failures += "官方汇总解析失败：${failure.message}"
+            null
+        }
+        val rankings = try { parser.parseGradeRankings(html) } catch (failure: HtmlParseError) {
+            if (failure.kind == HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE) failures += "官方排名解析失败：${failure.message}"
+            null
+        }
         AcademicResult(
             grades = grades,
-            rankings = runCatching { parser.parseGradeRankings(html) }.getOrNull(),
-            summary = runCatching { parser.parseGradeSummary(html) }.getOrNull(),
+            rankings = rankings,
+            summary = summary,
+            failures = failures,
         )
     }
 
-    override suspend fun fetchGradeRankings(): List<com.myleafy.android.parsers.ParsedGradeRanking> = withContext(Dispatchers.IO) {
+    override suspend fun fetchGradeRankings() = fetchGradeSupplemental().rankings
+
+    override suspend fun fetchGradeSupplemental(): com.myleafy.android.core.network.AcademicSupplementalResult = withContext(Dispatchers.IO) {
         val origin = baseUrl.toHttpUrl()
         val candidates = ArrayDeque<Request>()
         candidates.add(requestBuilder("/jsxsd/kscj/cjcx_list").get().build())
@@ -303,7 +315,15 @@ class OkHttpSchoolNetworkClient(
                 SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
             } ?: continue
             if (SchoolPageDetector.isLoginPage(html)) { loginPageSeen = true; continue }
-            try { return@withContext parser.parseGradeRankings(html) } catch (_: HtmlParseError) { /* try the school's ranking entry */ }
+            val rankings = try { parser.parseGradeRankings(html) } catch (_: HtmlParseError) { null }
+            if (rankings != null) {
+                val failures = mutableListOf<String>()
+                val summary = try { parser.parseGradeSummary(html) } catch (failure: HtmlParseError) {
+                    if (failure.kind == HtmlParseError.ParseErrorKind.TABLE_ROWS_UNPARSEABLE) failures += "官方汇总解析失败：${failure.message}"
+                    null
+                }
+                return@withContext com.myleafy.android.core.network.AcademicSupplementalResult(rankings, summary, failures)
+            }
             if (seen.size == 1) {
                 val document = org.jsoup.Jsoup.parse(html)
                 val links = document.select("a[href],iframe[src]").map { it.attr(if (it.hasAttr("href")) "href" else "src") }
@@ -343,34 +363,18 @@ class OkHttpSchoolNetworkClient(
         }
     }
 
-    override suspend fun fetchEmptyClassrooms(
-        semesterId: String,
-        week: Int,
-        day: Int,
-        startPeriod: Int,
-        endPeriod: Int,
-    ): List<EmptyClassroom> = withContext(Dispatchers.IO) {
-        val path = buildString {
-            append("/jsxsd/kbxx/jsjy_query2")
-            append("?xnxqh=").append(semesterId)
-            append("&zc=").append(week).append("&zc2=").append(week)
-            append("&jc=").append(startPeriod).append("&jc2=").append(endPeriod)
-            append("&xqbh=&jxqbh=&jxlbh=&jsbh=&bjfh=&rnrs=&xnxqhmc=")
-            append("&xq=").append(day).append("&xq2=").append(day)
-            append("&jszt=5")
-        }
-        val request = requestBuilder(path, referer = "${baseUrl}/jsxsd/framework/xsMain.jsp").get().build()
-        val html = execute(request).use {
-            SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
-        }
-        if (SchoolPageDetector.isLoginPage(html)) {
-            throw SchoolNetworkError.SessionExpired
-        }
-        return@withContext try {
-            parser.parseEmptyClassrooms(html)
-        } catch (e: HtmlParseError) {
-            throw SchoolNetworkError.ClassroomDataUnavailable
-        }
+    override suspend fun fetchEmptyClassrooms(semesterId: String, week: Int, day: Int, startPeriod: Int, endPeriod: Int): List<EmptyClassroom> =
+        fetchClassroomAvailability(semesterId, week, day).available(startPeriod, endPeriod)
+
+    override suspend fun fetchClassroomAvailability(semesterId: String, week: Int, day: Int): com.myleafy.android.parsers.ClassroomAvailability = withContext(Dispatchers.IO) {
+        require(week in 1..20 && day in 1..7)
+        val form = okhttp3.FormBody.Builder().add("xnxqh", semesterId).add("zc", week.toString()).add("zc2", week.toString())
+            .add("jc", "01").add("jc2", "12").add("xq", day.toString()).add("xq2", day.toString())
+        listOf("xqbh", "jxqbh", "jxlbh", "jsbh", "bjfh", "rnrs", "xnxqhmc", "jszt").forEach { form.add(it, "") }
+        val request = requestBuilder("/jsxsd/kbxx/jsjy_query2", referer = "$baseUrl/jsxsd/kbxx/jsjy_query").post(form.build()).build()
+        val html = execute(request).use { SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()) }
+        if (SchoolPageDetector.isLoginPage(html)) throw SchoolNetworkError.SessionExpired
+        parser.parseClassroomAvailability(html)
     }
 
     override suspend fun fetchTeachingPlan(): List<ParsedTeachingPlanSection> = withContext(Dispatchers.IO) {

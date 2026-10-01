@@ -235,7 +235,7 @@ React-admin → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 - Android 二级真实页面与 `FeatureDestination` 占位页面统一使用 48dp 紧凑返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；资料编辑、缓存同步、个性化、帮助中心、权限说明、反馈、关于与内置校历均为真实页面。
 - Android `MyLeafyTheme` 是 Compose 视觉语义的单一入口：`LeafyTypography`、`LeafySpacing`、`LeafyElevation`、`LeafyIconSize`、`LeafyMotion`、`LeafySurfaceColors` 与 `LeafyCourseColors` 由共享组件消费；progress/gesture 等状态值使用语义 Token，课表几何、校园断点和验证码尺寸使用功能级 Token。根壳拥有导航区域 Insets，页面 Scaffold 拥有状态栏/TopBar Insets，编辑表单与 Sheet 拥有 navigation bar/IME Insets；应用 padding 后必须消费，避免系统栏遮挡或重复留白。课表照片由应用私有文件读取，显示中的 Bitmap 所有权交给 Compose/运行时，不在 composable disposal 中手动回收。
 - Android 只有北林与免登录两个入口，没有通用学校和 Demo。`AppContainer.restoreIdentity()` 异步恢复持久化选择，恢复完成前不创建页面 ViewModel；选择 guest 时不会因仍有旧学校凭据而自动恢复北林身份。`enterLocalMode()` 清理本地学校会话并关闭已创建的社区客户端、自动刷新和连接，不发起学校或社区请求；guest 使用稳定的 `signed-out` 本机数据空间；schema 升级规则见下文。免登录不提供天气、教务查询/同步和共享入口，原有本地记录功能继续使用。
-- Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 与 capabilities。Room v8 的业务实体使用 `scopeKey` 隔离；成绩保存课程编号、属性、类别与考试性质。v7→v8 使用 AutoMigration 保留现有数据，新增课程备注、课次备注、提醒和首次同步检查点；不启用破坏性回退，也不维护 v7 以前的 schema。调试包 `com.myleafy.android.next` 与正式/旧调试包并存。
+- Android `ActiveAppScopeStore` 是校园身份边界的单一来源，包含 `campusId`、`eduId`、`scopeKey`、guest 与 capabilities。Room v9 的业务实体使用 `scopeKey` 隔离；成绩保存课程编号、属性、类别与考试性质。v7→v8→v9 使用 AutoMigration 保留原数据与附件路径；v9 的官方学分字段初始为 null，新增常用教室、学院/届别综素材料和默认关闭的长跑提醒配置。不启用破坏性回退，也不维护 v7 以前的 schema。调试包 `com.myleafy.android.next` 与正式/旧调试包并存。
 - Android `BackendClient` 使用 OkHttp 调用单一 Cloudflare `/v1` origin，通过 Better Auth 匿名会话和学校 profile bootstrap 建立身份；Keystore 会话按 origin 与 scope 隔离。无 Supabase SDK、配置或失败回退。客户端按 capability 延迟创建，guest 不建立会话或订阅；切换身份关闭旧请求和 WebSocket，响应提交前再次检查作用域。
 - Android 社区、通知/公告、资料、评价与共享课表通过 Cloudflare REST 契约读取，不落 Room。Feed 与通知订阅 `/v1/events/{scope}` 变更信号，只有活跃社区页建立订阅；Feed 新内容由用户显式应用。发帖、互动先检查社区规则确认；资料清空发送显式 null。发布复用 post/request ID，网络发布开始后冻结本次 payload，图片使用 full/thumb 上传、校验收据、挂载链路，重试先检查已挂载图片；显示服务端签名媒体 URL。共享关系通过 relationship ID 撤销，展示后端允许的昵称。
 - Android 本科认证用 `SchoolCaptchaChallenge` 绑定图片、key、匿名 Cookie、身份/代次，挑战只消费一次，验证成功才提交会话。Keystore 凭据 JSON 精确匹配学校/门户/账号，密码仅驻留内存 ViewModel 与加密存储。`SchoolAuthenticationRecovery` 由 App/身份拥有，明确会话过期才去重获取人工验证码挑战，身份变化取消；表单预填当前账号密码，用户自行填写验证码并提交，成功后继续原查询。不存在 OCR SDK、模型、自动识别或自动登录提交。网络失败不触发认证，学校恢复不依赖 Cloudflare，阻塞请求在 IO 执行。
@@ -243,10 +243,16 @@ React-admin → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 - Android 教务课表按学校实际 form/link/frame 获取，保留 form method、隐藏字段和 referer，并校验目标学期；必要时通过同源 WebView 初始化学校页面。未知结构或学期不符均不得作为空课表保存。获取、校验和解析成功后先预检本机备注/提醒关联，再在同一事务替换当前 scope/semester 与个人数据；保存失败回滚。刷新只请求课表，弹窗显示实际阶段及更新/未变化/空安排/失败；会话过期重新认证后恢复原操作。现场验收范围见 CURRENT。
 - Android `TimetableGridProjection` 预投影 20 周的课程、考试与个人日程，数据变化时在后台计算；翻周仅选择已有投影。根页面唯一持有照片背景和 `TimetableFixedAxis`，位于透明 `HorizontalPager` 前景之外。月份取选中周周首日期；左轴与网格共用表头/行高，翻周只移动日期和课程。Pager 驱动选周，显式跳周指令执行后消费；保留 5/7 天 × 13 节单屏，节次、开始、结束时间竖排，空周保留完整网格。周标题取消左右箭头，保留选周/回到本周；北林支持纵向下拉刷新，guest 不触发教务请求。
 - Android `InitialAcademicSync` 由身份作用域拥有，启动恢复完成后去重执行课表→成绩/排名→考试；每项以 scope/semester/kind 记录可信结果，空结果也算完成。现有副本一次性 bootstrap；独立失败不阻断后续，会话过期暂停，重新认证后只续传未完成范围。切换身份取消并等待旧任务，提交前校验作用域；免登录不创建同步或后台连接。
-- Android 课程详情使用可滚动 `CourseDetailSheet`，接收课程、学期和选中周上下文；课次进度按实际安排计算。备注分课程/课次，提醒按稳定课程键关联，不使用导入记录 ID，也不进入云端或共享。刷新关联遵循 iOS 同名/教师分段/时段规则；冲突在事务前失败，无法关联的记录保留并通过“待关联备注与提醒”查看/删除。通知深链先读取已提交 Room 数据，并核对身份、学期、课程和周次。
+- Android 课程详情使用默认部分展开、可上拉展开的 `CourseDetailSheet`；课程名、地点、教师、节次、周次与课次进度采用紧凑布局，备注和提醒放在下方，输入聚焦时展开并避让键盘。日期使用课程所属学期配置，缺失时明确未确认。备注分课程/课次，提醒按稳定课程键关联，不使用导入记录 ID，也不进入云端或共享。刷新关联遵循 iOS 同名/教师分段/时段规则；冲突在事务前失败，无法关联的记录保留并通过“待关联备注与提醒”查看/删除。通知深链先读取已提交 Room 数据，并核对身份、学期、课程和周次。
 - Android 课前提醒使用 `CourseReminderScheduler`/AlarmManager 精确调度，ID 是完整键摘要；只安排当前身份/学期的未来课次。主动启用时申请通知权限，精确提醒授权通过系统设置；未授权或通知渠道关闭时保存设置并明确未启用。重启、时间/时区变化、授权变化、刷新和身份切换触发重校验；接收器实际投递前再次校验作用域和排课。待投递 ID 持久化用于清理，不把权限拒绝表示为成功。
-- Android 根导航外壳保持 NavHost 的挂载位置稳定，底栏显隐只改变 chrome；窄屏选中图标使用圆形底，文字在圆外。校园分类与分类列表状态随返回栈保留，完成身份切换清理旧导航状态；医疗与评价嵌入原业务组件，避免双 Scaffold 与重复加载。
-- Android 校园目录不依赖成绩或考试加载结果。成绩按学期折叠，`GradeAnalytics` 独立计算有效成绩、学期趋势、分数分布、课程结构与风险排序；有编号的重修选取有效记录，缺编号不跨学期合并，文字成绩不换算分数，GPA 只展示官方值。排名刷新不更新成绩或考试。空教室结果绑定查询条件并以请求代次拒绝旧响应。
+- Android 根导航外壳保持 NavHost 的组合状态，底栏显隐只改变 chrome；跨 600dp 导航形态变化通过 movableContentOf 保留页面和编辑草稿；窄屏选中图标使用圆形底，文字在圆外。校园分类与分类列表状态随返回栈保留，完成身份切换清理旧导航状态；医疗与评价嵌入原业务组件，避免双 Scaffold 与重复加载。
+- Android 校园目录不依赖成绩或考试加载结果。成绩、排名/汇总、考试和培养文档各自保留缓存与错误；排名刷新同时读取同页官方学分，不更新成绩或考试。`GradeAnalytics` 独立计算有效成绩、学期趋势、分数分布、课程结构与风险排序；有编号的重修选取有效记录，缺编号不跨学期合并，文字成绩不换算分数，GPA 只展示官方值。访客成绩/考试支持本地编辑和 CSV；全文件校验后确认替换，事务失败保留原记录，报错使用实际文件行号。
+- Android 毕业进度由成绩、官方学分及培养方案共同重算：总学分优先官方汇总（确认零仍为零），缺失时使用通过课程有效学分并标记成绩估算；总要求只取明确总计的要求学分，不累加重叠分类或用计划总学分代替。分类未确认时显示未确认；总学分达标不等于满足全部毕业条件。教学计划按学期默认折叠，培养正文按章节默认折叠，保留原表格和链接。
+- Android 空教室通过已验证的 POST 协议请求同日十二节矩阵，再筛选单节/连续节次或指定楼、教室的全天状态；已知占用符号可同格组合，未知或缺少单元格不能判为空闲。结果绑定日期、条件和身份，请求代次与取消阻止旧响应回填；常用教室按 scope 保存在 Room。
+- Android 社区首页与搜索共用双列错列卡片，封面保持比例并置顶，纯文字摘要及底部信息紧凑排列；提示、错误与分页入口跨两列。最新列表使用后端 next_cursor，分页去重并保留已加载内容；查询改变取消旧结果。身份变化清除全部根 Tab 的保存栈，防止其他账号的表单、筛选、缓存和 ViewModel 回显。
+- Android 医疗政策、七类场景及九处场馆资料来自 iOS 对应本地快照；医疗展示政策/医院资料日期及原文，场馆展示本地整理日期，不能表述为实时政策。医疗六状态、四筛选、十材料、估算/实际金额和照片可完整编辑；ZIP 包含 CSV、结构化清单与照片，附件缺失直接失败并清理不完整导出。
+- Android 综素记录按学院/届别保存和恢复，旧 current 记录只在对应学院保存成功后替代；分项材料按身份、学院、届别保存。荣誉、综素和医疗使用私有附件目录及现有 FileProvider，平台 PdfRenderer 支持多页预览，图片采用采样解码。输入改变重新计算综素结果；本地读取失败不冒充空记录。
+- Android 长跑按真实学期起止、排除周和日期去重计算全部周期进度；补记、撤销、规则及身份变化重排 AlarmManager，投递前再次核对身份、日期和未达标周期，提醒默认关闭。体测保留自定义项目/单位，跑步输入和展示使用分秒。评分目录使用服务器筛选、viewer_rating 和提交后的汇总；先选星再明确提交，建议成功才关闭，课程教师标注来自本机课表。
 - Android 随记/日程保存、删除和社区发布在 ViewModel 层阻止重复提交；取消继续传播，不转换为业务失败。编辑失败保留输入、成功才关闭；编辑器返回、遮罩与下滑共用未保存确认。日迹分区通过 SaveableStateHolder 保留各自滚动状态，编辑草稿和课表编辑草稿使用共享 Saver 恢复。
 - Android 课表与日迹日程列表共用 `ScheduleEventEntity`/`ScheduleRepository`；新增、编辑与删除按活动 `scopeKey` 持久化并触发通知重排。ICS 导出按学期首日展开课程周次，并包含学期范围内个人日程，固定 `Asia/Shanghai`，文件仅暴露给 Android FileProvider Sharesheet。早晚报、考试及个人日程继续使用 WorkManager 四小时协调任务；课前提醒单独使用 AlarmManager，协调任务也重校验课程排期。日迹新增控件为 56dp 圆形加号，按分区提供准确语义。
 - Android 校园学业仓储将成绩/排名与考试拆成独立刷新边界；校园根页按学校教学、自习安排、体育相关、医疗事项和评价相关分组，不含周末去哪。学校教学含成绩、考试、教学与培养、校历（含作息）、综素测算与本机荣誉记录；自习安排含空闲教室与图书馆座位预约外链。体育、体测、医疗台账及照片按 `scopeKey` 保存在 Room/私有目录；医疗需 `medicalServices`，评价使用 Cloudflare catalog/ratings 契约。培养方案展开合并单元格，只从明确学分要求区域及对应列取值，课程编号/学时不能作为学分；教学长表格统一列宽与水平滚动状态，场馆卡片占满可用宽度。
@@ -361,7 +367,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 
 iOS CI 固定 macOS 26 / Xcode 26.6，保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
 
-Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
+Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；Pages 的 _routes.json 明确包含 /api/releases/android/*，避免发行代理被静态页面吞掉；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
 
 iOS `release.yml` 仅在 Apple 正式发布后记录源码、版本/build 与 annotated tag，不生成未签名归档。完整操作入口为 `docs/operations/delivery.md`。
 

@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.catch
 import com.myleafy.android.core.flow.retryableFlow
 import kotlinx.coroutines.launch
 
@@ -25,6 +27,7 @@ sealed interface CampusUiState {
         val gradeSummary: GradeSummaryEntity?,
         val exams: List<ExamEntity>,
         val analytics: GradeAnalytics = GradeAnalytics.calculate(grades, gradeSummary),
+        val warnings: List<String> = emptyList(),
     ) : CampusUiState
 
     data class Error(val message: String) : CampusUiState
@@ -54,30 +57,41 @@ class CampusViewModel(
 
     private val _syncState = MutableStateFlow<CampusSyncState>(CampusSyncState.Idle)
     val syncState: StateFlow<CampusSyncState> = _syncState.asStateFlow()
+    private val localErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+    private fun <T> supplemental(source: Flow<T>, label: String, empty: T): Flow<T> = source.map { value ->
+        if (label in localErrors.value) localErrors.value = localErrors.value - label
+        value
+    }.catch { failure ->
+        if (failure is kotlinx.coroutines.CancellationException) throw failure
+        localErrors.value = localErrors.value + (label to "$label：${failure.message ?: "读取失败"}")
+        emit(empty)
+    }
 
     private val gradesAndMetadata = combine(
         repository.grades(),
         repository.terms(),
-        repository.rankings(),
+        supplemental(repository.rankings(), "官方排名", emptyList()),
     ) { grades, terms, rankings -> Triple(grades, terms, rankings) }
 
     private val academics = combine(
         gradesAndMetadata,
-        repository.gradeSummary(),
+        supplemental(repository.gradeSummary(), "官方汇总", null),
     ) { (grades, terms, rankings), summary ->
         AcademicSnapshot(grades, terms, rankings, summary)
     }
 
     private val mapped: Flow<CampusUiState> = combine(
         academics,
-        repository.exams(),
-    ) { academic, exams ->
+        supplemental(repository.exams(), "考试缓存", emptyList()),
+        localErrors,
+    ) { academic, exams, errors ->
         CampusUiState.Loaded(
             terms = academic.terms,
             grades = academic.grades,
             rankings = academic.rankings,
             gradeSummary = academic.summary,
             exams = exams,
+            warnings = errors.values.toList(),
         )
     }
 
@@ -97,6 +111,10 @@ class CampusViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = CampusUiState.Loading,
     )
+    val examUiState: StateFlow<CampusUiState> = retryableFlow(loadRetryToken,
+        repository.exams().map<List<ExamEntity>, CampusUiState> { CampusUiState.Loaded(emptyList(), emptyList(), emptyList(), null, it) },
+        onError = { CampusUiState.Error(it.message ?: "考试数据加载失败") })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CampusUiState.Loading)
 
     /** 本地读取失败后的原地重试：重新订阅本地数据流，不发起教务请求。 */
     fun retryLoad() {

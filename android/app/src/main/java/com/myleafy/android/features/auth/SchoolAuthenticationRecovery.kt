@@ -83,6 +83,8 @@ class RecoveringSchoolNetworkClient(
     private val recovery: SchoolAuthenticationRecovery,
     private val scopes: ActiveAppScopeStore,
 ) : SchoolNetworkClient by delegate {
+    override suspend fun fetchGradeSupplemental() = request { delegate.fetchGradeSupplemental() }
+    override suspend fun fetchClassroomAvailability(semesterId: String, week: Int, day: Int) = request { delegate.fetchClassroomAvailability(semesterId, week, day) }
     private suspend fun <T> request(block: suspend () -> T): T {
         val scope = scopes.current.scopeKey
         val revision = recovery.revision

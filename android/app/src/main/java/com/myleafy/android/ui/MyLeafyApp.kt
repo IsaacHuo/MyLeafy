@@ -73,6 +73,10 @@ fun MyLeafyApp(deepLinkIntent: Intent? = null) {
     }
 
     LaunchedEffect(deepLinkIntent) {
+        if (deepLinkIntent?.getBooleanExtra("sunshineReminder", false) == true &&
+            deepLinkIntent.getStringExtra("scope") == application.container.activeAppScopeStore.current.scopeKey) {
+            navController.navigate(com.myleafy.android.navigation.FeatureDestination.CAMPUS_SUNSHINE_RUN.route) { launchSingleTop = true }
+        }
         if (deepLinkIntent?.getBooleanExtra("courseReminder", false) == true) {
             val uri = android.net.Uri.Builder().scheme("myleafy-internal").authority("course")
             listOf("scope", "semester", "course").forEach { uri.appendQueryParameter(it, deepLinkIntent.getStringExtra(it)) }

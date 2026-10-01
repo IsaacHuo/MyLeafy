@@ -80,7 +80,7 @@ fun GradesScreen(
                     LeafyTextButton(onClick = viewModel::retryLoad) { Text("重新加载") }
                 },
             )
-            is CampusUiState.Loaded -> GradesContent(state, modifier, onAnalysis)
+            is CampusUiState.Loaded -> GradesContent(state, modifier, guestActions = { GuestAcademicActions(GuestAcademicKind.GRADE, grades = state.grades) }, onAnalysis = onAnalysis)
         }
     }
 }
@@ -91,7 +91,7 @@ fun ExamsScreen(
     canSync: Boolean = false,
     viewModel: CampusViewModel = academicViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.examUiState.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 
     AcademicDetailScaffold(
@@ -117,6 +117,7 @@ fun ExamsScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
                 verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
             ) {
+                item { GuestAcademicActions(GuestAcademicKind.EXAM, exams = state.exams) }
                 item {
                     Text(
                         text = "共 ${state.exams.size} 场考试",
@@ -130,8 +131,8 @@ fun ExamsScreen(
                 if (state.exams.isEmpty()) {
                     item {
                         LeafyEmptyState(
-                            title = "学校暂未返回考试安排",
-                            message = "刷新后查看考试时间和地点。",
+                            title = if (canSync) "学校暂未返回考试安排" else "暂无本地考试",
+                            message = if (canSync) "刷新后查看考试时间和地点。" else "可新增考试或使用 CSV 导入。",
                             icon = Icons.Outlined.CalendarMonth,
                         )
                     }
@@ -147,7 +148,7 @@ fun ExamsScreen(
 }
 
 @Composable
-internal fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier, onAnalysis: () -> Unit) {
+internal fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier, guestActions: (@Composable () -> Unit)? = null, onAnalysis: () -> Unit) {
     var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val groups = remember(state.grades) { state.grades.groupBy { it.term }.toSortedMap(reverseOrder()) }
     LazyColumn(
@@ -155,6 +156,8 @@ internal fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier, onAn
         contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
     ) {
+        guestActions?.let { actions -> item(key = "guest-actions") { actions() } }
+        if (state.warnings.isNotEmpty()) item { LeafyStatusBanner(state.warnings.joinToString("；"), isError = true) }
         item(key = "summary") {
             LeafyContentSurface(modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "查看成绩分析详情", onClick = onAnalysis)) {
                 Column(Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
@@ -181,6 +184,8 @@ internal fun GradesContent(state: CampusUiState.Loaded, modifier: Modifier, onAn
                         Text("${grades.size} 门 · ${if (term in collapsed) "展开" else "收起"}")
                     }
                 }
+                val termAnalysis = GradeAnalytics.calculate(grades)
+                Text("加权均分 ${termAnalysis.weightedAverage.gradeNumber()} · ${termAnalysis.totalCredits.gradeNumber()} 学分 · ${grades.size} 条原始成绩", style = MaterialTheme.typography.bodySmall)
             }
             if (term !in collapsed) items(grades, key = { "grade:${it.id}" }) { GradeRow(it) }
         }
