@@ -1,6 +1,36 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {currentDeployment,deploymentTarget,account,waitForDeploymentJSON} from '../scripts/deployment-platform.mjs';
+import {currentDeployment,deploymentTarget,account,platform,verifyWorkerDomain,waitForDeploymentJSON} from '../scripts/deployment-platform.mjs';
+
+test('code publication verifies the existing domain and never writes zone routing',async()=>{
+  const original=globalThis.fetch,token=process.env.CLOUDFLARE_API_TOKEN,configuredAccount=process.env.CLOUDFLARE_ACCOUNT_ID;
+  process.env.CLOUDFLARE_API_TOKEN='synthetic-test-only';process.env.CLOUDFLARE_ACCOUNT_ID=account;
+  const calls=[],target=deploymentTarget('production','leafy');
+  try{
+    globalThis.fetch=async(url,init)=>{calls.push({url:String(url),method:init.method});return Response.json({success:true,result:[{hostname:'api.myleafy.space',service:target.worker,environment:'production'}]});};
+    await verifyWorkerDomain(target);
+    assert.deepEqual(calls,[{url:`https://api.cloudflare.com/client/v4/accounts/${account}/workers/domains?hostname=api.myleafy.space`,method:'GET'}]);
+    for(const result of [[],[{hostname:'api.myleafy.space',service:'another-worker',environment:'production'}],
+                         [{hostname:'api.myleafy.space',service:target.worker,environment:'staging'}]]){
+      globalThis.fetch=async()=>Response.json({success:true,result});
+      await assert.rejects(verifyWorkerDomain(target),/before publishing code/);
+    }
+    globalThis.fetch=async()=>Response.json({success:false},{status:403});
+    await assert.rejects(verifyWorkerDomain(target),/HTTP 403/);
+  }finally{globalThis.fetch=original;if(token===undefined)delete process.env.CLOUDFLARE_API_TOKEN;else process.env.CLOUDFLARE_API_TOKEN=token;if(configuredAccount===undefined)delete process.env.CLOUDFLARE_ACCOUNT_ID;else process.env.CLOUDFLARE_ACCOUNT_ID=configuredAccount;}
+});
+
+test('cron updates use the account Worker API and retain failure visibility',async()=>{
+  const original=globalThis.fetch,token=process.env.CLOUDFLARE_API_TOKEN,configuredAccount=process.env.CLOUDFLARE_ACCOUNT_ID;
+  process.env.CLOUDFLARE_API_TOKEN='synthetic-test-only';process.env.CLOUDFLARE_ACCOUNT_ID=account;
+  const schedules=[{cron:'17 * * * *'}],path='workers/scripts/myleafy-api-production/schedules';
+  try{
+    globalThis.fetch=async(url,init)=>{assert.equal(init.method,'PUT');assert.deepEqual(JSON.parse(init.body),schedules);assert(String(url).endsWith(path));return Response.json({success:true,result:{schedules}});};
+    assert.deepEqual(await platform(path,schedules,'PUT'),{schedules});
+    globalThis.fetch=async()=>Response.json({success:false},{status:403});
+    await assert.rejects(platform(path,schedules,'PUT'),/HTTP 403/);
+  }finally{globalThis.fetch=original;if(token===undefined)delete process.env.CLOUDFLARE_API_TOKEN;else process.env.CLOUDFLARE_API_TOKEN=token;if(configuredAccount===undefined)delete process.env.CLOUDFLARE_ACCOUNT_ID;else process.env.CLOUDFLARE_ACCOUNT_ID=configuredAccount;}
+});
 
 test('Pages permission and automatic-deployment failures stop before Worker operations',async()=>{
   const original=globalThis.fetch,token=process.env.CLOUDFLARE_API_TOKEN,configuredAccount=process.env.CLOUDFLARE_ACCOUNT_ID;

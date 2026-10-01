@@ -2,7 +2,7 @@ import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {resolve} from 'node:path';
 import assert from 'node:assert/strict';
-import {deploymentTarget,currentDeployment,platform,waitForDeploymentJSON} from './deployment-platform.mjs';
+import {deploymentTarget,currentDeployment,platform,verifyWorkerDomain,waitForDeploymentJSON} from './deployment-platform.mjs';
 
 const environment=process.argv[2],sha=process.env.RELEASE_COMMIT,project=process.env.CLOUDFLARE_PAGES_PROJECT;
 assert(['staging','production'].includes(environment)&&/^[a-f0-9]{40}$/.test(sha??'')&&/^[a-z0-9-]+$/.test(project??''),'Explicit environment, commit and Pages project are required');
@@ -19,6 +19,7 @@ if(environment==='production'){
 }
 const target=deploymentTarget(environment,project);
 report.previous=await currentDeployment(target);
+await verifyWorkerDomain(target);
 const previousHealth=await fetch(target.api+'/health',{signal:AbortSignal.timeout(20000)});assert(previousHealth.ok);
 const previousInfo=await previousHealth.json();assert.equal(previousInfo.environment,environment);
 report.previous.commit=previousInfo.commit??null;
@@ -30,7 +31,13 @@ writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');
 wrangle(['d1','migrations','list',`myleafy-${environment}`,'--env',environment,'--remote']);
 wrangle(['d1','migrations','apply',`myleafy-${environment}`,'--env',environment,'--remote']);
 const siteOrigin=target.site;
-wrangle(['deploy','--env',environment,'--var',`DEPLOY_COMMIT:${sha}`,'--var',`SITE_ORIGIN:${siteOrigin}`]);
+// Publish code on the verified existing domain without rewriting zone routes.
+const uploaded=wrangle(['versions','upload','--env',environment,'--var',`DEPLOY_COMMIT:${sha}`,'--var',`SITE_ORIGIN:${siteOrigin}`]);
+const version=uploaded.match(/Worker Version ID:\s*([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})/);
+assert(version,'Wrangler did not identify the uploaded Worker version');
+wrangle(['versions','deploy',`${version[1]}@100`,'--env',environment,'--yes']);
+const workerConfig=JSON.parse(readFileSync(resolve(root,'backend/wrangler.jsonc'),'utf8')).env[environment];
+await platform(`workers/scripts/${target.worker}/schedules`,workerConfig.triggers.crons.map(cron=>({cron})),'PUT');
 const api=target.api;
 await waitForDeploymentJSON(api+'/health',{status:'ok',environment,commit:sha});report.checks.push('worker-health-and-commit');
 if(environment==='staging'){

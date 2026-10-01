@@ -7,15 +7,21 @@ export function deploymentTarget(environment,project){
     api:environment==='production'?'https://api.myleafy.space':'https://api-staging.myleafy.space',
     site:environment==='production'?'https://myleafy.space':`https://${project}.pages.dev`};
 }
-export async function platform(path,body){
+export async function platform(path,body,method=body===undefined?'GET':'POST'){
   assert.equal(process.env.CLOUDFLARE_ACCOUNT_ID,account,'Cloudflare account mismatch');
   assert(process.env.CLOUDFLARE_API_TOKEN,'Cloudflare API token is missing');
   const response=await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}/${path}`,{
-    method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'},
+    method,headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'},
     ...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(20000)});
   const result=await response.json();
   assert(response.ok&&result.success,`Cloudflare ${path}: HTTP ${response.status}`);
   return result.result;
+}
+export async function verifyWorkerDomain(target){
+  const hostname=new URL(target.api).hostname;
+  const domains=await platform(`workers/domains?hostname=${encodeURIComponent(hostname)}`);
+  assert(domains.some(domain=>domain.hostname===hostname&&domain.service===target.worker&&domain.environment==='production'),
+    `Configure ${hostname} on ${target.worker} before publishing code; this workflow does not change domains`);
 }
 export async function currentDeployment(target){
   // Check Pages permission before any migration or Worker mutation.
