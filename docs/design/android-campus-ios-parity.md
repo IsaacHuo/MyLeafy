@@ -70,3 +70,9 @@
 截图位于 `android/app/src/test/screenshots/` 和本机 `android/app/build/parity-emulator/campus-parity/`；设备截图是独立测试身份，不能作为实网教务结果。横屏视觉验收按用户最新要求暂缓。
 
 实网待检：本轮新的官方学分完整表、教室单节/连续节次/全天、学校预约登录、目录评分实际写入；平台通知实际投递及重启恢复需独立记录。历史实网记录见 `state/CURRENT.md`，不能替代本轮验证。
+
+## 正式发布状态（2026-10-01）
+
+用户追加授权发布 1.2.2，并要求停止重复检查。实现已合入 main，源码 `39af5c96df85fcb1284cfc33a2e38ac77b211d26` 的主线 CI 全绿。正式 APK 为 1.2.2/code 6、54,634,846 字节，SHA-256 `47f07f0d044beb104fef6ef6510a255cfa09cf602a0632d8bc9024d99f418f3c`；私有 `android-candidate-6` 已保存 APK、校验和与构建信息，沿用已有正式证书。
+
+staging 部署与六项检查成功。production 在完成 D1 迁移与 Worker 上传后因 Workers routes 权限被拒绝，尚未执行网站部署；候选登记 HTTP 502，重试复用原 APK 仍失败。公开 latest 仍为 1.2.1/code 5，尚未产生正式 1.2.2 或管理员发布授权。修复发布凭据后继续发布同一候选，不重复构建或改写候选身份；正式覆盖升级与发行回读尚待完成。
