@@ -75,4 +75,4 @@
 
 用户追加授权发布 1.2.2，并要求停止重复检查。实现已合入 main，源码 `39af5c96df85fcb1284cfc33a2e38ac77b211d26` 的主线 CI 全绿。正式 APK 为 1.2.2/code 6、54,634,846 字节，SHA-256 `47f07f0d044beb104fef6ef6510a255cfa09cf602a0632d8bc9024d99f418f3c`；私有 `android-candidate-6` 已保存 APK、校验和与构建信息，沿用已有正式证书。
 
-staging 部署与六项检查成功。production 路由阻碍已通过版本式代码部署修正，后台与网站成功部署源码 `d4cee8eb71431a1e7b9d6efff948661c2bb9c44e`，未扩大凭据权限。安全诊断确认候选登记 HTTP 502 对应后台读取私有候选时的 GitHub 403；公开 latest 仍为 1.2.1/code 5，尚未产生正式 1.2.2 或管理员发布授权。恢复后台候选读取能力后继续使用同一 APK，不重复构建或改写候选身份；正式覆盖升级与发行回读尚待完成。用户最新要求最后的确认发布由本人点击。
+staging 部署与六项检查成功。production 路由阻碍已通过版本式代码部署修正，后台与网站成功部署源码 `d4cee8eb71431a1e7b9d6efff948661c2bb9c44e`，未扩大凭据权限。候选登记最初的 GitHub 403 经诊断为 production Worker 的 `GITHUB_RELEASE_TOKEN` 不是该 Worker 实际部署的当前值；在 `myleafy-api-production` 重新部署该 token 后，复用原 APK 的登记成功。用户确认候选验收并点击发布，发布工作流成功，公开 latest 为 1.2.2/code 6，GitHub Release `android-v1.2.2` 已公开（`publishedAt 2026-10-01T09:07:00Z`），APK 与候选 SHA-256 一致，全程未重建或改写候选身份。用户最新要求最后的确认发布由本人点击，已由本人完成。
