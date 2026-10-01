@@ -17,8 +17,12 @@ Cloudflare 上传曾返回 403；同一接口使用默认 Python User-Agent 得�
 
 旧直发流程使用 Actions 自带的发行凭据，不代表新后台令牌能够读取私有候选。候选登记先读取私有 draft，再检查准备运行及主线 CI；生产首次私有 draft 请求返回 GitHub 403 时，登记包装为 502。先区分上游错误和外层状态，不把 APK 构建成功等同候选登记成功。
 
+production Worker 的 `GITHUB_RELEASE_TOKEN` 必须是**实际部署到该 Worker 的当前值**；只在别处保存或更新、未在 `myleafy-api-production` 重新部署时，后台读取私有候选仍返回 403。2026-10-01 在 production Worker 重新部署该 fine-grained token 后，复用原 APK 的登记立即成功，随后正常发布，无需放宽 Contents 权限。凭据有效性的判定标准是目标 Worker 上真实发起的请求，而不是存储层存在同名 Secret。
+
 日常 wrangler deploy 会同步 Zone 路由，可能在代码上传后因路由权限失败。已有域名的代码更新可核对账号级绑定后使用 versions upload/deploy，Cron 用账号级 schedules 更新；域名变更另行配置，不为普通代码更新扩大凭据权限。
 
 ## 验证与边界
 
 协调器回归覆盖新 draft ID、登记失败回退和响应丢失后确认。实际正式流水线完成 Cloudflare/GitHub 双发布，系统安装器验证同签名覆盖安装。当前部署状态与版本以 `state/CURRENT.md` 为准；这些事实不代表大陆网络速度或全系统版本均已验收。
+
+1.2.2 复用原候选 APK 完成登记与双发布：GitHub Release `android-v1.2.2` 与公开 latest 的 APK SHA-256 均为候选值 `47f07f0d…f418f3c`，全程未重建。候选登记、正式发布分别见运行 36840232872、36840522960。

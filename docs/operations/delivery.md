@@ -21,7 +21,7 @@ GitHub Environments 为 `staging`、`production`、`android-candidates`、`andro
 1. 在 staging/production Environment 中分别保存 `CLOUDFLARE_API_TOKEN`；仅授予目标账号需要的 Workers Scripts、D1、R2、Pages 编辑权限。API 自定义域名须事先绑定对应 Worker；日常部署核对绑定后以 `versions upload` / `versions deploy` 发布代码，用账号级接口更新 Cron，不改写域名路由。各自设置 `CLOUDFLARE_PAGES_PROJECT`：生产现有项目 `leafy`，测试独立项目如 `myleafy-site-staging`，两者的 production branch 均为 main。
 2. 测试 Pages 绑定 `myleafy-api-staging`；生产 Pages 绑定 `myleafy-api-production`。仓库的 `site/wrangler.<environment>.jsonc` 明确 AdminAPI 和 PublicAPI 绑定。官网下载区同样使用自身 PublicAPI 绑定，部署后回读网站/后端发行信息并比较。测试项目 `.pages.dev` 页面显示预览提示。
 3. 关闭现有 Pages 项目的生产 Git 自动部署；测试项目也使用受控部署。脚本会在任何迁移和 Worker 写入前检查 Pages 权限与自动部署状态，配置不完整就停止。
-4. production Worker Secret `GITHUB_RELEASE_TOKEN` 限定 `IsaacHuo/MyLeafy`，Contents 只读、Actions 读写。它用于读取私有 draft 和运行状态、发起固定发布工作流，永不发送给浏览器。Cloudflare 只能列出 Secret 名称；真实有效性由管理员下载/发布请求验证。不要将其设置为 `VITE_` 变量。
+4. production Worker Secret `GITHUB_RELEASE_TOKEN` 限定 `IsaacHuo/MyLeafy`，Contents 只读、Actions 读写。它用于读取私有 draft 和运行状态、发起固定发布工作流，永不发送给浏览器。Cloudflare 只能列出 Secret 名称；真实有效性由管理员下载/发布请求验证，且该 Secret 必须**实际部署到目标 Worker**——仅存储或更新、未部署到 `myleafy-api-production` 时后台仍会因读取私有候选失败。不要将其设置为 `VITE_` 变量。
 5. 继续使用现有 Android 四个签名 Secrets 与 `MYLEAFY_RELEASE_PUBLISH_TOKEN`。publisher token 仅能登记私有候选；正式上传/登记还必须匹配已保存、已领取的管理员授权。staging/production 的 publisher token 和 R2 bucket 保持独立。
 6. 首次 staging 人工确认可写后将 `backend_control` 置为 active。冒烟测试只生成/删除本次随机身份与数据，不改变全局开关、不清理其他验收数据。
 7. 通过完整 CI 后才设置 main 的必需检查 `CI result`。完成 staging 验收并由用户批准首次 production 部署后，新版 admin 和发行授权接口才在生产生效。
