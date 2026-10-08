@@ -57,6 +57,8 @@
 
 本轮候选版本为 1.2.3/code 7，交付流程为当前提交的 `CI result` 通过后快进合入 main，再由候选工作流准备原签名 APK。正式发行仍由用户在 Android 版本管理页验收并授权。本轮不执行后端生产部署。
 
+PR 的完整 JVM 回归暴露了既有登录测试的协程寿命问题：初始化使用真实 IO dispatcher，测试撤销 Main 时后台工作仍可能恢复，导致下一个认证测试收到 `UncaughtExceptionsBeforeTest`。测试现持有自己创建的 ViewModel，在撤销 Main 前取消并等待其 scope 完成。仅修正测试清理，未改变应用认证行为；登录/认证恢复专项与完整 JVM 套件重新通过。
+
 ### 托管 Gradle 检查的问题与答案
 
 全部命令通过 `gradle_run.py` 托管，仅读取有界摘要。失败后根据具体源码或测试报告修正再运行，没有重开完整 Gradle 日志。
@@ -77,6 +79,8 @@
 | “Do the full JVM suite, debug lint, app build and instrumentation build pass for the completed UI changes?” | 182 项无失败；两类 APK 构建与 lint 通过 |
 | “Does the screenshot verification pass and does the instrumentation APK include readable renderer diagnostics?” | 61 张基线验证通过，测试 APK 构建通过；诊断采集随后由同数据模拟器回归验证 |
 | “Does the instrumentation APK compile after matching venue headers by their click semantics?” | 构建通过；场馆单项随后通过 |
+| “Do login and school authentication recovery tests pass with joined ViewModel cleanup?” | 通过；取消并等待初始化协程后再撤销测试 Main |
+| “Does the full JVM suite pass after preventing login test coroutines from escaping teardown?” | 182 项无失败，175 通过、7 项外部探测跳过 |
 
 ## 仍需现场核验
 

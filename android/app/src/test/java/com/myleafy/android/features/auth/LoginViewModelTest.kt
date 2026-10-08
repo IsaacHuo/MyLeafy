@@ -1,6 +1,9 @@
 package com.myleafy.android.features.auth
 
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import com.myleafy.android.core.security.StoredSchoolCredential
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -18,19 +21,31 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
     private val dispatcher = StandardTestDispatcher()
+    private val viewModels = mutableListOf<LoginViewModel>()
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
 
     @After
-    fun tearDown() = Dispatchers.resetMain()
+    fun tearDown() {
+        try {
+            runTest(dispatcher) {
+                viewModels.forEach { it.viewModelScope.coroutineContext[Job]?.cancelAndJoin() }
+            }
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private fun createViewModel(repository: AuthRepository) =
+        LoginViewModel(repository).also(viewModels::add)
 
     @Test
     fun loginFailureSurvivesAutomaticCaptchaRefresh() = runTest(dispatcher) {
         val repository = FakeAuthRepository(
             loginResult = Result.failure(IllegalStateException("验证码错误")),
         )
-        val viewModel = LoginViewModel(repository)
+        val viewModel = createViewModel(repository)
         testScheduler.advanceUntilIdle()
 
         viewModel.submit("student", "password", "1234")
@@ -46,7 +61,7 @@ class LoginViewModelTest {
     fun savedCredentialsPrefillAndCaptchaStaysManual() = runTest(dispatcher) {
         val stored = StoredSchoolCredential("bjfu", "undergraduate", "student", "p|a\"ss", 1)
         val repository = FakeAuthRepository(Result.success(Unit), stored)
-        val viewModel = LoginViewModel(repository)
+        val viewModel = createViewModel(repository)
         assertEquals(stored.password, viewModel.password.first { it.isNotEmpty() })
         assertEquals(stored.account, viewModel.account.value)
         assertEquals("", viewModel.captcha.value)
@@ -56,7 +71,7 @@ class LoginViewModelTest {
     @Test
     fun failedLoginRetainsAccountAndPasswordAfterRefreshingCaptcha() = runTest(dispatcher) {
         val repository = FakeAuthRepository(Result.failure(IllegalStateException("验证码错误")))
-        val viewModel = LoginViewModel(repository)
+        val viewModel = createViewModel(repository)
         testScheduler.advanceUntilIdle()
         viewModel.setAccount("student")
         viewModel.setPassword("p|a\"ss")
