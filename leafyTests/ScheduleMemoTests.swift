@@ -439,7 +439,7 @@ final class ScheduleMemoTests: XCTestCase {
     }
 
     func testAccountModelCleanupDeletesMemoRows() throws {
-        let setup = AppModelContainerFactory.make()
+        let setup = try AppModelContainerFactory.make()
         let context = setup.container.mainContext
         let memo = ScheduleMemo(body: "清理我")
         context.insert(memo)

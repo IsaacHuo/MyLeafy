@@ -2518,6 +2518,7 @@ struct TimetableView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
+        let scope = CampusOperationScope()
         guard !isFetching, !Task.isCancelled else { return }
         if isCustomCampus {
             await MainActor.run {
@@ -2533,6 +2534,7 @@ struct TimetableView: View {
             do {
                 let saved = try ReviewDemoDataSeeder.refreshTimetable(using: modelContext)
                 let reminderWarning = await saved.reminders.restore()
+                try scope.check()
                 TimetableCacheMetadata.lastSyncAt = Date()
                 TimetableCacheMetadata.lastFailureMessage = reminderWarning
                 TimetableCacheMetadata.lastSyncedSemesterID = SemesterConfig.currentSemesterID
@@ -2547,6 +2549,7 @@ struct TimetableView: View {
                     showAlert = true
                 }
             } catch {
+                guard !scope.wasCancelled(error) else { return }
                 alertMessage = error.localizedDescription
                 showAlert = true
             }
@@ -2592,12 +2595,12 @@ struct TimetableView: View {
         progressReporter?(.begin(.refreshingSemester))
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: userInitiated)
         do {
-            try Task.checkCancellation()
+            try scope.check()
             applySemesterRuntimeConfig(semesterConfig)
             let refreshUseCase = TimetableRefreshUseCase(repository: dependencies.schoolTimetableRepository)
             progressReporter?(.begin(.fetchingTimetable))
             let document = try await refreshUseCase.fetchDocument()
-            try Task.checkCancellation()
+            try scope.check()
             let parsedCourseRecords: [ParsedCourseRecord]
 
             do {
@@ -2612,8 +2615,9 @@ struct TimetableView: View {
                 )
             }
 
-            try Task.checkCancellation()
+            try scope.check()
             let (saved, refreshSummary) = try await MainActor.run {
+                try scope.check()
                 progressReporter?(.begin(.savingTimetable))
                 let refreshSummary = TimetableRefreshSummary.compare(
                     records: parsedCourseRecords,
@@ -2629,7 +2633,9 @@ struct TimetableView: View {
                 return (saved, refreshSummary)
             }
             let reminderWarning = await saved.reminders.restore()
+            try scope.check()
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 let sharedCourses = saved.sharedCourses
 
                 timetableGridSnapshotCache.invalidate()
@@ -2640,6 +2646,7 @@ struct TimetableView: View {
                 AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
                 SchoolDataRefreshNotifier.post(.timetable)
                 Task {
+                    guard scope.isCurrent, !Task.isCancelled else { return }
                     await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: sharedCourses)
                 }
                 lastSyncAt = TimetableCacheMetadata.lastSyncAt
@@ -2655,7 +2662,7 @@ struct TimetableView: View {
                 }
             }
         } catch {
-            if Task.isCancelled {
+            if scope.wasCancelled(error) {
                 progressController.clear()
                 return
             }

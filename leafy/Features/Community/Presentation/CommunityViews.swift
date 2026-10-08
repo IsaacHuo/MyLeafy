@@ -783,6 +783,15 @@ struct RealCommunitySectionView: View {
                                     campusID: ActiveCampusContext.descriptor.id.rawValue,
                                     isVisible: $isBannerVisible
                                 )
+                                if let message = publishCoordinator.storageError {
+                                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
+                                        Text("发布队列暂不可用").font(.headline)
+                                        Text(message).font(.footnote).foregroundStyle(.secondary)
+                                        Button("重试", action: publishCoordinator.retryStorage)
+                                    }
+                                    .padding(AppSpacing.card)
+                                    .leafyCardStyle()
+                                }
                                 if !publishCoordinator.visibleTasks.isEmpty {
                                     CommunityPublishTaskStrip(tasks: publishCoordinator.visibleTasks)
                                         .padding(.top, isBannerVisible ? AppSpacing.card : 0)

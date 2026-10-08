@@ -2287,6 +2287,8 @@ private struct CacheAndSyncView: View {
                 ? nil
                 : progressController.reporter(for: .allAcademicData)
         ) {
+        case .cancelled:
+            progressController.clear()
         case .success(let syncMessage):
             progressController.completeCurrentStep()
             progressController.clear()

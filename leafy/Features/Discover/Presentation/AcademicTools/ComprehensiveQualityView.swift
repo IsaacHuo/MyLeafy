@@ -751,9 +751,10 @@ struct ComprehensiveQualityView: View {
     }
 
     private func delete(_ document: ComprehensiveQualityEvidenceDocument) {
-        try? ComprehensiveQualityEvidenceFileStore.deleteFile(named: document.localFilename)
-        modelContext.delete(document)
-        try? modelContext.save()
+        do {
+            let file = LocalFileCleanup.File(document, url: ComprehensiveQualityEvidenceFileStore.fileURL(named: document.localFilename))
+            try LocalFileCleanup().delete([document], files: [file], in: modelContext)
+        } catch { alertMessage = error.localizedDescription }
     }
 
     private var normalizedCohort: String {
@@ -1114,8 +1115,10 @@ enum ComprehensiveQualityEvidenceFileStore {
         )
     }
 
+    static func fileURL(named filename: String) -> URL { directoryURL.appendingPathComponent(filename) }
+
     static func deleteFile(named filename: String) throws {
-        let url = directoryURL.appendingPathComponent(filename)
+        let url = fileURL(named: filename)
         if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
             try FileManager.default.removeItem(at: url)
         }

@@ -24,9 +24,12 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
         return profile
     }
     func publishSnapshot(courses: [SharedTimetableCourse]) async throws -> SharedTimetableSnapshot {
+        let scope = await CampusOperationScope()
         guard !courses.isEmpty else { throw TimetableSharingError.emptySnapshot }
         _ = try await requireProfile()
+        try await scope.check()
         let semester = await SemesterConfig.refreshRemoteIfAvailable()
+        try await scope.check()
         struct Input: Encodable { let semester_id: String; let courses: [SharedTimetableCourse] }
         return try await backend.request("/v1/timetables", method: "PUT", body: Input(semester_id: semester.semesterID, courses: courses))
     }

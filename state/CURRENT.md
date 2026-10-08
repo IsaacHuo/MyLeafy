@@ -1,8 +1,10 @@
 # Current State
 
-Last verified: 2026-10-08 (Android UI polish; source 1.2.3/code 7, public release remains 1.2.2/code 6)
+Last verified: 2026-10-08 (iOS reliability build and offline XCTest; Android UI polish source 1.2.3/code 7, public release remains 1.2.2/code 6)
 
 ## Current Focus
+
+- **iOS 工程可靠性**：持久库失败保留原文件并进入恢复页，显式重建校验完整备份；身份/门户/会话代次隔离学校请求与预取，保存失败撤销本次修改，文件删除延迟清理，学习资料批次一次提交且可安全重试，考试异常行拒绝整批覆盖，社区发布持久化后才入队并绑定身份，录音权限迟到失效。单测宿主不再挂载生产根界面，默认正式传输拒绝测试请求。iOS 17 最低目标构建通过，完整离线 XCTest 602 项中 601 通过、1 跳过；性能候选尚无 ETTrace、memgraph 或真机测量结论。
 
 - **Android 现有功能 UI 打磨**：课表周次入口、日期换排、课程文字分配、轻网格与累计像素对齐已落地；校园时区分钟更新只在 RESUMED 收集，恢复/午夜即时校准。短屏大字号先省略结束时间，连开始时间也放不下时保留节次与完整朗读。共享字体、分组、提示、深色弹层推广至五个根页面；成绩坐标/单点/零值、横滑柱图、综素成对字段、教学/场馆展开行、体测分秒提示、日迹卡片与社区辅助信息已调整。Room v9、API、身份隔离与业务计算未变。详见 `docs/design/android-experience-polish.md`。
 - **本轮验证**：JVM 182 项中 175 通过、7 外部探测跳过；Debug/测试 APK 构建与 lint 通过，118 warning、2 hint、0 error。Roborazzi 63 项通过，61 张基线验证通过；44 张原基线改变、9 张新增，变化图片已审阅。只读隔离 API 36 模拟器完整 45 项中 44 通过；场馆标题与地点同文导致测试定位歧义，改为可点击标题后该项复跑通过。GPU 模拟器同数据前后冷启动 5 次中位数 2800/2807ms；自动化帧时只作诊断，不据此宣称真机性能提升。候选版本为 1.2.3/code 7，正式版本仍为用户已发布的 1.2.2/code 6。

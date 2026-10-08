@@ -594,7 +594,7 @@ enum LearningMaterialFileStore {
         UTType(filenameExtension: "csv") ?? .data
     ]
 
-    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil) throws -> StoredFile {
+    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil, filename: String? = nil) throws -> StoredFile {
         let didAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -605,7 +605,7 @@ enum LearningMaterialFileStore {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
-        let localFilename = LearningMaterialLocalFile.localFilename(originalExtension: sourceURL.pathExtension)
+        let localFilename = filename ?? LearningMaterialLocalFile.localFilename(originalExtension: sourceURL.pathExtension)
         let destinationURL = directoryURL.appendingPathComponent(localFilename)
 
         if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
@@ -623,8 +623,10 @@ enum LearningMaterialFileStore {
         )
     }
 
+    static func fileURL(named filename: String) -> URL { directoryURL.appendingPathComponent(filename) }
+
     static func fileURL(for document: LearningMaterialDocument) -> URL? {
-        let url = directoryURL.appendingPathComponent(document.localFilename)
+        let url = fileURL(named: document.localFilename)
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
     }
 

@@ -37,6 +37,7 @@ final class SchoolDataPrefetchCoordinator {
     private let userDefaults: UserDefaults
     private let now: () -> Date
     private let logger = Logger(subsystem: "com.isaachuo.leafy", category: "SchoolDataPrefetch")
+    private var activeRunID: UUID?
     private var activeTask: Task<Void, Never>?
 
     init(
@@ -85,12 +86,22 @@ final class SchoolDataPrefetchCoordinator {
             }
         }
 
+        let runID = UUID()
+        let scope = CampusOperationScope()
+        activeRunID = runID
         activeTask = Task { @MainActor in
+            defer {
+                if activeRunID == runID {
+                    activeTask = nil
+                    activeRunID = nil
+                }
+            }
             logger.info("Academic prefetch started trigger=\(String(describing: trigger), privacy: .public)")
             let outcome = await syncOperation(modelContext, language)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, scope.isCurrent, activeRunID == runID else { return }
 
             switch outcome {
+            case .cancelled: return
             case .success:
                 lastSuccessAt = now()
                 logger.info("Academic prefetch completed")
@@ -107,7 +118,6 @@ final class SchoolDataPrefetchCoordinator {
                 lastFailureAt = now()
                 logger.info("Academic prefetch requires reauthentication")
             }
-            activeTask = nil
         }
 
         return .started
@@ -116,6 +126,7 @@ final class SchoolDataPrefetchCoordinator {
     func cancel() {
         activeTask?.cancel()
         activeTask = nil
+        activeRunID = nil
     }
 
     private var lastSuccessAt: Date? {

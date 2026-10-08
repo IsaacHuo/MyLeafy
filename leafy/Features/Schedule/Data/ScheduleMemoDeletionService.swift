@@ -4,65 +4,61 @@ import SwiftData
 @MainActor
 enum ScheduleMemoDeletionService {
     static func moveToTrash(_ memo: ScheduleMemo, now: Date = Date(), in context: ModelContext) throws {
+        let previous = (memo.trashedAt, memo.pinnedAt, memo.updatedAt)
         memo.trashedAt = now
         memo.pinnedAt = nil
         memo.updatedAt = now
-        try context.save()
+        try LocalModelSave.save(context, undo: {
+            memo.trashedAt = previous.0
+            memo.pinnedAt = previous.1
+            memo.updatedAt = previous.2
+        })
     }
 
     static func restore(_ memo: ScheduleMemo, now: Date = Date(), in context: ModelContext) throws {
+        let previous = (memo.trashedAt, memo.updatedAt)
         memo.trashedAt = nil
         memo.updatedAt = now
-        try context.save()
+        try LocalModelSave.save(context, undo: {
+            memo.trashedAt = previous.0
+            memo.updatedAt = previous.1
+        })
     }
 
     static func permanentlyDelete(
-        _ memo: ScheduleMemo,
-        images: [ScheduleMemoImage],
-        attachments: [ScheduleMemoAttachment] = [],
-        audioRecords: [ScheduleMemoAudio] = [],
-        in context: ModelContext,
-        imageDirectory: URL? = nil,
-        attachmentDirectory: URL? = nil,
-        audioDirectory: URL? = nil,
-        saves: Bool = true
+        _ memo: ScheduleMemo, images: [ScheduleMemoImage], attachments: [ScheduleMemoAttachment] = [],
+        audioRecords: [ScheduleMemoAudio] = [], in context: ModelContext,
+        imageDirectory: URL? = nil, attachmentDirectory: URL? = nil, audioDirectory: URL? = nil,
+        cleanup: LocalFileCleanup? = nil, save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
-        let imageRecords: [ScheduleMemoImage]
-        if images.isEmpty {
-            imageRecords = try context.fetch(FetchDescriptor<ScheduleMemoImage>())
-        } else {
-            imageRecords = images
-        }
-        let attachmentRecords: [ScheduleMemoAttachment]
-        if attachments.isEmpty {
-            attachmentRecords = try context.fetch(FetchDescriptor<ScheduleMemoAttachment>())
-        } else {
-            attachmentRecords = attachments
-        }
-        let ownedImages = imageRecords.filter { $0.memoID == memo.id }
-        let ownedAttachments = attachmentRecords.filter { $0.memoID == memo.id }
-        let resolvedAudioRecords: [ScheduleMemoAudio]
-        if audioRecords.isEmpty {
-            resolvedAudioRecords = try context.fetch(FetchDescriptor<ScheduleMemoAudio>())
-        } else {
-            resolvedAudioRecords = audioRecords
-        }
-        let ownedAudioRecords = resolvedAudioRecords.filter { $0.memoID == memo.id }
-        try ScheduleMemoImageStore.deleteFiles(named: ownedImages.map(\.localFilename), in: imageDirectory)
-        try ScheduleMemoAttachmentStore.deleteFiles(
-            named: ownedAttachments.map(\.localFilename),
-            in: attachmentDirectory
+        try permanentlyDelete(
+            [memo], images: images, attachments: attachments, audioRecords: audioRecords, in: context,
+            imageDirectory: imageDirectory, attachmentDirectory: attachmentDirectory, audioDirectory: audioDirectory,
+            cleanup: cleanup, save: save
         )
-        try ScheduleMemoAudioStore.deleteFiles(
-            named: ownedAudioRecords.map(\.localFilename),
-            in: audioDirectory
-        )
-        ownedImages.forEach(context.delete)
-        ownedAttachments.forEach(context.delete)
-        ownedAudioRecords.forEach(context.delete)
-        context.delete(memo)
-        if saves { try context.save() }
     }
+
+    static func permanentlyDelete(
+        _ memos: [ScheduleMemo], images: [ScheduleMemoImage], attachments: [ScheduleMemoAttachment] = [],
+        audioRecords: [ScheduleMemoAudio] = [], in context: ModelContext,
+        imageDirectory: URL? = nil, attachmentDirectory: URL? = nil, audioDirectory: URL? = nil,
+        cleanup: LocalFileCleanup? = nil, save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws {
+        let ids = Set(memos.map(\.id))
+        let ownedImages = try (images.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoImage>()) : images).filter { ids.contains($0.memoID) }
+        let ownedAttachments = try (attachments.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoAttachment>()) : attachments).filter { ids.contains($0.memoID) }
+        let ownedAudio = try (audioRecords.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoAudio>()) : audioRecords).filter { ids.contains($0.memoID) }
+        let files = ownedImages.map {
+            LocalFileCleanup.File($0, url: (imageDirectory ?? ScheduleMemoImageStore.directoryURL()).appendingPathComponent($0.localFilename))
+        } + ownedAttachments.compactMap { record in
+            ScheduleMemoAttachmentStore.fileURL(named: record.localFilename, in: attachmentDirectory).map { LocalFileCleanup.File(record, url: $0) }
+        } + ownedAudio.compactMap { record in
+            ScheduleMemoAudioStore.fileURL(named: record.localFilename, in: audioDirectory).map { LocalFileCleanup.File(record, url: $0) }
+        }
+        let models: [any PersistentModel] = memos + ownedImages + ownedAttachments + ownedAudio
+        try (cleanup ?? LocalFileCleanup()).delete(models, files: files, in: context, save: save)
+    }
+
 }
 
 nonisolated enum ScheduleMemoLinkResolver {

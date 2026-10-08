@@ -50,11 +50,7 @@ struct TimetableReminderRefreshPlan {
             guard setting.minutesBefore > 0 else { return nil }
             // Notification APIs suspend. A later refresh can delete the persisted model
             // while this plan is waiting, so retain an unmanaged copy for scheduling.
-            let snapshot = Course(
-                id: course.id, courseName: course.courseName, teacher: course.teacher, classInfo: course.classInfo,
-                room: course.room, location: course.location, dayOfWeek: course.dayOfWeek,
-                weeks: course.weeks, duration: course.duration, sourceSemesterID: course.sourceSemesterID
-            )
+            let snapshot = Self.courseSnapshot(course)
             return Schedule(course: snapshot, minutesBefore: setting.minutesBefore, anchorPeriod: setting.anchorPeriod)
         }
         var identifiers = Set<String>()
@@ -68,13 +64,24 @@ struct TimetableReminderRefreshPlan {
         }
     }
 
+    static func courseSnapshot(_ course: Course) -> Course {
+        Course(
+            id: course.id, courseName: course.courseName, teacher: course.teacher, classInfo: course.classInfo,
+            room: course.room, location: course.location, dayOfWeek: course.dayOfWeek,
+            weeks: course.weeks, duration: course.duration, sourceSemesterID: course.sourceSemesterID
+        )
+    }
+
     /// Called only after the database commit. Rebuilding from persisted settings on every
     /// successful refresh also retries any previously failed notification scheduling.
     func restore(using scheduler: any TimetableCourseReminderScheduling = LiveTimetableCourseReminderScheduler()) async -> String? {
+        let scope = CampusOperationScope()
+        guard scope.isCurrent, !Task.isCancelled else { return nil }
         scheduler.cancel(identifiers: obsoleteIdentifiers)
         var failureCount = 0
         var firstError: Error?
         for schedule in schedules {
+            guard scope.isCurrent, !Task.isCancelled else { return nil }
             do {
                 try await scheduler.schedule(
                     course: schedule.course, minutesBefore: schedule.minutesBefore, anchorPeriod: schedule.anchorPeriod

@@ -549,11 +549,14 @@ enum TimetableNotificationManager {
     }
 
     static func applyReminder(minutesBefore: Int, anchorPeriod: Int?, course: Course) async throws {
+        let scope = CampusOperationScope()
+        try scope.check()
         cancelReminder(for: course)
         let minutesBefore = normalizedReminderMinutes(minutesBefore)
         guard minutesBefore > 0 else { return }
 
         let center = try await authorizedNotificationCenter()
+        try scope.check()
 
         let now = Date()
         for week in course.weeks.sorted() {
@@ -580,7 +583,12 @@ enum TimetableNotificationManager {
                 content: content,
                 trigger: trigger
             )
+            try scope.check()
             try await center.add(request)
+            if !scope.isCurrent || Task.isCancelled {
+                center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+                throw CancellationError()
+            }
         }
     }
 

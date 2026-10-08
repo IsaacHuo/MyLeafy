@@ -467,6 +467,7 @@ struct GradesView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
+        let scope = CampusOperationScope()
         guard !isFetching else { return }
         if isCustomCampus {
             await MainActor.run {
@@ -523,12 +524,14 @@ struct GradesView: View {
         do {
             progressReporter?(.begin(.fetchingGrades))
             let htmlData = try await networkManager.fetchGrades()
+            try scope.check()
             progressReporter?(.begin(.processingGrades))
             let newGrades = try HTMLParser.parseGrades(html: htmlData)
             let newRankings = (try? HTMLParser.parseGradeRankings(html: htmlData)) ?? []
             let parsedCreditSummary = try? HTMLParser.parseGradeCreditSummary(html: htmlData)
 
             try await MainActor.run {
+                try scope.check()
                 let refreshSummary = GradeRefreshSummary.compare(existing: grades, incoming: newGrades)
                 progressReporter?(.begin(.savingGrades))
                 try SchoolDataSyncService.persistGrades(newGrades, modelContext: modelContext)
@@ -550,6 +553,11 @@ struct GradesView: View {
                 progressController.clear()
             }
         } catch {
+            if scope.wasCancelled(error) {
+                progressController.clear()
+                isFetching = false
+                return
+            }
             await MainActor.run {
                 isFetching = false
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
@@ -1343,6 +1351,7 @@ struct GradeAnalyticsDetailView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool
     ) async {
+        let scope = CampusOperationScope()
         guard !isLoadingRankings else { return }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
@@ -1366,9 +1375,11 @@ struct GradeAnalyticsDetailView: View {
                 : nil
             progressReporter?(.begin(.fetchingRankings))
             let html = try await networkManager.fetchGradeRankings()
+            try scope.check()
             let parsed = try HTMLParser.parseGradeRankings(html: html)
             let parsedCreditSummary = try? HTMLParser.parseGradeCreditSummary(html: html)
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 if parsed.isEmpty {
                     rankingMessage = rankings.isEmpty
                         ? L10n.text("本次未查询到官方排名。", language: leafyLanguage)
@@ -1395,6 +1406,11 @@ struct GradeAnalyticsDetailView: View {
                 }
             }
         } catch {
+            if scope.wasCancelled(error) {
+                progressController.clear()
+                isLoadingRankings = false
+                return
+            }
             await MainActor.run {
                 rankingMessage = error.localizedDescription.isEmpty ? L10n.text("教务暂未开放成绩排名。", language: leafyLanguage) : error.localizedDescription
                 isLoadingRankings = false

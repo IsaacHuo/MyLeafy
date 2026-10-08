@@ -67,7 +67,7 @@ final class ExternalLearningMaterialImportTests: XCTestCase {
         let sourceURL = root.appendingPathComponent("课件.pdf")
         try Data("pdf".utf8).write(to: sourceURL)
         let manifest = try store.makeBatch(from: [sourceURL], source: .openIn)
-        let setup = AppModelContainerFactory.make()
+        let setup = try AppModelContainerFactory.make()
         let coordinator = ExternalLearningMaterialImportCoordinator(store: store)
         let appNavigation = AppNavigationCoordinator()
 

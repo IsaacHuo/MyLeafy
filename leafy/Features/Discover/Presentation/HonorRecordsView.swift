@@ -146,9 +146,10 @@ struct HonorRecordsView: View {
     }
 
     private func deleteRecord(_ record: HonorRecord) {
-        try? HonorRecordFileStore.deleteFile(named: record.localFilename)
-        modelContext.delete(record)
-        try? modelContext.save()
+        do {
+            let files = HonorRecordFileStore.fileURL(for: record).map { [LocalFileCleanup.File(record, url: $0)] } ?? []
+            try LocalFileCleanup().delete([record], files: files, in: modelContext)
+        } catch { alertMessage = error.localizedDescription }
     }
 }
 

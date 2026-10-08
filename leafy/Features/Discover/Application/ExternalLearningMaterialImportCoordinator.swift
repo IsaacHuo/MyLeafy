@@ -42,20 +42,28 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
         return true
     }
 
-    func presentPendingIfPossible(isAuthenticated: Bool) {
+    func presentPendingIfPossible(isAuthenticated: Bool, modelContext: ModelContext? = nil) {
         guard isAuthenticated, activeBatch == nil else { return }
 
-        while let batchID = queuedBatchIDs.first {
-            queuedBatchIDs.removeFirst()
-            if let manifest = try? store.loadManifest(id: batchID) {
+        do {
+            let importedIDs = try modelContext.map { Set(try $0.fetch(FetchDescriptor<LearningMaterialDocument>()).map(\.id)) } ?? []
+            let isImported: (ExternalLearningMaterialImportManifest) -> Bool = { manifest in
+                !manifest.items.isEmpty && manifest.items.allSatisfy { importedIDs.contains($0.id) }
+            }
+            while let batchID = queuedBatchIDs.first {
+                let manifest = try store.loadManifest(id: batchID)
+                queuedBatchIDs.removeFirst()
+                if isImported(manifest) { try store.removeBatch(batchID); continue }
                 activeBatch = manifest
                 return
             }
-        }
+            for manifest in store.pendingManifests() {
+                if isImported(manifest) { try store.removeBatch(manifest.id); continue }
+                activeBatch = manifest
+                return
+            }
+        } catch { alertMessage = error.localizedDescription }
 
-        if let manifest = store.pendingManifests().first {
-            activeBatch = manifest
-        }
     }
 
     func cancel(_ batch: ExternalLearningMaterialImportManifest) {
@@ -70,37 +78,26 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
         _ batch: ExternalLearningMaterialImportManifest,
         to destination: LearningWorkspaceDestination,
         modelContext: ModelContext,
-        appNavigation: AppNavigationCoordinator
+        appNavigation: AppNavigationCoordinator,
+        save: (ModelContext) throws -> Void = { try $0.save() },
+        cleanup: LocalFileCleanup? = nil
     ) throws -> Int {
-        guard !batch.items.isEmpty else {
-            throw ExternalLearningMaterialImportError.emptyBatch
-        }
-
-        for item in batch.items {
-            let sourceURL = try store.stagedFileURL(for: item, in: batch)
-            let stored = try LearningMaterialFileStore.importFile(
-                from: sourceURL,
-                contentTypeIdentifier: item.contentTypeIdentifier
+        guard !batch.items.isEmpty else { throw ExternalLearningMaterialImportError.emptyBatch }
+        let sources = try batch.items.map { item in
+            LearningMaterialBatchImport.Source(
+                id: item.id, url: try store.stagedFileURL(for: item, in: batch),
+                originalFilename: item.originalFilename, contentTypeIdentifier: item.contentTypeIdentifier
             )
-            let title = item.originalFilename.deletingPathExtensionTitle
-            modelContext.insert(LearningMaterialDocument(
-                projectID: destination.projectID,
-                title: title.isEmpty ? "学习资料" : title,
-                categoryRawValue: destination.fixedCategory?.rawValue ?? LearningMaterialCategory.other.rawValue,
-                originalFilename: item.originalFilename,
-                localFilename: stored.localFilename,
-                contentTypeIdentifier: stored.contentTypeIdentifier
-            ))
         }
-
-        try modelContext.save()
-        try? store.removeBatch(batch.id)
+        let result = try LearningMaterialBatchImport.importFiles(sources, to: destination, in: modelContext, cleanup: cleanup, save: save)
+        alertMessage = result.cleanupWarning
+        // From this point the database is authoritative; cleanup errors must not trigger a second import.
+        do { try store.removeBatch(batch.id) }
+        catch { alertMessage = L10n.text("资料已保存，但暂存文件清理未完成：%@", error.localizedDescription) }
         queuedBatchIDs.removeAll { $0 == batch.id }
-        if activeBatch?.id == batch.id {
-            activeBatch = nil
-        }
+        if activeBatch?.id == batch.id { activeBatch = nil }
         appNavigation.openAcademicDetailRoute(.learningWorkspace(destination, initialTab: .materials))
-        return batch.items.count
+        return result.documents.count
     }
 
     private func enqueue(_ manifest: ExternalLearningMaterialImportManifest, isAuthenticated: Bool) {
@@ -111,11 +108,5 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
         } else {
             queuedBatchIDs.append(manifest.id)
         }
-    }
-}
-
-private extension String {
-    var deletingPathExtensionTitle: String {
-        (self as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

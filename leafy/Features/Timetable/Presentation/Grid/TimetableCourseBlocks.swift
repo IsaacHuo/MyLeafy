@@ -1622,112 +1622,72 @@ struct CourseDetailSheet: View {
         }
     }
 
+    private func persistSelectedNote(_ text: String) throws {
+        switch selectedNoteScope {
+        case .course:
+            try TimetableLocalEdits.setCourseNote(text, courseKey: courseKey, in: modelContext)
+        case .occurrence:
+            try TimetableLocalEdits.setOccurrenceNote(
+                text, courseKey: courseKey, occurrenceKey: occurrenceKey,
+                week: context.week, dayOfWeek: course.dayOfWeek, in: modelContext
+            )
+        }
+    }
+
     private func saveNote() {
         let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
-        switch selectedNoteScope {
-        case .occurrence:
-            saveOccurrenceNote(trimmed)
-        case .course:
-            saveCourseNote(trimmed)
-        }
-
-        try? modelContext.save()
-        LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
-        operationAlert = .success(
-            trimmed.isEmpty
+        do {
+            try persistSelectedNote(trimmed)
+            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
+            operationAlert = .success(trimmed.isEmpty
                 ? L10n.text("备注已清空。", language: leafyLanguage)
-                : L10n.text("备注已保存。", language: leafyLanguage)
-        )
+                : L10n.text("备注已保存。", language: leafyLanguage))
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
+        }
     }
 
     private func deleteSelectedNote() {
-        switch selectedNoteScope {
-        case .occurrence:
-            if let note = occurrenceNoteRecord {
-                modelContext.delete(note)
-            }
-        case .course:
-            if let note = noteRecord {
-                modelContext.delete(note)
-            }
-        }
-
-        noteText = ""
-        try? modelContext.save()
-        LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
-        operationAlert = .success(L10n.text("备注已删除。", language: leafyLanguage))
-    }
-
-    private func saveCourseNote(_ trimmed: String) {
-        if let note = noteRecord {
-            if trimmed.isEmpty {
-                modelContext.delete(note)
-            } else {
-                note.text = trimmed
-                note.updatedAt = Date()
-            }
-        } else if !trimmed.isEmpty {
-            modelContext.insert(CourseNote(courseKey: courseKey, text: trimmed))
-        }
-    }
-
-    private func saveOccurrenceNote(_ trimmed: String) {
-        if let note = occurrenceNoteRecord {
-            if trimmed.isEmpty {
-                modelContext.delete(note)
-            } else {
-                note.text = trimmed
-                note.updatedAt = Date()
-            }
-        } else if !trimmed.isEmpty {
-            modelContext.insert(
-                CourseOccurrenceNote(
-                    courseKey: courseKey,
-                    occurrenceKey: occurrenceKey,
-                    week: context.week,
-                    dayOfWeek: course.dayOfWeek,
-                    text: trimmed
-                )
-            )
+        do {
+            try persistSelectedNote("")
+            noteText = ""
+            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
+            operationAlert = .success(L10n.text("备注已删除。", language: leafyLanguage))
+        } catch {
+            operationAlert = .failure(error.localizedDescription)
         }
     }
 
     @MainActor
     private func saveReminder() async {
+        let scope = CampusOperationScope()
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
         let anchorPeriod = TimetableNotificationManager.resolvedAnchorPeriod(selectedReminderAnchorPeriod, for: course)
-
-        if let setting = reminderRecord {
-            setting.minutesBefore = reminderMinutes
-            setting.anchorPeriod = anchorPeriod
-            setting.updatedAt = Date()
-        } else {
-            modelContext.insert(
-                CourseReminderSetting(
-                    courseKey: courseKey,
-                    minutesBefore: reminderMinutes,
-                    anchorPeriod: anchorPeriod
-                )
-            )
-        }
-
+        let snapshot = TimetableReminderRefreshPlan.courseSnapshot(course)
         do {
-            try? modelContext.save()
-            try await TimetableNotificationManager.applyReminder(
-                minutesBefore: reminderMinutes,
-                anchorPeriod: anchorPeriod,
-                course: course
-            )
-            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
-            operationAlert = .success(
-                reminderMinutes == 0
-                    ? L10n.text("已关闭这门课的提醒。", language: leafyLanguage)
-                    : L10n.text("提醒已设置。", language: leafyLanguage)
+            try TimetableLocalEdits.setReminder(
+                courseKey: courseKey, minutesBefore: reminderMinutes, anchorPeriod: anchorPeriod, in: modelContext
             )
         } catch {
             operationAlert = .failure(error.localizedDescription)
+            return
+        }
+        LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
+        do {
+            try scope.check()
+            try await TimetableNotificationManager.applyReminder(
+                minutesBefore: reminderMinutes, anchorPeriod: anchorPeriod, course: snapshot
+            )
+            try scope.check()
+            operationAlert = .success(reminderMinutes == 0
+                ? L10n.text("已关闭这门课的提醒。", language: leafyLanguage)
+                : L10n.text("提醒已设置。", language: leafyLanguage))
+        } catch {
+            guard !scope.wasCancelled(error) else { return }
+            operationAlert = .failure(L10n.text("提醒设置已保存，但系统提醒排期失败：%@", language: leafyLanguage, error.localizedDescription))
         }
     }
+
 }
 
 struct CourseOccurrenceProgressView: View {

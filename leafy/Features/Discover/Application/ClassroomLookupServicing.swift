@@ -6,7 +6,7 @@ protocol ClassroomLookupServicing: Sendable {
 
 protocol ClassroomLookupCaching: Sendable {
     func loadEmptyClassrooms(date: Date, start: Int, end: Int) async -> [EmptyClassroom]
-    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int) async
+    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int, scope: CampusOperationScope) async
     func loadClassroomUsage(date: Date, building: String, room: String) async -> [ClassroomUsageSlot]
-    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String) async
+    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String, scope: CampusOperationScope) async
 }

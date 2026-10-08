@@ -13,21 +13,12 @@ enum LearningProjectContentRelocation {
         let scopedTasks = tasks.filter { $0.belongs(to: destination) }
         let scopedRecords = records.filter { $0.belongs(to: destination) }
 
-        for material in scopedMaterials {
-            try LearningMaterialFileStore.deleteFile(named: material.localFilename)
+        let files = scopedMaterials.compactMap { material in
+            LearningMaterialFileStore.fileURL(for: material).map { LocalFileCleanup.File(material, url: $0) }
         }
+        let models: [any PersistentModel] = scopedMaterials + scopedTasks + scopedRecords
+        try LocalFileCleanup().delete(models, files: files, in: modelContext)
 
-        for material in scopedMaterials {
-            modelContext.delete(material)
-        }
-        for task in scopedTasks {
-            modelContext.delete(task)
-        }
-        for record in scopedRecords {
-            modelContext.delete(record)
-        }
-
-        try modelContext.save()
     }
 
     static func moveToUnfiled(
@@ -87,23 +78,13 @@ enum LearningProjectContentRelocation {
         let projectIDString = project.id.uuidString
         let scopedMaterials = materials.filter { $0.projectID == projectIDString }
 
-        for material in scopedMaterials {
-            try LearningMaterialFileStore.deleteFile(named: material.localFilename)
+        let files = scopedMaterials.compactMap { material in
+            LearningMaterialFileStore.fileURL(for: material).map { LocalFileCleanup.File(material, url: $0) }
         }
+        let scopedTasks = tasks.filter { $0.projectID == projectIDString }
+        let scopedRecords = records.filter { $0.projectID == projectIDString }
+        let models: [any PersistentModel] = [project] + scopedMaterials + scopedTasks + scopedRecords
+        try LocalFileCleanup().delete(models, files: files, in: modelContext)
 
-        for material in scopedMaterials {
-            modelContext.delete(material)
-        }
-
-        for task in tasks where task.projectID == projectIDString {
-            modelContext.delete(task)
-        }
-
-        for record in records where record.projectID == projectIDString {
-            modelContext.delete(record)
-        }
-
-        modelContext.delete(project)
-        try modelContext.save()
     }
 }

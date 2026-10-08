@@ -569,29 +569,25 @@ struct MedicalLedgerView: View {
     }
 
     private func deletePhoto(_ photo: MedicalLedgerPhoto) {
-        try? MedicalLedgerPhotoStore.deleteFile(named: photo.localFilename)
-        modelContext.delete(photo)
-        try? modelContext.save()
+        deleteRecords([photo], photos: [photo])
     }
 
     private func deleteEntry(_ entry: MedicalLedgerEntry) {
-        for photo in photos(for: entry) {
-            try? MedicalLedgerPhotoStore.deleteFile(named: photo.localFilename)
-            modelContext.delete(photo)
-        }
-        modelContext.delete(entry)
-        try? modelContext.save()
+        let ownedPhotos = photos(for: entry)
+        deleteRecords([entry] + ownedPhotos, photos: ownedPhotos)
     }
 
     private func deleteAllEntries() {
-        for photo in photos {
-            try? MedicalLedgerPhotoStore.deleteFile(named: photo.localFilename)
-            modelContext.delete(photo)
-        }
-        for entry in entries {
-            modelContext.delete(entry)
-        }
-        try? modelContext.save()
+        deleteRecords(entries + photos, photos: photos)
+    }
+
+    private func deleteRecords(_ models: [any PersistentModel], photos: [MedicalLedgerPhoto]) {
+        do {
+            let files = photos.compactMap { photo in
+                MedicalLedgerPhotoStore.fileURL(for: photo).map { LocalFileCleanup.File(photo, url: $0) }
+            }
+            try LocalFileCleanup().delete(models, files: files, in: modelContext)
+        } catch { alertMessage = error.localizedDescription }
     }
 
     private func exportArchive() {

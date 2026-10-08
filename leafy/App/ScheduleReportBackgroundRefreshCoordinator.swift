@@ -47,7 +47,13 @@ final class ScheduleReportBackgroundRefreshCoordinator {
     private func handle(_ backgroundTask: BGAppRefreshTask) {
         schedule()
         let work = Task { @MainActor in
-            let setup = AppModelContainerFactory.make()
+            let setup: AppModelContainerSetup
+            do { setup = try AppModelContainerFactory.make() }
+            catch {
+                logger.error("Background database unavailable: \(error.localizedDescription, privacy: .public)")
+                backgroundTask.setTaskCompleted(success: false)
+                return
+            }
             let service = LeafyDependencies.live.timetableWeatherService
             let weather: TimetableWeatherSnapshot?
             if let cached = service.cachedWeather(maxAge: 30 * 60) {

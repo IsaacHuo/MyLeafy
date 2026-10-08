@@ -301,7 +301,7 @@ final class ClassroomLookupServiceTests: XCTestCase {
         let date = Date(timeIntervalSince1970: 1_800_000_000)
         let cachedRooms = [EmptyClassroom(building: "二教", room: "205")]
         let cache = InMemoryClassroomLookupCache()
-        await cache.saveEmptyClassrooms(cachedRooms, date: date, start: 1, end: 2)
+        await cache.saveEmptyClassrooms(cachedRooms, date: date, start: 1, end: 2, scope: CampusOperationScope())
         let html = classroomMatrixFixture().replacingOccurrences(of: "◆", with: "◆ ?")
         let service = LiveClassroomLookupService(
             fetchEmptyClassroomsHTML: { _, start, end in
@@ -326,7 +326,7 @@ final class ClassroomLookupServiceTests: XCTestCase {
         let date = Date(timeIntervalSince1970: 1_800_000_000)
         let cachedRooms = [EmptyClassroom(building: "图书馆", room: "研讨间 3")]
         let cache = InMemoryClassroomLookupCache()
-        await cache.saveEmptyClassrooms(cachedRooms, date: date, start: 5, end: 6)
+        await cache.saveEmptyClassrooms(cachedRooms, date: date, start: 5, end: 6, scope: CampusOperationScope())
         let service = LiveClassroomLookupService(
             fetchEmptyClassroomsHTML: { _, _, _ in throw ClassroomLookupTestError.remoteFailure },
             isDemoModeEnabled: { false },
@@ -413,7 +413,7 @@ private final class InMemoryClassroomLookupCache: ClassroomLookupCaching {
         roomsByKey[emptyRoomsKey(date: date, start: start, end: end)] ?? []
     }
 
-    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int) {
+    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int, scope: CampusOperationScope) {
         roomsByKey[emptyRoomsKey(date: date, start: start, end: end)] = rooms
     }
 
@@ -421,7 +421,7 @@ private final class InMemoryClassroomLookupCache: ClassroomLookupCaching {
         usageByKey[usageKey(date: date, building: building, room: room)] ?? []
     }
 
-    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String) {
+    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String, scope: CampusOperationScope) {
         usageByKey[usageKey(date: date, building: building, room: room)] = usage
     }
 

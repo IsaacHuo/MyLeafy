@@ -5,6 +5,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @StateObject private var recorder = ScheduleMemoAudioRecorder()
+    @State private var startTask: Task<Void, Never>?
     @State private var note = ""
     @State private var saveError: String?
 
@@ -65,6 +66,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
             Text(saveError ?? "")
         }
         .onDisappear {
+            startTask?.cancel()
             recorder.discard()
         }
     }
@@ -74,7 +76,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
         switch recorder.state {
         case .idle, .failed:
             Button {
-                Task { await recorder.start() }
+                startRecording()
             } label: {
                 Label("开始录音", systemImage: "record.circle")
                     .padding(.horizontal, 18)
@@ -97,7 +99,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
             .tint(AppTheme.danger)
         case .ready:
             Button {
-                Task { await recorder.start() }
+                startRecording()
             } label: {
                 Label("重新录制", systemImage: "arrow.counterclockwise")
                     .padding(.horizontal, 18)
@@ -105,6 +107,11 @@ struct ScheduleMemoAudioRecorderSheet: View {
             }
             .buttonStyle(.bordered)
         }
+    }
+
+    private func startRecording() {
+        startTask?.cancel()
+        startTask = Task { await recorder.start() }
     }
 
     private var statusText: String {

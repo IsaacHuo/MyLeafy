@@ -171,6 +171,8 @@ nonisolated enum CustomCampusAuthCallback {
 extension SchoolNetworkManager {
     func persistCustomCampusAuthSession(_ session: CustomCampusAuthSession) {
         let identity = session.campusIdentity
+        cancelInFlightRequests()
+        SchoolDataPrefetchCoordinator.shared.cancel()
         CampusIdentityStore.activate(identity)
         currentPortal = .undergraduate
         authenticatedEduID = identity.eduID

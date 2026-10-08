@@ -798,22 +798,13 @@ class HTMLParser {
         var parsed: [ExamArrangement] = []
 
         for (offset, row) in rows.dropFirst().enumerated() {
-            let cells = try row.select("td").array().map {
-                try normalizedTableCellText($0)
-            }
-            guard !cells.isEmpty else { continue }
-
+            let cells = try row.select("td").array().map { try normalizedTableCellText($0) }
+            guard !cells.isEmpty, !cells.allSatisfy({ $0.isEmpty }) else { continue }
+            if cells.filter({ !$0.isEmpty }).count == 1, try rowsRepresentVerifiedEmpty([row]) { continue }
             guard let exam = parseExamRow(cells, headerIndex: headerIndex, fallbackID: offset + 1) else {
-                continue
+                throw HTMLParserError.tableRowsUnparseable("考试安排")
             }
             parsed.append(exam)
-        }
-
-        let dataRows = try rows.dropFirst().filter { try !$0.select("td").isEmpty() }
-        if parsed.isEmpty,
-           !dataRows.isEmpty,
-           try !rowsRepresentVerifiedEmpty(dataRows) {
-            throw HTMLParserError.tableRowsUnparseable("考试安排")
         }
 
         return parsed

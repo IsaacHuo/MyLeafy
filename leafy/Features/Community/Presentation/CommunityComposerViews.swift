@@ -16,6 +16,7 @@ struct CommunityComposerSheet: View {
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
 
     private let initialDraftID: UUID?
+    private let ownerScopeKey: String?
     @State private var draftID: UUID
     @State private var draftExists: Bool
     @State private var composerMode: CommunityComposerMode = .post
@@ -51,6 +52,7 @@ struct CommunityComposerSheet: View {
         onPosted: @escaping (String) -> Void
     ) {
         initialDraftID = draftID
+        ownerScopeKey = ActiveCampusContext.identity?.scopeKey
         self.onDraftChanged = onDraftChanged
         self.onPosted = onPosted
         _draftID = State(initialValue: draftID ?? UUID())
@@ -443,6 +445,8 @@ struct CommunityComposerSheet: View {
     }
 
     private func submitPost() async {
+        guard ownerScopeKey != nil, ownerScopeKey == ActiveCampusContext.identity?.scopeKey else { return }
+        let scope = CampusOperationScope()
         isSubmitting = true
         defer { isSubmitting = false }
 
@@ -463,6 +467,7 @@ struct CommunityComposerSheet: View {
         }
 
         do {
+            try scope.check()
             let handoff = try CommunityPostDraftPublishHandoff.enqueue(
                 draftID: draftExists ? draftID : nil,
                 ownerProfileID: sessionManager.currentUserID,
@@ -497,6 +502,7 @@ struct CommunityComposerSheet: View {
             onPosted(postedMessage)
             dismiss()
         } catch {
+            guard !scope.wasCancelled(error) else { return }
             if error.localizedDescription == CommunityServiceError.profileCompletionRequired.localizedDescription {
                 showingProfileEditor = true
             } else if error.localizedDescription == CommunityServiceError.termsAcceptanceRequired.localizedDescription {
@@ -507,6 +513,7 @@ struct CommunityComposerSheet: View {
     }
 
     private func submitPoll() async {
+        guard ownerScopeKey != nil, ownerScopeKey == ActiveCampusContext.identity?.scopeKey else { return }
         isSubmitting = true
         defer { isSubmitting = false }
 
@@ -695,6 +702,7 @@ struct CommunityComposerSheet: View {
     }
 
     private func saveDraftNow(allowWhenPoll: Bool = false) {
+        guard ownerScopeKey != nil, ownerScopeKey == ActiveCampusContext.identity?.scopeKey else { return }
         guard composerMode == .post || allowWhenPoll,
               draftExists || hasMeaningfulDraftContent else { return }
         guard !draftLoadFailed else {

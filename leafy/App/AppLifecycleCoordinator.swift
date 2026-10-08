@@ -14,6 +14,7 @@ enum AppLifecycleCoordinator {
     }
 
     private static func suspendInFlightWork() {
+        SchoolDataPrefetchCoordinator.shared.cancel()
         ActiveCampusContext.networkManager.cancelInFlightRequests()
         CommunitySessionManager.shared.cancelInFlightWork()
         Task {

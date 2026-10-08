@@ -622,10 +622,19 @@ struct ScheduleMemoFeedView: View {
                     prefillNote: memo.body
                 ),
                 onSaved: { reference in
+                    let previous = (memo.linkedScheduleKind, memo.linkedScheduleID, memo.updatedAt)
                     memo.linkedScheduleKind = reference.kind
                     memo.linkedScheduleID = reference.stableID
                     memo.updatedAt = Date()
-                    try? modelContext.save()
+                    do {
+                        try LocalModelSave.save(modelContext, undo: {
+                            memo.linkedScheduleKind = previous.0
+                            memo.linkedScheduleID = previous.1
+                            memo.updatedAt = previous.2
+                        })
+                    } catch {
+                        presentedAlert = .failure(id: UUID(), message: L10n.text("日程已创建，但随记关联保存失败：%@", error.localizedDescription))
+                    }
                     importantDates = CustomScheduleStore.load()
                 }
             )
@@ -1043,9 +1052,17 @@ struct ScheduleMemoFeedView: View {
     }
 
     private func togglePin(_ memo: ScheduleMemo) {
+        let previous = (memo.pinnedAt, memo.updatedAt)
         memo.pinnedAt = memo.pinnedAt == nil ? Date() : nil
         memo.updatedAt = Date()
-        try? modelContext.save()
+        do {
+            try LocalModelSave.save(modelContext, undo: {
+                memo.pinnedAt = previous.0
+                memo.updatedAt = previous.1
+            })
+        } catch {
+            presentedAlert = .failure(id: UUID(), message: error.localizedDescription)
+        }
     }
 
     private func requestTrash(_ memo: ScheduleMemo, closesDetail: Bool = false) {
@@ -2961,8 +2978,9 @@ private struct ScheduleMemoTrashView: View {
         }
         .confirmationDialog("永久删除回收站中的全部随记？", isPresented: $confirmsEmpty, titleVisibility: .visible) {
             Button("永久删除全部", role: .destructive) {
-                for memo in trashed { permanentlyDelete(memo, saves: false) }
-                try? modelContext.save()
+                do {
+                    try ScheduleMemoDeletionService.permanentlyDelete(trashed, images: images, audioRecords: audioRecords, in: modelContext)
+                } catch { errorMessage = error.localizedDescription }
             }
         } message: { Text("图片和附件也会从本机删除，此操作无法撤销。") }
         .confirmationDialog("永久删除这条随记？", isPresented: Binding(
@@ -2989,14 +3007,13 @@ private struct ScheduleMemoTrashView: View {
         catch { errorMessage = error.localizedDescription }
     }
 
-    private func permanentlyDelete(_ memo: ScheduleMemo, saves: Bool = true) {
+    private func permanentlyDelete(_ memo: ScheduleMemo) {
         do {
             try ScheduleMemoDeletionService.permanentlyDelete(
                 memo,
                 images: images,
                 audioRecords: audioRecords,
-                in: modelContext,
-                saves: saves
+                in: modelContext
             )
         } catch {
             errorMessage = error.localizedDescription

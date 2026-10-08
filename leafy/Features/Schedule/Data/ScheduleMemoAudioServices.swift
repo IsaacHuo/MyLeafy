@@ -28,17 +28,32 @@ final class ScheduleMemoAudioRecorder: NSObject, ObservableObject {
     @Published private(set) var elapsed: TimeInterval = 0
     @Published private(set) var level: Float = -60
 
+    private var hasActiveAudioSession = false
+    private var startGeneration: UInt64 = 0
+    private let permissionRequest: @MainActor () async -> Bool
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
     private(set) var recordingURL: URL?
+
+    init(permissionRequest: @escaping @MainActor () async -> Bool = {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
+        }
+    }) {
+        self.permissionRequest = permissionRequest
+        super.init()
+    }
 
     var isRecording: Bool { state == .recording }
     var canSave: Bool { state == .ready && recordingURL != nil && elapsed > 0 }
 
     func start() async {
         discard()
+        let generation = startGeneration
         state = .requestingPermission
-        guard await requestPermission() else {
+        let granted = await permissionRequest()
+        guard generation == startGeneration, !Task.isCancelled else { return }
+        guard granted else {
             state = .failed("未获得麦克风权限，可在系统设置中允许后重试。")
             return
         }
@@ -47,6 +62,7 @@ final class ScheduleMemoAudioRecorder: NSObject, ObservableObject {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .default, options: [.duckOthers])
             try session.setActive(true)
+            hasActiveAudioSession = true
 
             let url = ScheduleMemoAudioStore.temporaryRecordingURL()
             let settings: [String: Any] = [
@@ -94,6 +110,7 @@ final class ScheduleMemoAudioRecorder: NSObject, ObservableObject {
     }
 
     func discard() {
+        startGeneration &+= 1
         timer?.invalidate()
         timer = nil
         recorder?.stop()
@@ -133,15 +150,9 @@ final class ScheduleMemoAudioRecorder: NSObject, ObservableObject {
         level = recorder.averagePower(forChannel: 0)
     }
 
-    private func requestPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            AVAudioApplication.requestRecordPermission {
-                continuation.resume(returning: $0)
-            }
-        }
-    }
-
     private func deactivateAudioSession() {
+        guard hasActiveAudioSession else { return }
+        hasActiveAudioSession = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

@@ -41,7 +41,7 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
+      shouldUseLaunchSchemeArgsEnv = "NO"
       shouldAutocreateTestPlan = "YES">
       <MacroExpansion>
          <BuildableReference
@@ -52,6 +52,9 @@
             ReferencedContainer = "container:leafy.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
+      <EnvironmentVariables>
+         <EnvironmentVariable key="LEAFY_UNIT_TESTING" value="1" isEnabled="YES"/>
+      </EnvironmentVariables>
       <Testables>
          <TestableReference
             skipped = "NO"

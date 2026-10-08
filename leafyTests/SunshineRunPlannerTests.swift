@@ -4,7 +4,8 @@ import XCTest
 final class SunshineRunPlannerTests: XCTestCase {
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        // Runtime semester and calendar-event strings are parsed in the device time zone.
+        calendar.timeZone = .current
         return calendar
     }
 

@@ -24,8 +24,13 @@ extension SchoolNetworkManager {
     }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        guard !AppRuntimeEnvironment.isRunningUnitTests else { throw URLError(.unsupportedURL) }
+        let scope = CampusOperationScope()
         do {
-            return try await session.data(for: request)
+            try scope.check()
+            let response = try await session.data(for: request)
+            try scope.check()
+            return response
         } catch {
             throw mapSchoolNetworkError(error)
         }
@@ -118,7 +123,7 @@ extension SchoolNetworkManager {
     func cookieHeaderValue(for url: URL) -> String {
         var mergedCookies = persistedCookieValues
 
-        if let cookies = HTTPCookieStorage.shared.cookies(for: url) {
+        if let cookies = session.configuration.httpCookieStorage?.cookies(for: url) {
             for cookie in cookies {
                 mergedCookies[cookie.name] = cookie.value
             }
@@ -144,7 +149,7 @@ extension SchoolNetworkManager {
             ]
 
             if let cookie = HTTPCookie(properties: properties) {
-                HTTPCookieStorage.shared.setCookie(cookie)
+                session.configuration.httpCookieStorage?.setCookie(cookie)
             }
         }
     }
@@ -161,10 +166,10 @@ extension SchoolNetworkManager {
 
         for cookie in responseCookies {
             mergedCookies[cookie.name] = cookie.value
-            HTTPCookieStorage.shared.setCookie(cookie)
+            session.configuration.httpCookieStorage?.setCookie(cookie)
         }
 
-        if let storageCookies = HTTPCookieStorage.shared.cookies(for: url) {
+        if let storageCookies = session.configuration.httpCookieStorage?.cookies(for: url) {
             for cookie in storageCookies {
                 mergedCookies[cookie.name] = cookie.value
             }
@@ -177,8 +182,8 @@ extension SchoolNetworkManager {
         persistedCookieValues = [:]
         let schoolURLs = [URL(string: baseURL), URL(string: graduateBaseURL)].compactMap { $0 }
         for url in schoolURLs {
-            for cookie in HTTPCookieStorage.shared.cookies(for: url) ?? [] {
-                HTTPCookieStorage.shared.deleteCookie(cookie)
+            for cookie in session.configuration.httpCookieStorage?.cookies(for: url) ?? [] {
+                session.configuration.httpCookieStorage?.deleteCookie(cookie)
             }
         }
     }
@@ -197,6 +202,10 @@ extension SchoolNetworkManager {
                 displayName: (trimmedDisplayName?.isEmpty == false) ? trimmedDisplayName : trimmedEduID,
                 portal: currentPortal
             )
+            if ActiveCampusContext.identity?.scopeKey != identity.scopeKey {
+                cancelInFlightRequests()
+                SchoolDataPrefetchCoordinator.shared.cancel()
+            }
             CampusIdentityStore.activate(identity)
 
             if !sessionCookies.isEmpty {
@@ -227,6 +236,8 @@ extension SchoolNetworkManager {
             portal: .undergraduate,
             kind: .guest
         )
+        cancelInFlightRequests()
+        SchoolDataPrefetchCoordinator.shared.cancel()
         CampusIdentityStore.activate(identity)
         currentPortal = .undergraduate
         authenticatedEduID = identity.eduID
@@ -240,8 +251,10 @@ extension SchoolNetworkManager {
     }
 
     func clearSession() {
+        cancelInFlightRequests()
+        SchoolDataPrefetchCoordinator.shared.cancel()
         clearPersistedCookies()
-        HTTPCookieStorage.shared.removeCookies(since: Date.distantPast)
+        session.configuration.httpCookieStorage?.removeCookies(since: Date.distantPast)
         lastLandingURLString = nil
         currentPortal = .undergraduate
         isLoggedIn = false
@@ -252,16 +265,16 @@ extension SchoolNetworkManager {
     }
 
     func cancelInFlightRequests() {
-        session.getAllTasks { tasks in
-            tasks.forEach { $0.cancel() }
-        }
+        sessionGeneration &+= 1
+        session.invalidateAndCancel()
+        session = Self.makeSession()
     }
 
     func cookieDebugSummary(for url: URL?) -> String {
         #if DEBUG
         guard let url else { return "cookies: unavailable" }
         let names = Set(persistedCookieValues.keys)
-            .union(HTTPCookieStorage.shared.cookies(for: url)?.map(\.name) ?? [])
+            .union(session.configuration.httpCookieStorage?.cookies(for: url)?.map(\.name) ?? [])
             .sorted()
         return names.isEmpty ? "cookies: none" : "cookie names: \(names.joined(separator: ", "))"
         #else

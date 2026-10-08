@@ -49,6 +49,7 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
     }
 
     func lookup(_ request: ClassroomLookupRequest, userInitiated: Bool) async -> ClassroomLookupOutcome {
+        let scope = await CampusOperationScope()
         if await isDemoModeEnabled() {
             return .success(await demoData(for: request))
         }
@@ -57,15 +58,20 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
             switch request.mode {
             case .byPeriod:
                 let html = try await fetchEmptyClassroomsHTML(request.date, 1, 12)
+                try await scope.check()
                 let rooms = try parseEmptyClassrooms(html, request.startPeriod, request.endPeriod)
-                await cache.saveEmptyClassrooms(rooms, date: request.date, start: request.startPeriod, end: request.endPeriod)
+                await cache.saveEmptyClassrooms(rooms, date: request.date, start: request.startPeriod, end: request.endPeriod, scope: scope)
+                try await scope.check()
                 return .success(ClassroomLookupData(rooms: rooms))
             case .byRoom:
                 let usage = try await fetchClassroomUsage(request.date, request.building, request.room)
-                await cache.saveClassroomUsage(usage, date: request.date, building: request.building, room: request.room)
+                try await scope.check()
+                await cache.saveClassroomUsage(usage, date: request.date, building: request.building, room: request.room, scope: scope)
+                try await scope.check()
                 return .success(ClassroomLookupData(usage: usage))
             }
         } catch {
+            if await scope.wasCancelled(error) { return .success(ClassroomLookupData()) }
             let reauthenticationNeeded = userInitiated && requiresReauthentication(error)
             let message = SchoolDataSyncContinuationPolicy.shouldStop(after: error)
                 ? "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击查询。"
@@ -134,8 +140,9 @@ nonisolated struct SchoolDataClassroomLookupCache: ClassroomLookupCaching {
         }
     }
 
-    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int) async {
+    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int, scope: CampusOperationScope) async {
         await MainActor.run {
+            guard scope.isCurrent, !Task.isCancelled else { return }
             SchoolDataCache.saveEmptyClassrooms(rooms, date: date, start: start, end: end)
         }
     }
@@ -146,8 +153,9 @@ nonisolated struct SchoolDataClassroomLookupCache: ClassroomLookupCaching {
         }
     }
 
-    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String) async {
+    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String, scope: CampusOperationScope) async {
         await MainActor.run {
+            guard scope.isCurrent, !Task.isCancelled else { return }
             SchoolDataCache.saveClassroomUsage(usage, date: date, building: building, room: room)
         }
     }

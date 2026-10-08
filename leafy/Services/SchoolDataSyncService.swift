@@ -15,6 +15,7 @@ enum SchoolDataSyncOutcome: Equatable {
     case partialSuccess(String)
     case failure(String)
     case needsLogin
+    case cancelled
     case needsReauthentication(SchoolReauthenticationContext)
 }
 
@@ -90,8 +91,10 @@ enum SchoolDataSyncService {
             return .needsReauthentication(.schoolDataSync)
         }
 
+        let scope = CampusOperationScope()
         progressReporter?(.begin(.refreshingSemester))
         _ = await SemesterConfig.refreshRemoteIfAvailable(force: true)
+        guard scope.isCurrent, !Task.isCancelled else { return .cancelled }
 
         var results: [String] = []
         var successfulOperationCount = 0
@@ -107,13 +110,15 @@ enum SchoolDataSyncService {
         do {
             progressReporter?(.begin(.fetchingTimetable))
             let document = try await networkManager.fetchTimetable()
+            try scope.check()
             progressReporter?(.begin(.processingTimetable))
             let records = try HTMLParser.parseTimetableResult(html: document.html).records
             progressReporter?(.begin(.savingTimetable))
             let persisted = try await persistTimetable(
                 records,
                 semesterID: document.verifiedSemesterID,
-                modelContext: modelContext
+                modelContext: modelContext,
+                scope: scope
             )
             successfulOperationCount += 1
             results.append(L10n.text("课表 %d 门", language: language, Set(persisted.sharedCourses.map(\.courseName)).count))
@@ -122,12 +127,15 @@ enum SchoolDataSyncService {
                 results.append(warning)
                 progressReporter?(.fail(.savingTimetable, warning))
             }
+            try scope.check()
             if await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(
                 courses: persisted.sharedCourses
             ) {
                 results.append(L10n.text("共享课表已更新", language: language))
             }
+            try scope.check()
         } catch {
+            if scope.wasCancelled(error) { return .cancelled }
             modelContext.rollback()
             if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                 progressReporter?(.fail(.fetchingTimetable, error.localizedDescription))
@@ -147,6 +155,7 @@ enum SchoolDataSyncService {
             do {
                 progressReporter?(.begin(.fetchingGrades))
                 let html = try await networkManager.fetchGrades()
+                try scope.check()
                 progressReporter?(.begin(.processingGrades))
                 let parsed = try HTMLParser.parseGrades(html: html)
                 let rankings = (try? HTMLParser.parseGradeRankings(html: html)) ?? []
@@ -159,6 +168,7 @@ enum SchoolDataSyncService {
                 }
                 parsedGrades = parsed
             } catch {
+                if scope.wasCancelled(error) { return .cancelled }
                 if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                     progressReporter?(.fail(.fetchingGrades, error.localizedDescription))
                     return campusNetworkFailure(language: language)
@@ -175,6 +185,7 @@ enum SchoolDataSyncService {
             do {
                 progressReporter?(.begin(.fetchingRankings))
                 let html = try await networkManager.fetchGradeRankings()
+                try scope.check()
                 let parsed = try HTMLParser.parseGradeRankings(html: html)
                 gradeRankingsToSave = parsed
                 if let creditSummary = try? HTMLParser.parseGradeCreditSummary(html: html) {
@@ -183,6 +194,7 @@ enum SchoolDataSyncService {
                 successfulOperationCount += 1
                 results.append(L10n.text("排名 %d 条", language: language, parsed.count))
             } catch {
+                if scope.wasCancelled(error) { return .cancelled }
                 if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                     progressReporter?(.fail(.fetchingRankings, error.localizedDescription))
                     return campusNetworkFailure(language: language)
@@ -199,12 +211,14 @@ enum SchoolDataSyncService {
             do {
                 progressReporter?(.begin(.fetchingExams))
                 let html = try await networkManager.fetchExamSchedule()
+                try scope.check()
                 progressReporter?(.begin(.processingExams))
                 let parsed = try HTMLParser.parseExams(html: html)
                 examScheduleToSave = parsed
                 successfulOperationCount += 1
                 results.append(L10n.text("考试 %d 条", language: language, parsed.count))
             } catch {
+                if scope.wasCancelled(error) { return .cancelled }
                 if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                     progressReporter?(.fail(.fetchingExams, error.localizedDescription))
                     return campusNetworkFailure(language: language)
@@ -221,12 +235,14 @@ enum SchoolDataSyncService {
             do {
                 progressReporter?(.begin(.fetchingTeachingPlan))
                 let html = try await networkManager.fetchTeachingPlan()
+                try scope.check()
                 progressReporter?(.begin(.processingTeachingPlan))
                 let parsed = try HTMLParser.parseTeachingPlan(html: html)
                 teachingPlanToSave = parsed
                 successfulOperationCount += 1
                 results.append(L10n.text("教学计划 %d 学期", language: language, parsed.count))
             } catch {
+                if scope.wasCancelled(error) { return .cancelled }
                 if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                     progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
                     return campusNetworkFailure(language: language)
@@ -243,12 +259,14 @@ enum SchoolDataSyncService {
             do {
                 progressReporter?(.begin(.fetchingTrainingProgram))
                 let html = try await networkManager.fetchGraduationRequirements()
+                try scope.check()
                 progressReporter?(.begin(.processingTrainingProgram))
                 let document = try HTMLParser.parseTrainingProgram(html: html)
                 trainingProgramToSave = document
                 successfulOperationCount += 1
                 results.append(L10n.text("培养方案 %d 类", language: language, document.creditRequirements.count))
             } catch {
+                if scope.wasCancelled(error) { return .cancelled }
                 if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                     progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
                     return campusNetworkFailure(language: language)
@@ -263,6 +281,7 @@ enum SchoolDataSyncService {
             }
         }
 
+        guard scope.isCurrent, !Task.isCancelled else { return .cancelled }
         progressReporter?(.begin(.savingResults))
         if let parsedGrades {
             do {
@@ -322,8 +341,10 @@ enum SchoolDataSyncService {
     private static func persistTimetable(
         _ records: [ParsedCourseRecord],
         semesterID: String,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        scope: CampusOperationScope
     ) async throws -> (sharedCourses: [SharedTimetableCourse], reminderWarning: String?) {
+        try scope.check()
         let saved = try TimetableRefreshUseCase().persist(
             records: records,
             existingCourses: modelContext.fetch(FetchDescriptor<Course>()),
@@ -332,6 +353,7 @@ enum SchoolDataSyncService {
         )
 
         let reminderWarning = await saved.reminders.restore()
+        try scope.check()
         let now = Date()
         TimetableCacheMetadata.lastSyncAt = now
         TimetableCacheMetadata.lastFailureMessage = reminderWarning

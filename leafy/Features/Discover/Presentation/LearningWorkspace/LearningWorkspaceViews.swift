@@ -1322,24 +1322,11 @@ struct LearningWorkspaceDetailView: View {
     private func handleImport(_ result: Result<[URL], Error>) {
         do {
             let urls = try result.get()
-            var importedMaterials: [LearningMaterialDocument] = []
-
-            for url in urls {
-                let stored = try LearningMaterialFileStore.importFile(from: url)
-                let title = url.deletingPathExtension().lastPathComponent
-                let material = LearningMaterialDocument(
-                    projectID: destination.projectID,
-                    title: title.isEmpty ? L10n.text("学习资料", language: leafyLanguage) : title,
-                    categoryRawValue: destination.fixedCategory?.rawValue ?? LearningMaterialCategory.other.rawValue,
-                    originalFilename: url.lastPathComponent,
-                    localFilename: stored.localFilename,
-                    contentTypeIdentifier: stored.contentTypeIdentifier
-                )
-                modelContext.insert(material)
-                importedMaterials.append(material)
-            }
-
-            try modelContext.save()
+            let result = try LearningMaterialBatchImport.importFiles(
+                urls.map { .init(url: $0) }, to: destination, in: modelContext
+            )
+            let importedMaterials = result.documents
+            if let warning = result.cleanupWarning { alertMessage = warning }
             switch importedMaterials.count {
             case 0:
                 break
@@ -1372,9 +1359,8 @@ struct LearningWorkspaceDetailView: View {
 
     private func delete(_ material: LearningMaterialDocument) {
         do {
-            try LearningMaterialFileStore.deleteFile(named: material.localFilename)
-            modelContext.delete(material)
-            try modelContext.save()
+            let files = LearningMaterialFileStore.fileURL(for: material).map { [LocalFileCleanup.File(material, url: $0)] } ?? []
+            try LocalFileCleanup().delete([material], files: files, in: modelContext)
             operationAlert = .success(L10n.text("资料已删除。", language: leafyLanguage))
         } catch {
             alertMessage = error.localizedDescription

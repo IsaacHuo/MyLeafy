@@ -82,6 +82,10 @@ final class SchoolNetworkManager: ObservableObject {
 
     @Published var currentPortal: SchoolPortal {
         didSet {
+            if oldValue != currentPortal {
+                cancelInFlightRequests()
+                SchoolDataPrefetchCoordinator.shared.cancel()
+            }
             UserDefaults.standard.set(currentPortal.rawValue, forKey: storageKey("schoolPortal"))
         }
     }
@@ -120,9 +124,11 @@ final class SchoolNetworkManager: ObservableObject {
 
     let baseURL = CampusDescriptor.bjfu.undergraduateBaseURL.absoluteString
     let graduateBaseURL = CampusDescriptor.bjfu.graduateBaseURL.absoluteString
-    let session: URLSession = {
-        let config = URLSessionConfiguration.default
-        config.httpCookieStorage = HTTPCookieStorage.shared
+    var sessionGeneration: UInt64 = 0
+    var session: URLSession = makeSession()
+
+    static func makeSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -134,7 +140,7 @@ final class SchoolNetworkManager: ObservableObject {
             "Referer": "http://newjwxt.bjfu.edu.cn/"
         ]
         return URLSession(configuration: config)
-    }()
+    }
 
     init() {
         let currentIdentity = CampusIdentityStore.currentIdentity()

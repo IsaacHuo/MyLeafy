@@ -160,6 +160,7 @@ struct ExamScheduleView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
+        let scope = CampusOperationScope()
         guard !isLoading else { return }
         if isCustomCampus {
             await MainActor.run {
@@ -170,6 +171,7 @@ struct ExamScheduleView: View {
         if ReviewDemoMode.isEnabled {
             ReviewDemoDataSeeder.refreshSchoolCaches()
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 exams = SchoolDataCache.loadExamSchedule()
                 errorMessage = nil
             }
@@ -223,9 +225,11 @@ struct ExamScheduleView: View {
         do {
             progressReporter?(.begin(.fetchingExams))
             let html = try await networkManager.fetchExamSchedule()
+            try scope.check()
             progressReporter?(.begin(.processingExams))
             let parsed = try HTMLParser.parseExams(html: html)
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 exams = SchoolDataCache.saveRemoteExamSchedule(parsed)
                 if userInitiated {
                     progressController.completeCurrentStep()
@@ -238,6 +242,7 @@ struct ExamScheduleView: View {
                 }
             }
         } catch {
+            if scope.wasCancelled(error) { progressController.clear(); return }
             await MainActor.run {
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
                     progressReporter?(.fail(.fetchingExams, error.localizedDescription))
@@ -484,6 +489,7 @@ enum TeachingCultivationRefreshOutcome: Equatable {
     case partial(String)
     case failure(String)
     case needsReauthentication
+    case cancelled
 }
 
 @MainActor
@@ -501,18 +507,21 @@ struct TeachingCultivationRefreshUseCase {
     func refresh(
         progressReporter: AcademicOperationProgressReporter? = nil
     ) async -> TeachingCultivationRefreshOutcome {
+        let scope = CampusOperationScope()
         var successes: [String] = []
         var failures: [String] = []
 
         do {
             progressReporter?(.begin(.fetchingTeachingPlan))
             let html = try await networkManager.fetchTeachingPlan()
+            try scope.check()
             progressReporter?(.begin(.processingTeachingPlan))
             let parsed = try HTMLParser.parseTeachingPlan(html: html)
             SchoolDataCache.saveTeachingPlan(parsed, notifies: false)
             SchoolDataRefreshNotifier.post(.teachingPlan)
             successes.append(L10n.text("教学计划已更新"))
         } catch {
+            if scope.wasCancelled(error) { return .cancelled }
             progressReporter?(.fail(.fetchingTeachingPlan, error.localizedDescription))
             if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                 return .failure(
@@ -530,12 +539,14 @@ struct TeachingCultivationRefreshUseCase {
         do {
             progressReporter?(.begin(.fetchingTrainingProgram))
             let html = try await networkManager.fetchGraduationRequirements()
+            try scope.check()
             progressReporter?(.begin(.processingTrainingProgram))
             let parsed = try HTMLParser.parseTrainingProgram(html: html)
             SchoolDataCache.saveTrainingProgram(parsed, notifies: false)
             SchoolDataRefreshNotifier.post(.trainingProgram)
             successes.append(L10n.text("培养方案已更新"))
         } catch {
+            if scope.wasCancelled(error) { return .cancelled }
             progressReporter?(.fail(.fetchingTrainingProgram, error.localizedDescription))
             if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                 return .failure(
@@ -671,6 +682,8 @@ struct TeachingAndCultivationView: View {
         switch await TeachingCultivationRefreshUseCase().refresh(
             progressReporter: progressController.reporter(for: .teachingAndCultivation)
         ) {
+        case .cancelled:
+            progressController.clear()
         case .success(let message):
             progressController.completeCurrentStep()
             progressController.clear()
@@ -868,6 +881,7 @@ struct TeachingPlanView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
+        let scope = CampusOperationScope()
         guard !isLoading else { return }
 
         let progressReporter: AcademicOperationProgressReporter? = userInitiated
@@ -942,15 +956,18 @@ struct TeachingPlanView: View {
         do {
             progressReporter?(.begin(.fetchingTeachingPlan))
             let html = try await networkManager.fetchTeachingPlan()
+            try scope.check()
             progressReporter?(.begin(.processingTeachingPlan))
             let parsed = try HTMLParser.parseTeachingPlan(html: html)
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 sections = parsed
                 SchoolDataCache.saveTeachingPlan(parsed)
                 progressController.completeCurrentStep()
                 progressController.clear()
             }
         } catch {
+            if scope.wasCancelled(error) { progressController.clear(); return }
             await MainActor.run {
                 sections = SchoolDataCache.loadTeachingPlan()
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
@@ -1415,6 +1432,7 @@ struct TrainingProgramView: View {
         userInitiated: Bool,
         allowsAutomaticRecovery: Bool = true
     ) async {
+        let scope = CampusOperationScope()
         guard !isLoading else { return }
 
         let progressReporter: AcademicOperationProgressReporter? = userInitiated
@@ -1429,6 +1447,7 @@ struct TrainingProgramView: View {
         if ReviewDemoMode.isEnabled {
             ReviewDemoDataSeeder.refreshSchoolCaches()
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 document = SchoolDataCache.loadTrainingProgram()
                 requirements = document?.creditRequirements ?? SchoolDataCache.loadGraduationRequirements()
                 creditSummary = SchoolDataCache.loadGradeCreditSummary()
@@ -1495,9 +1514,11 @@ struct TrainingProgramView: View {
         do {
             progressReporter?(.begin(.fetchingTrainingProgram))
             let html = try await networkManager.fetchGraduationRequirements()
+            try scope.check()
             progressReporter?(.begin(.processingTrainingProgram))
             let parsed = try HTMLParser.parseTrainingProgram(html: html)
             await MainActor.run {
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 document = parsed
                 requirements = parsed.creditRequirements
                 SchoolDataCache.saveTrainingProgram(parsed)
@@ -1505,6 +1526,7 @@ struct TrainingProgramView: View {
                 progressController.clear()
             }
         } catch {
+            if scope.wasCancelled(error) { progressController.clear(); return }
             await MainActor.run {
                 let fallbackDocument = SchoolDataCache.loadTrainingProgram()
                 document = fallbackDocument
@@ -2216,20 +2238,24 @@ struct EmptyClassroomView: View {
     }
 
     private func removeFavorite(_ favorite: FavoriteClassroom) {
-        modelContext.delete(favorite)
-        try? modelContext.save()
-        operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
+        do {
+            try LocalModelSave.delete(favorite, in: modelContext)
+            operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
+        } catch { operationAlert = .failure(error.localizedDescription) }
     }
 
     private func toggleFavorite(building: String, room: String) {
-        if let existing = favoriteClassrooms.first(where: { $0.building == building && $0.room == room }) {
-            modelContext.delete(existing)
-            operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
-        } else {
-            modelContext.insert(FavoriteClassroom(building: building, room: room))
-            operationAlert = .success(L10n.text("已添加收藏。", language: leafyLanguage))
-        }
-        try? modelContext.save()
+        do {
+            if let existing = favoriteClassrooms.first(where: { $0.building == building && $0.room == room }) {
+                try LocalModelSave.delete(existing, in: modelContext)
+                operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
+            } else {
+                let favorite = FavoriteClassroom(building: building, room: room)
+                modelContext.insert(favorite)
+                try LocalModelSave.save(modelContext, undo: { modelContext.delete(favorite) })
+                operationAlert = .success(L10n.text("已添加收藏。", language: leafyLanguage))
+            }
+        } catch { operationAlert = .failure(error.localizedDescription) }
     }
 
 }

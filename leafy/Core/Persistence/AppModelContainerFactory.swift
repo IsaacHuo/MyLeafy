@@ -7,11 +7,12 @@ struct AppModelContainerSetup {
 }
 
 nonisolated enum AppRuntimeEnvironment {
-    static let isRunningUnitTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    static let isRunningUnitTests = ProcessInfo.processInfo.environment["LEAFY_UNIT_TESTING"] == "1"
+        || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 }
 
 enum AppModelContainerFactory {
-    static func make() -> AppModelContainerSetup {
+    static func make() throws -> AppModelContainerSetup {
         let schema = Schema([
             Course.self, Grade.self,
             CourseNote.self, CourseOccurrenceNote.self, CourseReminderSetting.self, TimetableCellReminder.self,
@@ -30,76 +31,70 @@ enum AppModelContainerFactory {
             modelConfiguration = CampusStoreScope.configuration(schema: schema)
         }
 
+        let container = try open(schema: schema, configuration: modelConfiguration)
+        return AppModelContainerSetup(container: container, recoveryMessage: nil)
+    }
+
+    static func open(schema: Schema, configuration: ModelConfiguration) throws -> ModelContainer {
+        if !configuration.isStoredInMemoryOnly {
+            try FileManager.default.createDirectory(at: configuration.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    static func rebuild() throws -> AppModelContainerSetup {
+        guard let identity = CampusIdentityStore.currentIdentity(),
+              let url = CampusStoreScope.scopedStoreURL(for: identity) else {
+            return try make()
+        }
+        return try rebuildStore(at: url) { try make().container }
+    }
+
+    static func rebuildStore(
+        at url: URL,
+        copyFile: (URL, URL) throws -> Void = { try FileManager.default.copyItem(at: $0, to: $1) },
+        open: () throws -> ModelContainer
+    ) throws -> AppModelContainerSetup {
+        let manager = FileManager.default
+        let candidates = [url, URL(fileURLWithPath: url.path + "-wal"), URL(fileURLWithPath: url.path + "-shm"),
+                          url.deletingLastPathComponent().appendingPathComponent("PendingLocalFileCleanup.json")]
+        let files = candidates.filter { manager.fileExists(atPath: $0.path) }
+        let backup = url.deletingLastPathComponent()
+            .appendingPathComponent("LeafyStoreBackups", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try manager.createDirectory(at: backup, withIntermediateDirectories: true)
+        // No original is removed until every store component has a verified copy.
+        for file in files {
+            let destination = backup.appendingPathComponent(file.lastPathComponent)
+            try copyFile(file, destination)
+            guard try sameContents(file, destination) else { throw CocoaError(.fileReadCorruptFile) }
+        }
         do {
-            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            return AppModelContainerSetup(container: container, recoveryMessage: nil)
+            for file in files { try manager.removeItem(at: file) }
+            let container = try open()
+            return AppModelContainerSetup(
+                container: container,
+                recoveryMessage: L10n.text("已创建新的本地数据库。原数据库保留在备份 %@ 中，尚未恢复其中的个人数据。", backup.lastPathComponent)
+            )
         } catch {
-            let backupURL = backupModelStore(at: modelConfiguration.url)
-
-            do {
-                let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                let backupText = backupURL
-                    .map { L10n.text("旧缓存已备份到 %@。", $0.lastPathComponent) }
-                    ?? L10n.text("未发现可备份的旧缓存文件。")
-                return AppModelContainerSetup(
-                    container: container,
-                    recoveryMessage: L10n.text("本地课表和成绩缓存无法直接打开，已自动重建缓存。%@", backupText)
-                )
-            } catch let rebuildError {
-                let memoryConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-
-                do {
-                    let container = try ModelContainer(for: schema, configurations: [memoryConfiguration])
-                    let backupText = backupURL
-                        .map { L10n.text("旧缓存已备份到 %@。", $0.lastPathComponent) }
-                        ?? L10n.text("未发现可备份的旧缓存文件。")
-                    return AppModelContainerSetup(
-                        container: container,
-                        recoveryMessage: L10n.text("本地缓存暂时无法重建，已使用临时空缓存启动。%@ 原始错误：%@", backupText, rebuildError.localizedDescription)
-                    )
-                } catch {
-                    preconditionFailure("Could not create in-memory ModelContainer: \(error)")
-                }
+            let originalError = error
+            for file in candidates where manager.fileExists(atPath: file.path) { try manager.removeItem(at: file) }
+            for file in files {
+                try copyFile(backup.appendingPathComponent(file.lastPathComponent), file)
             }
+            throw originalError
         }
     }
 
-    private static func backupModelStore(at url: URL) -> URL? {
-        let fileManager = FileManager.default
-        let timestamp = ISO8601DateFormatter()
-            .string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        let backupDirectory = url
-            .deletingLastPathComponent()
-            .appendingPathComponent("LeafyStoreBackups", isDirectory: true)
-            .appendingPathComponent(timestamp, isDirectory: true)
-
-        do {
-            try fileManager.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
-        } catch {
-            return nil
+    private static func sameContents(_ lhs: URL, _ rhs: URL) throws -> Bool {
+        let left = try FileHandle(forReadingFrom: lhs)
+        let right = try FileHandle(forReadingFrom: rhs)
+        defer { try? left.close(); try? right.close() }
+        while true {
+            let a = try left.read(upToCount: 64 * 1024) ?? Data()
+            let b = try right.read(upToCount: 64 * 1024) ?? Data()
+            guard a == b else { return false }
+            if a.isEmpty { return true }
         }
-
-        let storePath = url.path(percentEncoded: false)
-        let candidates = [
-            url,
-            URL(fileURLWithPath: storePath + "-shm"),
-            URL(fileURLWithPath: storePath + "-wal")
-        ]
-
-        var didMoveFile = false
-        for fileURL in candidates where fileManager.fileExists(atPath: fileURL.path(percentEncoded: false)) {
-            let destination = backupDirectory.appendingPathComponent(fileURL.lastPathComponent)
-            do {
-                try fileManager.moveItem(at: fileURL, to: destination)
-                didMoveFile = true
-            } catch {
-                try? fileManager.copyItem(at: fileURL, to: destination)
-                try? fileManager.removeItem(at: fileURL)
-                didMoveFile = true
-            }
-        }
-
-        return didMoveFile ? backupDirectory : nil
     }
 }

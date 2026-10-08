@@ -27,29 +27,44 @@ final class TimetableWebViewBootstrapper: NSObject, WKNavigationDelegate {
     }
 
     func bootstrap() async throws -> RenderedTimetableBootstrap {
+        guard !AppRuntimeEnvironment.isRunningUnitTests else { throw URLError(.unsupportedURL) }
+        let scope = CampusOperationScope()
         guard let timetableURL = URL(string: "\(manager.baseURL)/jsxsd/xskb/xskb_list.do"),
               let mainURL = URL(string: "\(manager.baseURL)/jsxsd/framework/xsMain.jsp") else {
             throw URLError(.badURL)
         }
 
         try await syncCookies(for: timetableURL)
+        try scope.check()
         try await load(url: timetableURL)
+        try scope.check()
         try await pause(milliseconds: 1200)
+        try scope.check()
 
         let directHTML = try await captureBestHTML()
+        try scope.check()
         let directFrames = try await captureFrameSources()
+        try scope.check()
         if manager.isTimetablePage(directHTML) {
+            try scope.check()
             return RenderedTimetableBootstrap(html: directHTML, url: webView.url, frameSources: directFrames)
         }
 
         try await syncCookies(for: mainURL)
+        try scope.check()
         try await load(url: mainURL)
+        try scope.check()
         try await pause(milliseconds: 800)
+        try scope.check()
         _ = try? await evaluate(script: Self.expandTimetableMenuScript)
         try await pause(milliseconds: 1000)
+        try scope.check()
 
         let html = try await captureBestHTML()
+        try scope.check()
         let frameSources = try await captureFrameSources()
+        try scope.check()
+        try scope.check()
         return RenderedTimetableBootstrap(html: html, url: webView.url, frameSources: frameSources)
     }
 
@@ -81,7 +96,7 @@ final class TimetableWebViewBootstrapper: NSObject, WKNavigationDelegate {
         manager.syncPersistedCookiesToStorage(for: url)
         let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
 
-        let cookies = HTTPCookieStorage.shared.cookies?.filter { cookie in
+        let cookies = manager.session.configuration.httpCookieStorage?.cookies?.filter { cookie in
             guard let host = url.host else { return true }
             return cookie.domain.contains(host) || host.contains(cookie.domain.replacingOccurrences(of: ".", with: ""))
         } ?? []

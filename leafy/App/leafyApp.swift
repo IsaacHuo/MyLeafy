@@ -31,7 +31,10 @@ struct LeafyApp: App {
     @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw = LeafyAppIconAppearancePreference.green.rawValue
     @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
     @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system.rawValue
-    @State private var modelContainerSetup: AppModelContainerSetup
+    @State private var modelContainerSetup: AppModelContainerSetup?
+    @State private var storageFailure: String?
+    @State private var fileCleanupFailure: String?
+    @State private var confirmsRebuild = false
     @State private var modelContainerRevision = UUID()
     @State private var modelRecoveryMessage: String?
     @State private var authCallbackMessage: String?
@@ -40,7 +43,8 @@ struct LeafyApp: App {
     @State private var scheduleReportRefreshTask: Task<Void, Never>?
 
     private var sharedModelContainer: ModelContainer {
-        modelContainerSetup.container
+        guard let setup = modelContainerSetup else { preconditionFailure("Database is unavailable outside recovery UI") }
+        return setup.container
     }
 
     private var isAuthenticatedForExternalImport: Bool {
@@ -68,10 +72,15 @@ struct LeafyApp: App {
     }
 
     init() {
-        CommunityPostCardGenerator.cleanupStaleRenderedFiles()
-        let setup = AppModelContainerFactory.make()
-        self._modelContainerSetup = State(initialValue: setup)
-        self._modelRecoveryMessage = State(initialValue: setup.recoveryMessage)
+        if !AppRuntimeEnvironment.isRunningUnitTests {
+            CommunityPostCardGenerator.cleanupStaleRenderedFiles()
+        }
+        let result = Result { try AppModelContainerFactory.make() }
+        self._modelContainerSetup = State(initialValue: try? result.get())
+        if case .failure(let error) = result {
+            self._storageFailure = State(initialValue: error.localizedDescription)
+        }
+        guard !AppRuntimeEnvironment.isRunningUnitTests, case .success = result else { return }
         ScheduleReportBackgroundRefreshCoordinator.shared.register()
 
         #if DEBUG
@@ -81,6 +90,17 @@ struct LeafyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            if AppRuntimeEnvironment.isRunningUnitTests {
+                Color.clear
+            } else if modelContainerSetup == nil {
+                recoveryRoot
+            } else {
+                productionRoot
+            }
+        }
+    }
+
+    private var productionRoot: some View {
             Group {
                 if !appNavigation.requiresLoginAfterAccountDeletion,
                    networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled {
@@ -112,7 +132,7 @@ struct LeafyApp: App {
                     appNavigation: appNavigation
                 )
             }
-            .alert(L10n.text("本地缓存已恢复", language: languagePreference), isPresented: Binding(
+            .alert(L10n.text("本地数据库已重建", language: languagePreference), isPresented: Binding(
                 get: { modelRecoveryMessage != nil },
                 set: { if !$0 { modelRecoveryMessage = nil } }
             )) {
@@ -129,7 +149,13 @@ struct LeafyApp: App {
                 Text(authCallbackMessage ?? "")
             }
             .leafyAccountDeletionOutcomeAlert(outcome: $appNavigation.accountDeletionOutcome)
-            .alert("无法导入学习资料", isPresented: Binding(
+            .alert("本地文件清理未完成", isPresented: Binding(
+                get: { fileCleanupFailure != nil }, set: { if !$0 { fileCleanupFailure = nil } }
+            )) {
+                Button("重试") { retryPendingFileCleanup() }
+                Button("稍后", role: .cancel) {}
+            } message: { Text(fileCleanupFailure ?? "") }
+            .alert("学习资料", isPresented: Binding(
                 get: { externalImportCoordinator.alertMessage != nil },
                 set: { if !$0 { externalImportCoordinator.alertMessage = nil } }
             )) {
@@ -142,6 +168,8 @@ struct LeafyApp: App {
             .animation(appearanceAnimation, value: appAppearancePreferenceRaw)
             .animation(appearanceAnimation, value: appThemeCustomColorHex)
             .onAppear {
+                retryPendingFileCleanup()
+                ScheduleReportBackgroundRefreshCoordinator.shared.register()
                 languagePreference.syncToAppGroup()
                 syncThemeAppearance()
                 LeafyNotificationCoordinator.shared.configure(appNavigation: appNavigation)
@@ -155,10 +183,10 @@ struct LeafyApp: App {
                 refreshWidgetSnapshot()
                 refreshScheduleReportNotifications()
                 ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
-                externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
+                externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport, modelContext: modelContainerSetup?.container.mainContext)
             }
             .onChange(of: networkManager.hasCachedIdentity) { _, _ in
-                externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
+                externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport, modelContext: modelContainerSetup?.container.mainContext)
             }
             .onChange(of: networkManager.authenticatedEduID) { _, eduID in
                 if eduID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -185,13 +213,14 @@ struct LeafyApp: App {
                     refreshWidgetSnapshot()
                 }
                 if newPhase == .active {
+                    retryPendingFileCleanup()
                     if ActiveCampusContext.descriptor.supports(.community) {
                         CommunityPublishCoordinator.shared.configureAndResume()
                     }
                     refreshSemesterRuntimeConfig(prefetchTrigger: .foreground)
                     refreshScheduleReportNotifications()
                     ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
-                    externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
+                    externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport, modelContext: modelContainerSetup?.container.mainContext)
                 }
                 if newPhase != .active {
                     reviewRequestTask?.cancel()
@@ -203,6 +232,7 @@ struct LeafyApp: App {
             }
         .onReceive(NotificationCenter.default.publisher(for: .campusIdentityDidChange)) { notification in
             guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
+            networkManager.cancelInFlightRequests()
             CommunityPublishCoordinator.shared.handleIdentityChange()
             reloadModelContainerForCampusIdentity(
                 prefetchTrigger: notification.object == nil ? .foreground : .login
@@ -226,7 +256,6 @@ struct LeafyApp: App {
             .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
                 refreshScheduleReportNotifications()
             }
-        }
         .environment(\.leafyFontScale, displaySizePreference.fontScale)
         .environment(\.leafyControlScale, displaySizePreference.controlScale)
         .environment(\.leafyThemeColorPreference, themeColorPreference)
@@ -236,14 +265,73 @@ struct LeafyApp: App {
         .modelContainer(sharedModelContainer)
     }
 
+    private var recoveryRoot: some View {
+        NavigationStack {
+            VStack(spacing: AppSpacing.page) {
+                ContentUnavailableView(
+                    "无法打开本地数据",
+                    systemImage: "externaldrive.badge.exclamationmark",
+                    description: Text("原数据库已保留。随记、备注和个人资料尚未读取，请先重试。")
+                )
+                Text(storageFailure ?? "本地数据库暂时不可用。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                Button("重试") { recoverStorage(rebuild: false) }
+                    .buttonStyle(.borderedProminent)
+                Button("备份并创建新数据库", role: .destructive) { confirmsRebuild = true }
+                    .buttonStyle(.bordered)
+            }
+            .padding(AppSpacing.page)
+            .background(LeafyPageBackground())
+            .navigationTitle("本地数据恢复")
+            .confirmationDialog("备份并创建新的空数据库？", isPresented: $confirmsRebuild, titleVisibility: .visible) {
+                Button("验证备份并重建", role: .destructive) { recoverStorage(rebuild: true) }
+            } message: {
+                Text("原数据库包含随记、备注和个人资料。完整备份验证成功后才会重建，个人数据不会自动恢复。")
+            }
+        }
+    }
+
+    private func retryPendingFileCleanup() {
+        guard let setup = modelContainerSetup else { return }
+        do {
+            try LocalFileCleanup().retry(in: setup.container.mainContext)
+            fileCleanupFailure = nil
+        } catch { fileCleanupFailure = error.localizedDescription }
+    }
+
+    private func recoverStorage(rebuild: Bool) {
+        do {
+            let setup: AppModelContainerSetup
+            if rebuild { setup = try AppModelContainerFactory.rebuild() }
+            else { setup = try AppModelContainerFactory.make() }
+            modelContainerSetup = setup
+            storageFailure = nil
+            modelRecoveryMessage = setup.recoveryMessage
+            modelContainerRevision = UUID()
+        } catch {
+            storageFailure = error.localizedDescription
+        }
+    }
+
     @MainActor
     private func reloadModelContainerForCampusIdentity(
         prefetchTrigger: SchoolDataPrefetchTrigger
     ) {
-        let setup = AppModelContainerFactory.make()
-        modelContainerSetup = setup
-        if let recoveryMessage = setup.recoveryMessage {
-            modelRecoveryMessage = recoveryMessage
+        reviewRequestTask?.cancel()
+        semesterConfigRefreshTask?.cancel()
+        scheduleReportRefreshTask?.cancel()
+        SchoolDataPrefetchCoordinator.shared.cancel()
+        do {
+            let setup = try AppModelContainerFactory.make()
+            modelContainerSetup = setup
+            storageFailure = nil
+        } catch {
+            modelContainerSetup = nil
+            storageFailure = error.localizedDescription
+            LeafyWidgetSnapshotBuilder.publishNeedsLogin()
+            return
         }
         modelContainerRevision = UUID()
         refreshSemesterRuntimeConfig(force: true, prefetchTrigger: prefetchTrigger)
@@ -265,7 +353,7 @@ struct LeafyApp: App {
                 return
             }
             networkManager.persistCustomCampusAuthSession(session)
-            externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport)
+            externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport, modelContext: modelContainerSetup?.container.mainContext)
             authCallbackMessage = L10n.text(
                 "邮箱验证已完成，已登录通用入口账号 %@。",
                 language: languagePreference,
@@ -282,6 +370,10 @@ struct LeafyApp: App {
 
     @MainActor
     private func refreshWidgetSnapshot() {
+        guard modelContainerSetup != nil else {
+            LeafyWidgetSnapshotBuilder.publishNeedsLogin()
+            return
+        }
         let isAuthenticated = networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
         guard isAuthenticated else {
             LeafyWidgetSnapshotBuilder.publishNeedsLogin()
@@ -296,6 +388,9 @@ struct LeafyApp: App {
         let settings = ScheduleReportSettingsStore.load()
         guard settings.isEnabled else { return }
 
+        guard modelContainerSetup != nil else { return }
+        let container = sharedModelContainer
+        let scope = CampusOperationScope()
         scheduleReportRefreshTask?.cancel()
         scheduleReportRefreshTask = Task { @MainActor in
             do {
@@ -308,8 +403,9 @@ struct LeafyApp: App {
                 } else {
                     weather = nil
                 }
+                try scope.check()
                 try await ScheduleReportNotificationManager.refreshIfEnabled(
-                    modelContext: sharedModelContainer.mainContext,
+                    modelContext: container.mainContext,
                     weather: weather
                 )
                 guard !Task.isCancelled else { return }
@@ -323,6 +419,8 @@ struct LeafyApp: App {
 
     @MainActor
     private func refreshLocalizedNotifications() {
+        guard modelContainerSetup != nil else { return }
+        let container = sharedModelContainer
         scheduleReportRefreshTask?.cancel()
         scheduleReportRefreshTask = Task { @MainActor in
             let authorizationStatus = await UNUserNotificationCenter.current()
@@ -351,7 +449,7 @@ struct LeafyApp: App {
                 }
                 try Task.checkCancellation()
                 try await ScheduleReportNotificationManager.refreshIfEnabled(
-                    modelContext: sharedModelContainer.mainContext,
+                    modelContext: container.mainContext,
                     weather: weather
                 )
             } catch is CancellationError {
@@ -367,6 +465,7 @@ struct LeafyApp: App {
 
     @MainActor
     private func refreshTimetableNotificationsForCurrentLanguage() async {
+        guard modelContainerSetup != nil, !Task.isCancelled else { return }
         let context = sharedModelContainer.mainContext
         let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
         let currentCoursesByKey = Dictionary(
@@ -462,7 +561,7 @@ struct LeafyApp: App {
 
     @MainActor
     private func prefetchSchoolData(trigger: SchoolDataPrefetchTrigger) {
-        guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
+        guard !AppRuntimeEnvironment.isRunningUnitTests, modelContainerSetup != nil else { return }
         SchoolDataPrefetchCoordinator.shared.prefetchIfNeeded(
             modelContext: sharedModelContainer.mainContext,
             language: languagePreference,

@@ -74,6 +74,7 @@ nonisolated struct CommunityPublishTask: Codable, Identifiable, Hashable, Sendab
     var completedAt: Date?
     var automaticallyRetryable: Bool? = nil
     var backendAuthority: String? = nil
+    var ownerScopeKey: String? = nil
 
     var progress: Double {
         switch state {
@@ -358,6 +359,11 @@ final class CommunityPublishCoordinator: ObservableObject {
     static let shared = CommunityPublishCoordinator()
 
     @Published private(set) var tasks: [CommunityPublishTask] = []
+    @Published private(set) var storageError: String?
+    private var queueUnreadable = false
+    private var queueWriteFailed = false
+    private let rootDirectory: URL
+    private let writeManifest: (Data, URL) throws -> Void
 
     private let logger = Logger(subsystem: "com.isaachuo.leafy", category: "CommunityPublish")
     private let fileManager = FileManager.default
@@ -369,9 +375,16 @@ final class CommunityPublishCoordinator: ObservableObject {
     private var workers: [UUID: Task<Void, Never>] = [:]
     private var hasConfigured = false
 
-    private init(backend: any CommunityPublishBackend = CommunityBackendFactory.publish) {
+    init(
+        backend: any CommunityPublishBackend = CommunityBackendFactory.publish,
+        rootDirectory: URL? = nil,
+        writeManifest: @escaping (Data, URL) throws -> Void = { try $0.write(to: $1, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
+    ) {
         self.backend = backend
+        self.rootDirectory = rootDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("CommunityPublishQueue", isDirectory: true)
+        self.writeManifest = writeManifest
         tasks = loadPersistedTasks()
+        guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
         CommunityBackgroundTransferManager.shared.progressHandler = { descriptor, progress in
             Task { @MainActor in
                 CommunityPublishCoordinator.shared.applyProgress(
@@ -390,11 +403,11 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     var activeTasks: [CommunityPublishTask] {
-        tasks.filter { !$0.state.isTerminal && $0.state != .cancelled }
+        tasks.filter { isCurrentOwner($0) && !$0.state.isTerminal && $0.state != .cancelled }
     }
 
     var visibleTasks: [CommunityPublishTask] {
-        tasks.filter(\.isVisibleInFeedTaskStrip)
+        tasks.filter { isCurrentOwner($0) && $0.isVisibleInFeedTaskStrip }
     }
 
     var notificationItems: [NotificationFeedItem] {
@@ -403,7 +416,7 @@ final class CommunityPublishCoordinator: ObservableObject {
         let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
         return tasks
             .filter {
-                ($0.state == .published || $0.state == .failed)
+                isCurrentOwner($0) && ($0.state == .published || $0.state == .failed)
                     && $0.updatedAt >= cutoff
                     && !dismissedIDs.contains($0.id)
             }
@@ -426,6 +439,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     func configureAndResume() {
+        guard !queueUnreadable, currentOwnerScopeKey != nil, persistTasks() else { return }
         purgeExpiredTasks()
         if !hasConfigured {
             hasConfigured = true
@@ -448,105 +462,122 @@ final class CommunityPublishCoordinator: ObservableObject {
             throw CommunityServiceError.edgeFunctionRejected("单条帖子最多上传 2 个附件。")
         }
 
+        guard !queueUnreadable else { throw CommunityServiceError.edgeFunctionRejected(storageError ?? "发布队列无法读取。") }
+        guard let ownerScopeKey = currentOwnerScopeKey else { throw CommunityServiceError.missingAuthenticatedUser }
         let taskID = UUID()
-        let directory = try taskDirectory(taskID: taskID, create: true)
-        var media: [CommunityPublishMediaItem] = []
+        let directory = taskDirectoryURL(taskID: taskID)
+        do {
+            _ = try taskDirectory(taskID: taskID, create: true)
+            var media: [CommunityPublishMediaItem] = []
 
-        for (index, image) in images.enumerated() {
-            let fullName = "\(image.id.uuidString.lowercased()).\(image.fileExtension)"
-            let thumbnail = try image.thumbnailUpload()
-            let thumbnailName = "\(image.id.uuidString.lowercased())-thumb.\(thumbnail.fileExtension)"
-            let fullURL = directory.appendingPathComponent(fullName)
-            let thumbnailURL = directory.appendingPathComponent(thumbnailName)
-            try image.data.write(to: fullURL, options: .atomic)
-            try thumbnail.data.write(to: thumbnailURL, options: .atomic)
-            try applyBackgroundFileProtection(to: fullURL)
-            try applyBackgroundFileProtection(to: thumbnailURL)
-            media.append(
-                CommunityPublishMediaItem(
-                    id: image.id,
-                    kind: .image,
-                    displayName: "图片 \(index + 1)",
-                    contentType: image.mimeType,
-                    fileExtension: image.fileExtension,
-                    byteSize: image.data.count,
-                    sortOrder: index,
-                    localRelativePath: fullName,
-                    thumbnailRelativePath: thumbnailName,
-                    remotePath: nil,
-                    thumbnailRemotePath: nil,
-                    fullUploaded: false,
-                    thumbnailUploaded: false,
-                    validated: false,
-                    progress: 0,
-                    tusUploadURL: nil,
-                    tusOffset: 0,
-                    errorMessage: nil
+            for (index, image) in images.enumerated() {
+                let fullName = "\(image.id.uuidString.lowercased()).\(image.fileExtension)"
+                let thumbnail = try image.thumbnailUpload()
+                let thumbnailName = "\(image.id.uuidString.lowercased())-thumb.\(thumbnail.fileExtension)"
+                let fullURL = directory.appendingPathComponent(fullName)
+                let thumbnailURL = directory.appendingPathComponent(thumbnailName)
+                try image.data.write(to: fullURL, options: .atomic)
+                try thumbnail.data.write(to: thumbnailURL, options: .atomic)
+                try applyBackgroundFileProtection(to: fullURL)
+                try applyBackgroundFileProtection(to: thumbnailURL)
+                media.append(
+                    CommunityPublishMediaItem(
+                        id: image.id,
+                        kind: .image,
+                        displayName: "图片 \(index + 1)",
+                        contentType: image.mimeType,
+                        fileExtension: image.fileExtension,
+                        byteSize: image.data.count,
+                        sortOrder: index,
+                        localRelativePath: fullName,
+                        thumbnailRelativePath: thumbnailName,
+                        remotePath: nil,
+                        thumbnailRemotePath: nil,
+                        fullUploaded: false,
+                        thumbnailUploaded: false,
+                        validated: false,
+                        progress: 0,
+                        tusUploadURL: nil,
+                        tusOffset: 0,
+                        errorMessage: nil
+                    )
                 )
-            )
-        }
+            }
 
-        for (index, attachment) in attachments.enumerated() {
-            guard CommunityPostAttachment.supportedExtensions.contains(attachment.fileExtension),
-                  attachment.byteSize > 0,
-                  attachment.byteSize <= CommunityPostAttachment.maxBytes else {
-                throw CommunityServiceError.edgeFunctionRejected("附件格式或大小无效。")
-            }
-            let localName = "\(attachment.id.uuidString.lowercased()).\(attachment.fileExtension)"
-            let destination = directory.appendingPathComponent(localName)
-            if fileManager.fileExists(atPath: destination.path) {
-                try fileManager.removeItem(at: destination)
-            }
-            try fileManager.copyItem(at: attachment.localURL, to: destination)
-            try applyBackgroundFileProtection(to: destination)
-            media.append(
-                CommunityPublishMediaItem(
-                    id: attachment.id,
-                    kind: .attachment,
-                    displayName: attachment.displayName,
-                    contentType: attachment.contentType,
-                    fileExtension: attachment.fileExtension,
-                    byteSize: attachment.byteSize,
-                    sortOrder: index,
-                    localRelativePath: localName,
-                    thumbnailRelativePath: nil,
-                    remotePath: nil,
-                    thumbnailRemotePath: nil,
-                    fullUploaded: false,
-                    thumbnailUploaded: true,
-                    validated: false,
-                    progress: 0,
-                    tusUploadURL: nil,
-                    tusOffset: 0,
-                    errorMessage: nil
+            for (index, attachment) in attachments.enumerated() {
+                guard CommunityPostAttachment.supportedExtensions.contains(attachment.fileExtension),
+                      attachment.byteSize > 0,
+                      attachment.byteSize <= CommunityPostAttachment.maxBytes else {
+                    throw CommunityServiceError.edgeFunctionRejected("附件格式或大小无效。")
+                }
+                let localName = "\(attachment.id.uuidString.lowercased()).\(attachment.fileExtension)"
+                let destination = directory.appendingPathComponent(localName)
+                if fileManager.fileExists(atPath: destination.path) {
+                    try fileManager.removeItem(at: destination)
+                }
+                try fileManager.copyItem(at: attachment.localURL, to: destination)
+                try applyBackgroundFileProtection(to: destination)
+                media.append(
+                    CommunityPublishMediaItem(
+                        id: attachment.id,
+                        kind: .attachment,
+                        displayName: attachment.displayName,
+                        contentType: attachment.contentType,
+                        fileExtension: attachment.fileExtension,
+                        byteSize: attachment.byteSize,
+                        sortOrder: index,
+                        localRelativePath: localName,
+                        thumbnailRelativePath: nil,
+                        remotePath: nil,
+                        thumbnailRemotePath: nil,
+                        fullUploaded: false,
+                        thumbnailUploaded: true,
+                        validated: false,
+                        progress: 0,
+                        tusUploadURL: nil,
+                        tusOffset: 0,
+                        errorMessage: nil
+                    )
                 )
-            )
-        }
+            }
 
-        let now = Date()
-        tasks.insert(
-            CommunityPublishTask(
-                id: taskID,
-                input: input,
-                createdAt: now,
-                updatedAt: now,
-                state: .queued,
-                media: media,
-                authorID: nil,
-                errorMessage: nil,
-                completedAt: nil,
-                backendAuthority: MyLeafyBackendEnvironment.publicationAuthority
-            ),
-            at: 0
-        )
-        persistTasks()
-        startWorker(taskID: taskID)
-        return taskID
+            let now = Date()
+            tasks.insert(
+                CommunityPublishTask(
+                    id: taskID,
+                    input: input,
+                    createdAt: now,
+                    updatedAt: now,
+                    state: .queued,
+                    media: media,
+                    authorID: nil,
+                    errorMessage: nil,
+                    completedAt: nil,
+                    backendAuthority: MyLeafyBackendEnvironment.publicationAuthority,
+                    ownerScopeKey: ownerScopeKey
+                ),
+                at: 0
+            )
+            try writeTasks()
+            queueWriteFailed = false
+            storageError = nil
+            startWorker(taskID: taskID)
+            return taskID
+        } catch {
+            tasks.removeAll { $0.id == taskID }
+            do {
+                if fileManager.fileExists(atPath: directory.path) { try fileManager.removeItem(at: directory) }
+            } catch {
+                storageError = L10n.text("发布未入队，部分临时文件未能清理：%@", error.localizedDescription)
+            }
+            throw error
+        }
     }
 
     func retry(taskID: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }),
-              tasks[index].state == .failed else { return }
+              tasks[index].state == .failed, isCurrentOwner(tasks[index]) else { return }
+        let previous = tasks[index]
         tasks[index].state = .queued
         tasks[index].errorMessage = nil
         tasks[index].automaticallyRetryable = nil
@@ -554,16 +585,17 @@ final class CommunityPublishCoordinator: ObservableObject {
         for mediaIndex in tasks[index].media.indices {
             tasks[index].media[mediaIndex].errorMessage = nil
         }
-        persistTasks()
+        guard persistTasks() else { tasks[index] = previous; return }
         startWorker(taskID: taskID)
     }
 
     func cancel(taskID: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }),
               !tasks[index].state.isTerminal else { return }
+        let previous = tasks[index]
         tasks[index].state = .cancelling
         tasks[index].updatedAt = Date()
-        persistTasks()
+        guard persistTasks() else { tasks[index] = previous; return }
         workers[taskID]?.cancel()
         workers[taskID] = nil
         CommunityBackgroundTransferManager.shared.cancel(publishTaskID: taskID)
@@ -578,7 +610,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     func handleIdentityChange() {
-        for task in activeTasks {
+        for task in tasks where !task.state.isTerminal && task.ownerScopeKey != nil && !isCurrentOwner(task) {
             cancel(taskID: task.id)
         }
         updateStoredNotificationIDs(forKey: notificationDismissedKey) { ids in
@@ -608,7 +640,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     private func startQueuedWork() {
-        for task in tasks where !task.state.isTerminal
+        for task in tasks where isCurrentOwner(task) && !task.state.isTerminal
             && task.state != .cancelling
             && task.state != .failed {
             startWorker(taskID: task.id)
@@ -618,7 +650,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     private func resumeAutomaticallyRetryableTasks() {
         var resumedTaskIDs: [UUID] = []
         for index in tasks.indices
-        where tasks[index].state == .failed && tasks[index].automaticallyRetryable == true {
+        where isCurrentOwner(tasks[index]) && tasks[index].state == .failed && tasks[index].automaticallyRetryable == true {
             tasks[index].state = .queued
             tasks[index].errorMessage = nil
             tasks[index].automaticallyRetryable = nil
@@ -648,7 +680,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     private func startWorker(taskID: UUID) {
-        guard workers[taskID] == nil else { return }
+        guard workers[taskID] == nil, let task = tasks.first(where: { $0.id == taskID }), isCurrentOwner(task), !queueUnreadable, !queueWriteFailed else { return }
         workers[taskID] = Task { [weak self] in
             await self?.process(taskID: taskID)
             await MainActor.run {
@@ -661,32 +693,35 @@ final class CommunityPublishCoordinator: ObservableObject {
         do {
             guard !Task.isCancelled else { return }
             var task = try requiredTask(taskID)
-            if (task.backendAuthority ?? "supabase") != MyLeafyBackendEnvironment.publicationAuthority {
-                guard task.authorID == nil else {
-                    throw CommunityServiceError.edgeFunctionRejected("后台已切换，这条未完成的发布请取消后重新提交。")
-                }
-                updateTask(taskID) { $0.backendAuthority = MyLeafyBackendEnvironment.publicationAuthority }
+            guard task.backendAuthority == MyLeafyBackendEnvironment.publicationAuthority else {
+                throw CommunityServiceError.edgeFunctionRejected("后台已切换，这条未完成的发布请取消后重新提交。")
             }
             try await backend.requireCapabilities(for: Set(task.media.map(\.kind)))
+            task = try requiredTask(taskID)
 
             // Recover a committed publication even when the final upload/attach
             // response was lost and local media flags still say incomplete.
             if let existing = try await backend.pendingPostContext(postID: taskID) {
+                _ = try requiredTask(taskID)
                 updateTask(taskID) { $0.authorID = existing.authorID }
                 if existing.status == "published" {
                     complete(taskID: taskID)
                     return
                 }
             } else if task.authorID == nil {
+                _ = try requiredTask(taskID)
                 setState(taskID, .creatingPost)
+                _ = try requiredTask(taskID)
                 _ = try await backend.createPendingPost(
                     id: taskID, requestID: taskID, input: task.input,
                     imageCount: task.media.filter { $0.kind == .image }.count,
                     attachmentCount: task.media.filter { $0.kind == .attachment }.count
                 )
+                _ = try requiredTask(taskID)
                 guard let context = try await backend.pendingPostContext(postID: taskID) else {
                     throw CommunityServiceError.edgeFunctionRejected("帖子创建后未能读取发布状态。")
                 }
+                _ = try requiredTask(taskID)
                 updateTask(taskID) { $0.authorID = context.authorID }
                 if context.status == "published" {
                     complete(taskID: taskID)
@@ -710,6 +745,7 @@ final class CommunityPublishCoordinator: ObservableObject {
                   post.status == "published" else {
                 throw CommunityServiceError.edgeFunctionRejected("媒体已上传，但帖子尚未完成发布。")
             }
+            _ = try requiredTask(taskID)
             complete(taskID: taskID)
         } catch is CancellationError {
             return
@@ -728,6 +764,7 @@ final class CommunityPublishCoordinator: ObservableObject {
         if !media.fullUploaded {
             let component: CommunityBackgroundTransferDescriptor.Component = media.kind == .image ? .imageFull : .attachmentChunk
             let path = try await backend.uploadMedia(kind: media.kind == .image ? "full" : "attachment", taskID: taskID, mediaID: mediaID, name: media.displayName, contentType: media.contentType, fileURL: directory.appendingPathComponent(media.localRelativePath), descriptor: CommunityBackgroundTransferDescriptor(publishTaskID: taskID, mediaID: mediaID, component: component, offset: 0, byteCount: Int64(media.byteSize)))
+            _ = try requiredTask(taskID)
             updateMedia(taskID: taskID, mediaID: mediaID) { $0.remotePath = path; $0.fullUploaded = true; $0.progress = 0.5 }
         }
         media = try requiredMedia(taskID: taskID, mediaID: mediaID)
@@ -736,17 +773,20 @@ final class CommunityPublishCoordinator: ObservableObject {
             let file = directory.appendingPathComponent(relative)
             let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             let path = try await backend.uploadMedia(kind: "thumb", taskID: taskID, mediaID: mediaID, name: "thumbnail.jpg", contentType: "image/jpeg", fileURL: file, descriptor: CommunityBackgroundTransferDescriptor(publishTaskID: taskID, mediaID: mediaID, component: .imageThumbnail, offset: 0, byteCount: Int64(size)))
+            _ = try requiredTask(taskID)
             updateMedia(taskID: taskID, mediaID: mediaID) { $0.thumbnailRemotePath = path; $0.thumbnailUploaded = true; $0.progress = 0.9 }
         }
         media = try requiredMedia(taskID: taskID, mediaID: mediaID)
         guard let path = media.remotePath else { throw CommunityServiceError.edgeFunctionRejected("文件上传路径无效。") }
         setState(taskID, .validating)
+        _ = try requiredTask(taskID)
         if media.kind == .image {
             guard let thumbnail = media.thumbnailRemotePath else { throw CommunityServiceError.edgeFunctionRejected("图片上传路径无效。") }
             try await self.backend.validateAndAttachPostImage(postID: taskID, imageID: mediaID, fullPath: path, thumbnailPath: thumbnail, sortOrder: media.sortOrder)
         } else {
             try await self.backend.validateAndAttachPostAttachment(postID: taskID, attachmentID: mediaID, objectPath: path, displayName: media.displayName, sortOrder: media.sortOrder)
         }
+        _ = try requiredTask(taskID)
         updateMedia(taskID: taskID, mediaID: mediaID) { $0.validated = true; $0.progress = 1; $0.errorMessage = nil }
         setState(taskID, .uploading)
     }
@@ -794,7 +834,7 @@ final class CommunityPublishCoordinator: ObservableObject {
                 $0.media[index].validated = true
             }
         }
-        try? fileManager.removeItem(at: taskDirectoryURL(taskID: taskID))
+        if !queueWriteFailed { try? fileManager.removeItem(at: taskDirectoryURL(taskID: taskID)) }
         NotificationCenter.default.post(
             name: .communityPublishTaskDidFinish,
             object: taskID,
@@ -824,7 +864,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             $0.errorMessage = nil
             $0.automaticallyRetryable = nil
         }
-        try? fileManager.removeItem(at: taskDirectoryURL(taskID: taskID))
+        if !queueWriteFailed { try? fileManager.removeItem(at: taskDirectoryURL(taskID: taskID)) }
     }
 
     private func updateTask(_ taskID: UUID, mutation: (inout CommunityPublishTask) -> Void) {
@@ -877,6 +917,8 @@ final class CommunityPublishCoordinator: ObservableObject {
         guard let task = tasks.first(where: { $0.id == taskID }) else {
             throw CommunityServiceError.edgeFunctionRejected("本地发布任务已不存在。")
         }
+        guard !Task.isCancelled, isCurrentOwner(task), task.state != .cancelling, task.state != .cancelled else { throw CancellationError() }
+        guard !queueWriteFailed, !queueUnreadable else { throw CommunityServiceError.edgeFunctionRejected(storageError ?? "发布队列无法保存。") }
         return task
     }
 
@@ -902,38 +944,63 @@ final class CommunityPublishCoordinator: ObservableObject {
         publishRootDirectory.appendingPathComponent(taskID.uuidString.lowercased(), isDirectory: true)
     }
 
-    private var publishRootDirectory: URL {
-        let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fileManager.temporaryDirectory
-        return base.appendingPathComponent("CommunityPublishQueue", isDirectory: true)
+    private var publishRootDirectory: URL { rootDirectory }
+
+    private var manifestURL: URL { rootDirectory.appendingPathComponent("tasks.json") }
+
+    private var currentOwnerScopeKey: String? {
+        guard ActiveCampusContext.networkManager.hasCachedIdentity,
+              ActiveCampusContext.descriptor.supports(.community) else { return nil }
+        return ActiveCampusContext.identity?.scopeKey
     }
 
-    private var manifestURL: URL {
-        publishRootDirectory.appendingPathComponent("tasks.json")
+    private func isCurrentOwner(_ task: CommunityPublishTask) -> Bool {
+        guard let scope = currentOwnerScopeKey else { return false }
+        return task.ownerScopeKey == scope
     }
 
-    private func persistTasks() {
+    func retryStorage() {
+        if queueUnreadable { tasks = loadPersistedTasks() }
+        configureAndResume()
+    }
+
+    private func writeTasks() throws {
+        guard !queueUnreadable else { throw CommunityServiceError.edgeFunctionRejected(storageError ?? "发布队列无法读取。") }
+        try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+        try applyBackgroundFileProtection(to: rootDirectory)
+        try writeManifest(JSONEncoder().encode(tasks), manifestURL)
+    }
+
+    @discardableResult
+    private func persistTasks() -> Bool {
         do {
-            try fileManager.createDirectory(at: publishRootDirectory, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(tasks)
-            try data.write(to: manifestURL, options: .atomic)
-            try applyBackgroundFileProtection(to: manifestURL)
+            try writeTasks()
+            queueWriteFailed = false
+            storageError = tasks.contains(where: { $0.ownerScopeKey == nil && !$0.state.isTerminal })
+                ? L10n.text("部分旧发布任务无法确认所属身份，已保留本机文件，不会自动发布。") : nil
+            return true
         } catch {
+            queueWriteFailed = true
+            storageError = L10n.text("发布队列无法保存，请保留草稿并重试。%@", error.localizedDescription)
             logger.error("Persist community publish tasks failed: \(error.localizedDescription, privacy: .private)")
+            return false
         }
     }
 
     private func loadPersistedTasks() -> [CommunityPublishTask] {
-        guard let data = try? Data(contentsOf: manifestURL),
-              let decoded = try? JSONDecoder().decode([CommunityPublishTask].self, from: data) else {
-            return []
-        }
-        let retentionCutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
-        return decoded.filter {
-            if $0.state == .published || $0.state == .cancelled {
-                return ($0.completedAt ?? $0.updatedAt) >= retentionCutoff
+        queueUnreadable = false
+        guard fileManager.fileExists(atPath: manifestURL.path) else { return [] }
+        do {
+            let decoded = try JSONDecoder().decode([CommunityPublishTask].self, from: Data(contentsOf: manifestURL))
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            if decoded.contains(where: { $0.ownerScopeKey == nil && !$0.state.isTerminal }) {
+                storageError = L10n.text("部分旧发布任务无法确认所属身份，已保留本机文件，不会自动发布。")
             }
-            return true
+            return decoded.filter { !$0.state.isTerminal || ($0.completedAt ?? $0.updatedAt) >= cutoff }
+        } catch {
+            queueUnreadable = true
+            storageError = L10n.text("发布队列无法读取，原文件已保留，不会覆盖或自动发布。%@", error.localizedDescription)
+            return []
         }
     }
 
@@ -951,7 +1018,8 @@ nonisolated final class LeafyBackgroundSessionAppDelegate: NSObject, UIApplicati
         handleEventsForBackgroundURLSession identifier: String,
         completionHandler: @escaping () -> Void
     ) {
-        guard identifier == CommunityBackgroundTransferManager.sessionIdentifier else {
+        guard !AppRuntimeEnvironment.isRunningUnitTests,
+              identifier == CommunityBackgroundTransferManager.sessionIdentifier else {
             completionHandler()
             return
         }
