@@ -212,7 +212,7 @@ struct TimetableConflictBlockView: View {
             shape.stroke(isTodayCourse ? AppTheme.accentEmphasis(for: theme) : AppTheme.separator, lineWidth: isTodayCourse ? 1.5 : 0.7)
             let primaryRegion = TimetableConflictGeometry.textRegion(in: rects, minimumHeight: 28 * scale)
             ForEach(Array(rects.enumerated()), id: \.offset) { _, box in
-                if let primaryRegion, box.height >= 16 * scale, box.width >= 14 * scale,
+                if !isSchedule, let primaryRegion, box.height >= 16 * scale, box.width >= 14 * scale,
                    box.midY < primaryRegion.minY || box.midY > primaryRegion.maxY {
                     Image(systemName: item.agenda.systemImage)
                         .font(.system(size: 8 * scale, weight: .medium))
@@ -234,19 +234,33 @@ struct TimetableConflictBlockView: View {
         .accessibilityLabel([L10n.text(item.typeText, language: language), item.agenda.title, item.note ?? "", item.location, item.timeText].filter { !$0.isEmpty }.joined(separator: "，"))
     }
 
+    private var isSchedule: Bool {
+        switch item.agenda.kind {
+        case .cellReminder, .countdown: true
+        case .course, .exam: false
+        }
+    }
+
     private func blockText(region: CGRect) -> some View {
         let availableHeight = max(region.height - 8 * scale, 0)
         let hasSupportingText = availableHeight > 48 * scale && (item.note?.isEmpty == false || !item.location.isEmpty)
-        let supportingHeight: CGFloat = hasSupportingText ? (item.note?.isEmpty == false ? 26 : 14) * scale : (availableHeight > 36 * scale ? 12 * scale : 0)
+        let supportingHeight: CGFloat = hasSupportingText ? (item.note?.isEmpty == false ? 26 : 14) * scale : (!isSchedule && availableHeight > 36 * scale ? 12 * scale : 0)
         let timeHeight: CGFloat = availableHeight > 92 * scale && region.width > 65 * scale ? 14 * scale : 0
         let titleLines = max(1, min(6, Int((availableHeight - supportingHeight - timeHeight) / (12.5 * scale))))
         return VStack(alignment: .leading, spacing: 3 * scale) {
-            // A thin type mark does not take a column away from the title.
-            Text(item.agenda.title)
-                .font(.system(size: 10.5 * scale, weight: .semibold))
-                .foregroundStyle(AppTheme.primaryText)
-                .lineLimit(titleLines)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 3 * scale) {
+                if isSchedule {
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 8 * scale, weight: .medium))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .accessibilityHidden(true)
+                }
+                Text(item.agenda.title)
+                    .font(.system(size: 10.5 * scale, weight: .semibold))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(titleLines)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if availableHeight > 48 * scale {
                 if let note = item.note, !note.isEmpty {
                     Text(note).font(.system(size: 9.5 * scale, weight: .medium))
@@ -256,7 +270,7 @@ struct TimetableConflictBlockView: View {
                         .foregroundStyle(AppTheme.secondaryText).lineLimit(1)
                 }
             }
-            if !hasSupportingText && availableHeight > 36 * scale {
+            if !isSchedule && !hasSupportingText && availableHeight > 36 * scale {
                 Image(systemName: item.agenda.systemImage)
                     .font(.system(size: 8 * scale, weight: .medium))
                     .foregroundStyle(AppTheme.secondaryText)

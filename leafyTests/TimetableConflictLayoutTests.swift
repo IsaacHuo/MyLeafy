@@ -119,6 +119,7 @@ final class TimetableConflictCacheTests: XCTestCase {
         let nextDay = try XCTUnwrap(calendar.date(byAdding: .day, value: 7, to: day))
         let moved = cache.content(metadata: metadata(date: nextDay), snapshot: snapshot(), totalClasses: 13)
         XCTAssertEqual(try XCTUnwrap(moved.items.values.first).interval.start - (try XCTUnwrap(initial.items.values.first).interval.start), 7 * 86400, accuracy: 1)
+        XCTAssertEqual(moved.items.values.first?.agenda.date, nextDay)
         let empty = cache.content(metadata: metadata(date: nextDay), snapshot: snapshot(courses: []), totalClasses: 13)
         XCTAssertTrue(empty.items.isEmpty)
     }
