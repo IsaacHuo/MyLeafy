@@ -28,12 +28,11 @@ private enum TimetableQuickAccessAction: Equatable, Sendable {
 private struct TimetableZoomDayRenderPayload: Identifiable {
     let preparedDay: TimetableZoomPreparedDay
     let metadata: TimetableDayMetadata?
-    let layouts: [TimetableGridCourseLayout]
     let occupiedPeriods: Set<Int>
     let reminders: [TimetableCellReminderRenderValue]
     let reminderPeriods: Set<Int>
     let countdownPeriods: Set<Int>
-    let notesByCourseID: [UUID: String]
+    let conflictContent: TimetableConflictDayContent
 
     var id: Date { preparedDay.id }
 }
@@ -76,6 +75,9 @@ struct TimetableView: View {
     @State private var timetableCellReminderProjections: [UUID: TimetableCellReminderProjection] = [:]
     @State private var currentWeek: Int
     @State private var isAwayFromCurrentSchedule = false
+    @State private var selectedConflictSelection: TimetableConflictSelection?
+    @State private var pendingConflictItem: TimetableAgendaItem?
+    @State private var conflictDayCache = TimetableConflictDayCache()
     @State private var selectedDaySummary: TimetableDaySelection?
     @State private var lastSyncAt = TimetableCacheMetadata.lastSyncAt
     @State private var lastFailureMessage = TimetableCacheMetadata.lastFailureMessage
@@ -457,6 +459,18 @@ struct TimetableView: View {
             CustomScheduleEditorSheet(presentation: presentation)
                 .presentationDetents([.medium, .large])
         }
+        .leafySheet(item: $selectedConflictSelection, onDismiss: {
+            if let item = pendingConflictItem {
+                pendingConflictItem = nil
+                handleConflictItemTap(item)
+            }
+        }) { selection in
+            TimetableConflictListSheet(selection: selection) { item in
+                pendingConflictItem = item
+                selectedConflictSelection = nil
+            }
+            .presentationDetents([.medium, .large])
+        }
         .leafySheet(item: $selectedDaySummary) { selection in
             DayScheduleSummarySheet(
                 selection: selection,
@@ -659,31 +673,23 @@ struct TimetableView: View {
                 return TimetableZoomDayRenderPayload(
                     preparedDay: preparedDay,
                     metadata: nil,
-                    layouts: [],
                     occupiedPeriods: [],
                     reminders: [],
                     reminderPeriods: [],
                     countdownPeriods: [],
-                    notesByCourseID: [:]
+                    conflictContent: .empty
                 )
             }
             let metadata = dayMetadata(day: preparedDay.dayOfWeek, week: week)
-            let layouts = snapshot.layouts(day: preparedDay.dayOfWeek, week: week)
             let reminders = snapshot.cellReminders(week: week, day: preparedDay.dayOfWeek)
-            let notes = Dictionary(
-                uniqueKeysWithValues: layouts.compactMap { layout in
-                    snapshot.note(for: layout.course, week: week).map { (layout.course.id, $0) }
-                }
-            )
             return TimetableZoomDayRenderPayload(
                 preparedDay: preparedDay,
                 metadata: metadata,
-                layouts: layouts,
                 occupiedPeriods: snapshot.occupiedPeriods(day: preparedDay.dayOfWeek, week: week),
                 reminders: reminders,
                 reminderPeriods: Set(reminders.flatMap { Array($0.displayPeriodRange) }),
                 countdownPeriods: Set(metadata.countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) }),
-                notesByCourseID: notes
+                conflictContent: conflictDayCache.content(metadata: metadata, snapshot: snapshot, totalClasses: totalClasses)
             )
         }
         hasDeferredContinuousPayloadRefresh = false
@@ -1629,7 +1635,6 @@ struct TimetableView: View {
         metadata: TimetableDayMetadata,
         preparedPayload: TimetableZoomDayRenderPayload? = nil
     ) -> some View {
-        let layouts = preparedPayload?.layouts ?? gridSnapshot.layouts(day: day, week: week)
         let occupiedPeriods = preparedPayload?.occupiedPeriods
             ?? gridSnapshot.occupiedPeriods(day: day, week: week)
         let reminders = preparedPayload?.reminders
@@ -1639,7 +1644,6 @@ struct TimetableView: View {
         let countdowns = metadata.countdowns
         let countdownPeriods = preparedPayload?.countdownPeriods
             ?? Set(countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) })
-        let exams = metadata.exams
 
         return ZStack(alignment: .topLeading) {
             timetableGridBackground(width: width, metrics: metrics)
@@ -1692,139 +1696,86 @@ struct TimetableView: View {
                     }
             }
 
-            ForEach(reminders) { reminder in
-                let geometry = scheduleBlockGeometry(
-                    startDate: reminder.resolvedStartDate,
-                    endDate: reminder.resolvedEndDate,
-                    fallbackStartPeriod: reminder.displayStartPeriod,
-                    fallbackEndPeriod: reminder.displayEndPeriod,
-                    metrics: metrics
-                )
-                let blockWidth = max(width - metrics.cardInset * 2, 1)
-                PersonalScheduleBlockView(
-                    value: PersonalScheduleBlockValue(reminder: reminder),
-                    height: geometry.height,
-                    width: blockWidth
-                )
-                .position(
-                    x: width * 0.5,
-                    y: geometry.centerY
-                )
-                .zIndex(2)
-                .onTapGesture {
-                    guard let currentReminder = cellReminders.first(where: { $0.id == reminder.id }) else {
-                        handleStaleTimetableSnapshot()
-                        return
+            let content = preparedPayload?.conflictContent
+                ?? conflictDayCache.content(metadata: metadata, snapshot: gridSnapshot, totalClasses: totalClasses)
+            ForEach(content.layout.blocks) { block in
+                if let item = content.items[block.id] {
+                    let rects = TimetableConflictGeometry.rects(segments: block.segments, width: width, metrics: metrics)
+                    TimetableConflictBlockView(
+                        item: item,
+                        rects: rects,
+                        width: width,
+                        height: metrics.gridHeight,
+                        background: conflictBlockBackground(item),
+                        isTodayCourse: metadata.isToday && isCourseConflictItem(item)
+                    )
+                    .onTapGesture { handleConflictItemTap(item.agenda) }
+                    .onLongPressGesture {
+                        if case .course(let course) = item.agenda.kind {
+                            courseNotePreview = CourseNotePreview(courseName: course.displayCourseName, note: item.note)
+                        }
                     }
-                    selectedCellReminderContext = TimetableCellReminderContext(
-                        week: week,
-                        day: day,
-                        period: reminder.displayStartPeriod,
-                        date: metadata.date,
-                        occupiedPeriods: occupiedPeriods,
-                        totalPeriods: totalClasses,
-                        reminder: currentReminder
-                    )
+                    .accessibilityAddTraits(.isButton)
                 }
             }
-
-            ForEach(layouts) { layout in
-                let blockHeight = heightForCourse(layout.course, metrics: metrics)
-                let blockWidth = widthForLayout(layout, availableWidth: width, metrics: metrics)
-                let noteText = preparedPayload?.notesByCourseID[layout.course.id]
-                    ?? gridSnapshot.note(for: layout.course, week: week)
-
-                CourseBlockView(
-                    renderValue: layout.course,
-                    hasNote: noteText != nil,
-                    noteText: noteText,
-                    height: blockHeight,
-                    width: blockWidth,
-                    isCompact: true,
-                    isTodayCourse: metadata.isToday,
-                    backgroundPalette: timetableBackgroundCoursePalette,
-                    courseCardOpacity: timetableBackgroundConfiguration.courseCardOpacity,
-                    showsContextMenu: false,
-                    prefersExpandedTypography: false
-                )
-                .position(
-                    x: xOffsetForLayout(layout, availableWidth: width, metrics: metrics) + blockWidth * 0.5,
-                    y: yOffset(for: layout.course, metrics: metrics) + blockHeight * 0.5
-                )
-                .onTapGesture {
-                    guard let currentCourse = courses.first(where: { $0.id == layout.course.id }) else {
-                        handleStaleTimetableSnapshot()
-                        return
+            ForEach(content.layout.groups) { group in
+                let segment = TimetableConflictSegment(start: group.start, end: group.end, leading: 0, trailing: 1)
+                if let rect = TimetableConflictGeometry.rects(segments: [segment], width: width, metrics: metrics).first {
+                    Button {
+                        let items = group.itemIDs.compactMap { content.items[$0] }.sorted {
+                            if $0.interval.start != $1.interval.start { return $0.interval.start < $1.interval.start }
+                            return $0.id < $1.id
+                        }
+                        selectedConflictSelection = TimetableConflictSelection(id: group.id, date: metadata.date, items: items)
+                    } label: {
+                        Text(L10n.text("%d 项安排", language: leafyLanguage, group.itemIDs.count))
+                            .font(.system(size: 10.5 * leafyControlScale, weight: .semibold))
+                            .foregroundStyle(AppTheme.primaryText)
+                            .lineLimit(2)
+                            .frame(width: rect.width, height: rect.height)
+                            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 5))
+                            .overlay(RoundedRectangle(cornerRadius: 5).stroke(AppTheme.accent, lineWidth: 1))
                     }
-                    selectedCourseContext = SelectedCourseContext(
-                        course: currentCourse,
-                        week: layout.course.semesterWeek(for: week) ?? week,
-                        day: day,
-                        date: metadata.date
-                    )
-                }
-                .onLongPressGesture {
-                    courseNotePreview = CourseNotePreview(
-                        courseName: layout.course.displayCourseName,
-                        note: noteText
-                    )
-                }
-            }
-
-            ForEach(countdowns) { countdown in
-                let geometry = scheduleBlockGeometry(
-                    startDate: countdown.startsAt,
-                    endDate: countdown.endsAt,
-                    fallbackStartPeriod: countdown.startPeriod,
-                    fallbackEndPeriod: countdown.endPeriod,
-                    metrics: metrics
-                )
-                let blockWidth = max(width - metrics.cardInset * 2, 1)
-                Button {
-                    presentCustomScheduleEditor(for: countdown)
-                } label: {
-                    PersonalScheduleBlockView(
-                        value: PersonalScheduleBlockValue(countdown: countdown),
-                        height: geometry.height,
-                        width: blockWidth
-                    )
-                    .contentShape(
-                        RoundedRectangle(cornerRadius: AppRadius.small * 0.68, style: .continuous)
-                    )
-                }
-                .buttonStyle(.plain)
-                .position(
-                    x: width * 0.5,
-                    y: geometry.centerY
-                )
-                .zIndex(3)
-            }
-
-            ForEach(Array(exams.enumerated()), id: \.element.id) { index, projection in
-                let blockHeight = examBlockHeight(metrics: metrics)
-                let blockWidth = max(width - metrics.cardInset * 2, 1)
-                TimetableExamBlockView(
-                    projection: projection,
-                    height: blockHeight,
-                    width: blockWidth
-                )
-                .position(
-                    x: width * 0.5,
-                    y: examYPosition(for: projection.period, index: index, height: blockHeight, metrics: metrics)
-                )
-                .zIndex(4)
-                .onTapGesture {
-                    let context = teachingContext(for: week)
-                    selectedDaySummary = TimetableDaySelection(
-                        week: context?.week ?? week,
-                        day: day,
-                        date: metadata.date,
-                        semesterID: context?.semesterID
-                    )
+                    .buttonStyle(.plain)
+                    .position(x: rect.midX, y: rect.midY)
+                    .accessibilityHint(L10n.text("查看这个时段的全部安排", language: leafyLanguage))
                 }
             }
         }
         .frame(width: width, height: metrics.gridHeight, alignment: .topLeading)
+    }
+
+    private func isCourseConflictItem(_ item: TimetableConflictDisplayItem) -> Bool {
+        if case .course = item.agenda.kind { return true }
+        return false
+    }
+
+    private func conflictBlockBackground(_ item: TimetableConflictDisplayItem) -> Color {
+        if case .exam = item.agenda.kind {
+            return colorScheme == .dark ? AppTheme.warning.opacity(0.28) : AppTheme.warning.opacity(0.20)
+        }
+        if case .course(let course) = item.agenda.kind,
+           let palette = timetableBackgroundCoursePalette, !palette.isEmpty {
+            return AppTheme.courseCardColor(for: course.displayCourseName + course.teacher, colors: palette)
+                .opacity(timetableBackgroundConfiguration.courseCardOpacity)
+        }
+        if colorScheme == .dark { return AppTheme.accent(for: themeColorPreference).opacity(0.3) }
+        let key: String
+        if case .course(let course) = item.agenda.kind { key = course.displayCourseName + course.teacher }
+        else { key = item.id + item.agenda.title }
+        return AppTheme.courseCardColor(for: key, themeColorPreferenceRaw: themeColorPreference.rawValue).opacity(0.9)
+    }
+
+    private func handleConflictItemTap(_ item: TimetableAgendaItem) {
+        if case .course(let value) = item.kind {
+            guard let current = courses.first(where: { $0.id == value.id }) else {
+                handleStaleTimetableSnapshot()
+                return
+            }
+            selectedCourseContext = SelectedCourseContext(course: current, week: value.semesterWeek(for: item.week) ?? item.week, day: item.day, date: item.date)
+        } else {
+            handleAgendaItemTap(item)
+        }
     }
 
     private func timetableAgendaList(gridSnapshot: TimetableGridSnapshot) -> some View {
@@ -2115,36 +2066,6 @@ struct TimetableView: View {
         syncReturnButtonVisibility(for: nextWeek)
     }
 
-    private func scheduleBlockGeometry(
-        startDate: Date?,
-        endDate: Date?,
-        fallbackStartPeriod: Int,
-        fallbackEndPeriod: Int,
-        metrics: TimetableLayoutMetrics
-    ) -> TimetableScheduleBlockGeometry {
-        TimetableScheduleBlockGeometry.make(
-            startDate: startDate,
-            endDate: endDate,
-            fallbackStartPeriod: fallbackStartPeriod,
-            fallbackEndPeriod: fallbackEndPeriod,
-            metrics: metrics,
-            minimumHeight: min(
-                18 * leafyControlScale,
-                max(metrics.rowHeight - metrics.cardInset * 2, 1)
-            )
-        )
-    }
-
-    private func examBlockHeight(metrics: TimetableLayoutMetrics) -> CGFloat {
-        min(max(metrics.rowHeight * 0.52, 20 * leafyControlScale), metrics.rowHeight - metrics.cardInset * 2)
-    }
-
-    private func examYPosition(for period: Int, index: Int, height: CGFloat, metrics: TimetableLayoutMetrics) -> CGFloat {
-        let base = yPosition(forClass: period, metrics: metrics) + metrics.cardInset + height * 0.5
-        let stackedOffset = CGFloat(index % 2) * min(height * 0.38, 8 * leafyControlScale)
-        return base + stackedOffset
-    }
-
     private func dayHeader(metadata: TimetableDayMetadata) -> some View {
         let annotation = [
             metadata.event?.displayTitle(language: leafyLanguage),
@@ -2343,40 +2264,6 @@ struct TimetableView: View {
             .tint(AppTheme.accent(for: themeColorPreference))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func layoutsForDay(_ day: Int, week: Int) -> [TimetableGridCourseLayout] {
-        currentTimetableGridSnapshot().layouts(day: day, week: week)
-    }
-
-    private func widthForLayout(
-        _ layout: TimetableGridCourseLayout,
-        availableWidth: CGFloat,
-        metrics: TimetableLayoutMetrics
-    ) -> CGFloat {
-        let totalSpacing = CGFloat(max(layout.laneCount - 1, 0)) * metrics.laneSpacing
-        let laneWidth = (availableWidth - totalSpacing - metrics.cardInset * 2) / CGFloat(layout.laneCount)
-        return max(laneWidth, 1)
-    }
-
-    private func xOffsetForLayout(
-        _ layout: TimetableGridCourseLayout,
-        availableWidth: CGFloat,
-        metrics: TimetableLayoutMetrics
-    ) -> CGFloat {
-        let laneWidth = widthForLayout(layout, availableWidth: availableWidth, metrics: metrics)
-        return metrics.cardInset + CGFloat(layout.laneIndex) * (laneWidth + metrics.laneSpacing)
-    }
-
-    private func heightForCourse(_ course: TimetableCourseRenderValue, metrics: TimetableLayoutMetrics) -> CGFloat {
-        let count = max(course.duration.count, 1)
-        let rawHeight = CGFloat(count) * metrics.rowHeight + CGFloat(count - 1) * metrics.rowSpacing - metrics.cardInset * 2
-        return max(rawHeight, metrics.rowHeight * 0.7)
-    }
-
-    private func yOffset(for course: TimetableCourseRenderValue, metrics: TimetableLayoutMetrics) -> CGFloat {
-        guard let start = course.duration.min() else { return 0 }
-        return yPosition(forClass: start, metrics: metrics) + metrics.cardInset
     }
 
     private func yPosition(forClass classIndex: Int, metrics: TimetableLayoutMetrics) -> CGFloat {
