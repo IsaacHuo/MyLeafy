@@ -84,7 +84,7 @@ class CoreVisualReviewTest {
                     compose.onNodeWithText("大学英语").assertIsDisplayed()
                 }
                 "analysis" -> {
-                    compose.onNode(hasScrollAction()).performScrollToNode(hasText("统计口径"))
+                    compose.onNodeWithTag("academic-analysis-list").performScrollToNode(hasText("统计口径"))
                     compose.onNodeWithText("统计口径").assertIsDisplayed()
                 }
                 "campus" -> compose.onNodeWithText("成绩查询").assertIsDisplayed().performClick()

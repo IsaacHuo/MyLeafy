@@ -1,5 +1,7 @@
 package com.myleafy.android.features.campus
 
+import androidx.compose.foundation.layout.FlowRow
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -284,8 +286,7 @@ private fun TrainingProgramContent(
             itemsIndexed(program.sections, key = { index, section -> "$index-${section.title}" }) { _, section ->
                 LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(LeafySpacing.card)) {
-                        Text("${section.title} ${if (section.title in expanded) "⌄" else "›"}", style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.fillMaxWidth().clickable { expanded = if (section.title in expanded) expanded - section.title else expanded + section.title })
+                        com.myleafy.android.ui.components.LeafyDisclosureRow(section.title, section.title in expanded, onClick = { expanded = if (section.title in expanded) expanded - section.title else expanded + section.title })
                         if (section.title in expanded) {
                         if (section.body.isNotBlank()) {
                             Text(section.body, style = MaterialTheme.typography.bodyMedium)
@@ -334,8 +335,8 @@ private fun GraduationProgressCard(progress: GraduationProgress) {
             }
             Text(if (progress.official) "官方所得学分" else "成绩估算", color = MaterialTheme.colorScheme.primary)
             progress.categories.forEach { category ->
-                Row(Modifier.fillMaxWidth()) {
-                    Text(category.name, Modifier.weight(1f))
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(category.name)
                     Text("${category.completed?.let(::trimNumber) ?: "未确认"} / ${trimNumber(category.required)}")
                 }
                 category.completed?.let { earned -> Text(if (earned >= category.required) "已满足学分要求" else "还需 ${trimNumber(category.required - earned)} 学分", style = MaterialTheme.typography.bodySmall) }

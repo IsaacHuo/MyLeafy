@@ -48,9 +48,9 @@ object LeafyTimetableTokens {
      * 无自定义背景时空格与页面同色，只留一条更淡的描边画出网格；
      * 有照片/纯色背景时才用半透明填充压住背景。
      */
-    const val emptyCellBorderAlpha = 0.18f
-    const val emptyCellFillAlphaOnBackground = 0.22f
-    const val emptyCellBorderAlphaOnBackground = 0.25f
+    const val emptyCellBorderAlpha = 0.12f
+    const val emptyCellFillAlphaOnBackground = 0.18f
+    const val emptyCellBorderAlphaOnBackground = 0.18f
 }
 
 object LeafyAdaptiveTokens {

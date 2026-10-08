@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -35,6 +39,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.FileProvider
@@ -298,22 +305,8 @@ fun ComprehensiveQualityScreen(
                         componentRule?.let {
                             Text(it.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                            LeafyTextField(
-                                value = draft.raw,
-                                onValueChange = { value -> drafts = drafts.updated(kind, draft.copy(raw = value.filter { it.isDigit() || it == '.' })) },
-                                modifier = Modifier.weight(1f),
-                                label = { Text("原始分") },
-                                singleLine = true,
-                            )
-                            LeafyTextField(
-                                value = draft.peer,
-                                onValueChange = { value -> drafts = drafts.updated(kind, draft.copy(peer = value.filter { it.isDigit() || it == '.' })) },
-                                modifier = Modifier.weight(1f),
-                                label = { Text("专业最高分") },
-                                singleLine = true,
-                            )
-                        }
+                        QualityScoreFields(draft.raw, "原始分", { value -> drafts = drafts.updated(kind, draft.copy(raw = value.filter { it.isDigit() || it == '.' })) },
+                            draft.peer, "专业最高分", { value -> drafts = drafts.updated(kind, draft.copy(peer = value.filter { it.isDigit() || it == '.' })) })
                         LeafyTextField(
                             value = draft.official,
                             onValueChange = { value -> drafts = drafts.updated(kind, draft.copy(official = value.filter { it.isDigit() || it == '.' })) },
@@ -372,22 +365,8 @@ fun ComprehensiveQualityScreen(
                 LeafySectionHeader(title = "官方结果（可选）", supportingText = "录入学院公示结果，便于对照本地估算。")
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                    LeafyTextField(
-                        value = officialQuality,
-                        onValueChange = { officialQuality = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("官方综素分") },
-                        singleLine = true,
-                    )
-                    LeafyTextField(
-                        value = officialComposite,
-                        onValueChange = { officialComposite = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("官方综合成绩") },
-                        singleLine = true,
-                    )
-                }
+                QualityScoreFields(officialQuality, "官方综素分", { officialQuality = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    officialComposite, "官方综合成绩", { officialComposite = it.filter { ch -> ch.isDigit() || ch == '.' } })
             }
             item {
                 LeafyTextField(
@@ -436,6 +415,21 @@ fun ComprehensiveQualityScreen(
             },
             dismissButton = { LeafyTextButton(onClick = { confirmClear = false }) { Text("取消") } },
         )
+    }
+}
+
+@Composable
+internal fun QualityScoreFields(firstValue: String, firstLabel: String, onFirstChange: (String) -> Unit,
+    secondValue: String, secondLabel: String, onSecondChange: (String) -> Unit) {
+    val scale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val fieldWidth = if (maxWidth >= 320.dp * scale) (maxWidth - LeafySpacing.micro) / 2 else maxWidth
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro), verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+            LeafyTextField(firstValue, onFirstChange, Modifier.width(fieldWidth), label = { Text(firstLabel) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+            LeafyTextField(secondValue, onSecondChange, Modifier.width(fieldWidth), label = { Text(secondLabel) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+        }
     }
 }
 

@@ -37,6 +37,7 @@ class TimetablePagerTest {
         var refreshes = 0
         var sync by mutableStateOf<TimetableSyncState>(TimetableSyncState.Idle)
         try {
+            com.myleafy.android.testing.resetRenderReview()
             compose.setContent {
                 MyLeafyTheme {
                     TimetableScreenContent(
@@ -72,6 +73,7 @@ class TimetablePagerTest {
             compose.waitForIdle()
             assertEquals(1, refreshes)
             compose.onNodeWithText("同步课表").assertIsDisplayed()
+            com.myleafy.android.testing.captureRenderReview("timetable-pager")
             recording?.let { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).use { stream -> stream.readBytes() } }
         } finally { photo.delete() }
     }

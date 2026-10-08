@@ -98,7 +98,11 @@ class CampusParityUiTest {
         groups.forEach { group ->
             compose.onNode(hasScrollAction()).performScrollToNode(hasText(group.title,substring=true))
             compose.onNodeWithText(group.title,substring=true).performClick()
-            group.venues.forEach { venue -> compose.onNode(hasScrollAction()).performScrollToNode(hasText(venue.title,substring=true)); compose.onNodeWithText(venue.title,substring=true).assertIsDisplayed().performClick() }
+            group.venues.forEach { venue ->
+                val header = hasText(venue.title, substring = false) and hasClickAction()
+                compose.onNode(hasScrollAction()).performScrollToNode(header)
+                compose.onNode(header).assertIsDisplayed().performClick()
+            }
         }
         capture("sports-venues")
     }

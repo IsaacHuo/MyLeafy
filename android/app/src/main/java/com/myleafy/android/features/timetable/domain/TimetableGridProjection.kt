@@ -85,7 +85,9 @@ object TimetableGridProjection {
                         sourceId = course.id,
                         type = TimetableGridItemType.COURSE,
                         title = course.name,
-                        subtitle = listOf(course.location, course.room).filter(String::isNotBlank).joinToString(" ")
+                        subtitle = listOf(course.location, course.room)
+                            .map { it.trim().replace(Regex("\\s+"), " ") }
+                            .filter(String::isNotBlank).distinct().joinToString(" ")
                             .ifBlank { null },
                         dayIndex = course.dayOfWeek - 1,
                         startPeriod = periods.first(),

@@ -147,12 +147,12 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
             CourseDetailValue("节次", "${date ?: "学期日期未确认"} · ${courseTimeDescription(course)}")
             val teachers = course.teacher.split(Regex("[、,，;；/\\n]+")).map(String::trim).filter(String::isNotBlank).distinct()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("教师", Modifier.width(44.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text("教师", Modifier.widthIn(min = 44.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (teachers.isEmpty()) Text("未填写", style = MaterialTheme.typography.bodyMedium)
                     else teachers.forEach { teacher ->
                         Text("$teacher ›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                            modifier = Modifier.heightIn(min = 48.dp).wrapContentHeight().clickable(role = androidx.compose.ui.semantics.Role.Button) {
                                 if (!dirty && !saving) onTeacher(teacher) else error = "请先保存或放弃更改"
                             })
                     }
@@ -199,17 +199,20 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
                 dao.save(CourseReminderEntity(course.scopeKey, course.sourceSemesterID, key, if (selectingCustom) custom.toInt() else minutes, anchor))
                 container.courseReminderScheduler.reconcile()
                 permissionProblem = container.courseReminderScheduler.permissionProblem()
-                feedback = if (!selectingCustom && minutes == 0) "提醒已关闭" else permissionProblem ?: container.courseReminderScheduler.error.value ?: "提醒已应用"
+                feedback = if (!selectingCustom && minutes == 0) "提醒已关闭" else "提醒配置已保存"
                 if ((selectingCustom || minutes > 0) && Build.VERSION.SDK_INT >= 33 && !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             } }) { Text("应用提醒") }
             if (reminder != null && reminder.minutes > 0 && permissionProblem != null) {
-                LeafyStatusBanner(permissionProblem!!, isError = true, actionLabel = "设置", onAction = {
+                LeafyStatusBanner("提醒未启用 · $permissionProblem", isError = true, actionLabel = "设置", onAction = {
                     val intent = if (Build.VERSION.SDK_INT >= 31 && !context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms())
                         Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
                     else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                     context.startActivity(intent)
                 })
+            }
+            if (reminder != null && reminder.minutes > 0 && permissionProblem == null && schedulingError == null) {
+                Text("提醒已启用", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
             Text("提醒只保存在本机，会为这门课尚未开始的周次创建本地通知。", style = MaterialTheme.typography.bodySmall)
             schedulingError?.let { LeafyStatusBanner(it, isError = true) }
@@ -226,7 +229,7 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
 @Composable
 private fun CourseDetailValue(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, Modifier.width(44.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text(label, Modifier.widthIn(min = 44.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
     }
 }

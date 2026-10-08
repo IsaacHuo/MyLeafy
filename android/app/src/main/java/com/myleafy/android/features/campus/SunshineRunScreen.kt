@@ -52,8 +52,9 @@ import java.time.LocalDate
         if (state.loading) { item { LeafyLoadingState() }; return@LazyColumn }
         if (state.loadFailed) { item { TextButton(onClick = viewModel::retryLoad) { Text("重新加载跑步记录") } }; return@LazyColumn }
         item {
-            Text("有效记录 $total / ${state.settings.totalTarget} 次", style = MaterialTheme.typography.headlineSmall)
-            Text("还需 ${(state.settings.totalTarget - total).coerceAtLeast(0)} 次 · ${config.semesterStartDate} 至 ${SunshineRunPlanner.semesterEnd(config)}")
+            Text("有效记录 $total / ${state.settings.totalTarget} 次", style = MaterialTheme.typography.titleLarge)
+            Text("还需 ${(state.settings.totalTarget - total).coerceAtLeast(0)} 次", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text("${config.semesterStartDate} 至 ${SunshineRunPlanner.semesterEnd(config)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LinearProgressIndicator(progress = { (total.toFloat() / state.settings.totalTarget).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
             Text(current?.let { "本周期 ${it.count} / ${it.target} 次 · 有效周 ${it.weeks.joinToString("、")}" } ?: "今天不在有效跑步周内")
             val record = state.runs.firstOrNull { it.dateEpochDay == today.toEpochDay() }

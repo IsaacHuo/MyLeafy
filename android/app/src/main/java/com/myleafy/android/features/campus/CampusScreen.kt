@@ -1,5 +1,7 @@
 package com.myleafy.android.features.campus
 
+import androidx.compose.ui.unit.dp
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -13,8 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -228,6 +230,14 @@ private fun CampusDomainChips(
                 selected = selectedDomain == domain,
                 onClick = { onDomainSelected(domain) },
                 label = { Text(domain.label) },
+                shape = androidx.compose.foundation.shape.CircleShape,
+                border = null,
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.leafySurfaces.grouped,
+                    selectedContainerColor = MaterialTheme.leafySurfaces.accentSoft,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
             )
         }
     }
@@ -489,7 +499,9 @@ internal fun GradeRow(grade: GradeEntity) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(text = grade.score, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(text = grade.score, style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.widthIn(max = 112.dp),
+                color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -504,7 +516,7 @@ internal fun ExamRow(exam: ExamEntity) {
     ) {
         Column(modifier = Modifier.padding(LeafySpacing.card)) {
             Text(text = exam.name, style = MaterialTheme.typography.titleSmall)
-            Text("课程编号：${exam.courseId.ifBlank { "未填写" }}", style = MaterialTheme.typography.bodySmall)
+            Text("课程编号：${exam.courseId.ifBlank { "未填写" }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val examStart = runCatching { java.time.LocalDateTime.of(java.time.LocalDate.parse(exam.date), java.time.LocalTime.parse(exam.start)) }.getOrNull()
             val examEnd = runCatching { java.time.LocalDateTime.of(java.time.LocalDate.parse(exam.date), java.time.LocalTime.parse(exam.end)) }.getOrNull()
             val now = java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"))
@@ -512,12 +524,12 @@ internal fun ExamRow(exam: ExamEntity) {
             Spacer(modifier = Modifier.height(LeafySpacing.tiny))
             Text(
                 text = "${exam.date} ${exam.start}–${exam.end}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = exam.location,
-                style = MaterialTheme.typography.bodySmall,
+                text = exam.location.ifBlank { "地点待确认" },
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

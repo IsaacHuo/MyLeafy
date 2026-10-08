@@ -90,4 +90,11 @@ class TimetableGridProjectionTest {
         weeks = listOf(2),
         periods = periods,
     )
+
+    @Test fun duplicateLocationFieldsAreCleanedForDisplayWithoutChangingSource() {
+        val source = course("a", listOf(1, 2)).copy(location = "  一教   101 ", room = "一教 101")
+        val result = TimetableGridProjection.project(listOf(source), emptyList(), emptyList(), week)
+        assertEquals("一教 101", result.items.single().subtitle)
+        assertEquals("  一教   101 ", source.location)
+    }
 }

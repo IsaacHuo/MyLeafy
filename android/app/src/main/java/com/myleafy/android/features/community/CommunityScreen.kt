@@ -282,18 +282,18 @@ private fun CommunityFilterChip(
 fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(onClick = onClick, modifier = modifier.fillMaxWidth().testTag("community-post-${post.id}"),
         color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))) {
         Column {
             if (post.images.isNotEmpty()) CommunityPostCoverImage(post.images)
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(post.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (post.images.isEmpty() && post.body.isNotBlank()) Text(post.body, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学", style = MaterialTheme.typography.labelSmall,
+                Text(if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     post.category?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
-                    Text(post.created_at.substringBefore('T').replace('-', '.'), style = MaterialTheme.typography.labelSmall)
+                    Text(post.created_at.substringBefore('T').replace('-', '.'), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${post.like_count} 赞", style = MaterialTheme.typography.labelSmall)

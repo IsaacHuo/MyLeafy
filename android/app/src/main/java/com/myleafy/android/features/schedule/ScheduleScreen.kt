@@ -1,5 +1,7 @@
 package com.myleafy.android.features.schedule
 
+import androidx.compose.foundation.layout.FlowRow
+
 import android.Manifest
 import android.os.Build
 import android.content.pm.PackageManager
@@ -357,7 +359,7 @@ internal fun ScheduleContent(
     when (section) {
         ScheduleSection.MEMOS -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = androidx.compose.ui.unit.Dp(104f)),
+            contentPadding = PaddingValues(top = LeafySpacing.micro, bottom = com.myleafy.android.ui.theme.LeafyComponentSize.floatingActionClearance),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             if (memos.isEmpty()) {
@@ -377,7 +379,7 @@ internal fun ScheduleContent(
 
         ScheduleSection.EVENTS -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = androidx.compose.ui.unit.Dp(104f)),
+            contentPadding = PaddingValues(top = LeafySpacing.micro, bottom = com.myleafy.android.ui.theme.LeafyComponentSize.floatingActionClearance),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             if (events.isEmpty()) {
@@ -501,7 +503,7 @@ private fun ScheduleReportsContent(
                         )
                     }
                     if (reminder?.enabled == true) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
                             listOf(10 to "10 分", 30 to "30 分", 60 to "1 小时", 1_440 to "1 天").forEach { option ->
                                 FilterChip(
                                     selected = reminder.leadMinutes == option.first,
@@ -528,16 +530,18 @@ private fun MemoRow(memo: ScheduleMemoEntity, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.leafySurfaces.page,
+        color = MaterialTheme.leafySurfaces.content,
+        shape = MaterialTheme.shapes.medium,
     ) {
-        Column(modifier = Modifier.padding(LeafySpacing.card)) {
-            Text(text = memo.title ?: memo.body, style = MaterialTheme.typography.titleSmall)
+        Column(modifier = Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
+            Text(text = memo.title ?: memo.body, style = if (memo.title == null) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall, maxLines = if (memo.title == null) 4 else 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (memo.title != null && memo.body.isNotBlank()) {
                 Text(
                     text = memo.body,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
             if (memo.tags.isNotBlank()) {
@@ -547,8 +551,6 @@ private fun MemoRow(memo: ScheduleMemoEntity, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
@@ -558,13 +560,15 @@ private fun EventRow(event: ScheduleEventEntity, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.leafySurfaces.page,
+        color = MaterialTheme.leafySurfaces.content,
+        shape = MaterialTheme.shapes.medium,
     ) {
-        Column(modifier = Modifier.padding(LeafySpacing.card)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = event.title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        Column(modifier = Modifier.padding(LeafySpacing.card), verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
+                Text(text = event.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 if (event.startsAt > System.currentTimeMillis()) {
                     Text(
+                        maxLines = 1,
                         text = ScheduleCountdown.description(event.startsAt),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
@@ -577,10 +581,8 @@ private fun EventRow(event: ScheduleEventEntity, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             event.note?.takeIf(String::isNotBlank)?.let {
-                Text(text = it, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                Text(text = it, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
-            Spacer(modifier = Modifier.height(LeafySpacing.compact))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }

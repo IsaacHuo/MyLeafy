@@ -25,15 +25,15 @@ import com.myleafy.android.ui.components.*
                 items(group.venues, key = { it.id }) { venue ->
                     LeafyContentSurface(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Column(Modifier.fillMaxWidth().clickable {
-                                expanded = if (venue.id in expanded) expanded - venue.id else (expanded - group.venues.map { it.id }.toSet()) + venue.id
-                            }) {
-                                Text("${venue.title} ${if (venue.id in expanded) "⌄" else "›"}", style = MaterialTheme.typography.titleMedium)
-                                Text(venue.location)
-                                Text(venue.tags.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                            Column(Modifier.fillMaxWidth()) {
+                                LeafyDisclosureRow(venue.title, venue.id in expanded, onClick = {
+                                    expanded = if (venue.id in expanded) expanded - venue.id else (expanded - group.venues.map { it.id }.toSet()) + venue.id
+                                })
+                                Text(venue.location, style = MaterialTheme.typography.bodyMedium)
+                                Text(venue.tags.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (venue.id in expanded) {
-                                venue.details.forEach { Text("${it.title}：${it.value}") }
+                                venue.details.forEach { Text(it.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(it.value, style = MaterialTheme.typography.bodyMedium) }
                                 venue.fees.forEach { fee -> Text(fee.title, style = MaterialTheme.typography.titleSmall); fee.lines.forEach { Text("${it.title}：${it.value}") } }
                                 venue.notes.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
                             }

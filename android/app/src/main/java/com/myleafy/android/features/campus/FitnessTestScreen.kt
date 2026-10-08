@@ -42,7 +42,7 @@ internal fun fitnessValue(record: FitnessTestRecordEntity): String = if (record.
         item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items((listOf("全部") + fitnessProjects.keys + state.fitnessTests.map { it.item }).distinct()) { name -> FilterChip(filter == name, { filter = name }, { Text(name) }) } } }
         if (records.isEmpty()) item { Text("没有符合条件的记录") }
         items(records, key = { it.id }) { record -> LeafyContentSurface(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
-            Text(record.item, style = MaterialTheme.typography.titleMedium); Text("${fitnessValue(record)} · ${LocalDate.ofEpochDay(record.testedAt)}")
+            Text(record.item, style = MaterialTheme.typography.titleSmall); Text(fitnessValue(record), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(LocalDate.ofEpochDay(record.testedAt).toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (record.note.isNotBlank()) Text(record.note)
             Row { TextButton(onClick = { editing = record; showing = true }) { Text("编辑") }; TextButton(onClick = { deleting = record }) { Text("删除") } }
         } } }
@@ -67,10 +67,10 @@ internal fun fitnessValue(record: FitnessTestRecordEntity): String = if (record.
     LeafyAlertDialog(onDismissRequest = exit, title = { Text(if (record == null) "新增体测" else "编辑体测") }, text = {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             error?.let { item { LeafyStatusBanner(it, isError = true) } }
-            item { LeafyTextField(date, { date = it }, label = { Text("日期 YYYY-MM-DD") }) }
+            item { LeafyTextField(date, { date = it }, label = { Text("日期 YYYY-MM-DD") }, singleLine = true, isError = date.isNotBlank() && runCatching { LocalDate.parse(date) }.isFailure, supportingText = { Text("日期格式：2026-10-08") }) }
             item { FlowRow { fitnessProjects.forEach { (name, defaultUnit) -> FilterChip(item.replace(" ", "") == name, { item = name; unit = defaultUnit; value = ""; minutes = ""; seconds = "" }, { Text(name) }) } } }
             item { LeafyTextField(item, { item = it }, label = { Text("项目") }) }
-            if (unit == "分秒") item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { LeafyTextField(minutes, { minutes = it }, modifier = Modifier.weight(1f), label = { Text("分") }); LeafyTextField(seconds, { seconds = it }, modifier = Modifier.weight(1f), label = { Text("秒") }) } }
+            if (unit == "分秒") item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { LeafyTextField(minutes, { minutes = it }, modifier = Modifier.weight(1f), label = { Text("分") }, singleLine = true, isError = minutes.isNotBlank() && minutes.toIntOrNull() !in 0..20, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number), supportingText = { Text("0–20 分") }); LeafyTextField(seconds, { seconds = it }, modifier = Modifier.weight(1f), label = { Text("秒") }, singleLine = true, isError = seconds.isNotBlank() && seconds.toIntOrNull() !in 0..59, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number), supportingText = { Text("0–59 秒") }) } }
             else item { LeafyTextField(value, { value = it }, label = { Text("数值") }) }
             item { LeafyTextField(unit, { unit = it }, label = { Text("单位") }) }
             item { LeafyTextField(note, { note = it }, label = { Text("备注") }) }

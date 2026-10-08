@@ -26,6 +26,7 @@ class CoursePersonalFlowTest {
     private fun course(scope: String) = CourseEntity(scope, "fixture-course", semester, "测试课程（仅自动化）", "测试教师", "", "", "测试教室", 1, (1..20).toList(), listOf(6, 7))
 
     @Test fun noteScopesSaveAndUnsavedExitRequiresConfirmation() {
+        com.myleafy.android.testing.resetRenderReview()
         val scope = "fixture-note-flow-${java.util.UUID.randomUUID()}"
         container.activeAppScopeStore.activateGuest(scope)
         val item = course(scope)
@@ -48,6 +49,7 @@ class CoursePersonalFlowTest {
             ime != null && field.height > 0 && field.bottom <= bounds.top
         }
         capture("course-expanded-keyboard")
+        com.myleafy.android.testing.captureRenderReview("course-keyboard")
         compose.onNodeWithText("放弃未保存的更改？").assertDoesNotExist()
         compose.onNodeWithText("保存备注").performScrollTo().performClick()
         compose.waitUntil(5_000) { runBlocking { container.timetablePersonalDao.notes(scope, semester).first().any { it.week == 4 && it.text == "本次备注" } } }

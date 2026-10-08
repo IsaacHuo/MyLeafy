@@ -34,7 +34,7 @@ import java.time.LocalDate
         LazyColumn(content.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Row { FilterChip(!byRoom, { byRoom = false; viewModel.clearResults() }, { Text("按节次") }); Spacer(Modifier.width(8.dp)); FilterChip(byRoom, { byRoom = true; viewModel.clearResults() }, { Text("按教室") }) }
-                LeafyTextField(date, { date = it; viewModel.clearResults() }, label = { Text("查询日期 YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth(), singleLine = true, isError = !validDate)
+                LeafyTextField(date, { date = it; viewModel.clearResults() }, label = { Text("查询日期 YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth(), singleLine = true, isError = !validDate, supportingText = { if (!validDate) Text("请输入有效日期，例如 2026-10-08") })
                 if (!byRoom) FlowRow {
                     OutlinedButton(onClick = { selecting = "start" }) { Text("第 $start 节起") }
                     OutlinedButton(onClick = { selecting = "end" }) { Text("第 $end 节止") }
@@ -67,7 +67,7 @@ import java.time.LocalDate
                             items((1..12).toList()) { period ->
                                 val slot = target.slots.firstOrNull { it.period == period }
                                 val time = com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule.slot(period)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("第 $period 节 ${time?.startText.orEmpty()}–${time?.endText.orEmpty()}"); Text(slot?.status?.title ?: "待确认") }
+                                FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("第 $period 节 ${time?.startText.orEmpty()}–${time?.endText.orEmpty()}", style = MaterialTheme.typography.bodyMedium); Text(slot?.status?.title ?: "待确认", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
                             }
                         }
                     } else {

@@ -1,8 +1,12 @@
 package com.myleafy.android.ui.components
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,6 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
@@ -69,6 +75,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.semantics
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafyIconSize
@@ -211,6 +221,19 @@ fun Modifier.leafyMinimumTouchTarget(): Modifier = sizeIn(
     minHeight = LeafyComponentSize.minimumTouchTarget,
 )
 
+/** Expandable section header; the caller owns its surrounding card and padding. */
+@Composable
+fun LeafyDisclosureRow(title: String, expanded: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().heightIn(min = LeafyComponentSize.minimumTouchTarget)
+        .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }
+        .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+        Text(title, Modifier.weight(1f).padding(vertical = LeafySpacing.micro), style = MaterialTheme.typography.titleSmall)
+        Icon(if (expanded) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(LeafyIconSize.compact))
+    }
+}
+
 @Composable
 fun LeafySectionHeader(
     title: String,
@@ -221,7 +244,7 @@ fun LeafySectionHeader(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny),
     ) {
-        Text(text = title, style = MaterialTheme.typography.titleLarge)
+        Text(text = title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
         supportingText?.let {
             Text(
                 text = it,
@@ -352,7 +375,7 @@ fun LeafyFeatureCard(
         supportingContent = {
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
@@ -511,7 +534,7 @@ fun LeafyStatusBanner(
     val content = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
     val hasAction = actionLabel != null && onAction != null
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         color = container,
         contentColor = content,
         shape = MaterialTheme.shapes.medium,
@@ -524,6 +547,18 @@ fun LeafyStatusBanner(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(LeafySpacing.compact),
             )
+        } else if (LocalDensity.current.fontScale >= 1.5f) {
+            Column(Modifier.padding(LeafySpacing.compact)) {
+                Text(message, style = MaterialTheme.typography.bodyMedium)
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalArrangement = Arrangement.spacedBy(LeafySpacing.tiny)) {
+                    if (hasAction) TextButton(onClick = requireNotNull(onAction), colors = ButtonDefaults.textButtonColors(contentColor = content)) {
+                        Text(requireNotNull(actionLabel), style = MaterialTheme.typography.labelLarge)
+                    }
+                    onDismiss?.let { dismiss ->
+                        LeafyActionIconButton(onClick = dismiss) { Icon(Icons.Outlined.Close, contentDescription = "关闭提示") }
+                    }
+                }
+            }
         } else {
             Row(
                 modifier = Modifier.padding(

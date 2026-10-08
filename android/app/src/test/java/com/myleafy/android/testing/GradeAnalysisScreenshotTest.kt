@@ -43,7 +43,7 @@ class GradeAnalysisScreenshotTest {
     fun analysis840DarkFont200() {
         compose.setContent { LeafyScreenshotTheme(darkTheme = true, fontScale = 2f) { LeafySecondaryScaffold("成绩分析", {}) { GradeAnalysisContent(state, it) } } }
         compose.onRoot().captureRoboImage()
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("统计口径"))
+        compose.onNodeWithTag("academic-analysis-list").performScrollToNode(hasText("统计口径"))
         compose.onNodeWithText("统计口径").assertIsDisplayed()
     }
 }

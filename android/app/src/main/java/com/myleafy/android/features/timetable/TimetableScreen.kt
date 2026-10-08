@@ -72,6 +72,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
@@ -258,7 +259,9 @@ fun TimetableScreen(
                                 text = { Text("回到本周") },
                                 leadingIcon = { Icon(Icons.Outlined.Today, contentDescription = null) },
                                 enabled = (uiState as? TimetableUiState.Loaded)?.let {
-                                    it.selectedWeek != it.currentWeek
+                                    val today = LocalDate.now(TimetableGridProjection.campusZone)
+                                    val currentWeek = it.pages.firstOrNull { page -> today >= page.weekRange.startDate && today <= page.weekRange.startDate.plusDays(6) }?.week ?: it.currentWeek
+                                    it.selectedWeek != currentWeek
                                 } == true,
                                 onClick = {
                                     menuExpanded = false
@@ -511,6 +514,7 @@ internal fun TimetableScreenContent(
         pageCount = { state.supportedWeeks },
     )
     val coroutineScope = rememberCoroutineScope()
+    val now by com.myleafy.android.features.timetable.presentation.rememberTimetableNow()
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
@@ -525,15 +529,30 @@ internal fun TimetableScreenContent(
         }
     }
     var choosingWeek by remember { mutableStateOf(false) }
+    val currentWeek = state.pages.firstOrNull {
+        !now.toLocalDate().isBefore(it.weekRange.startDate) && now.toLocalDate().isBefore(it.weekRange.endDateExclusive)
+    }?.week ?: state.currentWeek
     if (choosingWeek) LeafyAlertDialog(
         onDismissRequest = { choosingWeek = false }, title = { Text("选择周次") },
         text = {
-            androidx.compose.foundation.lazy.LazyColumn {
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (pagerState.settledPage - 2).coerceAtLeast(0)),
+            ) {
                 items(state.supportedWeeks) { index ->
-                    LeafyTextButton(onClick = {
+                    val selected = index == pagerState.settledPage
+                    Surface(onClick = {
                         choosingWeek = false
                         coroutineScope.launch { pagerState.scrollToPage(index) }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("第 ${index + 1} 周") }
+                    }, color = if (selected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = androidx.compose.ui.unit.Dp(48f))
+                            .semantics { this.selected = selected }) {
+                        Row(Modifier.padding(LeafySpacing.compact), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("第 ${index + 1} 周", style = MaterialTheme.typography.titleSmall)
+                            if (index + 1 == currentWeek) Text("本周", color = MaterialTheme.colorScheme.primary)
+                            else if (selected) Text("正在查看", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
         },
@@ -553,41 +572,10 @@ internal fun TimetableScreenContent(
             onAction = if (initialization.running == null && initialization.failures.isNotEmpty()) onRetryInitialization else null,
             onDismiss = if (initialization.running == null) onDismissInitialization else null,
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 周次与日期同一行：左侧“本周 · 第 N 周”，右侧日期范围，
-            // 为课表让出纵向空间。两端各占一半宽度，字体放大时各自省略而不互相挤压。
-            Row(
-                modifier = Modifier.weight(1f).padding(horizontal = LeafySpacing.tiny),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = if (visiblePage.week == state.currentWeek) {
-                        "本周 · 第 ${visiblePage.week} 周"
-                    } else {
-                        "第 ${visiblePage.week} 周"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).clickable(onClickLabel = "选择周次") { choosingWeek = true }.testTag("timetable-week"),
-                )
-                Text(
-                    text = formatWeekRange(visiblePage.weekRange.startDate),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-        }
+        com.myleafy.android.features.timetable.presentation.TimetableWeekHeader(
+            week = visiblePage.week, currentWeek = currentWeek,
+            startDate = visiblePage.weekRange.startDate, onChoose = { choosingWeek = true },
+        )
         if (pullRefresh.progress > 0f) {
             LinearProgressIndicator(progress = { pullRefresh.progress }, modifier = Modifier.fillMaxWidth())
             Text(if (pullRefresh.progress >= 1f) "松开刷新" else "下拉刷新", style = MaterialTheme.typography.labelSmall)
@@ -608,8 +596,8 @@ internal fun TimetableScreenContent(
                 onEmptyCellClick = onEmptyCellClick,
                 onItemClick = onItemClick,
                 modifier = Modifier.fillMaxSize(),
-                today = LocalDate.now(TimetableGridProjection.campusZone),
-                currentTime = LocalTime.now(TimetableGridProjection.campusZone),
+                today = now.toLocalDate(),
+                currentTime = now.toLocalTime(),
                 showWeekends = state.showWeekends,
                 showAxis = false,
                 background = state.background,
@@ -719,10 +707,3 @@ private fun ScheduleEventEntity.toDraft(): ScheduleEventDraft {
         note = note.orEmpty(),
     )
 }
-
-private fun formatWeekRange(start: LocalDate): String {
-    val end = start.plusDays(6)
-    return "${start.format(shortDateFormatter)}–${end.format(shortDateFormatter)}"
-}
-
-private val shortDateFormatter = DateTimeFormatter.ofPattern("M/d")

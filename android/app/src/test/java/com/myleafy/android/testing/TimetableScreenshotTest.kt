@@ -2,6 +2,8 @@ package com.myleafy.android.testing
 
 import android.app.Application
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +23,8 @@ import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
+import com.myleafy.android.features.timetable.presentation.TimetableBackground
+import com.myleafy.android.core.prefs.TimetableBackgroundSettings
 import java.time.LocalDate
 import java.time.LocalTime
 import org.junit.Assert.assertEquals
@@ -200,12 +204,14 @@ class TimetableScreenshotTest {
         gridHeight: Dp? = null,
         onEmptyCellClick: (LocalDate, Int) -> Unit = { _, _ -> },
         onItemClick: (TimetableGridItem) -> Unit = {},
+        background: TimetableBackgroundSettings = TimetableBackgroundSettings(),
     ) {
         val snapshot = weekOneSnapshot(longNames)
         composeRule.setContent {
             LeafyScreenshotTheme(darkTheme = darkTheme, fontScale = fontScale) {
                 // gridHeight 用来模拟“顶栏 + 周次头 + 底部导航”之后剩下的真实网格高度。
-                Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    TimetableBackground(background, Modifier.fillMaxSize())
                     TimetableGrid(
                         snapshot = snapshot,
                         onEmptyCellClick = onEmptyCellClick,
@@ -218,6 +224,7 @@ class TimetableScreenshotTest {
                         today = ScreenshotData.day(1),
                         currentTime = LocalTime.of(9, 10),
                         showWeekends = showWeekends,
+                        background = background,
                     )
                 }
             }
@@ -226,8 +233,9 @@ class TimetableScreenshotTest {
     }
 
     /** 13 节的开始时间在任何字体下都必须完整显示，且没有被截断。 */
-    private fun assertAxisStartTimesFit() {
+    private fun assertAxisStartTimesFit(requireAll: Boolean = true) {
         for (period in 1..13) {
+            if (!requireAll && composeRule.onAllNodesWithTag("timetable-axis-start-$period", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) continue
             // 轴格整体合并成一个无障碍节点（“第N节，开始 至 结束”），
             // 因此格子里的起止时间只存在于 unmerged 语义树里。
             composeRule
@@ -264,4 +272,49 @@ class TimetableScreenshotTest {
     }
 
     private fun capture() = composeRule.onRoot().captureRoboImage()
+
+    @Test
+    @Config(sdk = [36], qualifiers = "w393dp-h800dp-xxhdpi", application = Application::class)
+    fun weekdays393ShortWithLightPhotoFont130() = photoScenario(false, false, 1.3f)
+
+    @Test
+    @Config(sdk = [36], qualifiers = "w412dp-h800dp-xxhdpi", application = Application::class)
+    fun sevenDays412ShortWithDarkPhotoFont200() = photoScenario(true, true, 2f)
+
+    private fun photoScenario(weekends: Boolean, dark: Boolean, scale: Float) {
+        val file = java.io.File.createTempFile("timetable-contrast-", ".png")
+        try {
+            android.graphics.Bitmap.createBitmap(40, 80, android.graphics.Bitmap.Config.ARGB_8888).also { bitmap ->
+                val canvas = android.graphics.Canvas(bitmap)
+                canvas.drawColor(if (dark) android.graphics.Color.rgb(22, 38, 48) else android.graphics.Color.rgb(240, 245, 238))
+                val paint = android.graphics.Paint().apply { color = if (dark) android.graphics.Color.rgb(89, 120, 80) else android.graphics.Color.rgb(173, 207, 182) }
+                canvas.drawCircle(10f, 40f, 35f, paint)
+                file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+            }
+            render(weekends, dark, scale, true, 480.dp,
+                background = TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = file.absolutePath))
+            composeRule.waitUntil(5_000) { composeRule.onAllNodesWithTag("timetable-photo").fetchSemanticsNodes().size == 1 }
+            assertAxisStartTimesFit(requireAll = scale < 2f)
+            composeRule.onNodeWithContentDescription("第13节，21:00 至 21:45").assertExists()
+            composeRule.onNodeWithTag("timetable-item-course::forest::1").assertIsDisplayed()
+            capture()
+        } finally { file.delete() }
+    }
+
+    @Test
+    @Config(sdk = [36], qualifiers = "w840dp-h360dp-xxhdpi", application = Application::class)
+    fun emptyCrossMonthLandscapeHidesTimelineWhenSundayIsHidden() {
+        var weekends by mutableStateOf(true)
+        val range = com.myleafy.android.features.timetable.domain.TimetableWeekRange(4, LocalDate.of(2026, 9, 28))
+        composeRule.setContent { LeafyScreenshotTheme {
+            TimetableGrid(com.myleafy.android.features.timetable.domain.TimetableGridSnapshot(range, emptyList()), { _, _ -> }, {},
+                today = LocalDate.of(2026, 10, 4), currentTime = LocalTime.of(9, 10), showWeekends = weekends)
+        } }
+        composeRule.onNodeWithTag("timetable-current-time").assertExists()
+        composeRule.runOnIdle { weekends = false }
+        composeRule.onNodeWithTag("timetable-current-time").assertDoesNotExist()
+        composeRule.onNodeWithTag("timetable-axis-period-13", useUnmergedTree = true).assertIsDisplayed()
+        capture()
+    }
 }

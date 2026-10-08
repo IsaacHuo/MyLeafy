@@ -102,7 +102,7 @@ private val DarkSurfaces = LeafySurfaceColors(
     grouped = Color(0xFF18181B),
     content = Color(0xFF202023),
     elevated = Color(0xFF2B2B2F),
-    modal = Color(0xFF20221E),
+    modal = Color(0xFF202023),
     accentSoft = Color(0xFF2D4A22),
 )
 

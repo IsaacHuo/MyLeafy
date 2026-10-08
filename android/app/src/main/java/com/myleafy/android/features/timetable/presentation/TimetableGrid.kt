@@ -78,10 +78,8 @@ private val GridCellShape = RoundedCornerShape(LeafyTimetableTokens.cellCornerRa
  * 冲突窄列与矮行下地点会整段省略，完整信息仍由 semantics 提供。
  */
 private object CourseCardText {
-    val padding = 2.dp
+    val padding = 3.dp
     val lineSpacing = LeafySpacing.hairline
-    const val titleMaxLines = 3
-    const val titleMaxLinesNarrowLane = 4
 }
 
 fun stableCourseColorIndex(name: String, colorCount: Int): Int {
@@ -267,10 +265,10 @@ private fun TimetableGridLayout(
     background: TimetableBackgroundSettings,
     modifier: Modifier,
 ) {
-    val todayIndex = remember(snapshot.weekRange, today) {
+    val todayIndex = remember(snapshot.weekRange, today, visibleDayCount) {
         (0 until visibleDayCount).firstOrNull { snapshot.weekRange.startDate.plusDays(it.toLong()) == today }
     }
-    val timeline = remember(snapshot.weekRange, today, currentTime) {
+    val timeline = remember(snapshot.weekRange, today, todayIndex, currentTime) {
         todayIndex?.let { currentTimeline(currentTime) }
     }
 
@@ -311,7 +309,6 @@ private fun TimetableGridLayout(
                     item = item,
                     onClick = { onItemClick(item) },
                     opacity = if (background.enabled) background.courseOpacityPercent / 100f else 1f,
-                    rowHeight = periodRowHeight,
                     modifier = Modifier
                         .layoutId(GridSlot.Item(item))
                         .zIndex(1f),
@@ -334,24 +331,25 @@ private fun TimetableGridLayout(
         val height = constraints.maxHeight
         val axisWidthPx = axisWidth.roundToPx()
         val headerHeightPx = headerHeight.roundToPx()
-        val rowHeight = periodRowHeight.roundToPx()
+        val geometry = TimetableGridGeometry(height, headerHeightPx, LeafyTimetableTokens.maximumPeriodRowHeight.toPx())
         val gap = LeafyTimetableTokens.gridGap.roundToPx()
         val dayWidth = (width - axisWidthPx) / visibleDayCount.toFloat()
+        fun dayEdge(day: Int) = axisWidthPx + (day * dayWidth).roundToInt()
 
         val placements = measurables.map { measurable ->
             val slot = measurable.layoutId as GridSlot
             val childConstraints = when (slot) {
-                is GridSlot.Header -> Constraints.fixed(dayWidth.roundToInt(), headerHeightPx)
-                is GridSlot.Axis -> Constraints.fixed(axisWidthPx, rowHeight)
+                is GridSlot.Header -> Constraints.fixed(dayEdge(slot.day + 1) - dayEdge(slot.day), geometry.header)
+                is GridSlot.Axis -> Constraints.fixed(axisWidthPx, geometry.rowHeight(slot.period))
                 is GridSlot.Cell -> Constraints.fixed(
-                    (dayWidth.roundToInt() - gap * 2).coerceAtLeast(1),
-                    (rowHeight - gap * 2).coerceAtLeast(1),
+                    (dayEdge(slot.day + 1) - dayEdge(slot.day) - gap * 2).coerceAtLeast(1),
+                    (geometry.rowHeight(slot.period) - gap * 2).coerceAtLeast(1),
                 )
                 is GridSlot.Item -> {
-                    val laneWidth = dayWidth / slot.item.laneCount
+                    val laneWidth = (dayEdge(slot.item.dayIndex + 1) - dayEdge(slot.item.dayIndex)).toFloat() / slot.item.laneCount
                     Constraints.fixed(
-                        (laneWidth.roundToInt() - gap * 2).coerceAtLeast(1),
-                        (rowHeight * slot.item.periodSpan - gap * 2).coerceAtLeast(1),
+                        (((slot.item.lane + 1) * laneWidth).roundToInt() - (slot.item.lane * laneWidth).roundToInt() - gap * 2).coerceAtLeast(1),
+                        (geometry.rowEdge(slot.item.endPeriod) - geometry.rowEdge(slot.item.startPeriod - 1) - gap * 2).coerceAtLeast(1),
                     )
                 }
                 is GridSlot.Timeline -> Constraints.fixed(
@@ -368,26 +366,26 @@ private fun TimetableGridLayout(
                 val y: Int
                 when (slot) {
                     is GridSlot.Header -> {
-                        x = axisWidthPx + (slot.day * dayWidth).roundToInt()
+                        x = dayEdge(slot.day)
                         y = 0
                     }
                     is GridSlot.Axis -> {
                         x = 0
-                        y = headerHeightPx + (slot.period - 1) * rowHeight
+                        y = geometry.rowEdge(slot.period - 1)
                     }
                     is GridSlot.Cell -> {
-                        x = axisWidthPx + (slot.day * dayWidth).roundToInt() + gap
-                        y = headerHeightPx + (slot.period - 1) * rowHeight + gap
+                        x = dayEdge(slot.day) + gap
+                        y = geometry.rowEdge(slot.period - 1) + gap
                     }
                     is GridSlot.Item -> {
-                        val laneWidth = dayWidth / slot.item.laneCount
-                        x = axisWidthPx + (slot.item.dayIndex * dayWidth).roundToInt() +
+                        val laneWidth = (dayEdge(slot.item.dayIndex + 1) - dayEdge(slot.item.dayIndex)).toFloat() / slot.item.laneCount
+                        x = dayEdge(slot.item.dayIndex) +
                             (slot.item.lane * laneWidth).roundToInt() + gap
-                        y = headerHeightPx + (slot.item.startPeriod - 1) * rowHeight + gap
+                        y = geometry.rowEdge(slot.item.startPeriod - 1) + gap
                     }
                     is GridSlot.Timeline -> {
                         x = axisWidthPx + gap
-                        y = headerHeightPx + (slot.rowPosition * rowHeight).roundToInt()
+                        y = geometry.timelineY(slot.rowPosition)
                     }
                 }
                 placeable.placeRelative(x, y)
@@ -411,10 +409,10 @@ internal fun TimetableFixedAxis(month: Int, background: TimetableBackgroundSetti
                 Modifier.then(if (background.enabled) Modifier.background(MaterialTheme.leafySurfaces.page.copy(alpha = 0.9f)) else Modifier))
         }) { children, constraints ->
             val headerPx = header.roundToPx()
-            val rowPx = row.roundToPx()
-            val measured = children.mapIndexed { i, child -> child.measure(Constraints.fixed(constraints.maxWidth, if (i == 0) headerPx else rowPx)) }
+            val geometry = TimetableGridGeometry(constraints.maxHeight, headerPx, LeafyTimetableTokens.maximumPeriodRowHeight.toPx())
+            val measured = children.mapIndexed { i, child -> child.measure(Constraints.fixed(constraints.maxWidth, if (i == 0) geometry.header else geometry.rowHeight(i))) }
             layout(constraints.maxWidth, constraints.maxHeight) {
-                measured.forEachIndexed { i, child -> child.placeRelative(0, if (i == 0) 0 else headerPx + (i - 1) * rowPx) }
+                measured.forEachIndexed { i, child -> child.placeRelative(0, if (i == 0) 0 else geometry.rowEdge(i - 1)) }
             }
         }
     }
@@ -469,7 +467,8 @@ private fun PeriodAxis(period: Int, rowHeight: Dp, modifier: Modifier = Modifier
     val density = LocalDensity.current
     val timeLineHeight = with(density) { LeafyTimetableType.axisTime.lineHeight.toDp() }
     val periodLineHeight = with(density) { LeafyTimetableType.axisPeriod.lineHeight.toDp() }
-    // 短屏配合大字体时省略视觉上的结束时间，完整区间始终可由 TalkBack 和课程详情读取。
+    // 先省略结束时间；极短行连开始时间也放不下时，保留完整节次与朗读区间，避免半行裁切。
+    val showStart = startText.isNotEmpty() && rowHeight >= periodLineHeight + timeLineHeight
     val showEnd = endText.isNotEmpty() && rowHeight >= periodLineHeight + timeLineHeight * 2
     Column(
         modifier = modifier
@@ -485,7 +484,7 @@ private fun PeriodAxis(period: Int, rowHeight: Dp, modifier: Modifier = Modifier
             maxLines = 1,
             modifier = Modifier.testTag("timetable-axis-period-$period"),
         )
-        if (startText.isNotEmpty()) {
+        if (showStart) {
             Text(
                 text = startText,
                 style = LeafyTimetableType.axisTime,
@@ -518,7 +517,7 @@ private fun EmptyGridCell(
     // 空白格只保留对齐参照：填充与描边都比课程块更弱，让课程块、今天和当前时间
     // 继续当视觉重点。有自定义背景时进一步降低存在感，“今天”列用强调色区分。
     val fill = when {
-        isToday -> MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.42f else 0.5f)
+        isToday -> MaterialTheme.leafySurfaces.accentSoft.copy(alpha = if (hasBackground) 0.32f else 0.38f)
         hasBackground -> MaterialTheme.leafySurfaces.content.copy(
             alpha = LeafyTimetableTokens.emptyCellFillAlphaOnBackground,
         )
@@ -550,7 +549,6 @@ private fun TimetableItemCard(
     item: TimetableGridItem,
     onClick: () -> Unit,
     opacity: Float,
-    rowHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     val courseColors = MaterialTheme.leafyCourseColors
@@ -563,30 +561,7 @@ private fun TimetableItemCard(
         TimetableGridItemType.SCHEDULE -> MaterialTheme.colorScheme.secondaryContainer to
             MaterialTheme.colorScheme.onSecondaryContainer
     }
-    // 字号只由可用列宽决定，与跨节无关：11sp / 14dp 在冲突窄列也放得下，
-    // 宽屏富余的列宽交给行数，而不是换一套更大的字号。
     val subtitle = item.subtitle?.takeIf { it.isNotBlank() }
-    val cardHeight = rowHeight * item.periodSpan - LeafyTimetableTokens.gridGap * 2
-    val density = LocalDensity.current
-    // 课名在所有格子里都用同一个紧凑角色：单屏 5/7 天 × 13 节没有“宽裕到换大字号”
-    // 的空间，跨节与冲突格靠行数分配，而不是靠字号。
-    val titleLineHeight = with(density) { LeafyTimetableType.courseTitle.lineHeight.toDp() }
-    val subtitleLineHeight = with(density) { LeafyTimetableType.courseSubtitle.lineHeight.toDp() }
-    val lines = courseCardLines(
-        cardHeight = cardHeight,
-        titleLineHeight = titleLineHeight,
-        subtitleLineHeight = subtitleLineHeight,
-        lineSpacing = CourseCardText.lineSpacing,
-        hasSubtitle = subtitle != null,
-        // 冲突窄列一字一行，标题多留一行才能放下「高等数学」这类四字课名；
-        // 上限只是上限，实际行数仍由卡片高度与 fontScale 决定。
-        maxTitleLines = if (item.laneCount > 1) {
-            CourseCardText.titleMaxLinesNarrowLane
-        } else {
-            CourseCardText.titleMaxLines
-        },
-        maxSubtitleLines = 1,
-    )
     Surface(
         onClick = onClick,
         modifier = modifier.testTag("timetable-item-${item.stableId}").semantics(mergeDescendants = true) {
@@ -602,25 +577,32 @@ private fun TimetableItemCard(
         contentColor = contentColor,
         shadowElevation = LeafyElevation.flat,
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(CourseCardText.padding),
-            verticalArrangement = Arrangement.spacedBy(CourseCardText.lineSpacing),
-        ) {
-            Text(
-                text = item.title,
-                modifier = Modifier.weight(1f, fill = false),
-                style = LeafyTimetableType.courseTitle,
-                maxLines = lines.title,
-                overflow = TextOverflow.Ellipsis,
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            val measurer = rememberTextMeasurer()
+            val availableWidth = with(density) { (maxWidth - CourseCardText.padding * 2).toPx() }
+            val subtitleFits = subtitle != null && measurer.measure(
+                subtitle.take(2) + "…", LeafyTimetableType.courseSubtitle,
+            ).size.width <= availableWidth
+            val titleLineHeight = with(density) { LeafyTimetableType.courseTitle.lineHeight.toDp() }
+            val subtitleLineHeight = with(density) { LeafyTimetableType.courseSubtitle.lineHeight.toDp() }
+            val lines = courseCardLines(
+                cardHeight = maxHeight, titleLineHeight = titleLineHeight,
+                subtitleLineHeight = subtitleLineHeight, lineSpacing = CourseCardText.lineSpacing,
+                hasSubtitle = subtitleFits,
+                maxTitleLines = Int.MAX_VALUE, maxSubtitleLines = 1,
             )
-            if (subtitle != null && lines.subtitle > 0) {
-                Text(
-                    text = subtitle,
-                    style = LeafyTimetableType.courseSubtitle,
-                    color = contentColor.copy(alpha = 0.78f),
-                    maxLines = lines.subtitle,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            Column(
+                modifier = Modifier.fillMaxSize().padding(CourseCardText.padding),
+                verticalArrangement = Arrangement.spacedBy(CourseCardText.lineSpacing),
+            ) {
+                Text(text = item.title, style = LeafyTimetableType.courseTitle,
+                    maxLines = lines.title, overflow = TextOverflow.Ellipsis)
+                if (subtitle != null && lines.subtitle > 0) {
+                    Text(text = subtitle, style = LeafyTimetableType.courseSubtitle,
+                        color = contentColor.copy(alpha = 0.82f), maxLines = lines.subtitle,
+                        overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }

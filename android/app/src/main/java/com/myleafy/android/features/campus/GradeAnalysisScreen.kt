@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.ui.components.*
@@ -47,7 +48,7 @@ internal fun GradeAnalysisContent(state: CampusUiState.Loaded, modifier: Modifie
     var exportError by remember { mutableStateOf<String?>(null) }
     var image by remember { mutableStateOf<java.io.File?>(null) }
     val courses = when (sort) { "低分优先" -> analysis.lowScoreFirst; "影响" -> analysis.highImpact; else -> analysis.courses }
-    LazyColumn(modifier, contentPadding = PaddingValues(LeafySpacing.page), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(modifier.testTag("academic-analysis-list"), contentPadding = PaddingValues(LeafySpacing.page), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (state.warnings.isNotEmpty()) item { LeafyStatusBanner(state.warnings.joinToString("；"), isError = true) }
         item {
             Row {
@@ -71,12 +72,10 @@ internal fun GradeAnalysisContent(state: CampusUiState.Loaded, modifier: Modifie
         item { LeafySectionHeader("学期加权均分趋势"); AcademicLineChart(analysis.terms.reversed().mapNotNull { term -> term.average?.let { term.name to it } }) }
         items(analysis.terms.reversed(), key = { "term:${it.name}" }) { term ->
             AnalysisValueRow(term.name, term.average.gradeNumber(), "${term.courses.size} 门 · ${term.credits.gradeNumber()} 学分")
-            term.average?.let { AnalysisBar((it / 100).toFloat()) }
         }
         item { LeafySectionHeader("分数分布"); AcademicBarChart(analysis.distribution.map { it.range to it.count.toDouble() }) }
         items(analysis.distribution, key = { "bucket:${it.range}" }) { bucket ->
             AnalysisValueRow(bucket.range, "${bucket.count} 门", "${bucket.credits.gradeNumber()} 学分")
-            AnalysisBar(if (analysis.scoredCourseCount == 0) 0f else bucket.count.toFloat() / analysis.scoredCourseCount)
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -121,15 +120,6 @@ internal fun GradeAnalysisContent(state: CampusUiState.Loaded, modifier: Modifie
         }
     }
     image?.let { CampusFilePreview(it, "image/png") { image = null } }
-}
-
-@Composable
-private fun AnalysisBar(fraction: Float) {
-    Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
-        .background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
-        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight()
-            .clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary))
-    }
 }
 
 @Composable

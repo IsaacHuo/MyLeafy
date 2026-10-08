@@ -20,6 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -90,7 +93,7 @@ fun CheckUpdatesScreen(
                             current.info.releaseNotes.let {
                                 Text(
                                     text = it,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
@@ -116,6 +119,7 @@ fun CheckUpdatesScreen(
                             Text(
                                 text = "${(current.progress * 100).toInt()}%",
                                 style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
