@@ -66,38 +66,40 @@ struct CampusRootView: View {
     }
 
     private var sidebar: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 4 * leafyControlScale) {
-                ForEach(destinations) { destination in
-                    let isSelected = isSelected(destination)
-                    let unreadCount = destination == .community ? notificationBadgeViewModel.unreadCount : 0
-                    Button {
-                        select(destination)
-                    } label: {
-                        CampusSidebarTabItem(
-                            title: destination.title(language: leafyLanguage),
-                            icon: destination.icon,
-                            isSelected: isSelected,
-                            themeColorPreference: themeColorPreference,
-                            unreadCount: unreadCount
-                        )
+        GeometryReader { viewport in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 4 * leafyControlScale) {
+                    ForEach(destinations) { destination in
+                        let isSelected = isSelected(destination)
+                        let unreadCount = destination == .community ? notificationBadgeViewModel.unreadCount : 0
+                        Button {
+                            select(destination)
+                        } label: {
+                            CampusSidebarTabItem(
+                                title: destination.title(language: leafyLanguage),
+                                icon: destination.icon,
+                                isSelected: isSelected,
+                                themeColorPreference: themeColorPreference,
+                                unreadCount: unreadCount
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(destination.title(language: leafyLanguage))
+                        .accessibilityValue(unreadCount > 0
+                            ? L10n.text("%d 条未读通知", language: leafyLanguage, unreadCount) : "")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(destination.title(language: leafyLanguage))
-                    .accessibilityValue(unreadCount > 0
-                        ? L10n.text("%d 条未读通知", language: leafyLanguage, unreadCount) : "")
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
+                .padding(8 * leafyControlScale)
+                .leafyGlassSurface(
+                    in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
+                    fallbackFill: Color(uiColor: .systemBackground).opacity(0.9)
+                )
+                .frame(minHeight: viewport.size.height, alignment: .center)
             }
-            .padding(8 * leafyControlScale)
-            .leafyGlassSurface(
-                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
-                fallbackFill: Color(uiColor: .systemBackground).opacity(0.9)
-            )
         }
         .frame(width: min(max(74 * leafyControlScale, 72), 92), alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
-        .padding(.top, -(AppSpacing.micro / 15))
         .accessibilityElement(children: .contain)
     }
 
