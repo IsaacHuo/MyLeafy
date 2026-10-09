@@ -4,6 +4,18 @@ import WidgetKit
 
 @MainActor
 enum LeafyAppIconManager {
+    static func primaryIconImage(in bundle: Bundle = .main) throws -> UIImage {
+        guard let icons = bundle.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any],
+              let primary = icons["CFBundlePrimaryIcon"] as? [String: Any],
+              let files = primary["CFBundleIconFiles"] as? [String] else {
+            throw LeafyAppIconImageError.unavailable
+        }
+        for name in files.reversed() {
+            if let image = UIImage(named: name, in: bundle, compatibleWith: nil) { return image }
+        }
+        throw LeafyAppIconImageError.unavailable
+    }
+
     static func syncTheme(
         preferenceRaw: String,
         customColorHex: String,
@@ -54,6 +66,13 @@ enum LeafyAppIconManager {
         }
     }
 
+}
+
+private enum LeafyAppIconImageError: LocalizedError {
+    case unavailable
+    var errorDescription: String? {
+        L10n.text("App 图标资源不可用，无法生成分享卡片。")
+    }
 }
 
 extension LeafyAppIconAppearancePreference {

@@ -323,6 +323,12 @@ struct ProfileView: View {
         } label: {
             profileRow(icon: "info.circle.fill", title: "了解 MyLeafy", detail: "简介与设计理念")
         }
+
+        NavigationLink {
+            AndroidDownloadShareView()
+        } label: {
+            profileRow(icon: "square.and.arrow.up.fill", title: "分享安卓版", detail: "发给用安卓手机的同学")
+        }
     }
 
     private var moreWorksRows: some View {
@@ -1084,7 +1090,6 @@ private struct FeedbackSheetView: View {
     @State private var issueType: String
     @State private var feedbackBody: String
     @State private var contact = ""
-    @State private var showingContactSheet = false
 
     private var isCommunityEnabled: Bool {
         ActiveCampusContext.descriptor.supports(.community)
@@ -1137,31 +1142,7 @@ private struct FeedbackSheetView: View {
                     .padding(18)
                     .leafyCardStyle()
 
-                    Button {
-                        showingContactSheet = true
-                    } label: {
-                        HStack(spacing: 11) {
-                            LeafyCompactProfileIconBadge(systemName: "person.2.wave.2.fill", size: 34)
 
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("联系我们")
-                                    .leafyBody()
-                                    .foregroundStyle(AppTheme.primaryText)
-                                Text("QQ群反馈群")
-                                    .microCaption()
-                                    .foregroundStyle(AppTheme.tertiaryText)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(AppTheme.tertiaryText)
-                        }
-                        .padding(18)
-                        .leafyCardStyle()
-                    }
-                    .buttonStyle(.plain)
                 }
                 .padding(AppSpacing.page)
             }
@@ -1183,10 +1164,7 @@ private struct FeedbackSheetView: View {
                 }
             }
             .leafyOperationAlert($operationAlert)
-            .leafySheet(isPresented: $showingContactSheet) {
-                ContactUsSheetView()
-                    .presentationDetents([.medium, .large])
-            }
+
         }
     }
 
@@ -1386,110 +1364,6 @@ private struct CommunityTermsPreferenceSheet: View {
     }
 }
 
-private struct ContactUsSheetView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.leafyLanguage) private var leafyLanguage
-    @State private var isSaving = false
-    @State private var saveResultMessage: String?
-
-    private var feedbackImage: UIImage? {
-        FeedbackImageAsset.load()
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.card) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("社区安全与技术支持")
-                            .leafyHeadline()
-                            .foregroundStyle(AppTheme.primaryText)
-                        Text("如需举报不当活动、违规内容或滥用用户，可以在“举报与反馈”中选择“社区安全”，也可以发送邮件到 \(CommunityTerms.supportEmail)。")
-                            .leafyBody()
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                    .padding(18)
-                    .leafyCardStyle()
-
-                    if let feedbackImage {
-                        Image(uiImage: feedbackImage)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                                    .stroke(AppTheme.separator, lineWidth: 1)
-                            )
-                    } else {
-                        ContentUnavailableView(
-                            "未找到反馈图片",
-                            systemImage: "photo",
-                            description: Text("请确认 feedback.JPG 已包含在 App 资源中。")
-                        )
-                    }
-                }
-                .padding(AppSpacing.page)
-            }
-            .background(LeafyPageBackground())
-            .navigationTitle("联系我们")
-            .leafyInlineNavigationTitle()
-            .toolbar {
-                ToolbarItem(placement: .leafyLeading) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .leafyTrailing) {
-                    Button {
-                        if let feedbackImage {
-                            Task { await save(image: feedbackImage) }
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
-                            .offset(y: -1.5)
-                    }
-                    .disabled(isSaving || feedbackImage == nil)
-                }
-            }
-            .alert("保存结果", isPresented: Binding(
-                get: { saveResultMessage != nil },
-                set: { if !$0 { saveResultMessage = nil } }
-            )) {
-                Button("好", role: .cancel) {}
-            } message: {
-                Text(saveResultMessage ?? "")
-            }
-        }
-    }
-
-    @MainActor
-    private func save(image: UIImage) async {
-        isSaving = true
-        defer { isSaving = false }
-
-        do {
-            try await LeafyPhotoLibrarySaver.save(image)
-            saveResultMessage = L10n.text("已保存到系统相册。", language: leafyLanguage)
-        } catch {
-            saveResultMessage = error.localizedDescription
-        }
-    }
-}
-
-private enum FeedbackImageAsset {
-    static func load() -> UIImage? {
-        if let image = UIImage(named: "feedback") {
-            return image
-        }
-
-        let url = Bundle.main.url(forResource: "feedback", withExtension: "JPG")
-            ?? Bundle.main.url(forResource: "feedback", withExtension: "jpg")
-
-        guard let url else { return nil }
-        return UIImage(contentsOfFile: url.path)
-    }
-}
-
 private struct LeafyGuideAndDataSecurityView: View {
     @State private var showingCommunityTermsSheet = false
 
@@ -1605,7 +1479,7 @@ private struct LeafyGuideAndDataSecurityView: View {
                 ManualInfo(title: "保留在本机的内容", body: "成绩、考试安排、随记、个人日程、课程备注、提醒、收藏、学习资料文件、学习空间、任务、专注记录和体测记录不会因进入社区自动上传。"),
                 ManualInfo(title: "共享课表", body: "共享内容仅包含课程安排，不包含成绩、考试、课程备注、提醒、收藏或学习资料。查看权限可随时撤销。"),
                 ManualInfo(title: "反馈信息", body: "举报与反馈会提交文字说明。必要时还会提交设备型号、iOS 版本、App 版本、登录状态和最近同步时间，用于定位问题。"),
-                ManualInfo(title: "社区安全", body: "发现不当内容、骚扰、冒充、刷屏、恶意评分或隐私泄露时，可在“举报与反馈”中选择“社区安全”，也可通过联系邮箱或反馈群说明情况。")
+                ManualInfo(title: "社区安全", body: "发现不当内容、骚扰、冒充、刷屏、恶意评分或隐私泄露时，可在“举报与反馈”中选择“社区安全”，也可通过联系邮箱说明情况。")
             ],
             steps: [
                 ManualStep(title: "发布前检查", body: "提交帖子、评论、评分或共享课表前，请确认内容不含个人隐私、他人隐私或其他不宜公开的信息。"),

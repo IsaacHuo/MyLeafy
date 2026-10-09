@@ -77,6 +77,11 @@ nonisolated struct CommunityPostCardTheme: Sendable, Equatable {
     }
 }
 
+nonisolated enum CommunityPostCardAvatarStyle: Sendable, Equatable {
+    case circle
+    case appIcon
+}
+
 nonisolated struct CommunityPostCardSnapshot: Sendable {
     let authorName: String
     let avatarData: Data?
@@ -89,6 +94,7 @@ nonisolated struct CommunityPostCardSnapshot: Sendable {
     let photoData: [Data]
     let isAnonymous: Bool
     let theme: CommunityPostCardTheme
+    let avatarStyle: CommunityPostCardAvatarStyle
 
     init(
         authorName: String,
@@ -101,7 +107,8 @@ nonisolated struct CommunityPostCardSnapshot: Sendable {
         attachmentNames: [String],
         photoData: [Data],
         isAnonymous: Bool,
-        theme: CommunityPostCardTheme = .current
+        theme: CommunityPostCardTheme = .current,
+        avatarStyle: CommunityPostCardAvatarStyle = .circle
     ) {
         self.authorName = authorName
         self.avatarData = avatarData
@@ -114,6 +121,7 @@ nonisolated struct CommunityPostCardSnapshot: Sendable {
         self.photoData = photoData
         self.isAnonymous = isAnonymous
         self.theme = theme
+        self.avatarStyle = avatarStyle
     }
 
     var resolvedAvatarFallbackText: String {
@@ -653,7 +661,13 @@ private struct CommunityPostLongCardView: View {
                 }
             }
             .frame(width: 42, height: 42)
-            .clipShape(Circle())
+            .mask {
+                if snapshot.avatarStyle == .appIcon {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                } else {
+                    Circle()
+                }
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(snapshot.authorName)

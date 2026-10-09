@@ -38,7 +38,7 @@ private enum MyLeafyStory: String, CaseIterable, Identifiable {
         case .design: [
             "设计先服务于阅读。标题、辅助信息和操作有各自的层级，颜色帮助辨认，留白帮助集中注意。",
             "沿用 iPhone 熟悉的导航、列表和弹窗，让操作自然发生。主题、深浅色和显示密度，让同一套界面适合不同的使用习惯。",
-            "把校园工具认真做好，意味着把这些细节放到每天的使用里，一次次检查和完善。"
+            "字号、间距和按钮大小可以在设置里调整，按你的习惯来。"
         ]
         case .data: [
             "教务缓存、课程备注、随记和个人记录保存在当前设备。学校账号和密码用于学校登录，不作为社区内容上传。",
@@ -56,19 +56,6 @@ struct AboutMyLeafyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.section) {
-                VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 34, weight: .medium))
-                        .foregroundStyle(AppTheme.accent)
-                        .accessibilityHidden(true)
-                    Text(AppBrand.displayName).font(.largeTitle.bold())
-                    Text(L10n.text("把校园工具认真做好", language: language))
-                        .font(.title3.weight(.medium))
-                    Text(L10n.text("从课表出发，照顾校园生活中的安排、记录与日常事务。", language: language))
-                        .leafyBody().foregroundStyle(AppTheme.secondaryText)
-                }
-                .padding(.vertical, AppSpacing.compact)
-
                 ForEach(MyLeafyStory.allCases) { story in
                     NavigationLink {
                         MyLeafyStoryDetail(story: story)

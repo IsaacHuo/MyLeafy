@@ -7,6 +7,8 @@ import Foundation
 /// message if it is ever edited into a malformed value — surfacing the problem at
 /// the definition site instead of via an anonymous force-unwrap at the call site.
 nonisolated enum LeafyExternalLinks {
+    static let androidDownload = make("https://myleafy.space/#download")
+
     /// Library seat reservation portal.
     static let librarySeat = make("https://seat.bjfu.edu.cn/jsq-v/#/main/index")
 
