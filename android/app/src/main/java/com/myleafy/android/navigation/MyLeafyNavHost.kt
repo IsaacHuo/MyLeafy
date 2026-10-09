@@ -23,6 +23,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -115,6 +118,7 @@ object Routes {
 fun MyLeafyNavHost(
     navController: NavHostController,
     activeAppScopeStore: ActiveAppScopeStore,
+    timetableBackground: com.myleafy.android.core.prefs.TimetableBackgroundSettings = com.myleafy.android.core.prefs.TimetableBackgroundSettings(),
 ) {
     val activeScope by activeAppScopeStore.scope.collectAsStateWithLifecycle()
     val initialRoute = remember {
@@ -168,6 +172,7 @@ fun MyLeafyNavHost(
                 val reauthenticated by entry.savedStateHandle.getStateFlow("schoolReauthenticated", false).collectAsStateWithLifecycle()
                 val reminder by entry.savedStateHandle.getStateFlow<String?>("courseReminder", null).collectAsStateWithLifecycle()
                 TimetableScreen(
+                    background = timetableBackground,
                     reminderRequest = reminder,
                     onConsumeReminder = { entry.savedStateHandle["courseReminder"] = null },
                     onTeacher = { navController.navigate("campus/teacher?name=${android.net.Uri.encode(it)}") },
@@ -431,7 +436,8 @@ fun MyLeafyNavHost(
         }
     }
 
-    LeafyNavigationScaffold(
+    TimetableNavigationScaffold(
+            background = timetableBackground,
             selectedTab = selectedTab ?: RootTab.TIMETABLE,
             showNavigation = showsBottomBar && selectedTab != null,
             onTabSelected = { tab ->
@@ -447,6 +453,14 @@ fun MyLeafyNavHost(
         )
 }
 
+/** Optional surface override; the default navigation appearance remains unchanged. */
+data class LeafyNavigationSurface(
+    val color: Color,
+    val borderColor: Color,
+    val elevation: Dp,
+    val contentColor: Color,
+)
+
 /**
  * 根部导航壳（纯 chrome，无状态）：只负责导航组件的外观与选中态，
  * 不持有路由、不发起导航，业务回调仍由 [MyLeafyNavHost] 提供。
@@ -458,26 +472,29 @@ fun LeafyNavigationScaffold(
     onTabSelected: (RootTab) -> Unit,
     modifier: Modifier = Modifier,
     showNavigation: Boolean = true,
+    backgroundContent: @Composable BoxScope.() -> Unit = {},
+    navigationSurface: LeafyNavigationSurface? = null,
     content: @Composable () -> Unit,
 ) {
     val currentContent by rememberUpdatedState(content)
     // Keep the NavHost and open editors alive when rotation crosses the rail breakpoint.
     val stableContent = remember { movableContentOf { currentContent() } }
     BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.leafySurfaces.page)) {
+        backgroundContent()
         if (maxWidth < 600.dp) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) { stableContent() }
                 if (showNavigation) Surface(
                     modifier = Modifier.navigationBarsPadding().padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.micro),
                     shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.96f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-                    shadowElevation = 2.dp,
+                    color = navigationSurface?.color ?: MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.96f),
+                    border = BorderStroke(1.dp, navigationSurface?.borderColor ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    shadowElevation = navigationSurface?.elevation ?: 2.dp,
                 ) {
                     Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 4.dp)) {
                         RootTab.entries.forEach { tab ->
                             val selected = tab == selectedTab
-                            val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            val tint = navigationSurface?.contentColor ?: if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             Column(
                                 Modifier.weight(1f).heightIn(min = 52.dp)
                                     .testTag("root-tab-${tab.route}")
@@ -517,8 +534,13 @@ fun LeafyNavigationScaffold(
                         )
                     }
                 },
-                modifier = modifier,
-                containerColor = MaterialTheme.leafySurfaces.page,
+                modifier = Modifier.fillMaxSize(),
+                navigationSuiteColors = if (navigationSurface == null) NavigationSuiteDefaults.colors()
+                    else NavigationSuiteDefaults.colors(navigationRailContainerColor = navigationSurface.color,
+                        navigationRailContentColor = navigationSurface.contentColor,
+                        navigationBarContainerColor = navigationSurface.color,
+                        navigationBarContentColor = navigationSurface.contentColor),
+                containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 content = stableContent,
             )

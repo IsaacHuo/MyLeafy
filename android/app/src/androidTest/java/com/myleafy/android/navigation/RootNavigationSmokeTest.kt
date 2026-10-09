@@ -35,6 +35,8 @@ import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 @RunWith(AndroidJUnit4::class)
 class RootNavigationSmokeTest {
@@ -58,6 +60,65 @@ class RootNavigationSmokeTest {
             }
         } catch (failure: androidx.compose.ui.test.ComposeTimeoutException) {
             throw AssertionError(composeRule.onRoot().printToString(), failure)
+        }
+    }
+
+    @Test
+    fun timetablePhotoCoversTheShellAndRestoresAfterTabsAndSettings() {
+        val store = (composeRule.activity.application as MyLeafyApplication).container.settingsStore
+        val original = runBlocking { store.settings.first().timetableBackground }
+        val photo = java.io.File(composeRule.activity.cacheDir, "navigation-backdrop.png")
+        val bitmap = android.graphics.Bitmap.createBitmap(40, 80, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(bitmap).apply {
+            drawColor(android.graphics.Color.rgb(225, 237, 217))
+            drawCircle(15f, 45f, 28f, android.graphics.Paint().apply { color = android.graphics.Color.rgb(83, 139, 108) })
+        }
+        photo.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        val background = com.myleafy.android.core.prefs.TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = photo.absolutePath)
+        fun waitForPhoto() = composeRule.waitUntil(10_000) {
+            composeRule.onAllNodes(androidx.compose.ui.test.hasTestTag("timetable-photo")).fetchSemanticsNodes().size == 1
+        }
+        try {
+            composeRule.onNodeWithTag("root-tab-timetable").performClick()
+            runBlocking { store.setTimetableBackground(background) }
+            waitForPhoto()
+            assertEquals(composeRule.onRoot().fetchSemanticsNode().boundsInRoot,
+                composeRule.onNodeWithTag("timetable-photo").fetchSemanticsNode().boundsInRoot)
+            composeRule.onNodeWithTag("timetable-axis-period-13", useUnmergedTree = true).assertIsDisplayed()
+            com.myleafy.android.testing.captureRenderReview("timetable-full-backdrop")
+            if (androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("recordReview") == "true") {
+                val screen = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+                java.io.File(composeRule.activity.getExternalFilesDir(null), "timetable-full-backdrop.png").outputStream().use {
+                    check(screen.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                }
+                screen.recycle()
+            }
+            listOf("campus", "schedule", "profile").forEach { route ->
+                composeRule.onNodeWithTag("root-tab-$route").performClick()
+                composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
+                composeRule.onNodeWithTag("root-tab-timetable").performClick()
+                waitForPhoto()
+            }
+            composeRule.onNodeWithTag("root-tab-profile").performClick()
+            composeRule.onNodeWithText("课表背景").performScrollTo().performClick()
+            composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
+            composeRule.onNodeWithTag("root-tab-profile").assertDoesNotExist()
+            composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+            composeRule.onNodeWithTag("root-tab-timetable").performClick()
+            waitForPhoto()
+            runBlocking { store.setTimetableBackground(background.copy(enabled = false)) }
+            composeRule.waitUntil(10_000) {
+                composeRule.onAllNodes(androidx.compose.ui.test.hasTestTag("timetable-background")).fetchSemanticsNodes().isEmpty()
+            }
+            runBlocking { store.setTimetableBackground(background.copy(kind = "color", colorHex = "#A3C1B0")) }
+            composeRule.waitUntil(10_000) {
+                composeRule.onAllNodes(androidx.compose.ui.test.hasTestTag("timetable-background")).fetchSemanticsNodes().size == 1
+            }
+            composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
+        } finally {
+            runBlocking { store.setTimetableBackground(original) }
+            photo.delete()
         }
     }
 

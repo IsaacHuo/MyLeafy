@@ -1,11 +1,6 @@
 package com.myleafy.android.features.timetable.presentation
 
-import android.graphics.BitmapFactory
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import android.os.Build
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
@@ -25,17 +20,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -59,15 +48,12 @@ import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafySpacing
 import com.myleafy.android.ui.theme.LeafyTimetableTokens
-import com.myleafy.android.ui.theme.LeafyTimetableBackgroundFallback
 import com.myleafy.android.ui.theme.LeafyTimetableType
 import com.myleafy.android.ui.theme.leafyCourseColors
 import com.myleafy.android.ui.theme.leafySurfaces
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private const val PeriodCount = 13
 private val GridCellShape = RoundedCornerShape(LeafyTimetableTokens.cellCornerRadius)
@@ -185,73 +171,6 @@ private fun timetableDateIndicatorSize(): Dp {
 }
 
 @Composable
-fun TimetableBackground(settings: TimetableBackgroundSettings, modifier: Modifier = Modifier) {
-    if (!settings.enabled) return
-    val pageColor = MaterialTheme.leafySurfaces.page
-    Box(modifier = modifier.testTag("timetable-background")) {
-        if (settings.kind == "color") {
-            Box(
-                modifier = Modifier.fillMaxSize().background(
-                    parseBackgroundColor(settings.colorHex).copy(alpha = settings.visibilityPercent / 100f),
-                ),
-            )
-        } else {
-            val selectedPath = if (Build.VERSION.SDK_INT < 31 && settings.blurRadius > 0) {
-                settings.blurredPhotoPath ?: settings.photoPath
-            } else {
-                settings.photoPath
-            }
-            val bitmap by produceState<android.graphics.Bitmap?>(null, selectedPath) {
-                value = withContext(Dispatchers.IO) { selectedPath?.let(::decodeTimetableBackground) }
-            }
-            bitmap?.let { image ->
-                Image(
-                    bitmap = image.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = if (settings.contentScale == "fit") ContentScale.Fit else ContentScale.Crop,
-                    alpha = settings.visibilityPercent / 100f,
-                    modifier = Modifier.fillMaxSize().testTag("timetable-photo").then(
-                        if (Build.VERSION.SDK_INT >= 31 && settings.blurRadius > 0) {
-                            Modifier.graphicsLayer {
-                                renderEffect = RenderEffect.createBlurEffect(
-                                    settings.blurRadius.toFloat(),
-                                    settings.blurRadius.toFloat(),
-                                    Shader.TileMode.CLAMP,
-                                ).asComposeRenderEffect()
-                            }
-                        } else {
-                            Modifier
-                        },
-                    ),
-                )
-            }
-        }
-        if (settings.overlayPercent > 0) {
-            Box(
-                modifier = Modifier.fillMaxSize().background(
-                    pageColor.copy(alpha = settings.overlayPercent / 100f),
-                ),
-            )
-        }
-    }
-}
-
-private fun decodeTimetableBackground(path: String, maxSide: Int = 1_920): android.graphics.Bitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    var sample = 1
-    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxSide * 2) sample *= 2
-    return BitmapFactory.decodeFile(
-        path,
-        BitmapFactory.Options().apply {
-            inSampleSize = sample
-            inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-        },
-    )
-}
-
-@Composable
 private fun TimetableGridLayout(
     snapshot: TimetableGridSnapshot,
     today: LocalDate,
@@ -273,7 +192,7 @@ private fun TimetableGridLayout(
     }
 
     Layout(
-        modifier = modifier,
+        modifier = modifier.timetableAxisBackdrop(background.enabled, axisWidth),
         content = {
             for (day in 0 until visibleDayCount) {
                 val date = snapshot.weekRange.startDate.plusDays(day.toLong())
@@ -288,9 +207,7 @@ private fun TimetableGridLayout(
                 if (axisWidth > 0.dp) PeriodAxis(
                     period = period,
                     rowHeight = periodRowHeight,
-                    modifier = Modifier.layoutId(GridSlot.Axis(period)).then(
-                        if (background.enabled) Modifier.background(MaterialTheme.leafySurfaces.page.copy(alpha = 0.9f)) else Modifier,
-                    ),
+                    modifier = Modifier.layoutId(GridSlot.Axis(period)),
                 )
                 for (day in 0 until visibleDayCount) {
                     val date = snapshot.weekRange.startDate.plusDays(day.toLong())
@@ -396,7 +313,7 @@ private fun TimetableGridLayout(
 
 /** One axis shared by every week; geometry matches TimetableGridLayout pixel rounding. */
 @Composable
-internal fun TimetableFixedAxis(month: Int, background: TimetableBackgroundSettings, modifier: Modifier = Modifier) {
+internal fun TimetableFixedAxis(month: Int, modifier: Modifier = Modifier) {
     val header = timetableHeaderHeight()
     BoxWithConstraints(modifier.width(timetableAxisWidth()).testTag("timetable-fixed-axis")) {
         val row = ((maxHeight - header).coerceAtLeast(LeafyTimetableTokens.minimumPeriodRowHeight * PeriodCount) / PeriodCount)
@@ -405,8 +322,7 @@ internal fun TimetableFixedAxis(month: Int, background: TimetableBackgroundSetti
             Box(Modifier.testTag("timetable-month").semantics(mergeDescendants = true) {}, contentAlignment = Alignment.Center) {
                 Text("${month}月", style = LeafyTimetableType.axisTime)
             }
-            for (period in 1..PeriodCount) PeriodAxis(period, row,
-                Modifier.then(if (background.enabled) Modifier.background(MaterialTheme.leafySurfaces.page.copy(alpha = 0.9f)) else Modifier))
+            for (period in 1..PeriodCount) PeriodAxis(period, row)
         }) { children, constraints ->
             val headerPx = header.roundToPx()
             val geometry = TimetableGridGeometry(constraints.maxHeight, headerPx, LeafyTimetableTokens.maximumPeriodRowHeight.toPx())
@@ -672,7 +588,3 @@ private sealed interface GridSlot {
 }
 
 private val dayLabels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
-
-private fun parseBackgroundColor(value: String): Color = runCatching {
-    Color(android.graphics.Color.parseColor(value))
-}.getOrDefault(LeafyTimetableBackgroundFallback)

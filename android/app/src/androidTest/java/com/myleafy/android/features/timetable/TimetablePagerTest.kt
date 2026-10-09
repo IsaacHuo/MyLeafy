@@ -1,6 +1,12 @@
 package com.myleafy.android.features.timetable
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.Text
+import com.myleafy.android.navigation.TimetableNavigationScaffold
+import com.myleafy.android.navigation.RootTab
+import com.myleafy.android.features.timetable.presentation.TimetablePageScaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -40,20 +46,26 @@ class TimetablePagerTest {
             com.myleafy.android.testing.resetRenderReview()
             compose.setContent {
                 MyLeafyTheme {
+                    val background = TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = photo.absolutePath)
+                    TimetableNavigationScaffold(background, RootTab.TIMETABLE, {}) {
+                    TimetablePageScaffold(titleContent = { Text("课表") }, background = background) { padding ->
                     TimetableScreenContent(
                         state = TimetableUiState.Loaded("2026-2027-1", 1, selected, pages[selected - 1].weekRange,
                             emptyList(), emptyList(), emptyList(), pages[selected - 1].grid, 20, pages, true,
-                            TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = photo.absolutePath)),
+                            background),
+                        modifier = Modifier.padding(padding),
                         syncState = sync, onRetrySync = { refreshes++; sync = TimetableSyncState.Syncing() },
                         onSelectWeek = { selected = it }, onEmptyCellClick = { _, _ -> }, onItemClick = {}, onConsumeSync = {}, canRefresh = true,
                     )
+                    }
+                    }
                 }
             }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("timetable-photo").fetchSemanticsNodes().size == 1 }
             val bounds = compose.onNodeWithTag("timetable-photo").fetchSemanticsNode().boundsInRoot
             val axisBounds = compose.onNodeWithTag("timetable-fixed-axis").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithTag("timetable-month").assertTextEquals("9月")
-            (1..13).forEach { compose.onNodeWithTag("timetable-axis-end-$it", useUnmergedTree = true).assertIsDisplayed() }
+            (1..13).forEach { compose.onNodeWithTag("timetable-axis-period-$it", useUnmergedTree = true).assertIsDisplayed() }
             val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
             val recording = if (InstrumentationRegistry.getArguments().getString("recordReview") == "true") {
                 android.os.ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand("mkdir -p /data/local/tmp/myleafy-review")).use { it.readBytes() }

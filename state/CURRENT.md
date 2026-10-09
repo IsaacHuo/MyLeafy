@@ -1,8 +1,10 @@
 # Current State
 
-Last verified: 2026-10-09 (iOS campus navigation build and 12 focused tests; prior Android verification remains 2026-10-08)
+Last verified: 2026-10-09 (iOS campus navigation build and 12 focused tests; Android timetable backdrop source 1.2.4/code 8; public Android release remains 1.2.2/code 6)
 
 ## Current Focus
+
+- **Android 课表背景贯通**：整页背景提升到根导航展示槽，顶部、固定节次列、轻透圆角底栏及宽屏 Rail 共用一次图片绘制；主题渐变保护文字，切换其他 Tab/二级页恢复默认表面。图片按路径在 IO 线程解码，翻周与页面隐藏不重新解码。设置格式、业务数据与 Insets 不变。默认浅深色整页前后像素一致，13 张整页新基线与两个受影响网格已审阅，完整 Roborazzi 76 项通过；JVM 175 通过/7 跳过，构建和 lint 通过（118 warning、2 hint、0 error）。只读隔离 API 36 导航/翻周/网格 16 项通过，解码生命周期及跨 600dp 独立原生测试通过，实际系统栏截图另采集。1.2.4/code 8 配置用于下一私有候选，保留既有 1.2.3/code 7；正式发布仍由用户确认。详见 `docs/design/android-timetable-backdrop.md`。
 
 - **iOS 三 Tab 与校园左栏**：根导航为课表、校园、我的；校园左栏从日迹记录、校园社区、学校教学开始，原有后续领域与能力规则保留。首次默认社区，无社区能力时默认日迹；会话内保留选择，Widget、帖子链接与通知选择对应校园内容。日迹/社区首次访问后保持页面身份，隐藏区禁止交互与辅助功能访问，Feed 订阅跟随实际可见性；普通详情保留左栏，原有 Sheet、日迹窄屏顶栏与社区双列沿用原实现。仅 iOS 导航与布局变更，Android 与业务存储未改。iOS 17 最低目标本地构建通过，独立测试设备上 12 项导航/权限/深链/窄屏顶栏定向测试全部通过；未进行模拟器视觉验收，真机动画、键盘与窄屏由用户验收。
 
