@@ -50,7 +50,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -96,7 +95,6 @@ import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
 import com.myleafy.android.features.timetable.presentation.CourseDetailSheet
 import com.myleafy.android.core.data.local.stableCourseKey
 import com.myleafy.android.features.timetable.presentation.ExamDetailsDialog
-import com.myleafy.android.features.timetable.presentation.TimetableBackground
 import com.myleafy.android.features.timetable.presentation.TimetableFixedAxis
 import com.myleafy.android.features.timetable.presentation.TimetableGrid
 import com.myleafy.android.features.timetable.weather.WeatherCondition
@@ -105,7 +103,6 @@ import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyAlertDialog
 import com.myleafy.android.ui.components.LeafyErrorState
 import com.myleafy.android.ui.components.LeafyLoadingState
-import com.myleafy.android.ui.components.LeafyRootTopBar
 import com.myleafy.android.ui.components.LeafySnackbarHost
 import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.components.LeafyTextButton
@@ -148,6 +145,7 @@ fun TimetableScreen(
         },
     ),
     modifier: Modifier = Modifier,
+    background: com.myleafy.android.core.prefs.TimetableBackgroundSettings = com.myleafy.android.core.prefs.TimetableBackgroundSettings(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
@@ -210,97 +208,92 @@ fun TimetableScreen(
         }
     }
 
-    Scaffold(
+    com.myleafy.android.features.timetable.presentation.TimetablePageScaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.leafySurfaces.page,
+        background = background,
         snackbarHost = { LeafySnackbarHost(snackbarHostState) },
-        topBar = {
-            LeafyRootTopBar(
-                titleContent = {
-                    if (!identity.canSyncFromSchool) Text("课表", style = MaterialTheme.typography.titleLarge)
-                    else TimetableWeatherTitle(
-                        state = weatherState,
-                        hasPermission = ContextCompat.checkSelfPermission(
+        titleContent = {
+            if (!identity.canSyncFromSchool) Text("课表", style = MaterialTheme.typography.titleLarge)
+            else TimetableWeatherTitle(
+                state = weatherState,
+                hasPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ) == PackageManager.PERMISSION_GRANTED,
+                onClick = {
+                    if (ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.ACCESS_COARSE_LOCATION,
-                        ) == PackageManager.PERMISSION_GRANTED,
-                        onClick = {
-                            if (ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                ) == PackageManager.PERMISSION_GRANTED
-                            ) {
-                                viewModel.refreshWeather(forceRefresh = true)
-                            } else {
-                                showWeatherPermissionDialog = true
-                            }
-                        },
-                    )
-                },
-                compact = true,
-                actions = {
-                    LeafyActionIconButton(
-                        onClick = {
-                            val state = uiState as? TimetableUiState.Loaded ?: return@LeafyActionIconButton
-                            editorDraft = defaultDraft(state)
-                        },
+                        ) == PackageManager.PERMISSION_GRANTED
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = "添加日程")
-                    }
-                    Box {
-                        LeafyActionIconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "课表操作")
-                        }
-                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                            DropdownMenuItem(text = { Text("待关联备注与提醒") }, onClick = {
-                                menuExpanded = false; showPendingPersonalData = true
-                            })
-                            DropdownMenuItem(
-                                text = { Text("回到本周") },
-                                leadingIcon = { Icon(Icons.Outlined.Today, contentDescription = null) },
-                                enabled = (uiState as? TimetableUiState.Loaded)?.let {
-                                    val today = LocalDate.now(TimetableGridProjection.campusZone)
-                                    val currentWeek = it.pages.firstOrNull { page -> today >= page.weekRange.startDate && today <= page.weekRange.startDate.plusDays(6) }?.week ?: it.currentWeek
-                                    it.selectedWeek != currentWeek
-                                } == true,
-                                onClick = {
-                                    menuExpanded = false
-                                    viewModel.goToCurrentWeek()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text(if (syncState is TimetableSyncState.Syncing) "同步中…" else "同步课表")
-                                },
-                                leadingIcon = { Icon(Icons.Outlined.CloudSync, contentDescription = null) },
-                                enabled = uiState is TimetableUiState.Loaded &&
-                                    syncState !is TimetableSyncState.Syncing && initialSyncState.running == null,
-                                onClick = {
-                                    menuExpanded = false
-                                    viewModel.refresh()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("共享课表") },
-                                leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                                onClick = {
-                                    menuExpanded = false
-                                    onShareClick()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("导出 ICS") },
-                                leadingIcon = { Icon(Icons.Outlined.FileUpload, contentDescription = null) },
-                                enabled = exportState !is TimetableExportState.Exporting,
-                                onClick = {
-                                    menuExpanded = false
-                                    viewModel.exportCalendar(File(context.cacheDir, "calendar-exports"))
-                                },
-                            )
-                        }
+                        viewModel.refreshWeather(forceRefresh = true)
+                    } else {
+                        showWeatherPermissionDialog = true
                     }
                 },
             )
+        },
+        actions = {
+            LeafyActionIconButton(
+                onClick = {
+                    val state = uiState as? TimetableUiState.Loaded ?: return@LeafyActionIconButton
+                    editorDraft = defaultDraft(state)
+                },
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "添加日程")
+            }
+            Box {
+                LeafyActionIconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "课表操作")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("待关联备注与提醒") }, onClick = {
+                        menuExpanded = false; showPendingPersonalData = true
+                    })
+                    DropdownMenuItem(
+                        text = { Text("回到本周") },
+                        leadingIcon = { Icon(Icons.Outlined.Today, contentDescription = null) },
+                        enabled = (uiState as? TimetableUiState.Loaded)?.let {
+                            val today = LocalDate.now(TimetableGridProjection.campusZone)
+                            val currentWeek = it.pages.firstOrNull { page -> today >= page.weekRange.startDate && today <= page.weekRange.startDate.plusDays(6) }?.week ?: it.currentWeek
+                            it.selectedWeek != currentWeek
+                        } == true,
+                        onClick = {
+                            menuExpanded = false
+                            viewModel.goToCurrentWeek()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (syncState is TimetableSyncState.Syncing) "同步中…" else "同步课表")
+                        },
+                        leadingIcon = { Icon(Icons.Outlined.CloudSync, contentDescription = null) },
+                        enabled = uiState is TimetableUiState.Loaded &&
+                            syncState !is TimetableSyncState.Syncing && initialSyncState.running == null,
+                        onClick = {
+                            menuExpanded = false
+                            viewModel.refresh()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("共享课表") },
+                        leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
+                        onClick = {
+                            menuExpanded = false
+                            onShareClick()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("导出 ICS") },
+                        leadingIcon = { Icon(Icons.Outlined.FileUpload, contentDescription = null) },
+                        enabled = exportState !is TimetableExportState.Exporting,
+                        onClick = {
+                            menuExpanded = false
+                            viewModel.exportCalendar(File(context.cacheDir, "calendar-exports"))
+                        },
+                    )
+                }
+            }
         },
     ) { contentPadding ->
         when (val state = uiState) {
@@ -320,6 +313,7 @@ fun TimetableScreen(
             )
             is TimetableUiState.Loaded -> TimetableScreenContent(
                 state = state,
+                background = background,
                 initialization = initialSyncState,
                 onRetryInitialization = { if (initialSyncState.needsAuthentication) onReauthenticate() else initialSync.retry() },
                 onDismissInitialization = initialSync::dismiss,
@@ -508,13 +502,14 @@ internal fun TimetableScreenContent(
     onConsumeWeekNavigation: (Pair<Int, Int>) -> Unit = {},
     canRefresh: Boolean = false,
     onReauthenticate: () -> Unit = {},
+    background: com.myleafy.android.core.prefs.TimetableBackgroundSettings = state.background,
+    now: java.time.ZonedDateTime = com.myleafy.android.features.timetable.presentation.rememberTimetableNow().value,
 ) {
     val pagerState = rememberPagerState(
         initialPage = (state.selectedWeek - 1).coerceIn(0, state.supportedWeeks - 1),
         pageCount = { state.supportedWeeks },
     )
     val coroutineScope = rememberCoroutineScope()
-    val now by com.myleafy.android.features.timetable.presentation.rememberTimetableNow()
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }
@@ -564,7 +559,6 @@ internal fun TimetableScreenContent(
     Box(modifier.fillMaxSize()
         .leafyPullRefresh(pullRefresh, enabled = canRefresh && syncState is TimetableSyncState.Idle)
         .scrollable(rememberScrollableState { 0f }, Orientation.Vertical, enabled = canRefresh)) {
-    TimetableBackground(state.background, Modifier.matchParentSize())
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
         if (initialization.visible) com.myleafy.android.ui.components.LeafyStatusBanner(
             message = initialization.message, isError = initialization.failures.isNotEmpty(),
@@ -582,7 +576,7 @@ internal fun TimetableScreenContent(
         }
         TimetableSyncDialog(syncState, onRetrySync, onConsumeSync, onReauthenticate)
         Row(Modifier.fillMaxWidth().weight(1f)) {
-        TimetableFixedAxis(visiblePage.weekRange.startDate.monthValue, state.background, Modifier.fillMaxHeight())
+        TimetableFixedAxis(visiblePage.weekRange.startDate.monthValue, Modifier.fillMaxHeight())
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -600,7 +594,7 @@ internal fun TimetableScreenContent(
                 currentTime = now.toLocalTime(),
                 showWeekends = state.showWeekends,
                 showAxis = false,
-                background = state.background,
+                background = background,
             )
         }
     }

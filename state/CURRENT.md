@@ -1,8 +1,10 @@
 # Current State
 
-Last verified: 2026-10-08 (iOS reliability build and offline XCTest; Android UI polish source 1.2.3/code 7, public release remains 1.2.2/code 6)
+Last verified: 2026-10-09 (Android timetable backdrop source 1.2.4/code 8; public release remains 1.2.2/code 6; iOS reliability verified 2026-10-08)
 
 ## Current Focus
+
+- **Android 课表背景贯通**：整页背景提升到根导航展示槽，顶部、固定节次列、轻透圆角底栏及宽屏 Rail 共用一次图片绘制；主题渐变保护文字，切换其他 Tab/二级页恢复默认表面。图片按路径在 IO 线程解码，翻周与页面隐藏不重新解码。设置格式、业务数据与 Insets 不变。默认浅深色整页前后像素一致，13 张整页新基线与两个受影响网格已审阅，完整 Roborazzi 76 项通过；JVM 175 通过/7 跳过，构建和 lint 通过（118 warning、2 hint、0 error）。只读隔离 API 36 导航/翻周/网格 16 项通过，解码生命周期及跨 600dp 独立原生测试通过，实际系统栏截图另采集。1.2.4/code 8 配置用于下一私有候选，保留既有 1.2.3/code 7；正式发布仍由用户确认。详见 `docs/design/android-timetable-backdrop.md`。
 
 - **iOS 工程可靠性**：持久库失败保留原文件并进入恢复页，显式重建校验完整备份；身份/门户/会话代次隔离学校请求与预取，保存失败撤销本次修改，文件删除延迟清理，学习资料批次一次提交且可安全重试，考试异常行拒绝整批覆盖，社区发布持久化后才入队并绑定身份，录音权限迟到失效。单测宿主不再挂载生产根界面，默认正式传输拒绝测试请求。iOS 17 最低目标构建通过，完整离线 XCTest 602 项中 601 通过、1 跳过；性能候选尚无 ETTrace、memgraph 或真机测量结论。
 

@@ -20,7 +20,10 @@ import com.myleafy.android.features.schedule.notifications.NotificationDeliveryW
  * 深链（myleafy://community-post / timetable-invite）在此转发给 NavHost。
  */
 @Composable
-fun MyLeafyApp(deepLinkIntent: Intent? = null) {
+fun MyLeafyApp(
+    deepLinkIntent: Intent? = null,
+    timetableBackground: com.myleafy.android.core.prefs.TimetableBackgroundSettings = com.myleafy.android.core.prefs.TimetableBackgroundSettings(),
+) {
     val application = LocalContext.current.applicationContext as MyLeafyApplication
     var ready by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -68,6 +71,7 @@ fun MyLeafyApp(deepLinkIntent: Intent? = null) {
     MyLeafyNavHost(
         navController = navController,
         activeAppScopeStore = application.container.activeAppScopeStore,
+        timetableBackground = timetableBackground,
     )
     if (recoveryProgress == null) com.myleafy.android.features.profile.UpdatePromptHost(application.container.appUpdateManager, navController, updateGate)
     }
