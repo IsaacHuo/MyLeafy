@@ -1,47 +1,90 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "campus.sidebar.journal" : {
+    "社团" : {
       "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Journal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日迹记录"
+            "value" : "Clubs"
           }
         }
       }
     },
-    "campus.sidebar.community" : {
+    "问答" : {
       "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Community"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "校园社区"
+            "value" : "Q&A"
           }
         }
       }
     },
-    "%d 条未读通知" : {
+    "闲聊" : {
       "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d unread notifications"
+            "value" : "Chat"
+          }
+        }
+      }
+    },
+    "二手" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resale"
+          }
+        }
+      }
+    },
+    "MyLeafy 安卓版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MyLeafy for Android"
+          }
+        }
+      }
+    },
+    "MyLeafy 安卓版支持课表、成绩查询、个人日程和校园社区。扫描二维码即可访问官方下载页面，获取安装包与使用说明。欢迎分享给使用安卓手机的同学。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MyLeafy for Android supports timetables, grade queries, personal schedules, and the campus community. Scan the QR code to visit the official download page for the app and installation instructions. Share this card with friends who use Android phones."
+          }
+        }
+      }
+    },
+    "向使用安卓手机的同学分享 MyLeafy 下载页面或介绍卡片。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share the MyLeafy download page or introduction card with friends who use Android phones."
+          }
+        }
+      }
+    },
+    "App 图标资源不可用，无法生成分享卡片。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app icon is unavailable. The share card could not be created."
           }
         }
       }
@@ -1793,6 +1836,17 @@
         }
       }
     },
+    "%d 条未读通知" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d unread notifications"
+          }
+        }
+      }
+    },
     "%d 条考试" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2347,6 +2401,23 @@
         }
       }
     },
+    "campus.sidebar.community" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "校园社区"
+          }
+        }
+      }
+    },
     "campus.sidebar.explore" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2394,6 +2465,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "医疗事项"
+          }
+        }
+      }
+    },
+    "campus.sidebar.journal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日迹记录"
           }
         }
       }
@@ -2543,6 +2631,28 @@
     "MyLeafy · %@" : {
 
     },
+    "MyLeafy 也有安卓版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MyLeafy is available on Android too"
+          }
+        }
+      }
+    },
+    "MyLeafy 安卓版介绍卡片，含官网下载二维码" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MyLeafy Android introduction card with an official download QR code"
+          }
+        }
+      }
+    },
     "PDF、Word 和图片会导入到本机私有目录，不会上传到云端。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2555,6 +2665,7 @@
       }
     },
     "QQ群反馈群" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -4638,6 +4749,17 @@
         }
       }
     },
+    "分享下载链接" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share download link"
+          }
+        }
+      }
+    },
     "分享于 %@" : {
       "localizations" : {
         "en-US" : {
@@ -4681,6 +4803,17 @@
         }
       }
     },
+    "分享卡片图片" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share card image"
+          }
+        }
+      }
+    },
     "分享图片生成失败，请稍后重试。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4688,6 +4821,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Failed to Generate Shared Image, Please Try Again Later."
+          }
+        }
+      }
+    },
+    "分享安卓版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share the Android app"
           }
         }
       }
@@ -5653,6 +5797,17 @@
         }
       }
     },
+    "卡片生成失败" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to create the card"
+          }
+        }
+      }
+    },
     "历史最长连续" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5663,6 +5818,12 @@
           }
         }
       }
+    },
+    "原数据库包含随记、备注和个人资料。完整备份验证成功后才会重建，个人数据不会自动恢复。" : {
+
+    },
+    "原数据库已保留。随记、备注和个人资料尚未读取，请先重试。" : {
+
     },
     "原日程已不可用" : {
       "localizations" : {
@@ -5810,12 +5971,37 @@
         }
       }
     },
+    "发布队列暂不可用" : {
+
+    },
+    "发现不当内容、骚扰、冒充、刷屏、恶意评分或隐私泄露时，可在“举报与反馈”中选择“社区安全”，也可通过联系邮箱说明情况。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To report inappropriate content, harassment, impersonation, spam, rating abuse, or privacy violations, choose Community safety in Reports and feedback, or contact the support email."
+          }
+        }
+      }
+    },
     "发生时间" : {
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Time of occurrence"
+          }
+        }
+      }
+    },
+    "发给用安卓手机的同学" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send it to friends with Android phones"
           }
         }
       }
@@ -5989,6 +6175,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "You can go to the discovery page to find study rooms or check exam schedules."
+          }
+        }
+      }
+    },
+    "可以把下载页发给用安卓手机的同学。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send the download page to friends with Android phones."
           }
         }
       }
@@ -6874,6 +7071,12 @@
         }
       }
     },
+    "备份并创建新数据库" : {
+
+    },
+    "备份并创建新的空数据库？" : {
+
+    },
     "备注" : {
       "localizations" : {
         "en-US" : {
@@ -7141,6 +7344,7 @@
       }
     },
     "如需举报不当活动、违规内容或滥用用户，可以在“举报与反馈”中选择“社区安全”，也可以发送邮件到 %@。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7189,6 +7393,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "font size"
+          }
+        }
+      }
+    },
+    "字号、间距和按钮大小可以在设置里调整，按你的习惯来。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adjust text size, spacing, and button size in Settings to suit you."
           }
         }
       }
@@ -7275,7 +7490,6 @@
       }
     },
     "学习资料" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7563,6 +7777,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Full display"
+          }
+        }
+      }
+    },
+    "官方下载" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Official download"
           }
         }
       }
@@ -9942,6 +10167,17 @@
         }
       }
     },
+    "打开官网下载页" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open official download page"
+          }
+        }
+      }
+    },
     "打开并继续编辑草稿" : {
       "localizations" : {
         "en-US" : {
@@ -11271,6 +11507,7 @@
       }
     },
     "无法导入学习资料" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -11289,6 +11526,9 @@
           }
         }
       }
+    },
+    "无法打开本地数据" : {
+
     },
     "无法找到暂存文件 %@，请重新导入。" : {
       "extractionState" : "stale",
@@ -12609,6 +12849,7 @@
       }
     },
     "未找到反馈图片" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -12932,6 +13173,12 @@
           }
         }
       }
+    },
+    "本地数据恢复" : {
+
+    },
+    "本地文件清理未完成" : {
+
     },
     "本地缓存和本地身份已清除。" : {
       "extractionState" : "stale",
@@ -14002,6 +14249,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Querying available classrooms"
+          }
+        }
+      }
+    },
+    "正在生成分享卡片…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creating share card…"
           }
         }
       }
@@ -15416,6 +15674,17 @@
         }
       }
     },
+    "看课表、查成绩、记日程，也能逛校园社区。\n可以把这张卡片发给用安卓手机的同学。\n扫描下方二维码，打开官网下载页。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your timetable and grades, plan your day, and join the campus community.\nSend this card to friends with Android phones.\nScan the QR code below to open the official download page."
+          }
+        }
+      }
+    },
     "知道了" : {
       "localizations" : {
         "en-US" : {
@@ -15575,6 +15844,7 @@
       }
     },
     "社区安全与技术支持" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15845,6 +16115,9 @@
           }
         }
       }
+    },
+    "稍后" : {
+
     },
     "空教室查询来自学校教务系统，请连接校园网并保持教务登录态后再查询。" : {
       "localizations" : {
@@ -17095,6 +17368,7 @@
       }
     },
     "联系我们" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -18200,6 +18474,7 @@
       }
     },
     "请确认 feedback.JPG 已包含在 App 资源中。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -20134,6 +20409,17 @@
         }
       }
     },
+    "链接可以直接打开下载页；图片卡片可以在微信中长按识别二维码。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link opens the download page. In WeChat, long-press the card image to scan its QR code."
+          }
+        }
+      }
+    },
     "长图无法读取" : {
       "localizations" : {
         "en-US" : {
@@ -20639,6 +20925,9 @@
           }
         }
       }
+    },
+    "验证备份并重建" : {
+
     },
     "验证码" : {
       "extractionState" : "stale",
