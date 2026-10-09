@@ -1,523 +1,6 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "把校园工具认真做好" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Campus tools, thoughtfully made"
-          }
-        }
-      }
-    },
-    "从课表出发，照顾校园生活中的安排、记录与日常事务。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Starting with your timetable, make room for plans, notes, and everyday campus tasks."
-          }
-        }
-      }
-    },
-    "了解 MyLeafy" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Discover MyLeafy"
-          }
-        }
-      }
-    },
-    "看清每一天" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See your day clearly"
-          }
-        }
-      }
-    },
-    "安排与记录，各得其所" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A place for plans and notes"
-          }
-        }
-      }
-    },
-    "校园事务，有条理" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Campus tasks, organized"
-          }
-        }
-      }
-    },
-    "细节，让使用更舒服" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Details that make a difference"
-          }
-        }
-      }
-    },
-    "数据边界，说清楚" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Know where your data lives"
-          }
-        }
-      }
-    },
-    "让时间、地点和接下来的安排一目了然。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See when, where, and what comes next."
-          }
-        }
-      }
-    },
-    "放好计划，也留住生活中的小事。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keep your plans in place and remember the little things."
-          }
-        }
-      }
-    },
-    "把分散的信息，放在容易找到的地方。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bring scattered information somewhere easy to find."
-          }
-        }
-      }
-    },
-    "清晰的排版，克制的颜色，自然的交互。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear typography, restrained color, familiar interactions."
-          }
-        }
-      }
-    },
-    "哪些留在设备，哪些由你主动分享。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What stays on your device, and what you choose to share."
-          }
-        }
-      }
-    },
-    "打开课表，就能确认今天上什么课、在哪里，以及接下来有什么安排。课程和个人日程共享时间视图，发生重叠时也能各自看清。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open your timetable to see today’s classes, their locations, and what comes next. Classes and personal plans share a time view, with room for each when they overlap."
-          }
-        }
-      }
-    },
-    "一周适合看全局，三日视图适合看细节。Widget 则把近期安排放到主屏幕，让一次短暂的查看也有用。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A week shows the bigger picture; three days bring the details closer. Widgets keep upcoming plans on your Home Screen, so even a quick glance is useful."
-          }
-        }
-      }
-    },
-    "日程用来安排将来，随记用来留下当下。它们放在同一个日迹空间里，各自保持清楚的用途。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plans help organize what is ahead. Notes capture the present. Both live in Journal, each with a clear purpose."
-          }
-        }
-      }
-    },
-    "从一条短记录开始，通过标签、搜索和回顾重新找到它。记录日迹展示累积的记录习惯，让平常的一天也有迹可循。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start with a short note and find it again through tags, search, or review. Your journal statistics reveal the habits you build, giving ordinary days a place in your story."
-          }
-        }
-      }
-    },
-    "成绩、考试、培养要求和空闲教室，属于不同的校园任务。按事情来组织入口，让需要的信息更容易找到。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Grades, exams, degree requirements, and available classrooms serve different campus tasks. Organizing tools around those tasks makes the information easier to find."
-          }
-        }
-      }
-    },
-    "社区为同学交流留出空间。具体工具和社区能力取决于当前校园支持；教务结果仍以学校系统为准。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community gives students a place to connect. Tools and community access depend on campus support; your school’s system remains the source for academic results."
-          }
-        }
-      }
-    },
-    "设计先服务于阅读。标题、辅助信息和操作有各自的层级，颜色帮助辨认，留白帮助集中注意。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Design begins with readability. Titles, supporting details, and actions have clear roles. Color helps recognition, and space helps you focus."
-          }
-        }
-      }
-    },
-    "沿用 iPhone 熟悉的导航、列表和弹窗，让操作自然发生。主题、深浅色和显示密度，让同一套界面适合不同的使用习惯。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Familiar iPhone navigation, lists, and sheets make interactions feel natural. Themes, light and dark appearance, and display density adapt the interface to different preferences."
-          }
-        }
-      }
-    },
-    "把校园工具认真做好，意味着把这些细节放到每天的使用里，一次次检查和完善。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Making campus tools thoughtfully means testing these details in everyday use, then checking and improving them again."
-          }
-        }
-      }
-    },
-    "教务缓存、课程备注、随记和个人记录保存在当前设备。学校账号和密码用于学校登录，不作为社区内容上传。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Academic caches, course notes, journal entries, and personal records stay on this device. Your school account and password are used for school sign-in and are not uploaded as community content."
-          }
-        }
-      }
-    },
-    "主动发布的帖子、评论、反馈和共享课表进入 MyLeafy 服务。共享课表只发布允许分享的课程字段，不包含成绩、备注和提醒。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Posts, comments, feedback, and timetable shares you submit are stored by MyLeafy services. Shared timetables contain only permitted class fields, without grades, notes, or reminders."
-          }
-        }
-      }
-    },
-    "本地记录不提供自动云端备份。重要内容请使用已有导出能力妥善保存，具体操作与数据说明可以在帮助中心查看。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Local records do not have automatic cloud backup. Use the available export tools to keep important content safe. Help explains the steps and data boundaries."
-          }
-        }
-      }
-    },
-    "设计基础" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Design fundamentals"
-          }
-        }
-      }
-    },
-    "高等数学" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mathematics"
-          }
-        }
-      }
-    },
-    "大学英语" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "College English"
-          }
-        }
-      }
-    },
-    "小组讨论" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Group discussion"
-          }
-        }
-      }
-    },
-    "今天 15:00 · 图书馆" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Today, 15:00 · Library"
-          }
-        }
-      }
-    },
-    "把今天的小事记下来" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remember today’s little moments"
-          }
-        }
-      }
-    },
-    "随记 · 日常" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Note · Everyday"
-          }
-        }
-      }
-    },
-    "按日期和节次查询" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search by date and period"
-          }
-        }
-      }
-    },
-    "校园交流" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Campus conversations"
-          }
-        }
-      }
-    },
-    "同学的经验与消息" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Student experiences and updates"
-          }
-        }
-      }
-    },
-    "主题 · 显示密度 · 深浅色" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Theme · Density · Appearance"
-          }
-        }
-      }
-    },
-    "当前设备" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This device"
-          }
-        }
-      }
-    },
-    "随记与教务缓存" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes and academic caches"
-          }
-        }
-      }
-    },
-    "主动分享" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shared by you"
-          }
-        }
-      }
-    },
-    "社区与共享课表" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Community and timetable shares"
-          }
-        }
-      }
-    },
-    "重叠的安排" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Overlapping plans"
-          }
-        }
-      }
-    },
-    "%d 项安排" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d items"
-          }
-        }
-      }
-    },
-    "查看这个时段的全部安排" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View all items in this time interval"
-          }
-        }
-      }
-    },
-    "刷新课表" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Refresh timetable"
-          }
-        }
-      }
-    },
-    "课表已更新，但 %d 项课程提醒未恢复：%@。请检查通知设置后再次刷新课表。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The timetable was updated, but %d course reminders could not be restored: %@. Check notification settings and refresh the timetable again."
-          }
-        }
-      }
-    },
-    "无法确定“%@”第 %d 周备注对应的课次，课表未更新。原课表和备注已保留。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The session for the note on “%@” in week %d is unclear. The timetable was not updated. Your previous timetable and notes have been kept."
-          }
-        }
-      }
-    },
-    "“%@”的备注或提醒存在冲突，课表未更新。请检查相关记录后重试。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes or reminders for “%@” conflict. The timetable was not updated. Check these records and try again."
-          }
-        }
-      }
-    },
     "" : {
       "localizations" : {
         "en-US" : {
@@ -611,6 +94,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "·"
+          }
+        }
+      }
+    },
+    "“%@”的备注或提醒存在冲突，课表未更新。请检查相关记录后重试。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes or reminders for “%@” conflict. The timetable was not updated. Check these records and try again."
           }
         }
       }
@@ -2386,6 +1880,17 @@
         }
       }
     },
+    "%d 项安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d items"
+          }
+        }
+      }
+    },
     "%d月" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2689,6 +2194,12 @@
         }
       }
     },
+    "08:00" : {
+
+    },
+    "09:50" : {
+
+    },
     "12 位共享课表邀请码" : {
       "localizations" : {
         "en-US" : {
@@ -2709,6 +2220,9 @@
         }
       }
     },
+    "13:30" : {
+
+    },
     "A" : {
       "localizations" : {
         "en-US" : {
@@ -2718,6 +2232,9 @@
           }
         }
       }
+    },
+    "Aa  字" : {
+
     },
     "App 外观" : {
       "localizations" : {
@@ -2978,6 +2495,9 @@
         }
       }
     },
+    "MyLeafy · %@" : {
+
+    },
     "PDF、Word 和图片会导入到本机私有目录，不会上传到云端。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3141,6 +2661,17 @@
     },
     "一周课表视图" : {
 
+    },
+    "一周适合看全局，三日视图适合看细节。Widget 则把近期安排放到主屏幕，让一次短暂的查看也有用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A week shows the bigger picture; three days bring the details closer. Widgets keep upcoming plans on your Home Screen, so even a quick glance is useful."
+          }
+        }
+      }
     },
     "一条随记最多添加 %d 个附件。" : {
       "extractionState" : "stale",
@@ -3533,6 +3064,28 @@
         }
       }
     },
+    "主动分享" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shared by you"
+          }
+        }
+      }
+    },
+    "主动发布的帖子、评论、反馈和共享课表进入 MyLeafy 服务。共享课表只发布允许分享的课程字段，不包含成绩、备注和提醒。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posts, comments, feedback, and timetable shares you submit are stored by MyLeafy services. Shared timetables contain only permitted class fields, without grades, notes, or reminders."
+          }
+        }
+      }
+    },
     "主楼 412" : {
       "localizations" : {
         "en-US" : {
@@ -3550,6 +3103,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Homepage Background"
+          }
+        }
+      }
+    },
+    "主题 · 显示密度 · 深浅色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Theme · Density · Appearance"
           }
         }
       }
@@ -3635,6 +3199,17 @@
         }
       }
     },
+    "了解 MyLeafy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discover MyLeafy"
+          }
+        }
+      }
+    },
     "二教 203" : {
       "localizations" : {
         "en-US" : {
@@ -3714,6 +3289,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Today, %@"
+          }
+        }
+      }
+    },
+    "今天 15:00 · 图书馆" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today, 15:00 · Library"
           }
         }
       }
@@ -3854,6 +3440,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Today's Schedule"
+          }
+        }
+      }
+    },
+    "从一条短记录开始，通过标签、搜索和回顾重新找到它。记录日迹展示累积的记录习惯，让平常的一天也有迹可循。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start with a short note and find it again through tags, search, or review. Your journal statistics reveal the habits you build, giving ordinary days a place in your story."
+          }
+        }
+      }
+    },
+    "从课表出发，照顾校园生活中的安排、记录与日常事务。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting with your timetable, make room for plans, notes, and everyday campus tasks."
           }
         }
       }
@@ -4765,6 +4373,7 @@
       }
     },
     "关于 MyLeafy" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -5674,6 +5283,17 @@
         }
       }
     },
+    "刷新课表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh timetable"
+          }
+        }
+      }
+    },
     "刷新验证码" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6420,6 +6040,17 @@
         }
       }
     },
+    "同学的经验与消息" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Student experiences and updates"
+          }
+        }
+      }
+    },
     "同学的课表" : {
       "localizations" : {
         "en-US" : {
@@ -6561,6 +6192,7 @@
       }
     },
     "同步教务系统中的最新课表" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -6775,6 +6407,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Week Undetermined"
+          }
+        }
+      }
+    },
+    "哪些留在设备，哪些由你主动分享。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What stays on your device, and what you choose to share."
           }
         }
       }
@@ -7261,6 +6904,7 @@
       }
     },
     "复制标题" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7271,6 +6915,7 @@
       }
     },
     "复制正文" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -7307,6 +6952,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cloudy"
+          }
+        }
+      }
+    },
+    "大学英语" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "College English"
           }
         }
       }
@@ -7814,6 +7470,17 @@
         }
       }
     },
+    "安排与记录，各得其所" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A place for plans and notes"
+          }
+        }
+      }
+    },
     "完成" : {
       "localizations" : {
         "en-US" : {
@@ -8248,6 +7915,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This will remove all courses, exams, and reminder events written to the system calendar by %arg for this semester."
+          }
+        }
+      }
+    },
+    "小组讨论" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group discussion"
           }
         }
       }
@@ -9541,6 +9219,7 @@
       }
     },
     "当前版本" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9611,6 +9290,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Current network cannot connect to the graduate system verification code. It will automatically retry once the network is restored, or you can click the verification code area to retry."
+          }
+        }
+      }
+    },
+    "当前设备" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device"
           }
         }
       }
@@ -9849,6 +9539,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Grades, e.g., 92, Excellent, or Pass"
+          }
+        }
+      }
+    },
+    "成绩、考试、培养要求和空闲教室，属于不同的校园任务。按事情来组织入口，让需要的信息更容易找到。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grades, exams, degree requirements, and available classrooms serve different campus tasks. Organizing tools around those tasks makes the information easier to find."
           }
         }
       }
@@ -10251,6 +9952,17 @@
         }
       }
     },
+    "打开课表，就能确认今天上什么课、在哪里，以及接下来有什么安排。课程和个人日程共享时间视图，发生重叠时也能各自看清。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open your timetable to see today’s classes, their locations, and what comes next. Classes and personal plans share a time view, with room for each when they overlap."
+          }
+        }
+      }
+    },
     "打开这位同学的共享课表" : {
       "localizations" : {
         "en-US" : {
@@ -10290,6 +10002,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Batch import class schedules"
+          }
+        }
+      }
+    },
+    "把今天的小事记下来" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remember today’s little moments"
+          }
+        }
+      }
+    },
+    "把分散的信息，放在容易找到的地方。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bring scattered information somewhere easy to find."
+          }
+        }
+      }
+    },
+    "把校园工具认真做好" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campus tools, thoughtfully made"
+          }
+        }
+      }
+    },
+    "把校园工具认真做好，意味着把这些细节放到每天的使用里，一次次检查和完善。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Making campus tools thoughtfully means testing these details in everyday use, then checking and improving them again."
           }
         }
       }
@@ -10439,6 +10195,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estimate by scenario"
+          }
+        }
+      }
+    },
+    "按日期和节次查询" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search by date and period"
           }
         }
       }
@@ -11011,6 +10778,17 @@
         }
       }
     },
+    "放好计划，也留住生活中的小事。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep your plans in place and remember the little things."
+          }
+        }
+      }
+    },
     "放弃" : {
       "localizations" : {
         "en-US" : {
@@ -11092,6 +10870,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The academic affairs system can only be accessed on the campus network. Please connect to bjfu-wifi before updating; cached data can still be viewed offline."
+          }
+        }
+      }
+    },
+    "教务缓存、课程备注、随记和个人记录保存在当前设备。学校账号和密码用于学校登录，不作为社区内容上传。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Academic caches, course notes, journal entries, and personal records stay on this device. Your school account and password are used for school sign-in and are not uploaded as community content."
           }
         }
       }
@@ -11276,6 +11065,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "data structure"
+          }
+        }
+      }
+    },
+    "数据边界，说清楚" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Know where your data lives"
           }
         }
       }
@@ -11509,6 +11309,17 @@
         }
       }
     },
+    "无法确定“%@”第 %d 周备注对应的课次，课表未更新。原课表和备注已保留。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session for the note on “%@” in week %d is unclear. The timetable was not updated. Your previous timetable and notes have been kept."
+          }
+        }
+      }
+    },
     "无法访问 MyLeafy 共享暂存目录。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11645,6 +11456,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schedule time"
+          }
+        }
+      }
+    },
+    "日程用来安排将来，随记用来留下当下。它们放在同一个日迹空间里，各自保持清楚的用途。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plans help organize what is ahead. Notes capture the present. Both live in Journal, each with a clear purpose."
           }
         }
       }
@@ -13110,6 +12932,17 @@
         }
       }
     },
+    "本地记录不提供自动云端备份。重要内容请使用已有导出能力妥善保存，具体操作与数据说明可以在帮助中心查看。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local records do not have automatic cloud backup. Use the available export tools to keep important content safe. Help explains the steps and data boundaries."
+          }
+        }
+      }
+    },
     "本地课表和成绩缓存无法直接打开，已自动重建缓存。%@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13480,6 +13313,17 @@
         }
       }
     },
+    "查看这个时段的全部安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View all items in this time interval"
+          }
+        }
+      }
+    },
     "查询完成" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13633,6 +13477,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Campus"
+          }
+        }
+      }
+    },
+    "校园事务，有条理" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campus tasks, organized"
+          }
+        }
+      }
+    },
+    "校园交流" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campus conversations"
           }
         }
       }
@@ -13871,6 +13737,7 @@
       }
     },
     "正在同步" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -13892,6 +13759,7 @@
       }
     },
     "正在同步课表" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -14516,6 +14384,17 @@
         }
       }
     },
+    "沿用 iPhone 熟悉的导航、列表和弹窗，让操作自然发生。主题、深浅色和显示密度，让同一套界面适合不同的使用习惯。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Familiar iPhone navigation, lists, and sheets make interactions feel natural. Themes, light and dark appearance, and display density adapt the interface to different preferences."
+          }
+        }
+      }
+    },
     "法律信息" : {
       "localizations" : {
         "en-US" : {
@@ -14832,6 +14711,17 @@
         }
       }
     },
+    "清晰的排版，克制的颜色，自然的交互。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear typography, restrained color, familiar interactions."
+          }
+        }
+      }
+    },
     "清理" : {
       "localizations" : {
         "en-US" : {
@@ -15134,6 +15024,7 @@
       }
     },
     "版本" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -15469,6 +15360,17 @@
         }
       }
     },
+    "看清每一天" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See your day clearly"
+          }
+        }
+      }
+    },
     "知道了" : {
       "localizations" : {
         "en-US" : {
@@ -15579,6 +15481,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Community"
+          }
+        }
+      }
+    },
+    "社区与共享课表" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community and timetable shares"
+          }
+        }
+      }
+    },
+    "社区为同学交流留出空间。具体工具和社区能力取决于当前校园支持；教务结果仍以学校系统为准。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community gives students a place to connect. Tools and community access depend on campus support; your school’s system remains the source for academic results."
           }
         }
       }
@@ -16356,6 +16280,17 @@
         }
       }
     },
+    "细节，让使用更舒服" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details that make a difference"
+          }
+        }
+      }
+    },
     "绑定邮箱" : {
       "localizations" : {
         "en-US" : {
@@ -16901,6 +16836,7 @@
       }
     },
     "考试" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -17681,6 +17617,17 @@
         }
       }
     },
+    "让时间、地点和接下来的安排一目了然。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See when, where, and what comes next."
+          }
+        }
+      }
+    },
     "记录" : {
       "localizations" : {
         "en-US" : {
@@ -17878,6 +17825,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Set Reimbursement Deadline"
+          }
+        }
+      }
+    },
+    "设计先服务于阅读。标题、辅助信息和操作有各自的层级，颜色帮助辨认，留白帮助集中注意。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design begins with readability. Titles, supporting details, and actions have clear roles. Color helps recognition, and space helps you focus."
+          }
+        }
+      }
+    },
+    "设计基础" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design fundamentals"
           }
         }
       }
@@ -18508,6 +18477,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schedule failed: %@"
+          }
+        }
+      }
+    },
+    "课表已更新，但 %d 项课程提醒未恢复：%@。请检查通知设置后再次刷新课表。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The timetable was updated, but %d course reminders could not be restored: %@. Check notification settings and refresh the timetable again."
           }
         }
       }
@@ -19922,6 +19902,17 @@
         }
       }
     },
+    "重叠的安排" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overlapping plans"
+          }
+        }
+      }
+    },
     "重复导出会覆盖更新 %@ 已写入的课程、考试和提醒事件。" : {
       "localizations" : {
         "en-US" : {
@@ -19985,6 +19976,7 @@
       }
     },
     "重新同步" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -20239,6 +20231,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notes"
+          }
+        }
+      }
+    },
+    "随记 · 日常" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note · Everyday"
+          }
+        }
+      }
+    },
+    "随记与教务缓存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes and academic caches"
           }
         }
       }
@@ -20654,6 +20668,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The verification email could not be sent. Try again later."
+          }
+        }
+      }
+    },
+    "高等数学" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mathematics"
           }
         }
       }
