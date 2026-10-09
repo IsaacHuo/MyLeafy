@@ -588,9 +588,17 @@ extension PerformanceRefactorTests {
         XCTAssertNil(CommunityPostDeepLink(url: URL(string: "https://myleafy.space/share/community/post/not-a-uuid")!))
     }
 
-    func testRootTabVisibleCasesHideCommunityWhenDisabled() {
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: true), [.timetable, .community, .schedule, .academics, .profile])
-        XCTAssertEqual(RootTab.visibleCases(isCommunityEnabled: false), [.timetable, .schedule, .academics, .profile])
+    func testCampusSidebarHidesCommunityWhenDisabled() {
+        let enabled = CampusSidebarDestination.visibleCases(
+            isCustomCampus: false, isCommunityEnabled: true, isMedicalEnabled: true, campusID: .bjfu
+        )
+        let disabled = CampusSidebarDestination.visibleCases(
+            isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true, campusID: .bjfu
+        )
+        XCTAssertEqual(Array(enabled.prefix(3)), [.schedule, .community, .academic(.cultivation)])
+        XCTAssertEqual(Array(disabled.prefix(2)), [.schedule, .academic(.cultivation)])
+        XCTAssertFalse(disabled.contains(.community))
+        XCTAssertFalse(disabled.contains(.academic(.ratings)))
     }
 
     func testCatalogSuggestionInputKeepsTeacherNameInRepository() async throws {

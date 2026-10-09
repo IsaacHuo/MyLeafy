@@ -1,6 +1,51 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "campus.sidebar.journal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日迹记录"
+          }
+        }
+      }
+    },
+    "campus.sidebar.community" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "校园社区"
+          }
+        }
+      }
+    },
+    "%d 条未读通知" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d unread notifications"
+          }
+        }
+      }
+    },
     "" : {
       "localizations" : {
         "en-US" : {

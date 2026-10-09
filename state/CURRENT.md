@@ -1,8 +1,10 @@
 # Current State
 
-Last verified: 2026-10-08 (iOS reliability build and offline XCTest; Android UI polish source 1.2.3/code 7, public release remains 1.2.2/code 6)
+Last verified: 2026-10-09 (iOS campus navigation build and 12 focused tests; prior Android verification remains 2026-10-08)
 
 ## Current Focus
+
+- **iOS 三 Tab 与校园左栏**：根导航为课表、校园、我的；校园左栏从日迹记录、校园社区、学校教学开始，原有后续领域与能力规则保留。首次默认社区，无社区能力时默认日迹；会话内保留选择，Widget、帖子链接与通知选择对应校园内容。日迹/社区首次访问后保持页面身份，隐藏区禁止交互与辅助功能访问，Feed 订阅跟随实际可见性；普通详情保留左栏，原有 Sheet、日迹窄屏顶栏与社区双列沿用原实现。仅 iOS 导航与布局变更，Android 与业务存储未改。iOS 17 最低目标本地构建通过，独立测试设备上 12 项导航/权限/深链/窄屏顶栏定向测试全部通过；未进行模拟器视觉验收，真机动画、键盘与窄屏由用户验收。
 
 - **iOS 3.2.4 产品体验**：“了解 MyLeafy”改为本地五主题合集及图文详情，删除博客和 GitHub 入口。主课表统一分配课程、格子日程、个人日程和考试的冲突空间，支持连续阶梯轮廓与四项以上区段汇总；标题按轮廓区域排版，课程备注保持完整内容并支持长按阅读。App 与扩展版本元数据为 3.2.4，未提交 App Store。iOS 17 最低目标构建通过；已补充布局/命中/文字区域与缓存回归代码。先前一次本地测试编译因磁盘不足中断，未执行用例；按用户最新要求不再运行本地测试或模拟器，真机视觉由用户验收。后续体验审查与边界见 `docs/design/ios-product-polish.md`。
 

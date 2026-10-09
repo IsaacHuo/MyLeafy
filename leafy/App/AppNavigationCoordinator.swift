@@ -9,10 +9,18 @@ enum ProfileRoute: Hashable {
 
 enum RootTab: Hashable {
     case timetable
-    case community
-    case schedule
     case academics
     case profile
+}
+
+enum CampusSection: CaseIterable, Hashable {
+    case schedule
+    case community
+    case academics
+
+    static func initialSelection(isCommunityEnabled: Bool) -> Self {
+        isCommunityEnabled ? .community : .schedule
+    }
 }
 
 nonisolated struct TeacherRatingRoute: Hashable, Sendable {
@@ -53,11 +61,7 @@ enum AppAccountDeletionOutcome: Equatable, Identifiable {
 
 extension RootTab: CaseIterable, Identifiable {
     static var allCases: [RootTab] {
-        [.timetable, .community, .schedule, .academics, .profile]
-    }
-
-    static func visibleCases(isCommunityEnabled: Bool) -> [RootTab] {
-        allCases.filter { isCommunityEnabled || $0 != .community }
+        [.timetable, .academics, .profile]
     }
 
     var id: RootTab { self }
@@ -66,10 +70,6 @@ extension RootTab: CaseIterable, Identifiable {
         switch self {
         case .timetable:
             return L10n.text("课表", language: language)
-        case .community:
-            return L10n.text("社区", language: language)
-        case .schedule:
-            return L10n.text("日迹", language: language)
         case .academics:
             return L10n.text("校园", language: language)
         case .profile:
@@ -80,8 +80,6 @@ extension RootTab: CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .timetable: return "calendar"
-        case .community: return "person.2"
-        case .schedule: return "calendar.day.timeline.left"
         case .academics: return "book.closed"
         case .profile: return "person"
         }
@@ -90,8 +88,6 @@ extension RootTab: CaseIterable, Identifiable {
     var selectedSystemImage: String {
         switch self {
         case .timetable: return "calendar"
-        case .community: return "person.2.fill"
-        case .schedule: return "calendar.day.timeline.left"
         case .academics: return "book.closed.fill"
         case .profile: return "person.fill"
         }
@@ -101,6 +97,7 @@ extension RootTab: CaseIterable, Identifiable {
 @MainActor
 final class AppNavigationCoordinator: ObservableObject {
     @Published var selectedRootTab: RootTab = .timetable
+    @Published var selectedCampusSection: CampusSection
     @Published var selectedAcademicTab: AcademicPrimaryTab = .cultivation
     @Published var requestedAcademicRoute: AcademicRoute?
     @Published var requestedAcademicDetailRoute: AcademicDetailRoute?
@@ -115,6 +112,14 @@ final class AppNavigationCoordinator: ObservableObject {
     @Published private(set) var requiresLoginAfterAccountDeletion = false
     private var deferredRouteRequestTask: Task<Void, Never>?
 
+    init(isCommunityEnabled: Bool = ActiveCampusContext.descriptor.supports(.community)) {
+        selectedCampusSection = .initialSelection(isCommunityEnabled: isCommunityEnabled)
+    }
+
+    var isCampusCommunityActive: Bool {
+        selectedRootTab == .academics && selectedCampusSection == .community
+    }
+
     func completeAccountDeletion(with outcome: AppAccountDeletionOutcome) {
         requiresLoginAfterAccountDeletion = true
         selectedRootTab = .timetable
@@ -125,18 +130,20 @@ final class AppNavigationCoordinator: ObservableObject {
         requiresLoginAfterAccountDeletion = false
     }
 
-    func sanitizePublicRootTab(isCommunityEnabled: Bool) {
-        if selectedRootTab == .community && !isCommunityEnabled {
-            selectedRootTab = .timetable
+    func sanitizeCampusSection(isCommunityEnabled: Bool) {
+        if selectedCampusSection == .community && !isCommunityEnabled {
+            selectedCampusSection = .schedule
         }
     }
 
     func openAcademic(tab: AcademicPrimaryTab) {
         selectedAcademicTab = tab
+        selectedCampusSection = .academics
         selectedRootTab = .academics
     }
 
     func openAcademicRoute(_ route: AcademicRoute) {
+        selectedCampusSection = .academics
         switch route {
         case .grades:
             selectedAcademicTab = .cultivation
@@ -150,6 +157,7 @@ final class AppNavigationCoordinator: ObservableObject {
     }
 
     func openAcademicDetailRoute(_ route: AcademicDetailRoute) {
+        selectedCampusSection = .academics
         selectedAcademicTab = route.tab
         selectedRootTab = .academics
         deferRouteRequest {
@@ -161,6 +169,7 @@ final class AppNavigationCoordinator: ObservableObject {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedName.isEmpty else { return }
         selectedAcademicTab = .ratings
+        selectedCampusSection = .academics
         selectedRootTab = .academics
         deferRouteRequest {
             self.requestedTeacherRatingRoute = TeacherRatingRoute(name: normalizedName)
@@ -179,7 +188,8 @@ final class AppNavigationCoordinator: ObservableObject {
         requestedClassroomLookup = nil
         requestedProfileRoute = nil
         requestedScheduleDestination = destination
-        selectedRootTab = .schedule
+        selectedCampusSection = .schedule
+        selectedRootTab = .academics
     }
 
     func openProfileRoute(_ route: ProfileRoute) {
@@ -197,6 +207,7 @@ final class AppNavigationCoordinator: ObservableObject {
     func openClassroomLookup(building: String, room: String) {
         let request = ClassroomLookupRequest(building: building, room: room)
         selectedAcademicTab = .classrooms
+        selectedCampusSection = .academics
         selectedRootTab = .academics
         deferRouteRequest {
             self.requestedClassroomLookup = request
@@ -205,7 +216,12 @@ final class AppNavigationCoordinator: ObservableObject {
 
     func openCommunityPost(id: UUID) {
         requestedCommunityPostID = id
-        selectedRootTab = .community
+        openCampusCommunity()
+    }
+
+    func openCampusCommunity() {
+        selectedCampusSection = .community
+        selectedRootTab = .academics
     }
 
     func handle(url: URL) {

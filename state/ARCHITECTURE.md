@@ -2,7 +2,7 @@
 
 本文基于当前 `main` 代码整理，描述 **MyLeafy 现在实际的结构**。它不是未来方案：尚未实现的架构应进入 `docs/`。若本文与代码冲突，以代码为准，并请按 `state/README.md` 的维护原则更新本文。
 
-Last verified: 2026-10-08 (Android UI; validation boundaries in CURRENT.md)
+Last verified: 2026-10-09 (iOS campus navigation; prior Android verification remains 2026-10-08; validation boundaries in CURRENT.md)
 
 ## 1. 系统组成
 
@@ -25,7 +25,7 @@ flowchart LR
 
     subgraph Product["MyLeafy 系统边界"]
         direction TB
-        IOS["MyLeafy iOS<br/>课表 · 社区 · 日迹 · 校园 · 我的"]
+        IOS["MyLeafy iOS<br/>课表 · 校园 · 我的"]
         Local[("设备本地数据<br/>SwiftData · Keychain · 缓存")]
         Web["官网与运营后台<br/>公开页面 · 分享 · 内容治理"]
         IOS -->|读写本地状态| Local
@@ -51,7 +51,7 @@ flowchart LR
 2. `AppModelContainerFactory` 创建 SwiftData `ModelContainer`；持久库打不开时保留原库并显示恢复页，支持重试。只有用户明确选择重建后，才完整复制并逐块校验 store/WAL/SHM 与旧文件清理记录；备份失败不删除原文件，重建失败恢复原组件。新空库不重放旧库的清理记录。内存库只用于未登录入口和明确标记的单测。
 3. 恢复校园上下文与学校身份缓存（`ActiveCampusContext`，位于 `leafy/Core/Campus/CampusModels.swift`）。
 4. 无有效学校身份进入 `LoginView`，否则进入 `ContentView`。
-5. `ContentView` 渲染根 `TabView`，按校园 capability 决定社区入口是否可见。
+5. `ContentView` 渲染课表、校园、我的三个根 Tab；`CampusRootView` 管理左栏及右侧内容，按校园 capability 决定校园社区入口是否可见。
 6. 进入前台或用户主动刷新时更新学期配置、社区通知计数和必要数据。
 
 `leafy/App/` 中的其他协调器：
@@ -132,7 +132,7 @@ flowchart TB
 - `Domain/`：帖子/评论/草稿等模型。
 - `Application/`：`CommunitySessionManager`（会话与 profile 生命周期）、`CommunityRepository`、`CommunityPublishCoordinator`、`CommunityPostDraftRepository`、`RatingCatalogWorkspace`、`CommunityAccessGate` 等。
 - `Data/`：`Cloudflare/` 保存接口模型，仓储实现在 `Services/Cloudflare/`；Durable Objects WebSocket 只发送校园范围的变更信号，完整列表仍由 `/v1/community/feed` 获取；`Local/LocalCommunityPostDraftRepository`。
-- `Presentation/`：Feed、详情、发布、通知、投票、`Ratings/`（评教/评课/评菜）。Feed 在社区 Tab 活跃时预取变更快照，用户通过“有新内容”入口应用，手动刷新提供显式结果反馈。
+- `Presentation/`：Feed、详情、发布、通知、投票、`Ratings/`（评教/评课/评菜）。Feed 在校园 Tab 的校园社区内容活跃时预取变更快照，用户通过“有新内容”入口应用，手动刷新提供显式结果反馈。
 
 ### Schedule — `Features/Schedule/`（日迹）
 
@@ -227,7 +227,8 @@ React-admin → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 
 ## 8. 导航与深链
 
-- 根 Tab：`TabView`，顺序 `课表 / 社区 / 日迹 / 校园 / 我的`，默认课表；社区按校园 capability 隐藏（`ContentView.swift`，iOS 26 用系统 `Tab` API，低版本用 `tabItem`）。
+- iOS 根 Tab：`TabView`，顺序 `课表 / 校园 / 我的`，默认课表（`ContentView.swift`，iOS 26 用系统 `Tab` API，低版本用 `tabItem`）。校园未读 badge 与左栏校园社区入口、页内通知按钮共享同一计数。
+- `CampusRootView` 的纵向左栏依次为日迹记录、校园社区及现有学业领域；社区按校园 capability 隐藏。首次默认社区，无社区能力时默认日迹；会话内保留选择。三个内容区各自拥有 NavigationStack 和滚动容器，普通详情保留左栏，Sheet 保持原呈现。首次访问后保持页面身份，隐藏区关闭点击与辅助功能访问；Feed 仅在社区内容实际可见时订阅。
 - 层级详情使用 `NavigationStack`；轻量编辑/筛选/详情使用 sheet。
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
 - Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`。启动先恢复本机身份；无身份显示「北京林业大学 / 免登录入口」，完成选择后进入课表。免登录仍保留五个根 Tab，社区只展示门槛说明，不初始化社区请求。根目的地在小于 600dp 时使用轻透圆角底部导航，宽屏使用 Material 3 Adaptive Navigation Suite 的 Navigation Rail，二级目的地隐藏根导航；两种导航复用目的地集合、选择状态与状态恢复。根 Tab 以课表路由作为返回栈锚点，首次选择入口后也保留各 Tab 的状态。
@@ -286,11 +287,11 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 
 以下是不变量，修改代码前必须遵守（与 `docs/` 中的设计细节不同，这些是当前必须成立的事实）：
 
-- 根导航顺序固定为 `课表 / 社区 / 日迹 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。社区 Tab 按校园 capability 隐藏。
+- iOS 根导航顺序固定为 `课表 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。校园左栏从日迹记录、校园社区、学校教学开始，后续领域沿用原顺序和能力规则。社区入口按校园 capability 隐藏，无社区时默认日迹。
 - iOS 免登录（guest）入口完全本地：不创建任何账号，不连接任何云端后台；学期/校历配置使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
 - Android 免登录不建立学校/后台会话或订阅；匿名 Cloudflare 版本检查与用户主动下载是版本管理联网例外，不上传身份和本地记录。Android 的 guest/无社区 capability 身份仍显示全部五个根入口，但社区页只展示门槛说明，不得初始化后台客户端、订阅或教务同步。Android 个人日程同时呈现在课表与日迹列表，可导出 ICS，但不申请系统日历写入权限。
 - Android 窗口宽度只能改变根导航和校园领域选择的 chrome；不得改变 `RootTab` 顺序、默认目的地、深链、返回栈、状态恢复、capability 门控或任何业务数据请求。
-- 日迹顶部直接提供 `随记 / 日程 / 推送`；首次进入默认日程，根 Tab 往返保留本次分区选择，明确深链优先；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。
+- 日迹顶部直接提供 `随记 / 日程 / 推送`；首次进入默认日程，校园入口和根 Tab 往返保留本次分区选择，明确深链优先；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。
 - 随记不再提供邮件投稿；保留本机分享卡片与导出。随记按校园身份作用域保存在本地（元数据、Markdown 源文、图片、附件、音频、标签、统计）；不进入社区、Widget、日历导出或课表分享图。语音转写设备端完成且不持久化原始输入。学校课程、考试、校历不进入随记或个人日程列表。
 - 课表按单个学年浏览，从秋季学期首日到下一学年开始前一天；暑假最后一周停在学年边界，下一学年通过学年/日期选择进入。学校单学期课表保持 20 周数据集；学期结束与寒暑假区间来自语义校历事件，不用 20 周容器反推。
 - 课表周态与三日态使用同一棵 `TimetableContinuousColumnsLayout` 日期列树，由 `TimetableContinuousViewportController.zoomProgress` 连续驱动，不切换容器、不用 `scrollTo` 居中。本周以今天为三日中心，其他周以周二为中心；三日分页每次移动三个自然日，缩回当前中心日期所属周。隐藏周末只把周态周末 lane 收到零宽，三日态仍展示真实周末。21 日渲染窗口及课程、考试、日程 payload 在交互期间冻结，Header、网格和卡片共用 `TimetableZoomGeometry`。

@@ -3,17 +3,19 @@ import XCTest
 
 final class GenericCampusLifecycleTests: XCTestCase {
     @MainActor
-    func testScheduleDestinationRequestsSelectNewRootTab() async throws {
+    func testScheduleDestinationRequestsSelectCampusJournal() async throws {
         let coordinator = AppNavigationCoordinator()
         coordinator.openScheduleDestination(.customSchedules)
 
-        XCTAssertEqual(coordinator.selectedRootTab, .schedule)
+        XCTAssertEqual(coordinator.selectedRootTab, .academics)
+        XCTAssertEqual(coordinator.selectedCampusSection, .schedule)
         try await Task.sleep(for: .milliseconds(220))
         XCTAssertEqual(coordinator.requestedScheduleDestination, .customSchedules)
 
         coordinator.handle(url: try XCTUnwrap(URL(string: "leafy://schedule-reports")))
         try await Task.sleep(for: .milliseconds(220))
-        XCTAssertEqual(coordinator.selectedRootTab, .schedule)
+        XCTAssertEqual(coordinator.selectedRootTab, .academics)
+        XCTAssertEqual(coordinator.selectedCampusSection, .schedule)
         XCTAssertEqual(coordinator.requestedScheduleDestination, .scheduleReports)
     }
 

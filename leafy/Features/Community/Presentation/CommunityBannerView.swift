@@ -105,7 +105,7 @@ struct CommunityBannerSlot: View {
             case "timetable":
                 appNavigation.selectedRootTab = .timetable
             case "community":
-                appNavigation.selectedRootTab = .community
+                appNavigation.openCampusCommunity()
             case "schedule_reports":
                 appNavigation.openScheduleDestination(.scheduleReports)
             case "custom_schedules":
