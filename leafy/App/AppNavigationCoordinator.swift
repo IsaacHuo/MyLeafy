@@ -5,6 +5,7 @@ enum ProfileRoute: Hashable {
     case timetableSharing
     case cacheSync
     case timetableBackground
+    case personalization
 }
 
 enum RootTab: Hashable {

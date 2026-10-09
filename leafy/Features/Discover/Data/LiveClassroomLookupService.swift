@@ -49,7 +49,7 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
     }
 
     func lookup(_ request: ClassroomLookupRequest, userInitiated: Bool) async -> ClassroomLookupOutcome {
-        let scope = await CampusOperationScope()
+        let scope = CampusOperationScope()
         if await isDemoModeEnabled() {
             return .success(await demoData(for: request))
         }
@@ -58,20 +58,20 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
             switch request.mode {
             case .byPeriod:
                 let html = try await fetchEmptyClassroomsHTML(request.date, 1, 12)
-                try await scope.check()
+                try scope.check()
                 let rooms = try parseEmptyClassrooms(html, request.startPeriod, request.endPeriod)
                 await cache.saveEmptyClassrooms(rooms, date: request.date, start: request.startPeriod, end: request.endPeriod, scope: scope)
-                try await scope.check()
+                try scope.check()
                 return .success(ClassroomLookupData(rooms: rooms))
             case .byRoom:
                 let usage = try await fetchClassroomUsage(request.date, request.building, request.room)
-                try await scope.check()
+                try scope.check()
                 await cache.saveClassroomUsage(usage, date: request.date, building: request.building, room: request.room, scope: scope)
-                try await scope.check()
+                try scope.check()
                 return .success(ClassroomLookupData(usage: usage))
             }
         } catch {
-            if await scope.wasCancelled(error) { return .success(ClassroomLookupData()) }
+            if scope.wasCancelled(error) { return .success(ClassroomLookupData()) }
             let reauthenticationNeeded = userInitiated && requiresReauthentication(error)
             let message = SchoolDataSyncContinuationPolicy.shouldStop(after: error)
                 ? "暂时无法访问教务系统。请连接 bjfu-wifi 或北林 VPN 后，再次点击查询。"

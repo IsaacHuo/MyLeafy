@@ -40,6 +40,7 @@ struct ProfileView: View {
     @State private var showingPoemeryOverlay = false
 
     private let profileRowIconSize: CGFloat = 34
+    private static let navigationLog = Logger(subsystem: "com.isaachuo.leafy", category: "ProfileNavigation")
 
     private var themeColorPreference: AppThemeColorPreference {
         AppThemeColorPreference.storedValue(appThemeColorPreferenceRaw)
@@ -99,6 +100,8 @@ struct ProfileView: View {
                     CacheAndSyncView()
                 case .timetableBackground:
                     TimetableBackgroundSettingsView()
+                case .personalization:
+                    PersonalizationSettingsView()
                 }
             }
             .onChange(of: appNavigation.requestedProfileRoute) { _, route in
@@ -180,7 +183,11 @@ struct ProfileView: View {
                 }
             }
             .onAppear {
+                Self.navigationLog.info("Profile root appeared; communityEnabled=\(isCommunityEnabled, privacy: .public)")
                 handleProfileRouteRequest(appNavigation.requestedProfileRoute)
+            }
+            .onChange(of: navigationPath.count) { _, count in
+                if count == 0 { pendingTimetableInviteCode = nil }
             }
         }
     }
@@ -234,53 +241,15 @@ struct ProfileView: View {
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    @ViewBuilder
-    private var settingsRows: some View {
-        NavigationLink {
-            CacheAndSyncView()
-        } label: {
-            profileRow(
-                icon: "arrow.triangle.2.circlepath",
-                title: "重新同步",
-                detail: isCustomCampus ? "检查本地数据状态" : "重新同步教务数据"
-            )
-        }
-
-        if isCommunityEnabled {
-            NavigationLink {
-                TimetableSharingView()
-            } label: {
-                profileRow(icon: "person.2.fill", title: "共享课表", detail: "邀请同学查看")
-            }
-        }
-
-        NavigationLink {
-            PersonalizationSettingsView()
-        } label: {
-            profileRow(icon: "paintpalette.fill", title: "个性化", detail: personalizationDetail)
-        }
-
-        NavigationLink {
-            TimetableBackgroundSettingsView()
-        } label: {
-            profileRow(icon: "rectangle.3.group.fill", title: "课表背景", detail: timetableBackgroundDetail)
-        }
-
-        Toggle(isOn: $timetableHidesWeekends) {
-            HStack(spacing: 12) {
-                LeafyCompactProfileIconBadge(systemName: "calendar.badge.minus", size: profileRowIconSize)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.text("隐藏周末", language: leafyLanguage))
-                        .leafyBody()
-                        .foregroundStyle(AppTheme.primaryText)
-                    Text(L10n.text("课表页仅显示周一至周五", language: leafyLanguage))
-                        .microCaption()
-                        .foregroundStyle(AppTheme.tertiaryText)
-                }
-            }
-        }
-        .tint(AppTheme.accent)
+    private var settingsRows: ProfileSettingsRows {
+        Self.navigationLog.debug("Preparing profile settings routes; communityEnabled=\(isCommunityEnabled, privacy: .public) customCampus=\(isCustomCampus, privacy: .public)")
+        return ProfileSettingsRows(
+            isCustomCampus: isCustomCampus,
+            isCommunityEnabled: isCommunityEnabled,
+            personalizationDetail: personalizationDetail,
+            timetableBackgroundDetail: timetableBackgroundDetail,
+            hidesWeekends: $timetableHidesWeekends
+        )
     }
 
     @ViewBuilder
@@ -580,37 +549,14 @@ struct ProfileView: View {
         }
     }
 
-    @ViewBuilder
     private func profileRow(
         icon: String,
         title: String,
         detail: String,
         tint: Color = AppTheme.accent,
         showsDisclosure: Bool = false
-    ) -> some View {
-        HStack(alignment: .center, spacing: 11) {
-            LeafyCompactProfileIconBadge(systemName: icon, tint: tint, size: profileRowIconSize)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(L10n.text(title, language: leafyLanguage))
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.primaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-
-                Text(L10n.text(detail, language: leafyLanguage))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.78)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if showsDisclosure {
-                LeafyDisclosureIndicator()
-            }
-        }
-        .padding(.vertical, 1)
+    ) -> ProfileMenuRow {
+        ProfileMenuRow(icon: icon, title: title, detail: detail, tint: tint, showsDisclosure: showsDisclosure)
     }
 
     private var poemeryPromotionRow: some View {
@@ -728,7 +674,7 @@ private struct ThemeColorSwatch: View {
     }
 }
 
-private struct LeafyCompactProfileIconBadge: View {
+struct LeafyCompactProfileIconBadge: View {
     let systemName: String
     var tint: Color = AppTheme.accent
     let size: CGFloat

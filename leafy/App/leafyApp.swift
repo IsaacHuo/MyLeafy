@@ -72,6 +72,10 @@ struct LeafyApp: App {
     }
 
     init() {
+        let startupLog = Logger(subsystem: "com.isaachuo.leafy", category: "Startup")
+        if !AppRuntimeEnvironment.isRunningUnitTests {
+            startupLog.info("App initialization started")
+        }
         if !AppRuntimeEnvironment.isRunningUnitTests {
             CommunityPostCardGenerator.cleanupStaleRenderedFiles()
         }
@@ -79,6 +83,11 @@ struct LeafyApp: App {
         self._modelContainerSetup = State(initialValue: try? result.get())
         if case .failure(let error) = result {
             self._storageFailure = State(initialValue: error.localizedDescription)
+            if !AppRuntimeEnvironment.isRunningUnitTests {
+                startupLog.error("Model container setup failed: \(error.localizedDescription, privacy: .private)")
+            }
+        } else if !AppRuntimeEnvironment.isRunningUnitTests {
+            startupLog.info("Model container ready")
         }
         guard !AppRuntimeEnvironment.isRunningUnitTests, case .success = result else { return }
         ScheduleReportBackgroundRefreshCoordinator.shared.register()

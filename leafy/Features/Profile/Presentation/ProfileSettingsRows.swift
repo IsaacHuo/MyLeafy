@@ -1,0 +1,81 @@
+import SwiftUI
+
+/// Named row types keep settings destinations out of the root list's generic metadata.
+struct ProfileSettingsRows: View {
+    let isCustomCampus: Bool
+    let isCommunityEnabled: Bool
+    let personalizationDetail: String
+    let timetableBackgroundDetail: String
+    @Binding var hidesWeekends: Bool
+
+    var body: some View {
+        NavigationLink(value: ProfileRoute.cacheSync) {
+            ProfileMenuRow(icon: "arrow.triangle.2.circlepath", title: "重新同步",
+                           detail: isCustomCampus ? "检查本地数据状态" : "重新同步教务数据")
+        }
+        if isCommunityEnabled {
+            NavigationLink(value: ProfileRoute.timetableSharing) {
+                ProfileMenuRow(icon: "person.2.fill", title: "共享课表", detail: "邀请同学查看")
+            }
+        }
+        NavigationLink(value: ProfileRoute.personalization) {
+            ProfileMenuRow(icon: "paintpalette.fill", title: "个性化", detail: personalizationDetail)
+        }
+        NavigationLink(value: ProfileRoute.timetableBackground) {
+            ProfileMenuRow(icon: "rectangle.3.group.fill", title: "课表背景", detail: timetableBackgroundDetail)
+        }
+        ProfileHideWeekendsRow(isOn: $hidesWeekends)
+    }
+}
+
+struct ProfileMenuRow: View {
+    @Environment(\.leafyLanguage) private var language
+    let icon: String
+    let title: String
+    let detail: String
+    var tint: Color = AppTheme.accent
+    var showsDisclosure = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 11) {
+            LeafyCompactProfileIconBadge(systemName: icon, tint: tint, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(L10n.text(title, language: language))
+                    .leafyBody()
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                Text(L10n.text(detail, language: language))
+                    .microCaption()
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if showsDisclosure { LeafyDisclosureIndicator() }
+        }
+        .padding(.vertical, 1)
+    }
+}
+
+private struct ProfileHideWeekendsRow: View {
+    @Environment(\.leafyLanguage) private var language
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            HStack(spacing: 12) {
+                LeafyCompactProfileIconBadge(systemName: "calendar.badge.minus", size: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.text("隐藏周末", language: language))
+                        .leafyBody()
+                        .foregroundStyle(AppTheme.primaryText)
+                    Text(L10n.text("课表页仅显示周一至周五", language: language))
+                        .microCaption()
+                        .foregroundStyle(AppTheme.tertiaryText)
+                }
+            }
+        }
+        .tint(AppTheme.accent)
+    }
+}
