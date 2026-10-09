@@ -580,6 +580,7 @@ struct TeachingCultivationRefreshUseCase {
 struct TeachingAndCultivationView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
 
+    @State private var scrollHeader = LeafyScrollHeaderState()
     @State private var mode: TeachingCultivationMode
     @State private var isRefreshing = false
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
@@ -598,11 +599,15 @@ struct TeachingAndCultivationView: View {
     var body: some View {
         ZStack {
             if mode == .trainingProgram {
-                TrainingProgramView(showsStandaloneNavigation: false)
+                TrainingProgramView(showsStandaloneNavigation: false, onVerticalScroll: {
+                    if mode == .trainingProgram { scrollHeader.update($0) }
+                })
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
             if mode == .teachingPlan {
-                TeachingPlanView(showsStandaloneNavigation: false)
+                TeachingPlanView(showsStandaloneNavigation: false, onVerticalScroll: {
+                    if mode == .teachingPlan { scrollHeader.update($0) }
+                })
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
@@ -614,10 +619,14 @@ struct TeachingAndCultivationView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .padding(4)
+            .leafyGlassSurface(in: Capsule(), isInteractive: true)
             .padding(.horizontal, AppSpacing.page)
             .padding(.vertical, 10 * leafyControlScale)
-            .background(AppTheme.cardBackground)
+            .leafyScrollHeader(visible: scrollHeader.isVisible)
         }
+        .onAppear { scrollHeader.reset() }
+        .onChange(of: mode) { _, _ in scrollHeader.reset() }
         .navigationTitle("教学与培养")
         .leafyInlineNavigationTitle()
         .toolbar {
@@ -714,13 +723,14 @@ struct TeachingPlanView: View {
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
 
     var showsStandaloneNavigation = true
+    var onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
 
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
     }
 
     var body: some View {
-        AcademicDetailScrollContainer(spacing: AppSpacing.compact) {
+        AcademicDetailScrollContainer(spacing: AppSpacing.compact, onVerticalScroll: onVerticalScroll) {
             if isLoading {
                 planStatusCard {
                     HStack(spacing: 10 * leafyControlScale) {
@@ -1139,6 +1149,7 @@ struct TrainingProgramView: View {
     @State private var browserItem: TrainingProgramBrowserItem?
 
     var showsStandaloneNavigation = true
+    var onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
 
     private var isCustomCampus: Bool {
         ActiveCampusContext.identity?.isCustom == true
@@ -1161,7 +1172,7 @@ struct TrainingProgramView: View {
     }
 
     var body: some View {
-        AcademicDetailScrollContainer {
+        AcademicDetailScrollContainer(onVerticalScroll: onVerticalScroll) {
             if isLoading {
                 AcademicDetailCard {
                     HStack(spacing: 10 * leafyControlScale) {

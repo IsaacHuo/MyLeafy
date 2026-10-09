@@ -146,6 +146,7 @@ struct CommunityRootView: View {
     @State private var selectedCommunityCategory: String?
     @State private var isShowingHotPosts = false
     @State private var communityFeedContentFilter: CommunityFeedContentFilter = .all
+    @State private var scrollHeader = LeafyScrollHeaderState()
     @State private var isCommunityFeedAtTop = true
     @State private var communityTopicFilterHeight: CGFloat = 0
 
@@ -173,11 +174,13 @@ struct CommunityRootView: View {
                         },
                         refreshID: communityRefreshID,
                         viewModel: communityFeedViewModel,
-                        topContentInset: communityHeaderContentInset
+                        topContentInset: communityHeaderContentInset,
+                        onVerticalScroll: { scrollHeader.update($0) }
                     )
                     .leafyAdaptiveContentWidth(maxWidth: 760, horizontalPadding: AppSpacing.page)
 
                     communityHeader
+                        .leafyScrollHeader(visible: scrollHeader.isVisible)
                         .zIndex(1)
                 } else {
                     CommunityCampusRequestGateView(
@@ -202,7 +205,9 @@ struct CommunityRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(LeafyPageBackground())
             .tint(AppTheme.accent(for: themeColorPreference))
-            .leafyNavigationBarHidden()
+            .navigationTitle("")
+            .leafyInlineNavigationTitle()
+            .leafyNavigationBarVisible()
             .leafySheet(isPresented: $showingComposer) {
                 CommunityComposerSheet { message in
                     communityRefreshID = UUID()
@@ -298,7 +303,14 @@ struct CommunityRootView: View {
                       let postID = appNavigation.requestedCommunityPostID else { return }
                 await openRequestedCommunityPost(id: postID)
             }
+            .onChange(of: appNavigation.isCampusCommunityActive) { _, active in
+                if active { scrollHeader.reset() }
+            }
+            .onChange(of: selectedCommunityCategory) { _, _ in scrollHeader.reset() }
+            .onChange(of: isShowingHotPosts) { _, _ in scrollHeader.reset() }
+            .onChange(of: communityFeedContentFilter) { _, _ in scrollHeader.reset() }
             .onAppear {
+                scrollHeader.reset()
                 CommunityDiagnostics.log.info("CommunityRootView appeared")
             }
         }
@@ -313,7 +325,7 @@ struct CommunityRootView: View {
 
     private var communityHeaderContentInset: CGFloat {
         let baseInset = LeafyRootChromeMetrics.controlDiameter
-        guard isTopicFilterPresented, isCommunityFeedAtTop else { return baseInset }
+        guard isTopicFilterPresented else { return baseInset }
         return baseInset + communityTopicFilterHeight + 8 * leafyControlScale
     }
 

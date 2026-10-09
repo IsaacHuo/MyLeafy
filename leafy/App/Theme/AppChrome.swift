@@ -48,6 +48,7 @@ private struct LeafyModalSurfaceModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.leafySurfaceContext, .modal)
+            .environment(\.leafyCampusPane, false)
             .scrollContentBackground(.hidden)
             .background(AppTheme.modalBackground.ignoresSafeArea())
             .presentationBackground(AppTheme.modalBackground)

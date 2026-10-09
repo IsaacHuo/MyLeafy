@@ -21,9 +21,9 @@ final class CampusNavigationTests: XCTestCase {
         let items = CampusSidebarDestination.visibleCases(
             isCustomCampus: false, isCommunityEnabled: true, isMedicalEnabled: true, campusID: .bjfu
         )
-        XCTAssertEqual(items, [.schedule, .community] + AcademicPrimaryTab.allCases.map(CampusSidebarDestination.academic))
-        XCTAssertEqual(items[0].title(language: .zhHans), "日迹记录")
-        XCTAssertEqual(items[1].title(language: .zhHans), "校园社区")
+        XCTAssertEqual(items, [.community, .schedule] + AcademicPrimaryTab.allCases.map(CampusSidebarDestination.academic))
+        XCTAssertEqual(items[0].title(language: .zhHans), "校园社区")
+        XCTAssertEqual(items[1].title(language: .zhHans), "日迹记录")
 
         let guest = CampusSidebarDestination.visibleCases(
             isCustomCampus: true, isCommunityEnabled: false, isMedicalEnabled: false, campusID: .guest

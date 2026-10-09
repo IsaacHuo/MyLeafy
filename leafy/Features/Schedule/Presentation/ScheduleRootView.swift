@@ -66,6 +66,7 @@ struct ScheduleRootView: View {
     @State private var compactPath: [ScheduleDestination] = []
     @State private var primarySection: SchedulePrimarySection = .schedules
     @State private var showsMenu = false
+    @State private var scrollHeader = LeafyScrollHeaderState()
     @State private var newSchedulePresentation: CustomScheduleEditorPresentation?
 
     var body: some View {
@@ -73,9 +74,11 @@ struct ScheduleRootView: View {
             primaryView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(LeafyPageBackground())
-                .leafyNavigationBarHidden()
+                .navigationTitle("")
+                .leafyInlineNavigationTitle()
+                .leafyNavigationBarVisible()
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    rootTopBar
+                    rootTopBar.leafyScrollHeader(visible: scrollHeader.isVisible)
                 }
                 .navigationDestination(for: ScheduleDestination.self) { destination in
                     destinationView(destination)
@@ -99,30 +102,40 @@ struct ScheduleRootView: View {
             CustomScheduleEditorSheet(presentation: presentation)
                 .presentationDetents([.medium, .large])
         }
-        .onAppear { consumeRequestedDestination() }
+        .onAppear { scrollHeader.reset(); consumeRequestedDestination() }
+        .onChange(of: primarySection) { _, _ in scrollHeader.reset() }
+        .onChange(of: compactPath.isEmpty) { _, empty in if empty { scrollHeader.reset() } }
+        .onChange(of: appNavigation.selectedRootTab) { _, tab in
+            if tab == .academics { scrollHeader.reset() }
+        }
         .onChange(of: appNavigation.requestedScheduleDestination) { _, _ in
             consumeRequestedDestination()
         }
         .onChange(of: appNavigation.selectedCampusSection) { _, section in
-            if section == .schedule { consumeRequestedDestination() }
+            if section == .schedule { scrollHeader.reset(); consumeRequestedDestination() }
         }
     }
 
     private var primaryView: some View {
         ZStack {
-            ScheduleMemoFeedView(presentation: .daytraceRoot)
+            ScheduleMemoFeedView(presentation: .daytraceRoot, onVerticalScroll: { receiveScroll($0, from: .memos) })
                 .opacity(primarySection == .memos ? 1 : 0)
                 .allowsHitTesting(primarySection == .memos)
                 .accessibilityHidden(primarySection != .memos)
 
             if primarySection == .schedules {
-                CustomScheduleListView(presentation: .daytraceRoot)
+                CustomScheduleListView(presentation: .daytraceRoot, onVerticalScroll: { receiveScroll($0, from: .schedules) })
                     .transition(.opacity)
             } else if primarySection == .reports {
-                ScheduleReportsView(presentation: .daytraceRoot)
+                ScheduleReportsView(presentation: .daytraceRoot, onVerticalScroll: { receiveScroll($0, from: .reports) })
                     .transition(.opacity)
             }
         }
+    }
+
+    private func receiveScroll(_ sample: LeafyVerticalScrollSample, from section: SchedulePrimarySection) {
+        guard primarySection == section, compactPath.isEmpty else { return }
+        scrollHeader.update(sample)
     }
 
     private var rootTopBar: some View {
@@ -136,25 +149,23 @@ struct ScheduleRootView: View {
                 switch layout {
                 case .regular:
                     HStack(spacing: AppSpacing.compact) {
+                        rootSectionPicker(expands: true, usesCompactLabels: false)
                         rootMenuButton
-                        Spacer(minLength: 0)
-                        rootSectionPicker(expands: false, usesCompactLabels: false)
-                        Spacer(minLength: 0)
                         rootNewScheduleButton
                     }
                 case .combinedActions:
                     HStack(spacing: AppSpacing.compact) {
-                        rootCombinedActionsMenu
                         rootSectionPicker(expands: true, usesCompactLabels: true)
+                        rootCombinedActionsMenu
                     }
                 case .stacked:
                     VStack(spacing: AppSpacing.compact) {
-                        HStack {
-                            rootMenuButton
+                        rootSectionPicker(expands: true, usesCompactLabels: false)
+                        HStack(spacing: AppSpacing.compact) {
                             Spacer()
+                            rootMenuButton
                             rootNewScheduleButton
                         }
-                        rootSectionPicker(expands: true, usesCompactLabels: false)
                     }
                 }
             }
@@ -506,13 +517,16 @@ struct ScheduleMemoFeedView: View {
     @State private var isPositioningDaytraceFeed = false
     @StateObject private var audioPlayback = ScheduleMemoAudioPlaybackController()
 
+    private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let initialTag: String?
     private let presentation: SchedulePrimaryContentPresentation
 
     init(
         initialTag: String? = nil,
-        presentation: SchedulePrimaryContentPresentation = .standalone
+        presentation: SchedulePrimaryContentPresentation = .standalone,
+        onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
     ) {
+        self.onVerticalScroll = onVerticalScroll
         self.initialTag = initialTag
         self.presentation = presentation
         _selectedTag = State(initialValue: initialTag)
@@ -775,6 +789,12 @@ struct ScheduleMemoFeedView: View {
                 )
                 .padding(.bottom, AppSpacing.card)
             }
+            .leafyCampusScrollEdges()
+            .leafyVerticalScrollObserver(
+                enabled: presentation == .daytraceRoot && hasPositionedDaytraceFeed && !visibleFeedItems(using: mediaIndex).isEmpty,
+                logicalTopOffset: searchRevealHeight,
+                onChange: onVerticalScroll
+            )
             .coordinateSpace(name: ScheduleMemoFeedCoordinateSpace.scroll)
             .scrollPosition(id: $daytraceScrollPosition, anchor: .top)
             .scrollTargetBehavior(ScheduleMemoSearchRevealTargetBehavior(

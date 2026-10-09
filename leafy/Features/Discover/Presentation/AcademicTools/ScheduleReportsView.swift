@@ -12,9 +12,11 @@ struct ScheduleReportsView: View {
     @State private var applyTask: Task<Void, Never>?
     @State private var isEditorPresented = false
 
+    private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let presentation: SchedulePrimaryContentPresentation
 
-    init(presentation: SchedulePrimaryContentPresentation = .standalone) {
+    init(presentation: SchedulePrimaryContentPresentation = .standalone, onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil) {
+        self.onVerticalScroll = onVerticalScroll
         self.presentation = presentation
     }
 
@@ -68,6 +70,7 @@ struct ScheduleReportsView: View {
     private var reportsList: some View {
         if presentation == .daytraceRoot {
             reportsListContent
+                .leafyVerticalScrollObserver(onChange: onVerticalScroll)
                 .contentMargins(.top, AppSpacing.card, for: .scrollContent)
         } else {
             reportsListContent
@@ -146,6 +149,7 @@ struct ScheduleReportsView: View {
             }
         }
         .listStyle(.plain)
+        .leafyCampusScrollEdges()
         .scrollContentBackground(.hidden)
         .background {
             LeafyPageBackground()

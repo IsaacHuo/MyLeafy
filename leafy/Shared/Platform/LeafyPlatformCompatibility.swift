@@ -57,14 +57,8 @@ extension View {
             .leafyTranslucentNavigationBar()
     }
 
-    @ViewBuilder
     func leafyTranslucentNavigationBar() -> some View {
-        if #available(iOS 26.0, *) {
-            toolbarBackground(.hidden, for: .navigationBar)
-        } else {
-            toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-        }
+        modifier(LeafyNavigationBackgroundModifier())
     }
 
     @ViewBuilder

@@ -714,6 +714,7 @@ struct RealCommunitySectionView: View {
 
     @ObservedObject var viewModel: CommunityFeedViewModel
     var topContentInset: CGFloat = 0
+    var onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
     @ObservedObject private var publishCoordinator = CommunityPublishCoordinator.shared
     @State private var showingTermsSheet = false
@@ -815,6 +816,8 @@ struct RealCommunitySectionView: View {
                             .padding(.bottom, 40)
                         }
                     }
+                    .leafyCampusScrollEdges()
+                    .leafyVerticalScrollObserver(enabled: !viewModel.items.isEmpty, onChange: onVerticalScroll)
                     .coordinateSpace(name: "community-feed-scroll")
                     .onPreferenceChange(CommunityFeedTopPreferenceKey.self) { minY in
                         let newValue = minY >= -(8 * leafyControlScale)

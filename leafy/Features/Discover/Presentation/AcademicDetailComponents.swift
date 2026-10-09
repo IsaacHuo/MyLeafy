@@ -4,6 +4,7 @@ struct AcademicDetailScrollContainer<Content: View>: View {
     @State private var initialLayoutRefreshID = UUID()
     @State private var didScheduleInitialLayoutRefresh = false
 
+    private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let spacing: CGFloat
     private let usesSystemBackground: Bool
     private let performsInitialLayoutRefresh: Bool
@@ -13,8 +14,10 @@ struct AcademicDetailScrollContainer<Content: View>: View {
         spacing: CGFloat = AppSpacing.card,
         usesSystemBackground: Bool = false,
         performsInitialLayoutRefresh: Bool = true,
+        onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        self.onVerticalScroll = onVerticalScroll
         self.spacing = spacing
         self.usesSystemBackground = usesSystemBackground
         self.performsInitialLayoutRefresh = performsInitialLayoutRefresh
@@ -30,6 +33,8 @@ struct AcademicDetailScrollContainer<Content: View>: View {
             .padding(.top, AppSpacing.compact)
             .padding(.bottom, bottomSpacing)
         }
+        .leafyCampusScrollEdges()
+        .leafyVerticalScrollObserver(onChange: onVerticalScroll)
         .id(initialLayoutRefreshID)
         .background {
             if usesSystemBackground {

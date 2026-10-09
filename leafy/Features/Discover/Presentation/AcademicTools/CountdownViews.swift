@@ -77,9 +77,11 @@ struct CustomScheduleListView: View {
     @State private var operationAlert: LeafyOperationAlert?
     @State private var pendingDeleteItem: CustomScheduleListItem?
 
+    private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let presentation: SchedulePrimaryContentPresentation
 
-    init(presentation: SchedulePrimaryContentPresentation = .standalone) {
+    init(presentation: SchedulePrimaryContentPresentation = .standalone, onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil) {
+        self.onVerticalScroll = onVerticalScroll
         self.presentation = presentation
     }
 
@@ -139,6 +141,7 @@ struct CustomScheduleListView: View {
     private var configuredContent: some View {
         if presentation == .daytraceRoot {
             scheduleList
+                .leafyVerticalScrollObserver(enabled: !sortedItems.isEmpty, onChange: onVerticalScroll)
                 .contentMargins(.top, AppSpacing.card, for: .scrollContent)
         } else {
             scheduleList
@@ -208,6 +211,7 @@ struct CustomScheduleListView: View {
                 ))
         }
         .listStyle(.plain)
+        .leafyCampusScrollEdges()
         .scrollContentBackground(.hidden)
         .background(LeafyPageBackground())
         .frame(maxWidth: 840, alignment: .top)

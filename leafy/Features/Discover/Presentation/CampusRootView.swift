@@ -56,6 +56,8 @@ struct CampusRootView: View {
             let isSelected = appNavigation.selectedCampusSection == section
             let isActive = isSelected && appNavigation.selectedRootTab == .academics
             content()
+                .leafyCampusScrollEdges()
+                .environment(\.leafyCampusPane, true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .opacity(isSelected ? 1 : 0)
                 .allowsHitTesting(isActive)

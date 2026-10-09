@@ -595,7 +595,7 @@ extension PerformanceRefactorTests {
         let disabled = CampusSidebarDestination.visibleCases(
             isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true, campusID: .bjfu
         )
-        XCTAssertEqual(Array(enabled.prefix(3)), [.schedule, .community, .academic(.cultivation)])
+        XCTAssertEqual(Array(enabled.prefix(3)), [.community, .schedule, .academic(.cultivation)])
         XCTAssertEqual(Array(disabled.prefix(2)), [.schedule, .academic(.cultivation)])
         XCTAssertFalse(disabled.contains(.community))
         XCTAssertFalse(disabled.contains(.academic(.ratings)))

@@ -37,8 +37,9 @@ enum CampusSidebarDestination: Hashable, Identifiable {
         isMedicalEnabled: Bool,
         campusID: CampusID
     ) -> [Self] {
-        var destinations: [Self] = [.schedule]
+        var destinations: [Self] = []
         if isCommunityEnabled { destinations.append(.community) }
+        destinations.append(.schedule)
         destinations += AcademicPrimaryTab.visibleCases(
             isCustomCampus: isCustomCampus,
             isCommunityEnabled: isCommunityEnabled,
