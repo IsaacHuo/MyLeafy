@@ -386,10 +386,17 @@ struct TimetableDayMetadataCacheKey: Hashable {
     let day: Int
 }
 
+private struct TimetableAgendaCacheDayKey: Hashable {
+    let week: Int
+    let day: Int
+    let date: Date
+    let language: AppLanguagePreference
+}
+
 @MainActor
 final class TimetableAgendaItemCache {
     private var identity: TimetableAgendaItemCacheIdentity?
-    private var itemsByDay: [TimetableDayMetadataCacheKey: [TimetableAgendaItem]] = [:]
+    private var itemsByDay: [TimetableAgendaCacheDayKey: [TimetableAgendaItem]] = [:]
 
     func items(
         metadata: TimetableDayMetadata,
@@ -407,7 +414,7 @@ final class TimetableAgendaItemCache {
             itemsByDay.removeAll(keepingCapacity: true)
         }
 
-        let key = TimetableDayMetadataCacheKey(week: metadata.week, day: metadata.day)
+        let key = TimetableAgendaCacheDayKey(week: metadata.week, day: metadata.day, date: metadata.date, language: AppLanguagePreference.current.resolvedLocalization)
         if let items = itemsByDay[key] {
             return items
         }

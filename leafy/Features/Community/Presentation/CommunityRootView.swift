@@ -293,14 +293,13 @@ struct CommunityRootView: View {
                     )
                 }
             }
-            .onChange(of: appNavigation.requestedCommunityPostID) { _, postID in
-                guard let postID else { return }
-                Task { await openRequestedCommunityPost(id: postID) }
+            .task(id: appNavigation.isCampusCommunityActive ? appNavigation.requestedCommunityPostID : nil) {
+                guard appNavigation.isCampusCommunityActive,
+                      let postID = appNavigation.requestedCommunityPostID else { return }
+                await openRequestedCommunityPost(id: postID)
             }
             .onAppear {
                 CommunityDiagnostics.log.info("CommunityRootView appeared")
-                guard let postID = appNavigation.requestedCommunityPostID else { return }
-                Task { await openRequestedCommunityPost(id: postID) }
             }
         }
     }
@@ -495,14 +494,18 @@ struct CommunityRootView: View {
     private func openRequestedCommunityPost(id postID: UUID) async {
         do {
             try await dependencies.communityRepository.ensureAnonymousSession()
-            guard let post = try await dependencies.communityRepository.fetchPost(postID: postID) else {
-                appNavigation.requestedCommunityPostID = nil
-                communityActionError = L10n.text("帖子已不存在或不可见。", language: leafyLanguage)
-                return
-            }
+            let post = try await dependencies.communityRepository.fetchPost(postID: postID)
+            guard !Task.isCancelled, appNavigation.isCampusCommunityActive,
+                  appNavigation.requestedCommunityPostID == postID else { return }
             appNavigation.requestedCommunityPostID = nil
-            selectedPost = post
+            if let post {
+                selectedPost = post
+            } else {
+                communityActionError = L10n.text("帖子已不存在或不可见。", language: leafyLanguage)
+            }
         } catch {
+            guard !Task.isCancelled, appNavigation.isCampusCommunityActive,
+                  appNavigation.requestedCommunityPostID == postID else { return }
             appNavigation.requestedCommunityPostID = nil
             communityActionError = error.localizedDescription
         }

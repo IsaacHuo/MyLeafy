@@ -2,12 +2,9 @@ import SwiftUI
 
 struct AcademicHubView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @Environment(\.leafyControlScale) private var leafyControlScale
-    @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @Binding private var selectedTab: AcademicPrimaryTab
-    private let showsSidebar: Bool
     @State private var selectedTeacher: TeacherRatingSummary?
     @State private var selectedCourse: CourseRatingSummary?
     @State private var selectedDish: DishRatingSummary?
@@ -19,11 +16,9 @@ struct AcademicHubView: View {
     @State private var navigationTab: AcademicPrimaryTab?
 
     init(
-        selectedTab: Binding<AcademicPrimaryTab> = .constant(.cultivation),
-        showsSidebar: Bool = true
+        selectedTab: Binding<AcademicPrimaryTab> = .constant(.cultivation)
     ) {
         _selectedTab = selectedTab
-        self.showsSidebar = showsSidebar
     }
 
     private var isCommunityEnabled: Bool {
@@ -45,29 +40,23 @@ struct AcademicHubView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollViewReader { proxy in
-                HStack(alignment: .top, spacing: 0) {
-                    if showsSidebar {
-                        academicSidebar
-                    }
+                ScrollView(showsIndicators: false) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id("academic-content-top")
 
-                    ScrollView(showsIndicators: false) {
-                        Color.clear
-                            .frame(height: 0)
-                            .id("academic-content-top")
-
-                        ZStack(alignment: .topLeading) {
-                            selectedAcademicContent
-                                .id(selectedTab)
-                                .transition(.opacity)
-                        }
-                        .leafyAdaptiveContentWidth(
-                            maxWidth: 760, horizontalPadding: AppSpacing.page
-                        )
-                        .padding(.bottom, AppSpacing.card)
+                    ZStack(alignment: .topLeading) {
+                        selectedAcademicContent
+                            .id(selectedTab)
+                            .transition(.opacity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, -AppSpacing.micro)
+                    .leafyAdaptiveContentWidth(
+                        maxWidth: 760, horizontalPadding: AppSpacing.page
+                    )
+                    .padding(.bottom, AppSpacing.card)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.top, -AppSpacing.micro)
                 .onChange(of: selectedTab) { _, _ in
                     // A route may arrive before SwiftUI delivers the tab's onChange callback.
                     // Keep a path already owned by the destination tab.
@@ -136,15 +125,6 @@ struct AcademicHubView: View {
         }
     }
 
-    private var visibleAcademicTabs: [AcademicPrimaryTab] {
-        AcademicPrimaryTab.visibleCases(
-            isCustomCampus: isCustomCampus,
-            isCommunityEnabled: isCommunityEnabled,
-            isMedicalEnabled: isMedicalEnabled,
-            campusID: campusID
-        )
-    }
-
     @ViewBuilder
     private func academicDestination(for route: AcademicDetailRoute) -> some View {
         AcademicRouteDestinationView(route: route, openRoute: openRoute)
@@ -195,42 +175,6 @@ struct AcademicHubView: View {
         }
     }
 
-    private var academicSidebar: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 4 * leafyControlScale) {
-                ForEach(visibleAcademicTabs) { tab in
-                    Button {
-                        selectAcademicTab(tab)
-                    } label: {
-                        AcademicSidebarTabItem(
-                            tab: tab,
-                            isSelected: selectedTab == tab,
-                            language: leafyLanguage,
-                            themeColorPreference: themeColorPreference
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
-                    .accessibilityLabel(tab.title(language: leafyLanguage))
-                    .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
-                }
-            }
-            .padding(8 * leafyControlScale)
-            .leafyGlassSurface(
-                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
-                fallbackFill: Color(uiColor: .systemBackground).opacity(0.9)
-            )
-        }
-        .frame(width: academicSidebarWidth, alignment: .top)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .padding(.top, -(AppSpacing.micro / 15))
-        .accessibilityElement(children: .contain)
-    }
-
-    private var academicSidebarWidth: CGFloat {
-        min(max(74 * leafyControlScale, 72), 92)
-    }
-
     @MainActor
     private func openRoute(_ route: AcademicDetailRoute) {
         guard
@@ -246,29 +190,6 @@ struct AcademicHubView: View {
         }
         navigationTab = route.tab
         navigationPath.append(AcademicNavigationItem(route: route))
-    }
-
-    @MainActor
-    private func selectAcademicTab(_ tab: AcademicPrimaryTab) {
-        guard tab.isVisible(
-            isCustomCampus: isCustomCampus,
-            isCommunityEnabled: isCommunityEnabled,
-            isMedicalEnabled: isMedicalEnabled,
-            campusID: campusID
-        )
-        else {
-            sanitizeSelectedTab()
-            return
-        }
-
-        navigationPath.removeAll()
-        if accessibilityReduceMotion {
-            selectedTab = tab
-        } else {
-            withAnimation(.easeInOut(duration: 0.22)) {
-                selectedTab = tab
-            }
-        }
     }
 
     @MainActor
@@ -374,47 +295,5 @@ struct AcademicHubView: View {
         else { return }
         selectedTab = .cultivation
         navigationPath.removeAll()
-    }
-}
-
-private struct AcademicSidebarTabItem: View {
-    @Environment(\.leafyControlScale) private var leafyControlScale
-
-    let tab: AcademicPrimaryTab
-    let isSelected: Bool
-    let language: AppLanguagePreference
-    let themeColorPreference: AppThemeColorPreference
-
-    var body: some View {
-        VStack(spacing: 4 * leafyControlScale) {
-            Image(systemName: tab.icon)
-                .font(.system(size: 14 * leafyControlScale, weight: .semibold))
-                .foregroundStyle(
-                    isSelected
-                        ? AppTheme.textOnAccent(for: themeColorPreference)
-                        : AppTheme.accent(for: themeColorPreference)
-                )
-                .frame(width: 28 * leafyControlScale, height: 28 * leafyControlScale)
-                .background(
-                    isSelected
-                        ? AppTheme.accent(for: themeColorPreference)
-                        : AppTheme.accent(for: themeColorPreference).opacity(0.12),
-                    in: Circle()
-                )
-
-            Text(tab.compactTitle(language: language))
-                .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
-                .foregroundStyle(AppTheme.primaryText)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 54 * leafyControlScale)
-        .background(
-            isSelected ? AppTheme.accent(for: themeColorPreference).opacity(0.12) : Color.clear,
-            in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
     }
 }

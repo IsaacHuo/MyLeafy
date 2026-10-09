@@ -329,16 +329,16 @@ extension PerformanceRefactorTests {
     }
 
     func testRootTabAllCasesOnlyContainPrimaryDestinations() {
-        XCTAssertEqual(RootTab.allCases, [.timetable, .community, .schedule, .academics, .profile])
+        XCTAssertEqual(RootTab.allCases, [.timetable, .academics, .profile])
     }
 
     func testAcademicRootTabUsesCampusProductName() {
         XCTAssertEqual(RootTab.academics.title(language: .zhHans), "校园")
     }
 
-    func testScheduleRootTabUsesDayTraceProductNameAndIcon() {
-        XCTAssertEqual(RootTab.schedule.title(language: .zhHans), "日迹")
-        XCTAssertEqual(RootTab.schedule.systemImage, "calendar.day.timeline.left")
+    func testCampusSidebarPreservesDayTraceNameAndIcon() {
+        XCTAssertEqual(CampusSidebarDestination.schedule.title(language: .zhHans), "日迹记录")
+        XCTAssertEqual(CampusSidebarDestination.schedule.icon, "calendar.day.timeline.left")
     }
 
     func testAppStoreReviewCoordinatorRequiresThreeDifferentSyncDays() {

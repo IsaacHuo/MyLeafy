@@ -115,25 +115,25 @@ App 图标：
 
 ## 5. 根导航设计
 
-根结构按 `课表 / 社区 / 日迹 / 校园 / 我的` 排列：
+iOS 根结构按 `课表 / 校园 / 我的` 排列：
 
 - 课表：SF Symbol `calendar`。
-- 社区：SF Symbol `person.2`。
-- 日迹：SF Symbol `note.text`。
 - 校园：SF Symbol `book.closed`。
 - 我的：SF Symbol `person`。
 
 iOS 26 及以上：
 
 - 使用系统 `TabView`。
-- 社区 Tab 支持未读 badge。
+- 校园 Tab 支持社区未读 badge。
 - 使用系统 tab bar 外观并禁止最小化行为。
 
 iOS 17 到 iOS 25：
 
 - 使用系统 `TabView` 与原生 tab item。
-- 社区 Tab 使用系统 badge。
+- 校园 Tab 使用系统社区未读 badge。
 - 底部栏使用系统 TabView 的原生选中状态，不叠加透明度伪淡入或自定义浮层。
+
+校园左栏依次为日迹记录（`calendar.day.timeline.left`）、校园社区（`person.2.fill`）与原有学业领域，首个学业领域为学校教学。默认选择社区，无社区能力时隐藏社区并选择日迹；会话内保留选择，深链优先。左栏常驻且独立纵向滚动，右侧三个内容区保持各自导航与滚动，不增加外层 NavigationStack 或 ScrollView。首次访问后保留页面身份，隐藏区禁用交互和辅助功能访问；社区 Feed 的订阅由实际可见性控制。普通详情留在右侧，原有 Sheet 不压窄。
 
 日迹首次进入默认显示日程，顶部使用 `随记 / 日程 / 推送` 三个分区；根 Tab 往返保留本次选择。外层导航保留 Liquid Glass；分区切换不添加白色选中衬底。侧栏“记录”分组按 `记录日迹 / 每日回顾 / 标签 / 导出随记 / 回收站` 排列，记录日迹位于每日回顾上方。
 

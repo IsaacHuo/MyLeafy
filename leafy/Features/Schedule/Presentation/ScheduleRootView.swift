@@ -103,6 +103,9 @@ struct ScheduleRootView: View {
         .onChange(of: appNavigation.requestedScheduleDestination) { _, _ in
             consumeRequestedDestination()
         }
+        .onChange(of: appNavigation.selectedCampusSection) { _, section in
+            if section == .schedule { consumeRequestedDestination() }
+        }
     }
 
     private var primaryView: some View {
@@ -309,6 +312,7 @@ struct ScheduleRootView: View {
     }
 
     private func consumeRequestedDestination() {
+        guard appNavigation.selectedCampusSection == .schedule else { return }
         guard let destination = appNavigation.requestedScheduleDestination else { return }
         compactPath.removeAll()
         openDestination(destination)
@@ -1954,6 +1958,7 @@ private struct ScheduleMemoInlinePhotoPickerSheet: View {
 
 private struct ScheduleMemoComposer: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.isEnabled) private var isEnabled
     @StateObject private var speech = ScheduleMemoSpeechRecognizer()
     @State private var text = ""
     @State private var speechBase = ""
@@ -2080,6 +2085,12 @@ private struct ScheduleMemoComposer: View {
         }
         .onChange(of: isEditorFocused) { _, isFocused in
             updatePresentationForFocus(isFocused)
+        }
+        .onChange(of: isEnabled) { _, enabled in
+            if !enabled {
+                isEditorFocused = false
+                Task { await speech.stop() }
+            }
         }
         .onPreferenceChange(ScheduleMemoComposerTextHeightPreferenceKey.self) { newHeight in
             guard abs(measuredTextHeight - newHeight) > 0.5 else { return }

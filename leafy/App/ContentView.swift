@@ -41,6 +41,9 @@ struct ContentView: View {
                 CommunityDiagnostics.log.info("Root tab changed to \(String(describing: newTab), privacy: .public)")
                 handleRootTabChange(to: newTab)
             }
+            .onChange(of: appNavigation.selectedCampusSection) { _, _ in
+                appNavigation.sanitizeCampusSection(isCommunityEnabled: isCommunityEnabled)
+            }
             .task {
                 CommunityDiagnostics.log.info("ContentView startup task began; communityEnabled=\(isCommunityEnabled, privacy: .public) options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
                 if isCommunityEnabled {
@@ -90,37 +93,14 @@ struct ContentView: View {
                 TimetableView()
             }
 
-            if isCommunityEnabled {
-                Tab(
-                    RootTab.community.title(language: leafyLanguage),
-                    systemImage: RootTab.community.systemImage,
-                    value: RootTab.community
-                ) {
-                    CommunityRootView(
-                        notificationBadgeViewModel: communityNotificationBadgeViewModel
-                    )
-                }
-                .badge(communityNotificationBadgeViewModel.unreadCount)
-            }
-
-            Tab(
-                RootTab.schedule.title(language: leafyLanguage),
-                systemImage: RootTab.schedule.systemImage,
-                value: RootTab.schedule
-            ) {
-                ScheduleRootView()
-            }
-
             Tab(
                 RootTab.academics.title(language: leafyLanguage),
                 systemImage: RootTab.academics.systemImage,
                 value: RootTab.academics
             ) {
-                AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
-                    .onAppear {
-                        appNavigation.selectedRootTab = .academics
-                    }
+                CampusRootView(notificationBadgeViewModel: communityNotificationBadgeViewModel)
             }
+            .badge(communityNotificationBadgeViewModel.unreadCount)
 
             Tab(
                 RootTab.profile.title(language: leafyLanguage),
@@ -149,27 +129,11 @@ struct ContentView: View {
                 }
                 .tag(RootTab.timetable)
 
-            if isCommunityEnabled {
-                CommunityRootView(
-                    notificationBadgeViewModel: communityNotificationBadgeViewModel
-                )
-                    .tabItem {
-                        Label(RootTab.community.title(language: leafyLanguage), systemImage: RootTab.community.systemImage)
-                    }
-                    .badge(communityNotificationBadgeViewModel.unreadCount)
-                    .tag(RootTab.community)
-            }
-
-            ScheduleRootView()
-                .tabItem {
-                    Label(RootTab.schedule.title(language: leafyLanguage), systemImage: RootTab.schedule.systemImage)
-                }
-                .tag(RootTab.schedule)
-
-            AcademicHubView(selectedTab: $appNavigation.selectedAcademicTab)
+            CampusRootView(notificationBadgeViewModel: communityNotificationBadgeViewModel)
                 .tabItem {
                     Label(RootTab.academics.title(language: leafyLanguage), systemImage: RootTab.academics.systemImage)
                 }
+                .badge(communityNotificationBadgeViewModel.unreadCount)
                 .tag(RootTab.academics)
 
             ProfileView()
@@ -182,7 +146,7 @@ struct ContentView: View {
     }
 
     private func handleRootTabChange(to newTab: RootTab) {
-        appNavigation.sanitizePublicRootTab(isCommunityEnabled: isCommunityEnabled)
+        appNavigation.sanitizeCampusSection(isCommunityEnabled: isCommunityEnabled)
     }
 
     @MainActor
@@ -222,7 +186,7 @@ struct ContentView: View {
     @MainActor
     private func sanitizeUnavailableRootTab() {
         let isCustomCampus = ActiveCampusContext.identity?.isCustom == true
-        appNavigation.sanitizePublicRootTab(isCommunityEnabled: isCommunityEnabled)
+        appNavigation.sanitizeCampusSection(isCommunityEnabled: isCommunityEnabled)
         if !appNavigation.selectedAcademicTab.isVisible(
             isCustomCampus: isCustomCampus,
             isCommunityEnabled: isCommunityEnabled,

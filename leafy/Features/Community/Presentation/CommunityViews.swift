@@ -745,7 +745,7 @@ struct RealCommunitySectionView: View {
         CommunityFeedRealtimeTaskID(
             campusID: ActiveCampusContext.descriptor.id.rawValue,
             isActive: scenePhase == .active
-                && appNavigation.selectedRootTab == .community
+                && appNavigation.isCampusCommunityActive
                 && hasAcceptedTerms == true
         )
     }
