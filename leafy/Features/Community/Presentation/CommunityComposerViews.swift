@@ -59,6 +59,13 @@ struct CommunityComposerSheet: View {
         _draftExists = State(initialValue: draftID != nil)
     }
 
+    private var selectableCategories: [String] {
+        if initialDraftID != nil, !communityCategories.contains(category), !category.isEmpty {
+            return [category] + communityCategories
+        }
+        return communityCategories
+    }
+
     private var communityAccessGate: CommunityAccessGate {
         CommunityAccessGate(
             sessionManager: sessionManager,
@@ -281,7 +288,7 @@ struct CommunityComposerSheet: View {
                 .leafyHeadline()
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(communityCategories, id: \.self) { option in
+                    ForEach(selectableCategories, id: \.self) { option in
                         CommunityCategoryPill(
                             title: option,
                             isSelected: category == option

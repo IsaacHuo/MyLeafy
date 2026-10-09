@@ -262,12 +262,11 @@ struct CommunityRefreshFeedback: Identifiable, Equatable {
 }
 
 let communityCategories = [
-    "学习交流",
-    "校园生活",
-    "活动社团",
-    "问答互助",
-    "闲聊吹水",
-    "二手交易"
+    "校园",
+    "社团",
+    "问答",
+    "闲聊",
+    "二手"
 ]
 
 let communityReportReasons = [
@@ -1076,12 +1075,8 @@ struct RealCommunitySectionView: View {
         case .post(let post):
             CommunityMasonryPostCard(
                 post: post,
-                isFavoriteLoading: viewModel.activeFavoritePostIDs.contains(post.id),
                 onOpen: {
                     selectedPost = post
-                },
-                onToggleFavorite: {
-                    await toggleFavorite(post)
                 }
             )
             .contextMenu {
@@ -1226,34 +1221,6 @@ struct RealCommunitySectionView: View {
         }
     }
 
-    @MainActor
-    private func toggleFavorite(_ post: CommunityPost) async {
-        switch await communityAccessGate.evaluate(.profileInteraction, forceBootstrap: true) {
-        case .allowed:
-            break
-        case .requiresProfileCompletion:
-            viewModel.errorMessage = L10n.text("收藏前需要先完善社区资料。", language: leafyLanguage)
-            requestProfileCompletion()
-            return
-        case .requiresTermsAcceptance:
-            showingTermsSheet = true
-            return
-        case .failed(let message):
-            viewModel.errorMessage = message
-            return
-        }
-
-        if let error = await viewModel.toggleFavorite(postID: post.id) {
-            viewModel.errorMessage = error
-        } else {
-            let message = post.viewerHasFavorited
-                ? L10n.text("已取消收藏。", language: leafyLanguage)
-                : L10n.text("已添加收藏。", language: leafyLanguage)
-            operationAlert = .success(message)
-        }
-    }
-
-    @MainActor
     private func vote(poll: CommunityPoll, option: CommunityPollOption) async {
         switch await communityAccessGate.evaluate(.postCreation, forceBootstrap: true) {
         case .allowed:
@@ -1401,7 +1368,7 @@ struct CommunityTopicFilterBar: View {
                 }
 
                 CommunityCategoryPill(
-                    title: "全部帖子",
+                    title: "全部",
                     isSelected: selectedCategory == nil && !isShowingHotPosts && contentFilter == .all
                 ) {
                     selectCategory(nil)
