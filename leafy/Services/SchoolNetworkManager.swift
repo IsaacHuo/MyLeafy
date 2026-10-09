@@ -19,7 +19,7 @@ enum SchoolPortal: String, CaseIterable, Codable, Identifiable, Sendable {
     var loginHint: String {
         switch self {
         case .undergraduate:
-            return "使用强智教务账号登录。"
+            return "请在校园网环境下，使用强智教务账号登录。"
         case .graduate:
             return "使用研究生管理系统账号登录，当前先接入课表。"
         }
