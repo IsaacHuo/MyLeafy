@@ -37,7 +37,10 @@ export function WorkQueuePage() {
                 </h2>
                 <Link
                   className="studio-button"
-                  to={listLink(group.resource, group.filters)}
+                  to={
+                    listLink(group.resource, group.filters) +
+                    (group.global ? "&campus=all" : "")
+                  }
                 >
                   查看全部
                 </Link>
@@ -45,7 +48,10 @@ export function WorkQueuePage() {
               <div className="studio-queue-items">
                 {group.items.length ? (
                   group.items.map((r: any) => (
-                    <Link key={r.id} to={`/${group.resource}/${r.id}`}>
+                    <Link
+                      key={r.id}
+                      to={`/${group.resource}/${r.id}${group.global ? "?campus=all" : ""}`}
+                    >
                       <span>
                         {r.title ??
                           r.question ??

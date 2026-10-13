@@ -45,6 +45,7 @@ export async function workQueue(
         const result = await adminList(env, context, action, {
           ...params,
           ...filters,
+          ...(global ? { campusID: "all", campus_id: "all" } : {}),
           page: 0,
           pageSize: 5,
           sortField: "created_at",
@@ -52,6 +53,7 @@ export async function workQueue(
         });
         return {
           resource,
+          global,
           label,
           total: result.total,
           oldestAt: result.items[0]?.created_at ?? null,

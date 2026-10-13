@@ -279,6 +279,20 @@ it("diagnostics reject lower roles and show actual queues without fabricating lo
   expect((await dataQuality(env, context, {})).checks.length).toBe(8);
   expect((await workQueue(env, context, {})).groups.length).toBe(7);
 });
+it("school selection preserves global school approval work and its drilldown scope", async () => {
+  const { db, env, context, who } = fixture();
+  db.sqlite
+    .prepare(
+      "INSERT INTO campus_membership_requests(id,requester_profile_id,school_name,normalized_school_name) VALUES(?,?,?,?)",
+    )
+    .run(crypto.randomUUID(), who.profileId, "New school", "new school");
+  const group = (
+    await workQueue(env, context, { campusID: "bjfu" })
+  ).groups.find((g) => g.resource === "campus-requests")!;
+  expect(group.global).toBe(true);
+  expect(group.total).toBe(1);
+  expect(group.items).toHaveLength(1);
+});
 it("a full offline batch stays within D1 binding limits and duplicate receipt replay is harmless", async () => {
   const { env, who, db } = fixture();
   const events = Array.from({ length: 100 }, () => event());
@@ -317,4 +331,23 @@ it("counts repeated hide transitions without confusing current hidden inventory 
       .get()!.n,
   ).toBe(1);
 });
-it('publication exceptions can be hidden but incomplete media cannot be restored',async()=>{const {env,who,db,context}=fixture();const id=crypto.randomUUID();db.sqlite.prepare("INSERT INTO posts(id,author_id,title,body,status,campus_id,expected_image_count,expected_attachment_count) VALUES(?,?,'未完成','内容','pending_review','bjfu',1,0)").run(id,who.profileId);const {moderate}=await import('../src/admin-write');await moderate(env,context,'moderatePost',{id,status:'hidden'});expect(db.sqlite.prepare('SELECT status FROM posts WHERE id=?').get(id)!.status).toBe('hidden');await expect(moderate(env,context,'moderatePost',{id,status:'published'})).rejects.toMatchObject({status:409});expect(db.sqlite.prepare('SELECT status FROM posts WHERE id=?').get(id)!.status).toBe('hidden');});
+it("publication exceptions can be hidden but incomplete media cannot be restored", async () => {
+  const { env, who, db, context } = fixture();
+  const id = crypto.randomUUID();
+  db.sqlite
+    .prepare(
+      "INSERT INTO posts(id,author_id,title,body,status,campus_id,expected_image_count,expected_attachment_count) VALUES(?,?,'未完成','内容','pending_review','bjfu',1,0)",
+    )
+    .run(id, who.profileId);
+  const { moderate } = await import("../src/admin-write");
+  await moderate(env, context, "moderatePost", { id, status: "hidden" });
+  expect(
+    db.sqlite.prepare("SELECT status FROM posts WHERE id=?").get(id)!.status,
+  ).toBe("hidden");
+  await expect(
+    moderate(env, context, "moderatePost", { id, status: "published" }),
+  ).rejects.toMatchObject({ status: 409 });
+  expect(
+    db.sqlite.prepare("SELECT status FROM posts WHERE id=?").get(id)!.status,
+  ).toBe("hidden");
+});
