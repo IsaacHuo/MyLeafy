@@ -23,14 +23,25 @@ async function call(path,body,token,method=body===undefined?'GET':'POST'){
   if(!response.ok)throw new Error(`${path}: HTTP ${response.status} (${payload.errorEnvelope?.code??payload.code??'unknown'})`);
   return {payload,token:response.headers.get('set-auth-token')};
 }
-let ownToken,ownUserId;
+let ownToken,ownUserId,ownProfileId;
 try{
   assert.equal((await call('/health')).payload.status,'ok');checks.push('health');
   const session=await call('/v1/auth/sign-in/anonymous',{});assert.ok(session.token);ownToken=session.token;ownUserId=session.payload.user.id;assert.ok(ownUserId);checks.push('anonymous-auth');
   const identity=`cf-smoke-${randomUUID()}`;
   const profile=(await call('/v1/profile/bootstrap',{campus_id:'bjfu',edu_id:identity},session.token)).payload.profile;
+  ownProfileId=profile.id;
   const repeated=(await call('/v1/profile/bootstrap',{campus_id:'bjfu',edu_id:identity},session.token)).payload.profile;
   assert.equal(repeated.id,profile.id);checks.push('repeat-bootstrap-keeps-session');
+  const activity={profileID:profile.id,events:[
+    {id:randomUUID(),occurredAt:new Date().toISOString(),platform:'ios',appVersion:'staging-smoke'},
+    {id:randomUUID(),occurredAt:new Date().toISOString(),platform:'android',appVersion:'staging-smoke'}
+  ]};
+  assert.deepEqual((await call('/v1/activity',activity,session.token)).payload.accepted,activity.events.map(e=>e.id));
+  await call('/v1/activity',activity,session.token);
+  const [activityCount]=await sql('SELECT count(*) events,count(DISTINCT profile_id) users FROM app_activity WHERE profile_id=?',[profile.id]);
+  assert.equal(activityCount.events,2);assert.equal(activityCount.users,1);checks.push('foreground-activity-idempotent-multiple-platforms');
+  const drift=await fetch(base+'/v1/activity',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify({...activity,profileID:randomUUID()}),signal:AbortSignal.timeout(20000)});
+  assert.equal(drift.status,409);checks.push('foreground-activity-identity-drift-denied');
   await call('/v1/profile',{nickname:'迁移测试'},session.token,'PATCH');
   await call('/v1/community/terms',{},session.token);
   const post={id:randomUUID(),title:'迁移测试',body:'仅测试环境数据'};
@@ -53,5 +64,6 @@ try{
     const linked=await sql('SELECT profile_id FROM profile_auth_links WHERE auth_user_id=?',[ownUserId]);
     if(linked.length)await call('/v1/account',undefined,ownToken,'DELETE');
     else await sql('DELETE FROM identity_user WHERE id=? AND isAnonymous=1 AND NOT EXISTS(SELECT 1 FROM profile_auth_links WHERE auth_user_id=identity_user.id)',[ownUserId]);
+    if(ownProfileId){const [remaining]=await sql('SELECT count(*) n FROM app_activity WHERE profile_id=?',[ownProfileId]);assert.equal(remaining.n,0);}
   }
 }
