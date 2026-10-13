@@ -86,7 +86,7 @@ export function AndroidReleasesPage() {
                             : "neutral"
                       }
                     >
-                      {valueLabel(r.status)}
+                      {r.status === "failed" ? "发布失败" : valueLabel(r.status)}
                     </Badge>
                   </td>
                   <td>{(r.sizeBytes / 1048576).toFixed(1)} MB</td>
