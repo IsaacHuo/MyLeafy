@@ -49,6 +49,7 @@ describe("admin resource capabilities", () => {
       status: "pending_review",
       image_count: 1,
       expected_image_count: 1,
+      expected_attachment_count:0, attachment_count:0,
     })).map((action) => action.label);
     expect(postActions).toEqual(["重新发布", "下架异常"]);
 

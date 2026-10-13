@@ -16,6 +16,7 @@
     "check:contracts": "tsx scripts/check-client-contracts.ts"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
     "bcryptjs": "3.0.3",
     "better-auth": "1.7.2",
     "hono": "4.13.7"

@@ -1,218 +1,476 @@
-import { expect, test } from "@playwright/test";
-
-const permissions = [
-  "dashboard", "manual", "campuses", "campus-requests", "posts", "polls", "comments", "reports",
-  "profiles", "feedback", "announcements", "postgraduate", "postgraduate-suggestions", "suggestions",
-  "teachers", "courses", "dishes", "ratings", "semester-configs", "national-calendar",
-  "admins", "sessions", "audit-logs",
-].map((resource) => ({ resource, actions: ["list", "show", "create", "edit", "delete", "bulk", "export"] }));
-
-const identity = {
-  admin: { id: "admin-1", username: "admin", display_name: "超级管理员", role: "super_admin", active: true },
-  permissions: [...permissions, { resource: "global-search", actions: ["search"] }],
-  session: { expires_at: "2099-01-01T00:00:00.000Z" },
+import { expect, test, type Page } from "@playwright/test";
+test.setTimeout(120_000);
+const resources = [
+  "dashboard",
+  "manual",
+  "work-queue",
+  "operations",
+  "data-quality",
+  "android-releases",
+  "campuses",
+  "campus-requests",
+  "posts",
+  "polls",
+  "comments",
+  "reports",
+  "profiles",
+  "feedback",
+  "announcements",
+  "community-banners",
+  "postgraduate",
+  "postgraduate-suggestions",
+  "suggestions",
+  "teachers",
+  "courses",
+  "dishes",
+  "ratings",
+  "semester-configs",
+  "national-calendar",
+  "admins",
+  "sessions",
+  "audit-logs",
+];
+const today = "2026-10-13";
+const daily = [{ bucket_date: today, posts: 2, comments: 3, profiles: 1 }];
+const overview = {
+  summary: {
+    operations: {
+      totalProfiles: 2323,
+      completeProfiles: 686,
+      newProfilesToday: 1,
+      mutedProfiles: 0,
+      postsToday: 2,
+      commentsToday: 3,
+      postsInRange: 2,
+      commentsInRange: 3,
+      daily,
+      activity: {
+        today: 19,
+        sevenDays: 72,
+        thirtyDays: 122,
+        inRange: 122,
+        daily: [{ bucket_date: today, users: 19 }],
+        startedAt: "2026-10-13T00:00:00Z",
+        coverage: "有 Cloudflare 身份的非演示用户；免登录、旧版客户端不计入",
+        supportedVersions: { ios: "3.2.5", android: "1.2.5" },
+      },
+    },
+    moderation: { openReports: 2, overdueReports: 1, hiddenPostsInRange: 2 },
+    feedback: {
+      open: 2,
+      reviewed: 3,
+      pending: 5,
+      overdue: 1,
+      aging: [
+        { key: "0-24h", label: "24 小时内", count: 2 },
+        { key: "1-3d", label: "1–3 天", count: 3 },
+      ],
+    },
+    teachers: { average: 4.2, totalRatings: 89 },
+  },
+  cards: { posts: { hidden: 4 } },
+  analyticsMeta: {
+    days: 30,
+    timezone: "Asia/Shanghai",
+    startDate: "2026-09-14",
+    startAt: "2026-09-13T16:00:00Z",
+    endAt: "2026-10-13T08:00:00Z",
+    generatedAt: "2026-10-13T08:00:00Z",
+  },
 };
-
-test("logs in through the BFF and opens a real resource route", async ({ page }) => {
+async function setup(page: Page, role = "super_admin") {
   let loggedIn = false;
-  const actionCalls: Array<{ action: string; params?: Record<string, unknown> }> = [];
-  await page.route("**/api/admin/**", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/login")) {
-      loggedIn = true;
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(identity) });
-      return;
-    }
-    if (url.pathname.endsWith("/me")) {
-      await route.fulfill(loggedIn
-        ? { status: 200, contentType: "application/json", body: JSON.stringify(identity) }
-        : { status: 401, contentType: "application/json", headers: { "x-request-id": "e2e-login" }, body: JSON.stringify({ error: "登录已过期", errorEnvelope: { code: "unauthorized", message: "登录已过期", retryable: false } }) });
-      return;
-    }
-    if (url.pathname.endsWith("/logout")) {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { ok: true }, meta: { request_id: "e2e-logout", audit_logged: true, duration_ms: 1 } }) });
-      return;
-    }
-    if (url.pathname.endsWith("/actions")) {
-      const body = route.request().postDataJSON() as { action: string; params?: Record<string, unknown> };
-      actionCalls.push(body);
-      const data = body.action === "overview"
-        ? { summary: { operations: { totalProfiles: 12, activeProfiles: 10, newProfilesToday: 1, mutedProfiles: 0, postsToday: 2, commentsToday: 3, daily: [{ bucket_date: "2026-07-13", posts: 2, comments: 3, profiles: 1 }] }, moderation: {}, feedback: { open: 2, reviewed: 3, pending: 5, overdue: 1, aging: [] }, teachers: {} } }
-          : body.action === "listCampuses"
-          ? { items: [{ id: "campus-a", display_name: "测试大学" }], total: 1, page: 0, pageSize: 100 }
-          : body.action === "listPosts"
-            ? { items: [{ id: "post-1", title: "测试图片帖子", status: "pending_review", display_status: "publish_exception", upload_state: "publish_failed", image_count: 1, expected_image_count: 1, created_at: "2026-07-10T00:00:00Z" }], total: 1, page: 0, pageSize: 20 }
-            : body.action === "getPost"
-              ? { post: { id: "post-1", title: "测试图片帖子", body: "图片证据", status: "pending_review", upload_state: "publish_failed", images: [{ id: "image-1", signed_url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", thumbnail_signed_url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" }] }, comments: [] }
-            : body.action === "retryPostPublish"
-              ? { id: "post-1", title: "测试图片帖子", status: "published" }
-            : body.action === "listFeedback"
-              ? { items: [{ id: "feedback-1", issue_type: "bug", body: "测试反馈", status: "reviewed", created_at: "2026-07-12T00:00:00Z" }], total: 1, page: 0, pageSize: 20 }
-              : body.action === "listAdminSessions"
-                ? { items: [{ id: "session-1", admin_id: "admin-2", admin: { display_name: "运营管理员" }, last_seen_at: "2026-07-13T08:00:00Z", expires_at: "2099-01-01T00:00:00Z", revoked_at: null, is_current: false }], total: 1, page: 0, pageSize: 20 }
-                : body.action === "listTeacherRatings"
-                  ? { items: [{ id: "teacher:341:user-1", target: "teacher", teacher_id: 341, user_id: "user-1", teacher: { name: "测试教师" }, user: { nickname: "测试用户" }, stars: 4, updated_at: "2026-07-13T08:00:00Z" }], total: 1, page: 0, pageSize: 20 }
-            : { items: [], total: 0, page: 0, pageSize: 20 };
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data, meta: { request_id: "e2e", audit_logged: true, duration_ms: 1 } }) });
-      return;
-    }
-    await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not found" }) });
-  });
-
-  await page.goto("/admin");
-  await page.getByLabel("账号").fill("operator");
-  await page.getByLabel("密码").fill("secret");
-  await page.getByRole("button", { name: "登录" }).click();
-  await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible();
-  await expect(page.getByRole("img", { name: /内容趋势，日期：07-13/ })).toBeVisible();
-  await expect(page.getByText("未查看 2 · 已查看 3 · 逾期 1")).toBeVisible();
-  await expect(page.getByText("undefined", { exact: true })).toHaveCount(0);
-
-  await navigateAdmin(page, "帖子");
-  await expect(page).toHaveURL(/\/admin\/posts/);
-  const postStatus = page.getByRole("combobox", { name: "状态" });
-  await expect(postStatus).toHaveText("发布异常");
-  await expect.poll(() => lastActionParams(actionCalls, "listPosts")?.status).toBe("pending_review");
-  await postStatus.click();
-  await expect(page.getByRole("option").first()).toHaveText("发布异常");
-  await expect(page.getByRole("option", { name: "全部" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await page.locator(".ra-input-status").getByRole("button", { name: "显示全部" }).click();
-  await expect(postStatus).toHaveText("全部");
-  await expect.poll(() => lastActionParams(actionCalls, "listPosts")?.status).toBe("all");
-  await expect(page.getByText("测试图片帖子")).toBeVisible();
-  await expect(page.getByRole("table").getByText("发布异常", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "重新发布" })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "标题" })).toBeVisible();
-  await page.getByRole("button", { name: "查看" }).click();
-  await expect(page.getByRole("img", { name: "帖子图片 1" })).toBeVisible();
-  await page.getByRole("button", { name: "关闭" }).click();
-  await page.getByRole("button", { name: "重新发布" }).click();
-  await expect(page.getByText(/仅完整上传的帖子才会公开/)).toBeVisible();
-  await page.getByRole("button", { name: "取消" }).click();
-
-  await navigateAdmin(page, "投票");
-  const pollStatus = page.getByRole("combobox", { name: "状态" });
-  await expect(pollStatus).toHaveText("待处理（审核/删除）");
-  await expect.poll(() => lastActionParams(actionCalls, "listPolls")?.status).toBe("pending");
-  await pollStatus.click();
-  await expect(page.getByRole("option").first()).toHaveText("待处理（审核/删除）");
-  await expect(page.getByRole("option", { name: "待审核" })).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  await navigateAdmin(page, "举报");
-  await expect(page.getByRole("combobox", { name: "状态" })).toHaveText("待处理");
-  await expect.poll(() => lastActionParams(actionCalls, "listModerationReports")?.status).toBe("open");
-
-  await navigateAdmin(page, "反馈");
-  await expect(page.getByRole("combobox", { name: "状态" })).toHaveText("未查看");
-  await expect.poll(() => lastActionParams(actionCalls, "listFeedback")?.status).toBe("open");
-  await expect(page.getByRole("columnheader", { name: /类型/ })).toBeVisible();
-  await expect(page.getByText("已查看待处理", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /新增反馈/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "添加筛选" })).toBeVisible();
-
-  await navigateAdmin(page, "会话");
-  await expect(page.getByRole("button", { name: "撤销", exact: true })).toBeVisible();
-
-  await navigateAdmin(page, "评分");
-  await page.getByRole("button", { name: "删除", exact: true }).click();
-  await expect(page.getByText(/评分：测试教师 · 4 星 · 用户：测试用户/)).toBeVisible();
-  await expect(page.getByText("undefined", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "取消" }).click();
-  await expect(page.evaluate(() => localStorage.getItem("leafy-admin-session"))).resolves.toBeNull();
-});
-
-test("viewer sees evidence but no edit, export, or bulk controls", async ({ page }) => {
-  const viewerIdentity = {
-    admin: { id: "viewer-1", username: "viewer", display_name: "只读管理员", role: "viewer", active: true },
-    permissions: permissions
-      .filter((permission) => !["admins", "sessions", "audit-logs"].includes(permission.resource))
-      .map((permission) => ({ resource: permission.resource, actions: ["list", "show"] })),
-    session: { expires_at: "2099-01-01T00:00:00.000Z" },
+  const calls: { action: string; params: any }[] = [];
+  const identity = {
+    admin: {
+      id: role,
+      username: role,
+      display_name: role === "viewer" ? "只读管理员" : "超级管理员",
+      role,
+      active: true,
+    },
+    permissions: resources
+      .filter(
+        (r) =>
+          role !== "viewer" ||
+          ![
+            "operations",
+            "data-quality",
+            "admins",
+            "sessions",
+            "audit-logs",
+          ].includes(r),
+      )
+      .map((resource) => ({
+        resource,
+        actions:
+          role === "viewer"
+            ? ["list", "show"]
+            : ["list", "show", "create", "edit", "delete", "bulk", "export"],
+      })),
+    session: { expires_at: "2099-01-01T00:00:00Z" },
   };
-  let loggedIn = false;
   await page.route("**/api/admin/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/login")) {
       loggedIn = true;
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(viewerIdentity) });
+      await route.fulfill({ json: identity });
       return;
     }
     if (url.pathname.endsWith("/me")) {
-      await route.fulfill(loggedIn
-        ? { status: 200, contentType: "application/json", body: JSON.stringify(viewerIdentity) }
-        : {
-            status: 401,
-            contentType: "application/json",
-            headers: { "x-request-id": "e2e-viewer-login" },
-            body: JSON.stringify({
-              error: "登录已过期",
-              errorEnvelope: { code: "unauthorized", message: "登录已过期", retryable: false },
-            }),
-          });
+      await route.fulfill(
+        loggedIn
+          ? { json: identity }
+          : { status: 401, json: { error: "请登录" } },
+      );
       return;
     }
     if (url.pathname.endsWith("/logout")) {
+      loggedIn = false;
+      await route.fulfill({ json: { ok: true } });
+      return;
+    }
+    if (url.pathname.endsWith("/export")) {
       await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: { ok: true },
-          meta: { request_id: "e2e-viewer-logout", audit_logged: true, duration_ms: 1 },
-        }),
+        body: "id,title\np1,测试",
+        contentType: "text/csv",
+        headers: { "content-disposition": 'attachment; filename="posts.csv"' },
       });
       return;
     }
-    if (url.pathname.endsWith("/actions")) {
-      const body = route.request().postDataJSON() as { action: string };
-      const data = body.action === "overview"
-        ? { summary: { operations: {}, moderation: {}, feedback: {}, teachers: {} } }
-        : body.action === "listCampuses"
-          ? { items: [{ id: "campus-a", display_name: "测试大学" }], total: 1, page: 0, pageSize: 100 }
-          : body.action === "listPosts"
-            ? { items: [{ id: "post-1", title: "只读图片帖子", status: "pending_review", display_status: "publish_exception", upload_state: "publish_failed", image_count: 1, expected_image_count: 1, created_at: "2026-07-10T00:00:00Z" }], total: 1, page: 0, pageSize: 20 }
-            : body.action === "listFeedback"
-              ? { items: [{ id: "feedback-1", issue_type: "bug", body: "只读反馈", status: "open", created_at: "2026-07-12T00:00:00Z" }], total: 1, page: 0, pageSize: 20 }
-              : { items: [], total: 0, page: 0, pageSize: 20 };
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
-      return;
-    }
-    await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not found" }) });
+    const { action, params } = route.request().postDataJSON();
+    calls.push({ action, params });
+    const post = {
+      id: "post-1",
+      title: "测试图片帖子",
+      body: "校园生活与学习交流",
+      status: "pending_review",
+      display_status: "publish_exception",
+      upload_state: "publish_failed",
+      category: "校园",
+      image_count: 1,
+      expected_image_count: 1,
+      attachment_count: 0,
+      expected_attachment_count: 0,
+      created_at: "2026-10-13T01:00:00Z",
+      images: [
+        {
+          id: "image-1",
+          signed_url:
+            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+        },
+      ],
+    };
+    let data: any = { items: [], total: 0, page: 0, pageSize: 20 };
+    if (action === "overview") data = overview;
+    else if (action === "listCampuses")
+      data = {
+        items: [
+          { id: "bjfu", display_name: "北京林业大学" },
+          { id: "another", display_name: "另一学校" },
+        ],
+        total: 2,
+      };
+    else if (action === "listPosts") data = { items: [post], total: 1 };
+    else if (action === "getPost") data = { post, comments: [] };
+    else if (action === "listFeedback")
+      data = {
+        items: [
+          {
+            id: "feedback-1",
+            body: "课表建议",
+            status: "reviewed",
+            issue_type: "bug",
+            created_at: "2026-10-13T03:00:00Z",
+          },
+        ],
+        total: 1,
+      };
+    else if (action === "listProfiles")
+      data = {
+        items: [
+          {
+            id: "profile-1",
+            nickname: "测试学生",
+            display_name: "测试",
+            community_access_status: "approved",
+            created_at: "2026-10-12T03:00:00Z",
+          },
+        ],
+        total: 1,
+      };
+    else if (action === "getProfile")
+      data = {
+        profile: { id: "profile-1", nickname: "测试学生" },
+        recentPosts: [post],
+      };
+    else if (action === "profileActivity")
+      data = {
+        items: [
+          {
+            id: "event-1",
+            occurred_at: "2026-10-13T08:00:00Z",
+            platform: "ios",
+            app_version: "3.2.5",
+          },
+        ],
+      };
+    else if (
+      action === "listTeacherRatings" ||
+      action === "listCourseRatings" ||
+      action === "listDishRatings"
+    )
+      data = {
+        items: [
+          {
+            id: "teacher:341:user-1",
+            teacher_id: 341,
+            user_id: "user-1",
+            teacher: { name: "测试教师" },
+            user: { nickname: "测试用户" },
+            stars: 4,
+            updated_at: "2026-10-13T08:00:00Z",
+          },
+        ],
+        total: 1,
+      };
+    else if (action === "listAdminSessions")
+      data = {
+        items: [
+          {
+            id: "session-1",
+            admin: { display_name: "管理员" },
+            expires_at: "2099-01-01T00:00:00Z",
+            is_current: false,
+          },
+        ],
+        total: 1,
+      };
+    else if (action === "workQueue")
+      data = {
+        groups: [
+          {
+            resource: "feedback",
+            label: "反馈",
+            total: 1,
+            items: [
+              {
+                id: "feedback-1",
+                body: "课表建议",
+                created_at: "2026-10-13T03:00:00Z",
+              },
+            ],
+            filters: { pending: true, status: "all" },
+          },
+        ],
+      };
+    else if (action === "operationalHealth")
+      data = {
+        environment: "staging",
+        mode: "active",
+        commit: "test-commit",
+        signals: { pending: 0 },
+        media: { pending: 0 },
+        generatedAt: "2026-10-13T08:00:00Z",
+      };
+    else if (action === "diagnosticList")
+      data = {
+        items: [
+          {
+            id: "run-1",
+            job: "media",
+            status: "succeeded",
+            started_at: "2026-10-13T08:00:00Z",
+          },
+        ],
+        total: 1,
+      };
+    else if (action === "dataQuality")
+      data = {
+        checks: [
+          {
+            key: "teachers",
+            label: "教师评分聚合",
+            count: 1,
+            samples: [{ id: 341 }],
+          },
+        ],
+        generatedAt: "2026-10-13T08:00:00Z",
+      };
+    else if (action === "globalSearch")
+      data = [
+        {
+          resource: "posts",
+          id: "post-1",
+          path: "/admin/posts/post-1",
+          title: "搜索帖子",
+          subtitle: "校园",
+        },
+      ];
+    else if (action === "previewCommunityFeed") data = { posts: [post] };
+    else if (action === "listAndroidReleases")
+      data = {
+        items: [
+          {
+            id: "release-1",
+            versionName: "1.2.5",
+            versionCode: 9,
+            status: "ready",
+            sizeBytes: 54000000,
+            ciVerified: true,
+            releaseNotes: "新增真实活动采集",
+          },
+        ],
+        total: 1,
+      };
+    await route.fulfill({
+      json: { data, meta: { request_id: "e2e", audit_logged: true } },
+    });
   });
-
   await page.goto("/admin");
-  await page.getByLabel("账号").fill("viewer");
-  await page.getByLabel("密码").fill("secret");
-  await page.getByRole("button", { name: "登录" }).click();
-  await navigateAdmin(page, "帖子");
-  await expect(page.getByText("只读图片帖子")).toBeVisible();
-  await expect(page.getByRole("button", { name: "查看" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "重新发布" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "下架异常" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出 CSV" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /批量/ })).toHaveCount(0);
-
-  await navigateAdmin(page, "反馈");
-  await expect(page.getByText("只读反馈")).toBeVisible();
-  await expect(page.getByRole("button", { name: "编辑" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "导出 CSV" })).toHaveCount(0);
+  await page.getByLabel("账号", { exact: true }).fill(role);
+  await page.getByLabel("密码", { exact: true }).fill("test-only");
+  await page.getByRole("button", { name: "登录", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible();
+  return calls;
+}
+async function navigate(page: Page, label: string) {
+  const link = page
+    .locator(".studio-sidebar nav")
+    .getByRole("link", { name: label, exact: true });
+  if (!(await link.isVisible()))
+    await page.getByRole("button", { name: "展开导航", exact: true }).click();
+  await link.click();
+  if (
+    await page
+      .getByRole("button", { name: "展开导航", exact: true })
+      .isVisible()
+  )
+    await page.getByRole("button", { name: "展开导航", exact: true }).click();
+}
+test("Studio data browsing, scopes, saved views, details and dangerous confirmations", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const calls = await setup(page);
+  await expect(page.getByText("资料完善", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: /内容趋势/ })).toBeVisible();
+  await navigate(page, "帖子");
+  await expect(page.getByLabel("状态", { exact: true })).toHaveValue(
+    "pending_review",
+  );
+  await page.getByLabel("状态", { exact: true }).selectOption("all");
+  await expect
+    .poll(
+      () => calls.filter((c) => c.action === "listPosts").at(-1)?.params.status,
+    )
+    .toBe("all");
+  await page.getByLabel("学校范围").selectOption("bjfu");
+  await expect
+    .poll(
+      () =>
+        calls.filter((c) => c.action === "listPosts").at(-1)?.params.campusID,
+    )
+    .toBe("bjfu");
+  await page.getByRole("button", { name: "视图", exact: true }).click();
+  await page.getByLabel("视图名称").fill("校园全部帖子");
+  await page.getByRole("button", { name: "保存视图", exact: true }).click();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await page.getByRole("button", { name: "列", exact: true }).click();
+  await page.getByLabel("点赞", { exact: true }).uncheck();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(
+    page.getByRole("columnheader", { name: "点赞", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("table")
+    .getByRole("link", { name: "详情", exact: true })
+    .click();
+  await expect(page.getByRole("img", { name: "帖子图片 1" })).toBeVisible();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await page.getByRole("button", { name: "重新发布", exact: true }).click();
+  await expect(page.getByText(/仅完整上传的帖子才会公开/)).toBeVisible();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await navigate(page, "评分");
+  await page.getByLabel("评分类型").selectOption("course");
+  await expect
+    .poll(() => calls.filter((c) => c.action === "listCourseRatings").length)
+    .toBeGreaterThan(0);
+  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await expect(page.getByText(/评分：测试教师/)).toBeVisible();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await navigate(page, "教师");
+  await page.getByRole("button", { name: "新增", exact: true }).click();
+  await page.getByLabel("姓名", { exact: true }).fill("未保存");
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "放弃未保存的修改？" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "放弃修改", exact: true }).click();
+  await page.getByRole("button", { name: "全局搜索", exact: true }).click();
+  await page.getByLabel("搜索内容").fill("校园");
+  await page.getByRole("button", { name: "搜索帖子", exact: false }).click();
+  await expect(page).toHaveURL(/\/admin\/posts\/post-1/);
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  expect(
+    await page.evaluate(() => localStorage.getItem("leafy-admin-session")),
+  ).toBeNull();
+  expect(errors).toEqual([]);
 });
-
-function lastActionParams(
-  calls: Array<{ action: string; params?: Record<string, unknown> }>,
-  action: string,
-) {
-  const matching = calls.filter((call) => call.action === action);
-  return matching[matching.length - 1]?.params;
-}
-
-async function navigateAdmin(page: import("@playwright/test").Page, label: string) {
-  const item = page.getByRole("menuitem", { name: label, exact: true });
-  const expandMenu = page.getByRole("button", { name: "展开菜单" });
-  if (await expandMenu.isVisible()) {
-    await expandMenu.click();
+test("viewer retains read access and cannot manage or see system diagnostics", async ({
+  page,
+}) => {
+  await setup(page, "viewer");
+  await navigate(page, "帖子");
+  await expect(
+    page.getByRole("table").getByRole("link", { name: "详情", exact: true }),
+  ).toBeVisible();
+  for (const label of ["重新发布", "导出 CSV", "编辑"])
+    await expect(
+      page.getByRole("button", { name: label, exact: true }),
+    ).toHaveCount(0);
+  await expect(
+    page.locator(".studio-sidebar nav").getByRole("link", { name: "运行诊断" }),
+  ).toHaveCount(0);
+  await page.goto("/admin/operations");
+  await expect(page.getByRole("alert")).toContainText("无权访问");
+});
+test("every resource and diagnostics renders in light and dark themes", async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await setup(page);
+  for (const theme of ["light", "dark"]) {
+    await page.getByLabel("主题", { exact: true }).selectOption(theme);
+    for (const path of resources.filter((r) => r !== "dashboard")) {
+      await page.goto(`/admin/${path}`);
+      await expect(page.locator("main h1")).toBeVisible();
+      await expect(page.locator("main .studio-loading")).toHaveCount(0);
+      await expect(page.locator("main [role=alert]")).toHaveCount(0);
+      if (
+        ["posts", "operations", "data-quality", "android-releases"].includes(
+          path,
+        )
+      )
+        await page.screenshot({
+          path: testInfo.outputPath(`${path}-${theme}.png`),
+          fullPage: true,
+        });
+    }
+    await page.goto("/admin");
+    await expect(page.getByRole("heading", { name: "运营总览" })).toBeVisible();
+    await expect(page.locator(".studio-chart canvas").first()).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath(`overview-${theme}.png`),
+      fullPage: true,
+    });
   }
-  await item.scrollIntoViewIfNeeded();
-  await item.click();
-}
+  expect(errors).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});

@@ -1,0 +1,37 @@
+# Admin Studio implementation
+
+The `/admin` frontend uses React, React Router, Tailwind, Radix primitives, TanStack Query/Table, React Hook Form and ECharts. Its shared layout and controls follow Supabase Studio patterns; Cloudflare remains the data and authentication authority. The public site still loads the admin bundle lazily.
+
+## Data contracts
+
+All browser management requests use the existing same-origin Pages proxy, HttpOnly cookie, CSRF header and private Worker AdminAPI binding. Client permissions hide controls; Worker role and state guards authorize operations. The school selector changes query scope and is not a school ACL.
+
+The resource registry exposes 83 actions. Lists use server-side filtering, stable sorting and pagination. Saved views store only view state in the current browser, keyed by admin ID and resource. Search results identify an object and link to its details. Query keys include admin, school, resource and filters; inactive requests can be aborted.
+
+`overview.operations.completeProfiles` counts completed profiles. `overview.operations.activity` contains actual foreground-event distinct profile counts for today, seven days, thirty days and the selected period, plus daily counts and collection coverage. New profiles mean profile creation, and content trends mean record creation regardless of later moderation status. Current hidden inventory and recorded hide transitions are separate measurements. Feedback and reports both include `open` and `reviewed` in pending work.
+
+`overview.analyticsMeta` supplies the IANA timezone, UTC start/end boundaries, date range, generation timestamp and collection start. Lists, export and metric drilldowns use these boundaries; end-date filters exclude the following midnight. Activity daily aggregation uses indexed UTC intervals rather than downloading every heartbeat. Server-side conversion uses Temporal, including DST transitions.
+
+Teacher/course/dish ratings have distinct composite IDs, target filters and raw-row aggregates. Hydrated posts include actual image/attachment counts; publication recovery requires both declared counts to match. Report details include post and comment evidence. Configuration forms use native calendar fields, with server validation of dates, IDs, titles and event kinds.
+
+## Foreground activity
+
+`POST /v1/activity` accepts 1–100 events containing `id`, `occurredAt`, `platform`, and `appVersion`. Clients also send an expected `profileID`; the server independently resolves the authenticated profile and rejects identity drift. A transaction checks the live session/link and rejects event IDs belonging to another profile. Replayed IDs do not produce another row. Demo events are acknowledged but do not count.
+
+The native foreground lifecycle records on entry and every five minutes. The first event can wait for the existing profile bootstrap. Identity-scoped queues retain at most seven days and remove only acknowledged events. Background transitions and identity changes cancel the caller's task; recreated profiles do not inherit the previous profile's queue. Guest and demo modes do not create a recorder network request. Data excludes school passwords, local timetable/grade/memo content, background jobs and widget activity.
+
+D1 0012 creates minimal activity records with account-deletion cascade; the daily retention job removes records older than ninety days. Collection metadata and supported versions are visible: iOS 3.2.5 and Android 1.2.5/code 9. Versions without instrumentation are not observed; an absent event is not proof of inactivity. D1 0013 records subsequent hide transitions without inventing earlier action history.
+
+## Operational tools
+
+- Work queue: reports, feedback, poll review/deletion, publication exceptions, school requests, catalog suggestions and postgraduate leads. Global approval queues remain global when a school is selected.
+- Super-admin diagnostics: environment, deployed commit, backend mode, scheduled runs, pending change signals and media deletion jobs. Filters and record details use bounded queries. Request logs and performance measurements show “not collected”.
+- Super-admin quality checks: rating count/average/star counters, post interaction counters, declared media quantity, active-semester uniqueness, comment relationships and native calendar shape. Each check exposes at most twenty object IDs. Missing media declarations are identified separately. No SQL editor, repair button or automatic historical data mutation is exposed.
+
+## Audit and verification
+
+`backend/scripts/audit-admin-data.ts` runs the same quality checks through an owner-operated SELECT-only D1 adapter. The receipt in `admin-data-audit.json` records environment, UTC check time, aggregate mismatch counts and unverifiable counts, without personal records or credentials. On 2026-10-13 all eight production checks reported zero mismatches and zero unverifiable media rows. This is a read-only consistency snapshot; it does not prove uncollected historical app activity.
+
+Focused backend tests exercise activity replay, offline time, scope changes, demo/session rejection, D1-sized batches, DST boundaries, filters, rating deletion, role gates and moderation transitions. Native tests cover queue retention, acknowledgement and identity isolation. Browser tests exercise every resource in both themes, plus view saving, column visibility, detail evidence, confirmations, unsaved changes, search and viewer restrictions. Production operations are never used as test fixtures.
+
+Deployment follows `operations/delivery.md`: task-commit CI, main integration, D1 forward migrations, Worker and site on staging. Production deployment requires the owner; Android candidate acceptance and iOS App Store publication remain separate.

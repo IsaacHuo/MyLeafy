@@ -2,9 +2,11 @@
 
 MyLeafy 运营后台是与官网同仓部署的受保护 Web 应用，生产路由为 `/admin`。它用于管理 MyLeafy 自有的社区、目录、配置和运营数据，不访问用户的学校密码，也不代替学校教务后台。
 
-后台前端位于 `site/src/admin/`，使用 React-admin 5、MUI、ECharts、Vite 与 TypeScript。管理 API 由 Cloudflare Pages Functions 代理到 Cloudflare Worker AdminAPI。
+后台前端位于 `site/src/admin/`，使用 React、Tailwind、Radix、TanStack Query/Table、React Hook Form、ECharts、Vite 与 TypeScript。管理 API 由 Cloudflare Pages Functions 代理到 Cloudflare Worker AdminAPI。
 
 Android 版本页是独立资源页面，管理私有候选、下载验收、超级管理员发布授权、失败重试与撤回。只有正式发行进入公开更新接口；iOS 继续由 App Store Connect 管理。操作和首次部署条件见 [交付与发布](../operations/delivery.md)。
+
+完整的当前 UI、指标与活动采集契约见 [Admin Studio implementation](admin-studio.md)。
 
 ## 1. 架构与信任边界
 
@@ -163,21 +165,21 @@ active 配置切换使用原子 action，不通过多个不相关表单请求拼
 
 ```text
 site/src/admin/
-├── AdminConsole.tsx          # 后台入口与资源组装
+├── AdminConsole.tsx          # 后台入口与路由组装
 ├── registry.ts               # 资源定义
 ├── contracts.ts              # API 与资源契约
 ├── components/               # 登录、布局和共享组件
 ├── dashboard/                # 指标与 ECharts 按需运行时
-├── providers/                # auth、session、client、data provider
+├── providers/                # auth、session、client、query context、data provider
 ├── resources/                # 列表、详情、编辑与复合页面
 └── *.test.ts(x)              # 单元和契约测试
 ```
 
-后台通过 `lazy()` 从公开网站独立加载，避免把 React-admin、MUI 和 ECharts 全部加入官网首屏包。ECharts 使用模块化运行时，页面只注册实际图表类型。
+后台通过 `lazy()` 从公开网站独立加载，避免把 后台组件和 ECharts 全部加入官网首屏包。ECharts 使用模块化运行时，页面只注册实际图表类型。
 
 ## 6. 前端数据契约
 
-React-admin 的 list/getOne/create/update/delete 等行为由 data provider 转换成受控 action。服务端不接受任意表名和任意 SQL 式参数。
+资源列表、详情和创建/更新/删除行为由 data provider 转换成受控 action。服务端不接受任意表名和任意 SQL 式参数。
 
 ### 6.1 列表
 

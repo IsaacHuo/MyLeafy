@@ -1,37 +1,53 @@
 import { useState } from "react";
-import { useLogin, useNotify } from "react-admin";
-import { Box, Button, Card, CircularProgress, TextField, Typography } from "@mui/material";
-
+import { useForm } from "react-hook-form";
+import { Leaf, ArrowRight } from "lucide-react";
+import { useAdmin } from "../providers/context";
+import { Button, ErrorState } from "./ui";
 export function AdminLogin() {
-  const login = useLogin();
-  const notify = useNotify();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setLoading(true);
-    try {
-      await login({ username, password });
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "登录失败。", { type: "error" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  const { login } = useAdmin(),
+    [error, setError] = useState<unknown>(null);
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<{ username: string; password: string }>();
   return (
-    <Box minHeight="100dvh" display="grid" sx={{ placeItems: "center", bgcolor: "#f5faf7", p: 3 }}>
-      <Card component="form" onSubmit={submit} sx={{ width: "min(100%, 420px)", p: 4, borderRadius: 2 }}>
-        <Typography color="primary" fontWeight={700} variant="overline">MyLeafy Admin</Typography>
-        <Typography variant="h4" fontWeight={700} mt={1} mb={3}>社区管理后台</Typography>
-        <TextField label="账号" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} fullWidth required margin="normal" />
-        <TextField label="密码" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} fullWidth required margin="normal" />
-        <Button type="submit" variant="contained" size="large" fullWidth disabled={loading} sx={{ mt: 3 }}>
-          {loading ? <CircularProgress color="inherit" size={22} /> : "登录"}
-        </Button>
-      </Card>
-    </Box>
+    <main className="studio-login">
+      <div className="studio-login-card">
+        <Leaf className="studio-brand-icon" size={28} />
+        <h1>MyLeafy</h1>
+        <p>登录运营工作台</p>
+        <form
+          onSubmit={handleSubmit(async (values) => {
+            setError(null);
+            try {
+              await login(values.username, values.password);
+            } catch (err) {
+              setError(err);
+            }
+          })}
+        >
+          <label>
+            账号
+            <input autoComplete="username" required {...register("username")} />
+          </label>
+          <label>
+            密码
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              {...register("password")}
+            />
+          </label>
+          {error != null && <ErrorState error={error} />}
+          <Button type="submit" variant="primary" disabled={isSubmitting}>
+            {isSubmitting ? "正在登录…" : "登录"}
+            <ArrowRight size={14} />
+          </Button>
+        </form>
+        <small>受保护的 Cloudflare 管理服务</small>
+      </div>
+    </main>
   );
 }

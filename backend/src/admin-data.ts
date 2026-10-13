@@ -4,6 +4,7 @@ import type { BackendEnv } from './auth';
 import { adminGuard, type AdminContext, type AdminRole } from './admin-auth';
 import { decode, rows, type Bind, type Row } from './db';
 import { ApiError, integer, text } from './http';
+import { dateBoundary } from './admin-dates';
 
 type Resource={table:string;search:string[];role?:AdminRole;campusColumn?:string;order?:string};
 export const adminLists:Record<string,Resource>={
@@ -26,6 +27,7 @@ export const adminLists:Record<string,Resource>={
   listDishes:{table:'dish_catalog',search:['search_text'],order:'rating_average'},
   listTeacherRatings:{table:'teacher_ratings',search:[]},
   listDishRatings:{table:'dish_ratings',search:[]},
+  listCourseRatings:{table:'course_ratings',search:[]},
   listSemesterRuntimeConfigs:{table:'semester_runtime_configs',search:['semester_id'],order:'updated_at'},
   listNationalCalendarRuntimeConfigs:{table:'national_calendar_runtime_configs',search:[],order:'year'},
   listAdmins:{table:'admin_accounts',search:['username','display_name'],role:'super_admin'},
@@ -38,13 +40,6 @@ export function profileForAdmin(record:Row,context:AdminContext){
   const projected=context.role==='super_admin'?record:Object.fromEntries(profileColumns.filter(k=>k in record).map(k=>[k,record[k]]));
   return decode('profiles',projected);
 }
-function dateBoundary(value:unknown,offset:number,end=false){
-  if(value==null||value==='')return null;
-  const string=text(value,40),dateOnly=/^\d{4}-\d{2}-\d{2}$/.test(string);
-  const parsed=Date.parse(dateOnly?`${string}T00:00:00Z`:string);
-  if(!Number.isFinite(parsed))throw new ApiError(400,'bad_request','日期无效。');
-  return new Date(parsed+(dateOnly?offset*60000+(end?86400000:0):0)).toISOString().replace('Z','000Z');
-}
 export async function adminHydrate(env:BackendEnv,context:AdminContext,table:string,records:Row[]){
   if(!records.length)return [];
   const profileIds=[...new Set(records.flatMap(row=>['author_id','user_id','requester_profile_id','reporter_id','reported_user_id'].map(key=>row[key]).filter((id):id is string=>typeof id==='string')))];
@@ -52,6 +47,12 @@ export async function adminHydrate(env:BackendEnv,context:AdminContext,table:str
   for(let start=0;start<profileIds.length;start+=80){
     const ids=profileIds.slice(start,start+80);
     for(const profile of await rows(env.DB,`SELECT * FROM profiles WHERE id IN(${ids.map(()=>'?').join(',')})`,ids))profiles.set(profile.id as string,profileForAdmin(profile,context));
+  }
+  const ratingTargets=new Map<Bind,Row>();
+  if(table.endsWith('_ratings')){
+    const target=table.slice(0,-8),catalog=target==='teacher'?'teachers':target==='course'?'course_catalog':'dish_catalog';
+    const ids=[...new Set(records.map(r=>r[`${target}_id`] as Bind))];
+    for(let offset=0;offset<ids.length;offset+=80){const batch=ids.slice(offset,offset+80);for(const r of await rows(env.DB,`SELECT id,name FROM ${catalog} WHERE id IN(${batch.map(()=>'?').join(',')})`,batch))ratingTargets.set(r.id as Bind,r);}
   }
   const output=await Promise.all(records.map(async record=>{
     let row=decode(table,record);
@@ -63,7 +64,11 @@ export async function adminHydrate(env:BackendEnv,context:AdminContext,table:str
     if(row.reporter_id)row.reporter=profiles.get(row.reporter_id as string)??null;
     if(row.reported_user_id)row.reported_user=profiles.get(row.reported_user_id as string)??null;
     if(table==='admin_sessions'){row.id=row.token_hash;row.is_current=row.token_hash===context.tokenHash;delete row.token_hash;}
-    if(table==='teacher_ratings'||table==='dish_ratings')row.id=`${row.teacher_id??row.dish_id}:${row.user_id}`;
+    if(table.endsWith('_ratings')) {
+      const target=table.slice(0,-8),key=`${target}_id`,catalog=target==='teacher'?'teachers':target==='course'?'course_catalog':'dish_catalog';
+      row.id=`${target}:${row[key]}:${row.user_id}`;row.target=target;
+      row[target]=ratingTargets.get(row[key] as Bind)??null;
+    }
     if(table==='profiles') {
       row.avatar_signed_url=row.avatar_path?await adminMediaURL(env,context,'community-images',String(row.avatar_path)):null;
       row.cover_signed_url=row.cover_path?await adminMediaURL(env,context,'community-images',String(row.cover_path)):null;
@@ -84,7 +89,11 @@ export async function adminHydrate(env:BackendEnv,context:AdminContext,table:str
     const attachments=await rows(env.DB,`SELECT * FROM post_attachments WHERE post_id IN(${ids.map(()=>'?').join(',')}) ORDER BY sort_order,id`,ids);
     for(const row of output){
       row.images=await Promise.all(images.filter(i=>i.post_id===row.id).map(async i=>({...i,signed_url:await adminMediaURL(env,context,'community-images',String(i.path)),thumbnail_signed_url:i.thumbnail_path?await adminMediaURL(env,context,'community-images',String(i.thumbnail_path)):null})));
+      row.image_count=(row.images as Row[]).length;
+      row.display_status=row.status==='pending_review'?'publish_exception':row.status;
       row.attachments=await Promise.all(attachments.filter(a=>a.post_id===row.id).map(async a=>({...a,preview_signed_url:await adminMediaURL(env,context,'community-attachments',String(a.path))})));
+      row.attachment_count=(row.attachments as Row[]).length;
+      if(row.status==='pending_review')row.upload_state=Number(row.expected_image_count)===row.image_count&&Number(row.expected_attachment_count)===row.attachment_count?'publish_failed':'upload_incomplete';
     }
   }
   if(table==='comments'||table==='community_reports'){
@@ -108,17 +117,31 @@ export async function adminList(env:BackendEnv,context:AdminContext,action:strin
   const status=params.status??(resource.table==='community_polls'||resource.table==='campus_membership_requests'?'pending':null);
   if(resource.table==='community_polls'&&status==='pending')where.push("(t.status='pending_review' OR t.deletion_status='pending')");
   else equal('status',status);
-  for(const [key,column] of Object.entries({authorID:'author_id',userID:'user_id',postID:'post_id',adminID:'admin_id',category:'category',location:'location',kind:'kind',role:'role',active:'active',complete:'is_profile_complete',targetType:'target_type',requestType:'request_type',deletionStatus:'deletion_status'}))equal(column,params[key]);
+  for(const [key,column] of Object.entries({id:'id',authorID:'author_id',userID:'user_id',postID:'post_id',adminID:'admin_id',category:'category',location:'location',kind:'source_kind',trustLevel:'trust_level',role:'role',active:'active',complete:'is_profile_complete',targetType:'target_type',requestType:'request_type',deletionStatus:'deletion_status',teacherID:'teacher_id',courseID:'course_id',dishID:'dish_id',stars:'stars',issueType:'issue_type',type:'suggestion_type',action:'action',outcome:'outcome'}))equal(column,params[key]);
+  if(resource.table==='admin_sessions'&&status&&status!=='all'){
+    if(status==='active'){where.push('t.revoked_at IS NULL AND t.expires_at>?');bind.push(new Date().toISOString().replace('Z','000Z'));}
+    else if(status==='revoked')where.push('t.revoked_at IS NOT NULL');
+    else if(status==='expired'){where.push('t.revoked_at IS NULL AND t.expires_at<=?');bind.push(new Date().toISOString().replace('Z','000Z'));}
+    else throw new ApiError(400,'bad_request','会话状态无效。');
+  }
   const campus=params.campusID??params.campus_id;
   if(typeof campus==='string'&&campus&&campus!=='all'){
     const column=resource.campusColumn??'campus_id';
-    if(columns.has(column))equal(column,campus);
-    else if(resource.table==='comments'||resource.table==='community_reports'){where.push('t.post_id IN(SELECT id FROM posts WHERE campus_id=?)');bind.push(campus);}
-    else if(resource.table.endsWith('_ratings')){const target=resource.table==='teacher_ratings'?'teachers':'dish_catalog',key=resource.table==='teacher_ratings'?'teacher_id':'dish_id';where.push(`t.${key} IN(SELECT id FROM ${target} WHERE campus_id=?)`);bind.push(campus);}
+    if(columns.has(column)&&!(resource.table==='profiles'&&params.activityStart))equal(column,campus);
+    else if(resource.table==='comments'){where.push('t.post_id IN(SELECT id FROM posts WHERE campus_id=?)');bind.push(campus);}
+    else if(resource.table==='community_reports'){where.push('coalesce((SELECT campus_id FROM posts WHERE id=t.post_id),(SELECT p.campus_id FROM comments c JOIN posts p ON p.id=c.post_id WHERE c.id=t.comment_id),(SELECT community_campus_id FROM profiles WHERE id=t.reported_user_id))=?');bind.push(campus);}
+    else if(resource.table.endsWith('_ratings')){const target=resource.table==='teacher_ratings'?'teachers':resource.table==='course_ratings'?'course_catalog':'dish_catalog',key=resource.table==='teacher_ratings'?'teacher_id':resource.table==='course_ratings'?'course_id':'dish_id';where.push(`t.${key} IN(SELECT id FROM ${target} WHERE campus_id=?)`);bind.push(campus);}
   }
+  if(params.pending===true&&['community_reports','feedback_submissions'].includes(resource.table))where.push("t.status IN('open','reviewed')");
   if(params.muted==='active'&&columns.has('muted_until')){where.push('t.muted_until>?');bind.push(new Date().toISOString().replace('Z','000Z'));}
-  const offset=integer(params.timezoneOffsetMinutes,-840,840,0),start=dateBoundary(params.start??params.startAt??params.start_at,offset),end=dateBoundary(params.end??params.endAt??params.end_at,offset,true);
-  if(start){where.push('t.created_at>=?');bind.push(start);}if(end){where.push('t.created_at<?');bind.push(end);}
+  const timezone=text(params.timezone??'Asia/Shanghai',100),start=dateBoundary(params.start??params.startAt??params.start_at,timezone),end=dateBoundary(params.end??params.endAt??params.end_at,timezone,true);
+  const dateColumn=resource.table.endsWith('_ratings')?'updated_at':'created_at';
+  if(start){where.push(`t.${dateColumn}>=?`);bind.push(start);}if(end){where.push(`t.${dateColumn}<?`);bind.push(end);}
+  if(params.before){where.push(`t.${dateColumn}<=?`);bind.push(dateBoundary(params.before,timezone));}
+  if(params.overdue===true&&['feedback_submissions','community_reports'].includes(resource.table)){
+    where.push("t.status IN('open','reviewed') AND t.created_at<?");bind.push(new Date(Date.now()-(resource.table==='feedback_submissions'?72:24)*3600000).toISOString().replace('Z','000Z'));
+  }
+  if(resource.table==='profiles'&&params.activityStart){where.push('EXISTS(SELECT 1 FROM app_activity a WHERE a.profile_id=t.id AND a.occurred_at>=? AND a.occurred_at<=?'+(typeof campus==='string'&&campus!=='all'?' AND a.campus_id=?':'')+')');bind.push(dateBoundary(params.activityStart,timezone),dateBoundary(params.activityEnd??new Date().toISOString(),timezone),...(typeof campus==='string'&&campus!=='all'?[campus]:[]));}
   const search=text(params.search,200,false);
   const searchable=resource.search.filter(c=>columns.has(c)&&!(resource.table==='profiles'&&context.role!=='super_admin'&&!profileColumns.includes(c)));
   if(search&&searchable.length){where.push(`(${searchable.map(c=>`instr(lower(coalesce(t.${c},'')),lower(?))>0`).join(' OR ')})`);bind.push(...searchable.map(()=>search));}
@@ -130,7 +153,7 @@ export async function adminList(env:BackendEnv,context:AdminContext,action:strin
   const [data,count]=await Promise.all([rows(env.DB,`SELECT t.* FROM ${resource.table} t${filter} ORDER BY t.${sort} ${direction},${metadata[resource.table].primaryKey.map(key=>`t.${key}`).join(',')} LIMIT ? OFFSET ?`,[...bind,pageSize,page*pageSize]),rows(env.DB,`SELECT count(*) AS n FROM ${resource.table} t${filter}`,bind)]);
   return {items:await adminHydrate(env,context,resource.table,data),total:count[0].n,page,pageSize};
 }
-export async function adminGet(env:BackendEnv,context:AdminContext,action:string,params:Row){
+export async function adminGet(env:BackendEnv,context:AdminContext,action:string,params:Row):Promise<Row>{
   const table=({getPost:'posts',getProfile:'profiles',getPoll:'community_polls',getModerationReport:'community_reports'} as Record<string,string>)[action];
   if(!table)throw new ApiError(400,'bad_request','未知详情操作。');
   const id=text(params.id,100),found=await rows(env.DB,`SELECT * FROM ${table} WHERE id=?`,[id]);
@@ -139,5 +162,7 @@ export async function adminGet(env:BackendEnv,context:AdminContext,action:string
   if(table==='profiles')return {profile:record,recentPosts:(await adminList(env,context,'listPosts',{authorID:id,pageSize:8})).items,recentComments:(await adminList(env,context,'listComments',{authorID:id,pageSize:8})).items,auditLogs:context.role==='super_admin'?await rows(env.DB,"SELECT * FROM admin_audit_logs WHERE target_type='profile' AND target_id=? ORDER BY created_at DESC LIMIT 8",[id]):[]};
   if(table==='posts')return {post:record,comments:(await adminList(env,context,'listComments',{postID:id,pageSize:20})).items,reports:(await adminList(env,context,'listModerationReports',{postID:id,pageSize:20})).items};
   if(table==='community_polls')return {poll:{...record,options:await rows(env.DB,'SELECT * FROM community_poll_options WHERE poll_id=? ORDER BY sort_order,id',[id])}};
-  return {report:record};
+  const comment=record.comment_id?(await rows(env.DB,'SELECT * FROM comments WHERE id=?',[record.comment_id as Bind]))[0]:null;
+  const postId=record.post_id??comment?.post_id;
+  return {report:record,evidence:{post:postId?await adminGet(env,context,'getPost',{id:postId}):null,comment:comment?(await adminHydrate(env,context,'comments',[comment]))[0]:null,user:record.reported_user??null}};
 }

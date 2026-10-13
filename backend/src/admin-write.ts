@@ -1,3 +1,4 @@
+import { calendarRecords } from './admin-calendar';
 import { hash } from 'bcryptjs';
 import type { BackendEnv } from './auth';
 import { adminGuard, audit, type AdminContext, type AdminRole } from './admin-auth';
@@ -69,7 +70,7 @@ export async function moderate(env:BackendEnv,context:AdminContext,action:string
   const ids=Array.isArray(params.ids)?params.ids.map(uuid):[uuid(params.id)];
   if(!ids.length||ids.length>50)throw new ApiError(400,'bad_request','一次最多操作 50 条内容。');
   const unique=[...new Set(ids)],slots=unique.map(()=>'?').join(','),status=choice(params.status,['published','hidden']),reason=text(params.reason,1000,false)||null,now=new Date().toISOString().replace('Z','000Z');
-  const operations=[guard(env.DB,`(SELECT count(*) FROM ${table} WHERE id IN(${slots}) AND status<>'deleted'${table==='posts'?" AND status<>'pending_review'":''})=?`,[...unique,unique.length]),
+  const operations=[guard(env.DB,`(SELECT count(*) FROM ${table} WHERE id IN(${slots}) AND status<>'deleted'${table==='posts'&&status==='published'?" AND status<>'pending_review' AND expected_image_count=(SELECT count(*) FROM post_images WHERE post_id=posts.id) AND expected_attachment_count=(SELECT count(*) FROM post_attachments WHERE post_id=posts.id)":''})=?`,[...unique,unique.length]),
     statement(env.DB,`UPDATE ${table} SET status=?,moderated_by=?,moderated_at=?,moderation_reason=?,updated_at=?${table==='posts'?',media_cleanup_hold=?,media_purge_after=NULL':''} WHERE id IN(${slots}) RETURNING *`,[status,context.id,now,reason,now,...(table==='posts'?[status==='hidden'?1:0]:[]),...unique])];
   if(table==='comments')operations.push(statement(env.DB,`UPDATE posts SET comment_count=(SELECT count(*) FROM comments WHERE post_id=posts.id AND status='published') WHERE id IN(SELECT post_id FROM comments WHERE id IN(${slots}))`,unique));
   if(table==='posts'&&status==='hidden')operations.push(statement(env.DB,`UPDATE community_post_pins SET status='inactive',updated_at=? WHERE post_id IN(${slots}) AND status='active'`,[now,...unique]));
@@ -106,7 +107,7 @@ export async function mute(env:BackendEnv,context:AdminContext,params:Row,enable
 export async function upsertRuntime(env:BackendEnv,context:AdminContext,params:Row,calendar=false){
   const table=calendar?'national_calendar_runtime_configs':'semester_runtime_configs',now=new Date().toISOString().replace('Z','000Z'),isActive=booleanValue(params.isActive??params.is_active),id=params.id==null?null:uuid(params.id);
   const payload:Row={is_active:isActive,updated_by:context.id,updated_at:now};
-  if(calendar){payload.year=integer(Number(params.year),2000,2100);payload.holidays=arrayValue(params.holidays);payload.solar_terms=arrayValue(params.solarTerms??params.solar_terms);}
+  if(calendar){payload.year=integer(Number(params.year),2000,2100);payload.holidays=calendarRecords(params.holidays,'holidays');payload.solar_terms=calendarRecords(params.solarTerms??params.solar_terms,'solar');}
   else{
     payload.campus_id=text(params.campusID??params.campus_id??'bjfu',64);payload.semester_id=text(params.semesterID??params.semester_id,64);
     const date=text(params.semesterStartDate??params.semester_start_date,10);
@@ -114,7 +115,7 @@ export async function upsertRuntime(env:BackendEnv,context:AdminContext,params:R
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)throw new ApiError(400,'bad_request','学期首日无效。');
     payload.semester_start_date=date;payload.supported_weeks=integer(Number(params.supportedWeeks??params.supported_weeks??20),1,30);
     if(payload.campus_id==='bjfu'&&payload.supported_weeks!==20)throw new ApiError(400,'bad_request','北林课表固定保留 20 周。');
-    payload.graduate_timetable_term_code=text(params.graduateTimetableTermCode??params.graduate_timetable_term_code,100);payload.calendar_events=arrayValue(params.calendarEvents??params.calendar_events??[]);
+    payload.graduate_timetable_term_code=text(params.graduateTimetableTermCode??params.graduate_timetable_term_code,100);payload.calendar_events=calendarRecords(params.calendarEvents??params.calendar_events??[],'semester');
   }
   const encoded=encode(table,payload),keys=Object.keys(encoded),natural=calendar?'year=?':'campus_id=? AND semester_id=?',naturalValues:Bind[]=calendar?[payload.year as number]:[payload.campus_id as string,payload.semester_id as string];
   const operations:D1PreparedStatement[]=[];

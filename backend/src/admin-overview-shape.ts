@@ -1,4 +1,4 @@
-// Preserve the existing React-admin dashboard response contract.
+// Explicit operational metrics; profile completeness is not app activity.
 export function buildOverviewSummary(input: {
   days: number;
   profileTotal: number;
@@ -19,6 +19,7 @@ export function buildOverviewSummary(input: {
   teacherTotal: number;
   teacherHidden: number;
   analytics: any;
+  activity: Awaited<ReturnType<typeof import('./activity').activitySummary>>;
 }) {
   const daily = Array.isArray(input.analytics?.daily) ? input.analytics.daily : [];
   const moderation = input.analytics?.moderation ?? {};
@@ -33,7 +34,8 @@ export function buildOverviewSummary(input: {
   return {
     operations: {
       totalProfiles: input.profileTotal,
-      activeProfiles: input.profileComplete,
+      completeProfiles: input.profileComplete,
+      activity: input.activity,
       newProfilesToday: Number(latestDaily.profiles) || 0,
       mutedProfiles: input.profileMuted,
       postsToday: Number(latestDaily.posts) || 0,
@@ -52,6 +54,8 @@ export function buildOverviewSummary(input: {
       pendingPosts: input.postPendingReview,
       publishedPosts: input.postPublished,
       publishedComments: input.commentPublished,
+      hiddenPostsInRange: moderation.hiddenPostsInRange,
+      hiddenCommentsInRange: moderation.hiddenCommentsInRange,
       recentRiskActions: moderation.recentRiskActions ?? [],
     },
     feedback: {

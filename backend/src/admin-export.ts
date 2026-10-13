@@ -14,13 +14,13 @@ export async function exportAdminData(env:BackendEnv,context:AdminContext,body:R
   if(!roleCanExport(context.role,resource))throw new ApiError(403,'forbidden','无权导出该资源。');
   const filters=body.filters&&typeof body.filters==='object'&&!Array.isArray(body.filters)?body.filters as Row:{};
   const sort=body.sort&&typeof body.sort==='object'&&!Array.isArray(body.sort)?body.sort as Row:{};
-  const action=resource==='ratings'&&filters.target==='dish'?'listDishRatings':actions[resource],all:Row[]=[];
+  const action=resource==='ratings'?(filters.target==='dish'?'listDishRatings':filters.target==='course'?'listCourseRatings':'listTeacherRatings'):actions[resource],all:Row[]=[];
   for(let page=0;page<50;page++){
     const result=await adminList(env,context,action,{...filters,sortField:sort.field,sortOrder:sort.order,page,pageSize:100});
     if(Number(result.total)>5000)throw new ApiError(413,'export_too_large','请缩小筛选范围后再导出，单次最多 5,000 条记录。');
     all.push(...result.items);if(all.length>=Number(result.total))break;
   }
-  const columns=action==='listDishRatings'?exportColumns.ratings.map(c=>c==='teacher_id'?'dish_id':c):exportColumns[resource];
+  const columns=resource==='ratings'?exportColumns.ratings.map(c=>c==='teacher_id'?(filters.target==='dish'?'dish_id':filters.target==='course'?'course_id':'teacher_id'):c):exportColumns[resource];
   // Preserve the historical CSV header while filling it from the actual field.
   if(resource==='profiles')for(const row of all)row.mute_reason=row.muted_reason;
   await audit(env,context,'exportResource','export',resource).run();

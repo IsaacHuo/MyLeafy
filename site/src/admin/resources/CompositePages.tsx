@@ -1,40 +1,30 @@
-import { useState } from "react";
-import { Card, CardContent, Tab, Tabs, Typography } from "@mui/material";
-import { ResourceList } from "./ResourcePages";
-import { resourceConfigs } from "./config";
-
-export function CampusesPage() {
-  return <TabbedResources tabs={[{ resource: "campus-requests", label: "学校归属申请" }, { resource: "campuses", label: "学校空间" }]} />;
-}
-
-export function PostgraduatePage() {
-  return <TabbedResources tabs={[{ resource: "postgraduate", label: "公开来源" }, { resource: "postgraduate-suggestions", label: "用户线索" }]} />;
-}
-
-function TabbedResources({ tabs }: { tabs: Array<{ resource: string; label: string }> }) {
-  const [selected, setSelected] = useState(0);
-  const current = tabs[selected];
-  return (
-    <>
-      <Tabs value={selected} onChange={(_, value) => setSelected(value)} sx={{ mb: 2 }}>
-        {tabs.map((tab) => <Tab key={tab.resource} label={tab.label} />)}
-      </Tabs>
-      <ResourceList resource={current.resource} config={resourceConfigs[current.resource]} />
-    </>
-  );
-}
-
+import { PageHeader } from "../components/ui";
 export function ManualPage() {
   return (
-    <Card><CardContent>
-      <Typography variant="h4" gutterBottom>运营手册</Typography>
-      <Typography paragraph>推荐处理顺序：举报与高风险内容 → 待审核学校与线索 → 用户反馈 → 公告与资料维护。</Typography>
-      <Typography variant="h6">权限边界</Typography>
-      <Typography paragraph>只读账号只能查看；运营账号可以执行内容与资料操作；超级管理员额外管理账号、会话、审计与敏感导出。所有写操作由 Cloudflare Worker 再次校验并记录审计。</Typography>
-      <Typography variant="h6">高风险操作</Typography>
-      <Typography paragraph>下架、删除、禁言、撤销会话和批量操作必须填写原因并等待服务端成功。遇到错误请保留界面显示的 request ID，不要重复提交或绕过后台直接修改表。</Typography>
-      <Typography variant="h6">校园范围</Typography>
-      <Typography>顶栏校园选择会作用于社区、反馈与名录资源；考研公开来源、国家日历和系统管理是全局资源。</Typography>
-    </CardContent></Card>
+    <>
+      <PageHeader title="运营手册" description="常用流程、数据口径与权限边界" />
+      <div className="studio-detail studio-card">
+        <h3>处理顺序</h3>
+        <p>
+          从待办页面处理举报、反馈、投票审核与发布异常，再维护学校和资料名录。操作前阅读详情证据，保留异常请求
+          ID。
+        </p>
+        <h3>指标口径</h3>
+        <p>
+          用户总数是非演示资料数。App 活跃是支持活动采集的客户端前台事件按
+          profile
+          去重；免登录和旧版本不计入。资料完善与近期使用分别统计。时间范围采用北京时间自然日。
+        </p>
+        <h3>权限与发布</h3>
+        <p>
+          只读管理员查看业务数据；运营管理员处理内容；超级管理员管理账号、会话、诊断与敏感导出。Android
+          正式发布必须本人下载验收并确认，iOS 使用 App Store Connect。
+        </p>
+        <h3>数据检查</h3>
+        <p>
+          数据质量页仅检查和定位异常，不直接修库。诊断页展示已记录的运行和队列状态，没有记录的数据明确显示未采集。
+        </p>
+      </div>
+    </>
   );
 }

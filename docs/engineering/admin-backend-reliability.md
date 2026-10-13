@@ -1,7 +1,7 @@
 # Admin backend reliability
 
 The current `/admin` site calls the private Worker `AdminAPI` through a Pages service binding.
-`backend/src/admin-router.ts` supports the website's 76 registered actions; `backend/scripts/check-client-contracts.ts` checks their names against that registry. Registration checks complement business tests and do not prove all behavior.
+`backend/src/admin-router.ts` supports the website's 83 registered actions; `backend/scripts/check-client-contracts.ts` checks their names against that registry. Registration checks complement business tests and do not prove all behavior.
 
 ## Write boundaries
 
@@ -27,3 +27,7 @@ The old Supabase service remains independent for old clients. It exposes exactly
 ## User counting scope
 
 Operational profile lists, exact pagination totals, search, CSV exports, overview cards and daily trends exclude `profiles.is_demo`. The generated classification covers legacy and installation review identities and is not client-editable. Demo accounts remain available to authentication and community workflows.
+
+## Metrics and diagnosis
+
+Profile completeness is distinct from foreground activity. Natural-day metrics use IANA boundaries shared with lists and export. Rating averages are derived from raw ratings; media hydration reports real image/attachment counts. The read-only diagnostics and quality checks, activity retention, and production audit receipt are documented in [Admin Studio](admin-studio.md).

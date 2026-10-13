@@ -1,0 +1,63 @@
+{
+  "environment": "production",
+  "readOnly": true,
+  "generatedAt": "2026-10-13T14:31:39.402000Z",
+  "checks": [
+    {
+      "key": "teachers",
+      "label": "教师评分聚合",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "course_catalog",
+      "label": "课程评分聚合",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "dish_catalog",
+      "label": "菜品评分聚合",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "post_counts",
+      "label": "帖子互动计数",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "post_media",
+      "label": "已发布帖子媒体完整性",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "active_semesters",
+      "label": "学校当前学期唯一性",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "orphan_comments",
+      "label": "评论关联完整性",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    },
+    {
+      "key": "configuration_shape",
+      "label": "校历客户端字段与日期",
+      "count": 0,
+      "unknownCount": 0,
+      "sampleCount": 0
+    }
+  ]
+}

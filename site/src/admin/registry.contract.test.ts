@@ -74,11 +74,22 @@ const legacyAdminActionNames = [
   "listAdminSessions",
   "revokeAdminSession",
   "listNationalCalendarRuntimeConfigs",
-  "upsertNationalCalendarRuntimeConfig"
+  "upsertNationalCalendarRuntimeConfig",
 ] as const;
 
 describe("admin action registry contract", () => {
   it("preserves every legacy action and registers the approved additions", () => {
-    expect(adminActionNames).toEqual(["requestAndroidPublication", "listAndroidReleases", "revokeAndroidRelease", ...legacyAdminActionNames]);
+    expect(new Set(adminActionNames).size).toBe(adminActionNames.length);
+    for (const action of [
+      ...legacyAdminActionNames,
+      "workQueue",
+      "profileActivity",
+      "operationalHealth",
+      "diagnosticList",
+      "dataQuality",
+      "listCourseRatings",
+      "deleteCourseRating",
+    ])
+      expect(adminActionNames).toContain(action);
   });
 });

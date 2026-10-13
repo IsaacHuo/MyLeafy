@@ -67,3 +67,55 @@ export type ExportRequest = {
     order: "ASC" | "DESC";
   };
 };
+export type AdminOverview = {
+  summary: {
+    operations: {
+      totalProfiles: number;
+      completeProfiles: number;
+      newProfilesToday: number;
+      postsToday: number;
+      commentsToday: number;
+      postsInRange: number;
+      commentsInRange: number;
+      daily: {
+        bucket_date: string;
+        posts: number;
+        comments: number;
+        profiles: number;
+      }[];
+      activity: {
+        today: number | null;
+        sevenDays: number | null;
+        thirtyDays: number | null;
+        inRange: number | null;
+        daily: { bucket_date: string; users: number | null }[];
+        startedAt: string;
+        coverage: string;
+        supportedVersions: { ios: string; android: string };
+      };
+    };
+    moderation: {
+      openReports: number;
+      overdueReports: number;
+      hiddenPostsInRange: number;
+    };
+    feedback: {
+      open: number;
+      reviewed: number;
+      pending: number;
+      overdue: number;
+      aging: { label: string; count: number }[];
+    };
+    teachers: { average: number; totalRatings: number };
+  };
+  cards: { posts: { hidden: number } };
+  analyticsMeta: {
+    days: number;
+    timezone: string;
+    startDate: string;
+    startAt: string;
+    endAt: string;
+    generatedAt: string;
+    moderationStartedAt: string;
+  };
+};

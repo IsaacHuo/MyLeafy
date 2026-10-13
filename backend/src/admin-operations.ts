@@ -26,10 +26,10 @@ export async function revokeAdminSession(env:BackendEnv,context:AdminContext,par
   return result[0];
 }
 
-export async function deleteRating(env:BackendEnv,context:AdminContext,params:Row,dish=false){
-  const target=dish?'dish':'teacher',table=dish?'dish_catalog':'teachers',ratings=`${target}_ratings`,key=`${target}_id`;
-  const id=integer(Number(params[dish?'dishID':'teacherID']??params[key]),1,Number.MAX_SAFE_INTEGER),user=uuid(params.userID??params.user_id);
-  const result=await commitAdmin(env,context,dish?'deleteDishRating':'deleteTeacherRating',`${target}_rating`,`${target}:${id}:${user}`,[
+export async function deleteRating(env:BackendEnv,context:AdminContext,params:Row,target:'teacher'|'dish'|'course'='teacher'){
+  const table=target==='dish'?'dish_catalog':target==='course'?'course_catalog':'teachers',ratings=`${target}_ratings`,key=`${target}_id`;
+  const id=integer(Number(params[`${target}ID`]??params[key]),1,Number.MAX_SAFE_INTEGER),user=uuid(params.userID??params.user_id);
+  const result=await commitAdmin(env,context,target==='dish'?'deleteDishRating':target==='course'?'deleteCourseRating':'deleteTeacherRating',`${target}_rating`,`${target}:${id}:${user}`,[
     guard(env.DB,`EXISTS(SELECT 1 FROM ${ratings} WHERE ${key}=? AND user_id=?)`,[id,user]),
     statement(env.DB,`DELETE FROM ${ratings} WHERE ${key}=? AND user_id=? RETURNING *`,[id,user]),
     statement(env.DB,`UPDATE ${table} SET rating_count=(SELECT count(*) FROM ${ratings} WHERE ${key}=?),rating_average=coalesce((SELECT ((sum(stars)*20+count(*))/(2*count(*)))/10.0 FROM ${ratings} WHERE ${key}=?),0),${[1,2,3,4,5].map(star=>`rating_${star}_count=(SELECT count(*) FROM ${ratings} WHERE ${key}=? AND stars=${star})`).join(',')},updated_at=? WHERE id=?`,[id,id,id,id,id,id,id,now(),id]),

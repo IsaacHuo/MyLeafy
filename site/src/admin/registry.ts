@@ -1,7 +1,15 @@
 export const adminActionNames = [
-  "requestAndroidPublication", "listAndroidReleases",
+  "requestAndroidPublication",
+  "listAndroidReleases",
   "revokeAndroidRelease",
   "overview",
+  "workQueue",
+  "operationalHealth",
+  "diagnosticList",
+  "profileActivity",
+  "dataQuality",
+  "listCourseRatings",
+  "deleteCourseRating",
   "listCampuses",
   "listCampusRequests",
   "approveCampusRequest",
@@ -73,7 +81,7 @@ export const adminActionNames = [
   "listAdminSessions",
   "revokeAdminSession",
   "listNationalCalendarRuntimeConfigs",
-  "upsertNationalCalendarRuntimeConfig"
+  "upsertNationalCalendarRuntimeConfig",
 ] as const;
 
 export type AdminActionName = (typeof adminActionNames)[number];

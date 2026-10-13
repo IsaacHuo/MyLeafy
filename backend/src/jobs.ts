@@ -53,7 +53,7 @@ export async function scheduled(event:ScheduledController,env:BackendEnv){
   const jobs:Record<string,()=>Promise<unknown>>={
     '* * * * *':()=>deliverSignals(env),
     '17 * * * *':()=>atomic(env.DB,[statement(env.DB,'DELETE FROM timetable_invites WHERE expires_at<=? AND accepted_at IS NULL',[new Date().toISOString().replace('Z','000Z')])]),
-    '20 17 * * *':()=>atomic(env.DB,[statement(env.DB,'DELETE FROM admin_login_attempts WHERE attempted_at<?',[new Date(Date.now()-90*86400000).toISOString().replace('Z','000Z')]),statement(env.DB,'DELETE FROM change_outbox WHERE delivered_at IS NOT NULL AND created_at<?',[new Date(Date.now()-7*86400000).toISOString().replace('Z','000Z')])]),
+    '20 17 * * *':()=>atomic(env.DB,[statement(env.DB,'DELETE FROM moderation_events WHERE occurred_at<?',[new Date(Date.now()-90*86400000).toISOString().replace('Z','000Z')]),statement(env.DB,'DELETE FROM app_activity WHERE occurred_at<?',[new Date(Date.now()-90*86400000).toISOString().replace('Z','000Z')]),statement(env.DB,'DELETE FROM admin_login_attempts WHERE attempted_at<?',[new Date(Date.now()-90*86400000).toISOString().replace('Z','000Z')]),statement(env.DB,'DELETE FROM change_outbox WHERE delivered_at IS NOT NULL AND created_at<?',[new Date(Date.now()-7*86400000).toISOString().replace('Z','000Z')])]),
     '35 18 * * *':()=>cleanMedia(env),
   };
   const run=jobs[event.cron];if(!run)throw new Error('Unknown scheduled task');

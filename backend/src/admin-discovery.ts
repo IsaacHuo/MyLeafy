@@ -12,7 +12,7 @@ export async function globalSearch(env:BackendEnv,context:AdminContext,params:Ro
   const selected=Array.isArray(params.resources)?new Set(params.resources):null;
   const results=await Promise.all(Object.entries(resources).filter(([name])=>!selected||selected.has(name)).map(async([resource,action])=>{
     const {items}=await adminList(env,context,action,{search:query,page:0,pageSize:8,status:'all',...(resource==='postgraduate'?{}:{campusID:params.campusID??params.campus_id})});
-    return items.map(row=>({resource,id:String(row.id),path:`/admin/${resource}?filter=${encodeURIComponent(JSON.stringify({search:String(row.title||row.name||row.nickname||row.body||query).slice(0,100)}))}`,title:String(row.title||row.name||row.nickname||row.display_name||row.body||'未命名').slice(0,120),
+    return items.map(row=>({resource,id:String(row.id),path:`/admin/${resource}/${encodeURIComponent(String(row.id))}`,title:String(row.title||row.name||row.nickname||row.display_name||row.body||'未命名').slice(0,120),
       subtitle:row.category||row.unit||row.location||row.community_campus_id||row.issue_type||row.source_kind||'',
       status:row.status??(row.is_muted?'muted':'active'),updated_at:row.updated_at??row.created_at}));
   }));

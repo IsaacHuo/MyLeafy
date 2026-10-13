@@ -218,7 +218,7 @@ iOS `MYLEAFY_API_ORIGIN` 默认 `api.myleafy.space`，与新官网后台使用�
 ### 运营后台链路
 
 ```text
-React-admin → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
+React 运营后台 → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
   → MYLEAFY_ADMIN_API 私有 WorkerEntrypoint → D1 / R2 / 审计
 分享页面 → MYLEAFY_PUBLIC_API 服务绑定 → /v1/share-preview
 ```
@@ -283,7 +283,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 - `backend/`：新版 Workers 业务、D1 migrations、数据导出转换与校验工具。
 - `supabase/`：旧生产 schema、Edge Functions 和测试，作为迁移输入及旧服务维护依据。
 - 新版业务统一走 `/v1`；后台走 Worker `AdminAPI` 私有入口，公开 HTTP 不开放管理路由。旧 `supabase/functions/` 只服务旧版。
-- `site/`：官网（React + Vite）+ React-admin 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。
+- `site/`：官网（React + Vite）+ Tailwind/Radix 运营后台 + Cloudflare Pages Functions；后台 `lazy()` 独立加载。
 - 高权限操作必须经过服务端认证、授权、参数校验与审计；iOS 使用用户会话调用业务 API，前端管理会话只保存在 HttpOnly Cookie；两者均不持有数据库密钥。
 
 ## 11. 当前行为约束
@@ -321,6 +321,8 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 - 空闲教室通过学校 `jsjy_query2` POST 表单获取矩阵，节次使用两位编码。按教室查询一次获取全天数据，按节次查询从全天矩阵筛选；按返回 `tdvalue` 展开组合节次。同格多个已知占用符号在统一全半角和空白后按占用处理，混入未知内容仍报错。缺失教室、未知符号、缺失节次和网络失败不得推断空闲/占用或写为成功缓存。日期必须对应已配置学期，不能夹到第一/最后一周。 空教室页面的结果绑定查询方式、上海自然日、节次或规范化教室身份；条件变化清除结果和已查询状态，旧请求及其延迟收尾不得更新新条件的页面或触发重新认证。
 - 成绩和教学计划按表头解析并保存课程编号；同编号重修保留原始记录并选有效成绩，不同编号同名课程分别统计。缺少编号的旧数据不跨学期合并。文字成绩用于通过判断，不自行换算数值分数；GPA 仅展示学校官方值，均分缺少官方值时标明本地估算。
 - 培养方案保留原文、表格和动态要求。毕业总要求只使用明确总计，不能加总可能重叠的类别；已获总学分、公选、本专业选修优先用官方汇总。无法核验的类别完成量显示未确认，不显示零或臆测剩余门数。第二课堂要求单独核验，总学分达标不等同全部毕业条件满足。
+- 后台 App 活跃只来自非 guest、非 Demo 身份的前台事件，按 profile 去重；不以资料完善、登录或后台请求充当活跃。iOS 3.2.5 / Android 1.2.5 起采集，客户端队列保留 7 天、D1 保留 90 天，账号删除级联清理；旧客户端和免登录不在覆盖范围。活动由前台生命周期任务拥有，隐藏/后台/身份切换取消，重建 profile 清除旧队列。
+- 后台使用 Tailwind/Radix、TanStack Query/Table 与 React Hook Form；请求键包含管理员、学校与筛选，保存视图按管理员和资源在浏览器隔离。日期采用 IANA 自然日边界，结束日次日排除；真实零、缺失、尚未采集和错误分开显示。诊断/数据质量页仅超级管理员只读访问，无 SQL 编辑或自动修库。当前隐藏存量与 0013 开始记录的下架次数分开。
 - 运营后台用户列表、搜索、分页、导出与用户统计统一排除 `profiles.is_demo`；该生成列按规范化 `edu_id` 的 legacy/installation Demo 规则计算。Demo 的身份、资料、访问和删除能力保留。
 - 帖子与评论通过 `/v1` API 创建，并以 community actor + 客户端 request ID 幂等重放；可空资料字段明确编码 null，数据库 UUID 在接口边界统一规范化。发帖队列在重试中复用稳定 UUID，评论内容与回复目标未变化时复用 request ID，超时重试不重复落库或通知。举报从不自动隐藏内容；图片帖使用短期单次服务端验证凭证，图片与附件全部完整且数量匹配后原子发布。相同媒体 ID、路径和顺序的挂载重试返回已提交结果，不能复用凭证挂载其他内容；发布队列重试先读取真实发布状态。评论最多两层。
 - 共享课表是一次性邀请码 + 只读授权；明文邀请码短暂展示，数据库保存 hash；不上传成绩、备注、提醒。

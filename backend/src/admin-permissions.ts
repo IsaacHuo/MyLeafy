@@ -8,6 +8,7 @@ export type AdminPermission = {
 const readableResources = [
   "android-releases",
   "dashboard",
+  "work-queue",
   "manual",
   "campuses",
   "campus-requests",
@@ -83,6 +84,8 @@ export function permissionsForRole(role: AdminRole): AdminPermission[] {
       { resource: "feedback", actions: ["list", "show", "edit", "bulk", "export"] },
       { resource: "admins", actions: ["list", "show", "create", "edit", "delete", "export"] },
       { resource: "sessions", actions: ["list", "show", "delete", "export"] },
+      { resource: "operations", actions: ["list", "show"] },
+      { resource: "data-quality", actions: ["list", "show"] },
       { resource: "audit-logs", actions: ["list", "show", "export"] },
     );
   }

@@ -1,74 +1,230 @@
-import {useEffect, useState} from 'react';
-import {Datagrid, DateField, FunctionField, List, Pagination, TextField, useCanAccess, useListContext, useNotify, useRecordContext, useRefresh} from 'react-admin';
-import {Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Stack, Typography} from '@mui/material';
-import {actionRequest} from '../providers/client';
-
-type Release={id:string;versionName:string;versionCode:number;status:string;releaseNotes:string;sizeBytes:number;commit:string;sha256:string;certificateSha256:string;errorCode?:string;runUrl?:string;preparationRunUrl?:string;ciVerified?:boolean;approvedBy?:string;approvedAt?:string;githubReleaseUrl:string};
-const statuses:Record<string,string>={ready:'待发布',publishing:'发布中',published:'已发布',failed:'发布失败',revoked:'已撤回'};
-const failures:Record<string,string>={dispatch_unconfirmed:'任务是否启动尚未确认，系统会继续核对。',dispatch_not_found:'GitHub 没有启动发布任务，请检查发行权限后重试。',workflow_incomplete:'发布任务已结束，正式发行尚未完成。请查看任务结果后重试。',publication_failed:'安装包校验或上传未完成，请查看发布任务的失败步骤。'};
-
-export function AndroidReleasesPage(){
-  return <Box>
-    <Typography variant="h5" sx={{my:2}}>Android 版本</Typography>
-    <Alert severity="info" sx={{mb:2}}>先下载候选包验收，再决定发布。正式发布使用同一份安装包；iOS 继续在 App Store Connect 发布。</Alert>
-    <List title="Android 版本" perPage={20} pagination={<Pagination rowsPerPageOptions={[20,50,100]} />} sort={{field:'versionCode',order:'DESC'}} exporter={false} empty={<Typography sx={{p:3}}>暂无候选或正式版本。主线版本更新并通过检查后，候选包会显示在这里。</Typography>}>
-      <PublicationPolling />
-      <Datagrid bulkActionButtons={false} rowClick={false}>
-        <TextField source="versionName" label="版本" />
-        <FunctionField label="状态" render={(r:Release)=><Chip size="small" label={statuses[r.status]??r.status} color={r.status==='failed'?'error':r.status==='published'?'success':'default'} />} />
-        <FunctionField label="安装包" render={(r:Release)=>`${(r.sizeBytes/1024/1024).toFixed(1)} MB`} />
-        <FunctionField label="检查" render={(r:Release)=>r.ciVerified?'已通过':'历史发行'} />
-        <DateField source="published_at" label="发布时间" showTime />
-        <FunctionField label="操作" render={()=><ReleaseActions />} />
-      </Datagrid>
-    </List>
-  </Box>;
-}
-function PublicationPolling(){
-  const {data}=useListContext<Release>();const refresh=useRefresh();
-  const active=data?.some(r=>r.status==='publishing');
-  useEffect(()=>{if(!active)return;const timer=setInterval(refresh,10000);return ()=>clearInterval(timer);},[active,refresh]);return null;
-}
-function ReleaseActions(){
-  const record=useRecordContext<Release>()!;const {canAccess}=useCanAccess({resource:'android-releases',action:'edit'});
-  const [dialog,setDialog]=useState<'details'|'publish'|'revoke'|null>(null),[accepted,setAccepted]=useState(false),[busy,setBusy]=useState(false);
-  const refresh=useRefresh(),notify=useNotify();
-  const close=()=>{if(!busy){setDialog(null);setAccepted(false);}};
-  async function submit(){
+import { useState, useEffect } from "react";
+import { useAction, useAdmin, queryClient } from "../providers/context";
+import { dataProvider } from "../providers/dataProvider";
+import {
+  PageHeader,
+  Button,
+  Dialog,
+  Badge,
+  ErrorState,
+  Loading,
+  Empty,
+} from "../components/ui";
+import { dateLabel } from "./ResourcePages";
+import { valueLabel } from "./helpers";
+export function AndroidReleasesPage() {
+  const { can } = useAdmin(),
+    query = useAction("listAndroidReleases", { page: 0, pageSize: 100 }),
+    [record, setRecord] = useState<any>(null),
+    [mode, setMode] = useState("details"),
+    [accepted, setAccepted] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState<unknown>(null);
+  const releases = query.data?.items ?? [];
+  const active = releases.some((r: any) => r.status === "publishing");
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => void query.refetch(), 10000);
+    return () => window.clearInterval(timer);
+  }, [active, query.refetch]);
+  const submit = async () => {
     setBusy(true);
-    try{
-      await actionRequest(dialog==='revoke'?'revokeAndroidRelease':'requestAndroidPublication',{id:record.id,...(dialog==='publish'?{accepted}: {})});
-      setDialog(null);setAccepted(false);notify(dialog==='revoke'?'版本已撤回':'发布任务已提交，正在核对发行结果。',{type:'info'});
-    }catch(error){notify(error instanceof Error?error.message:'操作失败，请刷新后重试。',{type:'error'});}
-    finally{setBusy(false);refresh();}
-  }
-  return <>
-    <Stack direction="row" spacing={1} flexWrap="wrap">
-      <Button size="small" onClick={()=>setDialog('details')}>详情</Button>
-      {['ready','failed'].includes(record.status)&&<Button size="small" component="a" href={`/api/admin/android-candidate?id=${encodeURIComponent(record.id)}`}>下载验收</Button>}
-      {canAccess&&['ready','failed'].includes(record.status)&&<Button size="small" onClick={()=>setDialog('publish')}>{record.status==='failed'?'重试发布':'发布'}</Button>}
-      {canAccess&&record.status==='published'&&<Button size="small" color="error" onClick={()=>setDialog('revoke')}>撤回</Button>}
-    </Stack>
-    <Dialog open={dialog!==null} onClose={close} fullWidth maxWidth="sm">
-      <DialogTitle>{dialog==='details'?'版本详情':dialog==='revoke'?'撤回版本':'发布 Android 版本'} {record.versionName}</DialogTitle>
-      <DialogContent>
-        <Typography sx={{whiteSpace:'pre-wrap',mb:2}}>{record.releaseNotes}</Typography>
-        {dialog==='publish'&&<><Alert severity="info">发布后，官网提供下载，App 提示更新。发布使用你已经下载验收的同一份 APK。</Alert><FormControlLabel control={<Checkbox checked={accepted} onChange={e=>setAccepted(e.target.checked)} />} label="我已完成候选包验收，确认发布此版本" /></>}
-        {dialog==='revoke'&&<Alert severity="warning">撤回后，官网和 App 不再推荐此版本。已安装的版本需要通过后续更新修复。</Alert>}
-        {dialog==='details'&&<Stack spacing={1} sx={{overflowWrap:'anywhere'}}>
-          <Typography>状态：{statuses[record.status]}</Typography><Typography>版本号：{record.versionCode}</Typography>
-          {record.errorCode&&<Alert severity="error">{failures[record.errorCode]??`发布未完成（${record.errorCode}），请查看任务结果。`}</Alert>}
-          <Typography variant="body2">源码：{record.commit}</Typography><Typography variant="body2">SHA-256：{record.sha256}</Typography>
-          <Typography variant="body2">签名：{record.certificateSha256}</Typography>
-          {record.approvedBy&&<Typography variant="body2">发布决定人：{record.approvedBy} · {record.approvedAt}</Typography>}
-          {record.preparationRunUrl&&<Button component="a" href={record.preparationRunUrl} target="_blank" rel="noreferrer">查看候选检查与构建</Button>}
-          {record.runUrl&&<Button component="a" href={record.runUrl} target="_blank" rel="noreferrer">查看发布任务</Button>}
-          {record.status==='published'&&<Button component="a" href={record.githubReleaseUrl} target="_blank" rel="noreferrer">GitHub 镜像</Button>}
-        </Stack>}
-      </DialogContent>
-      <DialogActions><Button disabled={busy} onClick={close}>{dialog==='details'?'关闭':'取消'}</Button>
-        {dialog!=='details'&&<Button disabled={busy||(dialog==='publish'&&!accepted)} onClick={submit} color={dialog==='revoke'?'error':'primary'}>{busy?'正在提交…':dialog==='revoke'?'确认撤回':'确认发布'}</Button>}
-      </DialogActions>
-    </Dialog>
-  </>;
+    setError(null);
+    try {
+      await dataProvider.execute(
+        mode === "revoke"
+          ? "revokeAndroidRelease"
+          : "requestAndroidPublication",
+        { id: record.id, ...(mode === "publish" ? { accepted } : {}) },
+      );
+      setRecord(null);
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <PageHeader
+        title="Android 版本"
+        description="下载候选包验收后，由超级管理员确认正式发布"
+      >
+        <Button onClick={() => void query.refetch()}>刷新状态</Button>
+      </PageHeader>
+      {query.error ? (
+        <ErrorState error={query.error} />
+      ) : query.isPending ? (
+        <Loading />
+      ) : releases.length ? (
+        <div className="studio-card studio-table-wrap">
+          <table className="studio-table">
+            <thead>
+              <tr>
+                <th>版本</th>
+                <th>状态</th>
+                <th>安装包</th>
+                <th>检查</th>
+                <th>发布时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {releases.map((r: any) => (
+                <tr key={r.id}>
+                  <td>
+                    {r.versionName} / {r.versionCode}
+                  </td>
+                  <td>
+                    <Badge
+                      tone={
+                        r.status === "published"
+                          ? "success"
+                          : r.status === "failed"
+                            ? "danger"
+                            : "neutral"
+                      }
+                    >
+                      {valueLabel(r.status)}
+                    </Badge>
+                  </td>
+                  <td>{(r.sizeBytes / 1048576).toFixed(1)} MB</td>
+                  <td>{r.ciVerified ? "已通过" : "历史发行"}</td>
+                  <td>{dateLabel(r.published_at)}</td>
+                  <td>
+                    <div className="studio-actions">
+                      <Button
+                        onClick={() => {
+                          setRecord(r);
+                          setMode("details");
+                        }}
+                      >
+                        详情
+                      </Button>
+                      {["ready", "failed"].includes(r.status) && (
+                        <a
+                          className="studio-button"
+                          href={`/api/admin/android-candidate?id=${encodeURIComponent(r.id)}`}
+                        >
+                          下载验收
+                        </a>
+                      )}
+                      {can("android-releases", "edit") &&
+                        ["ready", "failed", "published"].includes(r.status) && (
+                          <Button
+                            variant={
+                              r.status === "published" ? "danger" : "primary"
+                            }
+                            onClick={() => {
+                              setRecord(r);
+                              setMode(
+                                r.status === "published" ? "revoke" : "publish",
+                              );
+                              setAccepted(false);
+                              setError(null);
+                            }}
+                          >
+                            {r.status === "published"
+                              ? "撤回"
+                              : r.status === "failed"
+                                ? "重试发布"
+                                : "发布"}
+                          </Button>
+                        )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <Empty>主线版本更新并通过检查后，候选包会显示在这里。</Empty>
+      )}
+      <Dialog
+        open={!!record}
+        busy={busy}
+        onClose={() => setRecord(null)}
+        title={`${mode === "details" ? "版本详情" : mode === "revoke" ? "撤回版本" : "发布 Android 版本"} ${record?.versionName ?? ""}`}
+      >
+        <div className="studio-form">
+          <p>{record?.releaseNotes}</p>
+          {mode === "details" ? (
+            <>
+              <dl>
+                {[
+                  "status",
+                  "versionCode",
+                  "commit",
+                  "sha256",
+                  "certificateSha256",
+                  "approvedBy",
+                  "approvedAt",
+                  "errorCode",
+                ].map((key) => (
+                  <div key={key} className="break-all">
+                    <dt>{key}</dt>
+                    <dd>{String(record?.[key] ?? "—")}</dd>
+                  </div>
+                ))}
+              </dl>
+              {["preparationRunUrl", "runUrl", "githubReleaseUrl"].map(
+                (key) =>
+                  record?.[key] && (
+                    <a
+                      key={key}
+                      href={record[key]}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {key === "runUrl"
+                        ? "查看发布任务"
+                        : key === "preparationRunUrl"
+                          ? "查看检查与构建"
+                          : "GitHub 镜像"}
+                    </a>
+                  ),
+              )}
+            </>
+          ) : mode === "publish" ? (
+            <>
+              <p>
+                使用同一份已下载验收的 APK。发布后官网提供下载，App 提示更新。
+              </p>
+              <label className="flex gap-2">
+                <input
+                  type="checkbox"
+                  checked={accepted}
+                  onChange={(e) => setAccepted(e.target.checked)}
+                />
+                我已完成候选包验收，确认发布此版本
+              </label>
+            </>
+          ) : (
+            <p>撤回后不再推荐此版本，已安装的版本需要后续更新修复。</p>
+          )}
+          {error != null && <ErrorState error={error} />}
+          <footer>
+            <Button disabled={busy} onClick={() => setRecord(null)}>
+              {mode === "details" ? "关闭" : "取消"}
+            </Button>
+            {mode !== "details" && (
+              <Button
+                variant={mode === "revoke" ? "danger" : "primary"}
+                disabled={busy || (mode === "publish" && !accepted)}
+                onClick={() => void submit()}
+              >
+                {busy
+                  ? "正在提交…"
+                  : mode === "revoke"
+                    ? "确认撤回"
+                    : "确认发布"}
+              </Button>
+            )}
+          </footer>
+        </div>
+      </Dialog>
+    </>
+  );
 }

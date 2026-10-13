@@ -122,6 +122,12 @@ struct LeafyApp: App {
                 }
             }
             .id(modelContainerRevision)
+            .task(id: "\(ActiveCampusContext.identity?.scopeKey ?? ""):\(scenePhase == .active):\(networkManager.hasCachedIdentity)") {
+                guard scenePhase == .active, networkManager.hasCachedIdentity,
+                      let identity = ActiveCampusContext.identity,
+                      AppForegroundActivity.permits(identity: identity, isDemo: ReviewDemoMode.isEnabled) else { return }
+                await AppForegroundActivity.run(identity: identity)
+            }
             .onOpenURL { url in
                 if externalImportCoordinator.handle(url: url, isAuthenticated: isAuthenticatedForExternalImport) {
                     return

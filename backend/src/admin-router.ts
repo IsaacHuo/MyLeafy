@@ -1,3 +1,4 @@
+import { workQueue, operationalHealth, diagnosticList, profileActivity, dataQuality } from './admin-insights';
 import { globalSearch, previewCommunityFeed } from './admin-discovery';
 import { upsertPostgraduateSource, reviewPostgraduateSuggestion, reviewCatalogSuggestion, reviewCampusRequest } from './admin-remaining-reviews';
 import { prepareCommunityBannerImageUpload, uploadCommunityBanner, saveCommunityBanner, publishCommunityBanner, archiveCommunityBanner } from './admin-remaining-banners';
@@ -30,7 +31,8 @@ const mutations:Record<string,Handler>={
   createAnnouncement:(env,context,params)=>announcement(env,context,params,true),
   updateAnnouncement:announcement,
   deleteTeacherRating:(env,context,params)=>deleteRating(env,context,params),
-  deleteDishRating:(env,context,params)=>deleteRating(env,context,params,true),
+  deleteCourseRating:(env,context,params)=>deleteRating(env,context,params,'course'),
+  deleteDishRating:(env,context,params)=>deleteRating(env,context,params,'dish'),
   ...Object.fromEntries(['upsertTeacher','upsertCourse','upsertDish'].map(action=>[action,(env:BackendEnv,context:AdminContext,params:Row)=>upsertCatalog(env,context,action,params)])),
   ...Object.fromEntries(['setTeacherStatus','setCourseStatus','setDishStatus','setPostgraduateSourceStatus'].map(action=>[action,(env:BackendEnv,context:AdminContext,params:Row)=>setCatalogStatus(env,context,action,params)])),
   ...Object.fromEntries(['moderatePost','bulkModeratePosts','moderateComment','bulkModerateComments','moderatePoll'].map(action=>[action,(env:BackendEnv,context:AdminContext,params:Row)=>moderate(env,context,action,params)])),
@@ -42,7 +44,7 @@ const mutations:Record<string,Handler>={
   upsertNationalCalendarRuntimeConfig:(env,context,params)=>upsertRuntime(env,context,params,true),
 };
 
-export const supportedAdminActions = new Set(['listAndroidReleases','overview','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
+export const supportedAdminActions = new Set(['listAndroidReleases','overview','workQueue','operationalHealth','diagnosticList','profileActivity','dataQuality','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
 
 /** Invoked only by the dedicated AdminAPI service-binding entrypoint. */
 export async function handleAdminRequest(request:Request,env:BackendEnv):Promise<Response>{
@@ -76,6 +78,11 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
     if(!params||typeof params!=='object'||Array.isArray(params))throw new ApiError(400,'bad_request','管理操作参数必须是对象。');
     let data:unknown;
     if(action==='listAndroidReleases')data=await listAndroidReleases(env,params as Row);
+    else if(action==='workQueue')data=await workQueue(env,context,params as Row);
+    else if(action==='operationalHealth')data=await operationalHealth(env,context);
+    else if(action==='diagnosticList')data=await diagnosticList(env,context,params as Row);
+    else if(action==='profileActivity')data=await profileActivity(env,context,params as Row);
+    else if(action==='dataQuality')data=await dataQuality(env,context,params as Row);
     else if(action==='overview')data=await overview(env,context,params as Row);
     else if(action==='globalSearch')data=await globalSearch(env,context,params as Row);
     else if(action==='previewCommunityFeed')data=await previewCommunityFeed(env,context,params as Row);
