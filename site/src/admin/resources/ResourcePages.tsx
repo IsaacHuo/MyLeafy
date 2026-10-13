@@ -531,7 +531,19 @@ export function ResourceList({
                     {group.headers.map((header, index) => (
                       <th
                         key={header.id}
-                        className={index === 0 ? "sticky-col" : ""}
+                        className={
+                          index <= (canBulk ? 1 : 0) ? "sticky-col" : ""
+                        }
+                        style={
+                          canBulk && index <= 1
+                            ? {
+                                left: index === 0 ? 0 : 48,
+                                ...(index === 0
+                                  ? { width: 48, minWidth: 48, maxWidth: 48 }
+                                  : {}),
+                              }
+                            : undefined
+                        }
                       >
                         {flexRender(
                           header.column.columnDef.header,
@@ -548,7 +560,19 @@ export function ResourceList({
                     {row.getVisibleCells().map((cell, index) => (
                       <td
                         key={cell.id}
-                        className={index === 0 ? "sticky-col" : ""}
+                        className={
+                          index <= (canBulk ? 1 : 0) ? "sticky-col" : ""
+                        }
+                        style={
+                          canBulk && index <= 1
+                            ? {
+                                left: index === 0 ? 0 : 48,
+                                ...(index === 0
+                                  ? { width: 48, minWidth: 48, maxWidth: 48 }
+                                  : {}),
+                              }
+                            : undefined
+                        }
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
@@ -1160,7 +1184,7 @@ export function RecordDetailContent({
   resource: string;
   detail: RecordData;
 }) {
-  const {identity}=useAdmin();
+  const { identity } = useAdmin();
   const record =
       detail.post ?? detail.profile ?? detail.poll ?? detail.report ?? detail,
     config = resourceConfigs[resource];
