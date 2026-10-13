@@ -81,3 +81,5 @@ App 无法靠服务端回滚降级。Android 发布更高 code 修复，iOS 在 
 发布前核对主 App、Widget 和 Share Extension 的 version/build，Xcode 归档和上传对应的已验证提交。TestFlight、送审和正式发布仍在 App Store Connect。普通更新可采用 [Apple 分阶段发布](https://developer.apple.com/help/app-store-connect/update-your-app/release-a-version-update-in-phases/)，紧急修复可全量；分阶段发布不阻止用户手动下载。
 
 Apple 正式发布后运行 **Record released iOS version**。它核对 CI、main 来源和三个目标的版本，创建不可变 annotated `v<version>` tag 和源码记录 Release，不构建/上传未签名归档。重试仅接受同一提交/build 的已有记录，不移动正式 tag。在 `release-notes.md` 记录实际 Apple 构建和用户可见摘要。
+
+当前提交同时触发 push 与 PR CI 时，不因其中一项已通过而取消另一项必需检查；取消的依赖会让同名 CI result 保留失败状态并阻止 main 推送。遇到这一情况，保留提交并完整重跑受影响的当前提交工作流。排查记录见 logs/required-ci-checks.md。

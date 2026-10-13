@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
+  "sourceCIRuns": [
+    38420212777,
+    38420220941
+  ],
+  "stagingRun": 38426077398,
+  "productionRun": 38426362256,
+  "environment": "production",
+  "publishedAt": "2026-10-13T15:58:55.462Z",
+  "publicVerification": {
+    "workerCommitMatches": true,
+    "siteCommitMatches": true,
+    "adminHTMLStatus": 200,
+    "anonymousAdminMeStatus": 401
+  },
+  "qualityAudit": {
+    "readOnly": true,
+    "generatedAt": "2026-10-13T16:00:03.169000Z",
+    "checks": 8,
+    "mismatches": 0,
+    "unverifiable": 0
+  },
+  "activityVerification": {
+    "readOnly": true,
+    "checkedAt": "2026-10-13T16:00:18.990Z",
+    "collectionStartedAt": "2026-10-13T15:58:33.897000Z",
+    "events": 0,
+    "observedProfiles": 0,
+    "historicalBackfill": false
+  },
+  "newClientSources": {
+    "ios": "3.2.5",
+    "android": "1.2.5",
+    "androidVersionCode": 9,
+    "formallyPublishedInThisTask": false
+  }
+}
