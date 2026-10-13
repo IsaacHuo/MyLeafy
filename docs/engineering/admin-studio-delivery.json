@@ -1,13 +1,14 @@
 {
-  "sourceCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
+  "sourceCommit": "baf17b4be3f799e58f1b883e8b0aee7c9462e526",
   "sourceCIRuns": [
     38420212777,
-    38420220941
+    38420220941,
+    38428708385
   ],
-  "stagingRun": 38426077398,
-  "productionRun": 38426362256,
+  "stagingRun": 38429643166,
+  "productionRun": 38430130223,
   "environment": "production",
-  "publishedAt": "2026-10-13T15:58:55.462Z",
+  "publishedAt": "2026-10-13T16:25:46.193Z",
   "publicVerification": {
     "workerCommitMatches": true,
     "siteCommitMatches": true,
@@ -16,7 +17,7 @@
   },
   "qualityAudit": {
     "readOnly": true,
-    "generatedAt": "2026-10-13T16:00:03.169000Z",
+    "generatedAt": "2026-10-13T16:26:49.940000Z",
     "checks": 8,
     "mismatches": 0,
     "unverifiable": 0
@@ -34,5 +35,15 @@
     "android": "1.2.5",
     "androidVersionCode": 9,
     "formallyPublishedInThisTask": false
+  },
+  "implementationCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
+  "androidPrivateCandidate": {
+    "versionName": "1.2.5",
+    "versionCode": 9,
+    "sourceCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
+    "prepareRun": 38427876245,
+    "draftTag": "android-candidate-9",
+    "registered": true,
+    "formallyPublished": false
   }
 }

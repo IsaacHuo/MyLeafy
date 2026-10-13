@@ -4,7 +4,7 @@ Last verified: 2026-10-14 (Admin Studio production publication, exact-source CI 
 
 ## Current Focus
 
-- **Admin Studio 重构**：后台 UI 已迁移至 Tailwind/Radix、TanStack Query/Table 与 React Hook Form；全资源浅/深主题、列管理、保存视图、详情、搜索下钻、统一待办、课程评分、运行诊断与数据质量页接入现有 Cloudflare。修复资料完善冒充活跃、筛选不生效、媒体实际数量缺失和校历字段校验；生产只读八项一致性核对为零异常。iOS 3.2.5 与 Android 1.2.5/code 9 新增前台活动，guest/Demo 不上传；数据收集不会补造旧版历史。网站与 Worker 已部署 production，线上源码为 ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4；0012/0013 已应用，后台页面 200、匿名管理接口 401。上线后八项只读核验仍为零异常/零不可验证；新活动表无历史补造记录。源码 CI、staging 六项及 production 五项检查通过，iOS 629 通过/1 跳过，网站 65 单元/45 浏览器通过。移动端新版本本轮未正式发布，仍按本人验收/Apple 渠道交付。数据来源清单与部署证据见 docs/engineering/admin-studio.md。
+- **Admin Studio 重构**：后台 UI 已迁移至 Tailwind/Radix、TanStack Query/Table 与 React Hook Form；全资源浅/深主题、列管理、保存视图、详情、搜索下钻、统一待办、课程评分、运行诊断与数据质量页接入现有 Cloudflare。修复资料完善冒充活跃、筛选不生效、媒体实际数量缺失和校历字段校验；生产只读八项一致性核对为零异常。iOS 3.2.5 与 Android 1.2.5/code 9 新增前台活动，guest/Demo 不上传；数据收集不会补造旧版历史。网站与 Worker 已部署 production，线上源码为 baf17b4be3f799e58f1b883e8b0aee7c9462e526（含批量选择表格的主要列固定修正）；0012/0013 已应用，后台页面 200、匿名管理接口 401。上线后八项只读核验仍为零异常/零不可验证；新活动表无历史补造记录。源码 CI、staging 六项及 production 五项检查通过，iOS 629 通过/1 跳过，网站 65 单元/45 浏览器通过。Android 1.2.5/code 9 私有签名候选已构建并登记，保留原始 APK 与源码 ab6c18d；当前正式 Android 为 1.2.4/code 8。本轮未正式发布新移动端，仍按本人验收/Apple 渠道交付。数据来源清单与部署证据见 docs/engineering/admin-studio.md。
 
 - **Android 课表背景贯通**：整页背景提升到根导航展示槽，顶部、固定节次列、轻透圆角底栏及宽屏 Rail 共用一次图片绘制；主题渐变保护文字，切换其他 Tab/二级页恢复默认表面。图片按路径在 IO 线程解码，翻周与页面隐藏不重新解码。设置格式、业务数据与 Insets 不变。默认浅深色整页前后像素一致，13 张整页新基线与两个受影响网格已审阅，完整 Roborazzi 76 项通过；JVM 175 通过/7 跳过，构建和 lint 通过（118 warning、2 hint、0 error）。只读隔离 API 36 导航/翻周/网格 16 项通过，解码生命周期及跨 600dp 独立原生测试通过，实际系统栏截图另采集。1.2.4/code 8 配置用于下一私有候选，保留既有 1.2.3/code 7；正式发布仍由用户确认。详见 `docs/design/android-timetable-backdrop.md`。
 
