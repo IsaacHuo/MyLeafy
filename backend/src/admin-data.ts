@@ -127,7 +127,7 @@ export async function adminList(env:BackendEnv,context:AdminContext,action:strin
   const campus=params.campusID??params.campus_id;
   if(typeof campus==='string'&&campus&&campus!=='all'){
     const column=resource.campusColumn??'campus_id';
-    if(columns.has(column)&&!(resource.table==='profiles'&&params.activityStart))equal(column,campus);
+    if(columns.has(column))equal(column,campus);
     else if(resource.table==='comments'){where.push('t.post_id IN(SELECT id FROM posts WHERE campus_id=?)');bind.push(campus);}
     else if(resource.table==='community_reports'){where.push('coalesce((SELECT campus_id FROM posts WHERE id=t.post_id),(SELECT p.campus_id FROM comments c JOIN posts p ON p.id=c.post_id WHERE c.id=t.comment_id),(SELECT community_campus_id FROM profiles WHERE id=t.reported_user_id))=?');bind.push(campus);}
     else if(resource.table.endsWith('_ratings')){const target=resource.table==='teacher_ratings'?'teachers':resource.table==='course_ratings'?'course_catalog':'dish_catalog',key=resource.table==='teacher_ratings'?'teacher_id':resource.table==='course_ratings'?'course_id':'dish_id';where.push(`t.${key} IN(SELECT id FROM ${target} WHERE campus_id=?)`);bind.push(campus);}
@@ -141,7 +141,6 @@ export async function adminList(env:BackendEnv,context:AdminContext,action:strin
   if(params.overdue===true&&['feedback_submissions','community_reports'].includes(resource.table)){
     where.push("t.status IN('open','reviewed') AND t.created_at<?");bind.push(new Date(Date.now()-(resource.table==='feedback_submissions'?72:24)*3600000).toISOString().replace('Z','000Z'));
   }
-  if(resource.table==='profiles'&&params.activityStart){where.push('EXISTS(SELECT 1 FROM app_activity a WHERE a.profile_id=t.id AND a.occurred_at>=? AND a.occurred_at<=?'+(typeof campus==='string'&&campus!=='all'?' AND a.campus_id=?':'')+')');bind.push(dateBoundary(params.activityStart,timezone),dateBoundary(params.activityEnd??new Date().toISOString(),timezone),...(typeof campus==='string'&&campus!=='all'?[campus]:[]));}
   const search=text(params.search,200,false);
   const searchable=resource.search.filter(c=>columns.has(c)&&!(resource.table==='profiles'&&context.role!=='super_admin'&&!profileColumns.includes(c)));
   if(search&&searchable.length){where.push(`(${searchable.map(c=>`instr(lower(coalesce(t.${c},'')),lower(?))>0`).join(' OR ')})`);bind.push(...searchable.map(()=>search));}

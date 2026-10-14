@@ -83,7 +83,6 @@ describe("admin action registry contract", () => {
     for (const action of [
       ...legacyAdminActionNames,
       "workQueue",
-      "profileActivity",
       "operationalHealth",
       "diagnosticList",
       "dataQuality",

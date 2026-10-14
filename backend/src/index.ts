@@ -1,4 +1,3 @@
-import { recordActivity } from './activity';
 import { readAdminMedia } from './admin-media';
 import { Hono } from 'hono';
 import { APIError as AuthAPIError } from 'better-auth/api';
@@ -65,7 +64,6 @@ app.on(['GET','POST'],'/v1/auth/*',async c=>{
   await requireWritable(c.env.DB);
   return auth(c.env).handler(c.req.raw);
 });
-app.post('/v1/activity',async c=>c.json(await recordActivity(c.env,c.req.raw)));
 app.post('/v1/profile/bootstrap',async c=>c.json(await bootstrap(c.env,c.req.raw)));
 app.delete('/v1/account',async c=>{
   const result=await deleteAccount(c.env,c.req.raw);

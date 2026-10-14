@@ -6,7 +6,6 @@ export const adminActionNames = [
   "workQueue",
   "operationalHealth",
   "diagnosticList",
-  "profileActivity",
   "dataQuality",
   "listCourseRatings",
   "deleteCourseRating",

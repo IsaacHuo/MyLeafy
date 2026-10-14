@@ -1131,11 +1131,6 @@ function DetailSheet({
       }),
     enabled: !action && !record,
   });
-  const activity = useAction<RecordData>(
-    "profileActivity",
-    { id },
-    resource === "profiles",
-  );
   return (
     <Dialog
       open
@@ -1153,26 +1148,6 @@ function DetailSheet({
           resource={resource}
           detail={detail.data ?? record ?? fallback.data?.data[0] ?? {}}
         />
-      )}
-      {resource === "profiles" && (
-        <div className="studio-detail">
-          <h3>最近 App 活动</h3>
-          {activity.error ? (
-            <ErrorState error={activity.error} />
-          ) : activity.isPending ? (
-            <Loading />
-          ) : activity.data?.items.length ? (
-            <div>
-              {activity.data.items.map((e: RecordData) => (
-                <p key={e.id}>
-                  {dateLabel(e.occurred_at)} · {e.platform} · {e.app_version}
-                </p>
-              ))}
-            </div>
-          ) : (
-            <Empty>尚无采集到的前台活动，不能据此判定用户未使用 App。</Empty>
-          )}
-        </div>
       )}
     </Dialog>
   );

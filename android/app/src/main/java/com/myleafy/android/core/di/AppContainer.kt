@@ -188,6 +188,7 @@ class AppContainer(context: Context) {
     val courseReminderScheduler by lazy { com.myleafy.android.features.timetable.CourseReminderScheduler(applicationContext, activeAppScopeStore, timetablePersonalDao, timetableRepository) }
     val sunshineReminderScheduler by lazy { com.myleafy.android.features.campus.SunshineReminderScheduler(applicationContext, activeAppScopeStore, campusPersonalDao, campusLifeRepository) }
     init {
+        secureStorage.removeKeysWithPrefix("foreground-activity:")
         backendLifecycle.launch {
             kotlinx.coroutines.flow.combine(activeAppScopeStore.scope, campusLifeRepository.sunshineRuns, campusLifeRepository.sunshineSettings,
                 activeAppScopeStore.scope.flatMapLatest { campusPersonalDao.reminder(it.scopeKey) }) { scope, runs, settings, reminder -> scope.scopeKey to Triple(runs, settings, reminder) }
@@ -219,16 +220,6 @@ class AppContainer(context: Context) {
     private val liveCommunityRepository =
         LiveCommunityRepository(::communityServiceForActiveScope, schoolSessionState, activeAppScopeStore)
     val communityRepository: CommunityRepository = liveCommunityRepository
-    val foregroundActivity = com.myleafy.android.services.cloudflare.ForegroundActivityRecorder(
-        read = secureStorage::read,
-        write = secureStorage::save,
-        profile = { liveCommunityRepository.currentProfile().id },
-        upload = { profileID, events ->
-            checkNotNull(communityServiceForActiveScope()).uploadForegroundActivity(profileID, events)
-        },
-        isScopeActive = { key -> activeAppScopeStore.current.let { it.scopeKey == key && !it.isGuest && it.eduId != null } },
-        version = BuildConfig.VERSION_NAME,
-    )
     val initialAcademicSync = com.myleafy.android.features.campus.InitialAcademicSync(activeAppScopeStore, timetablePersonalDao, timetableRepository, academicRepository, backendLifecycle)
     init {
         backendLifecycle.launch { activeAppScopeStore.scope.collectLatest { courseReminderScheduler.reconcile() } }

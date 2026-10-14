@@ -157,31 +157,6 @@ export async function diagnosticList(
     pageSize,
   };
 }
-export async function profileActivity(
-  env: BackendEnv,
-  context: AdminContext,
-  params: Row,
-) {
-  adminGuard(env, context);
-  const id = text(params.id, 100),
-    profile = await adminList(env, context, "listProfiles", {
-      id,
-      pageSize: 1,
-    });
-  if (!profile.items.length)
-    throw new ApiError(404, "not_found", "用户不存在。");
-  return {
-    items: await rows(
-      env.DB,
-      "SELECT id,occurred_at,platform,app_version FROM app_activity WHERE profile_id=? ORDER BY occurred_at DESC LIMIT 100",
-      [id],
-    ),
-    collection: await rows(
-      env.DB,
-      "SELECT started_at FROM activity_collection WHERE id=1",
-    ),
-  };
-}
 export async function dataQuality(
   env: BackendEnv,
   context: AdminContext,

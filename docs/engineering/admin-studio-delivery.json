@@ -22,20 +22,6 @@
     "mismatches": 0,
     "unverifiable": 0
   },
-  "activityVerification": {
-    "readOnly": true,
-    "checkedAt": "2026-10-13T16:26:50.971Z",
-    "collectionStartedAt": "2026-10-13T15:58:33.897000Z",
-    "events": 0,
-    "observedProfiles": 0,
-    "historicalBackfill": false
-  },
-  "newClientSources": {
-    "ios": "3.2.5",
-    "android": "1.2.5",
-    "androidVersionCode": 9,
-    "formallyPublishedInThisTask": false
-  },
   "implementationCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
   "androidPrivateCandidate": {
     "versionName": "1.2.5",
@@ -45,5 +31,6 @@
     "draftTag": "android-candidate-9",
     "registered": true,
     "formallyPublished": false
-  }
+  },
+  "scope": "Admin Studio operational UI. This receipt describes the previous publication; App usage telemetry is removed by the following removal release."
 }

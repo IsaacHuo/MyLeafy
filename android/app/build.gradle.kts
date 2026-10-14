@@ -32,8 +32,8 @@ android {
         applicationId = "com.myleafy.android"
         minSdk = 29
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.2.5"
+        versionCode = 10
+        versionName = "1.2.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "MYLEAFY_API_ORIGIN", "\"${providers.gradleProperty("myleafyApiOrigin").getOrElse("https://api.myleafy.space")}\"")

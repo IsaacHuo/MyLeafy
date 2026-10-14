@@ -4,15 +4,6 @@ import com.myleafy.android.shared.model.*
 import kotlinx.serialization.json.*
 
 class CommunityService(private val client: BackendClient) {
-    suspend fun uploadForegroundActivity(profileID: String, events: List<ForegroundActivityEvent>): Set<String> {
-        val result = client.request<JsonObject>("/v1/activity", "POST", buildJsonObject {
-            put("profileID", profileID)
-            put("events", buildJsonArray { events.forEach { event -> add(buildJsonObject {
-                put("id", event.id); put("occurredAt", event.occurredAt); put("platform", event.platform); put("appVersion", event.appVersion)
-            }) } })
-        })
-        return result.getValue("accepted").jsonArray.map { it.jsonPrimitive.content }.toSet()
-    }
     val hasSession: Boolean get() = client.hasSession
     fun events(scope: String) = client.events(scope)
     suspend fun hasAcceptedTerms(): Boolean = client.request<JsonObject>("/v1/community/terms").getValue("accepted").jsonPrimitive.boolean

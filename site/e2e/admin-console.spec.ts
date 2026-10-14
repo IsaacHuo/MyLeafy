@@ -44,16 +44,6 @@ const overview = {
       postsInRange: 2,
       commentsInRange: 3,
       daily,
-      activity: {
-        today: 19,
-        sevenDays: 72,
-        thirtyDays: 122,
-        inRange: 122,
-        daily: [{ bucket_date: today, users: 19 }],
-        startedAt: "2026-10-13T00:00:00Z",
-        coverage: "有 Cloudflare 身份的非演示用户；免登录、旧版客户端不计入",
-        supportedVersions: { ios: "3.2.5", android: "1.2.5" },
-      },
     },
     moderation: { openReports: 2, overdueReports: 1, hiddenPostsInRange: 2 },
     feedback: {
@@ -203,17 +193,6 @@ async function setup(page: Page, role = "super_admin") {
       data = {
         profile: { id: "profile-1", nickname: "测试学生" },
         recentPosts: [post],
-      };
-    else if (action === "profileActivity")
-      data = {
-        items: [
-          {
-            id: "event-1",
-            occurred_at: "2026-10-13T08:00:00Z",
-            platform: "ios",
-            app_version: "3.2.5",
-          },
-        ],
       };
     else if (
       action === "listTeacherRatings" ||

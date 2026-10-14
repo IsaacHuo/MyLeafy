@@ -1,4 +1,4 @@
-import { workQueue, operationalHealth, diagnosticList, profileActivity, dataQuality } from './admin-insights';
+import { workQueue, operationalHealth, diagnosticList, dataQuality } from './admin-insights';
 import { globalSearch, previewCommunityFeed } from './admin-discovery';
 import { upsertPostgraduateSource, reviewPostgraduateSuggestion, reviewCatalogSuggestion, reviewCampusRequest } from './admin-remaining-reviews';
 import { prepareCommunityBannerImageUpload, uploadCommunityBanner, saveCommunityBanner, publishCommunityBanner, archiveCommunityBanner } from './admin-remaining-banners';
@@ -44,7 +44,7 @@ const mutations:Record<string,Handler>={
   upsertNationalCalendarRuntimeConfig:(env,context,params)=>upsertRuntime(env,context,params,true),
 };
 
-export const supportedAdminActions = new Set(['listAndroidReleases','overview','workQueue','operationalHealth','diagnosticList','profileActivity','dataQuality','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
+export const supportedAdminActions = new Set(['listAndroidReleases','overview','workQueue','operationalHealth','diagnosticList','dataQuality','globalSearch','previewCommunityFeed','getPost','getProfile','getPoll','getModerationReport',...Object.keys(adminLists),...Object.keys(mutations)]);
 
 /** Invoked only by the dedicated AdminAPI service-binding entrypoint. */
 export async function handleAdminRequest(request:Request,env:BackendEnv):Promise<Response>{
@@ -81,7 +81,6 @@ export async function handleAdminRequest(request:Request,env:BackendEnv):Promise
     else if(action==='workQueue')data=await workQueue(env,context,params as Row);
     else if(action==='operationalHealth')data=await operationalHealth(env,context);
     else if(action==='diagnosticList')data=await diagnosticList(env,context,params as Row);
-    else if(action==='profileActivity')data=await profileActivity(env,context,params as Row);
     else if(action==='dataQuality')data=await dataQuality(env,context,params as Row);
     else if(action==='overview')data=await overview(env,context,params as Row);
     else if(action==='globalSearch')data=await globalSearch(env,context,params as Row);

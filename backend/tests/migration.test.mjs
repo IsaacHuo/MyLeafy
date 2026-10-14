@@ -10,6 +10,21 @@ import { encodeRow, identityRows, timestamp, upsertSQL } from '../scripts/migrat
 import { materialize } from '../scripts/migration/materialize.mjs';
 import { rowSQL, transferSQL } from '../scripts/migration/d1-transfer.mjs';
 
+test('activity removal deletes telemetry and preserves profiles and moderation history',async()=>{
+  const db=new DatabaseSync(':memory:'),directory=new URL('../migrations/',import.meta.url);
+  try{
+    for(const name of (await readdir(directory)).filter(n=>n.endsWith('.sql')&&n<'0014').sort())db.exec(await readFile(new URL(name,directory),'utf8'));
+    db.exec("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','Campus','Campus','campus','qiangzhi'); INSERT INTO profiles(id,campus_id,edu_id,nickname,is_profile_complete) VALUES('kept-profile','bjfu','student','Student',1); INSERT INTO app_activity(id,profile_id,campus_id,occurred_at,received_at,platform,app_version) VALUES('retired-event','kept-profile','bjfu','2026-10-13T00:00:00Z','2026-10-13T00:00:00Z','ios','test'); INSERT INTO moderation_events(target_type,target_id,campus_id,occurred_at) VALUES('posts','kept-post','bjfu','2026-10-13T00:00:00Z');");
+    const profiles=db.prepare('SELECT * FROM profiles').all(),moderation=db.prepare('SELECT * FROM moderation_events').all(),started=db.prepare('SELECT started_at FROM activity_collection').get().started_at;
+    db.exec(await readFile(new URL('0014_remove_app_activity.sql',directory),'utf8'));
+    assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE name IN('app_activity','activity_collection')").all(),[]);
+    assert.deepEqual(db.prepare('SELECT * FROM profiles').all(),profiles);
+    assert.deepEqual(db.prepare('SELECT * FROM moderation_events').all(),moderation);
+    assert.equal(db.prepare('SELECT started_at FROM moderation_collection').get().started_at,started);
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
+  }finally{db.close();}
+});
+
 test('candidate migration preserves existing users, published releases and revoked releases',async()=>{
   const db=new DatabaseSync(':memory:');
   const migrations=new URL('../migrations/',import.meta.url);

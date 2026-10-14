@@ -35,7 +35,7 @@ All offered list controls send their query conditions to adminList. Search uses 
 
 - Nested author/user/requester/reporter profiles: profile foreign key -> profiles -> role projection. Sensitive education IDs/contact fields remain super-admin only.
 - Post media: post_id -> post_images/post_attachments -> actual counts and signed URLs. Declared counts determine publication completeness; they are not the displayed actual media count.
-- Profile content counts: grouped posts/comments by author_id. Recent App activity uses app_activity and its profile foreign key.
+- Profile content counts: grouped posts/comments by author_id.
 - Ratings: target_id + user_id -> raw rating row -> composite object ID; target names hydrate from teachers/course_catalog/dish_catalog. Counts, star distribution and weighted means are checked against raw ratings.
 - Session object IDs derive from the protected session token hash, with current-session status; session active/revoked/expired filters use actual revocation and expiration values.
 - Post/report/profile detail actions reuse the same role projection; report evidence resolves the reported post, comment and profile.
@@ -45,7 +45,6 @@ All offered list controls send their query conditions to adminList. Search uses 
 | Display | API/query | Raw evidence |
 |---|---|---|
 | Total/completed profiles | overview, listProfiles | Non-demo profiles / is_profile_complete |
-| App active today/7d/30d/range and trend | overview -> activitySummary; activityStart/End profile drilldown | Distinct app_activity.profile_id, event campus snapshot, occurrence boundaries and collection metadata |
 | New profiles/posts/comments | overview, corresponding list | Record creation in the same natural-day range |
 | Pending/overdue reports and feedback | overview, workQueue, corresponding list | open + reviewed states, created_at age, resolved/closed separate |
 | Current hidden content / period hide transitions | overview | Current status / moderation_events after collection start |
@@ -55,4 +54,4 @@ All offered list controls send their query conditions to adminList. Search uses 
 | Environment/deployment/tasks/queues | operationalHealth, diagnosticList | Deployment binding, backend_control, scheduled_runs, change_outbox, file_delete_jobs; absent logs/performance explicitly uncollected |
 | Data quality | dataQuality | Raw ratings, interaction rows, related objects, media declarations/rows, semester and calendar records; bounded samples |
 
-The SELECT-only production audit receipt records check time and mismatch/unverifiable counts in admin-data-audit.json. Historical foreground usage cannot be reconstructed. Tests use differing samples for the corrected filters, identity/session cases, time boundaries, rating deletion, permissions and global queues; browser acceptance covers every resource in both themes.
+The SELECT-only production audit receipt records check time and mismatch/unverifiable counts in admin-data-audit.json. The admin does not collect App foreground usage. Tests use differing samples for the corrected filters, time boundaries, rating deletion, permissions and global queues; browser acceptance covers every resource in both themes.

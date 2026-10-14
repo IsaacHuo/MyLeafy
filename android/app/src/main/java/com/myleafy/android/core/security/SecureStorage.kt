@@ -41,6 +41,11 @@ class SecureStorage(context: Context) {
         prefs.edit().remove(key).apply()
     }
 
+    fun removeKeysWithPrefix(prefix: String) {
+        val keys = prefs.all.keys.filter { it.startsWith(prefix) }
+        if (keys.isNotEmpty()) prefs.edit().apply { keys.forEach { remove(it) } }.apply()
+    }
+
     fun has(key: String): Boolean = prefs.contains(key)
 
     private fun encrypt(plaintext: String): String {

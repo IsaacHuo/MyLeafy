@@ -83,16 +83,6 @@ export type AdminOverview = {
         comments: number;
         profiles: number;
       }[];
-      activity: {
-        today: number | null;
-        sevenDays: number | null;
-        thirtyDays: number | null;
-        inRange: number | null;
-        daily: { bucket_date: string; users: number | null }[];
-        startedAt: string;
-        coverage: string;
-        supportedVersions: { ios: string; android: string };
-      };
     };
     moderation: {
       openReports: number;

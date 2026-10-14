@@ -1,12 +1,5 @@
 package com.myleafy.android
 
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.Lifecycle
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.CancellationException
 import android.os.Bundle
 import android.content.Intent
 import androidx.activity.ComponentActivity
@@ -35,20 +28,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         incomingIntent.value = intent
-        val container = (application as MyLeafyApplication).container
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                container.activeAppScopeStore.scope.collectLatest { scope ->
-                    if (scope.isGuest || scope.eduId == null) return@collectLatest
-                    while (true) {
-                        try { container.foregroundActivity.record(scope.scopeKey) }
-                        catch (cancelled: CancellationException) { throw cancelled }
-                        catch (failure: Exception) { android.util.Log.e("AppActivity", "Foreground activity retained for retry", failure) }
-                        delay(300_000)
-                    }
-                }
-            }
-        }
         enableEdgeToEdge()
         setContent {
             val navigationIntent by incomingIntent.collectAsStateWithLifecycle()

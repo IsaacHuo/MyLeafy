@@ -1,4 +1,4 @@
-// Explicit operational metrics; profile completeness is not app activity.
+// Explicit operational metrics based on stored business records.
 export function buildOverviewSummary(input: {
   days: number;
   profileTotal: number;
@@ -19,7 +19,6 @@ export function buildOverviewSummary(input: {
   teacherTotal: number;
   teacherHidden: number;
   analytics: any;
-  activity: Awaited<ReturnType<typeof import('./activity').activitySummary>>;
 }) {
   const daily = Array.isArray(input.analytics?.daily) ? input.analytics.daily : [];
   const moderation = input.analytics?.moderation ?? {};
@@ -35,7 +34,6 @@ export function buildOverviewSummary(input: {
     operations: {
       totalProfiles: input.profileTotal,
       completeProfiles: input.profileComplete,
-      activity: input.activity,
       newProfilesToday: Number(latestDaily.profiles) || 0,
       mutedProfiles: input.profileMuted,
       postsToday: Number(latestDaily.posts) || 0,

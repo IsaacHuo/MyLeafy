@@ -37,8 +37,6 @@ export function AdminDashboard() {
     !meta ||
     !Array.isArray(summary?.operations.daily) ||
     !Array.isArray(summary?.feedback.aging) ||
-    !summary?.operations.activity ||
-    !Array.isArray(summary.operations.activity.daily) ||
     ![
       summary.operations.totalProfiles,
       summary.operations.completeProfiles,
@@ -48,21 +46,13 @@ export function AdminDashboard() {
   )
     return <ErrorState error="统计响应不完整，请保留请求信息并重试。" />;
   const ops = summary.operations,
-    activity = ops.activity,
     feedback = summary.feedback,
     moderation = summary.moderation;
   const daily = ops.daily,
     range = { start: meta.startDate, before: meta.endAt };
-  const activeLink = (n: number) =>
-    listLink("profiles", {
-      activityStart: new Date(
-        Date.parse(meta.endAt) - (n - 1) * 86400000,
-      ).toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }),
-      activityEnd: meta.endAt,
-    });
   return (
     <>
-      <PageHeader title="运营总览" description="用户增长、真实使用、内容与待办">
+      <PageHeader title="运营总览" description="用户增长、内容与待办">
         <div className="studio-actions">
           <select
             aria-label="统计时间范围"
@@ -104,50 +94,6 @@ export function AdminDashboard() {
           detail={`未查看 ${feedback.open} · 已查看 ${feedback.reviewed} · 逾期 ${feedback.overdue}`}
           href={listLink("feedback", { pending: true })}
         />
-      </div>
-      <div className="studio-card" style={{ marginBottom: 22 }}>
-        <div className="studio-card-header">
-          <h2>App 活跃用户</h2>
-          <Help>
-            前台进入或持续前台使用事件按 profile 去重；多设备不重复计数。
-          </Help>
-        </div>
-        <div className="studio-grid" style={{ gap: 0, margin: 0 }}>
-          <Metric
-            title="今日活跃"
-            value={activity?.today}
-            detail="北京时间今日"
-            href={activeLink(1)}
-          />
-          <Metric
-            title="近 7 天活跃"
-            value={activity?.sevenDays}
-            detail="去重用户数"
-            href={activeLink(7)}
-          />
-          <Metric
-            title="近 30 天活跃"
-            value={activity?.thirtyDays}
-            detail="去重用户数"
-            href={activeLink(30)}
-          />
-          <Metric
-            title={`${days} 天活跃`}
-            value={activity?.inRange}
-            detail="当前统计范围"
-            href={activeLink(days)}
-          />
-        </div>
-        <div className="studio-card-header">
-          <small>
-            采集起点：{dateLabel(activity?.startedAt)} ·{" "}
-            {activity?.coverage ?? "覆盖信息未提供"}
-            <br />
-            支持采集：iOS {activity?.supportedVersions?.ios ?? "未提供"} /
-            Android {activity?.supportedVersions?.android ?? "未提供"}
-            。采集前无历史数据，尚未升级客户端的使用不会计入。
-          </small>
-        </div>
       </div>
       <div className="studio-charts">
         <Chart
@@ -215,33 +161,6 @@ export function AdminDashboard() {
           href={listLink("ratings", { target: "teacher" })}
         />
       </div>
-      <Chart
-        title="每日 App 活跃"
-        label="每日去重 App 活跃用户"
-        option={{
-          tooltip: { trigger: "axis" },
-          xAxis: {
-            type: "category",
-            data: daily.map((r: any) => formatBucketDate(r.bucket_date)),
-          },
-          yAxis: { type: "value", minInterval: 1 },
-          series: [
-            {
-              type: "line",
-              connectNulls: false,
-              showSymbol: daily.length === 1,
-              data: daily.map((r: any) =>
-                r.bucket_date < String(activity?.startedAt).slice(0, 10)
-                  ? null
-                  : (activity?.daily?.find(
-                      (a: any) => a.bucket_date === r.bucket_date,
-                    )?.users ?? null),
-              ),
-              itemStyle: { color: "#30a46c" },
-            },
-          ],
-        }}
-      />
       <small className="block mt-4">
         Asia/Shanghai · {meta.startDate} 至 {dateLabel(meta.endAt)} ·
         下架次数记录始于 {dateLabel(meta.moderationStartedAt)} · 生成于{" "}

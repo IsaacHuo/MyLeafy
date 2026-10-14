@@ -89,6 +89,9 @@ struct LeafyApp: App {
         } else if !AppRuntimeEnvironment.isRunningUnitTests {
             startupLog.info("Model container ready")
         }
+        for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("leafy.foreground-activity.") {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         guard !AppRuntimeEnvironment.isRunningUnitTests, case .success = result else { return }
         ScheduleReportBackgroundRefreshCoordinator.shared.register()
 
@@ -122,12 +125,6 @@ struct LeafyApp: App {
                 }
             }
             .id(modelContainerRevision)
-            .task(id: "\(ActiveCampusContext.identity?.scopeKey ?? ""):\(scenePhase == .active):\(networkManager.hasCachedIdentity)") {
-                guard scenePhase == .active, networkManager.hasCachedIdentity,
-                      let identity = ActiveCampusContext.identity,
-                      AppForegroundActivity.permits(identity: identity, isDemo: ReviewDemoMode.isEnabled) else { return }
-                await AppForegroundActivity.run(identity: identity)
-            }
             .onOpenURL { url in
                 if externalImportCoordinator.handle(url: url, isAuthenticated: isAuthenticatedForExternalImport) {
                     return

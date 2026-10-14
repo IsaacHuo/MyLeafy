@@ -1,9 +1,10 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+vi.mock('../src/signals', () => ({ ChangeSignals: class {} }));
+vi.mock('../src/admin-entrypoint', () => ({ AdminAPI: class {} }));
 import { LocalD1 } from "./d1-local";
 import type { Actor, BackendEnv } from "../src/auth";
 import type { AdminContext } from "../src/admin-auth";
-import { ingestActivity, activitySummary } from "../src/activity";
-import { dateBoundary, dayRange, utc } from "../src/admin-dates";
+import { dateBoundary, utc } from "../src/admin-dates";
 import { adminList } from "../src/admin-data";
 import {
   dataQuality,
@@ -12,6 +13,8 @@ import {
   workQueue,
 } from "../src/admin-insights";
 import { deleteRating } from "../src/admin-operations";
+import { overview } from "../src/admin-overview";
+import { app } from "../src/index";
 const databases: LocalD1[] = [];
 afterEach(() => databases.splice(0).forEach((db) => db.close()));
 function fixture() {
@@ -41,12 +44,12 @@ function fixture() {
     .run(who.sessionId, who.sessionExpires, "test-token", now, now, who.authId);
   db.sqlite
     .prepare(
-      "INSERT INTO profiles(id,campus_id,edu_id,nickname,is_profile_complete,community_campus_id) VALUES(?,'bjfu','activity-test','测试',1,'bjfu')",
+      "INSERT INTO profiles(id,campus_id,edu_id,nickname,is_profile_complete,community_campus_id) VALUES(?,'bjfu','studio-test','测试',1,'bjfu')",
     )
     .run(who.profileId);
   db.sqlite
     .prepare(
-      "INSERT INTO profile_auth_links(auth_user_id,profile_id,campus_id,edu_id) VALUES(?,?,'bjfu','activity-test')",
+      "INSERT INTO profile_auth_links(auth_user_id,profile_id,campus_id,edu_id) VALUES(?,?,'bjfu','studio-test')",
     )
     .run(who.authId, who.profileId);
   const admin = crypto.randomUUID(),
@@ -83,95 +86,14 @@ const event = (at = new Date()) => ({
   platform: "ios",
   appVersion: "3.2.5",
 });
-it("activity is idempotent and counts profiles rather than devices or event rows", async () => {
-  const { db, env, who } = fixture();
-  const e = event();
-  await ingestActivity(env, who, { events: [e, e, event()] });
-  await ingestActivity(env, who, { events: [e] });
-  expect(
-    db.sqlite.prepare("SELECT count(*) n FROM app_activity").get()!.n,
-  ).toBe(2);
-  const result = await activitySummary(env, "bjfu", "Asia/Shanghai", 7);
-  expect(result.today).toBe(1);
-  expect(result.sevenDays).toBe(1);
-  expect(result.inRange).toBe(1);
-  expect(result.daily.at(-1)!.users).toBe(1);
-});
-it("validates an entire activity batch before writing and rejects identity drift", async () => {
-  const { db, env, who } = fixture();
-  await expect(
-    ingestActivity(env, who, {
-      events: [event(), event(new Date(Date.now() - 8 * 86400000))],
-    }),
-  ).rejects.toMatchObject({ status: 422 });
-  expect(
-    db.sqlite.prepare("SELECT count(*) n FROM app_activity").get()!.n,
-  ).toBe(0);
-  await expect(
-    ingestActivity(env, who, {
-      profileID: crypto.randomUUID(),
-      events: [event()],
-    }),
-  ).rejects.toMatchObject({ status: 409 });
-  await expect(
-    ingestActivity(env, who, { events: [{ ...event(), platform: "web" }] }),
-  ).rejects.toMatchObject({ status: 422 });
-  await expect(
-    ingestActivity(env, who, {
-      events: [event(new Date(Date.now() + 3600000))],
-    }),
-  ).rejects.toMatchObject({ status: 422 });
-});
-it("demo profiles and expired sessions never contribute activity", async () => {
-  const { db, env, who } = fixture();
-  db.sqlite
-    .prepare("UPDATE profiles SET edu_id='review-demo' WHERE id=?")
-    .run(who.profileId);
-  await ingestActivity(env, who, { events: [event()] });
-  expect(
-    db.sqlite.prepare("SELECT count(*) n FROM app_activity").get()!.n,
-  ).toBe(0);
-  db.sqlite
-    .prepare("UPDATE identity_session SET expiresAt=0 WHERE id=?")
-    .run(who.sessionId);
-  await expect(
-    ingestActivity(env, who, { events: [event()] }),
-  ).rejects.toBeDefined();
-});
-it("seven day offline events retain occurrence time and disappear with deleted profile", async () => {
-  const { db, env, who } = fixture();
-  const at = new Date(Date.now() - 6 * 86400000);
-  await ingestActivity(env, who, { events: [event(at)] });
-  const result = await activitySummary(env, "bjfu", "Asia/Shanghai", 7);
-  expect(result.today).toBe(0);
-  expect(result.sevenDays).toBe(1);
-  db.sqlite.prepare("DELETE FROM profiles WHERE id=?").run(who.profileId);
-  expect(
-    db.sqlite.prepare("SELECT count(*) n FROM app_activity").get()!.n,
-  ).toBe(0);
-});
-it("activity school scope follows the recorded school even after membership changes", async () => {
-  const { db, env, who, context } = fixture();
-  const e = event();
-  await ingestActivity(env, who, { events: [e] });
-  db.sqlite
-    .prepare("UPDATE profiles SET community_campus_id=NULL WHERE id=?")
-    .run(who.profileId);
-  expect((await activitySummary(env, "bjfu", "Asia/Shanghai", 7)).today).toBe(
-    1,
-  );
-  expect(
-    (
-      await adminList(env, context, "listProfiles", {
-        campusID: "bjfu",
-        activityStart: dayRange(1, "Asia/Shanghai").since,
-        activityEnd: new Date().toISOString(),
-      })
-    ).total,
-  ).toBe(1);
-  expect(
-    (await activitySummary(env, "another", "Asia/Shanghai", 7)).today,
-  ).toBe(0);
+it("removed telemetry cannot ingest events and business overview still works", async () => {
+  const { db, env, context } = fixture();
+  const response = await app.request('/v1/activity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }, env);
+  expect(response.status).toBe(404);
+  const result = await overview(env, context, { days: 7 });
+  expect(result.summary.operations).toMatchObject({ totalProfiles: 1, completeProfiles: 1 });
+  expect(result.summary.operations).not.toHaveProperty('activity');
+  expect(result.analyticsMeta.moderationStartedAt).toBe(db.sqlite.prepare('SELECT started_at FROM moderation_collection').get()!.started_at);
 });
 it("natural days use IANA rules across both DST transitions and validate calendar dates", () => {
   expect(dateBoundary("2026-03-08", "America/New_York")).toBe(
@@ -292,18 +214,6 @@ it("school selection preserves global school approval work and its drilldown sco
   expect(group.global).toBe(true);
   expect(group.total).toBe(1);
   expect(group.items).toHaveLength(1);
-});
-it("a full offline batch stays within D1 binding limits and duplicate receipt replay is harmless", async () => {
-  const { env, who, db } = fixture();
-  const events = Array.from({ length: 100 }, () => event());
-  await ingestActivity(env, who, { profileID: who.profileId, events });
-  await ingestActivity(env, who, { profileID: who.profileId, events });
-  expect(
-    db.sqlite.prepare("SELECT count(*) n FROM app_activity").get()!.n,
-  ).toBe(100);
-  expect(
-    (await activitySummary(env, "bjfu", "Asia/Shanghai", 90)).inRange,
-  ).toBe(1);
 });
 it("counts repeated hide transitions without confusing current hidden inventory with actions", async () => {
   const { env, who, db, context } = fixture();
