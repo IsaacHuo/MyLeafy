@@ -1,36 +1,70 @@
 {
-  "sourceCommit": "baf17b4be3f799e58f1b883e8b0aee7c9462e526",
+  "sourceCommit": "592c54b30d84bcd089eecf1034cd53ba10c0b9ce",
   "sourceCIRuns": [
-    38420212777,
-    38420220941,
-    38428708385
+    38546872370,
+    38547034200,
+    38549392930
   ],
-  "stagingRun": 38429643166,
-  "productionRun": 38430130223,
+  "stagingRun": 38549396338,
+  "productionRun": 38549745873,
   "environment": "production",
-  "publishedAt": "2026-10-13T16:25:46.193Z",
+  "publishedAt": "2026-10-14T10:30:31.725Z",
   "publicVerification": {
     "workerCommitMatches": true,
     "siteCommitMatches": true,
     "adminHTMLStatus": 200,
-    "anonymousAdminMeStatus": 401
+    "anonymousAdminMeStatus": 401,
+    "retiredActivityEndpointStatus": 404
   },
   "qualityAudit": {
     "readOnly": true,
-    "generatedAt": "2026-10-13T16:26:49.940000Z",
+    "generatedAt": "2026-10-14T11:43:29.753000Z",
     "checks": 8,
     "mismatches": 0,
     "unverifiable": 0
   },
-  "implementationCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
+  "removalVerification": {
+    "readOnly": true,
+    "checkedAt": "2026-10-14T11:44:42.573Z",
+    "appliedMigration": "0014_remove_app_activity.sql",
+    "retiredTablesAbsent": [
+      "app_activity",
+      "activity_collection"
+    ],
+    "moderationCollectionStartedAt": "2026-10-13T15:58:33.897000Z",
+    "businessBefore": {
+      "profiles": 2576,
+      "posts": 180,
+      "moderationEvents": 0
+    },
+    "businessAfter": {
+      "profiles": 2576,
+      "posts": 180,
+      "moderationEvents": 0
+    }
+  },
   "androidPrivateCandidate": {
-    "versionName": "1.2.5",
-    "versionCode": 9,
-    "sourceCommit": "ab6c18dc9e2e84ab6c436e1273b8bcf667af49d4",
-    "prepareRun": 38427876245,
-    "draftTag": "android-candidate-9",
+    "versionName": "1.2.6",
+    "versionCode": 10,
+    "sourceCommit": "592c54b30d84bcd089eecf1034cd53ba10c0b9ce",
+    "prepareRun": 38551380219,
+    "draftTag": "android-candidate-10",
     "registered": true,
     "formallyPublished": false
   },
-  "scope": "Admin Studio operational UI. This receipt describes the previous publication; App usage telemetry is removed by the following removal release."
+  "withdrawnUnissuedCandidate": {
+    "versionName": "1.2.5",
+    "versionCode": 9,
+    "draftAssetsDeleted": true,
+    "formalReleaseExisted": false
+  },
+  "formalAndroid": {
+    "versionName": "1.2.4",
+    "versionCode": 8
+  },
+  "ios": {
+    "foregroundTelemetryRemovedFromSource": true,
+    "applePublicationPerformed": false
+  },
+  "scope": "App usage telemetry removed end to end; Admin Studio business and operations features retained."
 }
