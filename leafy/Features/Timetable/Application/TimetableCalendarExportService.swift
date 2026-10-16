@@ -222,6 +222,10 @@ enum TimetableCalendarExportBuilder {
         )
     }
 
+    static func cellReminderKey(_ reminder: TimetableCellReminder) -> String {
+        cellReminderKeyPrefix + reminder.id.uuidString.lowercased()
+    }
+
     private static func draft(reminder: TimetableCellReminder) -> TimetableCalendarEventDraft? {
         guard let startDate = reminder.resolvedStartDate
         else {
@@ -230,7 +234,7 @@ enum TimetableCalendarExportBuilder {
 
         let endDate = reminder.resolvedEndDate.flatMap { $0 > startDate ? $0 : nil }
             ?? startDate.addingTimeInterval(45 * 60)
-        let occurrenceKey = cellReminderKeyPrefix + reminder.cellKey
+        let occurrenceKey = cellReminderKey(reminder)
         return TimetableCalendarEventDraft(
             occurrenceKey: occurrenceKey,
             title: reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("日程") : reminder.title,

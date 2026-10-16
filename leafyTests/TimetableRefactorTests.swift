@@ -1610,7 +1610,7 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(currentWeekDrafts.map(\.occurrenceKey), [
             course.occurrenceKey(week: 2),
             "exam:7",
-            "cellReminder:\(reminder.cellKey)"
+            "cellReminder:\(reminder.id.uuidString.lowercased())"
         ])
         XCTAssertEqual(remainingDrafts.map(\.occurrenceKey), [course.occurrenceKey(week: 2), course.occurrenceKey(week: 3)])
         XCTAssertEqual(fullDrafts.count, 3)
@@ -1619,7 +1619,7 @@ extension PerformanceRefactorTests {
             course.occurrenceKey(week: 1),
             course.occurrenceKey(week: 2),
             "exam:7",
-            "cellReminder:\(reminder.cellKey)"
+            "cellReminder:\(reminder.id.uuidString.lowercased())"
         ])
         XCTAssertEqual(TimetableCalendarExportBuilder.weekRange(
             for: .customWeeks,
@@ -1638,7 +1638,7 @@ extension PerformanceRefactorTests {
         XCTAssertTrue(draft.notes.contains("备注：交作业"))
         XCTAssertEqual(TimetableCalendarExportBuilder.occurrenceKey(from: draft.url), draft.occurrenceKey)
 
-        let reminderDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "cellReminder:\(reminder.cellKey)" })
+        let reminderDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "cellReminder:\(reminder.id.uuidString.lowercased())" })
         XCTAssertEqual(reminderDraft.title, "预习植物分类")
         XCTAssertEqual(reminderDraft.location, "图书馆二层")
         XCTAssertTrue(reminderDraft.notes.contains("类型：日程"))
@@ -1717,7 +1717,7 @@ extension PerformanceRefactorTests {
         )
 
         XCTAssertEqual(drafts.map(\.occurrenceKey), [
-            "cellReminder:\(reminder.cellKey)",
+            "cellReminder:\(reminder.id.uuidString.lowercased())",
             "exam:8"
         ])
         XCTAssertEqual(drafts.map(\.title), ["社团面试", "考试：高等数学"])

@@ -17,7 +17,7 @@ enum PersonalScheduleExport {
     static func items(reminders: [TimetableCellReminder], events: [CustomScheduleEvent]) throws -> [PersonalScheduleExportItem] {
         let cells = try reminders.map { reminder in
             guard let start = reminder.resolvedStartDate else { throw CocoaError(.fileReadCorruptFile) }
-            return PersonalScheduleExportItem(key: "cellReminder:" + reminder.cellKey, title: reminder.title,
+            return PersonalScheduleExportItem(key: TimetableCalendarExportBuilder.cellReminderKey(reminder), title: reminder.title,
                 start: start, end: reminder.endsAt ?? (reminder.startsAt == nil ? reminder.resolvedEndDate : nil),
                 location: reminder.locationText, note: reminder.noteText, minutesBefore: reminder.minutesBefore)
         }
