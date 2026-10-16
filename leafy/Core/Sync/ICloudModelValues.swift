@@ -72,11 +72,12 @@ nonisolated struct SyncedGrade: Codable {
     var courseAttribute: String?
     var courseCategory: String?
     var examNature: String?
+    var updatedAt: Date?
 }
 
 extension SyncedGrade: ICloudModelValue {
     typealias Model = Grade
-    var syncDate: Date { .distantPast }
+    var syncDate: Date { updatedAt ?? .distantPast }
     static var kind: String { "Grade" }
     @MainActor init(_ model: Grade) {
         id = model.id
@@ -89,6 +90,7 @@ extension SyncedGrade: ICloudModelValue {
         courseAttribute = model.courseAttribute
         courseCategory = model.courseCategory
         examNature = model.examNature
+        updatedAt = model.updatedAt
     }
     @MainActor func make() -> Grade {
         let model = Grade(id: id, term: term, courseName: courseName, credit: credit, score: score, type: type, courseCode: courseCode, courseAttribute: courseAttribute, courseCategory: courseCategory, examNature: examNature)
@@ -106,6 +108,7 @@ extension SyncedGrade: ICloudModelValue {
         model.courseAttribute = courseAttribute
         model.courseCategory = courseCategory
         model.examNature = examNature
+        model.updatedAt = updatedAt
     }
 }
 

@@ -204,9 +204,15 @@ final class ICloudSyncCoordinator: ObservableObject {
         try persist()
         guard let data = record["value"] as? Data else { throw CocoaError(.fileReadCorruptFile) }
         var value = try JSONDecoder().decode(ICloudSyncValue.self, from: data)
-        if let payload = (record["payloadAsset"] as? CKAsset)?.fileURL {
-            value.payload = try Data(contentsOf: payload, options: .mappedIfSafe)
+        if record["payloadAsset"] != nil || record["payloadDigest"] != nil {
+            guard let payload = (record["payloadAsset"] as? CKAsset)?.fileURL else {
+                throw ICloudSyncFailure.message("iCloud 文本附件尚未下载完成，请重试。")
+            }
+            value.payload = try Data(contentsOf: payload)
             guard ICloudSyncValue.digest(value.payload) == record["payloadDigest"] as? String else { throw CocoaError(.fileReadCorruptFile) }
+        }
+        guard value.deleted || value.key.hasPrefix("file/") || !value.payload.isEmpty else {
+            throw ICloudSyncFailure.message("iCloud 数据尚未下载完整，请重试。")
         }
         guard value.recordName == record.recordID.recordName,
               value.filePath == nil || value.key == "file/" + value.filePath! else { throw CocoaError(.fileReadCorruptFile) }
@@ -254,7 +260,7 @@ final class ICloudSyncCoordinator: ObservableObject {
         defer { applying = false }
         // Files precede metadata so existing readers never observe a missing received attachment.
         let values = journal.inbox.values.sorted { ($0.filePath == nil ? 1 : 0, $0.key) < ($1.filePath == nil ? 1 : 0, $1.key) }
-        let notificationChange = values.contains { $0.key == "school/courses" || $0.key == "settings/timetable" || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") }
+        let notificationChange = values.contains { $0.key == "school/courses" || $0.key == "settings/timetable" || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
         let oldCourses = notificationChange ? try context.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot) : []
         let oldCells = notificationChange ? try context.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() } : []
         let oldEvents = notificationChange ? try CustomScheduleStore.loadForSync() : []

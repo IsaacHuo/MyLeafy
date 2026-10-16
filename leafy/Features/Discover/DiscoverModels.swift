@@ -8,6 +8,8 @@ struct ExamArrangement: Identifiable, Codable, Hashable {
     let start: String
     let end: String
     let location: String
+    var syncID: UUID? = nil
+    var updatedAt: Date? = nil
 
     var startsAt: Date? {
         DateFormatters.examStart.date(from: "\(date) \(start)")

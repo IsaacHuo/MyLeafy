@@ -122,6 +122,7 @@ enum ManualGradeStore {
         target.credit = validatedDraft.credit
         target.score = validatedDraft.score
         target.type = validatedDraft.type
+        target.updatedAt = Date()
 
         do {
             try modelContext.save()

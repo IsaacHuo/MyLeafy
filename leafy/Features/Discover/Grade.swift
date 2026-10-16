@@ -13,8 +13,9 @@ final class Grade {
     var courseAttribute: String?
     var courseCategory: String?
     var examNature: String?
+    var updatedAt: Date? = nil
     
-    init(id: UUID = UUID(), term: String, courseName: String, credit: String, score: String, type: String, courseCode: String? = nil, courseAttribute: String? = nil, courseCategory: String? = nil, examNature: String? = nil) {
+    init(id: UUID = UUID(), term: String, courseName: String, credit: String, score: String, type: String, courseCode: String? = nil, courseAttribute: String? = nil, courseCategory: String? = nil, examNature: String? = nil, updatedAt: Date? = Date()) {
         self.id = id
         self.term = term
         self.courseName = courseName
@@ -25,5 +26,6 @@ final class Grade {
         self.courseAttribute = courseAttribute
         self.courseCategory = courseCategory
         self.examNature = examNature
+        self.updatedAt = updatedAt
     }
 }

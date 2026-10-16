@@ -30,7 +30,7 @@ enum PersonalScheduleExport {
         let formatter = DateFormatter()
         formatter.timeZone = UserTimetableSettings.calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return "MyLeafy 个人日程（北京时间）\n\n" + items.map { item in
+        return "MyLeafy 个人日程（当地时间）\n\n" + items.map { item in
             var lines = [item.title, "开始：" + formatter.string(from: item.start)]
             if let end = item.end { lines.append("结束：" + formatter.string(from: end)) }
             if !item.location.isEmpty { lines.append("地点：" + item.location) }
@@ -76,6 +76,7 @@ struct PersonalScheduleExportView: View {
                 Task { @MainActor in
                     defer { busy = false }
                     do {
+                        try scope.check()
                         let result = try await TimetableCalendarExportService().exportPersonalSchedules(items)
                         try scope.check()
                         message = result.message

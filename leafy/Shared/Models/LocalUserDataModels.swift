@@ -176,9 +176,7 @@ final class TimetableCellReminder {
     }
 
     var resolvedEndDate: Date? {
-        if let startsAt, let endsAt, endsAt > startsAt {
-            return endsAt
-        }
+        if let startsAt { return endsAt.flatMap { $0 > startsAt ? $0 : nil } }
 
         return TimetablePeriodSchedule.endDate(week: week, dayOfWeek: dayOfWeek, period: displayEndPeriod)
     }

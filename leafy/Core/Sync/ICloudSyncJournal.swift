@@ -9,7 +9,7 @@ nonisolated struct ICloudSyncValue: Codable, Equatable, Sendable {
     var deleted = false
     var filePath: String?
     var fileDigest: String?
-    var isPersonalText: Bool { ["ScheduleMemo/", "CourseNote/", "CourseOccurrenceNote/", "CustomSchedule/", "TimetableCellReminder/"].contains { key.hasPrefix($0) } }
+    var isPersonalText: Bool { ["ScheduleMemo/", "CourseNote/", "CourseOccurrenceNote/", "CustomSchedule/", "TimetableCellReminder/", "ManualExam/"].contains { key.hasPrefix($0) } }
     var recordName: String { Self.digest(Data(key.utf8)) }
     static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
@@ -18,6 +18,7 @@ nonisolated struct ICloudSyncValue: Codable, Equatable, Sendable {
         if local.isSingleton, local.modifiedAt != remote.modifiedAt { return local.modifiedAt > remote.modifiedAt ? local : remote }
         if local.deleted != remote.deleted { return local.deleted ? local : remote }
         if local.modifiedAt != remote.modifiedAt { return local.modifiedAt > remote.modifiedAt ? local : remote }
+        if local.modifiedAt == .distantPast { return remote }
         return local.revision > remote.revision ? local : remote
     }
 }
@@ -50,7 +51,9 @@ nonisolated struct ICloudSyncJournal: Codable {
                previous.fileDigest == value.fileDigest, !previous.deleted { continue }
             // IDs are never reused after deletion.
             if records[value.key]?.deleted == true && !value.isSingleton { continue }
-            if !value.key.hasPrefix("school/"), records[value.key] != nil { value.modifiedAt = now }
+            // Initial caches retain their real fetch date. Later committed changes are
+            // new data even if reminder restoration has not updated cache metadata yet.
+            if records[value.key] != nil { value.modifiedAt = max(now, value.modifiedAt) }
             records[value.key] = value
             pending.insert(value.key)
             changed = true

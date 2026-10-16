@@ -332,6 +332,7 @@ enum TimetableCalendarExportBuilder {
 @MainActor
 final class TimetableCalendarExportService {
     private let eventStore: EKEventStore
+    private var ledgerKey: String { CampusScopedDefaults.key("calendar.exportedEvents.v1") }
 
     init(eventStore: EKEventStore = EKEventStore()) {
         self.eventStore = eventStore
@@ -347,11 +348,8 @@ final class TimetableCalendarExportService {
         currentWeek: Int,
         customWeeks: ClosedRange<Int>? = nil
     ) async throws -> TimetableCalendarExportResult {
-        try await ensureFullCalendarAccess()
-        guard let calendar = eventStore.defaultCalendarForNewEvents, calendar.allowsContentModifications else {
-            throw TimetableCalendarExportError.calendarUnavailable
-        }
-
+        let scope = CampusOperationScope()
+        let referenceDate = Date()
         let drafts = TimetableCalendarExportBuilder.drafts(
             courses: courses,
             courseNotes: courseNotes,
@@ -360,55 +358,64 @@ final class TimetableCalendarExportService {
             exams: exams,
             range: range,
             currentWeek: currentWeek,
+            referenceDate: referenceDate,
             customWeeks: customWeeks
         )
 
         guard let interval = TimetableCalendarExportBuilder.exportInterval(
             for: range,
             currentWeek: currentWeek,
+            referenceDate: referenceDate,
             customWeeks: customWeeks
         ) else {
             return TimetableCalendarExportResult(created: 0, updated: 0, removed: 0)
         }
 
-        let existingEvents = leafyEvents(in: interval)
-        let existingByKey = Dictionary(
-            existingEvents.compactMap { event in
-                TimetableCalendarExportBuilder.occurrenceKey(from: event.url).map { ($0, event) }
-            },
-            uniquingKeysWith: { first, _ in first }
-        )
+        // Build value drafts before the permission suspension; school refresh may replace models.
+        let weeks = TimetableCalendarExportBuilder.weekRange(for: range, currentWeek: currentWeek, referenceDate: referenceDate, customWeeks: customWeeks)
+        try await ensureFullCalendarAccess()
+        try scope.check()
+        guard let calendar = eventStore.defaultCalendarForNewEvents, calendar.allowsContentModifications else {
+            throw TimetableCalendarExportError.calendarUnavailable
+        }
+        let defaults = UserDefaults.standard
+        var ledger = defaults.dictionary(forKey: ledgerKey) as? [String: String] ?? [:]
         let draftKeys = Set(drafts.map(\.occurrenceKey))
-
-        var created = 0
-        var updated = 0
-
-        for draft in drafts {
-            let event = existingByKey[draft.occurrenceKey] ?? EKEvent(eventStore: eventStore)
-            if existingByKey[draft.occurrenceKey] == nil {
-                event.calendar = calendar
-                created += 1
-            } else {
-                updated += 1
-            }
-            apply(draft, to: event, defaultCalendar: calendar)
-            try eventStore.save(event, span: .thisEvent, commit: false)
+        var byKey: [String: EKEvent] = [:]
+        for event in leafyEvents(in: interval) {
+            if let key = TimetableCalendarExportBuilder.occurrenceKey(from: event.url) { byKey[key] = event }
         }
-
-        var removed = 0
-        for event in existingEvents {
-            guard let key = TimetableCalendarExportBuilder.occurrenceKey(from: event.url),
-                  !draftKeys.contains(key)
-            else {
-                continue
-            }
-            try eventStore.remove(event, span: .thisEvent, commit: false)
-            removed += 1
+        // A changed Monday can move events outside the new export interval. The ledger
+        // follows the selected course weeks and exact schedule IDs across that move.
+        for (key, identifier) in ledger {
+            let week = courseWeek(from: key)
+            guard draftKeys.contains(key) || week.map(weeks.contains) == true,
+                  let event = eventStore.event(withIdentifier: identifier),
+                  event.url == TimetableCalendarExportBuilder.url(for: key) else { continue }
+            byKey[key] = event
         }
-
-        try eventStore.commit()
-        return TimetableCalendarExportResult(created: created, updated: updated, removed: removed)
+        var created = 0, updated = 0, removed = 0
+        var saved: [(String, EKEvent)] = []
+        do {
+            for draft in drafts {
+                let event = byKey[draft.occurrenceKey] ?? EKEvent(eventStore: eventStore)
+                if byKey[draft.occurrenceKey] == nil { created += 1 } else { updated += 1 }
+                apply(draft, to: event, defaultCalendar: calendar)
+                try eventStore.save(event, span: .thisEvent, commit: false)
+                saved.append((draft.occurrenceKey, event))
+            }
+            for (key, event) in byKey where !draftKeys.contains(key) {
+                try eventStore.remove(event, span: .thisEvent, commit: false)
+                ledger.removeValue(forKey: key); removed += 1
+            }
+            try scope.check()
+            try eventStore.commit()
+            for (key, event) in saved { if let identifier = event.eventIdentifier { ledger[key] = identifier } }
+            defaults.set(ledger, forKey: ledgerKey)
+            return TimetableCalendarExportResult(created: created, updated: updated, removed: removed)
+        } catch { eventStore.reset(); throw error }
     }
+
 
     func exportPersonalSchedules(_ items: [PersonalScheduleExportItem]) async throws -> TimetableCalendarExportResult {
         let scope = CampusOperationScope()
@@ -418,7 +425,6 @@ final class TimetableCalendarExportService {
             throw TimetableCalendarExportError.calendarUnavailable
         }
         let defaults = UserDefaults.standard
-        let ledgerKey = CampusScopedDefaults.key("personalSchedule.calendarExport.v1")
         let previous = defaults.dictionary(forKey: ledgerKey) as? [String: String] ?? [:]
         var ledger = previous
         var created = 0, updated = 0
@@ -453,26 +459,39 @@ final class TimetableCalendarExportService {
         } catch { eventStore.reset(); throw error }
     }
 
+    private func courseWeek(from key: String) -> Int? {
+        guard !key.hasPrefix("personalSchedule:"), !key.hasPrefix("cellReminder:"), !key.hasPrefix("exam:"),
+              key.contains("|week:"), let week = key.components(separatedBy: "|week:").last.flatMap(Int.init),
+              (1...20).contains(week) else { return nil }
+        return week
+    }
+
     func clearExportedCourses() async throws -> TimetableCalendarClearResult {
+        let scope = CampusOperationScope()
+        let interval = TimetableCalendarExportBuilder.exportInterval(for: .fullSemester, currentWeek: 1)
         try await ensureFullCalendarAccess()
-        guard let interval = TimetableCalendarExportBuilder.exportInterval(
-            for: .fullSemester,
-            currentWeek: 1
-        ) else {
-            return TimetableCalendarClearResult(removed: 0)
+        try scope.check()
+        guard let interval else { return TimetableCalendarClearResult(removed: 0) }
+        let defaults = UserDefaults.standard
+        var ledger = defaults.dictionary(forKey: ledgerKey) as? [String: String] ?? [:]
+        var events: [String: EKEvent] = [:]
+        for event in leafyEvents(in: interval) { events[event.calendarItemIdentifier] = event }
+        for (key, identifier) in ledger where courseWeek(from: key) != nil {
+            if let event = eventStore.event(withIdentifier: identifier), event.url == TimetableCalendarExportBuilder.url(for: key) {
+                events[event.calendarItemIdentifier] = event
+            }
+            ledger.removeValue(forKey: key)
         }
-
-        let existingEvents = leafyEvents(in: interval)
-        var removed = 0
-        for event in existingEvents {
-            try eventStore.remove(event, span: .thisEvent, commit: false)
-            removed += 1
-        }
-
-        if removed > 0 {
-            try eventStore.commit()
-        }
-        return TimetableCalendarClearResult(removed: removed)
+        do {
+            for event in events.values {
+                try eventStore.remove(event, span: .thisEvent, commit: false)
+                if let key = TimetableCalendarExportBuilder.occurrenceKey(from: event.url) { ledger.removeValue(forKey: key) }
+            }
+            try scope.check()
+            if !events.isEmpty { try eventStore.commit() }
+            defaults.set(ledger, forKey: ledgerKey)
+            return TimetableCalendarClearResult(removed: events.count)
+        } catch { eventStore.reset(); throw error }
     }
 
     private func ensureFullCalendarAccess() async throws {

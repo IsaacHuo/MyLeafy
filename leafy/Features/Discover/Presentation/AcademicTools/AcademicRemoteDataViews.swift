@@ -276,7 +276,10 @@ struct ExamScheduleView: View {
     }
 
     @MainActor
-    private func upsertExam(_ exam: ExamArrangement) {
+    private func upsertExam(_ input: ExamArrangement) {
+        var exam = input
+        exam.syncID = SchoolDataCache.loadExamSchedule().first { $0.id == input.id }?.syncID ?? input.syncID ?? UUID()
+        exam.updatedAt = Date()
         var updated = exams.filter { $0.id != exam.id }
         updated.append(exam)
         exams = updated.sorted { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }

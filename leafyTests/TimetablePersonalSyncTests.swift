@@ -4,11 +4,14 @@ import SwiftData
 
 @MainActor
 final class TimetablePersonalSyncTests: XCTestCase {
+    private var retainedContainer: ModelContainer?
     private func context() throws -> ModelContext {
         let schema = Schema([Course.self, Grade.self, CourseNote.self, CourseOccurrenceNote.self,
             CourseReminderSetting.self, TimetableCellReminder.self, ScheduleMemo.self,
             ScheduleMemoImage.self, ScheduleMemoAttachment.self, ScheduleMemoAudio.self])
-        return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)]).mainContext
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
+        retainedContainer = container
+        return container.mainContext
     }
     private func record(day: Int = 1, room: String = "101", teacher: String = "林老师") -> ParsedCourseRecord {
         ParsedCourseRecord(courseName: "数据结构", teacher: teacher, classInfo: "一班", room: room,
@@ -108,6 +111,13 @@ final class TimetablePersonalSyncTests: XCTestCase {
         XCTAssertFalse(text.contains("结束："))
         XCTAssertEqual(String(data: Data(text.utf8), encoding: .utf8), text)
     }
+    func testAbsolutePersonalScheduleWithoutEndDoesNotInheritSemesterEndTime() {
+        let date = Date(timeIntervalSince1970: 2_000_000_000)
+        let reminder = TimetableCellReminder(week: 1, dayOfWeek: 1, period: 1,
+            title: "个人日程", startsAt: date, endsAt: nil)
+        XCTAssertEqual(reminder.resolvedStartDate, date)
+        XCTAssertNil(reminder.resolvedEndDate)
+    }
     func testCellCalendarKeyMatchesTimetableExporter() throws {
         let reminder = TimetableCellReminder(week: 1, dayOfWeek: 1, period: 1, title: "格子日程")
         let item = try XCTUnwrap(PersonalScheduleExport.items(reminders: [reminder], events: []).first)
@@ -152,6 +162,51 @@ final class TimetablePersonalSyncTests: XCTestCase {
         XCTAssertEqual(journal.records[value.key], first)
         XCTAssertEqual(first?.modifiedAt, value.modifiedAt)
         XCTAssertTrue(journal.pending.isEmpty)
+    }
+    func testCommittedSchoolRefreshCannotLoseToOldCloudWhileMetadataUpdateIsDelayed() {
+        let old = ICloudSyncValue(key: "school/courses", payload: Data("old".utf8), modifiedAt: Date(timeIntervalSince1970: 1))
+        var journal = ICloudSyncJournal()
+        journal.capture([old])
+        var incoming = old
+        incoming.payload = Data("new committed courses".utf8)
+        journal.capture([incoming], now: Date(timeIntervalSince1970: 10))
+        let committed = journal.records[old.key]!
+        XCTAssertEqual(ICloudSyncValue.winner(local: committed, remote: old).payload, incoming.payload)
+    }
+    func testInitialUnknownPreferenceUsesCloudInsteadOfNewDeviceDefault() {
+        var cloud = ICloudSyncValue(key: "preference/theme", payload: Data("blue".utf8), modifiedAt: .distantPast)
+        var local = ICloudSyncValue(key: cloud.key, payload: Data("default green".utf8), modifiedAt: .distantPast)
+        cloud.revision = "A"; local.revision = "Z"
+        XCTAssertEqual(ICloudSyncValue.winner(local: local, remote: cloud).payload, cloud.payload)
+    }
+    func testManualGradesAndExamsFromDifferentDevicesMergeWithoutLosingLocalRows() throws {
+        let previous = CampusIdentityStore.currentIdentity()
+        CampusIdentityStore.activate(CampusIdentity(campusID: .guest, eduID: "sync-test-" + UUID().uuidString, displayName: nil, portal: .undergraduate, kind: .guest))
+        let examKey = CampusScopedDefaults.key("schoolCache.examSchedule")
+        let dateKey = CampusScopedDefaults.key("schoolCache.lastExamScheduleSyncAt")
+        defer {
+            UserDefaults.standard.removeObject(forKey: examKey)
+            UserDefaults.standard.removeObject(forKey: dateKey)
+            if let previous { CampusIdentityStore.activate(previous) } else { CampusIdentityStore.clear() }
+        }
+        let context = try context()
+        let localGrade = Grade(term: "一", courseName: "本机课程", credit: "2", score: "90", type: "必修")
+        context.insert(localGrade); try context.save()
+        let remoteGrade = Grade(term: "一", courseName: "另一台设备的课程", credit: "3", score: "95", type: "必修")
+        let grade = ICloudSyncValue(key: "Grade/" + remoteGrade.id.uuidString.lowercased(), payload: try ICloudLocalData.encode(SyncedGrade(remoteGrade)), modifiedAt: Date())
+        try ICloudLocalData.apply(grade, context: context); try context.save()
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Grade>()).count, 2)
+        let localExamID = UUID(), remoteExamID = UUID()
+        let localExam = ExamArrangement(id: 1, courseID: "A", name: "本机考试", date: "2026-12-01", start: "08:00", end: "10:00", location: "101", syncID: localExamID)
+        let remoteExam = ExamArrangement(id: 1, courseID: "B", name: "另一台设备的考试", date: "2026-12-02", start: "08:00", end: "10:00", location: "202", syncID: remoteExamID)
+        SchoolDataCache.saveExamSchedule([localExam], notifies: false)
+        let exam = ICloudSyncValue(key: "ManualExam/" + remoteExamID.uuidString.lowercased(), payload: try ICloudLocalData.encode(remoteExam), modifiedAt: Date())
+        try ICloudLocalData.apply(exam, context: context)
+        let merged = SchoolDataCache.loadExamSchedule()
+        XCTAssertEqual(merged.count, 2)
+        XCTAssertEqual(Set(merged.map(\.id)).count, 2)
+        XCTAssertEqual(merged.first { $0.syncID == localExamID }?.id, 1)
+        XCTAssertEqual(Set(merged.compactMap(\.syncID)), [localExamID, remoteExamID])
     }
     func testAssetPathsRejectTraversal() {
         for path in ["../Leafy.store", "images/../secret", "images/..", "unknown/name", "images/abc\\def"] {

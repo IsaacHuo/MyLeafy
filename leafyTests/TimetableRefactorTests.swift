@@ -1433,7 +1433,8 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testWidgetSnapshotKeepsMoreThanFourCourses() throws {
-        let date = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 8)))
+        // Source semester is provenance; the current container supplies actual dates.
+        let date = semesterDate(week: 1, day: 1, hour: 8, minute: 0)
         let courses = (1...5).map { index in
             Course(
                 courseName: "Course \(index)",

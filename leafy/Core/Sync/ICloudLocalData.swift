@@ -30,14 +30,32 @@ enum ICloudLocalData {
         if !courses.isEmpty || journal.records["school/courses"] != nil {
             try append("school/courses", courses, date: TimetableCacheMetadata.lastSyncAt ?? .distantPast)
         }
-        let grades = try context.fetch(FetchDescriptor<Grade>()).map(SyncedGrade.init).sorted { $0.id.uuidString < $1.id.uuidString }
-        if !grades.isEmpty || journal.records["school/grades"] != nil { try append("school/grades", grades, date: SchoolDataCache.lastSyncDate(for: .gradeDetails) ?? .distantPast) }
-        let supplemental = ICloudGradeSupplemental(rankings: SchoolDataCache.loadGradeRankings(), summary: SchoolDataCache.loadGradeCreditSummary())
-        if !supplemental.rankings.isEmpty || supplemental.summary != nil || journal.records["school/gradeSupplemental"] != nil {
-            try append("school/gradeSupplemental", supplemental, date: SchoolDataCache.lastSyncDate(for: .gradeRankings) ?? .distantPast)
+        let isManual = ActiveCampusContext.identity?.isCustom == true
+        if isManual {
+            try models(SyncedGrade.self)
+            var exams = SchoolDataCache.loadExamSchedule()
+            var prepared = false
+            let previousDate = SchoolDataCache.lastSyncDate(for: .examSchedule)
+            for index in exams.indices where exams[index].syncID == nil {
+                exams[index].syncID = UUID()
+                exams[index].updatedAt = exams[index].updatedAt ?? previousDate
+                prepared = true
+            }
+            if prepared { SchoolDataCache.saveExamSchedule(exams, notifies: false) }
+            for exam in exams {
+                guard let id = exam.syncID else { throw CocoaError(.fileReadCorruptFile) }
+                try append("ManualExam/" + id.uuidString.lowercased(), examValue(exam, localID: examID(id)), date: exam.updatedAt ?? .distantPast)
+            }
+        } else {
+            let grades = try context.fetch(FetchDescriptor<Grade>()).map(SyncedGrade.init).sorted { $0.id.uuidString < $1.id.uuidString }
+            if !grades.isEmpty || journal.records["school/grades"] != nil { try append("school/grades", grades, date: SchoolDataCache.lastSyncDate(for: .gradeDetails) ?? .distantPast) }
+            let supplemental = ICloudGradeSupplemental(rankings: SchoolDataCache.loadGradeRankings(), summary: SchoolDataCache.loadGradeCreditSummary())
+            if !supplemental.rankings.isEmpty || supplemental.summary != nil || journal.records["school/gradeSupplemental"] != nil {
+                try append("school/gradeSupplemental", supplemental, date: SchoolDataCache.lastSyncDate(for: .gradeRankings) ?? .distantPast)
+            }
+            let exams = SchoolDataCache.loadExamSchedule()
+            if !exams.isEmpty || journal.records["school/exams"] != nil { try append("school/exams", exams, date: SchoolDataCache.lastSyncDate(for: .examSchedule) ?? .distantPast) }
         }
-        let exams = SchoolDataCache.loadExamSchedule()
-        if !exams.isEmpty || journal.records["school/exams"] != nil { try append("school/exams", exams, date: SchoolDataCache.lastSyncDate(for: .examSchedule) ?? .distantPast) }
         try models(SyncedCourseNote.self); try models(SyncedCourseOccurrenceNote.self)
         try models(SyncedCourseReminderSetting.self); try models(SyncedTimetableCellReminder.self)
         try models(SyncedScheduleMemo.self); try models(SyncedScheduleMemoImage.self)
@@ -66,6 +84,17 @@ enum ICloudLocalData {
         for audio in try context.fetch(FetchDescriptor<ScheduleMemoAudio>()) { try file("audio/" + audio.localFilename) }
         if let filename = defaults.string(forKey: TimetableBackgroundStore.filenameKey), !filename.isEmpty { try file("background/" + filename) }
         return result
+    }
+
+    private static func examID(_ id: UUID) -> Int {
+        let bytes = SHA256.hash(data: Data(id.uuidString.utf8)).prefix(8)
+        let value = bytes.reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        return max(1, Int(value & 0x3fff_ffff_ffff_ffff))
+    }
+    private static func examValue(_ exam: ExamArrangement, localID: Int, name: String? = nil) -> ExamArrangement {
+        ExamArrangement(id: localID, courseID: exam.courseID, name: name ?? exam.name,
+            date: exam.date, start: exam.start, end: exam.end, location: exam.location,
+            syncID: exam.syncID, updatedAt: exam.updatedAt)
     }
 
     static func fileURL(_ path: String) throws -> URL {
@@ -135,6 +164,21 @@ enum ICloudLocalData {
         }
         let kind = String(value.key.split(separator: "/").first ?? "")
         switch kind {
+        case "Grade":
+            guard ActiveCampusContext.identity?.isCustom == true else { throw CocoaError(.fileReadCorruptFile) }
+            try models(SyncedGrade.self)
+        case "ManualExam":
+            guard ActiveCampusContext.identity?.isCustom == true,
+                  let id = UUID(uuidString: String(value.key.dropFirst("ManualExam/".count))) else { throw CocoaError(.fileReadCorruptFile) }
+            let existing = SchoolDataCache.loadExamSchedule()
+            var exams = existing.filter { $0.syncID != id }
+            if !value.deleted {
+                let exam = try decoder.decode(ExamArrangement.self, from: value.payload)
+                guard exam.syncID == id else { throw CocoaError(.fileReadCorruptFile) }
+                let localID = existing.first { $0.syncID == id }?.id ?? examID(id)
+                exams.append(examValue(exam, localID: localID))
+            }
+            SchoolDataCache.saveExamSchedule(exams)
         case "CourseNote": try models(SyncedCourseNote.self)
         case "CourseOccurrenceNote": try models(SyncedCourseOccurrenceNote.self)
         case "CourseReminderSetting": try models(SyncedCourseReminderSetting.self)
@@ -144,6 +188,10 @@ enum ICloudLocalData {
         case "ScheduleMemoAttachment": try models(SyncedScheduleMemoAttachment.self)
         case "ScheduleMemoAudio": try models(SyncedScheduleMemoAudio.self)
         case "school":
+            if value.key != "school/courses", ActiveCampusContext.identity?.isCustom == true {
+                if value.deleted { return }
+                throw ICloudSyncFailure.message("此云端成绩或考试格式不适用于手动入口。本机数据已保留，请先导出备份后重新建立此身份的云端空间。")
+            }
             switch value.key {
             case "school/courses":
                 let old = try context.fetch(FetchDescriptor<Course>())
@@ -225,6 +273,15 @@ enum ICloudLocalData {
                 title: dto.title + "（冲突副本）", startsAt: start, endsAt: dto.endsAt,
                 location: dto.location ?? "", note: dto.note ?? "", minutesBefore: dto.minutesBefore, createdAt: dto.createdAt)
             let result = ICloudSyncValue(key: "CustomSchedule/" + event.id, payload: try encode(event), modifiedAt: Date())
+            try apply(result, context: context); return result
+        case "ManualExam":
+            var exam = try decoder.decode(ExamArrangement.self, from: value.payload)
+            let digest = ICloudSyncValue.digest(Data((value.key + value.revision).utf8))
+            let hex = String(digest.prefix(32))
+            let id = UUID(uuidString: "\(hex.prefix(8))-\(hex.dropFirst(8).prefix(4))-\(hex.dropFirst(12).prefix(4))-\(hex.dropFirst(16).prefix(4))-\(hex.dropFirst(20))")!
+            exam.syncID = id
+            let duplicate = examValue(exam, localID: examID(id), name: exam.name + "（冲突副本）")
+            let result = ICloudSyncValue(key: "ManualExam/" + id.uuidString.lowercased(), payload: try encode(duplicate), modifiedAt: Date())
             try apply(result, context: context); return result
         case "CustomSchedule":
             let original = try decoder.decode(CustomScheduleEvent.self, from: value.payload)

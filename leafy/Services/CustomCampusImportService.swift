@@ -282,7 +282,9 @@ enum CustomCampusImportService {
     }
 
     static func importExams(from url: URL, modelContext: ModelContext) throws -> Int {
-        let records = try CustomCampusCSVParser.parseExams(loadText(from: url))
+        let records = try CustomCampusCSVParser.parseExams(loadText(from: url)).map { input in
+            var exam = input; exam.syncID = UUID(); exam.updatedAt = Date(); return exam
+        }
         SchoolDataCache.saveExamSchedule(records)
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         return records.count

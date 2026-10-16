@@ -54,9 +54,10 @@ struct TimetableLocalDataReassociation {
             note.sourceCourseTitle = old.courseName
             let keys = Array(Set(targets(for: old).map(\.stableCourseKey)))
             guard !keys.isEmpty, keys.allSatisfy({ key in !notes.contains { $0.id != note.id && !$0.isUnassociated && $0.courseKey == key && $0.text != note.text } }) else {
-                note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
+                note.isUnassociated = true
                 continue
             }
+            note.updatedAt = max(note.updatedAt, notes.filter { keys.contains($0.courseKey) && !$0.isUnassociated }.map(\.updatedAt).max() ?? .distantPast)
             note.courseKey = keys[0]
             for key in keys.dropFirst() where !notes.contains(where: { $0.courseKey == key && !$0.isUnassociated }) {
                 context.insert(CourseNote(courseKey: key, text: note.text, updatedAt: note.updatedAt))
@@ -72,7 +73,7 @@ struct TimetableLocalDataReassociation {
             let keys = Set(matches.map(\.stableCourseKey))
             guard keys.count == 1, let key = keys.first,
                   !occurrences.contains(where: { $0.id != note.id && !$0.isUnassociated && $0.courseKey == key && $0.week == note.week && $0.text != note.text }) else {
-                note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
+                note.isUnassociated = true
                 continue
             }
             note.courseKey = key
@@ -88,9 +89,10 @@ struct TimetableLocalDataReassociation {
             let matches = targets(for: old)
             let keys = Array(Set(matches.map(\.stableCourseKey)))
             guard !keys.isEmpty, keys.allSatisfy({ key in !reminders.contains { $0.id != setting.id && !$0.isUnassociated && $0.courseKey == key && ($0.minutesBefore != setting.minutesBefore || $0.anchorPeriod != setting.anchorPeriod) } }) else {
-                setting.isUnassociated = !newCourses.contains { $0.stableCourseKey == setting.courseKey }
+                setting.isUnassociated = true
                 continue
             }
+            setting.updatedAt = max(setting.updatedAt, reminders.filter { keys.contains($0.courseKey) && !$0.isUnassociated }.map(\.updatedAt).max() ?? .distantPast)
             setting.courseKey = keys[0]
             let oldAnchor = setting.anchorPeriod
             for key in keys.dropFirst() where !reminders.contains(where: { $0.courseKey == key && !$0.isUnassociated }) {

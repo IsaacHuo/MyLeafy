@@ -6,9 +6,36 @@ nonisolated struct UserTimetableSettings: Codable, Equatable, Sendable {
     var firstMonday: Date
     var periods: [TimetablePeriodSchedule.Slot]
 
+    private enum CodingKeys: String, CodingKey { case academicYear, term, firstMonday, periods }
+    init(academicYear: Int, term: Int, firstMonday: Date, periods: [TimetablePeriodSchedule.Slot]) {
+        self.academicYear = academicYear; self.term = term; self.firstMonday = firstMonday; self.periods = periods
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        academicYear = try values.decode(Int.self, forKey: .academicYear)
+        term = try values.decode(Int.self, forKey: .term)
+        periods = try values.decode([TimetablePeriodSchedule.Slot].self, forKey: .periods)
+        let dateString = try values.decode(String.self, forKey: .firstMonday)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Self.calendar; formatter.timeZone = Self.calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard let date = formatter.date(from: dateString), formatter.string(from: date) == dateString else {
+            throw DecodingError.dataCorruptedError(forKey: .firstMonday, in: values, debugDescription: "Invalid first Monday")
+        }
+        firstMonday = date
+    }
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(academicYear, forKey: .academicYear); try values.encode(term, forKey: .term)
+        try values.encode(periods, forKey: .periods)
+        let parts = Self.calendar.dateComponents([.year, .month, .day], from: firstMonday)
+        try values.encode(String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!), forKey: .firstMonday)
+    }
+
     static var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        calendar.timeZone = .current
         calendar.firstWeekday = 2
         return calendar
     }
@@ -51,10 +78,11 @@ nonisolated enum UserTimetableSettingsStore {
     nonisolated(unsafe) private static var cached: (String, Data, UserTimetableSettings)?
     static func load(defaults: UserDefaults = .standard) -> UserTimetableSettings {
         let scoped = CampusScopedDefaults.key(key, defaults: defaults)
+        let cacheKey = scoped + "|" + UserTimetableSettings.calendar.timeZone.identifier
         if let data = defaults.data(forKey: scoped) {
-            if let value = lock.withLock({ cached.flatMap { $0.0 == scoped && $0.1 == data ? $0.2 : nil } }) { return value }
+            if let value = lock.withLock({ cached.flatMap { $0.0 == cacheKey && $0.1 == data ? $0.2 : nil } }) { return value }
             if let value = try? JSONDecoder().decode(UserTimetableSettings.self, from: data), value.isValid {
-                lock.withLock { cached = (scoped, data, value) }
+                lock.withLock { cached = (cacheKey, data, value) }
                 return value
             }
         }
