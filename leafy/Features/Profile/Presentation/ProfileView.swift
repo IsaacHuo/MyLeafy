@@ -237,18 +237,7 @@ struct ProfileView: View {
             }
             .listRowBackground(AppTheme.cardBackground)
             Section {
-                Link(destination: URL(string: "https://xhslink.cn/o/3PFBj45O8EQ")!) {
-                    HStack(spacing: 16) {
-                        Image("DeveloperMemoji").resizable().scaledToFit().frame(width: 72, height: 72)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("找到我").font(.headline).foregroundStyle(AppTheme.primaryText)
-                            Text("来小红书聊聊").font(.subheadline).foregroundStyle(AppTheme.accent)
-                        }
-                        Spacer()
-                        Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
-                    }.padding(.vertical, 8)
-                }
-                .accessibilityLabel("找到我，来小红书聊聊，在外部打开")
+                ProfileDeveloperContactCard()
             }
         }
         .leafyInsetGroupedListStyle()

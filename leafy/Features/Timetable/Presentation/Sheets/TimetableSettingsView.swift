@@ -32,19 +32,24 @@ struct TimetableSettingsView: View {
                 }
                 Stepper("每天 \(periodCount) 节", value: $periodCount, in: 1...24)
                 ForEach(draft.periods.indices, id: \.self) { index in
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("第 \(index + 1) 节")
-                        HStack {
-                            DatePicker("开始", selection: timeBinding(index, end: false), displayedComponents: .hourAndMinute)
-                            DatePicker("结束", selection: timeBinding(index, end: true), displayedComponents: .hourAndMinute)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) {
+                                periodTimeControl(index, end: false)
+                                Spacer(minLength: 0)
+                                periodTimeControl(index, end: true)
+                            }
+                            VStack(alignment: .leading, spacing: 10) {
+                                periodTimeControl(index, end: false)
+                                periodTimeControl(index, end: true)
+                            }
                         }
                     }
+                    .padding(.vertical, 4)
                 }
                 Text("开始时间须早于结束时间，各节时间不能重叠。新增节次后请核对作息。")
                     .font(.footnote).foregroundStyle(.secondary)
-            }
-            Section {
-                NavigationLink("待关联备注与提醒") { UnassociatedCourseEditsView() }
             }
         }
         .environment(\.calendar, UserTimetableSettings.calendar)
@@ -81,6 +86,19 @@ struct TimetableSettingsView: View {
         .alert("课表设置", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("知道了", role: .cancel) {}
         } message: { Text(message ?? "") }
+    }
+
+    private func periodTimeControl(_ index: Int, end: Bool) -> some View {
+        let title: LocalizedStringKey = end ? "结束" : "开始"
+        return HStack(spacing: 8) {
+            Text(title).fixedSize()
+            DatePicker(title, selection: timeBinding(index, end: end), displayedComponents: .hourAndMinute)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityLabel(end ? Text("第 \(index + 1) 节结束时间") : Text("第 \(index + 1) 节开始时间"))
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func timeBinding(_ index: Int, end: Bool) -> Binding<Date> {
@@ -135,5 +153,43 @@ struct TimetableSettingsView: View {
             dismiss()
         } catch { message = error.localizedDescription }
 
+    }
+}
+
+struct TimetableConfigurationLink: View {
+    @State private var settings = UserTimetableSettingsStore.load()
+
+    var body: some View {
+        NavigationLink {
+            TimetableSettingsView()
+        } label: {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label {
+                        Text("学期与开学日期")
+                            .font(.headline).foregroundStyle(AppTheme.primaryText)
+                    } icon: {
+                        Image(systemName: "calendar.badge.clock").foregroundStyle(AppTheme.accent)
+                    }
+                    Text(settings.summary)
+                        .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.secondaryText)
+                    Text(settings.firstMonday, format: .dateTime.year().month().day())
+                        .font(.subheadline.weight(.medium)).foregroundStyle(AppTheme.secondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .leafyCardStyle()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("调整学年、学期和第一周的星期一")
+        .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in
+            settings = UserTimetableSettingsStore.load()
+        }
     }
 }

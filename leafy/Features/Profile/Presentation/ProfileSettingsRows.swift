@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Named row types keep settings destinations out of the root list's generic metadata.
 struct ProfileSettingsRows: View {
@@ -9,15 +10,15 @@ struct ProfileSettingsRows: View {
     @Binding var hidesWeekends: Bool
 
     var body: some View {
+        NavigationLink(value: ProfileRoute.cacheSync) {
+            ProfileMenuRow(icon: "arrow.triangle.2.circlepath", title: "重新同步",
+                           detail: isCustomCampus ? "检查本地数据状态" : "重新同步教务数据")
+        }
         NavigationLink(value: ProfileRoute.timetableSettings) {
             ProfileMenuRow(icon: "calendar.badge.clock", title: "课表设置", detail: "学期、开学日期与节次时间")
         }
         NavigationLink(value: ProfileRoute.iCloudSync) {
             ProfileMenuRow(icon: "icloud", title: "iCloud 同步", detail: "同步个人数据与设置")
-        }
-        NavigationLink(value: ProfileRoute.cacheSync) {
-            ProfileMenuRow(icon: "arrow.triangle.2.circlepath", title: "重新同步",
-                           detail: isCustomCampus ? "检查本地数据状态" : "重新同步教务数据")
         }
         if isCommunityEnabled {
             NavigationLink(value: ProfileRoute.timetableSharing) {
@@ -83,5 +84,44 @@ private struct ProfileHideWeekendsRow: View {
             }
         }
         .tint(AppTheme.accent)
+    }
+}
+
+struct ProfileDeveloperContactCard: View {
+    @Environment(\.openURL) private var openURL
+    @State private var showsContacts = false
+    @State private var mailUnavailable = false
+    private let email = "huoweifang@foxmail.com"
+
+    var body: some View {
+        Button { showsContacts = true } label: {
+            HStack(spacing: 16) {
+                Image("DeveloperMemoji")
+                    .resizable().scaledToFit().frame(width: 72, height: 72)
+                    .accessibilityHidden(true)
+                Text("找到我").font(.headline).foregroundStyle(AppTheme.primaryText)
+                Spacer(minLength: 12)
+                LeafyDisclosureIndicator()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("找到我")
+        .accessibilityHint("选择邮箱或小红书联系")
+        .confirmationDialog("找到我", isPresented: $showsContacts, titleVisibility: .visible) {
+            Button("邮箱：\(email)") {
+                openURL(URL(string: "mailto:" + email)!) { accepted in
+                    if !accepted { mailUnavailable = true }
+                }
+            }
+            Button("小红书") { openURL(URL(string: "https://xhslink.cn/o/3PFBj45O8EQ")!) }
+            Button("取消", role: .cancel) {}
+        }
+        .alert("无法打开邮件 App", isPresented: $mailUnavailable) {
+            Button("复制邮箱") { UIPasteboard.general.string = email }
+            Button("取消", role: .cancel) {}
+        } message: { Text(email) }
     }
 }

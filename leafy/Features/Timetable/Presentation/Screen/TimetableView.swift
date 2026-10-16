@@ -2693,19 +2693,7 @@ private struct TimetableWeekPickerPanel: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
-                    NavigationLink {
-                        TimetableSettingsView()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("学期与开学日期", systemImage: "calendar.badge.clock")
-                            Text(UserTimetableSettingsStore.load().summary)
-                                .font(.subheadline).foregroundStyle(.secondary)
-                            Text(SemesterConfig.startOfSemesterDate, format: .dateTime.year().month().day())
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16).leafyCardStyle()
-                    }
+                    TimetableConfigurationLink()
                     ForEach(visibleAcademicYears) { academicYear in
                         primaryAcademicYearSection(academicYear)
                     }
