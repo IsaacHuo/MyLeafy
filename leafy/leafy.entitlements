@@ -12,6 +12,12 @@
 	<array>
 		<string>iCloud.com.isaachuo.leafy</string>
 	</array>
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>$(LEAFY_CLOUDKIT_ENVIRONMENT)</string>
+	<key>com.apple.developer.icloud-container-development-container-identifiers</key>
+	<array>
+		<string>iCloud.com.isaachuo.leafy</string>
+	</array>
 	<key>com.apple.developer.icloud-services</key>
 	<array>
 		<string>CloudKit</string>

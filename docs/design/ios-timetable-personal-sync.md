@@ -31,3 +31,11 @@
 CloudKit development 使用 `PersonalValue` 记录类型，字段为 `value`（Bytes）、`asset` / `payloadAsset`（Asset）和 `payloadDigest`（String）；开发环境首次保存生成 schema，正式发布前需在 CloudKit Console 提升至 production。工程已配置 `iCloud.com.isaachuo.leafy`，仍须以开发者账号核对容器归属和签名 profile。
 
 旧全局个人日程在首次读取时归入当前身份并删除旧键，后续按身份保存。显式重建空数据库保留 iCloud 开关和账号绑定，但清除本机同步基线与游标，先从云端恢复，不能把恢复空库当作用户删除。
+
+## iCloud 初始化与故障定位
+
+Debug 明确使用 `Development`，Release 明确使用 `Production`，由 `LEAFY_CLOUDKIT_ENVIRONMENT` 同时写入 entitlement 和诊断用 Info.plist。验收必须核对签名后的包，而不只检查工程源文件。已有云端 zone 先读取，仅收到 `zoneNotFound` 才创建；权限、认证、服务端拒绝等错误直接保留，不能当作 zone 不存在。
+
+同步页展示当前阶段，并提供只包含错误元数据的诊断信息（阶段、环境、容器、错误码、HTTP 状态、请求编号）；不包含记录正文、凭据或 HTTP headers。服务端或引擎回调失败不能被后续发送步骤清空，也不能据此标记同步成功。无关 UserDefaults 通知在未产生同步数据变更时不触发失败请求重试，手动/前台重试继续可用。
+
+2026-10-16 真机旧包可复现 `CKErrorDomain 15`：私有 zone 的 PCS 获取在中国区网关返回 HTTP 500，随后 `CKDModifyRecordZonesOperation` 拒绝保存分区。失败发生在业务记录上传之前；仅凭错误 15 不能认定是 schema 缺失。修复包需要重新在真机验证该服务端问题是否仍出现，生产 schema 发布与双设备一致性仍单独验收。

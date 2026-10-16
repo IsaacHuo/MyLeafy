@@ -13,6 +13,9 @@ final class ICloudSyncCoordinator: ObservableObject {
     @Published private(set) var isBusy = false
     @Published private(set) var lastSuccess: Date?
     @Published private(set) var failure: String?
+    @Published private(set) var failureDetails: String?
+    @Published private(set) var phase: ICloudSyncPhase = .idle
+    private var reportedError: Error?
     @Published private(set) var pendingCount = 0
     private var context: ModelContext?
     private var identity: CampusIdentity?
@@ -48,7 +51,7 @@ final class ICloudSyncCoordinator: ObservableObject {
         journalURL = store.deletingLastPathComponent().appendingPathComponent("ICloudSync/journal.json")
         do {
             journal = try ICloudSyncJournal.load(from: journalURL!)
-            loaded = true; failure = nil; publish()
+            loaded = true; failure = nil; failureDetails = nil; publish()
             if journal.enabled { retry() }
         } catch { report(error) }
     }
@@ -74,14 +77,15 @@ final class ICloudSyncCoordinator: ObservableObject {
     private func stop() {
         generation = UUID(); task?.cancel(); task = nil
         if let old = engine { Task { await old.cancelOperations() } }
-        engine = nil; readyToSend = false; isBusy = false
+        engine = nil; readyToSend = false; isBusy = false; phase = .idle
     }
     func retry(userConfirmed: Bool = false) {
         guard loaded, journal.enabled, context != nil, task == nil else { return }
         let token = generation
         task = Task { @MainActor in
-            isBusy = true
-            defer { if generation == token { isBusy = false; task = nil; publish() } }
+            isBusy = true; phase = .account
+            failure = nil; failureDetails = nil; reportedError = nil
+            defer { if generation == token { isBusy = false; phase = .idle; task = nil; publish() } }
             do {
                 guard try await container.accountStatus() == .available else {
                     throw ICloudSyncFailure.message("iCloud 暂不可用。请检查系统中的 Apple 账号、iCloud 设置和网络后重试。")
@@ -101,8 +105,11 @@ final class ICloudSyncCoordinator: ObservableObject {
                 }
                 journal.accountID = account
                 UIApplication.shared.registerForRemoteNotifications()
+                phase = .localData
                 try capture()
+                phase = .assets
                 try await recoverInboxAssets(token: token)
+                phase = .merge
                 try applyInbox()
                 if engine == nil {
                     let serialization = try journal.engineState.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
@@ -112,10 +119,21 @@ final class ICloudSyncCoordinator: ObservableObject {
                     engine = CKSyncEngine(config)
                 }
                 guard let engine else { return }
-                _ = try await container.privateCloudDatabase.save(CKRecordZone(zoneID: zoneID))
+                phase = .cloudSpace
+                let database = container.privateCloudDatabase
+                let zone = zoneID
+                try await ICloudZonePreparation.ensure(fetch: {
+                    _ = try await database.recordZone(for: zone)
+                }, create: {
+                    try self.check(token)
+                    _ = try await database.save(CKRecordZone(zoneID: zone))
+                })
                 try check(token)
+                phase = .download
                 try await engine.fetchChanges(.init(scope: .zoneIDs([zoneID])))
                 try check(token)
+                if let reportedError { throw reportedError }
+                phase = .merge
                 try applyInbox()
                 if journal.inbox["school/courses"] == nil, journal.records["school/courses"] != nil, let context {
                     let committed = ModelContext(context.container)
@@ -124,9 +142,10 @@ final class ICloudSyncCoordinator: ObservableObject {
                 }
                 readyToSend = true
                 queuePending(on: engine)
-                failure = nil
+                phase = .upload
                 try await engine.sendChanges(.init(scope: .zoneIDs([zoneID])))
                 try check(token)
+                if let reportedError { throw reportedError }
                 if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch.isEmpty && failure == nil { journal.lastSuccess = Date() }
                 try persist()
                 try check(token)
@@ -144,15 +163,19 @@ final class ICloudSyncCoordinator: ObservableObject {
     }
     private func localDataChanged() {
         guard loaded, journal.enabled, !applying, identity == ActiveCampusContext.identity else { return }
-        do { try capture() } catch { report(error); return }
-        // Coalesce system notifications without delaying the durable local queue.
-        if task == nil && (!journal.pending.isEmpty || !journal.inbox.isEmpty || !journal.refetch.isEmpty) { retry() }
+        let changed: Bool
+        do { changed = try capture() } catch { report(error); return }
+        // Unrelated defaults notifications must not repeatedly retry a rejected request.
+        if changed && task == nil && (!journal.pending.isEmpty || !journal.inbox.isEmpty || !journal.refetch.isEmpty) { retry() }
     }
-    private func capture() throws {
-        guard let context, journal.inbox.isEmpty else { return }
+    @discardableResult
+    private func capture() throws -> Bool {
+        guard let context, journal.inbox.isEmpty else { return false }
         let committed = ModelContext(context.container)
         committed.autosaveEnabled = false
-        if journal.capture(try ICloudLocalData.capture(context: committed, journal: journal)) { try persist() }
+        let changed = journal.capture(try ICloudLocalData.capture(context: committed, journal: journal))
+        if changed { try persist() }
+        return changed
     }
     private func persist() throws {
         guard loaded, let journalURL else { throw ICloudSyncFailure.message("同步记录不可用。") }
@@ -163,8 +186,11 @@ final class ICloudSyncCoordinator: ObservableObject {
         pendingCount = journal.pending.count + journal.inbox.count + journal.refetch.count
     }
     private func report(_ error: Error) {
-        failure = error.localizedDescription
-        log.error("Sync failed: \(error.localizedDescription, privacy: .private)")
+        reportedError = error
+        let diagnostic = ICloudSyncDiagnostic(error: error, phase: phase, container: Self.containerIdentifier,
+            environment: Bundle.main.object(forInfoDictionaryKey: "LeafyCloudKitEnvironment") as? String ?? "未指定")
+        failure = diagnostic.message; failureDetails = diagnostic.details
+        log.error("Sync failed phase=\(self.phase.rawValue, privacy: .public) domain=\((error as NSError).domain, privacy: .public) code=\((error as NSError).code) details=\(diagnostic.details, privacy: .private)")
         publish()
     }
     private func queuePending(on engine: CKSyncEngine) {
@@ -340,7 +366,7 @@ final class ICloudSyncCoordinator: ObservableObject {
             guard identity == ActiveCampusContext.identity else { return }
             journal.engineState = nil; journal.systemFields = [:]; journal.inbox = [:]; journal.refetch = []; journal.lastSuccess = nil
             journal.pending = Set(journal.records.keys)
-            failure = nil; try persist()
+            failure = nil; failureDetails = nil; try persist()
         } catch { report(error) }
     }
 }
@@ -359,7 +385,7 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
                 case .signIn(let current) where current.recordName == journal.accountID: break
                 default:
                     stop(); journal.enabled = false; try persist()
-                    failure = "Apple 账号已变化，同步已暂停。请重新开启以确认同步到当前账号。"
+                    failure = "Apple 账号已变化，同步已暂停。请重新开启以确认同步到当前账号。"; failureDetails = nil
                 }
             case .fetchedRecordZoneChanges(let changes):
                 // Persist record IDs before staging any attachment. Even a decoding or
@@ -382,7 +408,7 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
                     journal.engineState = nil; journal.systemFields = [:]
                     journal.pending = Set(journal.records.keys)
                     try persist()
-                    failure = "此身份的 iCloud 数据已被删除，同步已暂停。本机数据已保留。"
+                    failure = "此身份的 iCloud 数据已被删除，同步已暂停。本机数据已保留。"; failureDetails = nil
                 }
             case .sentRecordZoneChanges(let changes):
                 for record in changes.savedRecords {

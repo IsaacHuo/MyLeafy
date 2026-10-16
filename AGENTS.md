@@ -104,7 +104,9 @@ The behavioral invariants that must hold while editing code live in `state/ARCHI
 - Pull requests are optional; larger changes should use a PR for review. Issues and second-person approval are optional. Both task branches and `main` run the same CI gate; the task branch checks its cumulative changes from `main`.
 - Mainline integration prepares staging and private Android candidates. Formal Android publication requires super-admin acceptance in the Android versions page; iOS remains in Xcode / App Store Connect; Cloudflare production deployment requires the owner's approval in GitHub Actions. Follow `docs/operations/delivery.md`.
 - Delete the completed task's local branch and any same-name remote branch created for that task. Do not delete unrelated collaborators' branches. The maintained long-lived branch is `main`.
-- If the worktree is dirty, `main` has diverged, or a fast-forward update is not possible, preserve existing work and stop for explicit resolution instead of resetting, overwriting, or force-updating `main`.
+- Uncommitted changes do not block a new task. Inspect their ownership and scope, preserve them, and continue on a dedicated task branch when this is safe. Use an isolated worktree when it avoids mixing concurrent or unrelated work. Do not ask for confirmation merely because the worktree is dirty.
+- Stage only task-owned changes. Do not discard, overwrite, automatically stash, or include unrelated changes in a commit. If a task touches a file with existing edits, preserve those edits and separate the task diff; ask only when ownership or the required resolution cannot be determined safely.
+- Stop for explicit resolution only when continuing would discard or overwrite existing work, unresolved conflicts prevent safe progress, `main` has diverged, or the required fast-forward integration is impossible. Never reset or force-update `main` to bypass these conditions.
 
 ## Principles
 

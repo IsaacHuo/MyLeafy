@@ -15,11 +15,17 @@ struct ICloudSyncSettingsView: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section("同步状态") {
-                if sync.isBusy { ProgressView("正在同步") }
+                if sync.isBusy { ProgressView(sync.phase.title) }
                 if let date = sync.lastSuccess { LabeledContent("最近成功", value: date.formatted(date: .abbreviated, time: .shortened)) }
                 else { Text("尚未完成同步").foregroundStyle(.secondary) }
                 if sync.pendingCount > 0 { Text("待同步或待接收：\(sync.pendingCount) 项") }
                 if let failure = sync.failure { Text(failure).foregroundStyle(.red).textSelection(.enabled) }
+                if let details = sync.failureDetails {
+                    DisclosureGroup("错误详情") {
+                        Text(details).font(.caption.monospaced()).textSelection(.enabled)
+                        ShareLink(item: details) { Label("分享诊断信息", systemImage: "square.and.arrow.up") }
+                    }
+                }
                 Button("立即同步 / 重试") { sync.retry() }.disabled(!sync.isEnabled || sync.isBusy)
             }
             Section {
