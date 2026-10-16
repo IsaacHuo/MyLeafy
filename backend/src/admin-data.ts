@@ -127,7 +127,10 @@ export async function adminList(env:BackendEnv,context:AdminContext,action:strin
   const campus=params.campusID??params.campus_id;
   if(typeof campus==='string'&&campus&&campus!=='all'){
     const column=resource.campusColumn??'campus_id';
-    if(columns.has(column))equal(column,campus);
+    if(resource.table==='campus_membership_requests'&&columns.has(column)){
+      where.push(`(t.${column}=? OR t.${column} IS NULL)`);bind.push(campus);
+    }
+    else if(columns.has(column))equal(column,campus);
     else if(resource.table==='comments'){where.push('t.post_id IN(SELECT id FROM posts WHERE campus_id=?)');bind.push(campus);}
     else if(resource.table==='community_reports'){where.push('coalesce((SELECT campus_id FROM posts WHERE id=t.post_id),(SELECT p.campus_id FROM comments c JOIN posts p ON p.id=c.post_id WHERE c.id=t.comment_id),(SELECT community_campus_id FROM profiles WHERE id=t.reported_user_id))=?');bind.push(campus);}
     else if(resource.table.endsWith('_ratings')){const target=resource.table==='teacher_ratings'?'teachers':resource.table==='course_ratings'?'course_catalog':'dish_catalog',key=resource.table==='teacher_ratings'?'teacher_id':resource.table==='course_ratings'?'course_id':'dish_id';where.push(`t.${key} IN(SELECT id FROM ${target} WHERE campus_id=?)`);bind.push(campus);}

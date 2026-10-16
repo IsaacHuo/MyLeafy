@@ -215,6 +215,75 @@ it("school selection preserves global school approval work and its drilldown sco
   expect(group.total).toBe(1);
   expect(group.items).toHaveLength(1);
 });
+it("campus scope keeps the global school approval queue and still scopes approved rows", async () => {
+  const { db, env, context, who } = fixture();
+  db.sqlite.exec(
+    "INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('other','其他','其他','其他','qiangzhi')",
+  );
+  const insert = db.sqlite.prepare(
+    "INSERT INTO campus_membership_requests(id,requester_profile_id,school_name,normalized_school_name,status,approved_campus_id) VALUES(?,?,?,?,?,?)",
+  );
+  insert.run(
+    crypto.randomUUID(),
+    who.profileId,
+    "Pending school",
+    "pending school",
+    "pending",
+    null,
+  );
+  insert.run(
+    crypto.randomUUID(),
+    who.profileId,
+    "Rejected school",
+    "rejected school",
+    "rejected",
+    null,
+  );
+  insert.run(
+    crypto.randomUUID(),
+    who.profileId,
+    "Bjfu approved",
+    "bjfu approved",
+    "approved",
+    "bjfu",
+  );
+  insert.run(
+    crypto.randomUUID(),
+    who.profileId,
+    "Other approved",
+    "other approved",
+    "approved",
+    "other",
+  );
+  const pending = await adminList(env, context, "listCampusRequests", {
+    status: "pending",
+    campusID: "bjfu",
+  });
+  expect(pending.total).toBe(1);
+  expect(pending.items).toHaveLength(1);
+  expect(pending.items[0]).toMatchObject({
+    status: "pending",
+    approved_campus_id: null,
+  });
+  const rejected = await adminList(env, context, "listCampusRequests", {
+    status: "rejected",
+    campusID: "bjfu",
+  });
+  expect(rejected.total).toBe(1);
+  expect(rejected.items[0]).toMatchObject({
+    status: "rejected",
+    approved_campus_id: null,
+  });
+  const approved = await adminList(env, context, "listCampusRequests", {
+    status: "approved",
+    campusID: "bjfu",
+  });
+  expect(approved.total).toBe(1);
+  expect(approved.items[0]).toMatchObject({
+    status: "approved",
+    approved_campus_id: "bjfu",
+  });
+});
 it("counts repeated hide transitions without confusing current hidden inventory with actions", async () => {
   const { env, who, db, context } = fixture();
   const post = crypto.randomUUID();

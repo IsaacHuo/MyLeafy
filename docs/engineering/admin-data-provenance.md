@@ -29,7 +29,7 @@ Source inventory verified against the Studio resource configuration, provider ac
 | semester-configs | listSemesterRuntimeConfigs | semester_runtime_configs | campus_id, semester_id, semester_start_date, supported_weeks, graduate_timetable_term_code, is_active | status (where offered) |
 | national-calendar | listNationalCalendarRuntimeConfigs | national_calendar_runtime_configs | year, is_active, holidays, solar_terms, updated_at | status (where offered) |
 
-All offered list controls send their query conditions to adminList. Search uses the registry search columns; ordering uses an allowed physical column plus a stable primary-key tie-breaker. Pagination and export reuse the same filtering path. Date filters use admin-dates.ts: Asia/Shanghai by default, start midnight inclusive, following end-date midnight exclusive. Rating date filters use updated_at; other resources use created_at. Global resources omit campus scoping; campus requests in the unified queue explicitly preserve their global scope.
+All offered list controls send their query conditions to adminList. Search uses the registry search columns; ordering uses an allowed physical column plus a stable primary-key tie-breaker. Pagination and export reuse the same filtering path. Date filters use admin-dates.ts: Asia/Shanghai by default, start midnight inclusive, following end-date midnight exclusive. Rating date filters use updated_at; other resources use created_at. Global resources omit campus scoping; campus requests in the unified queue and the direct 学校申请 page preserve their global scope for rows with a NULL `approved_campus_id` (pending and rejected), while approved rows stay campus-scoped.
 
 ## Derived fields and details
 
