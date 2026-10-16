@@ -19,4 +19,10 @@
 4. 现有 zone 不应每次同步都再次保存。先读取，只在 `zoneNotFound` 时创建；其它错误不得静默降级为重建。
 5. 如明确指定环境后仍持续出现 PCS/HTTP 500，用请求编号在 CloudKit Console 或向 Apple 排查容器服务状态；不得把无签名构建或单机成功当双设备同步验收。
 
+## iOS 分发签名拒绝额外的开发容器键
+
+App Store Connect 返回 `Invalid Code Signing Entitlements`，明确拒绝主 App 签名中的 `com.apple.developer.icloud-container-development-container-identifiers`。该键虽然出现在 Apple 通用 entitlement 文档中，也可能通过本机开发签名，但不能据此视为 iOS 分发支持。不要将 provisioning profile 中出现的键全部复制进 App entitlement 文件。
+
+iOS 主 App 仅声明 `com.apple.developer.icloud-container-identifiers`、`com.apple.developer.icloud-services` 和 `com.apple.developer.icloud-container-environment` 这三个 CloudKit 配置键；环境继续由 Debug/Release 分别指定 Development/Production。修正后必须重新 Archive，旧 archive/IPA 的签名不会随源文件修改而变化。核对 Release archive 的实际签名；本机签名通过不代表 App Store Connect 上传验证通过，也不代表 HTTP 500 已解决。
+
 参考：[Apple 的 serverRejectedRequest 定义](https://developer.apple.com/documentation/cloudkit/ckerror/serverrejectedrequest)、[Apple DTS 对同类错误的排查说明](https://developer.apple.com/forums/thread/823303)、[CloudKit 环境 entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.icloud-container-environment)。

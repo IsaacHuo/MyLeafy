@@ -4,6 +4,8 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
+- **iOS CloudKit 分发签名**：移除 App Store Connect 明确拒绝的 `com.apple.developer.icloud-container-development-container-identifiers`，保留标准 CloudKit 容器、服务与 Debug/Release 环境配置。旧 archive/IPA 必须重新生成；本次签名修正不代表私有分区 HTTP 500 已恢复。
+
 - **iOS 课表设置与联系入口**：重新同步置于课表与偏好首项；时间视图设置卡片加重文字并加入右箭头。作息的开始/结束标签贴近各自时间，空间不足时分行。移除待关联管理入口和页面，个人记录仍独立保留。找到我卡片只显示标题，点选邮箱或小红书；本轮按用户边界仅本地构建，真机视觉由用户验收。
 
 - **iOS 当前课表与个人数据**：课表改为固定 20 周容器，时间视图与我的页共用学期标签、首周周一和 1–24 节作息设置。学校实际可用选项决定最新有课数据，不再按开学日或后台 active 学期拦截；成功刷新完整覆盖旧课程，备注/课次备注/提醒/日程独立保留，无法匹配的个人记录独立保留、提醒暂停。节次不足时完整暂存新课表，补全后直接导入。日程可导出全部历史/未来记录到 Apple 日历或 TXT；找到我使用用户提供的拟我表情原图和小红书链接。

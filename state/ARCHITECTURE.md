@@ -369,7 +369,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 - `Core/Sync/` 使用 `CKSyncEngine` 和 `iCloud.com.isaachuo.leafy` 私有数据库，每个校园身份单独 zone；默认关闭，Demo 禁用。SwiftData 显式 `.none`，不自动镜像整个 schema。
 - 同步 allowlist：课程/成绩/考试及成绩补充快照、课程备注/课次备注/提醒、个人日程、随记及媒体、课表日期作息与个性化设置/背景。密码、Cookie、token、设备通知 ID、社区缓存及其他资料模块不上传。
 - 持久 journal 保存变更、删除标记、接收 inbox、失败重取 ID、CloudKit system fields 和引擎游标，首次先拉取合并再发送。独立 ModelContext 只操作已提交数据，文本冲突保留副本；附件 SHA-256 校验并暂存后再替换。记录删除胜过离线旧编辑，设置按字段的修改时间合并，课表的学年、学期、首周周一与作息各自同步；首次同步的未知时间默认值服从既有云端值。手动入口成绩使用 UUID、考试使用持久 syncID 逐条合并，学校来源仍按完整快照；手动编辑保留修改时间，不混淆两类权威来源。
-- Debug/Release 分别明确指定 CloudKit Development/Production，并在签名包中核验；已有 zone 先读，仅缺失时创建。同步状态保留失败阶段及安全的错误元数据，不把服务端拒绝当作缺失 zone。
+- Debug/Release 分别明确指定 CloudKit Development/Production，并在签名包中核验；iOS 不声明分发校验拒绝的 `icloud-container-development-container-identifiers`，仅保留标准容器、服务与环境键。已有 zone 先读，仅缺失时创建。同步状态保留失败阶段及安全的错误元数据，不把服务端拒绝当作缺失 zone。
 - 关闭保留两端数据；Apple 账号/校园身份变化使旧引擎失效，新 Apple 账号需重新确认。清除本机缓存先暂停并清除本机同步基线，重开从云端合并；删除云端 zone 需用户单独确认。CloudKit 生产 schema 和双设备实测属于独立发布验收。
 - 共享课表可选 `calendar_config` 保存发布者首周周一与作息，D1 0015 增量增加字段；旧客户端请求仍可省略，新 iOS 按每位发布者最新容器展示并使用发布者日期与时间。
 - 日程菜单支持所有历史/未来个人日程的 TXT 与 EventKit 导出；学校课程、考试、随记不混入。日历 URL 按校园身份隔离，格子日程与课表导出复用键，个人日程另有稳定 ID 和本机写入账本。查询围绕实际日期分段，无结束时间的日历事件用 45 分钟并明示，TXT 保留原始字段。
