@@ -42,11 +42,11 @@ struct TimetableLocalDataReassociation {
     private func normalized(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
-    private func preferredID(_ records: [(UUID, String, Date)], origins: [UUID: (String, Date)]) -> UUID {
+    private func preferredID(_ records: [(UUID, String, Date)], origins: [UUID: (String, Date)], prefersDestination: Bool = true) -> UUID {
         records.sorted { left, right in
             let leftOrigin = origins[left.0], rightOrigin = origins[right.0]
             let leftStayed = leftOrigin?.0 == left.1, rightStayed = rightOrigin?.0 == right.1
-            if leftStayed != rightStayed { return leftStayed }
+            if prefersDestination && leftStayed != rightStayed { return leftStayed }
             let leftDate = leftOrigin?.1 ?? left.2, rightDate = rightOrigin?.1 ?? right.2
             if leftDate != rightDate { return leftDate > rightDate }
             return left.0.uuidString < right.0.uuidString
@@ -134,7 +134,7 @@ struct TimetableLocalDataReassociation {
         }
         for group in Dictionary(grouping: try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).filter { !$0.isUnassociated }, by: \.occurrenceKey).values {
             if Set(group.map(\.text)).count == 1 {
-                let id = preferredID(group.map { ($0.id, $0.occurrenceKey, $0.updatedAt) }, origins: occurrenceOrigins)
+                let id = preferredID(group.map { ($0.id, $0.occurrenceKey, $0.updatedAt) }, origins: occurrenceOrigins, prefersDestination: false)
                 group.first { $0.id == id }?.updatedAt = group.map(\.updatedAt).max()!
                 for duplicate in group where duplicate.id != id { context.delete(duplicate) }
             }
