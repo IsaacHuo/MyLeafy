@@ -2482,7 +2482,7 @@ struct TimetableView: View {
         isFetching = true
         defer { isFetching = false }
         progressReporter?(.begin(.refreshingSemester))
-        let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable(force: userInitiated)
+        let semesterConfig = SemesterConfig.current
         do {
             try scope.check()
             applySemesterRuntimeConfig(semesterConfig)

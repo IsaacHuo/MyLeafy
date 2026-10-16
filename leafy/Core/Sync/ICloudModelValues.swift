@@ -444,4 +444,3 @@ extension SyncedScheduleMemoAudio: ICloudModelValue {
         model.recordedAt = recordedAt
     }
 }
-
