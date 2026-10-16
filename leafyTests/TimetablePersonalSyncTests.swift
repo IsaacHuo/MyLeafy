@@ -96,6 +96,39 @@ final class TimetablePersonalSyncTests: XCTestCase {
         SemesterRuntimeConfigCache.save(.previousSpring, defaults: defaults)
         XCTAssertEqual(UserTimetableSettingsStore.load(defaults: defaults), settings)
     }
+    func testCloudTimetableFieldsPreserveConcurrentChangesToOtherFields() throws {
+        let defaults = UserDefaults.standard
+        let key = CampusScopedDefaults.key(UserTimetableSettingsStore.key)
+        let editedKey = CampusScopedDefaults.key(UserTimetableSettingsStore.key + ".editedAt")
+        let previous = defaults.data(forKey: key), previousDate = defaults.object(forKey: editedKey)
+        defer { defaults.set(previous, forKey: key); defaults.set(previousDate, forKey: editedKey) }
+        var base = UserTimetableSettingsStore.load()
+        base.academicYear = 2026; base.term = 1
+        base.periods = Array(TimetablePeriodSchedule.defaultSlots.prefix(12))
+        try UserTimetableSettingsStore.save(base)
+        let context = try context()
+        func apply<T: Encodable>(_ field: String, _ payload: T) throws {
+            try ICloudLocalData.apply(ICloudSyncValue(key: "settings/timetable/" + field,
+                payload: ICloudLocalData.encode(payload), modifiedAt: Date()), context: context)
+        }
+        try apply("academicYear", 2028)
+        XCTAssertEqual(UserTimetableSettingsStore.load().firstMonday, base.firstMonday)
+        try apply("firstMonday", "2026-10-05")
+        var merged = UserTimetableSettingsStore.load()
+        XCTAssertEqual(merged.academicYear, 2028)
+        XCTAssertEqual(merged.term, 1)
+        XCTAssertEqual(merged.periods, base.periods)
+        XCTAssertEqual(merged.firstMondayString, "2026-10-05")
+        try apply("periods", TimetablePeriodSchedule.defaultSlots)
+        try apply("term", 2)
+        merged = UserTimetableSettingsStore.load()
+        XCTAssertEqual(merged.firstMondayString, "2026-10-05")
+        XCTAssertEqual(merged.academicYear, 2028)
+        XCTAssertEqual(merged.term, 2)
+        XCTAssertEqual(merged.periods, TimetablePeriodSchedule.defaultSlots)
+        XCTAssertThrowsError(try apply("firstMonday", "2026-10-06"))
+        XCTAssertEqual(UserTimetableSettingsStore.load(), merged)
+    }
     func testTermDiscoveryUsesNumericOrderAndIgnoresBlankOptions() throws {
         let html = "<select name='termcode'><option value=''>请选择</option><option value='9'>旧</option><option value='10'>新</option><option value='10'>重复</option></select>"
         XCTAssertEqual(try SchoolNetworkManager.shared.timetableTermOptions(in: html, selector: "select[name=termcode] option"), ["10", "9"])

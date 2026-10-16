@@ -16,11 +16,7 @@ nonisolated struct UserTimetableSettings: Codable, Equatable, Sendable {
         term = try values.decode(Int.self, forKey: .term)
         periods = try values.decode([TimetablePeriodSchedule.Slot].self, forKey: .periods)
         let dateString = try values.decode(String.self, forKey: .firstMonday)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Self.calendar; formatter.timeZone = Self.calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
-        guard let date = formatter.date(from: dateString), formatter.string(from: date) == dateString else {
+        guard let date = Self.civilDate(from: dateString) else {
             throw DecodingError.dataCorruptedError(forKey: .firstMonday, in: values, debugDescription: "Invalid first Monday")
         }
         firstMonday = date
@@ -29,8 +25,20 @@ nonisolated struct UserTimetableSettings: Codable, Equatable, Sendable {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(academicYear, forKey: .academicYear); try values.encode(term, forKey: .term)
         try values.encode(periods, forKey: .periods)
+        try values.encode(firstMondayString, forKey: .firstMonday)
+    }
+
+    var firstMondayString: String {
         let parts = Self.calendar.dateComponents([.year, .month, .day], from: firstMonday)
-        try values.encode(String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!), forKey: .firstMonday)
+        return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
+    }
+    static func civilDate(from string: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"; formatter.isLenient = false
+        guard let date = formatter.date(from: string), formatter.string(from: date) == string else { return nil }
+        return date
     }
 
     static var calendar: Calendar {

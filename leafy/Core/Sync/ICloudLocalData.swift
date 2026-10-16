@@ -68,8 +68,13 @@ enum ICloudLocalData {
                 try append("preference/" + key, data, date: journal.records["preference/" + key] == nil ? .distantPast : Date())
             }
         }
-        // Freeze the initial effective settings when sync is first enabled.
-        try append("settings/timetable", UserTimetableSettingsStore.load(), date: defaults.object(forKey: CampusScopedDefaults.key(UserTimetableSettingsStore.key + ".editedAt")) as? Date ?? .distantPast)
+        // Independent fields preserve concurrent date and period edits on different devices.
+        let settings = UserTimetableSettingsStore.load()
+        let settingsDate = defaults.object(forKey: CampusScopedDefaults.key(UserTimetableSettingsStore.key + ".editedAt")) as? Date ?? .distantPast
+        try append("settings/timetable/academicYear", settings.academicYear, date: settingsDate)
+        try append("settings/timetable/term", settings.term, date: settingsDate)
+        try append("settings/timetable/firstMonday", settings.firstMondayString, date: settingsDate)
+        try append("settings/timetable/periods", settings.periods, date: settingsDate)
         func file(_ path: String) throws {
             let url = try fileURL(path)
             if FileManager.default.fileExists(atPath: url.path) {
@@ -230,8 +235,19 @@ enum ICloudLocalData {
                 UserDefaults.standard.set(setting, forKey: key)
             }
         case "settings":
-            guard value.key == "settings/timetable", !value.deleted else { return }
-            try UserTimetableSettingsStore.save(decoder.decode(UserTimetableSettings.self, from: value.payload))
+            guard !value.deleted else { return }
+            var settings = UserTimetableSettingsStore.load()
+            switch value.key {
+            case "settings/timetable/academicYear": settings.academicYear = try decoder.decode(Int.self, from: value.payload)
+            case "settings/timetable/term": settings.term = try decoder.decode(Int.self, from: value.payload)
+            case "settings/timetable/firstMonday":
+                let string = try decoder.decode(String.self, from: value.payload)
+                guard let date = UserTimetableSettings.civilDate(from: string) else { throw CocoaError(.fileReadCorruptFile) }
+                settings.firstMonday = date
+            case "settings/timetable/periods": settings.periods = try decoder.decode([TimetablePeriodSchedule.Slot].self, from: value.payload)
+            default: throw CocoaError(.fileReadCorruptFile)
+            }
+            try UserTimetableSettingsStore.save(settings)
         default: throw CocoaError(.fileReadCorruptFile)
         }
     }

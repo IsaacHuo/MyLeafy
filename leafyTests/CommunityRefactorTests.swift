@@ -232,7 +232,10 @@ extension PerformanceRefactorTests {
         viewModel.requestStagedRefresh(after: .milliseconds(30))
         viewModel.requestStagedRefresh(after: .milliseconds(30))
         viewModel.requestStagedRefresh(after: .milliseconds(30))
-        try await Task.sleep(for: .milliseconds(150))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while !viewModel.hasPendingRefresh, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         let fetchCount = await repository.fetchedPostQueries().count
         XCTAssertEqual(fetchCount, 2)

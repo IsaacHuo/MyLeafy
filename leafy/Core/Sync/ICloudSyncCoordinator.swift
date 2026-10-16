@@ -260,7 +260,7 @@ final class ICloudSyncCoordinator: ObservableObject {
         defer { applying = false }
         // Files precede metadata so existing readers never observe a missing received attachment.
         let values = journal.inbox.values.sorted { ($0.filePath == nil ? 1 : 0, $0.key) < ($1.filePath == nil ? 1 : 0, $1.key) }
-        let notificationChange = values.contains { $0.key == "school/courses" || $0.key == "settings/timetable" || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
+        let notificationChange = values.contains { $0.key == "school/courses" || $0.key.hasPrefix("settings/timetable/") || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
         let oldCourses = notificationChange ? try context.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot) : []
         let oldCells = notificationChange ? try context.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() } : []
         let oldEvents = notificationChange ? try CustomScheduleStore.loadForSync() : []
