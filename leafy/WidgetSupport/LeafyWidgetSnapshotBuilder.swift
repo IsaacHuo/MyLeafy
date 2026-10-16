@@ -57,16 +57,16 @@ enum LeafyWidgetSnapshotBuilder {
         date: Date
     ) -> LeafyWidgetSnapshotArchive {
         let language = AppLanguagePreference.current
-        let configs = SemesterConfig.timelineConfigurations
+        let configs = [SemesterConfig.current]
         let notesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
-        let remindersByKey = Dictionary(reminders.map { ($0.courseKey, $0.minutesBefore) },
+        let remindersByKey = Dictionary(reminders.filter { !$0.isUnassociated }.map { ($0.courseKey, $0.minutesBefore) },
                                        uniquingKeysWith: { _, latest in latest })
-        let configsByID = Dictionary(uniqueKeysWithValues: configs.map { ($0.semesterID, $0) })
         var items: [LeafyWidgetAgendaItem] = []
         if isAuthenticated {
             for course in courses {
-                guard let config = configsByID[course.sourceSemesterID],
+                let config = SemesterConfig.current
+                guard
                       let first = course.duration.min(), let last = course.duration.max(),
                       (1...7).contains(course.dayOfWeek) else { continue }
                 for week in Set(course.weeks).sorted() where (1...config.supportedWeeks).contains(week) {
@@ -123,7 +123,7 @@ enum LeafyWidgetSnapshotBuilder {
             semesters: configs.map { config in
                 LeafyWidgetSemester(id: config.semesterID, startsAt: config.semesterStartDate,
                     weekCount: config.supportedWeeks,
-                    hasTimetableCache: courses.contains { $0.sourceSemesterID == config.semesterID }
+                    hasTimetableCache: !courses.isEmpty
                         || TimetableCacheMetadata.lastSyncedSemesterID == config.semesterID)
             }, items: items, exams: exams,
             defaultStartMinute: firstSlot.map { $0.startHour * 60 + $0.startMinute } ?? 480,

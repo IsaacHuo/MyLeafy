@@ -58,6 +58,8 @@ struct TimetableView: View {
     @State private var progressController = AcademicOperationProgressController()
     @State private var alertMessage = ""
     @State private var showAlert = false
+    @State private var emptyResultIdentity: CampusIdentity?
+    @State private var requiresPeriodConfiguration = false
     @State private var reauthenticationRequest: SchoolReauthenticationRequest?
     @State private var selectedCourseContext: SelectedCourseContext?
     @State private var selectedCellReminderContext: TimetableCellReminderContext?
@@ -126,9 +128,9 @@ struct TimetableView: View {
     )
     private var totalWeeks: Int { academicYearTimetable.weeks.count }
     private var timelineStartDate: Date {
-        academicYearTimetable.weeks.first?.weekStartDate ?? Calendar.current.startOfDay(for: Date())
+        academicYearTimetable.weeks.first?.weekStartDate ?? UserTimetableSettings.calendar.startOfDay(for: Date())
     }
-    private let totalClasses = 13
+    private var totalClasses: Int { TimetablePeriodSchedule.slots.count }
     private var overviewRowSpacing: CGFloat { 1.5 * leafyControlScale }
     private var overviewCardInset: CGFloat { 1.5 * leafyControlScale }
     private var overviewMinimumRowHeight: CGFloat { 26 * leafyControlScale }
@@ -146,21 +148,17 @@ struct TimetableView: View {
     }
 
     private static func makeAcademicYearTimetable(
-        configurations: [SemesterRuntimeConfig] = SemesterConfig.timelineConfigurations,
+        configurations: [SemesterRuntimeConfig] = [SemesterConfig.current],
         referenceDate: Date = Date()
     ) -> AcademicYearTimetable {
-        AcademicYearTimetable(
-            configurations: configurations,
-            semanticEvents: configurations.flatMap(\.calendarEvents),
-            referenceDate: referenceDate
-        )
+        AcademicYearTimetable(container: configurations.first ?? SemesterConfig.current)
     }
 
     init() {
-        let configurations = SemesterConfig.timelineConfigurations
+        let configurations = [SemesterConfig.current]
         let timetable = Self.makeAcademicYearTimetable(configurations: configurations)
-        let currentPage = timetable.pageIndex(containing: Date()) ?? 1
-        let calendar = Calendar.current
+        let currentPage = timetable.pageIndex(containing: Date()) ?? SemesterConfig.currentWeek()
+        let calendar = UserTimetableSettings.calendar
         let today = calendar.startOfDay(for: Date())
         let academicEnd = calendar.date(byAdding: .day, value: -1, to: timetable.endDate)
             ?? timetable.endDate
@@ -212,7 +210,7 @@ struct TimetableView: View {
     }
 
     private var currentAcademicYearPage: Int {
-        academicYearTimetable.pageIndex(containing: Date()) ?? 0
+        academicYearTimetable.pageIndex(containing: Date()) ?? SemesterConfig.currentWeek()
     }
 
     private var currentTimelineWeek: AcademicYearWeek? {
@@ -232,13 +230,13 @@ struct TimetableView: View {
         let displayedMonthDate = referenceDate < config.semesterStartDate
             ? config.semesterStartDate
             : referenceDate
-        let days = Calendar.current.dateComponents(
+        let days = UserTimetableSettings.calendar.dateComponents(
             [.day],
-            from: Calendar.current.startOfDay(for: config.semesterStartDate),
-            to: Calendar.current.startOfDay(for: referenceDate)
+            from: UserTimetableSettings.calendar.startOfDay(for: config.semesterStartDate),
+            to: UserTimetableSettings.calendar.startOfDay(for: referenceDate)
         ).day ?? 0
         return TimetableTimeScopeSnapshot.make(
-            currentWeek: max(1, days / 7 + 1),
+            currentWeek: min(20, max(1, days / 7 + 1)),
             referenceDate: referenceDate,
             displayedMonthDate: displayedMonthDate,
             language: leafyLanguage,
@@ -254,8 +252,7 @@ struct TimetableView: View {
     }
 
     private var selectedSemesterCourses: [Course] {
-        guard let selectedSemesterContext else { return [] }
-        return courses.filter { $0.sourceSemesterID == selectedSemesterContext.semesterID }
+        return courses
     }
 
     private var selectedSemesterWeek: Int {
@@ -475,7 +472,7 @@ struct TimetableView: View {
             DayScheduleSummarySheet(
                 selection: selection,
                 courses: selection.semesterID.map { semesterID in
-                    courses.filter { $0.sourceSemesterID == semesterID }
+                    courses
                 } ?? [],
                 exams: cachedExamArrangements,
                 lastSyncAt: lastSyncAt,
@@ -527,7 +524,13 @@ struct TimetableView: View {
     private var rootAlerts: some View {
         rootSheets
         .alert("提示", isPresented: $showAlert) {
-            Button("确定", role: .cancel) {}
+            if requiresPeriodConfiguration {
+                Button("补全课表作息") { appNavigation.openProfileRoute(.timetableSettings); requiresPeriodConfiguration = false }
+            }
+            if emptyResultIdentity != nil {
+                Button("清空学校课程", role: .destructive) { clearConfirmedEmptyTimetable() }
+            }
+            Button("保留当前数据", role: .cancel) { emptyResultIdentity = nil }
         } message: {
             Text(alertMessage)
         }
@@ -570,9 +573,9 @@ struct TimetableView: View {
 
     private var onboardingMessage: String {
         if isCustomCampus {
-            return "通用入口的课表、成绩和考试安排来自你手动导入的 CSV 文件；数据只保存在本机当前账号作用域内。"
+            return "可从时间视图设置学期和第一周的星期一。课表固定为 20 周，成绩和考试可手动导入；在我的页可选择开启 iCloud 同步。"
         }
-        return "课表、成绩和考试安排来自学校教务系统；课表和成绩缓存保存在本机，离线时仍可查看。社区资料和你主动发布的内容会保存到 \(AppBrand.displayName) 的社区服务。"
+        return "可从时间视图调整学期和第一周的星期一。课表固定为 20 周；刷新会替换课程，保留你写的备注和个人日程。离线时仍可查看，在我的页可选择开启 iCloud 同步。"
     }
 
     @MainActor
@@ -588,6 +591,7 @@ struct TimetableView: View {
                 cellReminders: cellReminders,
                 modelContext: modelContext
             )
+            try TimetableSingleContainerMigration.run(context: modelContext)
         } catch {
             Self.dataLogger.error("Failed to migrate historical timetable data: \(error.localizedDescription, privacy: .public)")
         }
@@ -636,7 +640,7 @@ struct TimetableView: View {
     private func handleCurrentWeekChange(_ newValue: Int) {
         if continuousViewport.phase == .idle,
            let weekStart = academicYearTimetable.week(atPageIndex: newValue)?.weekStartDate,
-           !Calendar.current.isDate(weekStart, inSameDayAs: continuousViewport.weekStartDate) {
+           !UserTimetableSettings.calendar.isDate(weekStart, inSameDayAs: continuousViewport.weekStartDate) {
             continuousViewport.positionOnWeek(
                 weekStart,
                 centersToday: newValue == currentAcademicYearPage
@@ -812,8 +816,7 @@ struct TimetableView: View {
     @MainActor
     private func applySemesterRuntimeConfig(_ config: SemesterRuntimeConfig) {
         _ = config
-        guard academicYearConfigurations != SemesterConfig.timelineConfigurations else { return }
-        rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: true)
+        rebuildAcademicYearTimeline(referenceDate: Date(), positionsToReferenceDate: false)
         publishWidgetSnapshot()
     }
 
@@ -822,7 +825,7 @@ struct TimetableView: View {
         referenceDate: Date,
         positionsToReferenceDate: Bool
     ) {
-        academicYearConfigurations = SemesterConfig.timelineConfigurations
+        academicYearConfigurations = [SemesterConfig.current]
         academicYearTimetable = Self.makeAcademicYearTimetable(
             configurations: academicYearConfigurations,
             referenceDate: referenceDate
@@ -839,21 +842,20 @@ struct TimetableView: View {
         timetableGridSnapshot = nil
         syncTimetableGridSnapshot()
 
-        let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? 1
+        let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? SemesterConfig.currentWeek(date: referenceDate)
         if positionsToReferenceDate {
             currentWeek = referencePage
         } else {
             currentWeek = min(max(currentWeek, 1), totalWeeks)
         }
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let academicEnd = calendar.date(byAdding: .day, value: -1, to: academicYearTimetable.endDate)
             ?? academicYearTimetable.endDate
         continuousViewport.updateBounds(
             rangeStart: academicYearTimetable.startDate,
             rangeEnd: academicEnd
         )
-        if positionsToReferenceDate,
-           let weekStart = academicYearTimetable.week(atPageIndex: referencePage)?.weekStartDate {
+        if let weekStart = academicYearTimetable.week(atPageIndex: currentWeek)?.weekStartDate {
             continuousViewport.positionOnWeek(
                 weekStart,
                 centersToday: referencePage == currentAcademicYearPage
@@ -881,7 +883,7 @@ struct TimetableView: View {
             var displayWeeks: [Int] = []
             var semesterWeekByDisplayWeek: [Int: Int] = [:]
             for semesterWeek in course.weeks {
-                guard let occurrenceDate = Calendar.current.date(
+                guard let occurrenceDate = UserTimetableSettings.calendar.date(
                     byAdding: .day,
                     value: (semesterWeek - 1) * 7 + (course.dayOfWeek - 1),
                     to: config.semesterStartDate
@@ -903,7 +905,7 @@ struct TimetableView: View {
         for reminder in cellReminders {
             guard let date = reminder.startsAt ?? reminder.resolvedStartDate,
                   let displayWeek = academicYearTimetable.pageIndex(containing: date) else { continue }
-            let weekday = Calendar.current.component(.weekday, from: date)
+            let weekday = UserTimetableSettings.calendar.component(.weekday, from: date)
             reminderProjections[reminder.id] = TimetableCellReminderProjection(
                 displayWeek: displayWeek,
                 dayOfWeek: ((weekday + 5) % 7) + 1
@@ -1165,7 +1167,7 @@ struct TimetableView: View {
     }
 
     private var defaultScheduleDay: Int {
-        let weekday = Calendar.current.component(.weekday, from: Date())
+        let weekday = UserTimetableSettings.calendar.component(.weekday, from: Date())
         return weekday == 1 ? 7 : weekday - 1
     }
 
@@ -1243,13 +1245,13 @@ struct TimetableView: View {
     }
 
     private func shortWeekDateRange(_ week: AcademicYearWeek) -> String {
-        let start = DateFormatters.chineseDay.string(from: max(
+        let start = TimetableClock.formatter(DateFormatters.chineseDay).string(from: max(
             week.weekStartDate,
             academicYearTimetable.startDate
         ))
-        let end = DateFormatters.chineseDay.string(from: min(
+        let end = TimetableClock.formatter(DateFormatters.chineseDay).string(from: min(
             week.weekEndDate(),
-            Calendar.current.date(byAdding: .day, value: -1, to: academicYearTimetable.endDate)
+            UserTimetableSettings.calendar.date(byAdding: .day, value: -1, to: academicYearTimetable.endDate)
                 ?? week.weekEndDate()
         ))
         return "\(start)－\(end)"
@@ -1406,7 +1408,7 @@ struct TimetableView: View {
         let now = Date()
         let currentTimeY = TimetableCurrentTimePosition.yPosition(for: now, metrics: metrics)
         let todayOrdinal = continuousRenderWindow.days.first { preparedDay in
-            Calendar.current.isDate(preparedDay.date, inSameDayAs: now)
+            UserTimetableSettings.calendar.isDate(preparedDay.date, inSameDayAs: now)
         }?.ordinal
 
         return TimetableScrollContainer(
@@ -1553,7 +1555,7 @@ struct TimetableView: View {
     }
 
     private func continuousCornerHeader(date: Date) -> some View {
-        Text(DateFormatters.shortMonth(language: leafyLanguage).string(from: date))
+        Text(TimetableClock.formatter(DateFormatters.shortMonth(language: leafyLanguage)).string(from: date))
             .font(.system(size: 11.5 * leafyControlScale, weight: .semibold))
             .foregroundStyle(AppTheme.secondaryText)
             .lineLimit(1)
@@ -1953,7 +1955,7 @@ struct TimetableView: View {
 
     private func isTodayCourseAgendaItem(_ item: TimetableAgendaItem) -> Bool {
         guard case .course = item.kind else { return false }
-        return Calendar.current.isDateInToday(item.date)
+        return UserTimetableSettings.calendar.isDateInToday(item.date)
     }
 
     private func agendaTodayCourseStrokeColor(_ item: TimetableAgendaItem) -> Color {
@@ -2056,7 +2058,7 @@ struct TimetableView: View {
     private var agendaWeekRangeText: String {
         let start = dateFor(dayOfWeek: 1, in: currentWeek)
         let end = dateFor(dayOfWeek: 7, in: currentWeek)
-        return "\(DateFormatters.chineseDay.string(from: start)) - \(DateFormatters.chineseDay.string(from: end))"
+        return "\(TimetableClock.formatter(DateFormatters.chineseDay).string(from: start)) - \(TimetableClock.formatter(DateFormatters.chineseDay).string(from: end))"
     }
 
     private func moveAgendaWeek(by delta: Int) {
@@ -2272,7 +2274,7 @@ struct TimetableView: View {
 
     private func syncReturnButtonVisibility(for visibleWeek: Int? = nil) {
         if displayMode == .threeDay {
-            isAwayFromCurrentSchedule = !Calendar.current.isDate(
+            isAwayFromCurrentSchedule = !UserTimetableSettings.calendar.isDate(
                 continuousViewport.centerDate,
                 inSameDayAs: Date()
             )
@@ -2295,7 +2297,7 @@ struct TimetableView: View {
 
     private func dateFor(dayOfWeek: Int, in week: Int) -> Date {
         guard let timelineWeek = academicYearTimetable.week(atPageIndex: week) else { return Date() }
-        return Calendar.current.date(
+        return UserTimetableSettings.calendar.date(
             byAdding: .day,
             value: dayOfWeek - 1,
             to: timelineWeek.weekStartDate
@@ -2509,13 +2511,13 @@ struct TimetableView: View {
                 let refreshSummary = TimetableRefreshSummary.compare(
                     records: parsedCourseRecords,
                     existingCourses: courses,
-                    semesterID: document.verifiedSemesterID
+                    semesterID: document.sourceSemesterID
                 )
                 let saved = try refreshUseCase.persist(
                     records: parsedCourseRecords,
                     existingCourses: courses,
                     modelContext: modelContext,
-                    semesterID: document.verifiedSemesterID
+                    semesterID: document.sourceSemesterID
                 )
                 return (saved, refreshSummary)
             }
@@ -2529,7 +2531,7 @@ struct TimetableView: View {
                 timetableGridSnapshot = nil
                 TimetableCacheMetadata.lastSyncAt = Date()
                 TimetableCacheMetadata.lastFailureMessage = reminderWarning
-                TimetableCacheMetadata.lastSyncedSemesterID = document.verifiedSemesterID
+                TimetableCacheMetadata.lastSyncedSemesterID = document.sourceSemesterID
                 AppStoreReviewCoordinator.recordSuccessfulSync(kind: .timetable, date: Date())
                 SchoolDataRefreshNotifier.post(.timetable)
                 Task {
@@ -2555,6 +2557,8 @@ struct TimetableView: View {
             }
             await MainActor.run {
                 isFetching = false
+                requiresPeriodConfiguration = error is TimetableConfigurationRequired
+                emptyResultIdentity = error is TimetableEmptyResult ? ActiveCampusContext.identity : nil
                 TimetableCacheMetadata.lastFailureMessage = error.localizedDescription
                 lastFailureMessage = error.localizedDescription
                 publishWidgetSnapshot()
@@ -2572,6 +2576,23 @@ struct TimetableView: View {
                 }
             }
         }
+    }
+
+    private func clearConfirmedEmptyTimetable() {
+        guard let identity = emptyResultIdentity, identity == ActiveCampusContext.identity else { return }
+        emptyResultIdentity = nil
+        do {
+            let saved = try TimetableRefreshUseCase().persist(records: [], existingCourses: courses,
+                modelContext: modelContext, allowsEmpty: true)
+            Task { @MainActor in
+                _ = await saved.reminders.restore()
+                guard identity == ActiveCampusContext.identity else { return }
+                TimetableCacheMetadata.lastSyncAt = Date()
+                SchoolDataRefreshNotifier.post(.timetable)
+                publishWidgetSnapshot()
+                _ = await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: [])
+            }
+        } catch { alertMessage = error.localizedDescription; showAlert = true }
     }
 
     private func timetableRefreshMessage(for summary: TimetableRefreshSummary) -> String {
@@ -2611,7 +2632,7 @@ struct TimetableView: View {
         let semesterWeek = course.weeks.contains(preferredSemesterWeek)
             ? preferredSemesterWeek
             : course.weeks.sorted().first ?? preferredSemesterWeek
-        guard let weekStart = Calendar.current.date(
+        guard let weekStart = UserTimetableSettings.calendar.date(
             byAdding: .day,
             value: (semesterWeek - 1) * 7,
             to: config.semesterStartDate
@@ -2621,7 +2642,7 @@ struct TimetableView: View {
             course: course,
             week: semesterWeek,
             day: course.dayOfWeek,
-            date: Calendar.current.date(
+            date: UserTimetableSettings.calendar.date(
                 byAdding: .day,
                 value: course.dayOfWeek - 1,
                 to: weekStart
@@ -2668,38 +2689,25 @@ private struct TimetableWeekPickerPanel: View {
         model.timeViewAcademicYears
     }
 
-    private var historyAcademicYears: [TimetableCalendarMenuAcademicYear] {
-        model.historyTimeViewAcademicYears
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
+                    NavigationLink {
+                        TimetableSettingsView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("学期与开学日期", systemImage: "calendar.badge.clock")
+                            Text(UserTimetableSettingsStore.load().summary)
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Text(SemesterConfig.startOfSemesterDate, format: .dateTime.year().month().day())
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16).leafyCardStyle()
+                    }
                     ForEach(visibleAcademicYears) { academicYear in
                         primaryAcademicYearSection(academicYear)
-                    }
-
-                    if !historyAcademicYears.isEmpty {
-                        NavigationLink {
-                            historyPicker
-                        } label: {
-                            HStack(spacing: AppSpacing.compact) {
-                                Label("过往学期与假期", systemImage: "clock.arrow.circlepath")
-                                    .leafyHeadline()
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(AppTheme.tertiaryText)
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .leafyCardStyle()
-                        .accessibilityHint("查看以前的学期课表和假期周")
                     }
 
                     if let message = model.unavailableFutureConfigurationMessage {
@@ -2726,6 +2734,9 @@ private struct TimetableWeekPickerPanel: View {
             .background(LeafyPageBackground())
             .navigationTitle("时间视图")
             .leafyInlineNavigationTitle()
+            .onChange(of: model.academicYears.flatMap(\.semesters).map(\.semesterID)) { _, _ in
+                expandedSemesterIDs = model.defaultExpandedSemesterIDs
+            }
         }
     }
 
@@ -2735,34 +2746,6 @@ private struct TimetableWeekPickerPanel: View {
                 semesterSection(semester)
             }
         }
-    }
-
-    private var historyPicker: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: AppSpacing.card) {
-                ForEach(historyAcademicYears) { academicYear in
-                    VStack(alignment: .leading, spacing: AppSpacing.compact) {
-                        Text("\(academicYear.academicYear) 学年")
-                            .leafyHeadline()
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .padding(.horizontal, 4)
-
-                        ForEach(academicYear.stages) { stage in
-                            switch stage {
-                            case let .semester(semester):
-                                semesterSection(semester)
-                            case let .vacation(vacation):
-                                vacationSection(vacation)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(AppSpacing.page)
-        }
-        .background(LeafyPageBackground())
-        .navigationTitle("过往学期与假期")
-        .leafyInlineNavigationTitle()
     }
 
     private func semesterSection(_ semester: TimetableCalendarMenuSemester) -> some View {
@@ -2808,7 +2791,7 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private func semesterRangeText(_ semester: TimetableCalendarMenuSemester) -> String {
-        let formatter = DateFormatters.monthYear(language: leafyLanguage)
+        let formatter = TimetableClock.formatter(DateFormatters.monthYear(language: leafyLanguage))
         formatter.calendar = Calendar(identifier: .gregorian)
         let start = formatter.string(from: semester.startDate)
         guard let endDate = semester.endDate else {
@@ -2932,9 +2915,9 @@ private struct TimetableWeekPickerPanel: View {
     }
 
     private func isSameWeek(_ lhs: Date, _ rhs: Date) -> Bool {
-        guard let lhsInterval = Calendar.current.dateInterval(of: .weekOfYear, for: lhs),
-              let rhsInterval = Calendar.current.dateInterval(of: .weekOfYear, for: rhs) else {
-            return Calendar.current.isDate(lhs, inSameDayAs: rhs)
+        guard let lhsInterval = UserTimetableSettings.calendar.dateInterval(of: .weekOfYear, for: lhs),
+              let rhsInterval = UserTimetableSettings.calendar.dateInterval(of: .weekOfYear, for: rhs) else {
+            return UserTimetableSettings.calendar.isDate(lhs, inSameDayAs: rhs)
         }
         return lhsInterval.start == rhsInterval.start
     }

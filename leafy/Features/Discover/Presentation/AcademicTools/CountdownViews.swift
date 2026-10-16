@@ -86,11 +86,7 @@ struct CustomScheduleListView: View {
     }
 
     private var academicYearTimetable: AcademicYearTimetable {
-        let configurations = SemesterConfig.timelineConfigurations
-        return AcademicYearTimetable(
-            configurations: configurations,
-            semanticEvents: configurations.flatMap(\.calendarEvents)
-        )
+        AcademicYearTimetable(container: SemesterConfig.current)
     }
 
     private var sortedItems: [CustomScheduleListItem] {

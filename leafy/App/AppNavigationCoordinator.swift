@@ -6,6 +6,8 @@ enum ProfileRoute: Hashable {
     case cacheSync
     case timetableBackground
     case personalization
+    case timetableSettings
+    case iCloudSync
 }
 
 enum RootTab: Hashable {

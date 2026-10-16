@@ -60,13 +60,13 @@
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MyLeafy needs calendar access to export your timetable to Calendar and update previously exported classes."
+            "value" : "MyLeafy needs calendar access to export your timetable and personal schedules, and update previously exported events."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "MyLeafy 需要访问日历，以便把课表导出到本地日历，并在重复导出时更新已写入的课程。"
+            "value" : "MyLeafy 需要访问日历，以便导出课表和个人日程，并在重复导出时更新已写入的事件。"
           }
         }
       }

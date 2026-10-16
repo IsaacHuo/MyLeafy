@@ -131,7 +131,7 @@ nonisolated struct CampusDescriptor: Codable, Hashable, Identifiable, Sendable {
             .grades,
             .exams
         ],
-        networkHint: "免登录入口数据全部保存在本机，不连接任何账号或后台。",
+        networkHint: "免登录入口默认保存在本机，不连接 MyLeafy 账号或后台；可自行开启 iCloud 同步。",
         defaultStudentDisplayName: "本地用户",
         undergraduateBaseURL: URL(string: "https://myleafy.space")!,
         graduateBaseURL: URL(string: "https://myleafy.space")!,

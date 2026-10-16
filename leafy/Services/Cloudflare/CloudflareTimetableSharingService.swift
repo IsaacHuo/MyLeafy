@@ -25,17 +25,16 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
     }
     func publishSnapshot(courses: [SharedTimetableCourse]) async throws -> SharedTimetableSnapshot {
         let scope = await CampusOperationScope()
-        guard !courses.isEmpty else { throw TimetableSharingError.emptySnapshot }
         _ = try await requireProfile()
         try await scope.check()
-        let semester = await SemesterConfig.refreshRemoteIfAvailable()
+        let calendar = SharedTimetableCalendar.current
+        let semesterID = SemesterConfig.currentSemesterID
         try await scope.check()
-        struct Input: Encodable { let semester_id: String; let courses: [SharedTimetableCourse] }
-        return try await backend.request("/v1/timetables", method: "PUT", body: Input(semester_id: semester.semesterID, courses: courses))
+        struct Input: Encodable { let semester_id: String; let courses: [SharedTimetableCourse]; let calendar_config: SharedTimetableCalendar }
+        return try await backend.request("/v1/timetables", method: "PUT", body: Input(semester_id: semesterID, courses: courses, calendar_config: calendar))
     }
     @discardableResult
     func publishExistingSnapshotIfNeeded(courses: [SharedTimetableCourse]) async -> Bool {
-        guard !courses.isEmpty else { return false }
         do {
             guard try await fetchMySnapshot() != nil else { return false }
             _ = try await publishSnapshot(courses: courses)
@@ -46,8 +45,10 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
         }
     }
     func snapshots() async throws -> [SharedTimetableSnapshot] {
-        let semester = await SemesterConfig.refreshRemoteIfAvailable()
-        return try await backend.get("/v1/timetables", backend.query(["semester_id":semester.semesterID]))
+        let all: [SharedTimetableSnapshot] = try await backend.get("/v1/timetables")
+        // The server orders newest first; each owner exposes one current container.
+        var seen = Set<UUID>()
+        return all.filter { seen.insert($0.ownerID).inserted }
     }
     func fetchMySnapshot() async throws -> SharedTimetableSnapshot? {
         let profile = try await requireProfile()

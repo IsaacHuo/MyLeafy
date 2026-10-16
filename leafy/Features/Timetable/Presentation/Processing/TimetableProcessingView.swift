@@ -57,7 +57,7 @@ struct ManualCourseEditorSheet: View {
         max(1, min(SemesterConfig.currentWeek(), SemesterConfig.supportedWeeks))
     ])
     @State private var startPeriod = 1
-    @State private var endPeriod = 2
+    @State private var endPeriod = min(2, TimetablePeriodSchedule.slots.count)
 
     private var isSaveDisabled: Bool {
         courseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -135,13 +135,13 @@ struct ManualCourseEditorSheet: View {
 
                 Section("上课节次") {
                     Picker("开始节次", selection: $startPeriod) {
-                        ForEach(1...13, id: \.self) { period in
+                        ForEach(1...TimetablePeriodSchedule.slots.count, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
                         }
                     }
 
                     Picker("结束节次", selection: $endPeriod) {
-                        ForEach(1...13, id: \.self) { period in
+                        ForEach(1...TimetablePeriodSchedule.slots.count, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
                         }
                     }

@@ -9,6 +9,12 @@ struct ProfileSettingsRows: View {
     @Binding var hidesWeekends: Bool
 
     var body: some View {
+        NavigationLink(value: ProfileRoute.timetableSettings) {
+            ProfileMenuRow(icon: "calendar.badge.clock", title: "课表设置", detail: "学期、开学日期与节次时间")
+        }
+        NavigationLink(value: ProfileRoute.iCloudSync) {
+            ProfileMenuRow(icon: "icloud", title: "iCloud 同步", detail: "同步个人数据与设置")
+        }
         NavigationLink(value: ProfileRoute.cacheSync) {
             ProfileMenuRow(icon: "arrow.triangle.2.circlepath", title: "重新同步",
                            detail: isCustomCampus ? "检查本地数据状态" : "重新同步教务数据")

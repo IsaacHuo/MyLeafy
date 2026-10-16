@@ -102,6 +102,10 @@ struct ProfileView: View {
                     TimetableBackgroundSettingsView()
                 case .personalization:
                     PersonalizationSettingsView()
+                case .timetableSettings:
+                    TimetableSettingsView()
+                case .iCloudSync:
+                    ICloudSyncSettingsView()
                 }
             }
             .onChange(of: appNavigation.requestedProfileRoute) { _, route in
@@ -232,6 +236,20 @@ struct ProfileView: View {
                 }
             }
             .listRowBackground(AppTheme.cardBackground)
+            Section {
+                Link(destination: URL(string: "https://xhslink.cn/o/3PFBj45O8EQ")!) {
+                    HStack(spacing: 16) {
+                        Image("DeveloperMemoji").resizable().scaledToFit().frame(width: 72, height: 72)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("找到我").font(.headline).foregroundStyle(AppTheme.primaryText)
+                            Text("来小红书聊聊").font(.subheadline).foregroundStyle(AppTheme.accent)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
+                    }.padding(.vertical, 8)
+                }
+                .accessibilityLabel("找到我，来小红书聊聊，在外部打开")
+            }
         }
         .leafyInsetGroupedListStyle()
         .scrollContentBackground(.hidden)
@@ -1495,7 +1513,7 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "教务账号和密码", body: "教务账号和密码仅用于向北林强智教务系统发起登录请求，不用于社区资料，也不会作为帖子、评论、反馈或共享课表内容保存。"),
                 ManualInfo(title: "学校教务数据", body: "课表、成绩、考试、教学计划和培养方案等个人教务数据优先保存在本机，供离线查看。学校教务系统仍是正式数据来源。"),
-                ManualInfo(title: "本机私有数据", body: "随记、个人日程、图片、附件、录音、学习资料、简历、社区帖子草稿、图文卡片、课程备注、提醒、学习空间、任务、专注记录、体测记录和收藏保存在 App 的本机空间。卸载 App、清除缓存或更换设备前，请确认需要保留的内容。"),
+                ManualInfo(title: "本机与 iCloud", body: "随记、个人日程、图片、附件、录音、学习资料、简历、社区帖子草稿、图文卡片、课程备注、提醒、学习空间、任务、专注记录、体测记录和收藏保存在 App 的本机空间。你可在我的页主动开启 iCloud，同步课表、成绩考试、备注提醒、个人日程、随记及附件、课表和个性化设置。其他资料模块仍保留本机；清除本机缓存会先暂停同步，删除云端数据需要单独确认。"),
                 ManualInfo(title: "社区服务数据", body: "主动参与社区、反馈、评教或共享课表时，相关内容会进入 \(AppBrand.displayName) 社区服务，用于展示、通知、审核、反馈处理和社区安全。"),
                 ManualInfo(title: "退出登录、清除缓存与删除账户", body: "退出登录只结束当前会话并保留本机缓存；清除本地缓存会删除当前设备保存的数据；删除 MyLeafy 账户还会永久删除社区账户与关联线上内容。以上操作都不会删除或修改北京林业大学官方教务账户。"),
                 ManualInfo(title: "设备权限", body: "相册、文件和通知权限仅在对应功能中使用。导入资料保存在 App 私有目录，通知用于课程和本机提醒。拒绝权限只影响对应功能。")
@@ -2049,6 +2067,8 @@ private struct CacheAndSyncView: View {
 
     @MainActor
     private func clearAcademicCaches() {
+        do { try ICloudSyncCoordinator.shared.pauseForLocalCacheClear() }
+        catch { operationAlert = .failure("无法暂停 iCloud 同步，尚未清除本机数据：\(error.localizedDescription)"); return }
         isClearing = true
 
         for course in courses { modelContext.delete(course) }
@@ -2078,6 +2098,8 @@ private struct CacheAndSyncView: View {
 
     @MainActor
     private func clearAllCaches() {
+        do { try ICloudSyncCoordinator.shared.pauseForLocalCacheClear() }
+        catch { operationAlert = .failure("无法暂停 iCloud 同步，尚未清除本机数据：\(error.localizedDescription)"); return }
         isClearing = true
 
         do {

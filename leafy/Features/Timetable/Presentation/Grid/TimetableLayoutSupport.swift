@@ -152,7 +152,7 @@ nonisolated struct TimetableCurrentTimePosition {
     static func yPosition(
         for date: Date,
         metrics: TimetableLayoutMetrics,
-        calendar: Calendar = .current
+        calendar: Calendar = UserTimetableSettings.calendar
     ) -> CGFloat? {
         let minutes = Double(calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date))
             + Double(calendar.component(.second, from: date)) / 60
@@ -214,7 +214,7 @@ nonisolated struct TimetableScheduleBlockGeometry: Equatable {
         fallbackEndPeriod: Int,
         metrics: TimetableLayoutMetrics,
         minimumHeight: CGFloat,
-        calendar: Calendar = .current
+        calendar: Calendar = UserTimetableSettings.calendar
     ) -> TimetableScheduleBlockGeometry {
         let fallbackStart = yPosition(forPeriod: fallbackStartPeriod, metrics: metrics)
         let fallbackEnd = yPosition(forPeriod: fallbackEndPeriod, metrics: metrics) + metrics.rowHeight
@@ -332,7 +332,7 @@ final class TimetableDayMetadataCache {
         scheduleSnapshot: TimetableScheduleProjectionSnapshot,
         language: AppLanguagePreference
     ) -> TimetableDayMetadata {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let today = calendar.startOfDay(for: Date())
         let identity = TimetableDayMetadataCacheIdentity(
             timelineStartDate: calendar.startOfDay(for: timelineStartDate),
@@ -362,7 +362,7 @@ final class TimetableDayMetadataCache {
             isToday: calendar.isDate(date, inSameDayAs: today),
             dayTitle: language.timetableWeekdayTitle(for: day),
             numericDateText: String(format: "%02d-%02d", numericComponents.month ?? 1, numericComponents.day ?? 1),
-            chineseDateText: DateFormatters.chineseDay.string(from: date),
+            chineseDateText: TimetableClock.formatter(DateFormatters.chineseDay).string(from: date),
             event: AcademicCalendarEvents.event(on: date, campusEvents: calendarEvents, calendar: calendar),
             countdowns: scheduleSnapshot.countdowns(week: week, day: day),
             exams: scheduleSnapshot.exams(week: week, day: day),
@@ -465,6 +465,7 @@ final class TimetableAgendaItemCache {
 }
 
 struct TimetableAgendaItemCacheIdentity: Equatable {
+    let periodSlots = TimetablePeriodSchedule.slots
     let gridSignature: TimetableGridInputSignature
     let totalWeeks: Int
     let projectionSignature: TimetableScheduleProjectionSignature
@@ -651,7 +652,7 @@ struct TimetableAgendaItem: Identifiable {
             date: date,
             sortPeriod: projection.period,
             title: projection.title,
-            detail: DateFormatters.headerWithTime.string(from: projection.targetDate),
+            detail: TimetableClock.formatter(DateFormatters.headerWithTime).string(from: projection.targetDate),
             periodText: "\(projection.period)",
             timeText: TimetablePeriodSchedule.slot(for: projection.period)?.startText ?? "",
             systemImage: "timer",
@@ -709,7 +710,7 @@ struct TimetableAgendaItem: Identifiable {
         if let startDate = reminder.resolvedStartDate,
            let endDate = reminder.resolvedEndDate,
            endDate > startDate {
-            return "\(DateFormatters.timeOnly.string(from: startDate))\n\(DateFormatters.timeOnly.string(from: endDate))"
+            return "\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: startDate))\n\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: endDate))"
         }
 
         let startText = TimetablePeriodSchedule.slot(for: reminder.displayStartPeriod)?.startText

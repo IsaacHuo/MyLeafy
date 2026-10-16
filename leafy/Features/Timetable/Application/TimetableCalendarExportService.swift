@@ -317,11 +317,14 @@ enum TimetableCalendarExportBuilder {
         return name.isEmpty ? L10n.text("未命名课程") : name
     }
 
-    private static func url(for occurrenceKey: String) -> URL {
+    static func url(for occurrenceKey: String) -> URL {
         var components = URLComponents()
         components.scheme = "leafy"
         components.host = urlHost
         components.path = "/" + occurrenceKey
+        if let identity = ActiveCampusContext.identity {
+            components.queryItems = [URLQueryItem(name: "scope", value: identity.scopeKey)]
+        }
         return components.url ?? URL(string: "leafy://\(urlHost)")!
     }
 }
@@ -407,6 +410,49 @@ final class TimetableCalendarExportService {
         return TimetableCalendarExportResult(created: created, updated: updated, removed: removed)
     }
 
+    func exportPersonalSchedules(_ items: [PersonalScheduleExportItem]) async throws -> TimetableCalendarExportResult {
+        let scope = CampusOperationScope()
+        try await ensureFullCalendarAccess()
+        try scope.check()
+        guard let calendar = eventStore.defaultCalendarForNewEvents, calendar.allowsContentModifications else {
+            throw TimetableCalendarExportError.calendarUnavailable
+        }
+        let defaults = UserDefaults.standard
+        let ledgerKey = CampusScopedDefaults.key("personalSchedule.calendarExport.v1")
+        let previous = defaults.dictionary(forKey: ledgerKey) as? [String: String] ?? [:]
+        var ledger = previous
+        var created = 0, updated = 0
+        var savedEvents: [(String, EKEvent)] = []
+        do {
+            for item in items {
+                let url = TimetableCalendarExportBuilder.url(for: item.key)
+                var existing = previous[item.key].flatMap { eventStore.event(withIdentifier: $0) }
+                if existing?.url != url { existing = nil }
+                if existing == nil {
+                    // EventKit queries have a bounded interval: search near each actual date.
+                    let predicate = eventStore.predicateForEvents(withStart: item.start.addingTimeInterval(-86400),
+                        end: item.start.addingTimeInterval(86400), calendars: nil)
+                    existing = eventStore.events(matching: predicate).first { $0.url == url }
+                }
+                let event = existing ?? EKEvent(eventStore: eventStore)
+                if existing == nil { created += 1 } else { updated += 1 }
+                apply(TimetableCalendarEventDraft(occurrenceKey: item.key, title: item.title,
+                    location: item.location, notes: item.note, startDate: item.start,
+                    endDate: item.end ?? item.start.addingTimeInterval(45 * 60), url: url), to: event, defaultCalendar: calendar)
+                event.alarms = item.minutesBefore > 0 ? [EKAlarm(relativeOffset: -Double(item.minutesBefore * 60))] : []
+                try eventStore.save(event, span: .thisEvent, commit: false)
+                savedEvents.append((item.key, event))
+            }
+            try scope.check()
+            try eventStore.commit()
+            for (key, event) in savedEvents {
+                if let identifier = event.eventIdentifier { ledger[key] = identifier }
+            }
+            defaults.set(ledger, forKey: ledgerKey)
+            return TimetableCalendarExportResult(created: created, updated: updated, removed: 0)
+        } catch { eventStore.reset(); throw error }
+    }
+
     func clearExportedCourses() async throws -> TimetableCalendarClearResult {
         try await ensureFullCalendarAccess()
         guard let interval = TimetableCalendarExportBuilder.exportInterval(
@@ -464,7 +510,13 @@ final class TimetableCalendarExportService {
             calendars: nil
         )
         return eventStore.events(matching: predicate)
-            .filter { TimetableCalendarExportBuilder.occurrenceKey(from: $0.url) != nil }
+            .filter { event in
+                guard let key = TimetableCalendarExportBuilder.occurrenceKey(from: event.url),
+                      !key.hasPrefix("personalSchedule:") else { return false }
+                let scope = event.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?
+                    .queryItems?.first(where: { $0.name == "scope" })?.value
+                return scope == ActiveCampusContext.identity?.scopeKey
+            }
     }
 
     private func apply(_ draft: TimetableCalendarEventDraft, to event: EKEvent, defaultCalendar: EKCalendar) {

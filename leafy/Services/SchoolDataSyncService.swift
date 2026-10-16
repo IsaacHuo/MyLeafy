@@ -116,7 +116,7 @@ enum SchoolDataSyncService {
             progressReporter?(.begin(.savingTimetable))
             let persisted = try await persistTimetable(
                 records,
-                semesterID: document.verifiedSemesterID,
+                semesterID: document.sourceSemesterID,
                 modelContext: modelContext,
                 scope: scope
             )

@@ -1010,12 +1010,16 @@ private struct SharedTimetableGridDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     let snapshot: SharedTimetableSnapshot
 
-    @State private var currentWeek = SemesterConfig.currentWeek()
-    @State private var scrollToWeek: Int? = SemesterConfig.currentWeek()
+    @State private var currentWeek = 1
+    @State private var scrollToWeek: Int? = 1
     @State private var isAwayFromCurrentWeek = false
     @State private var selectedCourseContext: SharedTimetableGridCourseContext?
 
-    private let totalClasses = 13
+    private var totalClasses: Int { snapshot.calendarConfig?.periods.count ?? max(13, snapshot.courses.flatMap(\.duration).max() ?? 13) }
+    private var sharedCurrentWeek: Int { snapshot.calendarConfig?.currentWeek() ?? SemesterConfig.currentWeek() }
+    private func sharedSlot(_ period: Int) -> TimetablePeriodSchedule.Slot? {
+        (snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots).first { $0.period == period }
+    }
     private var totalWeeks: Int { SemesterConfig.supportedWeeks }
     private var overviewRowSpacing: CGFloat { 1.5 * leafyControlScale }
     private var overviewCardInset: CGFloat { 1.5 * leafyControlScale }
@@ -1060,6 +1064,8 @@ private struct SharedTimetableGridDetailView: View {
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isAwayFromCurrentWeek)
         .onAppear {
+            currentWeek = sharedCurrentWeek
+            scrollToWeek = sharedCurrentWeek
             syncReturnButtonVisibility()
         }
         .onChange(of: currentWeek) { _, newValue in
@@ -1069,7 +1075,7 @@ private struct SharedTimetableGridDetailView: View {
             applySemesterRuntimeConfig(SemesterConfig.current)
         }
         .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
-            currentWeek = SemesterConfig.currentWeek()
+            currentWeek = sharedCurrentWeek
         }
         .leafySheet(item: $selectedCourseContext) { context in
             SharedTimetableGridCourseDetailSheet(context: context)
@@ -1279,7 +1285,8 @@ private struct SharedTimetableGridDetailView: View {
                         course: layout.course,
                         week: week,
                         day: day,
-                        date: dateFor(dayOfWeek: day, in: week)
+                        date: dateFor(dayOfWeek: day, in: week),
+                        periodSlots: snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots
                     )
                 }
             }
@@ -1368,7 +1375,7 @@ private struct SharedTimetableGridDetailView: View {
                 VStack(alignment: .leading, spacing: 2 * leafyControlScale) {
                     Text(dayTitle(day))
                         .font(.system(size: 15 * leafyControlScale, weight: .bold))
-                        .foregroundStyle(Calendar.current.isDateInToday(date) ? AppTheme.accentEmphasis : AppTheme.primaryText)
+                        .foregroundStyle(UserTimetableSettings.calendar.isDateInToday(date) ? AppTheme.accentEmphasis : AppTheme.primaryText)
                     Text(DateFormatters.chineseDay.string(from: date))
                         .font(.system(size: 11 * leafyControlScale, weight: .medium))
                         .foregroundStyle(AppTheme.secondaryText)
@@ -1405,12 +1412,13 @@ private struct SharedTimetableGridDetailView: View {
                 course: course,
                 week: currentWeek,
                 day: day,
-                date: date
+                date: date,
+                periodSlots: snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots
             )
         } label: {
             HStack(alignment: .top, spacing: 10 * leafyControlScale) {
                 VStack(spacing: 2 * leafyControlScale) {
-                    Text(course.durationText(language: leafyLanguage))
+                    Text(course.durationText(language: leafyLanguage, slots: snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots))
                         .font(.system(size: 12 * leafyControlScale, weight: .bold))
                         .foregroundStyle(AppTheme.accent)
                         .lineLimit(1)
@@ -1466,14 +1474,14 @@ private struct SharedTimetableGridDetailView: View {
         let periods = course.duration.sorted()
         guard let first = periods.first else { return "" }
         let last = periods.last ?? first
-        guard let start = TimetablePeriodSchedule.slot(for: first)?.startText else { return "" }
-        guard let end = TimetablePeriodSchedule.slot(for: last)?.endText else { return start }
+        guard let start = sharedSlot(first)?.startText else { return "" }
+        guard let end = sharedSlot(last)?.endText else { return start }
         return "\(start)\n\(end)"
     }
 
     private func dayHeader(day: Int, week: Int) -> some View {
         let date = dateFor(dayOfWeek: day, in: week)
-        let today = Calendar.current.isDateInToday(date)
+        let today = UserTimetableSettings.calendar.isDateInToday(date)
         let event = SchoolCalendarEvent.event(on: date)
 
         return VStack(spacing: 1) {
@@ -1707,26 +1715,26 @@ private struct SharedTimetableGridDetailView: View {
 
     private func syncReturnButtonVisibility(for visibleWeek: Int? = nil) {
         let week = visibleWeek ?? currentWeek
-        isAwayFromCurrentWeek = week != SemesterConfig.currentWeek()
+        isAwayFromCurrentWeek = week != sharedCurrentWeek
     }
 
     private func returnToCurrentWeek() {
-        let week = SemesterConfig.currentWeek()
+        let week = sharedCurrentWeek
         currentWeek = week
         isAwayFromCurrentWeek = false
         scrollToWeek = week
     }
 
     private func applySemesterRuntimeConfig(_ config: SemesterRuntimeConfig) {
-        let week = SemesterConfig.currentWeek(config: config)
+        let week = sharedCurrentWeek
         currentWeek = week
         isAwayFromCurrentWeek = false
         scrollToWeek = week
     }
 
     private func dateFor(dayOfWeek: Int, in week: Int) -> Date {
-        let calendar = Calendar.current
-        let startOfSemester = SemesterConfig.startOfSemesterDate
+        let calendar = UserTimetableSettings.calendar
+        let startOfSemester = snapshot.calendarConfig?.startDate ?? SemesterConfig.startOfSemesterDate
         var comp = DateComponents()
         comp.day = (week - 1) * 7 + (dayOfWeek - 1)
         return calendar.date(byAdding: comp, to: startOfSemester) ?? Date()
@@ -1734,7 +1742,7 @@ private struct SharedTimetableGridDetailView: View {
 
     private func monthString() -> String {
         let date = dateFor(dayOfWeek: 1, in: currentWeek)
-        let month = Calendar.current.component(.month, from: date)
+        let month = UserTimetableSettings.calendar.component(.month, from: date)
         return "\(month)月"
     }
 
@@ -1743,7 +1751,7 @@ private struct SharedTimetableGridDetailView: View {
     }
 
     private func weekMenuTitle(_ week: Int) -> String {
-        weekTitle(week) + (week == SemesterConfig.currentWeek() ? L10n.text(" (本周)", language: leafyLanguage) : "")
+        weekTitle(week) + (week == sharedCurrentWeek ? L10n.text(" (本周)", language: leafyLanguage) : "")
     }
 
     private func dayTitle(_ day: Int) -> String {
@@ -1751,7 +1759,7 @@ private struct SharedTimetableGridDetailView: View {
     }
 
     private func dateString(for dayOfWeek: Int, in week: Int) -> String {
-        let components = Calendar.current.dateComponents(
+        let components = UserTimetableSettings.calendar.dateComponents(
             [.month, .day],
             from: dateFor(dayOfWeek: dayOfWeek, in: week)
         )
@@ -1789,6 +1797,7 @@ private struct SharedTimetableGridCourseContext: Identifiable {
     let week: Int
     let day: Int
     let date: Date
+    var periodSlots: [TimetablePeriodSchedule.Slot] = TimetablePeriodSchedule.slots
 
     var id: String {
         "\(course.id.uuidString)-\(week)-\(day)"
@@ -1922,7 +1931,7 @@ private struct SharedTimetableGridCourseDetailSheet: View {
                         Text(context.course.displayCourseName)
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
-                        Text("\(context.course.dayTitle(language: leafyLanguage)) · \(context.course.durationText(language: leafyLanguage))")
+                        Text("\(context.course.dayTitle(language: leafyLanguage)) · \(context.course.durationText(language: leafyLanguage, slots: context.periodSlots))")
                             .microCaption()
                             .foregroundStyle(AppTheme.secondaryText)
                     }
@@ -1934,7 +1943,7 @@ private struct SharedTimetableGridCourseDetailSheet: View {
                     LabeledContent("教师", value: context.course.teacher.isEmpty ? "未填写" : context.course.teacher)
                     LabeledContent("地点", value: context.course.locationText)
                     LabeledContent("周次", value: context.course.weeksText(language: leafyLanguage))
-                    LabeledContent("节次", value: context.course.durationText(language: leafyLanguage))
+                    LabeledContent("节次", value: context.course.durationText(language: leafyLanguage, slots: context.periodSlots))
                     LabeledContent("日期", value: dateText)
                 }
                 .listRowBackground(AppTheme.cardBackground)

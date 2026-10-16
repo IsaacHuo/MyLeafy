@@ -315,7 +315,7 @@ struct TimetableExportSheet: View {
 
     private func dateFor(day: Int, week: Int) -> Date {
         let offset = (week - 1) * 7 + (day - 1)
-        return Calendar.current.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? Date()
+        return UserTimetableSettings.calendar.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? Date()
     }
 
     private func clampedCustomWeek(_ week: Int) -> Int {
@@ -405,7 +405,7 @@ struct DayScheduleSummarySheet: View {
                 .padding(AppSpacing.page)
             }
             .background(LeafyPageBackground())
-            .navigationTitle(Calendar.current.isDateInToday(selection.date) ? L10n.text("今日视图", language: leafyLanguage) : L10n.text("日程视图", language: leafyLanguage))
+            .navigationTitle(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text("今日视图", language: leafyLanguage) : L10n.text("日程视图", language: leafyLanguage))
             .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .leafyTrailing) {
@@ -715,13 +715,13 @@ struct WeekScheduleCard: View {
     }
 
     private func shortDateText(for day: Int) -> String {
-        let components = Calendar.current.dateComponents([.month, .day], from: date(for: day))
+        let components = UserTimetableSettings.calendar.dateComponents([.month, .day], from: date(for: day))
         return String(format: "%02d-%02d", components.month ?? 1, components.day ?? 1)
     }
 
     private func date(for day: Int) -> Date {
         let offset = (selection.week - 1) * 7 + (day - 1)
-        return Calendar.current.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? selection.date
+        return UserTimetableSettings.calendar.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? selection.date
     }
 }
 
@@ -789,7 +789,7 @@ struct WeekScheduleShareImageCard: View {
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
                 Spacer()
-                Text(L10n.text("分享于 %@", language: leafyLanguage, DateFormatters.headerWithTime.string(from: Date())))
+                Text(L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())))
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
             }
@@ -841,7 +841,7 @@ struct WeeklyTimetableGrid: View {
         headerHeight + columnSpacing + CGFloat(13) * rowHeight + CGFloat(12) * 2
     }
 
-    private let totalPeriods = 13
+    private var totalPeriods: Int { TimetablePeriodSchedule.slots.count }
     private let rowSpacing: CGFloat = 2
     private let cardInset: CGFloat = 2
     private let laneSpacing: CGFloat = 2
@@ -1178,17 +1178,17 @@ struct WeeklyTimetableGrid: View {
     }
 
     private func shortDateText(for day: Int) -> String {
-        let components = Calendar.current.dateComponents([.month, .day], from: date(for: day))
+        let components = UserTimetableSettings.calendar.dateComponents([.month, .day], from: date(for: day))
         return String(format: "%02d-%02d", components.month ?? 1, components.day ?? 1)
     }
 
     private func isToday(_ day: Int) -> Bool {
-        Calendar.current.isDateInToday(date(for: day))
+        UserTimetableSettings.calendar.isDateInToday(date(for: day))
     }
 
     private func date(for day: Int) -> Date {
         let offset = (selection.week - 1) * 7 + (day - 1)
-        return Calendar.current.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? selection.date
+        return UserTimetableSettings.calendar.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? selection.date
     }
 }
 
@@ -1213,7 +1213,7 @@ struct DayScheduleSummaryCard: View {
         exams
             .filter { exam in
                 guard let startsAt = exam.startsAt else { return false }
-                return Calendar.current.isDate(startsAt, inSameDayAs: selection.date)
+                return UserTimetableSettings.calendar.isDate(startsAt, inSameDayAs: selection.date)
             }
             .sorted { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
     }
@@ -1222,10 +1222,10 @@ struct DayScheduleSummaryCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(Calendar.current.isDateInToday(selection.date) ? L10n.text("%@ 今日视图", language: leafyLanguage, AppBrand.displayName) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
+                    Text(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text("%@ 今日视图", language: leafyLanguage, AppBrand.displayName) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
                         .microCaption()
                         .foregroundStyle(AppTheme.accentEmphasis)
-                    Text(DateFormatters.header.string(from: selection.date))
+                    Text(TimetableClock.formatter(DateFormatters.header).string(from: selection.date))
                         .title2()
                         .foregroundStyle(AppTheme.primaryText)
                 }
@@ -1317,7 +1317,7 @@ struct DayScheduleSummaryCard: View {
             return L10n.text("正在使用本地缓存，上次同步失败：%@", language: leafyLanguage, lastFailureMessage)
         }
 
-        return L10n.text("分享于 %@", language: leafyLanguage, DateFormatters.headerWithTime.string(from: Date()))
+        return L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date()))
     }
 
 }
@@ -1442,10 +1442,10 @@ struct DayScheduleShareImageCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(Calendar.current.isDateInToday(selection.date) ? L10n.text("%@ 今日视图", language: leafyLanguage, AppBrand.displayName) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
+                    Text(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text("%@ 今日视图", language: leafyLanguage, AppBrand.displayName) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
                         .microCaption()
                         .foregroundStyle(AppTheme.accentEmphasis)
-                    Text(DateFormatters.header.string(from: selection.date))
+                    Text(TimetableClock.formatter(DateFormatters.header).string(from: selection.date))
                         .title2()
                         .foregroundStyle(AppTheme.primaryText)
                 }
@@ -1519,7 +1519,7 @@ struct DayScheduleShareImageCard: View {
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
                 Spacer()
-                Text(L10n.text("分享于 %@", language: leafyLanguage, DateFormatters.headerWithTime.string(from: Date())))
+                Text(L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())))
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
             }
@@ -1554,12 +1554,12 @@ struct DayScheduleSummary {
     let exam: ExamArrangement?
 
     init(selection: TimetableDaySelection, courses: [Course], exams: [ExamArrangement], now: Date) {
-        let isToday = Calendar.current.isDateInToday(selection.date)
+        let isToday = UserTimetableSettings.calendar.isDateInToday(selection.date)
         let dayExam = exams
             .sorted { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
             .first { exam in
                 guard let startsAt = exam.startsAt else { return false }
-                return Calendar.current.isDate(startsAt, inSameDayAs: selection.date)
+                return UserTimetableSettings.calendar.isDate(startsAt, inSameDayAs: selection.date)
             }
         let fallbackExam = isToday ? exams.nextRelevantExam(from: now) : nil
         exam = dayExam ?? fallbackExam
@@ -1635,7 +1635,7 @@ enum DayScheduleShareBuilder {
         let dayCourses = courses
             .filter { $0.weeks.contains(selection.week) && $0.dayOfWeek == selection.day }
             .sortedByStartPeriod()
-        var lines = [L10n.text("%@ 日程", AppBrand.displayName), DateFormatters.header.string(from: selection.date)]
+        var lines = [L10n.text("%@ 日程", AppBrand.displayName), TimetableClock.formatter(DateFormatters.header).string(from: selection.date)]
 
         if dayCourses.isEmpty {
             lines.append(L10n.text("当天无课"))
@@ -1649,7 +1649,7 @@ enum DayScheduleShareBuilder {
             .sorted { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
             .filter { exam in
                 guard let startsAt = exam.startsAt else { return false }
-                return Calendar.current.isDate(startsAt, inSameDayAs: selection.date)
+                return UserTimetableSettings.calendar.isDate(startsAt, inSameDayAs: selection.date)
             }
 
         for exam in dayExams {
@@ -1676,7 +1676,7 @@ struct TodayScheduleSummaryCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(DateFormatters.header.string(from: context.date))
+                        Text(TimetableClock.formatter(DateFormatters.header).string(from: context.date))
                             .microCaption()
                             .foregroundStyle(AppTheme.secondaryText)
                         Text(summary.headline)
@@ -1742,7 +1742,7 @@ struct TodayScheduleSummaryCard: View {
             return L10n.text("正在使用本地缓存，上次同步失败：%@", language: leafyLanguage, lastFailureMessage)
         }
 
-        return L10n.text("分享于 %@", language: leafyLanguage, DateFormatters.headerWithTime.string(from: Date()))
+        return L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date()))
     }
 }
 
@@ -1838,7 +1838,7 @@ enum ClassPeriodSchedule {
     ]
 
     static func periodForFocus(containing date: Date) -> Slot? {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let minutes = calendar.component(.hour, from: date) * 60
             + calendar.component(.minute, from: date)
 
@@ -1848,7 +1848,7 @@ enum ClassPeriodSchedule {
     }
 
     static func period(containing date: Date) -> Slot? {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let minutes = calendar.component(.hour, from: date) * 60
             + calendar.component(.minute, from: date)
 

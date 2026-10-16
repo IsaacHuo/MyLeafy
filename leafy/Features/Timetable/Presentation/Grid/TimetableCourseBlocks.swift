@@ -516,7 +516,7 @@ struct TimetableCountdownBlockView: View {
     }
 
     private var timeRangeText: String {
-        "\(DateFormatters.timeOnly.string(from: projection.startsAt))–\(DateFormatters.timeOnly.string(from: projection.endsAt))"
+        "\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: projection.startsAt))–\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: projection.endsAt))"
     }
 }
 
@@ -826,7 +826,7 @@ struct CustomScheduleEditorSheet: View {
             ? event?.minutesBefore ?? 0
             : context.reminder?.minutesBefore ?? 0
         let slot = TimetablePeriodSchedule.slot(for: context.period)
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let tappedCellStartDate = slot.flatMap {
             calendar.date(bySettingHour: $0.startHour, minute: $0.startMinute, second: 0, of: context.date)
         }
@@ -907,7 +907,7 @@ struct CustomScheduleEditorSheet: View {
                             scheduleInfoRow(title: "周次", value: weekText, icon: "calendar")
                         }
 
-                        scheduleInfoRow(title: "日期", value: DateFormatters.header.string(from: scheduleDate), icon: "calendar.badge.clock")
+                        scheduleInfoRow(title: "日期", value: TimetableClock.formatter(DateFormatters.header).string(from: scheduleDate), icon: "calendar.badge.clock")
 
                         DatePicker("开始时间", selection: $startTime, displayedComponents: .hourAndMinute)
                             .datePickerStyle(.compact)
@@ -1304,7 +1304,7 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private func combinedDate(date: Date, time: Date) -> Date {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
         let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
         return calendar.date(
@@ -1319,7 +1319,7 @@ struct CustomScheduleEditorSheet: View {
     }
 
     private func academicYearWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let current = calendar.startOfDay(for: date)
         let configurations = SemesterConfig.timelineConfigurations
         let timetable = AcademicYearTimetable(
@@ -1556,11 +1556,11 @@ struct CourseDetailSheet: View {
     }
 
     private var noteRecord: CourseNote? {
-        notes.first { $0.courseKey == courseKey }
+        notes.first { !$0.isUnassociated && $0.courseKey == courseKey }
     }
 
     private var occurrenceNoteRecord: CourseOccurrenceNote? {
-        occurrenceNotes.first { $0.occurrenceKey == occurrenceKey }
+        occurrenceNotes.first { !$0.isUnassociated && $0.occurrenceKey == occurrenceKey }
     }
 
     private var hasSelectedNote: Bool {
@@ -1573,7 +1573,7 @@ struct CourseDetailSheet: View {
     }
 
     private var reminderRecord: CourseReminderSetting? {
-        reminderSettings.first { $0.courseKey == courseKey }
+        reminderSettings.first { !$0.isUnassociated && $0.courseKey == courseKey }
     }
 
     private var reminderAnchorPeriods: [Int] {

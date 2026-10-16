@@ -19,7 +19,6 @@ struct TimetableRefreshSummary: Equatable {
     ) -> TimetableRefreshSummary {
         let incomingSignatures = records.map(TimetableCourseContentSignature.init(record:))
         let existingSignatures = existingCourses
-            .filter { $0.sourceSemesterID == semesterID }
             .map(TimetableCourseContentSignature.init(course:))
 
         return TimetableRefreshSummary(
@@ -111,16 +110,32 @@ struct TimetableRefreshUseCase {
         existingCourses: [Course],
         modelContext: ModelContext,
         semesterID: String = SemesterConfig.currentSemesterID,
+        allowsEmpty: Bool = false,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> TimetablePersistResult {
-        let oldCourses = existingCourses.filter { $0.sourceSemesterID == semesterID }
+        guard !records.isEmpty || allowsEmpty else { throw TimetableEmptyResult() }
+        let requiredPeriods = records.flatMap(\.duration).max() ?? 1
+        if requiredPeriods > TimetablePeriodSchedule.slots.count {
+            guard requiredPeriods <= 24 else { throw CocoaError(.fileReadCorruptFile) }
+            try TimetablePendingImportStore.save(records: records, semesterID: semesterID)
+            throw TimetableConfigurationRequired(periods: requiredPeriods)
+        }
+        let oldCourses = existingCourses
         let oldIdentifiers = Array(Set(oldCourses.flatMap {
             TimetableNotificationManager.courseReminderIdentifiers(for: $0)
         }))
         let newCourses = records.map { $0.makeCourse(semesterID: semesterID) }
+        for group in Dictionary(grouping: newCourses, by: \.stableCourseKey).values {
+            for (index, course) in group.enumerated() {
+                if group.dropFirst(index + 1).contains(where: {
+                    !Set($0.weeks).isDisjoint(with: course.weeks)
+                    && ($0.room != course.room || $0.classInfo != course.classInfo)
+                }) { throw TimetableLocalDataConflict.ambiguousArrangement(course.courseName) }
+            }
+        }
         let associations = try TimetableLocalDataReassociation(oldCourses: oldCourses, newCourses: newCourses, context: modelContext)
         do {
-            associations.apply(to: modelContext)
+            try associations.apply(to: modelContext)
             let reminderPlan = try TimetableReminderRefreshPlan(
                 oldIdentifiers: oldIdentifiers, courses: newCourses,
                 settings: modelContext.fetch(FetchDescriptor<CourseReminderSetting>())
@@ -147,4 +162,8 @@ struct TimetableRefreshUseCase {
             return leftDistance < rightDistance
         }
     }
+}
+
+struct TimetableEmptyResult: LocalizedError {
+    var errorDescription: String? { "学校暂未提供有课程的课表，已保留当前课表。可在课表刷新提示中确认清空课程；备注、提醒和个人日程会保留。" }
 }

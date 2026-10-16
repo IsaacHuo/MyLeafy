@@ -305,6 +305,11 @@
 				TargetAttributes = {
 					1119CC0B2F976BA0002A7E20 = {
 						CreatedOnToolsVersion = 26.4;
+                        SystemCapabilities = {
+                            com.apple.iCloud = { enabled = 1; };
+                            com.apple.Push = { enabled = 1; };
+                            com.apple.BackgroundModes = { enabled = 1; };
+                        };
 					};
 					A1B2C3D4E5F6000000000009 = {
 						CreatedOnToolsVersion = 26.4;

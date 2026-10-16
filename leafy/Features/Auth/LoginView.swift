@@ -242,7 +242,7 @@ struct LoginView: View {
         case .custom:
             return L10n.text("通用学校入口，使用邮箱注册，进入 App 后手动导入数据。", language: leafyLanguage)
         case .guest:
-            return L10n.text("无需账号和密码，数据全部保存在本机，不连接任何后台。", language: leafyLanguage)
+            return L10n.text("无需账号和密码，数据默认保存在本机，可自行开启 iCloud 同步。", language: leafyLanguage)
         case .bjfu:
             return L10n.text("已接入教务系统，可使用校园账号登录。", language: leafyLanguage)
         }
@@ -431,7 +431,7 @@ struct LoginView: View {
                     .font(.system(size: 15 * leafyFontScale, weight: .semibold))
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text(L10n.text("无需账号和密码。课表、成绩、考试安排、随记与日程都只保存在本机，不连接任何账号或后台；此模式不包含社区。", language: leafyLanguage))
+                Text(L10n.text("无需账号和密码。课表、成绩、考试安排、随记与日程默认保存在本机，可自行开启 iCloud 同步；此模式不连接 MyLeafy 账号或后台，不包含社区。", language: leafyLanguage))
                     .microCaption()
                     .foregroundStyle(AppTheme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)

@@ -6,7 +6,7 @@ import UIKit
 import UserNotifications
 
 nonisolated enum TimetablePeriodSchedule {
-    struct Slot: Hashable {
+    struct Slot: Hashable, Codable, Sendable {
         let period: Int
         let startHour: Int
         let startMinute: Int
@@ -22,7 +22,9 @@ nonisolated enum TimetablePeriodSchedule {
         }
     }
 
-    static let slots: [Slot] = [
+    static var slots: [Slot] { UserTimetableSettingsStore.load().periods }
+
+    static let defaultSlots: [Slot] = [
         Slot(period: 1, startHour: 8, startMinute: 0, endHour: 8, endMinute: 45),
         Slot(period: 2, startHour: 8, startMinute: 50, endHour: 9, endMinute: 35),
         Slot(period: 3, startHour: 9, startMinute: 50, endHour: 10, endMinute: 35),
@@ -93,7 +95,7 @@ nonisolated enum TimetablePeriodSchedule {
         guard let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         guard let date = calendar.date(byAdding: .day, value: dayOffset, to: semesterStartDate) else {
             return nil
         }
@@ -124,7 +126,7 @@ nonisolated enum TimetablePeriodSchedule {
         guard let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         guard let date = calendar.date(byAdding: .day, value: dayOffset, to: semesterStartDate) else {
             return nil
         }
@@ -149,13 +151,11 @@ nonisolated enum TimetablePeriodSchedule {
     }
 
     private static func semesterStartDate(for course: Course) -> Date? {
-        SemesterConfig.timelineConfigurations.first {
-            $0.semesterID == course.sourceSemesterID
-        }?.semesterStartDate
+        SemesterConfig.startOfSemesterDate
     }
 
     private static func minutesSinceStartOfDay(for date: Date) -> Int {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         return calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
     }
 
@@ -423,7 +423,7 @@ enum TimetableNoteResolver {
     ) -> String? {
         let occurrenceKey = course.occurrenceKey(week: week)
         if let occurrenceText = occurrenceNotes
-            .filter({ occurrenceKey == $0.occurrenceKey })
+            .filter({ !$0.isUnassociated && occurrenceKey == $0.occurrenceKey })
             .sorted(by: latestFirst)
             .compactMap({ trimmed($0.text) })
             .first {
@@ -431,7 +431,7 @@ enum TimetableNoteResolver {
         }
 
         return courseNotes
-            .filter { $0.courseKey == course.stableCourseKey }
+            .filter { !$0.isUnassociated && $0.courseKey == course.stableCourseKey }
             .sorted(by: latestFirst)
             .compactMap { trimmed($0.text) }
             .first
@@ -454,6 +454,7 @@ enum TimetableNoteResolver {
     static func courseNotesByKey(_ notes: [CourseNote]) -> [String: String] {
         Dictionary(
             notes
+                .filter { !$0.isUnassociated }
                 .sorted(by: latestFirst)
                 .compactMap { note in
                     trimmed(note.text).map { (note.courseKey, $0) }
@@ -465,6 +466,7 @@ enum TimetableNoteResolver {
     static func occurrenceNotesByKey(_ notes: [CourseOccurrenceNote]) -> [String: String] {
         Dictionary(
             notes
+                .filter { !$0.isUnassociated }
                 .sorted(by: latestFirst)
                 .compactMap { note in
                     trimmed(note.text).map { (note.occurrenceKey, $0) }

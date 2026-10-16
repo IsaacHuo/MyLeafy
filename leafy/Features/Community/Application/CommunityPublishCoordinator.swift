@@ -1,3 +1,4 @@
+import CloudKit
 import Combine
 import Foundation
 import Network
@@ -1013,6 +1014,19 @@ final class CommunityPublishCoordinator: ObservableObject {
 }
 
 nonisolated final class LeafyBackgroundSessionAppDelegate: NSObject, UIApplicationDelegate {
+    @MainActor
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard !AppRuntimeEnvironment.isRunningUnitTests,
+              let notification = CKNotification(fromRemoteNotificationDictionary: userInfo),
+              notification.containerIdentifier == ICloudSyncCoordinator.containerIdentifier else {
+            completionHandler(.noData); return
+        }
+        Task { @MainActor in
+            let changed = await ICloudSyncCoordinator.shared.receiveRemoteNotification()
+            completionHandler(changed ? .newData : .noData)
+        }
+    }
     func application(
         _: UIApplication,
         handleEventsForBackgroundURLSession identifier: String,

@@ -77,7 +77,7 @@ nonisolated private struct CourseMergeKey: Hashable {
     }
 }
 
-nonisolated struct ParsedCourseRecord: Sendable {
+nonisolated struct ParsedCourseRecord: Codable, Sendable {
     var courseName: String
     var teacher: String
     var classInfo: String

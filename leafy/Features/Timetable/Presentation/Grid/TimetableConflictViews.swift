@@ -34,20 +34,22 @@ final class TimetableConflictDayCache {
     }
     private var language: AppLanguagePreference?
     private var periodCount: Int?
+    private var periodSlots: [TimetablePeriodSchedule.Slot] = []
     private var entries: [DayKey: TimetableConflictDayContent] = [:]
     private let agendaCache = TimetableAgendaItemCache()
 
     func content(metadata: TimetableDayMetadata, snapshot: TimetableGridSnapshot, totalClasses: Int) -> TimetableConflictDayContent {
-        if gridSignature != snapshot.signature || scheduleSignature != metadata.projectionSignature || language != .current || periodCount != totalClasses {
+        if gridSignature != snapshot.signature || scheduleSignature != metadata.projectionSignature || language != .current || periodCount != totalClasses || periodSlots != TimetablePeriodSchedule.slots {
             language = .current
             periodCount = totalClasses
+            periodSlots = TimetablePeriodSchedule.slots
             gridSignature = snapshot.signature
             scheduleSignature = metadata.projectionSignature
             entries.removeAll(keepingCapacity: true)
         }
         let key = DayKey(week: metadata.week, day: metadata.day, date: metadata.date)
         if let content = entries[key] { return content }
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         func date(period: Int, end: Bool) -> Date? {
             guard let slot = TimetablePeriodSchedule.slot(for: period) else { return nil }
             return calendar.date(bySettingHour: end ? slot.endHour : slot.startHour,
@@ -86,7 +88,7 @@ final class TimetableConflictDayCache {
             guard let start, let end, end > start else { return nil }
             switch item.kind {
             case .cellReminder, .countdown:
-                timeText = "\(DateFormatters.timeOnly.string(from: start))–\(DateFormatters.timeOnly.string(from: end))"
+                timeText = "\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: start))–\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: end))"
             default: break
             }
             let lower = max(start, dayStart).timeIntervalSinceReferenceDate

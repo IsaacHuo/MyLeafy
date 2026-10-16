@@ -10780,7 +10780,14 @@
       }
     },
     "提前 %lld 分钟提醒" : {
-
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind %lld minutes before"
+          }
+        }
+      }
     },
     "提示" : {
       "localizations" : {
@@ -21043,6 +21050,526 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Default rule is still 34 times, two weeks per group, 4 times per group; generic schools can adjust according to their own physical education requirements."
+          }
+        }
+      }
+    },
+    "iCloud 同步" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud sync"
+          }
+        }
+      }
+    },
+    "上次同步" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last sync"
+          }
+        }
+      }
+    },
+    "保留当前数据" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep current data"
+          }
+        }
+      }
+    },
+    "关联课程" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link to course"
+          }
+        }
+      }
+    },
+    "关闭同步会保留本机与云端数据。学校密码、登录会话和社区缓存不参与同步。学习资料、职业规划、医疗等其他模块本轮不参与同步。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disabling sync keeps local and cloud data. School credentials, sessions and community caches are excluded, as are learning materials, career planning, medical records and other modules."
+          }
+        }
+      }
+    },
+    "删除云端数据并关闭同步" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete cloud data and disable sync"
+          }
+        }
+      }
+    },
+    "删除此身份云端数据" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete cloud data for this identity"
+          }
+        }
+      }
+    },
+    "删除此身份的 iCloud 数据？" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete iCloud data for this identity?"
+          }
+        }
+      }
+    },
+    "同步个人数据与设置" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync personal data and settings"
+          }
+        }
+      }
+    },
+    "同步状态" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync status"
+          }
+        }
+      }
+    },
+    "固定 20 周。学年和学期用于显示，拉取课表不受这些设置限制。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The timetable has 20 weeks. Year and semester labels do not restrict fetching courses."
+          }
+        }
+      }
+    },
+    "学期、开学日期与节次时间" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semester, start date and class times"
+          }
+        }
+      }
+    },
+    "学期与开学日期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semester and start date"
+          }
+        }
+      }
+    },
+    "导出 TXT" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export TXT"
+          }
+        }
+      }
+    },
+    "导出全部现存个人日程，包含过去和未来。学校课程、考试和随记不包含在内。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export all existing personal schedules, past and future. School courses, exams and memos are excluded."
+          }
+        }
+      }
+    },
+    "导出到 Apple 日历" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export to Apple Calendar"
+          }
+        }
+      }
+    },
+    "导出日程" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export schedules"
+          }
+        }
+      }
+    },
+    "将以下日期作为第一周的星期一？" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use this Monday as the start of week 1?"
+          }
+        }
+      }
+    },
+    "尚未完成同步" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not synced yet"
+          }
+        }
+      }
+    },
+    "开启 iCloud 同步？" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable iCloud sync?"
+          }
+        }
+      }
+    },
+    "开启后，课表、成绩考试、备注提醒、个人日程、随记及附件、课表与个性化设置，会同步到当前 Apple 账号的 iCloud。不同校园身份分别保存。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When enabled, your timetable, grades, exams, notes, reminders, schedules, memos, attachments and preferences sync to the current Apple Account. Campus identities stay separate."
+          }
+        }
+      }
+    },
+    "开启并合并数据" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable and merge data"
+          }
+        }
+      }
+    },
+    "开始时间须早于结束时间，各节时间不能重叠。新增节次后请核对作息。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each period must end after it starts and must not overlap another period. Check the times after adding periods."
+          }
+        }
+      }
+    },
+    "待关联备注与提醒" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlinked notes and reminders"
+          }
+        }
+      }
+    },
+    "找到我" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find me"
+          }
+        }
+      }
+    },
+    "找到我，来小红书聊聊，在外部打开" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find me on Xiaohongshu. Opens externally."
+          }
+        }
+      }
+    },
+    "暂不关联" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leave unlinked"
+          }
+        }
+      }
+    },
+    "暂无可导出的日程。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no schedules to export."
+          }
+        }
+      }
+    },
+    "最近成功" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last successful sync"
+          }
+        }
+      }
+    },
+    "本机数据保留，其他设备将停止同步此云端空间。重新开启同步会再次上传本机数据。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local data is kept, and other devices stop syncing this cloud space. Enabling sync again uploads local data."
+          }
+        }
+      }
+    },
+    "本机数据将与当前 Apple 账号中此校园身份的数据合并。文本冲突会保留副本，附件也会上传。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local data merges with this campus identity in your current Apple Account. Text conflicts keep a copy, and attachments are uploaded."
+          }
+        }
+      }
+    },
+    "来小红书聊聊" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Say hello on Xiaohongshu"
+          }
+        }
+      }
+    },
+    "正在导出" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting"
+          }
+        }
+      }
+    },
+    "没有结束时间的日程在 Apple 日历中按 45 分钟安排；TXT 保留原始信息。再次导出可更新已导出的事件。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedules without an end time last 45 minutes in Apple Calendar. TXT preserves the original information. Export again to update existing events."
+          }
+        }
+      }
+    },
+    "清空学校课程" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear school courses"
+          }
+        }
+      }
+    },
+    "演示模式不支持 iCloud 同步。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud sync is unavailable in demo mode."
+          }
+        }
+      }
+    },
+    "立即同步 / 重试" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync now / retry"
+          }
+        }
+      }
+    },
+    "第一周的星期一" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monday of week 1"
+          }
+        }
+      }
+    },
+    "第一学期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First semester"
+          }
+        }
+      }
+    },
+    "第二学期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Second semester"
+          }
+        }
+      }
+    },
+    "编辑个人记录" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit personal record"
+          }
+        }
+      }
+    },
+    "节次与作息" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Periods and class times"
+          }
+        }
+      }
+    },
+    "课表设置" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timetable settings"
+          }
+        }
+      }
+    },
+    "这些个人记录仍保留在本机。重新关联到课程后，提醒才会按最新排课恢复。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These personal records are kept on this device. Relink a course to resume its reminders."
+          }
+        }
+      }
+    },
+    "无需账号和密码，数据默认保存在本机，可自行开启 iCloud 同步。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No account or password needed. Data stays on this device by default; iCloud sync is optional."
+          }
+        }
+      }
+    },
+    "无需账号和密码。课表、成绩、考试安排、随记与日程默认保存在本机，可自行开启 iCloud 同步；此模式不连接 MyLeafy 账号或后台，不包含社区。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No account or password needed. Timetables, grades, exams, memos and schedules stay on this device by default. You can enable iCloud sync. This mode does not use MyLeafy accounts, services or community."
+          }
+        }
+      }
+    },
+    "免登录入口默认保存在本机，不连接 MyLeafy 账号或后台；可自行开启 iCloud 同步。" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guest data stays on this device by default without a MyLeafy account or service. iCloud sync is optional."
+          }
+        }
+      }
+    },
+    "%d–%d 学年 · 第 %d 学期" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d–%d academic year · Semester %d"
+          }
+        }
+      }
+    },
+    "%lld–%lld 学年" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld–%lld academic year"
+          }
+        }
+      }
+    },
+    "每天 %lld 节" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld periods per day"
+          }
+        }
+      }
+    },
+    "待同步或待接收：%lld 项" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending: %lld items"
+          }
+        }
+      }
+    },
+    "补全课表作息" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Complete class times"
           }
         }
       }

@@ -35,7 +35,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
         semesterConfig: SemesterRuntimeConfig = SemesterConfig.current,
         configurations: [SemesterRuntimeConfig]? = nil,
         campusID: CampusID = ActiveCampusContext.descriptor.id,
-        calendar baseCalendar: Calendar = .current
+        calendar baseCalendar: Calendar = UserTimetableSettings.calendar
     ) -> TimetableTimeScopeSnapshot {
         var calendar = baseCalendar
         calendar.firstWeekday = 2
@@ -246,7 +246,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
     }
 
     private static func currentDateText(for date: Date, language: AppLanguagePreference) -> String {
-        DateFormatters.fullDateWithWeekday(language: language).string(from: date)
+        TimetableClock.formatter(DateFormatters.fullDateWithWeekday(language: language)).string(from: date)
     }
 
     private static func monthTitle(for date: Date, calendar: Calendar, language: AppLanguagePreference) -> String {
@@ -260,7 +260,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
     }
 
     private static func shortDate(for date: Date, language: AppLanguagePreference) -> String {
-        DateFormatters.chineseDay(language: language).string(from: date)
+        TimetableClock.formatter(DateFormatters.chineseDay(language: language)).string(from: date)
     }
 }
 
@@ -293,7 +293,7 @@ nonisolated enum TimetableTimeScopeConfigurationResolver {
     static func configuration(
         for referenceDate: Date,
         configurations: [SemesterRuntimeConfig],
-        calendar: Calendar = .current
+        calendar: Calendar = UserTimetableSettings.calendar
     ) -> SemesterRuntimeConfig? {
         let day = calendar.startOfDay(for: referenceDate)
         let sorted = configurations.sorted { $0.semesterStartDate < $1.semesterStartDate }
@@ -598,7 +598,7 @@ struct TimetableTimeScopeView: View {
     }
 
     private func changeDisplayedMonth(by delta: Int) {
-        guard let nextMonth = Calendar.current.date(
+        guard let nextMonth = UserTimetableSettings.calendar.date(
             byAdding: .month,
             value: delta,
             to: displayedSnapshot.displayedMonthDate
@@ -1031,10 +1031,10 @@ struct TimetableTimeScopeMonthMarkView: View {
     let displayedMonthDate: Date
 
     private var isDisplayed: Bool {
-        guard let monthDate = Calendar.current.date(
+        guard let monthDate = UserTimetableSettings.calendar.date(
             from: DateComponents(year: mark.year, month: mark.month, day: 1)
         ) else { return mark.isDisplayedMonth }
-        return Calendar.current.isDate(monthDate, equalTo: displayedMonthDate, toGranularity: .month)
+        return UserTimetableSettings.calendar.isDate(monthDate, equalTo: displayedMonthDate, toGranularity: .month)
     }
 
     var body: some View {

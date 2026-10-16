@@ -40,7 +40,9 @@ struct LeafyApp: App {
     @State private var authCallbackMessage: String?
     @State private var reviewRequestTask: Task<Void, Never>?
     @State private var semesterConfigRefreshTask: Task<Void, Never>?
+    @State private var lastSharedTimetableSettings: UserTimetableSettings?
     @State private var scheduleReportRefreshTask: Task<Void, Never>?
+    @State private var timetableNotificationRefreshTask: Task<Void, Never>?
 
     private var sharedModelContainer: ModelContainer {
         guard let setup = modelContainerSetup else { preconditionFailure("Database is unavailable outside recovery UI") }
@@ -180,6 +182,7 @@ struct LeafyApp: App {
             .animation(appearanceAnimation, value: appAppearancePreferenceRaw)
             .animation(appearanceAnimation, value: appThemeCustomColorHex)
             .onAppear {
+                ICloudSyncCoordinator.shared.configure(context: sharedModelContainer.mainContext)
                 retryPendingFileCleanup()
                 ScheduleReportBackgroundRefreshCoordinator.shared.register()
                 languagePreference.syncToAppGroup()
@@ -193,7 +196,7 @@ struct LeafyApp: App {
                 }
                 refreshSemesterRuntimeConfig(force: true, prefetchTrigger: .foreground)
                 refreshWidgetSnapshot()
-                refreshScheduleReportNotifications()
+                refreshLocalizedNotifications()
                 ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
                 externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport, modelContext: modelContainerSetup?.container.mainContext)
             }
@@ -225,12 +228,14 @@ struct LeafyApp: App {
                     refreshWidgetSnapshot()
                 }
                 if newPhase == .active {
+                    ICloudSyncCoordinator.shared.configure(context: sharedModelContainer.mainContext)
+                    ICloudSyncCoordinator.shared.retry()
                     retryPendingFileCleanup()
                     if ActiveCampusContext.descriptor.supports(.community) {
                         CommunityPublishCoordinator.shared.configureAndResume()
                     }
                     refreshSemesterRuntimeConfig(prefetchTrigger: .foreground)
-                    refreshScheduleReportNotifications()
+                    refreshLocalizedNotifications()
                     ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
                     externalImportCoordinator.presentPendingIfPossible(isAuthenticated: isAuthenticatedForExternalImport, modelContext: modelContainerSetup?.container.mainContext)
                 }
@@ -249,6 +254,7 @@ struct LeafyApp: App {
             reloadModelContainerForCampusIdentity(
                 prefetchTrigger: notification.object == nil ? .foreground : .login
             )
+            if let setup = modelContainerSetup { ICloudSyncCoordinator.shared.configure(context: setup.container.mainContext) }
         }
             .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { _ in
                 refreshScheduleReportNotifications()
@@ -262,8 +268,21 @@ struct LeafyApp: App {
                 refreshWidgetSnapshot()
             }
             .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in
+                refreshLocalizedNotifications()
                 refreshScheduleReportNotifications()
                 refreshWidgetSnapshot()
+                let settings = UserTimetableSettingsStore.load()
+                if lastSharedTimetableSettings != settings, ActiveCampusContext.descriptor.supports(.community), !ReviewDemoMode.isEnabled {
+                    lastSharedTimetableSettings = settings
+                    let scope = CampusOperationScope()
+                    Task { @MainActor in
+                        guard scope.isCurrent else { return }
+                        do {
+                            let sharedCourses = try sharedModelContainer.mainContext.fetch(FetchDescriptor<Course>()).map(SharedTimetableCourse.init(course:))
+                            _ = await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: sharedCourses)
+                        } catch { logger.error("Shared timetable projection failed: \(error.localizedDescription, privacy: .private)") }
+                    }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
                 refreshScheduleReportNotifications()
@@ -334,6 +353,8 @@ struct LeafyApp: App {
         reviewRequestTask?.cancel()
         semesterConfigRefreshTask?.cancel()
         scheduleReportRefreshTask?.cancel()
+        timetableNotificationRefreshTask?.cancel()
+        timetableNotificationRefreshTask = nil
         SchoolDataPrefetchCoordinator.shared.cancel()
         do {
             let setup = try AppModelContainerFactory.make()
@@ -392,7 +413,7 @@ struct LeafyApp: App {
             return
         }
 
-        LeafyWidgetSnapshotBuilder.publish(from: sharedModelContainer.mainContext, isAuthenticated: isAuthenticated)
+        LeafyWidgetSnapshotBuilder.publish(from: ModelContext(sharedModelContainer), isAuthenticated: isAuthenticated)
     }
 
     @MainActor
@@ -432,65 +453,34 @@ struct LeafyApp: App {
     @MainActor
     private func refreshLocalizedNotifications() {
         guard modelContainerSetup != nil else { return }
-        let container = sharedModelContainer
-        scheduleReportRefreshTask?.cancel()
-        scheduleReportRefreshTask = Task { @MainActor in
-            let authorizationStatus = await UNUserNotificationCenter.current()
-                .notificationSettings()
-                .authorizationStatus
-            guard authorizationStatus == .authorized ||
-                    authorizationStatus == .provisional ||
-                    authorizationStatus == .ephemeral
-            else {
-                scheduleReportRefreshTask = nil
-                return
-            }
-
+        let scope = CampusOperationScope()
+        timetableNotificationRefreshTask?.cancel()
+        timetableNotificationRefreshTask = Task { @MainActor in
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            guard scope.isCurrent, !Task.isCancelled,
+                  status == .authorized || status == .provisional || status == .ephemeral else { return }
             await refreshTimetableNotificationsForCurrentLanguage()
+            guard scope.isCurrent, !Task.isCancelled else { return }
             await refreshSunshineRunNotificationsForCurrentLanguage()
-
-            do {
-                let service = LeafyDependencies.live.timetableWeatherService
-                let weather: TimetableWeatherSnapshot?
-                if let cached = service.cachedWeather(maxAge: 30 * 60) {
-                    weather = cached
-                } else if service.authorizationState() == .authorized {
-                    weather = try? await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
-                } else {
-                    weather = nil
-                }
-                try Task.checkCancellation()
-                try await ScheduleReportNotificationManager.refreshIfEnabled(
-                    modelContext: container.mainContext,
-                    weather: weather
-                )
-            } catch is CancellationError {
-                return
-            } catch {
-                logger.error("Localized schedule report notification refresh failed: \(error.localizedDescription, privacy: .public)")
-            }
-
-            guard !Task.isCancelled else { return }
-            scheduleReportRefreshTask = nil
         }
+        refreshScheduleReportNotifications()
     }
 
     @MainActor
     private func refreshTimetableNotificationsForCurrentLanguage() async {
         guard modelContainerSetup != nil, !Task.isCancelled else { return }
-        let context = sharedModelContainer.mainContext
-        let courses = (try? context.fetch(FetchDescriptor<Course>())) ?? []
+        let context = ModelContext(sharedModelContainer)
+        let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).map(TimetableReminderRefreshPlan.courseSnapshot)
         let currentCoursesByKey = Dictionary(
             courses
-                .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID }
                 .map { ($0.stableCourseKey, $0) },
             uniquingKeysWith: { first, _ in first }
         )
         let courseSettings = (try? context.fetch(FetchDescriptor<CourseReminderSetting>())) ?? []
-        let cellReminders = (try? context.fetch(FetchDescriptor<TimetableCellReminder>())) ?? []
+        let cellReminders = ((try? context.fetch(FetchDescriptor<TimetableCellReminder>())) ?? []).map { SyncedTimetableCellReminder($0).make() }
 
         do {
-            for setting in courseSettings where setting.minutesBefore > 0 {
+            for setting in courseSettings where !setting.isUnassociated && setting.minutesBefore > 0 {
                 try Task.checkCancellation()
                 guard let course = currentCoursesByKey[setting.courseKey] else { continue }
                 try await TimetableNotificationManager.applyReminder(

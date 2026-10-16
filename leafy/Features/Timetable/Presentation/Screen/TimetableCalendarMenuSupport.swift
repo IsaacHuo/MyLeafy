@@ -21,14 +21,14 @@ nonisolated struct TimetableCalendarMenuModel {
     }
 
     var historyTimeViewAcademicYears: [TimetableCalendarMenuAcademicYear] {
-        academicYears.filter { $0.academicYear != primaryTimeViewAcademicYearID }
+        []
     }
 
     init(
         timetable: AcademicYearTimetable,
         configurations: [SemesterRuntimeConfig],
         referenceDate: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = UserTimetableSettings.calendar
     ) {
         let referencePhase = timetable.phase(for: referenceDate)
         let referenceDay = calendar.startOfDay(for: referenceDate)
@@ -80,9 +80,7 @@ nonisolated struct TimetableCalendarMenuModel {
                 ),
                 weeks: weeks,
                 startDate: configuration.semesterStartDate,
-                endDate: configuration.calendarEvents.first {
-                    $0.academicCategory == .semesterEnd
-                }?.endDate
+                endDate: calendar.date(byAdding: .day, value: 139, to: configuration.semesterStartDate)
             )
             stagesByAcademicYear[academicYear, default: []].append(.semester(semester))
         }
@@ -170,7 +168,7 @@ nonisolated struct TimetableCalendarMenuModel {
     static func semesterSeasonTitle(
         semesterID: String,
         semesterStartDate: Date?,
-        calendar: Calendar = .current
+        calendar: Calendar = UserTimetableSettings.calendar
     ) -> String {
         switch semesterID.split(separator: "-").last {
         case "1":

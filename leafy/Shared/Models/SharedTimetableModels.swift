@@ -104,7 +104,7 @@ nonisolated struct SharedTimetableCourse: Codable, Identifiable, Hashable, Senda
         return L10n.text("第 %@ 周", language: language, text)
     }
 
-    func durationText(language: AppLanguagePreference) -> String {
+    func durationText(language: AppLanguagePreference, slots: [TimetablePeriodSchedule.Slot] = TimetablePeriodSchedule.slots) -> String {
         guard let first = duration.min(), let last = duration.max() else {
             return L10n.text("节次待定", language: language)
         }
@@ -113,8 +113,8 @@ nonisolated struct SharedTimetableCourse: Codable, Identifiable, Hashable, Senda
             ? L10n.text("第 %d 节", language: language, first)
             : L10n.text("第 %d-%d 节", language: language, first, last)
 
-        guard let startSlot = TimetablePeriodSchedule.slot(for: first),
-              let endSlot = TimetablePeriodSchedule.slot(for: last) else {
+        guard let startSlot = slots.first(where: { $0.period == first }),
+              let endSlot = slots.first(where: { $0.period == last }) else {
             return periodText
         }
 
@@ -165,6 +165,7 @@ nonisolated struct SharedTimetableSnapshot: Codable, Identifiable, Hashable, Sen
     let createdAt: String
     let updatedAt: String
     let owner: CommunityProfile?
+    var calendarConfig: SharedTimetableCalendar? = nil
 
     var ownerDisplayName: String {
         owner?.limitedResolvedDisplayName ?? L10n.text(ActiveCampusContext.descriptor.defaultStudentDisplayName)
@@ -188,6 +189,7 @@ nonisolated struct SharedTimetableSnapshot: Codable, Identifiable, Hashable, Sen
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case owner
+        case calendarConfig = "calendar_config"
     }
 }
 
@@ -256,5 +258,30 @@ nonisolated struct TimetableInvite: Codable, Identifiable, Hashable, Sendable {
         case acceptedBy = "accepted_by"
         case acceptedAt = "accepted_at"
         case createdAt = "created_at"
+    }
+}
+
+nonisolated struct SharedTimetableCalendar: Codable, Hashable, Sendable {
+    let semesterStartDate: String
+    let periods: [TimetablePeriodSchedule.Slot]
+    enum CodingKeys: String, CodingKey {
+        case semesterStartDate = "semester_start_date"
+        case periods
+    }
+    static var current: Self {
+        Self(semesterStartDate: SemesterConfig.current.semesterStartDateString, periods: TimetablePeriodSchedule.slots)
+    }
+    var startDate: Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = UserTimetableSettings.calendar
+        formatter.timeZone = UserTimetableSettings.calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: semesterStartDate)
+    }
+    func currentWeek(date: Date = Date()) -> Int {
+        guard let startDate else { return 1 }
+        let calendar = UserTimetableSettings.calendar
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: startDate), to: calendar.startOfDay(for: date)).day ?? 0
+        return max(1, min(20, days / 7 + 1))
     }
 }

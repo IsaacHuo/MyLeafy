@@ -76,7 +76,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         XCTAssertEqual(result.courses.count, 2)
     }
 
-    func testTeacherSplitPreservesHistoricalCourseAndPersonalCellReminder() throws {
+    func testTeacherSplitReplacesHistoricalCoursesAndPreservesPersonalSchedule() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let currentCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
@@ -102,13 +102,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         _ = try persistSplit(records: splitRecords(), existingCourses: [currentCourse, historicalCourse], context: context)
 
         let courses = try context.fetch(FetchDescriptor<Course>())
-        let savedHistorical = try XCTUnwrap(courses.first { $0.id == historicalCourse.id })
-        XCTAssertEqual(savedHistorical.sourceSemesterID, historicalSemesterID)
-        XCTAssertEqual(savedHistorical.teacher, "历史教师")
-        XCTAssertEqual(savedHistorical.weeks, [2, 4])
-        XCTAssertEqual(savedHistorical.room, "202")
-        XCTAssertEqual(savedHistorical.dayOfWeek, 2)
-        XCTAssertEqual(courses.filter { $0.sourceSemesterID == semesterID }.count, 2)
+        XCTAssertEqual(courses.count, 2)
+        XCTAssertFalse(courses.contains { $0.sourceSemesterID == historicalSemesterID })
 
         let reminders = try context.fetch(FetchDescriptor<TimetableCellReminder>())
         let savedReminder = try XCTUnwrap(reminders.first { $0.id == reminderID })
@@ -259,7 +254,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         XCTAssertEqual(settings.first { $0.courseKey == targetCourse.stableCourseKey }?.updatedAt, sourceDate)
     }
 
-    func testDifferentTargetCourseNoteFailsWithoutChangingExistingData() throws {
+    func testDifferentTargetCourseNoteIsPreservedPendingWithoutBlockingRefresh() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
@@ -271,20 +266,18 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         context.insert(targetNote)
         try context.save()
 
-        XCTAssertThrowsError(
-            try persistSplit(records: splitRecords(), existingCourses: [oldCourse], context: context)
-        )
+        _ = try persistSplit(records: splitRecords(), existingCourses: [oldCourse], context: context)
         let courses = try context.fetch(FetchDescriptor<Course>())
-        XCTAssertEqual(courses.count, 1)
-        XCTAssertEqual(courses.first?.id, oldCourse.id)
-        XCTAssertEqual(courses.first?.teacher, "教师甲")
+        XCTAssertEqual(courses.count, 2)
+        XCTAssertTrue(sourceNote.isUnassociated)
+        XCTAssertFalse(targetNote.isUnassociated)
         let notes = try context.fetch(FetchDescriptor<CourseNote>())
         XCTAssertEqual(notes.count, 2)
         XCTAssertEqual(notes.first { $0.courseKey == oldCourse.stableCourseKey }?.text, "甲段内容")
         XCTAssertEqual(notes.first { $0.courseKey == targetCourse.stableCourseKey }?.text, "乙段内容")
     }
 
-    func testDifferentTargetReminderFailsWithoutChangingExistingData() throws {
+    func testDifferentTargetReminderIsPreservedPendingWithoutBlockingRefresh() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
@@ -300,10 +293,10 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         context.insert(targetSetting)
         try context.save()
 
-        XCTAssertThrowsError(
-            try persistSplit(records: splitRecords(), existingCourses: [oldCourse], context: context)
-        )
-        XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).count, 1)
+        _ = try persistSplit(records: splitRecords(), existingCourses: [oldCourse], context: context)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).count, 2)
+        XCTAssertTrue(sourceSetting.isUnassociated)
+        XCTAssertFalse(targetSetting.isUnassociated)
         let settings = try context.fetch(FetchDescriptor<CourseReminderSetting>())
         XCTAssertEqual(settings.count, 2)
         XCTAssertEqual(settings.first { $0.courseKey == oldCourse.stableCourseKey }?.minutesBefore, 10)
@@ -383,7 +376,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         XCTAssertEqual(notes.first { $0.courseKey == teacherBKey }?.text, "乙段独立编辑")
     }
 
-    func testSameWeekMultipleTeacherCandidatesRejectWithoutMutation() throws {
+    func testSameWeekMultipleTeacherCandidatesLeaveOccurrencePending() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
@@ -399,13 +392,10 @@ final class TimetableTeacherReassociationTests: XCTestCase {
             makeRecord(teacher: "教师乙", weeks: Array(1...8))
         ]
 
-        XCTAssertThrowsError(
-            try persistSplit(records: ambiguousRecords, existingCourses: [oldCourse], context: context)
-        )
+        _ = try persistSplit(records: ambiguousRecords, existingCourses: [oldCourse], context: context)
         let courses = try context.fetch(FetchDescriptor<Course>())
-        XCTAssertEqual(courses.count, 1)
-        XCTAssertEqual(courses.first?.id, oldCourse.id)
-        XCTAssertEqual(courses.first?.weeks, Array(1...16))
+        XCTAssertEqual(courses.count, 2)
+        XCTAssertTrue(occurrence.isUnassociated)
         let savedOccurrence = try XCTUnwrap(try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).first)
         XCTAssertEqual(savedOccurrence.id, occurrence.id)
         XCTAssertEqual(savedOccurrence.courseKey, oldCourse.stableCourseKey)
@@ -566,7 +556,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         XCTAssertEqual(try context.fetch(FetchDescriptor<CourseReminderSetting>()).map(\.courseKey), [oldKey])
     }
 
-    func testOccurrenceOutsideOldWeekCoverageBlocksAnAffectedSplit() throws {
+    func testOccurrenceOutsideOldWeekCoverageRemainsPendingAfterRefresh() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let old = makeCourse(teacher: "教师甲")
@@ -576,8 +566,9 @@ final class TimetableTeacherReassociationTests: XCTestCase {
                                             week: 17, dayOfWeek: 1, text: "保留未匹配备注"))
         try context.save()
 
-        XCTAssertThrowsError(try persistSplit(records: splitRecords(), existingCourses: [old], context: context))
-        XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).count, 1)
+        _ = try persistSplit(records: splitRecords(), existingCourses: [old], context: context)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).count, 2)
+        XCTAssertTrue(try XCTUnwrap(context.fetch(FetchDescriptor<CourseOccurrenceNote>()).first).isUnassociated)
         XCTAssertEqual(try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).first?.courseKey, oldKey)
     }
 
@@ -603,7 +594,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         }
     }
 
-    func testOccurrenceDestinationsDeduplicateEqualTextAndRejectDifferentText() throws {
+    func testOccurrenceDestinationsDeduplicateEqualTextAndKeepConflictsPending() throws {
         for targetText in ["相同备注", "不同备注"] {
             let container = try makeContainer()
             let context = container.mainContext
@@ -626,11 +617,12 @@ final class TimetableTeacherReassociationTests: XCTestCase {
                 XCTAssertEqual(notes.first?.id, sourceID)
                 XCTAssertEqual(notes.first?.courseKey, target.stableCourseKey)
             } else {
-                XCTAssertThrowsError(try persistSplit(records: splitRecords(), existingCourses: [old], context: context))
-                XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).count, 1)
+                _ = try persistSplit(records: splitRecords(), existingCourses: [old], context: context)
+                XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).count, 2)
                 let notes = try context.fetch(FetchDescriptor<CourseOccurrenceNote>())
                 XCTAssertEqual(notes.count, 2)
                 XCTAssertEqual(notes.first { $0.id == sourceID }?.courseKey, oldKey)
+                XCTAssertTrue(try XCTUnwrap(notes.first { $0.id == sourceID }).isUnassociated)
             }
         }
     }

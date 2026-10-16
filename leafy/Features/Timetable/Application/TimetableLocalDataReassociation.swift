@@ -3,207 +3,115 @@ import SwiftData
 
 enum TimetableLocalDataConflict: LocalizedError {
     case conflictingRecords(String)
+    case ambiguousArrangement(String)
     case ambiguousOccurrence(String, Int)
-
     var errorDescription: String? {
         switch self {
-        case .conflictingRecords(let name):
-            return L10n.text("“%@”的备注或提醒存在冲突，课表未更新。请检查相关记录后重试。", name)
-        case .ambiguousOccurrence(let name, let week):
-            return L10n.text("无法确定“%@”第 %d 周备注对应的课次，课表未更新。原课表和备注已保留。", name, week)
+        case .ambiguousArrangement(let name): return L10n.text("学校返回的“%@”在同一时段有不同班级或教室，无法确定排课，已保留当前课表。", name)
+        case .conflictingRecords(let name): return L10n.text("“%@”存在不同的备注或提醒。请保留原记录并选择其他课程，或先编辑现有内容。", name)
+        case .ambiguousOccurrence(let name, let week): return L10n.text("无法确定“%@”第 %d 周备注对应的课次，请手动关联。", name, week)
         }
     }
 }
 
-/// Preflights all associations before changing the context. The existing course keys remain
-/// authoritative; only a verified teacher/period split creates associations with new keys.
+/// Personal edits survive every course replacement. Ambiguity is explicit and nonblocking.
 @MainActor
 struct TimetableLocalDataReassociation {
-    private struct NoteValue {
-        let text: String
-        let updatedAt: Date
-    }
-
-    private struct ReminderValue {
-        let minutesBefore: Int
-        let anchorPeriod: Int?
-        let updatedAt: Date
-    }
-
-    private struct OccurrenceMove {
-        let note: CourseOccurrenceNote
-        let courseKey: String
-    }
-
-    private var noteValues: [String: NoteValue] = [:]
-    private var reminderValues: [String: ReminderValue] = [:]
-    private var occurrenceMoves: [UUID: OccurrenceMove] = [:]
-    private var duplicateOccurrences: [CourseOccurrenceNote] = []
-    private let notes: [CourseNote]
-    private let reminders: [CourseReminderSetting]
-
+    let oldCourses: [Course]
+    let newCourses: [Course]
+    let context: ModelContext
     init(oldCourses: [Course], newCourses: [Course], context: ModelContext) throws {
-        notes = try context.fetch(FetchDescriptor<CourseNote>())
-        reminders = try context.fetch(FetchDescriptor<CourseReminderSetting>())
+        self.oldCourses = oldCourses; self.newCourses = newCourses; self.context = context
+    }
+    private func targets(for old: Course) -> [Course] {
+        let exact = newCourses.filter { $0.legacyStableCourseKey == old.legacyStableCourseKey && $0.classInfo == old.classInfo }
+        if !exact.isEmpty && old.weeks.allSatisfy({ week in exact.contains { $0.weeks.contains(week) } }) { return exact }
+        let candidates = newCourses.filter {
+            normalized($0.courseName) == normalized(old.courseName) && normalized($0.classInfo) == normalized(old.classInfo)
+        }
+        // Do not infer a new class when multiple old arrangements have this name/class.
+        let oldKeys = Set(oldCourses.filter {
+            normalized($0.courseName) == normalized(old.courseName) && normalized($0.classInfo) == normalized(old.classInfo)
+        }.map(\.stableCourseKey))
+        if candidates.count == 1 && oldKeys.count == 1 { return candidates }
+        let split = candidates.filter { $0.dayOfWeek == old.dayOfWeek && $0.room == old.room
+            && $0.location == old.location && Set($0.duration).isSubset(of: Set(old.duration))
+            && !Set($0.weeks).isDisjoint(with: old.weeks) }
+        return oldKeys.count == 1 ? split : []
+    }
+    private func normalized(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+    func apply(to context: ModelContext) throws {
+        let notes = try context.fetch(FetchDescriptor<CourseNote>())
         let occurrences = try context.fetch(FetchDescriptor<CourseOccurrenceNote>())
-        let oldByKey = Dictionary(grouping: oldCourses, by: \.stableCourseKey)
-
-        for (oldKey, oldGroup) in oldByKey {
-            // Already-separated teaching arrangements may coexist in the same week. If
-            // this key still covers its original occurrences, their independent notes
-            // must not be copied into another teacher's existing arrangement.
-            let stillCovered = oldGroup.allSatisfy { old in
-                old.weeks.allSatisfy { week in
-                    newCourses.contains {
-                        $0.stableCourseKey == oldKey && Self.sameArrangement($0, old) && $0.weeks.contains(week)
-                    }
-                }
+        let reminders = try context.fetch(FetchDescriptor<CourseReminderSetting>())
+        for note in notes where !note.isUnassociated {
+            guard let old = oldCourses.first(where: { $0.stableCourseKey == note.courseKey }) else {
+                note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
+                continue
             }
-            if stillCovered { continue }
-            let candidates = newCourses.filter { new in
-                oldGroup.contains { old in Self.isSplitCandidate(new, of: old) }
+            note.sourceCourseTitle = old.courseName
+            let keys = Array(Set(targets(for: old).map(\.stableCourseKey)))
+            guard !keys.isEmpty, keys.allSatisfy({ key in !notes.contains { $0.id != note.id && !$0.isUnassociated && $0.courseKey == key && $0.text != note.text } }) else {
+                note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
+                continue
             }
-            guard candidates.contains(where: { $0.stableCourseKey != oldKey }) else { continue }
-
-            let name = oldGroup[0].courseName
-            let sourceNotes = notes.filter { $0.courseKey == oldKey }
-            let sourceReminders = reminders.filter { $0.courseKey == oldKey }
-            let sourceOccurrences = occurrences.filter { $0.courseKey == oldKey }
-
-            // A legacy key omits room/classInfo. If it names different original arrangements,
-            // local records cannot reliably identify which arrangement the user annotated.
-            if !sourceNotes.isEmpty || !sourceReminders.isEmpty || !sourceOccurrences.isEmpty {
-                guard oldGroup.allSatisfy({ Self.sameArrangement($0, oldGroup[0]) }) else {
-                    throw TimetableLocalDataConflict.conflictingRecords(name)
-                }
-            }
-
-            let targetKeys = Set(candidates.map(\.stableCourseKey)).union([oldKey])
-            if let source = try Self.noteValue(sourceNotes, name: name) {
-                for key in targetKeys {
-                    let existing = try Self.noteValue(notes.filter { $0.courseKey == key }, name: name)
-                    let previous = noteValues[key] ?? existing
-                    if let previous, previous.text != source.text {
-                        throw TimetableLocalDataConflict.conflictingRecords(name)
-                    }
-                    noteValues[key] = NoteValue(text: source.text, updatedAt: max(source.updatedAt, previous?.updatedAt ?? .distantPast))
-                }
-            }
-            if let source = try Self.reminderValue(sourceReminders, name: name) {
-                for key in targetKeys {
-                    let existing = try Self.reminderValue(reminders.filter { $0.courseKey == key }, name: name)
-                    let previous = reminderValues[key] ?? existing
-                    if let previous, previous.minutesBefore != source.minutesBefore || previous.anchorPeriod != source.anchorPeriod {
-                        throw TimetableLocalDataConflict.conflictingRecords(name)
-                    }
-                    reminderValues[key] = ReminderValue(
-                        minutesBefore: source.minutesBefore,
-                        anchorPeriod: source.anchorPeriod,
-                        updatedAt: max(source.updatedAt, previous?.updatedAt ?? .distantPast)
-                    )
-                }
-            }
-
-            for note in sourceOccurrences {
-                guard oldGroup.contains(where: { $0.weeks.contains(note.week) && $0.dayOfWeek == note.dayOfWeek }) else {
-                    throw TimetableLocalDataConflict.ambiguousOccurrence(name, note.week)
-                }
-                let targets = candidates.filter { $0.weeks.contains(note.week) && $0.dayOfWeek == note.dayOfWeek }
-                guard targets.count == 1, let target = targets.first else {
-                    throw TimetableLocalDataConflict.ambiguousOccurrence(name, note.week)
-                }
-                occurrenceMoves[note.id] = OccurrenceMove(note: note, courseKey: target.stableCourseKey)
+            note.courseKey = keys[0]
+            for key in keys.dropFirst() where !notes.contains(where: { $0.courseKey == key && !$0.isUnassociated }) {
+                context.insert(CourseNote(courseKey: key, text: note.text, updatedAt: note.updatedAt))
             }
         }
-
-        // Validate the final destinations together, including records already at a target.
-        // This catches two old arrangements trying to overwrite the same occurrence.
-        let touchedKeys = Set(occurrenceMoves.values.map {
-            CourseOccurrenceNote.occurrenceKey(courseKey: $0.courseKey, week: $0.note.week)
-        })
-        let byDestination = Dictionary(grouping: occurrences) { note in
-            occurrenceMoves[note.id].map {
-                CourseOccurrenceNote.occurrenceKey(courseKey: $0.courseKey, week: note.week)
-            } ?? note.occurrenceKey
-        }
-        for key in touchedKeys {
-            let group = byDestination[key, default: []]
-            guard Set(group.map(\.text)).count <= 1 else {
-                let moving = group.first { occurrenceMoves[$0.id] != nil }!
-                let name = oldCourses.first { $0.stableCourseKey == moving.courseKey }?.courseName ?? ""
-                throw TimetableLocalDataConflict.conflictingRecords(name)
+        for note in occurrences where !note.isUnassociated {
+            guard let old = oldCourses.first(where: { $0.stableCourseKey == note.courseKey }) else {
+                note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
+                continue
             }
-            let sorted = group.sorted { $0.updatedAt > $1.updatedAt }
-            for duplicate in sorted.dropFirst() {
-                occurrenceMoves.removeValue(forKey: duplicate.id)
-                duplicateOccurrences.append(duplicate)
+            note.sourceCourseTitle = old.courseName
+            let matches = targets(for: old).filter { $0.weeks.contains(note.week) }
+            let keys = Set(matches.map(\.stableCourseKey))
+            guard keys.count == 1, let key = keys.first,
+                  !occurrences.contains(where: { $0.id != note.id && !$0.isUnassociated && $0.courseKey == key && $0.week == note.week && $0.text != note.text }) else {
+                note.isUnassociated = !newCourses.contains { $0.stableCourseKey == note.courseKey }
+                continue
             }
+            note.courseKey = key
+            note.dayOfWeek = matches[0].dayOfWeek
+            note.occurrenceKey = CourseOccurrenceNote.occurrenceKey(courseKey: key, week: note.week)
         }
-    }
-
-    func apply(to context: ModelContext) {
-        for (key, value) in noteValues {
-            let existing = notes.filter { $0.courseKey == key }.sorted { $0.updatedAt > $1.updatedAt }
-            if let note = existing.first {
-                note.updatedAt = value.updatedAt
-                for duplicate in existing.dropFirst() { context.delete(duplicate) }
-            } else {
-                context.insert(CourseNote(courseKey: key, text: value.text, updatedAt: value.updatedAt))
+        for setting in reminders where !setting.isUnassociated {
+            guard let old = oldCourses.first(where: { $0.stableCourseKey == setting.courseKey }) else {
+                setting.isUnassociated = !newCourses.contains { $0.stableCourseKey == setting.courseKey }
+                continue
             }
-        }
-        for (key, value) in reminderValues {
-            let existing = reminders.filter { $0.courseKey == key }.sorted { $0.updatedAt > $1.updatedAt }
-            if let reminder = existing.first {
-                reminder.updatedAt = value.updatedAt
-                for duplicate in existing.dropFirst() { context.delete(duplicate) }
-            } else {
-                context.insert(CourseReminderSetting(
-                    courseKey: key, minutesBefore: value.minutesBefore,
-                    anchorPeriod: value.anchorPeriod, updatedAt: value.updatedAt
-                ))
+            setting.sourceCourseTitle = old.courseName
+            let matches = targets(for: old)
+            let keys = Array(Set(matches.map(\.stableCourseKey)))
+            guard !keys.isEmpty, keys.allSatisfy({ key in !reminders.contains { $0.id != setting.id && !$0.isUnassociated && $0.courseKey == key && ($0.minutesBefore != setting.minutesBefore || $0.anchorPeriod != setting.anchorPeriod) } }) else {
+                setting.isUnassociated = !newCourses.contains { $0.stableCourseKey == setting.courseKey }
+                continue
+            }
+            setting.courseKey = keys[0]
+            let oldAnchor = setting.anchorPeriod
+            for key in keys.dropFirst() where !reminders.contains(where: { $0.courseKey == key && !$0.isUnassociated }) {
+                context.insert(CourseReminderSetting(courseKey: key, minutesBefore: setting.minutesBefore,
+                    anchorPeriod: oldAnchor, updatedAt: setting.updatedAt))
             }
         }
-        for move in occurrenceMoves.values {
-            move.note.courseKey = move.courseKey
-            move.note.occurrenceKey = CourseOccurrenceNote.occurrenceKey(courseKey: move.courseKey, week: move.note.week)
+        for group in Dictionary(grouping: try context.fetch(FetchDescriptor<CourseNote>()).filter { !$0.isUnassociated }, by: \.courseKey).values {
+            if Set(group.map(\.text)).count == 1 {
+                for duplicate in group.sorted(by: { $0.updatedAt > $1.updatedAt }).dropFirst() { context.delete(duplicate) }
+            }
         }
-        for duplicate in duplicateOccurrences { context.delete(duplicate) }
-    }
-
-    private static func noteValue(_ values: [CourseNote], name: String) throws -> NoteValue? {
-        guard let latest = values.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
-        guard values.allSatisfy({ $0.text == latest.text }) else {
-            throw TimetableLocalDataConflict.conflictingRecords(name)
+        for group in Dictionary(grouping: try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).filter { !$0.isUnassociated }, by: \.occurrenceKey).values {
+            if Set(group.map(\.text)).count == 1 {
+                for duplicate in group.sorted(by: { $0.updatedAt > $1.updatedAt }).dropFirst() { context.delete(duplicate) }
+            }
         }
-        return NoteValue(text: latest.text, updatedAt: latest.updatedAt)
-    }
-
-    private static func reminderValue(_ values: [CourseReminderSetting], name: String) throws -> ReminderValue? {
-        guard let latest = values.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
-        guard values.allSatisfy({ $0.minutesBefore == latest.minutesBefore && $0.anchorPeriod == latest.anchorPeriod }) else {
-            throw TimetableLocalDataConflict.conflictingRecords(name)
+        for group in Dictionary(grouping: try context.fetch(FetchDescriptor<CourseReminderSetting>()).filter { !$0.isUnassociated }, by: \.courseKey).values {
+            if Set(group.map { "\($0.minutesBefore):\($0.anchorPeriod ?? 0)" }).count == 1 {
+                for duplicate in group.sorted(by: { $0.updatedAt > $1.updatedAt }).dropFirst() { context.delete(duplicate) }
+            }
         }
-        return ReminderValue(minutesBefore: latest.minutesBefore, anchorPeriod: latest.anchorPeriod, updatedAt: latest.updatedAt)
-    }
-
-    private static func sameArrangement(_ lhs: Course, _ rhs: Course) -> Bool {
-        samePlaceAndClass(lhs, rhs) && lhs.duration.sorted() == rhs.duration.sorted()
-    }
-
-    private static func samePlaceAndClass(_ lhs: Course, _ rhs: Course) -> Bool {
-        lhs.sourceSemesterID == rhs.sourceSemesterID && normalized(lhs.courseName) == normalized(rhs.courseName) &&
-        normalized(lhs.classInfo) == normalized(rhs.classInfo) && lhs.dayOfWeek == rhs.dayOfWeek &&
-        normalized(lhs.room) == normalized(rhs.room) && normalized(lhs.location) == normalized(rhs.location)
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-    }
-
-    private static func isSplitCandidate(_ new: Course, of old: Course) -> Bool {
-        samePlaceAndClass(new, old) && !new.duration.isEmpty &&
-        Set(new.duration).isSubset(of: Set(old.duration)) &&
-        !Set(new.weeks).isDisjoint(with: old.weeks)
     }
 }

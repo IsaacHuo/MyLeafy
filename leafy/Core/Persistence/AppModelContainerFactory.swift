@@ -26,11 +26,14 @@ enum AppModelContainerFactory {
         ])
         let modelConfiguration: ModelConfiguration
         if AppRuntimeEnvironment.isRunningUnitTests {
-            modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         } else {
             modelConfiguration = CampusStoreScope.configuration(schema: schema)
         }
 
+        if !AppRuntimeEnvironment.isRunningUnitTests, ActiveCampusContext.identity != nil {
+            try UserTimetableSettingsStore.freezeIfNeeded()
+        }
         let container = try open(schema: schema, configuration: modelConfiguration)
         return AppModelContainerSetup(container: container, recoveryMessage: nil)
     }
@@ -47,7 +50,19 @@ enum AppModelContainerFactory {
               let url = CampusStoreScope.scopedStoreURL(for: identity) else {
             return try make()
         }
-        return try rebuildStore(at: url) { try make().container }
+        return try rebuildStore(at: url) {
+            let container = try make().container
+            let syncURL = url.deletingLastPathComponent().appendingPathComponent("ICloudSync/journal.json")
+            if FileManager.default.fileExists(atPath: syncURL.path) {
+                let previous = try ICloudSyncJournal.load(from: syncURL)
+                var reset = ICloudSyncJournal()
+                reset.accountID = previous.accountID
+                reset.enabled = previous.enabled
+                // A recovery-created empty database must fetch cloud data, not publish deletions.
+                try reset.save(to: syncURL)
+            }
+            return container
+        }
     }
 
     static func rebuildStore(

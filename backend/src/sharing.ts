@@ -4,7 +4,7 @@ import { ApiError, integer, sha256, text, uuid } from './http';
 import { publicProfile, requireCommunity } from './community';
 
 function courses(value:unknown){
-  if(!Array.isArray(value)||!value.length||value.length>500)throw new ApiError(400,'invalid_courses','课程数量无效。');
+  if(!Array.isArray(value)||value.length>500)throw new ApiError(400,'invalid_courses','课程数量无效。');
   const allowed=['id','course_name','teacher','room','location','day_of_week','weeks','duration'];
   return value.map((course:Row)=>{
     if(!course||typeof course!=='object'||Object.keys(course).some(key=>!allowed.includes(key)))throw new ApiError(400,'invalid_courses','课表分享只能包含课程字段。');
@@ -15,13 +15,37 @@ function courses(value:unknown){
     return {id:uuid(course.id),course_name:text(course.course_name,200),teacher:text(course.teacher,200,false),room:text(course.room,200,false),location:text(course.location,200,false),day_of_week:integer(course.day_of_week,1,7),weeks:list(course.weeks,60),duration:list(course.duration,24)};
   });
 }
+function snapshot(row:Row):Row {
+  return {...decode('timetable_snapshots',row),calendar_config:typeof row.calendar_config==='string'?JSON.parse(row.calendar_config):null};
+}
+export function timetableCalendar(value:unknown){
+  if(value==null)return null;
+  if(typeof value!=='object'||Array.isArray(value))throw new ApiError(400,'invalid_calendar','课表日期与作息无效。');
+  const config=value as Row;
+  if(Object.keys(config).some(k=>!['semester_start_date','periods'].includes(k)))throw new ApiError(400,'invalid_calendar','课表设置包含未知字段。');
+  const start=text(config.semester_start_date,10),date=new Date(`${start}T00:00:00Z`);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==start||date.getUTCDay()!==1)throw new ApiError(400,'invalid_calendar','第一周必须从星期一开始。');
+  if(!Array.isArray(config.periods)||!config.periods.length||config.periods.length>24)throw new ApiError(400,'invalid_calendar','课表需要 1 至 24 节作息。');
+  let previousEnd=-1;
+  const periods=config.periods.map((raw:unknown,index:number)=>{
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new ApiError(400,'invalid_calendar','节次无效。');
+    const slot=raw as Row;
+    if(Object.keys(slot).some(k=>!['period','startHour','startMinute','endHour','endMinute'].includes(k)))throw new ApiError(400,'invalid_calendar','节次包含未知字段。');
+    const period=integer(slot.period,1,24),startHour=integer(slot.startHour,0,23),startMinute=integer(slot.startMinute,0,59),endHour=integer(slot.endHour,0,23),endMinute=integer(slot.endMinute,0,59);
+    const start=startHour*60+startMinute,end=endHour*60+endMinute;
+    if(period!==index+1||start>=end||start<previousEnd)throw new ApiError(400,'invalid_calendar','节次必须按顺序排列且不重叠。');
+    previousEnd=end;return {period,startHour,startMinute,endHour,endMinute};
+  });
+  return {semester_start_date:start,periods};
+}
 export async function publishTimetable(env:BackendEnv,who:Actor,body:Row){
-  const campus=requireCommunity(who),semester=text(body.semester_id,64),items=courses(body.courses),now=new Date().toISOString().replace('Z','000Z');
+  const campus=requireCommunity(who),semester=text(body.semester_id,64),items=courses(body.courses),calendar=timetableCalendar(body.calendar_config),now=new Date().toISOString().replace('Z','000Z');
+  if(calendar&&items.some(c=>Math.max(...c.weeks)>20||Math.max(...c.duration)>calendar.periods.length))throw new ApiError(400,'invalid_calendar','课程超出当前课表的周次或节次。');
   const result=await atomic(env.DB,[actorGuard(env.DB,who,true),guard(env.DB,'EXISTS(SELECT 1 FROM profiles WHERE id=? AND is_profile_complete=1)',[who.profileId]),
-    statement(env.DB,`INSERT INTO timetable_snapshots(owner_id,campus_id,semester_id,courses,course_count,published_at) VALUES(?,?,?,?,?,?)
-      ON CONFLICT(owner_id,semester_id) DO UPDATE SET courses=excluded.courses,course_count=excluded.course_count,published_at=excluded.published_at,updated_at=excluded.published_at,campus_id=excluded.campus_id RETURNING *`,[who.profileId,campus,semester,JSON.stringify(items),items.length,now]),
+    statement(env.DB,`INSERT INTO timetable_snapshots(owner_id,campus_id,semester_id,courses,course_count,published_at,calendar_config) VALUES(?,?,?,?,?,?,?)
+      ON CONFLICT(owner_id,semester_id) DO UPDATE SET calendar_config=excluded.calendar_config,courses=excluded.courses,course_count=excluded.course_count,published_at=excluded.published_at,updated_at=excluded.published_at,campus_id=excluded.campus_id RETURNING *`,[who.profileId,campus,semester,JSON.stringify(items),items.length,now,calendar==null?null:JSON.stringify(calendar)]),
   ]);
-  const record=decode('timetable_snapshots',result[result.length-2].results[0]);
+  const record=snapshot(result[result.length-2].results[0]);
   const [owner]=await rows(env.DB,'SELECT * FROM profiles WHERE id=?',[String(record.owner_id)]);
   return {...record,owner:publicProfile(owner,who.profileId)};
 }
@@ -31,7 +55,7 @@ export async function timetables(env:BackendEnv,who:Actor,url:URL){
   if(!found.length)return [];
   const owners=[...new Set(found.map(s=>s.owner_id as string))];
   const profiles=await rows(env.DB,`SELECT * FROM profiles WHERE id IN(${owners.map(()=>'?').join(',')})`,owners);
-  return found.map(s=>({...decode('timetable_snapshots',s),owner:publicProfile(profiles.find(p=>p.id===s.owner_id)!,who.profileId)}));
+  return found.map<Row>(s=>({...snapshot(s),owner:publicProfile(profiles.find(p=>p.id===s.owner_id)!,who.profileId)}));
 }
 export async function invite(env:BackendEnv,who:Actor){
   const campus=requireCommunity(who),alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ234567';
@@ -54,7 +78,7 @@ export async function acceptInvite(env:BackendEnv,who:Actor,body:Row){
     statement(env.DB,'UPDATE timetable_invites SET accepted_by=?,accepted_at=? WHERE code_hash=? AND campus_id=?',[who.profileId,now,hash,campus]),
     statement(env.DB,'SELECT s.* FROM timetable_snapshots s JOIN timetable_invites i ON i.owner_id=s.owner_id AND i.semester_id=s.semester_id AND i.campus_id=s.campus_id WHERE i.code_hash=? AND i.campus_id=?',[hash,campus]),
   ]);
-  const record=decode('timetable_snapshots',result[result.length-2].results[0]);
+  const record=snapshot(result[result.length-2].results[0]);
   const [owner]=await rows(env.DB,'SELECT * FROM profiles WHERE id=?',[String(record.owner_id)]);
   return {...record,owner:publicProfile(owner,who.profileId)};
 }

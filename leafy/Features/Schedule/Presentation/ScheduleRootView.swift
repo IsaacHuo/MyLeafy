@@ -65,6 +65,7 @@ struct ScheduleRootView: View {
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
     @State private var compactPath: [ScheduleDestination] = []
     @State private var primarySection: SchedulePrimarySection = .schedules
+    @State private var showsScheduleExport = false
     @State private var showsMenu = false
     @State private var scrollHeader = LeafyScrollHeaderState()
     @State private var newSchedulePresentation: CustomScheduleEditorPresentation?
@@ -84,6 +85,9 @@ struct ScheduleRootView: View {
                     destinationView(destination)
                         .leafyNavigationBarVisible()
                 }
+        }
+        .leafySheet(isPresented: $showsScheduleExport) {
+            NavigationStack { PersonalScheduleExportView() }
         }
         .leafySheet(isPresented: $showsMenu) {
             NavigationStack {
@@ -184,12 +188,18 @@ struct ScheduleRootView: View {
     }
 
     private var rootMenuButton: some View {
-        LeafyRootCircularToolbarButton(
-            systemName: "line.3.horizontal",
-            accessibilityLabel: L10n.text("打开日迹记录菜单", language: leafyLanguage)
-        ) {
-            showsMenu = true
+        Menu {
+            Button("打开日迹记录菜单", systemImage: "line.3.horizontal") { showsMenu = true }
+            if primarySection == .schedules {
+                Button("导出日程", systemImage: "square.and.arrow.up") { showsScheduleExport = true }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: LeafyRootChromeMetrics.iconPointSize, weight: .semibold))
+                .frame(width: LeafyRootChromeMetrics.controlDiameter, height: LeafyRootChromeMetrics.controlDiameter)
+                .contentShape(Circle())
         }
+        .accessibilityLabel("日迹操作")
     }
 
     private var rootNewScheduleButton: some View {
@@ -203,6 +213,9 @@ struct ScheduleRootView: View {
 
     private var rootCombinedActionsMenu: some View {
         Menu {
+            if primarySection == .schedules {
+                Button("导出日程", systemImage: "square.and.arrow.up") { showsScheduleExport = true }
+            }
             Button(
                 L10n.text("打开日迹记录菜单", language: leafyLanguage),
                 systemImage: "line.3.horizontal"

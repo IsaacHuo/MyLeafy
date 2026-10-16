@@ -820,28 +820,32 @@ extension Notification.Name {
 
 enum CustomScheduleStore {
     private static let storageKey = "customScheduleEvents.v1"
-
     static func load(defaults: UserDefaults = .standard) -> [CustomScheduleEvent] {
-        guard let data = defaults.data(forKey: storageKey),
-              let events = try? JSONDecoder().decode([CustomScheduleEvent].self, from: data)
-        else { return [] }
+        (try? loadForSync(defaults: defaults)) ?? []
+    }
+    static func loadForSync(defaults: UserDefaults = .standard) throws -> [CustomScheduleEvent] {
+        let key = CampusScopedDefaults.key(storageKey, defaults: defaults)
+        if let data = defaults.data(forKey: key) { return try JSONDecoder().decode([CustomScheduleEvent].self, from: data) }
+        guard let legacy = defaults.data(forKey: storageKey) else { return [] }
+        let events = try JSONDecoder().decode([CustomScheduleEvent].self, from: legacy)
+        // Adopt legacy unscoped data once, before any identity can sync it.
+        defaults.set(legacy, forKey: key)
+        if key != storageKey { defaults.removeObject(forKey: storageKey) }
         return events
     }
-
     static func save(_ events: [CustomScheduleEvent], defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(events) else { return }
-        defaults.set(data, forKey: storageKey)
+        let key = CampusScopedDefaults.key(storageKey, defaults: defaults)
+        defaults.set(data, forKey: key)
+        if key != storageKey { defaults.removeObject(forKey: storageKey) }
         NotificationCenter.default.post(name: .customScheduleEventsDidChange, object: nil)
     }
-
     static func clear(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: CampusScopedDefaults.key(storageKey, defaults: defaults))
         defaults.removeObject(forKey: storageKey)
         NotificationCenter.default.post(name: .customScheduleEventsDidChange, object: nil)
     }
-
-    static func storageKeyForTesting() -> String {
-        storageKey
-    }
+    static func storageKeyForTesting() -> String { storageKey }
 }
 
 nonisolated struct EmptyClassroom: Identifiable, Codable, Hashable, Sendable {
@@ -917,10 +921,10 @@ enum SchoolExamScheduleMerger {
             examsByIdentity[exam.cacheIdentity] = exam
         }
 
-        let semesterStart = calendar.startOfDay(for: SemesterConfig.startOfSemesterDate)
+        let semesterStart = calendar.startOfDay(for: SemesterConfig.schoolCurrent.semesterStartDate)
         let semesterEnd = calendar.date(
             byAdding: .day,
-            value: SemesterConfig.supportedWeeks * 7,
+            value: SemesterConfig.schoolCurrent.supportedWeeks * 7,
             to: semesterStart
         ) ?? semesterStart
 
@@ -1163,7 +1167,7 @@ enum DateFormatters {
     static let examStart: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = UserTimetableSettings.calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
         return formatter
     }()

@@ -110,7 +110,7 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
     private static func date(from string: String) -> Date? {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = UserTimetableSettings.calendar.timeZone
         return formatter.date(from: string)
     }
 }
@@ -186,14 +186,14 @@ actor SemesterRuntimeConfigService {
         if !force,
            let lastAttemptAt,
            Date().timeIntervalSince(lastAttemptAt) < minimumRefreshInterval {
-            return SemesterConfig.current
+            return SemesterConfig.schoolCurrent
         }
 
         if let activeRefreshTask {
             return await activeRefreshTask.value
         }
 
-        let previous = SemesterConfig.current
+        let previous = SemesterConfig.schoolCurrent
         let task = Task<SemesterRuntimeConfig, Never> {
             do {
                 let remoteConfig = try await Self.fetchRemoteActiveConfig()
@@ -314,19 +314,21 @@ nonisolated struct SemesterConfig {
 
     static var sunshineRunExcludedWeeks: Set<Int> {
         AcademicCalendarEvents.nationalHolidayWeeks(
-            semesterStart: startOfSemesterDate,
-            totalWeeks: supportedWeeks
+            semesterStart: schoolCurrent.semesterStartDate,
+            totalWeeks: schoolCurrent.supportedWeeks
         )
     }
 
+    static var schoolCurrent: SemesterRuntimeConfig { SemesterRuntimeConfigCache.load() ?? .builtIn }
+
     static var current: SemesterRuntimeConfig {
-        SemesterRuntimeConfigCache.load() ?? .builtIn
+        UserTimetableSettingsStore.load().runtimeConfig(base: schoolCurrent)
     }
 
     static var timelineConfigurations: [SemesterRuntimeConfig] {
         let combined = SemesterRuntimeConfig.builtInTimeline
             + SemesterRuntimeConfigTimelineCache.load()
-            + [current]
+            + [schoolCurrent]
         return Dictionary(grouping: combined, by: \.semesterID)
             .compactMap { _, configs in
                 guard let preferred = configs.sorted(by: { lhs, rhs in
@@ -401,7 +403,7 @@ nonisolated struct SemesterConfig {
     static func currentWeek(date: Date = Date(), config: SemesterRuntimeConfig = current) -> Int {
         let now = date
 
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         // Remove time components for pure day comparison
         let start = calendar.startOfDay(for: config.semesterStartDate)
         let current = calendar.startOfDay(for: now)
@@ -421,7 +423,7 @@ nonisolated struct SemesterConfig {
     }
 
     static func weekAndDay(for date: Date, config: SemesterRuntimeConfig = current) -> (week: Int, day: Int) {
-        let calendar = Calendar.current
+        let calendar = UserTimetableSettings.calendar
         let start = calendar.startOfDay(for: config.semesterStartDate)
         let current = calendar.startOfDay(for: date)
         let days = calendar.dateComponents([.day], from: start, to: current).day ?? 0
@@ -574,7 +576,7 @@ nonisolated struct SchoolCalendarEvent: Identifiable, Codable, Hashable, Sendabl
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = UserTimetableSettings.calendar.timeZone
         return formatter
     }()
 }
@@ -653,7 +655,7 @@ nonisolated struct NationalHolidayEvent: Identifiable, Codable, Hashable, Sendab
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = UserTimetableSettings.calendar.timeZone
         return formatter
     }()
 }
@@ -1008,6 +1010,6 @@ nonisolated enum AcademicCalendarEvents {
 }
 
 extension Notification.Name {
-    static let semesterRuntimeConfigDidChange = Notification.Name("semesterRuntimeConfigDidChange")
-    static let nationalCalendarRuntimeConfigDidChange = Notification.Name("nationalCalendarRuntimeConfigDidChange")
+    nonisolated static let semesterRuntimeConfigDidChange = Notification.Name("semesterRuntimeConfigDidChange")
+    nonisolated static let nationalCalendarRuntimeConfigDidChange = Notification.Name("nationalCalendarRuntimeConfigDidChange")
 }

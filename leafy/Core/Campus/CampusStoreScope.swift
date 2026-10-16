@@ -8,13 +8,14 @@ enum CampusStoreScope {
     ) -> ModelConfiguration {
         guard let identity,
               let scopedURL = scopedStoreURL(for: identity) else {
-            return ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            return ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         }
 
         return ModelConfiguration(
             "Leafy-\(identity.scopeKey)",
             schema: schema,
-            url: scopedURL
+            url: scopedURL,
+            cloudKitDatabase: .none
         )
     }
 

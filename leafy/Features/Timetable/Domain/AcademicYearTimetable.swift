@@ -7,6 +7,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
     let weeks: [AcademicYearWeek]
 
     private let calendar: Calendar
+    private let isCourseContainer: Bool
     private let configurations: [SemesterRuntimeConfig]
     private let vacations: [SchoolCalendarEvent]
 
@@ -16,6 +17,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
         referenceDate: Date = Date(),
         calendar: Calendar = .current
     ) {
+        isCourseContainer = false
         let sortedConfigurations = configurations.sorted {
             Self.semesterStartDate(for: $0, calendar: calendar)
                 < Self.semesterStartDate(for: $1, calendar: calendar)
@@ -73,6 +75,21 @@ nonisolated struct AcademicYearTimetable: Sendable {
         weeks = generated
     }
 
+    /// The editable course container has exactly 20 weeks, independent of school terms.
+    init(container config: SemesterRuntimeConfig, calendar: Calendar = UserTimetableSettings.calendar) {
+        isCourseContainer = true
+        self.calendar = calendar
+        configurations = [config]
+        vacations = []
+        academicYearID = Self.academicYearID(semesterID: config.semesterID) ?? config.semesterID
+        startDate = calendar.startOfDay(for: config.semesterStartDate)
+        endDate = calendar.date(byAdding: .day, value: 140, to: startDate)!
+        weeks = (1...20).map { week in
+            let date = calendar.date(byAdding: .day, value: (week - 1) * 7, to: config.semesterStartDate)!
+            return AcademicYearWeek(id: date, phase: .teaching(semesterID: config.semesterID, weekNumber: week), referenceDate: date)
+        }
+    }
+
     var academicYearTitle: String {
         academicYearID.replacingOccurrences(of: "-", with: "–")
     }
@@ -112,7 +129,7 @@ nonisolated struct AcademicYearTimetable: Sendable {
     }
 
     func configuration(semesterID: String) -> SemesterRuntimeConfig? {
-        configurations.first { $0.semesterID == semesterID }
+        isCourseContainer ? configurations.first : configurations.first { $0.semesterID == semesterID }
     }
 
     func courseIntersectsTimeline(_ course: Course) -> Bool {

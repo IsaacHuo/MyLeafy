@@ -16,7 +16,7 @@ enum TimetableLocalEdits {
         _ text: String, courseKey: String, in context: ModelContext,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
-        let existing = try context.fetch(FetchDescriptor<CourseNote>()).first { $0.courseKey == courseKey }
+        let existing = try context.fetch(FetchDescriptor<CourseNote>()).first { !$0.isUnassociated && $0.courseKey == courseKey }
         try setNote(text, existing: existing, create: { CourseNote(courseKey: courseKey) }, in: context, save: save)
     }
 
@@ -24,7 +24,7 @@ enum TimetableLocalEdits {
         _ text: String, courseKey: String, occurrenceKey: String, week: Int, dayOfWeek: Int,
         in context: ModelContext, save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
-        let existing = try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).first { $0.occurrenceKey == occurrenceKey }
+        let existing = try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).first { !$0.isUnassociated && $0.occurrenceKey == occurrenceKey }
         try setNote(text, existing: existing, create: {
             CourseOccurrenceNote(courseKey: courseKey, occurrenceKey: occurrenceKey, week: week, dayOfWeek: dayOfWeek)
         }, in: context, save: save)
@@ -59,7 +59,7 @@ enum TimetableLocalEdits {
         courseKey: String, minutesBefore: Int, anchorPeriod: Int?, in context: ModelContext,
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
-        let existing = try context.fetch(FetchDescriptor<CourseReminderSetting>()).first { $0.courseKey == courseKey }
+        let existing = try context.fetch(FetchDescriptor<CourseReminderSetting>()).first { !$0.isUnassociated && $0.courseKey == courseKey }
         let setting = existing ?? CourseReminderSetting(courseKey: courseKey)
         let previous = (setting.minutesBefore, setting.anchorPeriod, setting.updatedAt)
         if existing == nil { context.insert(setting) }

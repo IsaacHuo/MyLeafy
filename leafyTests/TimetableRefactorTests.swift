@@ -880,7 +880,7 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
-    func testTimetableRefreshPersistsCoursesPerSemester() throws {
+    func testTimetableRefreshReplacesWholeCurrentContainer() throws {
         let schema = Schema([Course.self, CourseNote.self, CourseOccurrenceNote.self, CourseReminderSetting.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
@@ -914,8 +914,7 @@ extension PerformanceRefactorTests {
 
         try useCase.persist(records: [courseB], existingCourses: courses, modelContext: context, semesterID: "B")
         courses = try context.fetch(FetchDescriptor<Course>())
-        XCTAssertEqual(Set(courses.map(\.sourceSemesterID)), ["A", "B"])
-        let courseBID = try XCTUnwrap(courses.first(where: { $0.sourceSemesterID == "B" })?.id)
+        XCTAssertEqual(Set(courses.map(\.sourceSemesterID)), ["B"])
 
         let replacementA = ParsedCourseRecord(
             courseName: "学期 A 新课程",
@@ -930,9 +929,9 @@ extension PerformanceRefactorTests {
         try useCase.persist(records: [replacementA], existingCourses: courses, modelContext: context, semesterID: "A")
         courses = try context.fetch(FetchDescriptor<Course>())
 
-        XCTAssertEqual(courses.count, 2)
-        XCTAssertEqual(courses.filter { $0.sourceSemesterID == "A" }.map(\.courseName), ["学期 A 新课程"])
-        XCTAssertEqual(courses.first(where: { $0.sourceSemesterID == "B" })?.id, courseBID)
+        XCTAssertEqual(courses.count, 1)
+        XCTAssertEqual(courses.map(\.courseName), ["学期 A 新课程"])
+        XCTAssertFalse(courses.contains { $0.sourceSemesterID == "B" })
     }
 
     @MainActor
@@ -964,7 +963,7 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
-    func testHistoricalCourseDatesUseSourceSemester() throws {
+    func testCourseDatesUseUserContainerRegardlessOfSourceSemester() throws {
         let spring = Course(
             courseName: "森林生态学",
             teacher: "王老师",
@@ -976,7 +975,7 @@ extension PerformanceRefactorTests {
         )
         let start = try XCTUnwrap(TimetablePeriodSchedule.startDate(for: spring, week: 1))
 
-        XCTAssertEqual(DateFormatters.queryDate.string(from: start), "2026-03-09")
+        XCTAssertTrue(UserTimetableSettings.calendar.isDate(start, inSameDayAs: SemesterConfig.startOfSemesterDate))
     }
 
     @MainActor
@@ -1313,7 +1312,7 @@ extension PerformanceRefactorTests {
     }
 
     @MainActor
-    func testTimetableSemesterValidationRejectsExplicitMismatch() throws {
+    func testTimetableAcceptsValidDataFromDifferentSourceSemester() throws {
         let html = """
         <html>
           <body>
@@ -1326,37 +1325,16 @@ extension PerformanceRefactorTests {
         </html>
         """
 
-        XCTAssertThrowsError(
-            try SchoolNetworkManager.shared.validateTimetableSemester(
-                html: html,
-                expectedSemesterID: "2026-2027-1"
-            )
-        ) { error in
-            guard case SchoolNetworkError.timetableSemesterMismatch(let expected, let actual) = error else {
-                return XCTFail("Unexpected error: \(error)")
-            }
-            XCTAssertEqual(expected, "2026-2027-1")
-            XCTAssertEqual(actual, "2025-2026-2")
-        }
+        XCTAssertEqual(SchoolNetworkManager.shared.timetableDocument(html: html, requestedSemesterID: "2026-2027-1").sourceSemesterID, "2025-2026-2")
     }
 
     @MainActor
-    func testTimetableSemesterValidationRejectsMissingResponseProof() {
+    func testTimetableAcceptsMissingSemesterMetadata() throws {
         let html = """
         <html><body><div id="kbcontent_1_1"></div></body></html>
         """
 
-        XCTAssertThrowsError(
-            try SchoolNetworkManager.shared.validateTimetableSemester(
-                html: html,
-                expectedSemesterID: "2026-2027-1"
-            )
-        ) { error in
-            guard case SchoolNetworkError.timetableSemesterUnverified(let expected) = error else {
-                return XCTFail("Unexpected error: \(error)")
-            }
-            XCTAssertEqual(expected, "2026-2027-1")
-        }
+        XCTAssertEqual(SchoolNetworkManager.shared.timetableDocument(html: html, requestedSemesterID: "2026-2027-1").sourceSemesterID, "2026-2027-1")
     }
 
     @MainActor
@@ -1370,14 +1348,12 @@ extension PerformanceRefactorTests {
         </html>
         """
 
-        let document = try SchoolNetworkManager.shared.verifiedTimetableDocument(
+        let document = SchoolNetworkManager.shared.timetableDocument(
             html: html,
-            expectedSemesterID: "2026-2027-1"
+            requestedSemesterID: "2026-2027-1"
         )
 
-        XCTAssertEqual(document.requestedSemesterID, "2026-2027-1")
-        XCTAssertEqual(document.verifiedSemesterID, "2026-2027-1")
-        XCTAssertEqual(document.verificationSource, .responseDocument)
+        XCTAssertEqual(document.sourceSemesterID, "2026-2027-1")
     }
 
     func testExamParserAcceptsBackendShape() throws {

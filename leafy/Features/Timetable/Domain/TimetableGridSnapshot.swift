@@ -75,9 +75,11 @@ struct TimetableGridInputSignature: Equatable, Hashable {
             .map { CourseSignature(course: $0, projection: courseWeekProjections[$0.id]) }
             .sorted { $0.id.uuidString < $1.id.uuidString }
         noteSignatures = notes
+            .filter { !$0.isUnassociated }
             .map(NoteSignature.init(note:))
             .sorted { $0.id.uuidString < $1.id.uuidString }
         occurrenceNoteSignatures = occurrenceNotes
+            .filter { !$0.isUnassociated }
             .map(OccurrenceNoteSignature.init(note:))
             .sorted { $0.id.uuidString < $1.id.uuidString }
         cellReminderSignatures = cellReminders

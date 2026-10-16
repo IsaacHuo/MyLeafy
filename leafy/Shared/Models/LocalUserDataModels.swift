@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 @Model
 final class CourseNote {
+    var isUnassociated: Bool = false
+    var sourceCourseTitle: String = ""
     var id: UUID
     var courseKey: String
     var text: String
@@ -19,6 +21,8 @@ final class CourseNote {
 
 @Model
 final class CourseOccurrenceNote {
+    var isUnassociated: Bool = false
+    var sourceCourseTitle: String = ""
     var id: UUID
     var courseKey: String
     var occurrenceKey: String
@@ -56,6 +60,8 @@ final class CourseOccurrenceNote {
 
 @Model
 final class CourseReminderSetting {
+    var isUnassociated: Bool = false
+    var sourceCourseTitle: String = ""
     var id: UUID
     var courseKey: String
     var minutesBefore: Int

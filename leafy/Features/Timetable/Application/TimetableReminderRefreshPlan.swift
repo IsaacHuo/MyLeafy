@@ -40,7 +40,7 @@ struct TimetableReminderRefreshPlan {
 
     init(oldIdentifiers: [String], courses: [Course], settings: [CourseReminderSetting]) throws {
         obsoleteIdentifiers = oldIdentifiers
-        let byKey = Dictionary(grouping: settings, by: \.courseKey)
+        let byKey = Dictionary(grouping: settings.filter { !$0.isUnassociated }, by: \.courseKey)
         schedules = try courses.compactMap { course in
             guard let matches = byKey[course.stableCourseKey],
                   let setting = matches.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }

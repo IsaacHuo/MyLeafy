@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { LocalD1 } from './d1-local';
 import type { Actor, BackendEnv } from '../src/auth';
-import { acceptInvite, invite, publishTimetable, revokeShare, shareMembers, timetables } from '../src/sharing';
+import { acceptInvite, invite, publishTimetable, timetableCalendar, revokeShare, shareMembers, timetables } from '../src/sharing';
 import { rate, catalog } from '../src/catalog';
 import { createPost, termsVersion } from '../src/community';
 import { createPoll, report, requestPollDeletion, setPostReaction, vote } from '../src/interactions';
@@ -78,4 +78,25 @@ it('poll vote replay and option changes preserve totals; deletion requires autho
   await expect(requestPollDeletion(env,viewer,id,'删除')).rejects.toMatchObject({status:409});
   const request=await requestPollDeletion(env,owner,id,'删除');
   expect(request.deletion_status).toBe('pending');expect(request.status).toBe('published');
+});
+
+it('shared calendar persists its own Monday and periods, including a cleared current container',async()=>{
+  const {env,owner}=setup();
+  const calendar={semester_start_date:'2026-09-07',periods:[
+    {period:1,startHour:9,startMinute:0,endHour:9,endMinute:45},
+    {period:2,startHour:10,startMinute:0,endHour:10,endMinute:45}]};
+  await publishTimetable(env,owner,{semester_id:'2026-2027-1',courses:[course()],calendar_config:calendar});
+  const [saved]=await timetables(env,owner,new URL('https://api.invalid/v1/timetables'));
+  expect(saved.calendar_config).toEqual(calendar);
+  await publishTimetable(env,owner,{semester_id:'2026-2027-1',courses:[],calendar_config:calendar});
+  const [cleared]=await timetables(env,owner,new URL('https://api.invalid/v1/timetables'));
+  expect(cleared.courses).toEqual([]);
+  expect(cleared.calendar_config).toEqual(calendar);
+});
+it('shared calendar rejects invalid Monday, overlaps and unknown personal fields',()=>{
+  const period={period:1,startHour:8,startMinute:0,endHour:8,endMinute:45};
+  expect(timetableCalendar(null)).toBeNull();
+  expect(()=>timetableCalendar({semester_start_date:'2026-09-08',periods:[period]})).toThrow();
+  expect(()=>timetableCalendar({semester_start_date:'2026-09-07',periods:[period,{...period,period:2}]})).toThrow();
+  expect(()=>timetableCalendar({semester_start_date:'2026-09-07',periods:[period],notes:'private'})).toThrow();
 });
