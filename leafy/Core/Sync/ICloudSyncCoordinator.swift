@@ -94,6 +94,9 @@ final class ICloudSyncCoordinator: ObservableObject {
                 }
                 if journal.accountID != account {
                     journal.engineState = nil; journal.systemFields = [:]
+                    // Pending downloads belong to the previous private database.
+                    // Only the confirmed local records may be uploaded to the new account.
+                    journal.inbox = [:]; journal.refetch = []; journal.lastSuccess = nil
                     journal.pending.formUnion(journal.records.keys)
                 }
                 journal.accountID = account
