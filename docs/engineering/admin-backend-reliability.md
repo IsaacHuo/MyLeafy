@@ -18,6 +18,8 @@ Browser traffic passes through same-origin Pages Functions with HttpOnly cookies
 
 Expected validation and state failures return 400/404/409 responses, with sanitized infrastructure failures and a request ID. Import mode blocks admin reads and writes. Read-only mode prevents mutations. Unknown action names are rejected before dispatch.
 
+Campus list scoping never hides the global school-ownership queue. `listCampusRequests` returns rows whose `approved_campus_id` is NULL (the pending and rejected requests) regardless of the selected campus; only approved rows are campus-scoped by `approved_campus_id`. The work queue and the direct 学校申请 resource page therefore agree.
+
 ## Verification and release
 
 Run backend type checks, client contract checks, business tests, migration tests and the Worker dry-run build. Deploy required forward D1 migrations before the Worker and dependent website. Never overwrite active data with an old import snapshot or automatically approve real pending content as a test.
