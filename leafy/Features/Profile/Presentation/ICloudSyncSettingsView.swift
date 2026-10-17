@@ -13,6 +13,8 @@ struct ICloudSyncSettingsView: View {
                 .disabled(ReviewDemoMode.isEnabled || sync.isBusy)
                 Text("开启后，课表、成绩考试、备注提醒、个人日程、随记及附件、课表与个性化设置，会同步到当前 Apple 账号的 iCloud。不同校园身份分别保存。")
                     .font(.footnote).foregroundStyle(.secondary)
+                Text("开启同步会消耗电量和网络流量，使用移动网络时可能产生网络资费，具体以运营商套餐为准。")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("同步状态") {
                 if sync.isBusy { ProgressView(sync.phase.title) }
@@ -40,7 +42,7 @@ struct ICloudSyncSettingsView: View {
         .confirmationDialog("开启 iCloud 同步？", isPresented: $confirmsEnable, titleVisibility: .visible) {
             Button("开启并合并数据") { sync.setEnabled(true) }
             Button("取消", role: .cancel) {}
-        } message: { Text("本机数据将与当前 Apple 账号中此校园身份的数据合并。文本冲突会保留副本，附件也会上传。") }
+        } message: { Text("本机数据将与当前 Apple 账号中此校园身份的数据合并。文本冲突会保留副本，附件也会上传。同步会消耗电量和网络流量，使用移动网络时可能产生网络资费。") }
         .confirmationDialog("删除此身份的 iCloud 数据？", isPresented: $confirmsDelete, titleVisibility: .visible) {
             Button("删除云端数据并关闭同步", role: .destructive) { Task { await sync.deleteCloudData() } }
             Button("取消", role: .cancel) {}

@@ -99,8 +99,8 @@ struct ProfileDeveloperContactCard: View {
                 Image("DeveloperMemoji")
                     .resizable().scaledToFit().frame(width: 72, height: 72)
                     .accessibilityHidden(true)
-                Text("找到我").font(.headline).foregroundStyle(AppTheme.primaryText)
                 Spacer(minLength: 12)
+                Text("找到我").font(.headline).foregroundStyle(AppTheme.primaryText)
                 LeafyDisclosureIndicator()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -123,5 +123,6 @@ struct ProfileDeveloperContactCard: View {
             Button("复制邮箱") { UIPasteboard.general.string = email }
             Button("取消", role: .cancel) {}
         } message: { Text(email) }
+        .tint(.black)
     }
 }

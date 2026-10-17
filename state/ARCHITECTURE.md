@@ -368,6 +368,7 @@ Widget provider 按当前日期投影今天、明天及本自然周，在项目�
 
 - `Core/Sync/` 使用 `CKSyncEngine` 和 `iCloud.com.isaachuo.leafy` 私有数据库，每个校园身份单独 zone；默认关闭，Demo 禁用。SwiftData 显式 `.none`，不自动镜像整个 schema。
 - 同步 allowlist：课程/成绩/考试及成绩补充快照、课程备注/课次备注/提醒、个人日程、随记及媒体、课表日期作息与个性化设置/背景。密码、Cookie、token、设备通知 ID、社区缓存及其他资料模块不上传。
+- 自动同步默认关闭，仅用户主动开启后启动。已提交的本机修改静置 5 秒后合并采集；无关 UserDefaults 变更不采集，健康引擎在前台恢复时不强制拉取/发送，日常增量交给同一个 CKSyncEngine 调度。进入后台会立即保存待采集修改，收到云端变更前先采集本机已提交编辑以保留冲突副本。初始化/未完成接收的恢复从 5 分钟逐步退避至 30 分钟并尊重服务端 retry-after；恢复截止时间写入 journal，手动同步可立即重试，关闭/身份变化取消待执行工作。同步页与开启确认提示电量、流量和移动网络资费。
 - 持久 journal 保存变更、删除标记、接收 inbox、失败重取 ID、CloudKit system fields 和引擎游标，首次先拉取合并再发送。独立 ModelContext 只操作已提交数据，文本冲突保留副本；附件 SHA-256 校验并暂存后再替换。记录删除胜过离线旧编辑，设置按字段的修改时间合并，课表的学年、学期、首周周一与作息各自同步；首次同步的未知时间默认值服从既有云端值。手动入口成绩使用 UUID、考试使用持久 syncID 逐条合并，学校来源仍按完整快照；手动编辑保留修改时间，不混淆两类权威来源。
 - Debug/Release 分别明确指定 CloudKit Development/Production，并在签名包中核验；iOS 不声明分发校验拒绝的 `icloud-container-development-container-identifiers`，仅保留标准容器、服务与环境键。已有 zone 先读，仅缺失时创建。同步状态保留失败阶段及安全的错误元数据，不把服务端拒绝当作缺失 zone。
 - 关闭保留两端数据；Apple 账号/校园身份变化使旧引擎失效，新 Apple 账号需重新确认。清除本机缓存先暂停并清除本机同步基线，重开从云端合并；删除云端 zone 需用户单独确认。CloudKit 生产 schema 和双设备实测属于独立发布验收。

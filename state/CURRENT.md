@@ -4,6 +4,8 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
+- **iOS iCloud 同步频率**：默认关闭、用户主动开启后才运行；连续修改合并 5 秒后采集，回前台不再强制执行完整同步，日常增量复用系统引擎。初始化失败按 5–30 分钟退避并持久保存恢复时间；进入后台保存待采集修改、手动重试即时执行。同步开关和开启确认新增电量/流量/移动网络资费说明；找到我文字靠右、联系弹窗使用黑色按钮文字。真机效果及真实同步由用户验收。
+
 - **iOS CloudKit 分发签名**：移除 App Store Connect 明确拒绝的 `com.apple.developer.icloud-container-development-container-identifiers`，保留标准 CloudKit 容器、服务与 Debug/Release 环境配置。旧 archive/IPA 必须重新生成；本次签名修正不代表私有分区 HTTP 500 已恢复。
 
 - **iOS 课表设置与联系入口**：重新同步置于课表与偏好首项；时间视图设置卡片加重文字并加入右箭头。作息的开始/结束标签贴近各自时间，空间不足时分行。移除待关联管理入口和页面，个人记录仍独立保留。找到我卡片只显示标题，点选邮箱或小红书；本轮按用户边界仅本地构建，真机视觉由用户验收。

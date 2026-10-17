@@ -227,9 +227,12 @@ struct LeafyApp: App {
                 if newPhase == .active || newPhase == .background {
                     refreshWidgetSnapshot()
                 }
+                if newPhase == .background {
+                    ICloudSyncCoordinator.shared.prepareForBackground()
+                }
                 if newPhase == .active {
                     ICloudSyncCoordinator.shared.configure(context: sharedModelContainer.mainContext)
-                    ICloudSyncCoordinator.shared.retry()
+                    ICloudSyncCoordinator.shared.resume()
                     retryPendingFileCleanup()
                     if ActiveCampusContext.descriptor.supports(.community) {
                         CommunityPublishCoordinator.shared.configureAndResume()

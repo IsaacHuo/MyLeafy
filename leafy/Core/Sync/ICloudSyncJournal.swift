@@ -32,6 +32,7 @@ nonisolated struct ICloudSyncJournal: Codable {
     var engineState: Data?
     var accountID: String?
     var lastSuccess: Date?
+    var automaticRetryAt: Date?
     var enabled = false
 
     static func load(from url: URL) throws -> Self {

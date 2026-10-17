@@ -23,10 +23,16 @@ final class ICloudSyncCoordinator: ObservableObject {
     private var journalURL: URL?
     private var engine: CKSyncEngine?
     private var task: Task<Void, Never>?
+    private let localChangeWork = ICloudSyncWorkScheduler()
+    private let recoveryWork = ICloudSyncWorkScheduler()
+    private var localChangesPending = false
+    private var recoveryFailures = 0
+    private var observedPreferences = NSDictionary()
     private var observers: [NSObjectProtocol] = []
     private var applying = false
     private var loaded = false
     private var readyToSend = false
+    private var usesAutomaticEngine = false
     private var generation = UUID()
     private let log = Logger(subsystem: "com.isaachuo.leafy", category: "ICloudSync")
     private var zoneID: CKRecordZone.ID { CKRecordZone.ID(zoneName: "personal-" + (identity?.scopeKey ?? "none")) }
@@ -34,12 +40,16 @@ final class ICloudSyncCoordinator: ObservableObject {
 
     private init() {
         guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
-        for name in [ModelContext.didSave, UserDefaults.didChangeNotification, .customScheduleEventsDidChange,
+        for name in [ModelContext.didSave, .customScheduleEventsDidChange,
                      .schoolDataDidRefresh, .semesterRuntimeConfigDidChange] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.localDataChanged() }
+                MainActor.assumeIsolated { self?.localDataChanged() }
             })
         }
+        observers.append(NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.preferencesDidChange() }
+            })
     }
     func configure(context: ModelContext) {
         let current = ActiveCampusContext.identity
@@ -51,8 +61,10 @@ final class ICloudSyncCoordinator: ObservableObject {
         journalURL = store.deletingLastPathComponent().appendingPathComponent("ICloudSync/journal.json")
         do {
             journal = try ICloudSyncJournal.load(from: journalURL!)
-            loaded = true; failure = nil; failureDetails = nil; publish()
-            if journal.enabled { retry() }
+            loaded = true; failure = nil; failureDetails = nil
+            observedPreferences = preferenceSnapshot()
+            publish()
+            if journal.enabled { resume() }
         } catch { report(error) }
     }
     func setEnabled(_ enabled: Bool) {
@@ -75,17 +87,53 @@ final class ICloudSyncCoordinator: ObservableObject {
         try persist()
     }
     private func stop() {
+        localChangeWork.cancel(); recoveryWork.cancel()
+        localChangesPending = false; recoveryFailures = 0
         generation = UUID(); task?.cancel(); task = nil
         if let old = engine { Task { await old.cancelOperations() } }
-        engine = nil; readyToSend = false; isBusy = false; phase = .idle
+        engine = nil; readyToSend = false; usesAutomaticEngine = false; isBusy = false; phase = .idle
     }
     func retry(userConfirmed: Bool = false) {
+        recoveryWork.cancel()
+        journal.automaticRetryAt = nil
+        localChangeWork.cancel()
+        performSync(userConfirmed: userConfirmed)
+    }
+
+    /// Foregrounding a healthy engine doesn't force another account/zone/fetch cycle.
+    func resume() {
+        guard loaded, journal.enabled, context != nil, task == nil else { return }
+        if let date = journal.automaticRetryAt {
+            if date > Date() { scheduleRecovery(at: date) }
+            else { performSync(userConfirmed: false) }
+            return
+        }
+        if readyToSend, usesAutomaticEngine, engine != nil,
+           journal.inbox.isEmpty, journal.refetch.isEmpty {
+            localChangeWork.cancel()
+            if localChangesPending { collectLocalChanges() }
+            return
+        }
+        performSync(userConfirmed: false)
+    }
+
+    func prepareForBackground() {
+        // Persist the latest committed edits before the debounce task is suspended.
+        localChangeWork.flush()
+    }
+
+    private func performSync(userConfirmed: Bool) {
         guard loaded, journal.enabled, context != nil, task == nil else { return }
         let token = generation
         task = Task { @MainActor in
             isBusy = true; phase = .account
             failure = nil; failureDetails = nil; reportedError = nil
-            defer { if generation == token { isBusy = false; phase = .idle; task = nil; publish() } }
+            defer {
+                if generation == token {
+                    isBusy = false; phase = .idle; task = nil; publish()
+                    if localChangesPending { localDataChanged() }
+                }
+            }
             do {
                 guard try await container.accountStatus() == .available else {
                     throw ICloudSyncFailure.message("iCloud 暂不可用。请检查系统中的 Apple 账号、iCloud 设置和网络后重试。")
@@ -107,6 +155,7 @@ final class ICloudSyncCoordinator: ObservableObject {
                 UIApplication.shared.registerForRemoteNotifications()
                 phase = .localData
                 try capture()
+                if journal.inbox.isEmpty { localChangesPending = false }
                 phase = .assets
                 try await recoverInboxAssets(token: token)
                 phase = .merge
@@ -137,9 +186,9 @@ final class ICloudSyncCoordinator: ObservableObject {
                 try applyInbox()
                 if journal.inbox["school/courses"] == nil, journal.records["school/courses"] != nil, let context {
                     let committed = ModelContext(context.container)
-                    try ICloudLocalData.markUnlinkedEdits(in: committed)
-                    try capture()
+                    if try ICloudLocalData.markUnlinkedEdits(in: committed) { try capture() }
                 }
+                let needsAutomaticEngine = !usesAutomaticEngine
                 readyToSend = true
                 queuePending(on: engine)
                 phase = .upload
@@ -149,13 +198,24 @@ final class ICloudSyncCoordinator: ObservableObject {
                 if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch.isEmpty && failure == nil { journal.lastSuccess = Date() }
                 try persist()
                 try check(token)
-                let state = try journal.engineState.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
-                var automatic = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: self)
-                automatic.automaticallySync = true
-                self.engine = CKSyncEngine(automatic)
-                queuePending(on: self.engine!)
-                await engine.cancelOperations()
-            } catch { if generation == token && !(error is CancellationError) { report(error) } }
+                if needsAutomaticEngine {
+                    let state = try journal.engineState.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
+                    var automatic = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: self)
+                    automatic.automaticallySync = true
+                    self.engine = CKSyncEngine(automatic)
+                    usesAutomaticEngine = true
+                    queuePending(on: self.engine!)
+                    await engine.cancelOperations()
+                }
+                recoveryFailures = 0; journal.automaticRetryAt = nil
+                recoveryWork.cancel()
+                try persist()
+            } catch {
+                if generation == token && !(error is CancellationError) {
+                    report(error)
+                    deferRecovery(after: error)
+                }
+            }
         }
     }
     private func check(_ token: UUID) throws {
@@ -163,10 +223,53 @@ final class ICloudSyncCoordinator: ObservableObject {
     }
     private func localDataChanged() {
         guard loaded, journal.enabled, !applying, identity == ActiveCampusContext.identity else { return }
-        let changed: Bool
-        do { changed = try capture() } catch { report(error); return }
-        // Unrelated defaults notifications must not repeatedly retry a rejected request.
-        if changed && task == nil && (!journal.pending.isEmpty || !journal.inbox.isEmpty || !journal.refetch.isEmpty) { retry() }
+        localChangesPending = true
+        localChangeWork.schedule(after: ICloudSyncScheduling.localChangeDelay) { [weak self] in
+            self?.collectLocalChanges()
+        }
+    }
+    private func preferenceSnapshot() -> NSDictionary {
+        var values: [String: Any] = [:]
+        for key in ICloudLocalData.preferenceKeys { values[key] = UserDefaults.standard.object(forKey: key) }
+        return NSDictionary(dictionary: values)
+    }
+    private func preferencesDidChange() {
+        guard loaded, journal.enabled, !applying else { return }
+        let current = preferenceSnapshot()
+        guard !current.isEqual(observedPreferences) else { return }
+        observedPreferences = current
+        localDataChanged()
+    }
+    private func collectLocalChanges() {
+        guard localChangesPending, loaded, journal.enabled, !applying,
+              identity == ActiveCampusContext.identity, task == nil else { return }
+        do {
+            // Downloads must finish merging before a new local snapshot is captured.
+            guard journal.inbox.isEmpty, journal.automaticRetryAt == nil else { resume(); return }
+            let changed = try capture()
+            localChangesPending = false
+            if readyToSend, usesAutomaticEngine, let engine {
+                if changed { queuePending(on: engine) }
+            }
+            else { resume() }
+        } catch { report(error); deferRecovery(after: error) }
+    }
+    private func deferRecovery(after error: Error) {
+        guard loaded, journal.enabled else { return }
+        recoveryFailures += 1
+        let retryAfter = (error as? CKError)?.retryAfterSeconds ?? 0
+        let delay = ICloudSyncScheduling.recoveryDelay(failures: recoveryFailures, retryAfter: retryAfter)
+        let date = Date().addingTimeInterval(delay)
+        journal.automaticRetryAt = date
+        do { try persist() } catch { report(error) }
+        scheduleRecovery(at: date)
+    }
+    private func scheduleRecovery(at date: Date) {
+        let token = generation
+        recoveryWork.schedule(after: .seconds(max(0, date.timeIntervalSinceNow))) { [weak self] in
+            guard let self, self.generation == token else { return }
+            self.resume()
+        }
     }
     @discardableResult
     private func capture() throws -> Bool {
@@ -286,7 +389,7 @@ final class ICloudSyncCoordinator: ObservableObject {
         let context = ModelContext(sourceContext.container)
         context.autosaveEnabled = false
         applying = true
-        defer { applying = false }
+        defer { applying = false; observedPreferences = preferenceSnapshot() }
         // Files precede metadata so existing readers never observe a missing received attachment.
         let values = journal.inbox.values.sorted { ($0.filePath == nil ? 1 : 0, $0.key) < ($1.filePath == nil ? 1 : 0, $1.key) }
         let notificationChange = values.contains { $0.key == "school/courses" || $0.key.hasPrefix("settings/timetable/") || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
@@ -350,7 +453,8 @@ final class ICloudSyncCoordinator: ObservableObject {
     func receiveRemoteNotification() async -> Bool {
         guard journal.enabled else { return false }
         let previous = journal.lastSuccess
-        retry()
+        // A healthy CKSyncEngine handles its subscription notifications itself.
+        resume()
         await task?.value
         return journal.lastSuccess != previous
     }
@@ -388,6 +492,13 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
                     failure = "Apple 账号已变化，同步已暂停。请重新开启以确认同步到当前账号。"; failureDetails = nil
                 }
             case .fetchedRecordZoneChanges(let changes):
+                // The debounce must never let a received version overwrite a newer
+                // committed local edit that hasn't entered the journal yet.
+                if journal.inbox.isEmpty && (!changes.modifications.isEmpty || !changes.deletions.isEmpty) {
+                    try capture()
+                    localChangesPending = false
+                    localChangeWork.cancel()
+                }
                 // Persist record IDs before staging any attachment. Even a decoding or
                 // download failure can be fetched again after the engine advances its cursor.
                 journal.refetch.formUnion(changes.modifications.filter { $0.record.recordID.zoneID == zoneID }.map { $0.record.recordID.recordName })
@@ -402,6 +513,7 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
                     }
                 }
                 try persist(); try applyInbox()
+                if readyToSend && !journal.pending.isEmpty { queuePending(on: source) }
             case .fetchedDatabaseChanges(let changes):
                 if changes.deletions.contains(where: { $0.zoneID == zoneID }) {
                     stop(); journal.enabled = false
@@ -429,8 +541,7 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
             case .didFetchChanges:
                 if readyToSend, journal.inbox["school/courses"] == nil, journal.records["school/courses"] != nil, let context {
                     let committed = ModelContext(context.container)
-                    try ICloudLocalData.markUnlinkedEdits(in: committed)
-                    try capture(); queuePending(on: source)
+                    if try ICloudLocalData.markUnlinkedEdits(in: committed) { localDataChanged() }
                 }
             case .didSendChanges:
                 if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch.isEmpty && failure == nil { journal.lastSuccess = Date(); try persist() }

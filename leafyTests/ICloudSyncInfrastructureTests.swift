@@ -4,6 +4,64 @@ import XCTest
 
 @MainActor
 final class ICloudSyncInfrastructureTests: XCTestCase {
+    func testBurstOfLocalNotificationsCollectsOnceAndBackgroundFlushDoesNotRepeatIt() {
+        let work = ICloudSyncWorkScheduler()
+        var collections = 0
+        for _ in 0..<25 {
+            work.schedule(after: .seconds(3_600)) { collections += 1 }
+        }
+        XCTAssertEqual(collections, 0)
+        work.flush()
+        XCTAssertEqual(collections, 1)
+        work.flush()
+        XCTAssertEqual(collections, 1)
+    }
+
+    func testIdentityChangeOrDisablingCancelsPendingCollection() {
+        let work = ICloudSyncWorkScheduler()
+        var collections = 0
+        work.schedule(after: .seconds(3_600)) { collections += 1 }
+        work.cancel()
+        work.flush()
+        XCTAssertEqual(collections, 0)
+    }
+
+    func testInitializationRecoveryBacksOffAndHonorsServerRetryAfter() {
+        let delays = (1...5).map { ICloudSyncScheduling.recoveryDelay(failures: $0) }
+        XCTAssertEqual(delays, [300, 600, 1_200, 1_800, 1_800])
+        XCTAssertEqual(ICloudSyncScheduling.recoveryDelay(failures: 1, retryAfter: 3_600), 3_600)
+    }
+
+    func testDeferredOfflineEditsKeepLatestNoteAndDeletionInPersistentQueue() throws {
+        var journal = ICloudSyncJournal()
+        let first = ICloudSyncValue(key: "CourseNote/note", payload: Data("first".utf8), modifiedAt: Date())
+        var edited = first
+        edited.payload = Data("edited".utf8)
+        edited.revision = "new-revision"
+        journal.capture([first])
+        journal.capture([edited])
+        XCTAssertEqual(journal.pending, [first.key])
+        XCTAssertEqual(journal.records[first.key]?.payload, edited.payload)
+        journal.capture([])
+        journal.automaticRetryAt = Date().addingTimeInterval(300)
+        let reloaded = try JSONDecoder().decode(ICloudSyncJournal.self, from: JSONEncoder().encode(journal))
+        XCTAssertEqual(reloaded.pending, [first.key])
+        XCTAssertEqual(reloaded.records[first.key]?.deleted, true)
+        XCTAssertEqual(reloaded.automaticRetryAt, journal.automaticRetryAt)
+    }
+
+    func testJournalWithoutRecoveryDeadlineRetainsExistingPendingRecords() throws {
+        var journal = ICloudSyncJournal()
+        let value = ICloudSyncValue(key: "CustomSchedule/event", payload: Data("schedule".utf8), modifiedAt: Date())
+        journal.capture([value])
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(journal)) as? [String: Any])
+        json.removeValue(forKey: "automaticRetryAt")
+        let reloaded = try JSONDecoder().decode(ICloudSyncJournal.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(reloaded.automaticRetryAt)
+        XCTAssertEqual(reloaded.pending, journal.pending)
+        XCTAssertEqual(reloaded.records, journal.records)
+    }
+
     func testUnchangedLocalCaptureDoesNotRequestAnotherRetryWhilePending() {
         var journal = ICloudSyncJournal()
         let value = ICloudSyncValue(key: "preference/theme", payload: Data("green".utf8), modifiedAt: Date())

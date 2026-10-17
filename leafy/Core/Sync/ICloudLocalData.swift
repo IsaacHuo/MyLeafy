@@ -252,7 +252,8 @@ enum ICloudLocalData {
         }
     }
 
-    static func markUnlinkedEdits(in context: ModelContext) throws {
+    @discardableResult
+    static func markUnlinkedEdits(in context: ModelContext) throws -> Bool {
         let courses = try context.fetch(FetchDescriptor<Course>())
         let keys = Set(courses.map(\.stableCourseKey))
         for note in try context.fetch(FetchDescriptor<CourseNote>()) where !note.isUnassociated && !keys.contains(note.courseKey) { note.isUnassociated = true }
@@ -260,7 +261,9 @@ enum ICloudLocalData {
             if !note.isUnassociated && !courses.contains(where: { $0.stableCourseKey == note.courseKey && $0.weeks.contains(note.week) }) { note.isUnassociated = true }
         }
         for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>()) where !setting.isUnassociated && !keys.contains(setting.courseKey) { setting.isUnassociated = true }
-        if context.hasChanges { try context.save() }
+        let changed = context.hasChanges
+        if changed { try context.save() }
+        return changed
     }
 
     static func conflictCopy(_ value: ICloudSyncValue, context: ModelContext) throws -> ICloudSyncValue? {
