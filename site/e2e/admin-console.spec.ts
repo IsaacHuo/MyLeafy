@@ -218,12 +218,49 @@ async function setup(page: Page, role = "super_admin") {
         items: [
           {
             id: "session-1",
-            admin: { display_name: "管理员" },
+            admin_id: "admin-1",
+            // Mirrors the backend adminHydrate contract: admin_id -> admin_accounts
+            admin: {
+              id: "admin-1",
+              username: "ops",
+              display_name: "运维管理员",
+              role: "operator",
+            },
             expires_at: "2099-01-01T00:00:00Z",
             is_current: false,
           },
         ],
         total: 1,
+      };
+    else if (action === "listAuditLogs")
+      data = {
+        items: [
+          {
+            id: 2,
+            admin_id: "admin-1",
+            admin: {
+              id: "admin-1",
+              username: "ops",
+              display_name: "运维管理员",
+              role: "operator",
+            },
+            action: "disableAdmin",
+            target_type: "admin",
+            outcome: "success",
+            duration_ms: 12,
+            created_at: "2026-10-13T08:00:00Z",
+          },
+          {
+            id: 1,
+            admin_id: null,
+            admin: null,
+            action: "migrationReplay",
+            target_type: "system",
+            outcome: "success",
+            created_at: "2026-10-13T07:00:00Z",
+          },
+        ],
+        total: 2,
       };
     else if (action === "workQueue")
       data = {
@@ -396,6 +433,25 @@ test("Studio data browsing, scopes, saved views, details and dangerous confirmat
     await page.evaluate(() => localStorage.getItem("leafy-admin-session")),
   ).toBeNull();
   expect(errors).toEqual([]);
+});
+test("sessions and audit logs show the owning admin name and a system placeholder", async ({
+  page,
+}) => {
+  await setup(page);
+  await navigate(page, "会话");
+  await expect(
+    page.getByRole("link", { name: "运维管理员", exact: true }),
+  ).toBeVisible();
+  await page.locator("tbody").getByRole("button", { name: "撤销", exact: true }).click();
+  await expect(page.getByText(/管理会话：运维管理员/)).toBeVisible();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await navigate(page, "审计日志");
+  await expect(
+    page.getByRole("link", { name: "运维管理员", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "系统", exact: true }),
+  ).toBeVisible();
 });
 test("viewer retains read access and cannot manage or see system diagnostics", async ({
   page,

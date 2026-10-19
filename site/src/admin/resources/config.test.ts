@@ -37,6 +37,14 @@ describe("admin resource capabilities", () => {
     }
   });
 
+  it("labels the admin column and marks missing actors as system", () => {
+    for (const resource of ["sessions", "audit-logs"]) {
+      const column = resourceConfigs[resource].columns.find((candidate) => candidate.source === "admin.display_name");
+      expect(column?.label, resource).toBe("管理员");
+      expect(column?.fallback, resource).toBe("系统");
+    }
+  });
+
   it("does not expose moderation actions for terminal deleted records", () => {
     for (const resource of ["posts", "polls", "comments"]) {
       const visible = resourceConfigs[resource].actions?.filter((action) => !action.visible || action.visible({ status: "deleted" })) ?? [];

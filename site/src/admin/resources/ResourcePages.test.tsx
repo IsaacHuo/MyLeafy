@@ -51,4 +51,38 @@ describe("admin action confirmations", () => {
     const confirmation = actionConfirmation("posts", { id: "post-1", title: "图片帖子" }, action);
     expect(confirmation.impact).toContain("完整上传");
   });
+
+  it("shows the hydrated admin name and falls back to a system label", () => {
+    render(<RecordDetailContent resource="audit-logs" detail={{
+      id: 2,
+      admin_id: "admin-1",
+      admin: { id: "admin-1", username: "ops", display_name: "运维管理员", role: "operator" },
+      action: "disableAdmin",
+      target_type: "admin",
+    }} />);
+    expect(screen.getByText("运维管理员")).toBeInTheDocument();
+  });
+
+  it("labels audit records without an admin as the system actor", () => {
+    render(<RecordDetailContent resource="audit-logs" detail={{
+      id: 1,
+      admin_id: null,
+      admin: null,
+      action: "migrationReplay",
+      target_type: "system",
+    }} />);
+    expect(screen.getByText("系统")).toBeInTheDocument();
+  });
+
+  it("names the admin in the session revoke confirmation", () => {
+    const action = resourceConfigs.sessions.actions?.[0];
+    if (!action) throw new Error("Missing session revoke action");
+    const confirmation = actionConfirmation("sessions", {
+      id: "session-1",
+      admin_id: "admin-1",
+      admin: { id: "admin-1", username: "ops", display_name: "运维管理员", role: "operator" },
+    }, action);
+    expect(confirmation.summary).toContain("管理会话：运维管理员");
+    expect(confirmation.summary).not.toContain("admin-1");
+  });
 });
