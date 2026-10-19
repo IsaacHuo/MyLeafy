@@ -3,6 +3,7 @@ export type ColumnConfig = {
   label: string;
   kind?: "text" | "date" | "number" | "boolean" | "json" | "image";
   sortable?: boolean;
+  fallback?: string;
 };
 
 export type FormFieldConfig = {
@@ -882,7 +883,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   sessions: {
     label: "会话",
     columns: columns(
-      ["admin.display_name", "管理员"],
+      ["admin.display_name", "管理员", "text", false, "系统"],
       ["is_current", "当前会话", "boolean"],
       ["last_seen_at", "最近活动", "date", true],
       ["expires_at", "过期", "date", true],
@@ -919,7 +920,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   "audit-logs": {
     label: "审计日志",
     columns: columns(
-      ["admin.display_name", "管理员"],
+      ["admin.display_name", "管理员", "text", false, "系统"],
       ["action", "动作", "text", true],
       ["target_type", "对象", "text", true],
       ["outcome", "结果", "text", true],
@@ -1098,11 +1099,12 @@ function communityBannerForm(editing: boolean): FormFieldConfig[] {
 }
 
 function columns(...items: any[]): ColumnConfig[] {
-  return items.map(([source, label, kind = "text", sortable = false]) => ({
+  return items.map(([source, label, kind = "text", sortable = false, fallback]) => ({
     source,
     label,
     kind,
     sortable,
+    ...(fallback == null ? {} : { fallback }),
   }));
 }
 

@@ -38,6 +38,7 @@ All offered list controls send their query conditions to adminList. Search uses 
 - Profile content counts: grouped posts/comments by author_id.
 - Ratings: target_id + user_id -> raw rating row -> composite object ID; target names hydrate from teachers/course_catalog/dish_catalog. Counts, star distribution and weighted means are checked against raw ratings.
 - Session object IDs derive from the protected session token hash, with current-session status; session active/revoked/expired filters use actual revocation and expiration values.
+- Session/audit admin names: admin_id -> admin_accounts -> id, username, display_name, role (the password hash is never selected). Historical audit actions without an admin_id (performed by the system) return admin: null, and the Studio renders the 系统 placeholder.
 - Post/report/profile detail actions reuse the same role projection; report evidence resolves the reported post, comment and profile.
 
 ## Metrics and special pages

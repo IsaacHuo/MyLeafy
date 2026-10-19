@@ -54,6 +54,14 @@ export async function adminHydrate(env:BackendEnv,context:AdminContext,table:str
     const ids=[...new Set(records.map(r=>r[`${target}_id`] as Bind))];
     for(let offset=0;offset<ids.length;offset+=80){const batch=ids.slice(offset,offset+80);for(const r of await rows(env.DB,`SELECT id,name FROM ${catalog} WHERE id IN(${batch.map(()=>'?').join(',')})`,batch))ratingTargets.set(r.id as Bind,r);}
   }
+  const adminAccounts=new Map<string,Row>();
+  if(table==='admin_sessions'||table==='admin_audit_logs'){
+    const adminIds=[...new Set(records.map(record=>record.admin_id).filter((id):id is string=>typeof id==='string'&&id.length>0))];
+    for(let start=0;start<adminIds.length;start+=80){
+      const ids=adminIds.slice(start,start+80);
+      for(const account of await rows(env.DB,`SELECT id,username,display_name,role FROM admin_accounts WHERE id IN(${ids.map(()=>'?').join(',')})`,ids))adminAccounts.set(account.id as string,account);
+    }
+  }
   const output=await Promise.all(records.map(async record=>{
     let row=decode(table,record);
     if(table==='profiles')row=profileForAdmin(record,context);
@@ -64,6 +72,7 @@ export async function adminHydrate(env:BackendEnv,context:AdminContext,table:str
     if(row.reporter_id)row.reporter=profiles.get(row.reporter_id as string)??null;
     if(row.reported_user_id)row.reported_user=profiles.get(row.reported_user_id as string)??null;
     if(table==='admin_sessions'){row.id=row.token_hash;row.is_current=row.token_hash===context.tokenHash;delete row.token_hash;}
+    if(table==='admin_sessions'||table==='admin_audit_logs')row.admin=typeof row.admin_id==='string'&&row.admin_id.length?adminAccounts.get(row.admin_id)??null:null;
     if(table.endsWith('_ratings')) {
       const target=table.slice(0,-8),key=`${target}_id`,catalog=target==='teacher'?'teachers':target==='course'?'course_catalog':'dish_catalog';
       row.id=`${target}:${row[key]}:${row.user_id}`;row.target=target;
