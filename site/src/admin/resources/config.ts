@@ -384,7 +384,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         label: "下架并关闭",
         action: "resolveModerationReport",
         tone: "danger",
-        visible: (r) => r.status === "open" || r.status === "reviewed",
+        visible: (r) =>
+          (r.target_type === "post" || r.target_type === "comment") &&
+          (r.status === "open" || r.status === "reviewed"),
         fields: [
           {
             source: "resolutionNote",
@@ -400,7 +402,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         label: "下架并禁言",
         action: "resolveModerationReport",
         tone: "danger",
-        visible: (r) => r.status === "open" || r.status === "reviewed",
+        visible: (r) =>
+          (r.target_type === "post" || r.target_type === "comment") &&
+          (r.status === "open" || r.status === "reviewed"),
         fields: [
           {
             source: "resolutionNote",
@@ -416,6 +420,47 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
           { source: "mutedReason", label: "禁言原因", kind: "longtext" },
         ],
         fixed: { status: "resolved", hideContent: true, muteUser: true },
+        build: idParams,
+      },
+      {
+        label: "禁言并关闭",
+        action: "resolveModerationReport",
+        tone: "danger",
+        visible: (r) =>
+          r.target_type === "user" &&
+          (r.status === "open" || r.status === "reviewed"),
+        fields: [
+          {
+            source: "resolutionNote",
+            label: "处理备注",
+            kind: "longtext",
+            required: true,
+          },
+          {
+            source: "mutedUntil",
+            label: "禁言截止（留空默认一年）",
+            kind: "datetime",
+          },
+          { source: "mutedReason", label: "禁言原因", kind: "longtext" },
+        ],
+        fixed: { status: "resolved", hideContent: false, muteUser: true },
+        build: idParams,
+      },
+      {
+        label: "关闭举报（不禁言）",
+        action: "resolveModerationReport",
+        visible: (r) =>
+          r.target_type === "user" &&
+          (r.status === "open" || r.status === "reviewed"),
+        fields: [
+          {
+            source: "resolutionNote",
+            label: "处理备注",
+            kind: "longtext",
+            required: true,
+          },
+        ],
+        fixed: { status: "resolved", hideContent: false },
         build: idParams,
       },
       {
