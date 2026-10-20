@@ -91,6 +91,7 @@ export async function resolveModerationReport(env:BackendEnv,context:AdminContex
   if(mute&&until<=timestamp)throw new ApiError(400,'bad_request','禁言截止时间必须晚于当前时间。');
   const report=(await rows(env.DB,'SELECT * FROM community_reports WHERE id=?',[id]))[0];
   if(!report)throw new ApiError(404,'not_found','举报不存在。');
+  if(hide&&report.target_type!=='post'&&report.target_type!=='comment')throw new ApiError(400,'bad_request','该举报对象没有可下架的内容，请改用禁言或直接关闭举报。');
   const ops=[guard(env.DB,"EXISTS(SELECT 1 FROM community_reports WHERE id=? AND status IN('open','reviewed') AND status=?)",[id,report.status as string])];
   if(hide&&report.target_type==='post'){
     ops.push(statement(env.DB,"UPDATE community_post_pins SET status='inactive',updated_at=? WHERE post_id=? AND status='active'",[timestamp,report.post_id as string]));

@@ -44,6 +44,57 @@ describe("admin resource capabilities", () => {
     }
   });
 
+  it("never offers content takedown actions for user reports", () => {
+    const labelsFor = (target_type: string, status: string) =>
+      (resourceConfigs.reports.actions ?? [])
+        .filter((action) => !action.visible || action.visible({ target_type, status }))
+        .map((action) => action.label);
+
+    expect(labelsFor("user", "open")).toEqual([
+      "标记已看",
+      "禁言并关闭",
+      "关闭举报（不禁言）",
+      "驳回",
+    ]);
+    expect(labelsFor("user", "reviewed")).toEqual([
+      "禁言并关闭",
+      "关闭举报（不禁言）",
+      "驳回",
+    ]);
+    expect(labelsFor("user", "resolved")).toEqual([]);
+    expect(labelsFor("post", "open")).toEqual([
+      "标记已看",
+      "下架并关闭",
+      "下架并禁言",
+      "驳回",
+    ]);
+    expect(labelsFor("comment", "reviewed")).toEqual([
+      "下架并关闭",
+      "下架并禁言",
+      "驳回",
+    ]);
+    expect(labelsFor("user", "open").some((label) => label.includes("下架"))).toBe(false);
+  });
+
+  it("sends mute-only resolution for user reports", () => {
+    const actions = resourceConfigs.reports.actions ?? [];
+    expect(actions.find((action) => action.label === "禁言并关闭")?.fixed).toEqual({
+      status: "resolved",
+      hideContent: false,
+      muteUser: true,
+    });
+    expect(actions.find((action) => action.label === "关闭举报（不禁言）")?.fixed).toEqual({
+      status: "resolved",
+      hideContent: false,
+    });
+    for (const label of ["下架并关闭", "下架并禁言"]) {
+      expect(actions.find((action) => action.label === label)?.visible?.({
+        target_type: "user",
+        status: "open",
+      })).toBe(false);
+    }
+  });
+
   it("keeps every pending workflow decision-complete", () => {
     const postActions = resourceConfigs.posts.actions?.filter((action) => action.visible?.({
       status: "pending_review",

@@ -117,6 +117,28 @@ it('report resolution is atomic and rejects repeated resolution',async()=>{
   expect(db.sqlite.prepare('SELECT muted_until FROM profiles WHERE id=?').get(author)!.muted_until).toBeTruthy();
   await expect(resolveModerationReport(env,context,{id:report,status:'rejected'})).rejects.toMatchObject({status:409});
 });
+it('rejects hiding content for user reports instead of silently resolving them',async()=>{
+  const {db,env,login}=await fixture();
+  const reporter=crypto.randomUUID(),target=crypto.randomUUID(),otherReporter=crypto.randomUUID(),otherTarget=crypto.randomUUID();
+  const report=crypto.randomUUID(),otherReport=crypto.randomUUID();
+  db.sqlite.exec("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi');");
+  const insertProfile=db.sqlite.prepare("INSERT INTO profiles(id,edu_id,nickname,campus_id,community_campus_id) VALUES(?,?,'测试','bjfu','bjfu')");
+  insertProfile.run(reporter,'user-report-reporter');insertProfile.run(target,'user-report-target');
+  insertProfile.run(otherReporter,'user-report-reporter-2');insertProfile.run(otherTarget,'user-report-target-2');
+  const insertReport=db.sqlite.prepare("INSERT INTO community_reports(id,reporter_id,reported_user_id,target_type,reason) VALUES(?,?,?,'user','骚扰')");
+  insertReport.run(report,reporter,target);insertReport.run(otherReport,otherReporter,otherTarget);
+  const signedIn=await adminLogin(env,login()),context=await authenticateAdmin(env,new Request('https://admin.internal/me',{headers:{Authorization:`Bearer ${signedIn.token}`}}));
+  await expect(resolveModerationReport(env,context,{id:report,status:'resolved',hideContent:true})).rejects.toMatchObject({status:400});
+  expect(db.sqlite.prepare('SELECT status,resolution_note,resolved_at FROM community_reports WHERE id=?').get(report)).toEqual({status:'open',resolution_note:null,resolved_at:null});
+  expect(db.sqlite.prepare('SELECT muted_until FROM profiles WHERE id=?').get(target)!.muted_until).toBeNull();
+  await resolveModerationReport(env,context,{id:report,status:'resolved',hideContent:false,muteUser:true,mutedReason:'骚扰他人'});
+  expect(db.sqlite.prepare('SELECT status FROM community_reports WHERE id=?').get(report)!.status).toBe('resolved');
+  expect(db.sqlite.prepare('SELECT muted_until FROM profiles WHERE id=?').get(target)!.muted_until).toBeTruthy();
+  await resolveModerationReport(env,context,{id:otherReport,status:'reviewed',hideContent:false});
+  await resolveModerationReport(env,context,{id:otherReport,status:'rejected'});
+  expect(db.sqlite.prepare('SELECT status FROM community_reports WHERE id=?').get(otherReport)!.status).toBe('rejected');
+  expect(db.sqlite.prepare('SELECT muted_until FROM profiles WHERE id=?').get(otherTarget)!.muted_until).toBeNull();
+});
 it('announcement edits validate windows and session revocation requires super admin',async()=>{
   const {env,login,db}=await fixture();
   db.sqlite.exec("INSERT INTO campuses(id,display_name,short_name,normalized_name,connector_kind) VALUES('bjfu','北林','北林','北林','qiangzhi');");
