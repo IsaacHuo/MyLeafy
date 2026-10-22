@@ -626,12 +626,20 @@ private fun defaultScheduleDraft(): ScheduleEventDraft {
 
 private val eventFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 HH:mm")
 
-private fun formatEventTime(event: ScheduleEventEntity): String {
+/** 日迹日程列表跨自然年保存，非本年条目必须带年份，避免「3月5日」指代不明。 */
+private val yearEventFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm")
+
+internal fun formatEventTime(
+    event: ScheduleEventEntity,
+    nowMillis: Long = System.currentTimeMillis(),
+): String {
     val start = Instant.ofEpochMilli(event.startsAt).atZone(TimetableGridProjection.campusZone)
     val end = event.endsAt?.let { Instant.ofEpochMilli(it).atZone(TimetableGridProjection.campusZone) }
+    val currentYear = Instant.ofEpochMilli(nowMillis).atZone(TimetableGridProjection.campusZone).year
+    val formatter = if (start.year == currentYear) eventFormatter else yearEventFormatter
     return if (end == null) {
-        start.format(eventFormatter)
+        start.format(formatter)
     } else {
-        "${start.format(eventFormatter)}–${end.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+        "${start.format(formatter)}–${end.format(DateTimeFormatter.ofPattern("HH:mm"))}"
     }
 }
