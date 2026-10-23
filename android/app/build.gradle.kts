@@ -152,9 +152,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime)
 
-implementation(libs.okhttp)
-implementation(libs.coil)
-implementation(libs.jsoup)
+    implementation(libs.okhttp)
+    implementation(libs.coil)
+    implementation(libs.jsoup)
 
     implementation(libs.kotlinx.serialization.json)
 

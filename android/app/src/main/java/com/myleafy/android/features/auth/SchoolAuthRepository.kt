@@ -27,8 +27,7 @@ class SchoolAuthRepository(
     override val hasCachedIdentity: Boolean
         get() = sessionState.identity != null
 
-    override fun cachedCredential(): StoredSchoolCredential? = credentialStore.load(
-        CampusID.bjfu.rawValue, "undergraduate", sessionState.identity?.eduId)
+    override fun cachedCredential(): StoredSchoolCredential? = credentialStore.load(CampusID.bjfu.rawValue, "undergraduate", sessionState.identity?.eduId)
 
     override suspend fun prepareUndergraduateChallenge() =
         recovery?.manualChallenge() ?: client.prepareUndergraduateChallenge()

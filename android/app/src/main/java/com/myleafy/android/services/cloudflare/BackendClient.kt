@@ -93,8 +93,7 @@ class BackendClient(
     }
 
     suspend fun signOut() {
-        try { if (synchronized(lock) { token != null && !closed }) requestText("/v1/auth/sign-out", "POST") }
-        finally { close() }
+        try { if (synchronized(lock) { token != null && !closed }) requestText("/v1/auth/sign-out", "POST") } finally { close() }
     }
 
     fun close() {

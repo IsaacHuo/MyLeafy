@@ -48,16 +48,16 @@ class TimetablePagerTest {
                 MyLeafyTheme {
                     val background = TimetableBackgroundSettings(enabled = true, kind = "photo", photoPath = photo.absolutePath)
                     TimetableNavigationScaffold(background, RootTab.TIMETABLE, {}) {
-                    TimetablePageScaffold(titleContent = { Text("课表") }, background = background) { padding ->
-                    TimetableScreenContent(
-                        state = TimetableUiState.Loaded("2026-2027-1", 1, selected, pages[selected - 1].weekRange,
-                            emptyList(), emptyList(), emptyList(), pages[selected - 1].grid, 20, pages, true,
-                            background),
-                        modifier = Modifier.padding(padding),
-                        syncState = sync, onRetrySync = { refreshes++; sync = TimetableSyncState.Syncing() },
-                        onSelectWeek = { selected = it }, onEmptyCellClick = { _, _ -> }, onItemClick = {}, onConsumeSync = {}, canRefresh = true,
-                    )
-                    }
+                        TimetablePageScaffold(titleContent = { Text("课表") }, background = background) { padding ->
+                            TimetableScreenContent(
+                                state = TimetableUiState.Loaded("2026-2027-1", 1, selected, pages[selected - 1].weekRange,
+                                    emptyList(), emptyList(), emptyList(), pages[selected - 1].grid, 20, pages, true,
+                                    background),
+                                modifier = Modifier.padding(padding),
+                                syncState = sync, onRetrySync = { refreshes++; sync = TimetableSyncState.Syncing() },
+                                onSelectWeek = { selected = it }, onEmptyCellClick = { _, _ -> }, onItemClick = {}, onConsumeSync = {}, canRefresh = true,
+                            )
+                        }
                     }
                 }
             }

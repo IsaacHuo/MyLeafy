@@ -68,12 +68,12 @@ class TimetableCalendarExporter(
     ): String {
         require(rangeEndExclusive.isAfter(rangeStart)) { "导出结束日期必须晚于开始日期" }
         val events = buildList {
-            courses.forEach courseLoop@ { course ->
+            courses.forEach courseLoop@{ course ->
                 val periods = course.periods.filter { it in 1..13 }.distinct().sorted()
                 val firstSlot = periods.firstOrNull()?.let(TimetablePeriodSchedule::slot)
                 val lastSlot = periods.lastOrNull()?.let(TimetablePeriodSchedule::slot)
                 if (course.dayOfWeek !in 1..7 || firstSlot == null || lastSlot == null) return@courseLoop
-                course.weeks.distinct().sorted().forEach weekLoop@ { week ->
+                course.weeks.distinct().sorted().forEach weekLoop@{ week ->
                     if (week < 1) return@weekLoop
                     val date = semesterStartDate
                         .plusWeeks((week - 1).toLong())
@@ -100,7 +100,7 @@ class TimetableCalendarExporter(
                 }
             }
 
-            scheduleEvents.forEach scheduleLoop@ { event ->
+            scheduleEvents.forEach scheduleLoop@{ event ->
                 val start = Instant.ofEpochMilli(event.startsAt)
                 val date = start.atZone(campusZone).toLocalDate()
                 if (date.isBefore(rangeStart) || !date.isBefore(rangeEndExclusive)) return@scheduleLoop

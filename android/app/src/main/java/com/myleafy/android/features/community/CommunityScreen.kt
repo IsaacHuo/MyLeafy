@@ -147,67 +147,67 @@ fun CommunityContent(
             )
         },
     ) { contentPadding ->
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(contentPadding)
-                    .leafyPullRefresh(pullRefreshState, enabled = !state.isRefreshing),
-                contentPadding = PaddingValues(
-                    start = LeafySpacing.page,
-                    end = LeafySpacing.page,
-                    bottom = LeafyComponentSize.floatingActionClearance,
-                ),
-                verticalItemSpacing = LeafySpacing.compact,
-            ) {
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .leafyPullRefresh(pullRefreshState, enabled = !state.isRefreshing),
+            contentPadding = PaddingValues(
+                start = LeafySpacing.page,
+                end = LeafySpacing.page,
+                bottom = LeafyComponentSize.floatingActionClearance,
+            ),
+            verticalItemSpacing = LeafySpacing.compact,
+        ) {
+            item(span = StaggeredGridItemSpan.FullLine) {
+                CommunityFilters(
+                    selection = state.selection,
+                    onSelectHot = onSelectHot,
+                    onSelectLatest = onSelectLatest,
+                )
+            }
+            if (state.hasNewPosts) item(span = StaggeredGridItemSpan.FullLine) {
+                LeafyStatusBanner(message = "有新动态", isError = false, actionLabel = "查看", onAction = onRefresh)
+            }
+            if (state.isInitialLoading) {
+                item(span = StaggeredGridItemSpan.FullLine) { LeafyLoadingState(message = "正在加载校园动态") }
+            }
+            if (state.isRefreshing || pullRefreshState.progress > 0f) {
                 item(span = StaggeredGridItemSpan.FullLine) {
-                    CommunityFilters(
-                        selection = state.selection,
-                        onSelectHot = onSelectHot,
-                        onSelectLatest = onSelectLatest,
+                    LinearProgressIndicator(
+                        progress = { if (state.isRefreshing) 1f else pullRefreshState.progress },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (state.hasNewPosts) item(span = StaggeredGridItemSpan.FullLine) {
-                    LeafyStatusBanner(message = "有新动态", isError = false, actionLabel = "查看", onAction = onRefresh)
-                }
-                if (state.isInitialLoading) {
-                    item(span = StaggeredGridItemSpan.FullLine) { LeafyLoadingState(message = "正在加载校园动态") }
-                }
-                if (state.isRefreshing || pullRefreshState.progress > 0f) {
-                    item(span = StaggeredGridItemSpan.FullLine) {
-                        LinearProgressIndicator(
-                            progress = { if (state.isRefreshing) 1f else pullRefreshState.progress },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-                state.error?.let { message ->
-                    item(span = StaggeredGridItemSpan.FullLine) {
-                        Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
-                            LeafyStatusBanner(message = if (state.posts.isEmpty()) message else "刷新失败，已保留上次内容：$message", isError = true)
-                            LeafyPrimaryButton(onClick = onRefresh) { Text("重新刷新") }
-                        }
-                    }
-                }
-                if (state.posts.isEmpty() && !state.isInitialLoading && state.error == null) {
-                    item(span = StaggeredGridItemSpan.FullLine) {
-                        LeafyEmptyState(
-                            title = "没有找到内容",
-                            message = "换一个分类，或发布第一条校园动态。",
-                            icon = Icons.Outlined.Forum,
-                            modifier = Modifier.fillMaxWidth().padding(top = LeafySpacing.spacious),
-                        )
-                    }
-                } else {
-                    items(state.posts, key = { it.id }) { post ->
-                        CommunityPostCard(post, onClick = { onPostClick(post.id) })
-                    }
-                    if (state.nextCursor != null) item(span = StaggeredGridItemSpan.FullLine) {
-                        LeafyTextButton(onClick = onLoadMore, enabled = !state.loadingMore) { Text(if (state.loadingMore) "加载中…" else "加载更多") }
+            }
+            state.error?.let { message ->
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+                        LeafyStatusBanner(message = if (state.posts.isEmpty()) message else "刷新失败，已保留上次内容：$message", isError = true)
+                        LeafyPrimaryButton(onClick = onRefresh) { Text("重新刷新") }
                     }
                 }
             }
+            if (state.posts.isEmpty() && !state.isInitialLoading && state.error == null) {
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    LeafyEmptyState(
+                        title = "没有找到内容",
+                        message = "换一个分类，或发布第一条校园动态。",
+                        icon = Icons.Outlined.Forum,
+                        modifier = Modifier.fillMaxWidth().padding(top = LeafySpacing.spacious),
+                    )
+                }
+            } else {
+                items(state.posts, key = { it.id }) { post ->
+                    CommunityPostCard(post, onClick = { onPostClick(post.id) })
+                }
+                if (state.nextCursor != null) item(span = StaggeredGridItemSpan.FullLine) {
+                    LeafyTextButton(onClick = onLoadMore, enabled = !state.loadingMore) { Text(if (state.loadingMore) "加载中…" else "加载更多") }
+                }
+            }
+        }
     }
 }
 

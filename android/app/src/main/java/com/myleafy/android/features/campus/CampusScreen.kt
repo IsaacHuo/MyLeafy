@@ -367,30 +367,30 @@ private fun CampusDomainContent(
                 )
             }
             if (campusId == CampusID.bjfu) {
-            item {
-                CampusToolRow(
-                    title = "教学与培养",
-                    description = "查看课程体系与应取学分",
-                    icon = Icons.Outlined.School,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_TRAINING_PLAN) },
-                )
-            }
-            item {
-                CampusToolRow(
-                    title = "校历与作息",
-                    description = "查看学期校历和作息时间",
-                    icon = Icons.Outlined.CalendarMonth,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_CALENDAR) },
-                )
-            }
-            item {
-                CampusToolRow(
-                    title = "综素测算",
-                    description = "估算综素分，整理材料",
-                    icon = Icons.Outlined.Functions,
-                    onClick = { onFeatureClick(FeatureDestination.CAMPUS_COMPREHENSIVE) },
-                )
-            }
+                item {
+                    CampusToolRow(
+                        title = "教学与培养",
+                        description = "查看课程体系与应取学分",
+                        icon = Icons.Outlined.School,
+                        onClick = { onFeatureClick(FeatureDestination.CAMPUS_TRAINING_PLAN) },
+                    )
+                }
+                item {
+                    CampusToolRow(
+                        title = "校历与作息",
+                        description = "查看学期校历和作息时间",
+                        icon = Icons.Outlined.CalendarMonth,
+                        onClick = { onFeatureClick(FeatureDestination.CAMPUS_CALENDAR) },
+                    )
+                }
+                item {
+                    CampusToolRow(
+                        title = "综素测算",
+                        description = "估算综素分，整理材料",
+                        icon = Icons.Outlined.Functions,
+                        onClick = { onFeatureClick(FeatureDestination.CAMPUS_COMPREHENSIVE) },
+                    )
+                }
             }
             item {
                 CampusToolRow(

@@ -158,8 +158,7 @@ class TrainingProgramViewModel(
             try {
                 val program = repository.trainingProgram().first()
                 if (repository.teachingPlan().first().isEmpty() || program == null || program.creditRequirements.any { it.credits !in 0.0..500.0 }) refresh()
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (failure: Exception) { refreshState.value = TrainingProgramRefreshState.Error(failure.message ?: "教学与培养加载失败") }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { refreshState.value = TrainingProgramRefreshState.Error(failure.message ?: "教学与培养加载失败") }
         }
     }
 

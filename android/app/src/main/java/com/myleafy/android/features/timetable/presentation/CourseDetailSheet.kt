@@ -133,9 +133,7 @@ fun CourseDetailSheet(
             try {
                 check(dependencies.currentScopeKey() == course.scopeKey) { "账号已切换，请重新打开课程" }
                 block()
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { error = failure.message ?: "保存失败，请重试" }
-            finally { saving = false }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.message ?: "保存失败，请重试" } finally { saving = false }
         }
     }
     val occurrences = remember(courses, course.courseName) {
@@ -303,7 +301,6 @@ fun PendingCoursePersonalSheet(onDismiss: () -> Unit) {
                     is CourseReminderEntity -> dao.deleteReminder(record.scopeKey, record.semesterId, record.courseKey)
                 }
                 deleting = null
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { error = failure.message ?: "删除失败，请重试" }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.message ?: "删除失败，请重试" }
         } }) { Text("删除") } }, dismissButton = { LeafyTextButton(onClick = { deleting = null }) { Text("取消") } }) }
 }

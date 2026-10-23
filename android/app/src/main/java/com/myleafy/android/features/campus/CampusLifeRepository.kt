@@ -160,21 +160,20 @@ class CampusLifeRepository(
                 val sample = kotlin.math.ceil(maxOf(info.size.width, info.size.height) / 2400.0).toInt().coerceAtLeast(1)
                 decoder.setTargetSampleSize(sample)
             }
-            try { target.outputStream().use { check(image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it)) { "照片保存失败" } } }
-            finally { image.recycle() }
+            try { target.outputStream().use { check(image.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it)) { "照片保存失败" } } } finally { image.recycle() }
             check(scopeStore.current.scopeKey == scopeKey) { "账号已切换" }
-        val now = System.currentTimeMillis()
-        medicalDao.upsert(
-            MedicalLedgerPhotoEntity(
-                id = UUID.randomUUID().toString(),
-                scopeKey = scopeKey,
-                entryId = entryId,
-                originalFilename = uri.lastPathSegment ?: "医疗凭证.jpg",
-                localFilename = target.absolutePath,
-                importedAt = now,
-                updatedAt = now,
-            ),
-        )
+            val now = System.currentTimeMillis()
+            medicalDao.upsert(
+                MedicalLedgerPhotoEntity(
+                    id = UUID.randomUUID().toString(),
+                    scopeKey = scopeKey,
+                    entryId = entryId,
+                    originalFilename = uri.lastPathSegment ?: "医疗凭证.jpg",
+                    localFilename = target.absolutePath,
+                    importedAt = now,
+                    updatedAt = now,
+                ),
+            )
         } catch (failure: Exception) { target.delete(); throw failure }
     }
 

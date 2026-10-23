@@ -48,8 +48,7 @@ class ClassroomViewModel(
             val old = dao.favorites(scope).first().firstOrNull { it.building == room.building && it.room == room.room }
             if (scopes.current.scopeKey != scope) throw kotlinx.coroutines.CancellationException("Identity changed")
             if (old == null) dao.save(com.myleafy.android.core.data.local.FavoriteClassroomEntity(scope, room.building, room.room, System.currentTimeMillis())) else dao.delete(old)
-        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (failure: Exception) { _uiState.value = ClassroomUiState.Error(failure.message ?: "收藏失败") }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { _uiState.value = ClassroomUiState.Error(failure.message ?: "收藏失败") }
     } }
 
     fun queryDate(date: LocalDate, start: Int, end: Int) {
@@ -64,8 +63,7 @@ class ClassroomViewModel(
                 val matrix = repository.availability(config.semesterId, week, date.dayOfWeek.value)
                 val rooms = if (start == 0) emptyList() else matrix.available(start, end)
                 if (request == generation && scope == scopes?.current?.scopeKey) _uiState.value = ClassroomUiState.Loaded(rooms, matrix, date, System.currentTimeMillis())
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (failure: Exception) { if (request == generation) _uiState.value = ClassroomUiState.Error(failure.message ?: "查询失败") }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { if (request == generation) _uiState.value = ClassroomUiState.Error(failure.message ?: "查询失败") }
         }
     }
 
@@ -86,8 +84,7 @@ class ClassroomViewModel(
             try {
                 val rooms = repository.emptyClassrooms(semesterId, week, day, startPeriod, endPeriod)
                 if (request == generation) _uiState.value = ClassroomUiState.Loaded(rooms)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (failure: Exception) {
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) {
                 if (request == generation) _uiState.value = ClassroomUiState.Error(failure.message ?: "查询失败")
             }
         }

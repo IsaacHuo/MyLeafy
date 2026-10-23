@@ -104,7 +104,7 @@ class WeatherRepository(
         if (!forceRefresh && cached != null && age(cached) <= FRESH_AGE) return@withContext cached
         val location = locationProvider.currentLocation()
             ?: return@withContext cached?.takeIf { age(it) <= STALE_AGE }?.copy(isStale = true)
-            ?: error("无法获取当前位置")
+                ?: error("无法获取当前位置")
         runCatching { fetch(location) }.getOrElse { error ->
             cached?.takeIf { age(it) <= STALE_AGE }?.copy(isStale = true)
                 ?: throw error

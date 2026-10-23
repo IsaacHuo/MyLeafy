@@ -108,7 +108,7 @@ fun HonorRecordsScreen(
         Column(modifier = contentModifier.fillMaxSize()) {
             message?.let { value ->
                 LeafyStatusBanner(message = value, isError = true, onDismiss = viewModel::consumeMessage,
-                        actionLabel = if (loadFailed) "重试" else null, onAction = if (loadFailed) viewModel::retryLoad else null)
+                    actionLabel = if (loadFailed) "重试" else null, onAction = if (loadFailed) viewModel::retryLoad else null)
             }
             if (records.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

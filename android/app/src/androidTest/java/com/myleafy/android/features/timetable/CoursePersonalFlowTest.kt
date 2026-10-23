@@ -72,8 +72,7 @@ class CoursePersonalFlowTest {
         android.os.SystemClock.sleep(300)
         val image = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
         val directory = java.io.File(context.getExternalFilesDir(null), "campus-parity").apply { mkdirs() }
-        try { java.io.File(directory, "$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) } }
-        finally { image.recycle() }
+        try { java.io.File(directory, "$name.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } } finally { image.recycle() }
     }
 
     @Test fun permissionsSchedulingRecoveryAndIdentityCancellationUseRealAlarmManager() = runBlocking {

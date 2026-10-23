@@ -44,7 +44,7 @@ class DatabaseUpgradeTest {
     @Test fun versionEightPreservesAccountsNotesAndMedicalAttachmentsWithoutInventingCredits() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "isolated-v8-v9-parity-test"
-        val photo = java.io.File(context.cacheDir, "migration-v8-photo.jpg").apply { writeBytes(byteArrayOf(1,2,3)) }
+        val photo = java.io.File(context.cacheDir, "migration-v8-photo.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         helper.createDatabase(name, 8).apply {
             execSQL("INSERT INTO grade_summaries VALUES('account-a','official',3.2,85,NULL)")
             execSQL("INSERT INTO courses VALUES('account-a','course','2026-2027-1','保留课程','教师','','','教室',1,'[1,2]','[6,7]')")

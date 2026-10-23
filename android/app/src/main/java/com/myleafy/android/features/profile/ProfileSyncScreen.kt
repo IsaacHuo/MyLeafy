@@ -178,8 +178,7 @@ private fun SyncCard(title: String, summary: String, state: SyncItemState?, onSy
             ) {
                 if (state is SyncItemState.Running) {
                     CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = LeafyStroke.progress)
-                }
-                else Text("同步")
+                } else Text("同步")
             }
         }
     }

@@ -437,20 +437,20 @@ fun MyLeafyNavHost(
     }
 
     TimetableNavigationScaffold(
-            background = timetableBackground,
-            selectedTab = selectedTab ?: RootTab.TIMETABLE,
-            showNavigation = showsBottomBar && selectedTab != null,
-            onTabSelected = { tab ->
-                navController.navigate(tab.route) {
-                    popUpTo(RootTab.TIMETABLE.route) {
-                        saveState = true
-                    }
-                    launchSingleTop = true
-                    restoreState = true
+        background = timetableBackground,
+        selectedTab = selectedTab ?: RootTab.TIMETABLE,
+        showNavigation = showsBottomBar && selectedTab != null,
+        onTabSelected = { tab ->
+            navController.navigate(tab.route) {
+                popUpTo(RootTab.TIMETABLE.route) {
+                    saveState = true
                 }
-            },
-            content = navigationContent,
-        )
+                launchSingleTop = true
+                restoreState = true
+            }
+        },
+        content = navigationContent,
+    )
 }
 
 /** Optional surface override; the default navigation appearance remains unchanged. */
@@ -537,10 +537,10 @@ fun LeafyNavigationScaffold(
                 },
                 modifier = Modifier.fillMaxSize(),
                 navigationSuiteColors = if (navigationSurface == null) NavigationSuiteDefaults.colors()
-                    else NavigationSuiteDefaults.colors(navigationRailContainerColor = navigationSurface.color,
-                        navigationRailContentColor = navigationSurface.contentColor,
-                        navigationBarContainerColor = navigationSurface.color,
-                        navigationBarContentColor = navigationSurface.contentColor),
+                else NavigationSuiteDefaults.colors(navigationRailContainerColor = navigationSurface.color,
+                    navigationRailContentColor = navigationSurface.contentColor,
+                    navigationBarContainerColor = navigationSurface.color,
+                    navigationBarContentColor = navigationSurface.contentColor),
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 content = stableContent,

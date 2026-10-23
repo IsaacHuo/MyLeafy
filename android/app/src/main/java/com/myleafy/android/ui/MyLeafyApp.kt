@@ -68,12 +68,12 @@ fun MyLeafyApp(
         com.myleafy.android.ui.components.LocalUpdatePresentationGate provides updateGate,
         com.myleafy.android.ui.components.LocalSchoolRecoveryProgress provides recoveryProgress,
     ) {
-    MyLeafyNavHost(
-        navController = navController,
-        activeAppScopeStore = application.container.activeAppScopeStore,
-        timetableBackground = timetableBackground,
-    )
-    if (recoveryProgress == null) com.myleafy.android.features.profile.UpdatePromptHost(application.container.appUpdateManager, navController, updateGate)
+        MyLeafyNavHost(
+            navController = navController,
+            activeAppScopeStore = application.container.activeAppScopeStore,
+            timetableBackground = timetableBackground,
+        )
+        if (recoveryProgress == null) com.myleafy.android.features.profile.UpdatePromptHost(application.container.appUpdateManager, navController, updateGate)
     }
 
     LaunchedEffect(deepLinkIntent) {

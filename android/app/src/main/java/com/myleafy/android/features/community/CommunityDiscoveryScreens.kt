@@ -96,8 +96,7 @@ class CommunitySearchViewModel(
                 val page = repository.feedPage(FeedQuery(limit = 20, campus_id = campusId, search = query, cursor = if (append) snapshot.nextCursor else null))
                 if (version != generation) return@launch
                 _uiState.value = _uiState.value.copy(posts = (if (append) snapshot.posts + page.posts else page.posts).distinctBy { it.id }, nextCursor = page.next_cursor, isLoading = false, loadingMore = false)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (failure: Exception) { if (version == generation) _uiState.value = _uiState.value.copy(isLoading = false, loadingMore = false, error = failure.toCommunityMessage("搜索失败")) }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { if (version == generation) _uiState.value = _uiState.value.copy(isLoading = false, loadingMore = false, error = failure.toCommunityMessage("搜索失败")) }
         }
     }
 }

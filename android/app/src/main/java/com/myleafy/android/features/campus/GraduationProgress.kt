@@ -24,10 +24,10 @@ data class GraduationProgress(
             val nonTotal = requirements.filterNot { it.isTotal }
             val aggregate = nonTotal.filter { it.isAggregate }
             val groups = (if (aggregate.isEmpty()) nonTotal else aggregate).groupBy { category(it.label + it.courseName, it.label) }
-            val categories = groups.toSortedMap(compareBy<String> { when(it) { "公选课" -> 0; "专选课" -> 1; else -> 2 } }.thenBy { it }).map { (label, entries) ->
+            val categories = groups.toSortedMap(compareBy<String> { when (it) { "公选课" -> 0; "专选课" -> 1; else -> 2 } }.thenBy { it }).map { (label, entries) ->
                 val aggregates = entries.filter { it.isAggregate }
                 val required = if (aggregates.isNotEmpty()) aggregates.maxOf { maxOf(it.credits, it.plannedCredits ?: 0.0) }
-                    else entries.sumOf { maxOf(it.credits, it.plannedCredits ?: 0.0) }
+                else entries.sumOf { maxOf(it.credits, it.plannedCredits ?: 0.0) }
                 val completed = when {
                     label == "公选课" -> summary?.publicElectiveCredits
                     label == "专选课" -> summary?.professionalMajorElectiveCredits

@@ -38,10 +38,7 @@ class SportsViewModel(private val repository: CampusLifeRepository) : ViewModel(
         if (_saving.value) return
         _saving.value = true
         viewModelScope.launch {
-            try { block(); _error.value = null; onSaved() }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
-            finally { _saving.value = false }
+            try { block(); _error.value = null; onSaved() } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { _error.value = failure.message ?: "保存失败" } finally { _saving.value = false }
         }
     }
 
@@ -91,10 +88,7 @@ class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel
         if (_saving.value) return
         _saving.value = true
         viewModelScope.launch {
-            try { block(); _error.value = null; onSaved() }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { _error.value = failure.message ?: "保存失败" }
-            finally { _saving.value = false }
+            try { block(); _error.value = null; onSaved() } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { _error.value = failure.message ?: "保存失败" } finally { _saving.value = false }
         }
     }
 
@@ -118,9 +112,7 @@ class MedicalViewModel(private val repository: CampusLifeRepository) : ViewModel
     fun importPhotos(entryId: String, uris: List<Uri>) = mutate {
         val failures = mutableListOf<String>()
         uris.forEachIndexed { index, uri ->
-            try { repository.importMedicalPhoto(entryId, uri) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { failures += "第 ${index + 1} 张照片：${failure.message ?: "导入失败"}" }
+            try { repository.importMedicalPhoto(entryId, uri) } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { failures += "第 ${index + 1} 张照片：${failure.message ?: "导入失败"}" }
         }
         check(failures.isEmpty()) { failures.joinToString("；") }
     }

@@ -71,8 +71,7 @@ class CatalogRatingsViewModel(private val repository: CatalogRatingRepository) :
                 val previous = mutableState.value.items.firstOrNull { it.profile.id == itemId }
                 if (mutableState.value.kind == snapshot.kind) mutableState.value = mutableState.value.copy(items = mutableState.value.items.map { if (it.profile.id == itemId) updated.copy(localTeachers = previous?.localTeachers.orEmpty()) else it }, saving = false)
                 else workspaces[snapshot.kind] = (workspaces[snapshot.kind] ?: snapshot).let { it.copy(items = it.items.map { row -> if (row.profile.id == itemId) updated.copy(localTeachers = row.localTeachers) else row }, saving = false) }
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { if (scope == identity && mutableState.value.kind == snapshot.kind) mutableState.value = mutableState.value.copy(error = failure.message ?: "评分失败", saving = false) }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { if (scope == identity && mutableState.value.kind == snapshot.kind) mutableState.value = mutableState.value.copy(error = failure.message ?: "评分失败", saving = false) }
         }
     }
     fun suggest(name: String, unit: String, teacher: String?, category: String?, credit: Double?, stars: Int?, note: String?, onSaved: () -> Unit) {
@@ -83,8 +82,7 @@ class CatalogRatingsViewModel(private val repository: CatalogRatingRepository) :
         viewModelScope.launch { try {
             repository.suggest(snapshot.kind, name, unit, teacher, category, credit, stars, note)
             if (scope == identity && mutableState.value.kind == snapshot.kind) { mutableState.value = mutableState.value.copy(saving = false, error = null); onSaved() }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Exception) { if (scope == identity && mutableState.value.kind == snapshot.kind) mutableState.value = mutableState.value.copy(saving = false, error = failure.message ?: "建议提交失败") }
+        } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { if (scope == identity && mutableState.value.kind == snapshot.kind) mutableState.value = mutableState.value.copy(saving = false, error = failure.message ?: "建议提交失败") }
         }
     }
     private fun load(append: Boolean) {
@@ -98,8 +96,7 @@ class CatalogRatingsViewModel(private val repository: CatalogRatingRepository) :
                 if (version != generation || scope != identity) return@launch
                 val options = page.mapNotNull { when (snapshot.kind) { RatingCatalogKind.TEACHER -> it.profile.unit; RatingCatalogKind.COURSE -> it.profile.category; RatingCatalogKind.DISH -> it.profile.location } }
                 mutableState.value = mutableState.value.copy(items = (if (append) snapshot.items + page else page).distinctBy { it.profile.id }, options = (snapshot.options + options).distinct().sorted(), loading = false, hasMore = page.size == 20)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { if (version == generation && scope == identity) mutableState.value = mutableState.value.copy(loading = false, error = failure.message ?: "评价列表加载失败") }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { if (version == generation && scope == identity) mutableState.value = mutableState.value.copy(loading = false, error = failure.message ?: "评价列表加载失败") }
         }
     }
 }

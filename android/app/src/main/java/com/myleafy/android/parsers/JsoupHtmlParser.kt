@@ -492,8 +492,7 @@ class JsoupHtmlParser : HtmlParser {
                     if (leaf == "外专业") cross = value
                 }
                 if (group.contains("公共选修") || group.contains("通识选修")) {
-                    if (leaf in listOf("总计", "合计") || leaf == group) { publicTotal = value; raw["公共选修总计"] = text }
-                    else buckets[bottom.getOrNull(index).orEmpty()] = value
+                    if (leaf in listOf("总计", "合计") || leaf == group) { publicTotal = value; raw["公共选修总计"] = text } else buckets[bottom.getOrNull(index).orEmpty()] = value
                 }
             }
             raw["所得学分"] = cells[totalColumn]
@@ -927,7 +926,7 @@ class JsoupHtmlParser : HtmlParser {
                 if (label.length >= 45 || label.contains("学时") || label.contains("占比")) continue
                 val distinct = row.distinct().filter(String::isNotBlank)
                 val value = if (creditColumn >= 0 && creditColumn != labelIndex) row.getOrNull(creditColumn)
-                    else if (distinct.size == 2 && distinct.first() == label) distinct.last() else null
+                else if (distinct.size == 2 && distinct.first() == label) distinct.last() else null
                 // Credits are a whole cell, never a number extracted from a code or a prose sentence.
                 val raw = value?.removeSuffix("学分")?.trim() ?: continue
                 if (!raw.matches(Regex("[0-9]+(?:\\.[0-9]+)?"))) continue

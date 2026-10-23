@@ -84,8 +84,7 @@ class LoginViewModel(
                 ensureActive()
                 challenge = next
                 state.value = state.value.copy(isCaptchaLoading = false, captchaBytes = next.imageBytes)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) {
                 state.value = state.value.copy(isCaptchaLoading = false,
                     captchaErrorMessage = captchaErrorMessage(error))
             }

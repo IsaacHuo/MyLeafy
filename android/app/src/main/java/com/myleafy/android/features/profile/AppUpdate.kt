@@ -132,8 +132,7 @@ class AppUpdateManager(private val context: Context, private val owner: Coroutin
                 if (manual) state.value = when { info == null -> UpdateUiState.Unpublished; info.versionCode <= installedCode -> UpdateUiState.UpToDate(BuildConfig.VERSION_NAME); else -> UpdateUiState.Available(info) }
                 else if (info != null && info.versionCode > installedCode &&
                     !(prefs.getInt("snooze_code", 0) == info.versionCode && now < prefs.getLong("snooze_until", 0))) offer.value = info
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { if (manual) state.value = UpdateUiState.Error(error.message ?: "检查更新失败") }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { if (manual) state.value = UpdateUiState.Error(error.message ?: "检查更新失败") }
         }
     }
     fun later(info: AppUpdateInfo) {
@@ -162,8 +161,7 @@ class AppUpdateManager(private val context: Context, private val owner: Coroutin
                 val id = downloads.enqueue(request)
                 prefs.edit().putLong("download_id", id).putString("release", repository.json.encodeToString(info)).commit()
                 watch(id, info, true)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { state.value = UpdateUiState.Error(error.message ?: "下载失败") }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { state.value = UpdateUiState.Error(error.message ?: "下载失败") }
         }
     }
     private suspend fun restoreDownload() {
@@ -174,9 +172,7 @@ class AppUpdateManager(private val context: Context, private val owner: Coroutin
             val id = prefs.getLong("download_id", -1)
             if (id < 0) return
             downloadJob = owner.launch {
-                try { watch(id, info) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (error: Exception) { state.value = UpdateUiState.Error(error.message ?: "无法恢复下载") }
+                try { watch(id, info) } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { state.value = UpdateUiState.Error(error.message ?: "无法恢复下载") }
             }
         } catch (error: Exception) { state.value = UpdateUiState.Error(error.message ?: "无法恢复下载") }
     }
@@ -193,8 +189,7 @@ class AppUpdateManager(private val context: Context, private val owner: Coroutin
                 }
             }
             if (progress.first == DownloadManager.STATUS_SUCCESSFUL) {
-                try { state.value = UpdateUiState.Downloaded(info, repository.verify(info)); if (autoInstall) requestingInstall.value = true }
-                catch (error: Exception) { clearDownload(); throw error }
+                try { state.value = UpdateUiState.Downloaded(info, repository.verify(info)); if (autoInstall) requestingInstall.value = true } catch (error: Exception) { clearDownload(); throw error }
                 return
             }
             if (progress.first == DownloadManager.STATUS_FAILED) {

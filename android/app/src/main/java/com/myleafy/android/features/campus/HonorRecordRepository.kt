@@ -47,26 +47,26 @@ class HonorRecordRepository(
         val directory = File(context.filesDir, "HonorRecords/$scopeKey").apply { mkdirs() }
         val target = File(directory, localFilename)
         try {
-        resolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { input.copyTo(it) }
-        } ?: error("无法读取所选文件")
-        check(scopeKey == scopeStore.current.scopeKey) { "账号已切换" }
-        val now = System.currentTimeMillis()
-        dao.upsert(
-            HonorRecordEntity(
-                scopeKey = scopeKey,
-                id = id,
-                title = title.ifBlank { displayName },
-                note = "",
-                awardedAt = null,
-                originalFilename = displayName,
-                localFilename = localFilename,
-                contentType = mime,
-                importedAt = now,
-                updatedAt = now,
-            ),
-        )
-        id
+            resolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { input.copyTo(it) }
+            } ?: error("无法读取所选文件")
+            check(scopeKey == scopeStore.current.scopeKey) { "账号已切换" }
+            val now = System.currentTimeMillis()
+            dao.upsert(
+                HonorRecordEntity(
+                    scopeKey = scopeKey,
+                    id = id,
+                    title = title.ifBlank { displayName },
+                    note = "",
+                    awardedAt = null,
+                    originalFilename = displayName,
+                    localFilename = localFilename,
+                    contentType = mime,
+                    importedAt = now,
+                    updatedAt = now,
+                ),
+            )
+            id
         } catch (failure: Exception) { target.delete(); throw failure }
     }
 
@@ -139,11 +139,8 @@ class HonorRecordsViewModel(
         viewModelScope.launch {
             val failures = mutableListOf<String>()
             try { uris.forEachIndexed { index, uri ->
-                try { repository.importFile(uri, "") }
-                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                catch (failure: Exception) { failures += "第 ${index + 1} 个文件：${failure.message ?: "导入失败"}" }
-            }; _message.value = failures.takeIf { it.isNotEmpty() }?.joinToString("；") }
-            finally { _saving.value = false }
+                try { repository.importFile(uri, "") } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { failures += "第 ${index + 1} 个文件：${failure.message ?: "导入失败"}" }
+            }; _message.value = failures.takeIf { it.isNotEmpty() }?.joinToString("；") } finally { _saving.value = false }
         }
     }
 
@@ -158,9 +155,7 @@ class HonorRecordsViewModel(
                 repository.update(record, title, note, awardedAt)
                 _message.value = null
                 onSaved()
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (failure: Exception) { _message.value = failure.message ?: "保存失败" }
-            finally { _saving.value = false }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { _message.value = failure.message ?: "保存失败" } finally { _saving.value = false }
         }
     }
 

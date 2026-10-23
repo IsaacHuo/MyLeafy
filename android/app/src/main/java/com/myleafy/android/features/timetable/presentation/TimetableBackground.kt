@@ -88,8 +88,8 @@ fun TimetableBackground(
     visible: Boolean = true,
 ) {
     val selectedPath = if (!settings.enabled || settings.kind == "color") null
-        else if (Build.VERSION.SDK_INT < 31 && settings.blurRadius > 0) settings.blurredPhotoPath ?: settings.photoPath
-        else settings.photoPath
+    else if (Build.VERSION.SDK_INT < 31 && settings.blurRadius > 0) settings.blurredPhotoPath ?: settings.photoPath
+    else settings.photoPath
     // Root ownership survives tab/route changes. Only the selected file restarts decoding.
     val bitmap by key(selectedPath) {
         produceState<android.graphics.Bitmap?>(null) {

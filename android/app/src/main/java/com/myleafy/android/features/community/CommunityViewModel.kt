@@ -74,8 +74,7 @@ class CommunityViewModel(
                             retries = 0
                         }
                         break
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (failure: Exception) {
+                    } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) {
                         Logger.getLogger("CommunityViewModel").warning("$kind subscription interrupted: ${failure.javaClass.simpleName}")
                         kotlinx.coroutines.delay((1_000L shl retries.coerceAtMost(5)).coerceAtMost(30_000L))
                         retries++
@@ -198,8 +197,7 @@ class CommunityViewModel(
                         CachedFeed(posts, page.next_cursor, snapshot.selection, lastLoadedAt),
                     )
                 }
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) {
                 if (generation == requestGeneration) {
                     _uiState.value = _uiState.value.copy(
                         loadingMore = false,

@@ -46,10 +46,8 @@ import java.util.UUID
                         context.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { input.copyTo(it) } } ?: error("无法读取 $name")
                         check(scope == container.activeAppScopeStore.current.scopeKey) { "账号已切换" }
                         container.campusPersonalDao.save(ComprehensiveEvidenceEntity(scope, id, college, cohort, component, name, target.absolutePath, mime, System.currentTimeMillis()))
-                    } catch (cancelled: CancellationException) { target?.delete(); throw cancelled }
-                    catch (failure: Exception) { target?.delete(); failures += failure.message ?: "材料导入失败" }
-                } } }
-                finally { importing = false; error = failures.takeIf { it.isNotEmpty() }?.joinToString("；") }
+                    } catch (cancelled: CancellationException) { target?.delete(); throw cancelled } catch (failure: Exception) { target?.delete(); failures += failure.message ?: "材料导入失败" }
+                } } } finally { importing = false; error = failures.takeIf { it.isNotEmpty() }?.joinToString("；") }
             }
         }
     }

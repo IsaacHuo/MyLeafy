@@ -309,20 +309,20 @@ private fun AnimatedScheduleContent(
         label = "schedule-section",
     ) { section ->
         sectionState.SaveableStateProvider(section.name) {
-        ScheduleContent(
-            section = section,
-            memos = memos,
-            events = events,
-            onNewMemo = onNewMemo,
-            onMemoClick = onMemoClick,
-            onNewEvent = onNewEvent,
-            onEventClick = onEventClick,
-            onFeatureClick = onFeatureClick,
-            reportsState = reportsState,
-            notificationPermissionDenied = notificationPermissionDenied,
-            onToggleReport = onToggleReport,
-            onSetEventReminder = onSetEventReminder,
-        )
+            ScheduleContent(
+                section = section,
+                memos = memos,
+                events = events,
+                onNewMemo = onNewMemo,
+                onMemoClick = onMemoClick,
+                onNewEvent = onNewEvent,
+                onEventClick = onEventClick,
+                onFeatureClick = onFeatureClick,
+                reportsState = reportsState,
+                notificationPermissionDenied = notificationPermissionDenied,
+                onToggleReport = onToggleReport,
+                onSetEventReminder = onSetEventReminder,
+            )
         }
     }
 }
@@ -356,62 +356,62 @@ internal fun ScheduleContent(
     onSetEventReminder: (String, Boolean, Int) -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
-    when (section) {
-        ScheduleSection.MEMOS -> LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = LeafySpacing.micro, bottom = com.myleafy.android.ui.theme.LeafyComponentSize.floatingActionClearance),
-            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-        ) {
-            if (memos.isEmpty()) {
-                item {
-                    LeafyEmptyState(
-                        title = "还没有随记",
-                        message = "记下一句话或一个想法。",
-                        icon = Icons.AutoMirrored.Outlined.Notes,
-                    )
-                }
-            } else {
-                items(memos, key = { it.id }) { memo ->
-                    MemoRow(memo = memo, onClick = { onMemoClick(memo) })
-                }
-            }
-        }
-
-        ScheduleSection.EVENTS -> LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = LeafySpacing.micro, bottom = com.myleafy.android.ui.theme.LeafyComponentSize.floatingActionClearance),
-            verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
-        ) {
-            if (events.isEmpty()) {
-                item {
-                    LeafyEmptyState(
-                        title = "还没有个人日程",
-                        message = "从这里或课表空白格添加，保存后两处会立即同步。",
-                        icon = Icons.Outlined.CalendarMonth,
-                    )
-                }
-            } else {
-                items(events, key = { it.id }) { event ->
-                    EventRow(event = event, onClick = { onEventClick(event) })
+        when (section) {
+            ScheduleSection.MEMOS -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = LeafySpacing.micro, bottom = com.myleafy.android.ui.theme.LeafyComponentSize.floatingActionClearance),
+                verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+            ) {
+                if (memos.isEmpty()) {
+                    item {
+                        LeafyEmptyState(
+                            title = "还没有随记",
+                            message = "记下一句话或一个想法。",
+                            icon = Icons.AutoMirrored.Outlined.Notes,
+                        )
+                    }
+                } else {
+                    items(memos, key = { it.id }) { memo ->
+                        MemoRow(memo = memo, onClick = { onMemoClick(memo) })
+                    }
                 }
             }
-        }
 
-        ScheduleSection.REPORTS -> ScheduleReportsContent(
-            state = reportsState,
-            events = events,
-            notificationPermissionDenied = notificationPermissionDenied,
-            onToggleReport = onToggleReport,
-            onSetEventReminder = onSetEventReminder,
-        )
-    }
-    if (section != ScheduleSection.REPORTS) {
-        androidx.compose.material3.FloatingActionButton(
-            onClick = if (section == ScheduleSection.MEMOS) onNewMemo else onNewEvent,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(LeafySpacing.card).size(56.dp).testTag("schedule-create"),
-            shape = androidx.compose.foundation.shape.CircleShape,
-        ) { Icon(Icons.Filled.Add, contentDescription = if (section == ScheduleSection.MEMOS) "新建随记" else "添加个人日程") }
-    }
+            ScheduleSection.EVENTS -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = LeafySpacing.micro, bottom = com.myleafy.android.ui.theme.LeafyComponentSize.floatingActionClearance),
+                verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+            ) {
+                if (events.isEmpty()) {
+                    item {
+                        LeafyEmptyState(
+                            title = "还没有个人日程",
+                            message = "从这里或课表空白格添加，保存后两处会立即同步。",
+                            icon = Icons.Outlined.CalendarMonth,
+                        )
+                    }
+                } else {
+                    items(events, key = { it.id }) { event ->
+                        EventRow(event = event, onClick = { onEventClick(event) })
+                    }
+                }
+            }
+
+            ScheduleSection.REPORTS -> ScheduleReportsContent(
+                state = reportsState,
+                events = events,
+                notificationPermissionDenied = notificationPermissionDenied,
+                onToggleReport = onToggleReport,
+                onSetEventReminder = onSetEventReminder,
+            )
+        }
+        if (section != ScheduleSection.REPORTS) {
+            androidx.compose.material3.FloatingActionButton(
+                onClick = if (section == ScheduleSection.MEMOS) onNewMemo else onNewEvent,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(LeafySpacing.card).size(56.dp).testTag("schedule-create"),
+                shape = androidx.compose.foundation.shape.CircleShape,
+            ) { Icon(Icons.Filled.Add, contentDescription = if (section == ScheduleSection.MEMOS) "新建随记" else "添加个人日程") }
+        }
     }
 }
 

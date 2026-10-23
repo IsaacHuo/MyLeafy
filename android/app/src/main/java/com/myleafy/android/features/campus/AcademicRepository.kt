@@ -99,20 +99,20 @@ class LiveAcademicRepository(
                 failures += result.failures
                 gradeDao.replaceAll(scopeKey,
                     result.grades.map { g ->
-                GradeEntity(
-                    scopeKey = scopeKey,
-                    id = "${g.term}|${g.courseCode}|${g.courseName}|${g.credit}|${g.examNature}|${g.score}",
-                    term = g.term,
-                    courseName = g.courseName,
-                    credit = g.credit,
-                    score = g.score,
-                    type = g.type,
-                    courseCode = g.courseCode,
-                    courseAttribute = g.courseAttribute,
-                    courseCategory = g.courseCategory,
-                    examNature = g.examNature,
-                )
-            },
+                        GradeEntity(
+                            scopeKey = scopeKey,
+                            id = "${g.term}|${g.courseCode}|${g.courseName}|${g.credit}|${g.examNature}|${g.score}",
+                            term = g.term,
+                            courseName = g.courseName,
+                            credit = g.credit,
+                            score = g.score,
+                            type = g.type,
+                            courseCode = g.courseCode,
+                            courseAttribute = g.courseAttribute,
+                            courseCategory = g.courseCategory,
+                            examNature = g.examNature,
+                        )
+                    },
                 )
                 gradeCount = result.grades.size
 

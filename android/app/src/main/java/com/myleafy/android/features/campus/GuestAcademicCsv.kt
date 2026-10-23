@@ -36,8 +36,7 @@ object GuestAcademicCsv {
         while (position < source.length) {
             val char = source[position]
             if (quoted) {
-                if (char == '"') { if (source.getOrNull(position + 1) == '"') { field.append('"'); position++ } else { quoted = false; closed = true } }
-                else field.append(char)
+                if (char == '"') { if (source.getOrNull(position + 1) == '"') { field.append('"'); position++ } else { quoted = false; closed = true } } else field.append(char)
             } else when (char) {
                 '"' -> { require(field.isEmpty() && !closed) { "CSV 第 $line 行：引号位置错误" }; quoted = true }
                 ',' -> finishField()

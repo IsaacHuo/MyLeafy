@@ -156,50 +156,50 @@ fun ProfileEditScreen(
                         .padding(LeafySpacing.page),
                     verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
                 ) {
-                state.error?.let { LeafyStatusBanner(it, isError = true) }
-                LeafyTextField(
-                enabled = !state.isSaving,
-                    value = state.nickname,
-                    onValueChange = viewModel::updateNickname,
-                    label = { Text("昵称（必填）") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LeafyTextField(
-                enabled = !state.isSaving,
-                    value = state.bio,
-                    onValueChange = viewModel::updateBio,
-                    label = { Text("简介") },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LeafyTextField(
-                enabled = !state.isSaving,
-                    value = state.major,
-                    onValueChange = viewModel::updateMajor,
-                    label = { Text("专业") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LeafyTextField(
-                enabled = !state.isSaving,
-                    value = state.grade,
-                    onValueChange = viewModel::updateGrade,
-                    label = { Text("年级") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LeafyPrimaryButton(
-                    onClick = viewModel::save,
-                    enabled = state.nickname.isNotBlank() && !state.isSaving,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (state.isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = LeafyStroke.progress)
+                    state.error?.let { LeafyStatusBanner(it, isError = true) }
+                    LeafyTextField(
+                        enabled = !state.isSaving,
+                        value = state.nickname,
+                        onValueChange = viewModel::updateNickname,
+                        label = { Text("昵称（必填）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LeafyTextField(
+                        enabled = !state.isSaving,
+                        value = state.bio,
+                        onValueChange = viewModel::updateBio,
+                        label = { Text("简介") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LeafyTextField(
+                        enabled = !state.isSaving,
+                        value = state.major,
+                        onValueChange = viewModel::updateMajor,
+                        label = { Text("专业") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LeafyTextField(
+                        enabled = !state.isSaving,
+                        value = state.grade,
+                        onValueChange = viewModel::updateGrade,
+                        label = { Text("年级") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LeafyPrimaryButton(
+                        onClick = viewModel::save,
+                        enabled = state.nickname.isNotBlank() && !state.isSaving,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (state.isSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(LeafyIconSize.standard), strokeWidth = LeafyStroke.progress)
+                        }
+                        Text(if (state.isSaving) "保存中…" else "保存资料")
                     }
-                    Text(if (state.isSaving) "保存中…" else "保存资料")
                 }
-            }
             }
         }
     }
