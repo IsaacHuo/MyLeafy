@@ -8,6 +8,8 @@ import com.myleafy.android.core.prefs.SettingsStore
 import com.myleafy.android.core.security.SchoolLoginCredentialStore
 import com.myleafy.android.core.security.StoredSchoolCredential
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 学校登录仓储（强智本科）。
@@ -44,17 +46,19 @@ class SchoolAuthRepository(
         client.loginUndergraduate(challenge, account, password, captcha)
         recovery?.manualAuthenticationCompleted()
 
-        runCatching {
-            credentialStore.save(
-                StoredSchoolCredential(
-                    campusId = CampusID.bjfu.rawValue,
-                    portal = "undergraduate",
-                    account = account,
-                    password = password,
-                    savedAt = System.currentTimeMillis(),
-                ),
-            )
-        }.onFailure { Log.w(TAG, "Login succeeded but credential autofill was not saved", it) }
+        withContext(Dispatchers.IO) {
+            runCatching {
+                credentialStore.save(
+                    StoredSchoolCredential(
+                        campusId = CampusID.bjfu.rawValue,
+                        portal = "undergraduate",
+                        account = account,
+                        password = password,
+                        savedAt = System.currentTimeMillis(),
+                    ),
+                )
+            }.onFailure { Log.w(TAG, "Login succeeded but credential autofill was not saved", it) }
+        }
 
         runCatching { settingsStore.setCampus(CampusID.bjfu.rawValue, account) }
             .onFailure { Log.w(TAG, "Login succeeded but local identity was not persisted", it) }
@@ -66,7 +70,7 @@ class SchoolAuthRepository(
         Result.failure(failure)
     }
 
-    override suspend fun logout() {
+    override suspend fun logout() = withContext(Dispatchers.IO) {
         val campusId = sessionState.identity?.campusId?.rawValue ?: CampusID.bjfu.rawValue
         client.clearSession()
         credentialStore.delete(campusId)

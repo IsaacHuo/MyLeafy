@@ -4,7 +4,9 @@ import android.util.Log
 import com.myleafy.android.core.security.SecureReadResult
 import com.myleafy.android.core.security.SecureStorage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.channels.awaitClose
@@ -68,7 +70,8 @@ class BackendClient(
         val response = execute("/v1/auth/sign-in/anonymous", "POST", body = "{}".toRequestBody(JSON), authenticated = false)
         val signedToken = response.token?.takeIf(String::isNotBlank)
             ?: throw BackendError(0, "missing_session", "无法建立登录状态，请重试。", null)
-        synchronized(lock) { checkOpen(); store.save(signedToken); token = signedToken }
+        withContext(Dispatchers.IO) { store.save(signedToken) }
+        synchronized(lock) { checkOpen(); token = signedToken }
     }
 
     suspend inline fun <reified T> request(
