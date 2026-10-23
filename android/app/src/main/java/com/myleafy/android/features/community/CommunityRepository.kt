@@ -62,6 +62,8 @@ interface CommunityRepository {
     /** 点赞/取消点赞，返回更新后的帖子。 */
     suspend fun togglePostLike(postId: String): PostDto
 
+    suspend fun toggleCommentLike(commentId: String, requestId: String): com.myleafy.android.shared.model.CommentLikeResultDto
+
     suspend fun togglePostFavorite(postId: String): PostDto
 
     suspend fun notifications(limit: Int = 50): List<NotificationDto>
@@ -207,6 +209,14 @@ class LiveCommunityRepository(
     override suspend fun togglePostLike(postId: String): PostDto {
         requireCommunityProfile(requireComplete = true)
         return requireService().togglePostLike(postId)
+    }
+
+    override suspend fun toggleCommentLike(
+        commentId: String,
+        requestId: String,
+    ): com.myleafy.android.shared.model.CommentLikeResultDto {
+        requireCommunityProfile(requireComplete = true)
+        return requireService().toggleCommentLike(commentId, requestId)
     }
 
     override suspend fun togglePostFavorite(postId: String): PostDto {

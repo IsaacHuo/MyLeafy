@@ -23,6 +23,7 @@ sealed interface PostDetailUiState {
         val commentLoadError: String? = null,
         val isLikePending: Boolean = false,
         val isFavoritePending: Boolean = false,
+        val commentLikePending: Set<String> = emptySet(),
         val isCommentPending: Boolean = false,
         val pendingModerationTarget: String? = null,
         val mutationError: String? = null,
@@ -50,6 +51,7 @@ class PostDetailViewModel(
     )
 
     private var pendingComment: PendingComment? = null
+    private val commentLikeRequestIds = mutableMapOf<String, String>()
 
     private val _uiState = MutableStateFlow<PostDetailUiState>(PostDetailUiState.Loading)
     val uiState: StateFlow<PostDetailUiState> = _uiState.asStateFlow()
@@ -154,6 +156,37 @@ class PostDetailViewModel(
                     _uiState.value = live.copy(
                         isFavoritePending = false,
                         mutationError = error.toCommunityMessage("收藏失败"),
+                    )
+                },
+            )
+        }
+    }
+
+    fun toggleCommentLike(commentId: String) {
+        val current = _uiState.value as? PostDetailUiState.Loaded ?: return
+        if (commentId in current.commentLikePending) return
+        val requestId = commentLikeRequestIds.getOrPut(commentId) { UUID.randomUUID().toString() }
+        _uiState.value = current.copy(commentLikePending = current.commentLikePending + commentId)
+        viewModelScope.launch {
+            runCatching { repository.toggleCommentLike(commentId, requestId) }.fold(
+                onSuccess = { result ->
+                    val live = _uiState.value as? PostDetailUiState.Loaded ?: return@fold
+                    _uiState.value = live.copy(
+                        threads = live.threads.map { thread ->
+                            thread.copy(
+                                root = thread.root.withCommentLike(result),
+                                replies = thread.replies.map { it.withCommentLike(result) },
+                            )
+                        },
+                        commentLikePending = live.commentLikePending - commentId,
+                    )
+                    commentLikeRequestIds.remove(commentId)
+                },
+                onFailure = { error ->
+                    val live = _uiState.value as? PostDetailUiState.Loaded ?: return@fold
+                    _uiState.value = live.copy(
+                        commentLikePending = live.commentLikePending - commentId,
+                        mutationError = error.toCommunityMessage("评论点赞失败"),
                     )
                 },
             )
@@ -300,3 +333,12 @@ class PostDetailViewModel(
         const val COMMENT_PAGE_SIZE = 20
     }
 }
+
+private fun com.myleafy.android.shared.model.CommentThreadDto.withCommentLike(
+    result: com.myleafy.android.shared.model.CommentLikeResultDto,
+): com.myleafy.android.shared.model.CommentThreadDto =
+    if (id == result.comment_id) {
+        copy(like_count = result.like_count, viewer_has_liked = result.viewer_has_liked)
+    } else {
+        this
+    }

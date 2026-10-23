@@ -179,6 +179,8 @@ fun ProfileContent(
                                 if (!profileState.profile.is_profile_complete) append(" · 资料待完善")
                             },
                             avatarLabel = name,
+                            avatarUrl = profileState.profile.avatar_url
+                                ?: profileState.profile.signed_avatar_url,
                             onClick = onEditProfileClick,
                         )
                     }
@@ -318,6 +320,7 @@ private fun ProfileEntry(
     title: String,
     subtitle: String,
     avatarLabel: String,
+    avatarUrl: String? = null,
     onClick: (() -> Unit)?,
 ) {
     LeafySettingsRow(
@@ -330,7 +333,7 @@ private fun ProfileEntry(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
-        leadingContent = { ProfileAvatar(avatarLabel) },
+        leadingContent = { ProfileAvatar(avatarLabel, avatarUrl) },
         trailingContent = {
             if (onClick != null) {
                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.mutedIcon))
@@ -341,18 +344,34 @@ private fun ProfileEntry(
 }
 
 @Composable
-private fun ProfileAvatar(label: String) {
+private fun ProfileAvatar(label: String, url: String? = null) {
     Surface(
         modifier = Modifier.size(LeafyComponentSize.featureIconContainer),
         shape = CircleShape,
         color = MaterialTheme.leafySurfaces.accentSoft,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label.trim().take(1).ifBlank { "我" },
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+        val initial = label.trim().take(1).ifBlank { "我" }
+        if (!url.isNullOrBlank()) {
+            coil.compose.SubcomposeAsyncImage(
+                model = url,
+                contentDescription = label,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                loading = {},
+                error = {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(initial, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                },
             )
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }

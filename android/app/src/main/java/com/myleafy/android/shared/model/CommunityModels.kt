@@ -175,6 +175,13 @@ data class CommentThreadPageDto(
     val next_cursor_id: String? = null,
 )
 
+@Serializable
+data class CommentLikeResultDto(
+    val comment_id: String,
+    val like_count: Int = 0,
+    val viewer_has_liked: Boolean = false,
+)
+
 /** 评论线程（根评论 + 最多一层回复），展示用。 */
 data class CommentThread(
     val root: CommentThreadDto,

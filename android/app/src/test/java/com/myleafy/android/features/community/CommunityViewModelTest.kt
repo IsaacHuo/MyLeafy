@@ -262,6 +262,10 @@ private class FakeCommunityRepository : CommunityRepository {
         afterId: String?,
     ): CommentThreadPage = CommentThreadPage(emptyList())
     override suspend fun togglePostLike(postId: String): PostDto = error("unused")
+    override suspend fun toggleCommentLike(
+        commentId: String,
+        requestId: String,
+    ): com.myleafy.android.shared.model.CommentLikeResultDto = error("unused")
     override suspend fun togglePostFavorite(postId: String): PostDto =
         requireNotNull(currentPost).copy(viewer_has_favorited = !requireNotNull(currentPost).viewer_has_favorited)
     override suspend fun notifications(limit: Int): List<NotificationDto> = emptyList()
