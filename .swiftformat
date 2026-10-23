@@ -1,0 +1,6 @@
+# Fixed whitespace-only rules; tool upgrades cannot silently enable rewrites.
+--swift-version 5.0
+--indent 4
+--linebreaks lf
+--maxwidth 120
+--rules indent,linebreaks,linebreakAtEndOfFile,trailingSpace,consecutiveBlankLines,consecutiveSpaces,spaceAroundBraces,spaceAroundBrackets,spaceAroundGenerics,spaceAroundOperators,spaceAroundParens,spaceInsideBraces,spaceInsideBrackets,spaceInsideGenerics,spaceInsideParens,blankLinesAtStartOfScope,blankLinesAtEndOfScope,wrap,wrapArguments
