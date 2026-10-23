@@ -98,9 +98,18 @@ struct TimetableRefreshUseCase {
     }
 
     static func parseRecords(html: String) async throws -> [ParsedCourseRecord] {
-        try await Task.detached(priority: .userInitiated) {
-            try HTMLParser.parseTimetableResult(html: html).records
-        }.value
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            return try HTMLParser.parseTimetableResult(html: html).records
+        }
+        let records = try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        try Task.checkCancellation()
+        return records
     }
 
     @MainActor

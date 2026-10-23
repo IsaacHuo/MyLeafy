@@ -792,11 +792,13 @@ final class CommunityPublishCoordinator: ObservableObject {
         setState(taskID, .uploading)
     }
 
-    private func applyProgress(
+    func applyProgress(
         descriptor: CommunityBackgroundTransferDescriptor,
         progress: Double
     ) {
         guard let taskIndex = tasks.firstIndex(where: { $0.id == descriptor.publishTaskID }),
+              isCurrentOwner(tasks[taskIndex]), !tasks[taskIndex].state.isTerminal,
+              tasks[taskIndex].state != .cancelling, tasks[taskIndex].state != .failed,
               let mediaIndex = tasks[taskIndex].media.firstIndex(where: { $0.id == descriptor.mediaID }) else {
             return
         }
@@ -811,9 +813,11 @@ final class CommunityPublishCoordinator: ObservableObject {
             let uploaded = Double(descriptor.offset) + progress * Double(descriptor.byteCount)
             resolved = min(0.9, uploaded / Double(max(1, media.byteSize)) * 0.9)
         }
-        tasks[taskIndex].media[mediaIndex].progress = max(media.progress, resolved)
+        let updated = max(media.progress, resolved)
+        guard updated > media.progress else { return }
+        tasks[taskIndex].media[mediaIndex].progress = updated
         tasks[taskIndex].updatedAt = Date()
-        persistTasks()
+        // Byte progress is transient; upload paths and state changes persist recovery checkpoints.
     }
 
     private func setState(_ taskID: UUID, _ state: CommunityPublishTaskState) {
