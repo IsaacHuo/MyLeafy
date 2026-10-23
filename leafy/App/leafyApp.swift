@@ -115,7 +115,7 @@ struct LeafyApp: App {
         }
     }
 
-    private var productionRoot: some View {
+    private var presentedRoot: some View {
             Group {
                 if !appNavigation.requiresLoginAfterAccountDeletion,
                    networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled {
@@ -186,6 +186,10 @@ struct LeafyApp: App {
             .preferredColorScheme(appearancePreference.preferredColorScheme)
             .animation(appearanceAnimation, value: appAppearancePreferenceRaw)
             .animation(appearanceAnimation, value: appThemeCustomColorHex)
+    }
+
+    private var lifecycleRoot: some View {
+        presentedRoot
             .onAppear {
                 ICloudSyncCoordinator.shared.configure(context: sharedModelContainer.mainContext)
                 retryPendingFileCleanup()
@@ -256,6 +260,10 @@ struct LeafyApp: App {
             .onReceive(NotificationCenter.default.publisher(for: AppStoreReviewCoordinator.successfulSyncRecordedNotification)) { _ in
                 scheduleReviewRequestIfEligible()
             }
+    }
+
+    private var productionRoot: some View {
+        lifecycleRoot
         .onReceive(NotificationCenter.default.publisher(for: .campusIdentityDidChange)) { notification in
             guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
             networkManager.cancelInFlightRequests()

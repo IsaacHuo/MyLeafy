@@ -17,6 +17,7 @@
 | R11 | 主 App/扩展使用 App Group defaults、文件日期和磁盘容量，却缺相应 required-reason 声明；扩展没有独立 manifest。 | 主 App 补 UserDefaults 1C8F.1、FileTimestamp C617.1、DiskSpace E174.1；Share 独立声明相同实际用途；Widget 仅声明实际 UserDefaults 用途。依据 [Apple 官方说明](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype)，plist 结构检查并核对构建产物；App Store 校验另属发布流程。 |
 | R12 | 默认工程 `Item` 模型已不在 schema 且全仓无类型调用。 | 完整读取与生产/测试/配置引用检查后删除；泛型参数同名不视为引用。未按文件长度拆分或删除实际功能。 |
 | R13 | 根 README 仍描述旧五 Tab 和按学年浏览，与当前三 Tab、固定容器及可选 iCloud 不符。 | 全文核对后修正 iOS 产品说明，保持当前 state 与实际导航一致；未改 Android 或后台说明。 |
+| R14 | 远程 Xcode 26.6 对 App 根视图整条修饰链类型检查超时，本地 Xcode 27 编译不能证明受支持工具链通过。 | 在同一 App 内把展示/弹窗、生命周期和通知/环境分别表达为私有 opaque View 属性；保留原修饰顺序、状态归属及全部回调。这针对真实编译故障，不按文件长度拆 View、不引入 AnyView。构建验证，不增加镜像测试。 |
 
 ## 配置、资源与本地化
 
