@@ -2,8 +2,10 @@ package com.myleafy.android.navigation
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -94,12 +96,19 @@ class RootNavigationSmokeTest {
                 }
                 screen.recycle()
             }
-            listOf("campus", "schedule", "profile").forEach { route ->
+            listOf("campus", "profile").forEach { route ->
                 composeRule.onNodeWithTag("root-tab-$route").performClick()
                 composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
                 composeRule.onNodeWithTag("root-tab-timetable").performClick()
                 waitForPhoto()
             }
+            // 日迹是校园二级页面，仍然不能覆盖课表照片背景。
+            composeRule.onNodeWithTag("root-tab-campus").performClick()
+            composeRule.onNodeWithText("日迹记录").performClick()
+            composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
+            composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+            composeRule.onNodeWithTag("root-tab-timetable").performClick()
+            waitForPhoto()
             composeRule.onNodeWithTag("root-tab-profile").performClick()
             composeRule.onNodeWithText("课表背景").performScrollTo().performClick()
             composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
@@ -246,22 +255,38 @@ class RootNavigationSmokeTest {
             "Sports" to listOf("阳光长跑", "体测记录", "场馆开放"),
         )
         for ((domain, entries) in tools) {
-            composeRule.onNodeWithTag("campus-domain-$domain").performClick()
+            selectCampusDomain(domain)
             for (title in entries) {
                 composeRule.onNodeWithText(title).performScrollTo().performClick()
                 composeRule.waitForIdle()
                 composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
                 back()
+                selectCampusDomain(domain)
                 composeRule.onNodeWithTag("campus-domain-$domain").assertIsSelected()
             }
         }
         composeRule.onNodeWithTag("root-tab-timetable").performClick()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
+        // Sports 是最后一个可见的窄屏胶囊；先恢复它再滚动到医疗/评价领域。
+        selectCampusDomain("Sports")
         composeRule.onNodeWithTag("campus-domain-Sports").assertIsSelected()
-        composeRule.onNodeWithTag("campus-domain-Medical").performClick()
+        selectCampusDomain("Medical")
         composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
-        composeRule.onNodeWithTag("campus-domain-Ratings").performClick()
+        selectCampusDomain("Ratings")
         composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
+    }
+
+    /** 校园领域在窄屏是横向 LazyRow、宽屏是竖向栏；先滚动到目标再点击。 */
+    private fun selectCampusDomain(domain: String) {
+        val tag = "campus-domain-$domain"
+        val chips = composeRule.onAllNodesWithTag("campus-domain-chips").fetchSemanticsNodes()
+        if (chips.isNotEmpty()) {
+            composeRule.onNodeWithTag("campus-domain-chips").performScrollToNode(hasTestTag(tag))
+        } else {
+            composeRule.onNodeWithTag("campus-domain-sidebar").performScrollToNode(hasTestTag(tag))
+        }
+        composeRule.onNodeWithTag(tag).performClick()
+        composeRule.waitForIdle()
     }
 
     private fun activateCommunityScope() {
@@ -314,7 +339,7 @@ class RootNavigationSmokeTest {
     @Test fun allComprehensiveCollegeRulesRenderWithoutCrashing() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
-        composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
+        selectCampusDomain("Teaching")
         composeRule.onNodeWithText("综素测算").performScrollTo().performClick()
         com.myleafy.android.features.campus.ComprehensiveQualityRuleCatalog.participatingCollegeNames.forEach { name ->
             composeRule.onNodeWithTag("comprehensive-colleges").performScrollToNode(hasText(name))

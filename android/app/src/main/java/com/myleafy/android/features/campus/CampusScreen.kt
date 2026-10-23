@@ -243,6 +243,7 @@ private fun CampusDomainChips(
     onDomainSelected: (CampusDomain) -> Unit,
 ) {
     LazyRow(
+        modifier = Modifier.testTag("campus-domain-chips"),
         contentPadding = PaddingValues(horizontal = LeafySpacing.page, vertical = LeafySpacing.compact),
         horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
@@ -273,7 +274,9 @@ private fun CampusDomainSidebar(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .testTag("campus-domain-sidebar"),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
     ) {
         domains.forEach { domain ->
