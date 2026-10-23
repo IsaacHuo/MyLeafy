@@ -31,7 +31,7 @@
 |---|---|---|
 | 自动化用例 | [leafyTests](../leafyTests/) 含 AcademicReliability、CampusNavigation、TimetablePersonalSync、ScheduleMemo、ICloudSyncInfrastructure、社区队列等；测试存在不等于本轮执行通过 | [JVM / Roborazzi](../android/app/src/test/) 与 [原生设备测试](../android/app/src/androidTest/) 含解析、作用域 Room、共享、通知规划、导航及背景生命周期 |
 | 历史执行 | [CURRENT](CURRENT.md) 保留各任务独立结果及中断记录；最近 iCloud 修复只完成签名/构建，实际同步未完成验收 | [课表背景记录](../docs/design/android-timetable-backdrop.md) 保留 76 项截图、175 JVM 通过/7 跳过及设备范围；[核心审查](../docs/design/android-core-review.md) 记录隔离后台与系统投递边界 |
-| 本轮工程验证 | iOS 17 最低目标本地构建通过；199 个格式化文件经 Swift 编译器解析，字符串实际值保持一致；完整 XCTest 以本任务精确提交 CI 为准 | Spotless 全量检查通过；本地 Debug 构建和完整 JVM/Lint/Roborazzi 结果以本任务交付记录及精确提交 CI 为准，原生设备测试本轮未运行 |
+| 本轮工程验证 | iOS 17 最低目标本地构建通过；199 个格式化文件经 Swift 编译器解析，字符串实际值保持一致；完整 XCTest 以本任务精确提交 CI 为准 | Spotless 全量检查通过；本地 Debug 构建通过；完整 JVM/Lint/Roborazzi 结果以本任务精确提交 CI 为准，原生设备测试本轮未运行 |
 | 发布前人工验收 | 真实学校会话、真机 UI/系统日历、iCloud 生产与双设备；[iOS 发行锚点 #38](https://github.com/IsaacHuo/MyLeafy/issues/38) 待补 | 正式包覆盖升级及候选验收见 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37)；实际系统通知/后台共享与媒体仍需独立核验 |
 
 本轮工具与流程追踪于 [#35](https://github.com/IsaacHuo/MyLeafy/issues/35)，不把本轮验证扩展成生产发布结论。候选、正式版与本次源码分别管理。

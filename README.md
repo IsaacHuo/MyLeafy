@@ -141,14 +141,14 @@ leafy/
 
 - macOS 与 Xcode 26 或更新版本（项目引用 iOS 26 SDK API，并为 iOS 17–25 提供运行时回退）
 - iOS 17.0 或更新版本的模拟器/设备
-- Node.js 与 npm：以各工作流和锁文件为准（当前 CI 使用 Node 25.6.1）
+- Node.js 与 npm：以各工作流和锁文件为准；当前后端 CI 使用 Node 25.6.1，网站 CI 使用 Node 22.23.1
 - 可用的目标学校教务账号（验证真实教务链路时需要）
 - 可用的 Cloudflare API 环境（验证社区、共享与运营能力时需要）
 
 ### iOS App
 
 ```bash
-git clone https://github.com/IsaacHuo/MyLeafy.git
+git clone https://github.com/IsaacHuo/MyLeafy.git leafy
 cd leafy
 
 cp Config/Leafy.example.xcconfig Config/Leafy.local.xcconfig
