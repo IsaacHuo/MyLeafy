@@ -95,6 +95,7 @@ fun LeafyRootTopBar(
     title: String,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    navigationIcon: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     colors: androidx.compose.material3.TopAppBarColors = TopAppBarDefaults.topAppBarColors(
         containerColor = Color.Transparent,
@@ -113,6 +114,7 @@ fun LeafyRootTopBar(
         },
         modifier = modifier,
         compact = compact,
+        navigationIcon = navigationIcon,
         actions = actions,
         colors = colors,
     )
@@ -124,6 +126,7 @@ fun LeafyRootTopBar(
     titleContent: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    navigationIcon: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     colors: androidx.compose.material3.TopAppBarColors = TopAppBarDefaults.topAppBarColors(
         containerColor = Color.Transparent,
@@ -132,6 +135,7 @@ fun LeafyRootTopBar(
 ) {
     TopAppBar(
         title = titleContent,
+        navigationIcon = { navigationIcon?.invoke() },
         actions = actions,
         modifier = modifier,
         expandedHeight = leafyTopBarHeight(compact = compact),

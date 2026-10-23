@@ -18,10 +18,10 @@ class CommunityErrorsTest {
         val message = error.toCommunityMessage("社区加载失败")
 
         assertEquals(
-            "当前网络拦截了社区安全连接，请切换网络或关闭会接管流量的代理/VPN 后重试",
+            "当前网络替换了 MyLeafy 的安全证书（bjfu-wifi 的登录/拦截页会返回 *.bjfu.edu.cn 证书）。请先完成校园网登录，或切换到移动数据/全局 VPN 后重试。",
             message,
         )
-        assertFalse(message.contains("certificate"))
         assertFalse(message.contains("supabase.co"))
+        org.junit.Assert.assertTrue(error.isPermanentTlsFailure())
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Notifications
@@ -66,6 +67,7 @@ val communityCategories = listOf("学习交流", "校园生活", "活动社团",
 
 @Composable
 fun CommunityScreen(
+    onBack: (() -> Unit)? = null,
     onPostClick: (String) -> Unit = {},
     onComposeClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
@@ -92,6 +94,7 @@ fun CommunityScreen(
 
     CommunityContent(
         state = uiState,
+        onBack = onBack,
         onPostClick = onPostClick,
         onComposeClick = onComposeClick,
         onSearchClick = onSearchClick,
@@ -107,6 +110,7 @@ fun CommunityScreen(
 @Composable
 fun CommunityContent(
     state: CommunityUiState,
+    onBack: (() -> Unit)? = null,
     onPostClick: (String) -> Unit,
     onComposeClick: () -> Unit,
     onSearchClick: () -> Unit,
@@ -124,6 +128,13 @@ fun CommunityContent(
         topBar = {
             LeafyRootTopBar(
                 title = "社区",
+                navigationIcon = onBack?.let {
+                    {
+                        LeafyActionIconButton(onClick = it) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    }
+                },
                 actions = {
                     LeafyActionIconButton(onClick = onSearchClick) {
                         Icon(Icons.Outlined.Search, contentDescription = "搜索社区")

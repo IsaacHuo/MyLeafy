@@ -3,8 +3,6 @@
     <string name="app_name">MyLeafy</string>
 
     <string name="tab_timetable">课表</string>
-    <string name="tab_community">社区</string>
-    <string name="tab_schedule">日迹</string>
     <string name="tab_campus">校园</string>
     <string name="tab_profile">我的</string>
 

@@ -95,8 +95,10 @@ import com.myleafy.android.ui.theme.leafySurfaces
 
 object Routes {
     const val LOGIN = "login"
+    const val COMMUNITY = "community"
     const val COMMUNITY_POST_DETAIL = "community/post/{postId}"
     const val COMMUNITY_COMPOSE = "community/compose"
+    const val SCHEDULE = "schedule"
     const val CLASSROOM = "campus/classroom"
     const val GRADE_ANALYSIS = "campus/grades/analysis"
     const val GRADES = "campus/grades"
@@ -191,9 +193,10 @@ fun MyLeafyNavHost(
                     ),
                 )
             }
-            composable(RootTab.COMMUNITY.route) {
+            composable(Routes.COMMUNITY) {
                 if (canUseCommunity) {
                     CommunityScreen(
+                        onBack = { navController.popBackStack() },
                         onPostClick = { postId ->
                             navController.navigate(Routes.communityPostDetail(postId))
                         },
@@ -247,8 +250,11 @@ fun MyLeafyNavHost(
                     )
                 }
             }
-            composable(RootTab.SCHEDULE.route) {
-                ScheduleScreen(onFeatureClick = { navController.navigate(it.route) })
+            composable(Routes.SCHEDULE) {
+                ScheduleScreen(
+                    onBack = { navController.popBackStack() },
+                    onFeatureClick = { navController.navigate(it.route) },
+                )
             }
             composable(
                 route = Routes.SCHEDULE_NOTIFICATION,
@@ -258,6 +264,7 @@ fun MyLeafyNavHost(
                 ),
             ) { entry ->
                 ScheduleScreen(
+                    onBack = { navController.popBackStack() },
                     onFeatureClick = { navController.navigate(it.route) },
                     initialSection = entry.arguments?.getString("mode"),
                     initialEventId = entry.arguments?.getString("eventId"),
@@ -268,8 +275,11 @@ fun MyLeafyNavHost(
                     onGradesClick = { navController.navigate(Routes.GRADES) },
                     onExamsClick = { navController.navigate(Routes.EXAMS) },
                     onClassroomClick = { navController.navigate(Routes.CLASSROOM) },
+                    onCommunityClick = { navController.navigate(Routes.COMMUNITY) },
+                    onScheduleClick = { navController.navigate(Routes.SCHEDULE) },
                     onFeatureClick = { navController.navigate(it.route) },
                     campusId = activeScope.campusId,
+                    canUseCommunity = canUseCommunity,
                 )
             }
             composable("campus/teacher?name={name}", arguments = listOf(navArgument("name") { defaultValue = "" })) { entry ->

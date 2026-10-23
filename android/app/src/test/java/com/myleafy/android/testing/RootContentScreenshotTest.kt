@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.myleafy.android.features.campus.CampusDashboard
@@ -141,9 +142,11 @@ class RootContentScreenshotTest {
             }
         }
         composeRule.waitForIdle()
+        composeRule.onNodeWithText("学校教学").performScrollTo().performClick()
+        composeRule.waitForIdle()
 
         composeRule
-            .onNode(hasScrollAction())
+            .onNodeWithTag("campus-content")
             .performScrollToNode(hasText("校历与作息"))
         composeRule.onNodeWithText("校历与作息").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(FeatureDestination.CAMPUS_CALENDAR, destination) }
@@ -162,6 +165,9 @@ class RootContentScreenshotTest {
                 )
             }
         }
+        composeRule.waitForIdle()
+        // 校园默认进入“校园生活”；截图沿用学校教学列表，保持原有覆盖面。
+        composeRule.onNodeWithText("学校教学").performScrollTo().performClick()
         composeRule.waitForIdle()
         capture()
     }

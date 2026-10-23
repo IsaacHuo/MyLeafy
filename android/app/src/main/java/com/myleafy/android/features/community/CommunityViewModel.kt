@@ -77,6 +77,14 @@ class CommunityViewModel(
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (failure: Exception) {
                         Logger.getLogger("CommunityViewModel").warning("$kind subscription interrupted: ${failure.javaClass.simpleName}")
+                        if (failure.isPermanentTlsFailure()) {
+                            // 证书被替换不会因为重连而恢复；停止无意义的后台重连并给出可操作提示。
+                            _uiState.value = _uiState.value.copy(
+                                isInitialLoading = false,
+                                error = failure.toCommunityMessage("社区连接失败"),
+                            )
+                            break
+                        }
                         kotlinx.coroutines.delay((1_000L shl retries.coerceAtMost(5)).coerceAtMost(30_000L))
                         retries++
                     }

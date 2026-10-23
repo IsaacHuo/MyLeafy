@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -28,7 +30,9 @@ import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Functions
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.LocalHospital
+import androidx.compose.material.icons.automirrored.outlined.EventNote
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.SportsBasketball
 import androidx.compose.material.icons.outlined.WorkspacePremium
@@ -52,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.data.local.ExamEntity
@@ -81,8 +86,11 @@ fun CampusScreen(
     onGradesClick: () -> Unit = {},
     onExamsClick: () -> Unit = {},
     onClassroomClick: () -> Unit = {},
+    onCommunityClick: () -> Unit = {},
+    onScheduleClick: () -> Unit = {},
     onFeatureClick: (FeatureDestination) -> Unit = {},
     campusId: CampusID? = CampusID.bjfu,
+    canUseCommunity: Boolean = true,
     viewModel: CampusViewModel = viewModel(
         factory = appViewModelFactory { container ->
             CampusViewModel(
@@ -127,6 +135,9 @@ fun CampusScreen(
             onGradesClick = onGradesClick,
             onExamsClick = onExamsClick,
             onClassroomClick = onClassroomClick,
+            onCommunityClick = onCommunityClick,
+            onScheduleClick = onScheduleClick,
+            canUseCommunity = canUseCommunity,
             onFeatureClick = onFeatureClick,
             modifier = Modifier.fillMaxSize().padding(contentPadding),
         )
@@ -142,11 +153,14 @@ internal fun CampusDashboard(
     onGradesClick: () -> Unit,
     onExamsClick: () -> Unit,
     onClassroomClick: () -> Unit,
+    onCommunityClick: () -> Unit = {},
+    onScheduleClick: () -> Unit = {},
+    canUseCommunity: Boolean = true,
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val domains = remember(campusId) { CampusDomain.entries.filter { it.isAvailableFor(campusId) } }
-    var selectedDomain by rememberSaveable { androidx.compose.runtime.mutableStateOf(CampusDomain.Teaching) }
+    var selectedDomain by rememberSaveable { androidx.compose.runtime.mutableStateOf(CampusDomain.Life) }
     val listStates = CampusDomain.entries.associateWith { androidx.compose.foundation.lazy.rememberLazyListState() }
     LaunchedEffect(domains) {
         if (selectedDomain !in domains) selectedDomain = domains.first()
@@ -174,6 +188,9 @@ internal fun CampusDashboard(
                     onGradesClick = onGradesClick,
                     onExamsClick = onExamsClick,
                     onClassroomClick = onClassroomClick,
+                    onCommunityClick = onCommunityClick,
+                    onScheduleClick = onScheduleClick,
+                    canUseCommunity = canUseCommunity,
                     onFeatureClick = onFeatureClick,
                     modifier = Modifier.weight(1f),
                 )
@@ -195,6 +212,9 @@ internal fun CampusDashboard(
                     onGradesClick = onGradesClick,
                     onExamsClick = onExamsClick,
                     onClassroomClick = onClassroomClick,
+                    onCommunityClick = onCommunityClick,
+                    onScheduleClick = onScheduleClick,
+                    canUseCommunity = canUseCommunity,
                     onFeatureClick = onFeatureClick,
                     modifier = Modifier.weight(1f),
                 )
@@ -204,15 +224,16 @@ internal fun CampusDashboard(
 }
 
 private enum class CampusDomain(val label: String, val supportingText: String) {
+    Life("校园生活", "社区动态、随记与个人日程"),
     Teaching("学校教学", "成绩、考试与学期安排"),
     SelfStudy("自习安排", "查询当前可用的学习地点"),
     Sports("体育相关", "长跑、体测与场馆信息"),
     Medical("医疗事项", "政策、报销指引与本机台账"),
     Ratings("评价相关", "评教、评课与评菜");
 
-    /** 学校服务按当前身份的适用范围展示。 */
+    /** 学校服务按当前身份的适用范围展示；校园生活对所有身份都可见。 */
     fun isAvailableFor(campusId: CampusID?): Boolean =
-        campusId == CampusID.bjfu || this == Teaching || this == Sports
+        this == Life || campusId == CampusID.bjfu || this == Teaching || this == Sports
 }
 
 @Composable
@@ -250,7 +271,10 @@ private fun CampusDomainSidebar(
     onDomainSelected: (CampusDomain) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+    ) {
         domains.forEach { domain ->
             Surface(
                 onClick = { onDomainSelected(domain) },
@@ -276,6 +300,46 @@ private fun CampusDomainSidebar(
 }
 
 @Composable
+private fun CampusLifeContent(
+    onCommunityClick: () -> Unit,
+    onScheduleClick: () -> Unit,
+    canUseCommunity: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    LazyColumn(
+        modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth),
+        contentPadding = PaddingValues(
+            start = LeafySpacing.page,
+            end = LeafySpacing.page,
+            top = LeafySpacing.micro,
+            bottom = LeafySpacing.section,
+        ),
+        verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
+    ) {
+        if (canUseCommunity) {
+            item {
+                CampusToolRow(
+                    title = "校园社区",
+                    description = "校园动态、问答、互助与二手",
+                    icon = Icons.Outlined.Groups,
+                    onClick = onCommunityClick,
+                    modifier = Modifier.testTag("campus-life-community"),
+                )
+            }
+        }
+        item {
+            CampusToolRow(
+                title = "日迹记录",
+                description = "随记、个人日程、回顾与导出",
+                icon = Icons.AutoMirrored.Outlined.EventNote,
+                onClick = onScheduleClick,
+                modifier = Modifier.testTag("campus-life-schedule"),
+            )
+        }
+    }
+}
+
+@Composable
 private fun CampusDomainContent(
     domain: CampusDomain,
     listState: androidx.compose.foundation.lazy.LazyListState,
@@ -286,9 +350,21 @@ private fun CampusDomainContent(
     onGradesClick: () -> Unit,
     onExamsClick: () -> Unit,
     onClassroomClick: () -> Unit,
+    onCommunityClick: () -> Unit,
+    onScheduleClick: () -> Unit,
+    canUseCommunity: Boolean,
     onFeatureClick: (FeatureDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (domain == CampusDomain.Life) {
+        CampusLifeContent(
+            onCommunityClick = onCommunityClick,
+            onScheduleClick = onScheduleClick,
+            canUseCommunity = canUseCommunity,
+            modifier = modifier,
+        )
+        return
+    }
     if (domain == CampusDomain.Medical) {
         MedicalScreen(onBack = {}, embedded = true, modifier = modifier, available = campusId == CampusID.bjfu)
         return
@@ -300,7 +376,7 @@ private fun CampusDomainContent(
     val context = LocalContext.current
     LazyColumn(
         state = listState,
-        modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth),
+        modifier = modifier.widthIn(max = LeafyComponentSize.contentMaxWidth).testTag("campus-content"),
         contentPadding = PaddingValues(
             start = LeafySpacing.page,
             top = LeafySpacing.micro,
@@ -461,12 +537,14 @@ private fun CampusToolRow(
     description: String,
     icon: ImageVector,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     com.myleafy.android.ui.components.LeafyFeatureCard(
         title = title,
         description = description,
         icon = icon,
         onClick = onClick,
+        modifier = modifier,
         trailingContent = {
             Icon(
                 androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowRight,

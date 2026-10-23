@@ -54,8 +54,17 @@ class CoreVisualReviewTest {
                                 "grades" -> LeafySecondaryScaffold("成绩查询", {}) { GradesContent(state, it) { analysisOpened++ } }
                                 "analysis" -> LeafySecondaryScaffold("成绩分析", {}) { GradeAnalysisContent(state, it) }
                                 else -> LeafySecondaryScaffold("校园", {}) {
-                                    CampusDashboard(CampusSyncState.Error("同步失败，请重试"), CampusID.bjfu, {}, {},
-                                        { gradesOpened++ }, {}, {}, {}, it)
+                                    CampusDashboard(
+                                        syncState = CampusSyncState.Error("同步失败，请重试"),
+                                        campusId = CampusID.bjfu,
+                                        onRetrySync = {},
+                                        onConsumeSync = {},
+                                        onGradesClick = { gradesOpened++ },
+                                        onExamsClick = {},
+                                        onClassroomClick = {},
+                                        onFeatureClick = {},
+                                        modifier = it,
+                                    )
                                 }
                             }
                         }

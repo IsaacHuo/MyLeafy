@@ -162,27 +162,29 @@ class RootNavigationSmokeTest {
         composeRule.onNodeWithTag("timetable-pager").performTouchInput { swipeLeft() }
         composeRule.waitForIdle()
         val selected = week()
-        composeRule.onNodeWithTag("root-tab-schedule").performClick()
-        composeRule.onNodeWithText("随记", substring = false).performClick()
+        composeRule.onNodeWithTag("root-tab-campus").performClick()
         composeRule.onNodeWithTag("root-tab-timetable").performClick()
         assertEquals(selected, week())
-        composeRule.onNodeWithTag("root-tab-schedule").performClick()
-        composeRule.onNodeWithText("随记", substring = false).assertIsSelected()
     }
 
     @Test
     fun secondaryDestinationHidesBottomBarAndBackRestoresIt() {
         activateCommunityScope()
-        composeRule.onNodeWithTag("root-tab-community").performClick()
+        composeRule.onNodeWithTag("root-tab-campus").performClick()
+        composeRule.onNodeWithTag("campus-life-community").performClick()
         composeRule.onNodeWithContentDescription("搜索社区").performClick()
 
         composeRule.onNodeWithText("搜索社区").assertIsDisplayed()
-        composeRule.onNodeWithTag("root-tab-community").assertDoesNotExist()
+        composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
 
         composeRule.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()
         }
-        composeRule.onNodeWithTag("root-tab-community").assertIsSelected()
+        composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
+        composeRule.runOnUiThread {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
     }
 
     @Test
@@ -214,14 +216,14 @@ class RootNavigationSmokeTest {
     }
 
     @Test
-    fun communityTabRemainsVisibleWithoutCapabilityButShowsGuardedState() {
+    fun campusLifeHidesCommunityEntryWithoutCapability() {
         val application = composeRule.activity.application as MyLeafyApplication
         application.container.activeAppScopeStore.activateGuest()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("root-tab-community").assertExists().performClick()
-        composeRule.onNodeWithText("社区暂不可用").assertIsDisplayed()
-        composeRule.onNodeWithText("当前校园入口暂不提供社区服务。").assertIsDisplayed()
+        composeRule.onNodeWithTag("root-tab-campus").performClick()
+        composeRule.onNodeWithTag("campus-life-schedule").assertExists()
+        composeRule.onNodeWithTag("campus-life-community").assertDoesNotExist()
     }
 
     @After
