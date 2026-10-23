@@ -136,19 +136,17 @@ struct ScheduleMemoAudioRecorderSheet: View {
             let filename = try ScheduleMemoAudioStore.importRecording(from: sourceURL)
             storedFilename = filename
             let memo = ScheduleMemo(body: note, kind: .audio)
-            modelContext.insert(memo)
-            modelContext.insert(ScheduleMemoAudio(
+            let audio = ScheduleMemoAudio(
                 memoID: memo.id,
                 localFilename: filename,
                 duration: recorder.elapsed
-            ))
-            try modelContext.save()
+            )
+            try ScheduleMemoPersistence.insert(memo, resources: [audio], in: modelContext)
             dismiss()
         } catch {
             if let storedFilename {
                 try? ScheduleMemoAudioStore.deleteFile(named: storedFilename)
             }
-            modelContext.rollback()
             saveError = error.localizedDescription
         }
     }

@@ -1767,3 +1767,38 @@ extension PerformanceRefactorTests {
         ])
     }
 }
+
+extension TimetableTableParserTests {
+    func testAsyncParserMatchesSchoolRecordsAndVerifiedEmptyResults() async throws {
+        let html = table(courses: [0: [2: course("异步课表", weeks: "1-3(周)")]])
+        let expected = try HTMLParser.parseTimetableRecords(html: html)
+        let actual = try await TimetableRefreshUseCase.parseRecords(html: html)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        XCTAssertEqual(try encoder.encode(actual), try encoder.encode(expected))
+        let empty = try await TimetableRefreshUseCase.parseRecords(html: table())
+        XCTAssertTrue(empty.isEmpty)
+    }
+
+    func testAsyncParserRejectsMalformedPageInsteadOfReturningEmpty() async {
+        do {
+            _ = try await TimetableRefreshUseCase.parseRecords(html: "<html>服务暂时不可用</html>")
+            XCTFail("An invalid page must not replace cached courses")
+        } catch {
+            guard case HTMLParserError.timetableTableNotFound = error else { return XCTFail("Unexpected error: \(error)") }
+        }
+    }
+
+    @MainActor
+    func testCancelledAsyncParserDoesNotReturnRecords() async {
+        let html = table(courses: [0: [1: course("取消", weeks: "1(周)")]])
+        let task = Task { try await TimetableRefreshUseCase.parseRecords(html: html) }
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled parsing must not return data to persist")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+    }
+}

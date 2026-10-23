@@ -1256,7 +1256,7 @@ private struct ScheduleMemoCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            ScheduleMemoPhotoStrip(images: images, layout: .feed)
+            ScheduleMemoPhotoStrip(images: images, revision: memo.updatedAt, layout: .feed)
 
             if let audio {
                 ScheduleMemoAudioPlayerBar(audio: audio, controller: audioPlayback)
@@ -1409,7 +1409,13 @@ private struct ScheduleMemoPhotoStrip: View {
     }
 
     let images: [ScheduleMemoImage]
+    let revision: Date
     let layout: Layout
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        .init(images: Array(images.prefix(ScheduleMemoImageStore.maximumImageCount)), revision: revision)
+    }
 
     @ViewBuilder
     var body: some View {
@@ -1421,6 +1427,8 @@ private struct ScheduleMemoPhotoStrip: View {
                     }
                 }
             }
+            .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+            .onDisappear { imageLoader.reset() }
         }
     }
 
@@ -1433,7 +1441,7 @@ private struct ScheduleMemoPhotoStrip: View {
 
     private func photoCell(_ imageRecord: ScheduleMemoImage) -> some View {
         Group {
-            if let image = ScheduleMemoImageStore.image(named: imageRecord.localFilename) {
+            if let image = imageLoader.images(for: imageRequest)[imageRecord.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -1566,18 +1574,19 @@ private struct ScheduleMemoDetailView: View {
 
     @State private var previewFile: ScheduleMemoPreviewFile?
 
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        .init(images: images, revision: memo.updatedAt)
+    }
+
     private var markdownResources: ScheduleMemoMarkdownResourceSet {
-        var imageMap: [UUID: UIImage] = [:]
-        for image in images {
-            if let value = ScheduleMemoImageStore.image(named: image.localFilename) {
-                imageMap[image.id] = value
-            }
-        }
         return .init(
-            images: imageMap,
+            images: imageLoader.images(for: imageRequest),
             imageOrder: images.map(\.id),
             attachmentNames: Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, $0.originalFilename) }),
-            attachmentOrder: attachments.map(\.id)
+            attachmentOrder: attachments.map(\.id),
+            isLoadingImages: imageLoader.isLoading(imageRequest)
         )
     }
 
@@ -1644,6 +1653,8 @@ private struct ScheduleMemoDetailView: View {
             .leafyAdaptiveContentWidth(maxWidth: 720)
             .padding(.vertical, AppSpacing.card)
         }
+        .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+        .onDisappear { imageLoader.reset() }
         .background(LeafyPageBackground())
         .navigationTitle("随记详情")
         .navigationBarTitleDisplayMode(.inline)
@@ -2599,12 +2610,11 @@ private struct ScheduleMemoComposer: View {
                 ))
             }
             let memo = ScheduleMemo(body: body, kind: kind, title: title)
-            modelContext.insert(memo)
-            for (index, filename) in filenames.enumerated() {
-                modelContext.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: index, localFilename: filename))
+            var resources: [any PersistentModel] = filenames.enumerated().map { index, filename in
+                ScheduleMemoImage(memoID: memo.id, sortOrder: index, localFilename: filename)
             }
             for (index, file) in storedAttachments.enumerated() {
-                modelContext.insert(ScheduleMemoAttachment(
+                resources.append(ScheduleMemoAttachment(
                     id: file.id,
                     memoID: memo.id,
                     sortOrder: index,
@@ -2613,7 +2623,7 @@ private struct ScheduleMemoComposer: View {
                     contentTypeIdentifier: file.contentTypeIdentifier
                 ))
             }
-            try modelContext.save()
+            try ScheduleMemoPersistence.insert(memo, resources: resources, in: modelContext)
             text = ""
             speechBase = ""
             photoItems = []
@@ -2625,7 +2635,6 @@ private struct ScheduleMemoComposer: View {
         } catch {
             try? ScheduleMemoImageStore.deleteFiles(named: filenames)
             try? ScheduleMemoAttachmentStore.deleteFiles(named: storedAttachments.map(\.localFilename))
-            modelContext.rollback()
             errorTitle = "无法保存随记"
             errorMessage = error.localizedDescription
         }
@@ -2661,12 +2670,12 @@ private struct ScheduleMemoEditorView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        memo.updateBody(bodyText)
                         do {
-                            try modelContext.save()
+                            _ = try ScheduleMemoPersistence.update(
+                                memo, title: memo.title, body: bodyText, in: modelContext
+                            )
                             dismiss()
                         } catch {
-                            modelContext.rollback()
                             errorMessage = error.localizedDescription
                         }
                     }

@@ -4,6 +4,8 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
+- **iOS Ponytail 逐条优化**：随记新建/录音/备注/高级编辑保存失败只撤销本次修改，移除媒体复用持久清理队列；上传纯字节进度只更新内存，关键恢复检查点仍立即落盘；随记存储图片移到生命周期后台加载，取消/身份变化拒绝旧结果、离开释放；完整教务同步复用后台课表解析并重验作用域。功能、最终视觉与业务规则保留，50 条规则对照和阅读边界见 `docs/engineering/ios-ponytail-audit.md`。iOS 17 arm64 本地 App/扩展/测试代码编译通过；新增 19 项回归交给远程 CI，本地不运行 XCTest 或模拟器，真机与性能验收仍独立。
+
 - **iOS iCloud 同步频率**：默认关闭、用户主动开启后才运行；连续修改合并 5 秒后采集，回前台不再强制执行完整同步，日常增量复用系统引擎。初始化失败按 5–30 分钟退避并持久保存恢复时间；进入后台保存待采集修改、手动重试即时执行。同步开关和开启确认新增电量/流量/移动网络资费说明；找到我文字靠右、联系弹窗使用黑色按钮文字。真机效果及真实同步由用户验收。
 
 - **iOS CloudKit 分发签名**：移除 App Store Connect 明确拒绝的 `com.apple.developer.icloud-container-development-container-identifiers`，保留标准 CloudKit 容器、服务与 Debug/Release 环境配置。旧 archive/IPA 必须重新生成；本次签名修正不代表私有分区 HTTP 500 已恢复。

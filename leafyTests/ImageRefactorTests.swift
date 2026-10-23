@@ -53,3 +53,28 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(Int(decoded.size.height), 6)
     }
 }
+
+extension PerformanceRefactorTests {
+    @MainActor
+    func testMemoImageBackgroundReadPreservesRenderedOrientationAndDimensions() async throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 6, height: 10), format: format).image { context in
+            UIColor.systemRed.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 6, height: 10))
+        }
+        let data = try XCTUnwrap(jpegData(from: source, orientation: 6))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try data.write(to: url)
+        let original = try XCTUnwrap(UIImage(contentsOfFile: url.path))
+        let loaded = await ScheduleMemoImageLoader.readImage(url)
+        let decoded = try XCTUnwrap(loaded)
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 6), format: format)
+        func rendered(_ image: UIImage) -> Data? {
+            renderer.image { _ in image.draw(in: CGRect(x: 0, y: 0, width: 10, height: 6)) }.pngData()
+        }
+        XCTAssertEqual(decoded.size, original.size)
+        XCTAssertEqual(rendered(decoded), rendered(original))
+    }
+}

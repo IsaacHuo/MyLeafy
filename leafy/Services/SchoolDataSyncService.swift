@@ -112,7 +112,8 @@ enum SchoolDataSyncService {
             let document = try await networkManager.fetchTimetable()
             try scope.check()
             progressReporter?(.begin(.processingTimetable))
-            let records = try HTMLParser.parseTimetableResult(html: document.html).records
+            let records = try await TimetableRefreshUseCase.parseRecords(html: document.html)
+            try scope.check()
             progressReporter?(.begin(.savingTimetable))
             let persisted = try await persistTimetable(
                 records,

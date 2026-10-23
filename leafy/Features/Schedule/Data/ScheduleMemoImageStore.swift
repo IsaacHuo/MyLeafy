@@ -1,5 +1,4 @@
 import Foundation
-import os
 import UIKit
 
 enum ScheduleMemoImageStoreError: LocalizedError {
@@ -36,14 +35,6 @@ enum ScheduleMemoImageStore {
         let filename = "\(UUID().uuidString).jpg"
         try compressed.write(to: directory.appendingPathComponent(filename), options: .atomic)
         return filename
-    }
-
-    static func image(named filename: String) -> UIImage? {
-        let signpostState = LeafyPerformanceSignposter.imageProcessing.beginInterval("schedule-memo-image-load")
-        defer {
-            LeafyPerformanceSignposter.imageProcessing.endInterval("schedule-memo-image-load", signpostState)
-        }
-        return UIImage(contentsOfFile: fileURL(named: filename).path(percentEncoded: false))
     }
 
     static func data(named filename: String) -> Data? {

@@ -9,17 +9,20 @@ struct ScheduleMemoMarkdownResourceSet {
     var imageOrder: [UUID] = []
     var attachmentNames: [UUID: String] = [:]
     var attachmentOrder: [UUID] = []
+    var isLoadingImages = false
 
     init(
         images: [UUID: UIImage] = [:],
         imageOrder: [UUID] = [],
         attachmentNames: [UUID: String] = [:],
-        attachmentOrder: [UUID] = []
+        attachmentOrder: [UUID] = [],
+        isLoadingImages: Bool = false
     ) {
         self.images = images
         self.imageOrder = Self.orderedIDs(imageOrder, available: Set(images.keys))
         self.attachmentNames = attachmentNames
         self.attachmentOrder = Self.orderedIDs(attachmentOrder, available: Set(attachmentNames.keys))
+        self.isLoadingImages = isLoadingImages
     }
 
     private static func orderedIDs(_ preferred: [UUID], available: Set<UUID>) -> [UUID] {
@@ -160,7 +163,7 @@ struct ScheduleMemoRichMarkdownView: View {
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 .accessibilityLabel(L10n.text("随记图片", language: leafyLanguage))
-        } else {
+        } else if !resources.isLoadingImages {
             missingResource(
                 L10n.text("图片已无法读取", language: leafyLanguage),
                 systemImage: "photo.badge.exclamationmark"
@@ -392,13 +395,15 @@ struct ScheduleMemoAdvancedEditorView: View {
         !isSaving && (memo.kind != .article || !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        .init(images: existingImages, revision: memo.updatedAt)
+    }
+
     private var resources: ScheduleMemoMarkdownResourceSet {
-        var imageMap = Dictionary(uniqueKeysWithValues: draftImages.map { ($0.id, $0.image) })
-        for image in existingImages {
-            if let value = ScheduleMemoImageStore.image(named: image.localFilename) {
-                imageMap[image.id] = value
-            }
-        }
+        var imageMap = imageLoader.images(for: imageRequest)
+        for image in draftImages { imageMap[image.id] = image.image }
         var names = Dictionary(uniqueKeysWithValues: draftAttachments.map { ($0.id, $0.originalFilename) })
         for attachment in existingAttachments {
             names[attachment.id] = attachment.originalFilename
@@ -407,7 +412,8 @@ struct ScheduleMemoAdvancedEditorView: View {
             images: imageMap,
             imageOrder: existingImages.map(\.id) + draftImages.map(\.id),
             attachmentNames: names,
-            attachmentOrder: existingAttachments.map(\.id) + draftAttachments.map(\.id)
+            attachmentOrder: existingAttachments.map(\.id) + draftAttachments.map(\.id),
+            isLoadingImages: imageLoader.isLoading(imageRequest)
         )
     }
 
@@ -445,6 +451,8 @@ struct ScheduleMemoAdvancedEditorView: View {
                 }
             }
         }
+        .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+        .onDisappear { imageLoader.reset() }
         .interactiveDismissDisabled(hasChanges)
         .photosPicker(
             isPresented: $showsPhotoPicker,
@@ -805,7 +813,7 @@ struct ScheduleMemoAdvancedEditorView: View {
         isSaving = true
         var newImageFilenames: [String] = []
         var newAttachmentFiles: [ScheduleMemoAttachmentStore.StoredFile] = []
-        var didSave = false
+        var insertedResources: [any PersistentModel] = []
 
         do {
             let availableImageIDs = Set(existingImages.map(\.id) + draftImages.map(\.id))
@@ -822,7 +830,7 @@ struct ScheduleMemoAdvancedEditorView: View {
             for draft in draftImages {
                 let filename = try ScheduleMemoImageStore.importImage(data: draft.data)
                 newImageFilenames.append(filename)
-                modelContext.insert(ScheduleMemoImage(
+                insertedResources.append(ScheduleMemoImage(
                     id: draft.id,
                     memoID: memo.id,
                     sortOrder: existingImages.count + newImageFilenames.count - 1,
@@ -836,7 +844,7 @@ struct ScheduleMemoAdvancedEditorView: View {
                     contentTypeIdentifier: draft.contentTypeIdentifier
                 )
                 newAttachmentFiles.append(stored)
-                modelContext.insert(ScheduleMemoAttachment(
+                insertedResources.append(ScheduleMemoAttachment(
                     id: draft.id,
                     memoID: memo.id,
                     sortOrder: existingAttachments.count + newAttachmentFiles.count - 1,
@@ -848,35 +856,38 @@ struct ScheduleMemoAdvancedEditorView: View {
 
             let removedImages = allImages.filter { deletedImageIDs.contains($0.id) }
             let removedAttachments = allAttachments.filter { deletedAttachmentIDs.contains($0.id) }
-            removedImages.forEach(modelContext.delete)
-            removedAttachments.forEach(modelContext.delete)
-
-            memo.title = memo.kind == .article
-                ? title.trimmingCharacters(in: .whitespacesAndNewlines)
-                : memo.title
-            memo.updateBody(source)
-            try modelContext.save()
-            didSave = true
-
-            try ScheduleMemoImageStore.deleteFiles(named: removedImages.map(\.localFilename))
-            try ScheduleMemoAttachmentStore.deleteFiles(named: removedAttachments.map(\.localFilename))
-            dismiss()
-        } catch {
-            if !didSave {
-                try? ScheduleMemoImageStore.deleteFiles(named: newImageFilenames)
-                try? ScheduleMemoAttachmentStore.deleteFiles(named: newAttachmentFiles.map(\.localFilename))
-                modelContext.rollback()
-            } else {
-                dismissAfterError = true
+            let files = removedImages.map {
+                LocalFileCleanup.File($0, url: ScheduleMemoImageStore.directoryURL().appendingPathComponent($0.localFilename))
+            } + removedAttachments.compactMap { record in
+                ScheduleMemoAttachmentStore.fileURL(named: record.localFilename).map {
+                    LocalFileCleanup.File(record, url: $0)
+                }
             }
-            isSaving = false
-            errorMessage = didSave
-                ? L10n.text(
+            let cleanupWarning = try ScheduleMemoPersistence.update(
+                memo,
+                title: memo.kind == .article ? title.trimmingCharacters(in: .whitespacesAndNewlines) : memo.title,
+                body: source,
+                inserting: insertedResources,
+                removing: removedImages + removedAttachments,
+                files: files,
+                in: modelContext
+            )
+            if let cleanupWarning {
+                dismissAfterError = true
+                isSaving = false
+                errorMessage = L10n.text(
                     "随记已保存，但未能清理已移除的本地文件：%@",
                     language: leafyLanguage,
-                    error.localizedDescription
+                    cleanupWarning
                 )
-                : error.localizedDescription
+            } else {
+                dismiss()
+            }
+        } catch {
+            try? ScheduleMemoImageStore.deleteFiles(named: newImageFilenames)
+            try? ScheduleMemoAttachmentStore.deleteFiles(named: newAttachmentFiles.map(\.localFilename))
+            isSaving = false
+            errorMessage = error.localizedDescription
         }
     }
 }
