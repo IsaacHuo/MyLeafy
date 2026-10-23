@@ -277,7 +277,7 @@ fun ProfileContent(
             }
 
             item {
-                LeafySettingsGroup(title = "帮助与安全") {
+                LeafySettingsGroup(title = "帮助与资源") {
                     ProfileDestinationRow(
                         title = "检查更新",
                         description = "获取最新的 Android 安装包",
@@ -293,14 +293,14 @@ fun ProfileContent(
                     )
                     LeafySettingsDivider()
                     ProfileDestinationRow(
-                        title = "系统权限",
-                        description = "了解权限用途并打开 Android 设置",
+                        title = "权限管理",
+                        description = "查看权限状态并打开 Android 设置",
                         icon = Icons.Outlined.Lock,
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_PERMISSIONS) },
                     )
                     LeafySettingsDivider()
                     ProfileDestinationRow(
-                        title = "反馈与支持",
+                        title = "反馈与举报",
                         description = "提交问题、建议或联系项目支持",
                         icon = Icons.Outlined.Feedback,
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_FEEDBACK) },
@@ -309,9 +309,9 @@ fun ProfileContent(
             }
 
             item {
-                LeafySettingsGroup(title = "项目") {
+                LeafySettingsGroup(title = "关于") {
                     ProfileDestinationRow(
-                        title = "关于 MyLeafy",
+                        title = "了解 MyLeafy",
                         description = "项目、版本、开源与支持信息",
                         icon = Icons.Outlined.Info,
                         onClick = { onFeatureClick(FeatureDestination.PROFILE_ABOUT) },
