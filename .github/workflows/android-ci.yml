@@ -90,4 +90,9 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: cd android && ./gradlew :app:connectedDebugAndroidTest
+          script: |
+            adb shell svc power stayon true
+            adb shell settings put system screen_off_timeout 2147483647
+            adb shell input keyevent 82
+            cd android && ./gradlew :app:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.myleafy.android.core.data.local.DatabaseUpgradeTest,com.myleafy.android.core.data.local.ScopedRoomIsolationTest

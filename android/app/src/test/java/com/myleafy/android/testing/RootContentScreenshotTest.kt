@@ -142,7 +142,7 @@ class RootContentScreenshotTest {
             }
         }
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("学校教学").performScrollTo().performClick()
+        composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
         composeRule.waitForIdle()
 
         composeRule
@@ -167,7 +167,7 @@ class RootContentScreenshotTest {
         }
         composeRule.waitForIdle()
         // 校园默认进入“校园生活”；截图沿用学校教学列表，保持原有覆盖面。
-        composeRule.onNodeWithText("学校教学").performScrollTo().performClick()
+        composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
         composeRule.waitForIdle()
         capture()
     }

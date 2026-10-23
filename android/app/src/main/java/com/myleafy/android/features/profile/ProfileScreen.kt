@@ -115,12 +115,27 @@ fun ProfileContent(
     modifier: Modifier = Modifier,
     appearance: com.myleafy.android.core.prefs.Settings = com.myleafy.android.core.prefs.Settings(),
 ) {
+    val currentCampusId = when (val snapshot = state) {
+        is ProfileUiState.Local -> snapshot.campusId
+        is ProfileUiState.Community -> snapshot.campusId
+        is ProfileUiState.Error -> snapshot.campusId
+        ProfileUiState.ProfileLoading -> null
+    }
+    val isGuest = currentCampusId == com.myleafy.android.core.campus.CampusID.guest.rawValue
     var confirmLogout by remember { mutableStateOf(false) }
     if (confirmLogout) {
         LeafyAlertDialog(
             onDismissRequest = { confirmLogout = false },
-            title = { Text("确认退出？") },
-            text = { Text("退出后需重新登录，本地缓存的课表和成绩数据将保留。") },
+            title = { Text(if (isGuest) "退出免登录模式？" else "确认退出？") },
+            text = {
+                Text(
+                    if (isGuest) {
+                        "本机数据会保留，之后仍可再次进入免登录模式。"
+                    } else {
+                        "退出后需重新登录，本地缓存的课表和成绩数据将保留。"
+                    },
+                )
+            },
             confirmButton = {
                 LeafyTextButton(onClick = {
                     confirmLogout = false
@@ -289,7 +304,7 @@ fun ProfileContent(
                     )
                 }
             }
-            val hasIdentity = when (state) {
+            val hasIdentity = isGuest || when (state) {
                 is ProfileUiState.Community -> true
                 is ProfileUiState.Local -> !state.eduId.isNullOrBlank()
                 is ProfileUiState.Error -> !state.eduId.isNullOrBlank()
@@ -304,7 +319,11 @@ fun ProfileContent(
                     ) {
                         androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
                         Text(
-                            if (isSigningOut) "正在退出…" else "退出登录",
+                            when {
+                                isSigningOut -> "正在退出…"
+                                isGuest -> "退出免登录模式"
+                                else -> "退出登录"
+                            },
                             modifier = Modifier.padding(start = LeafySpacing.micro),
                         )
                     }

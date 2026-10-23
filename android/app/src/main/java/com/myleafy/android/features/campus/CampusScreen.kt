@@ -250,6 +250,7 @@ private fun CampusDomainChips(
             FilterChip(
                 selected = selectedDomain == domain,
                 onClick = { onDomainSelected(domain) },
+                modifier = Modifier.testTag("campus-domain-${domain.name}"),
                 label = { Text(domain.label) },
                 shape = androidx.compose.foundation.shape.CircleShape,
                 border = null,
@@ -278,7 +279,7 @@ private fun CampusDomainSidebar(
         domains.forEach { domain ->
             Surface(
                 onClick = { onDomainSelected(domain) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag("campus-domain-${domain.name}"),
                 shape = MaterialTheme.shapes.large,
                 color = if (selectedDomain == domain) {
                     MaterialTheme.colorScheme.secondaryContainer

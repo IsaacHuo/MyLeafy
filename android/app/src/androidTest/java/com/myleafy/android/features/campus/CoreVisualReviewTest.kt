@@ -82,6 +82,11 @@ class CoreVisualReviewTest {
         variants.forEach { next ->
             compose.runOnIdle { variant = next }
             compose.waitForIdle()
+            if (next.page == "campus") {
+                // 校园默认进入“校园生活”；核心页面评审仍覆盖学校教学列表。
+                compose.onNodeWithTag("campus-domain-Teaching").performClick()
+                compose.waitForIdle()
+            }
             capture("${next.page}-${next.width}-${next.font}-${if (next.dark) "dark" else "light"}")
             when (next.page) {
                 "login" -> compose.onNode(hasScrollAction()).performScrollToNode(hasText("登录")).also {

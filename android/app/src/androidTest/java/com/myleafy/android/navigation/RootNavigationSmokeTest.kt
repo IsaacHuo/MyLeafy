@@ -241,26 +241,26 @@ class RootNavigationSmokeTest {
             composeRule.waitForIdle()
         }
         val tools = linkedMapOf(
-            "学校教学" to listOf("成绩查询", "考试安排", "教学与培养", "校历与作息", "综素测算", "荣誉记录"),
-            "自习安排" to listOf("空闲教室"),
-            "体育相关" to listOf("阳光长跑", "体测记录", "场馆开放"),
+            "Teaching" to listOf("成绩查询", "考试安排", "教学与培养", "校历与作息", "综素测算", "荣誉记录"),
+            "SelfStudy" to listOf("空闲教室"),
+            "Sports" to listOf("阳光长跑", "体测记录", "场馆开放"),
         )
-        for ((category, entries) in tools) {
-            composeRule.onNodeWithText(category).performScrollTo().performClick()
+        for ((domain, entries) in tools) {
+            composeRule.onNodeWithTag("campus-domain-$domain").performClick()
             for (title in entries) {
                 composeRule.onNodeWithText(title).performScrollTo().performClick()
                 composeRule.waitForIdle()
                 composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
                 back()
-                composeRule.onNodeWithText(category).assertIsSelected()
+                composeRule.onNodeWithTag("campus-domain-$domain").assertIsSelected()
             }
         }
         composeRule.onNodeWithTag("root-tab-timetable").performClick()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
-        composeRule.onNodeWithText("体育相关").assertIsSelected()
-        composeRule.onNodeWithText("医疗事项").performScrollTo().performClick()
+        composeRule.onNodeWithTag("campus-domain-Sports").assertIsSelected()
+        composeRule.onNodeWithTag("campus-domain-Medical").performClick()
         composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
-        composeRule.onNodeWithText("评价相关").performScrollTo().performClick()
+        composeRule.onNodeWithTag("campus-domain-Ratings").performClick()
         composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
     }
 
@@ -314,6 +314,7 @@ class RootNavigationSmokeTest {
     @Test fun allComprehensiveCollegeRulesRenderWithoutCrashing() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
+        composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
         composeRule.onNodeWithText("综素测算").performScrollTo().performClick()
         com.myleafy.android.features.campus.ComprehensiveQualityRuleCatalog.participatingCollegeNames.forEach { name ->
             composeRule.onNodeWithTag("comprehensive-colleges").performScrollToNode(hasText(name))
