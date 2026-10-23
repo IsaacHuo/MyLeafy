@@ -28,7 +28,8 @@ final class AndroidDownloadShareTests: XCTestCase {
         let url = try CommunityPostCardGenerator.render(snapshot)
         defer { CommunityPostCardGenerator.deleteRenderedFile(url) }
         let image = try XCTUnwrap(UIImage(contentsOfFile: url.path))
-        let previewURL = FileManager.default.temporaryDirectory.appendingPathComponent("MyLeafy-android-share-preview.jpg")
+        let previewURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MyLeafy-android-share-preview.jpg")
         try Data(contentsOf: url).write(to: previewURL)
         print("ANDROID_SHARE_PREVIEW=\(previewURL.path)")
         XCTAssertEqual(image.cgImage?.width, 1080)
@@ -44,10 +45,20 @@ final class AndroidDownloadShareTests: XCTestCase {
     func testLinkShareProvidesClickableURLAndCardMetadata() throws {
         let url = try CommunityPostCardGenerator.render(AndroidDownloadShareContent.snapshot(language: .zhHans))
         defer { CommunityPostCardGenerator.deleteRenderedFile(url) }
-        let source = AndroidDownloadLinkItemSource(title: "MyLeafy 安卓版", cardURL: url, appIcon: try LeafyAppIconManager.primaryIconImage())
+        let source = AndroidDownloadLinkItemSource(
+            title: "MyLeafy 安卓版",
+            cardURL: url,
+            appIcon: try LeafyAppIconManager.primaryIconImage()
+        )
         let activity = UIActivityViewController(activityItems: [source], applicationActivities: nil)
-        XCTAssertEqual(source.activityViewControllerPlaceholderItem(activity) as? URL, LeafyExternalLinks.androidDownload)
-        XCTAssertEqual(source.activityViewController(activity, itemForActivityType: nil) as? URL, LeafyExternalLinks.androidDownload)
+        XCTAssertEqual(
+            source.activityViewControllerPlaceholderItem(activity) as? URL,
+            LeafyExternalLinks.androidDownload
+        )
+        XCTAssertEqual(
+            source.activityViewController(activity, itemForActivityType: nil) as? URL,
+            LeafyExternalLinks.androidDownload
+        )
         let metadata = try XCTUnwrap(source.activityViewControllerLinkMetadata(activity))
         XCTAssertEqual(metadata.originalURL, LeafyExternalLinks.androidDownload)
         XCTAssertEqual(metadata.url?.fragment, "download")

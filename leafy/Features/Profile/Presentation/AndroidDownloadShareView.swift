@@ -21,7 +21,10 @@ enum AndroidDownloadShareContent {
             dateText: "Android",
             category: L10n.text("官方下载", language: language),
             title: title(language: language),
-            body: L10n.text("MyLeafy 安卓版支持课表、成绩查询、个人日程和校园社区。扫描二维码即可访问官方下载页面，获取安装包与使用说明。欢迎分享给使用安卓手机的同学。", language: language),
+            body: L10n.text(
+                "MyLeafy 安卓版支持课表、成绩查询、个人日程和校园社区。扫描二维码即可访问官方下载页面，获取安装包与使用说明。欢迎分享给使用安卓手机的同学。",
+                language: language
+            ),
             attachmentNames: [],
             photoData: [qrData],
             isAnonymous: false,
@@ -46,7 +49,12 @@ enum AndroidDownloadShareContent {
             UIColor.white.setFill()
             context.fill(CGRect(origin: .zero, size: size))
             context.cgContext.interpolationQuality = .none
-            UIImage(cgImage: cgImage).draw(in: CGRect(x: 16, y: 16, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
+            UIImage(cgImage: cgImage).draw(in: CGRect(
+                x: 16,
+                y: 16,
+                width: CGFloat(cgImage.width),
+                height: CGFloat(cgImage.height)
+            ))
         }
     }
 }
@@ -67,15 +75,24 @@ final class AndroidDownloadLinkItemSource: NSObject, UIActivityItemSource {
         LeafyExternalLinks.androidDownload
     }
 
-    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        itemForActivityType activityType: UIActivity.ActivityType?
+    ) -> Any? {
         LeafyExternalLinks.androidDownload
     }
 
-    func activityViewController(_ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        subjectForActivityType activityType: UIActivity.ActivityType?
+    ) -> String {
         title
     }
 
-    func activityViewController(_ activityViewController: UIActivityViewController, dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?) -> String {
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?
+    ) -> String {
         UTType.url.identifier
     }
 
@@ -114,7 +131,8 @@ struct AndroidDownloadShareView: View {
                     Button {
                         guard let cardURL, let iconImage else { return }
                         shareItems = ShareItems(items: [AndroidDownloadLinkItemSource(
-                            title: AndroidDownloadShareContent.title(language: language), cardURL: cardURL, appIcon: iconImage
+                            title: AndroidDownloadShareContent.title(language: language), cardURL: cardURL,
+                            appIcon: iconImage
                         )])
                     } label: {
                         Label(L10n.text("分享下载链接", language: language), systemImage: "square.and.arrow.up")
@@ -136,7 +154,6 @@ struct AndroidDownloadShareView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(cardURL == nil)
-
                 }
 
                 if let cardImage {

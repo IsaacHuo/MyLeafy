@@ -65,10 +65,12 @@ struct MedicalPolicyView: View {
                     .leafyHeadline()
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text("来源：\(snapshot.sourceTitle)。政策更新于 \(snapshot.policyUpdatedAt)，校医院基础信息更新于 \(snapshot.hospitalInfoUpdatedAt)。")
-                    .leafyBody()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(
+                    "来源：\(snapshot.sourceTitle)。政策更新于 \(snapshot.policyUpdatedAt)，校医院基础信息更新于 \(snapshot.hospitalInfoUpdatedAt)。"
+                )
+                .leafyBody()
+                .foregroundStyle(AppTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
 
                 MedicalPolicyWebLinkButton(title: "查看原始说明", systemImage: "link") {
                     browserItem = MedicalPolicyBrowserItem(url: snapshot.sourceURL)
@@ -210,7 +212,11 @@ struct MedicalScenarioAssistantView: View {
                     }
 
                     MedicalPolicyBulletGroup(title: "建议步骤", rows: advice.steps, systemImage: "checklist")
-                    MedicalPolicyBulletGroup(title: "材料清单", rows: advice.materials.map(\.rawValue), systemImage: "folder.fill")
+                    MedicalPolicyBulletGroup(
+                        title: "材料清单",
+                        rows: advice.materials.map(\.rawValue),
+                        systemImage: "folder.fill"
+                    )
                     MedicalPolicyBulletGroup(title: "注意事项", rows: advice.notes, systemImage: "info.circle.fill")
                 }
             }
@@ -330,7 +336,6 @@ private struct MedicalPolicySafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-
 
 private struct MedicalPolicyBrowserItem: Identifiable {
     let id = UUID()
@@ -487,7 +492,11 @@ struct MedicalLedgerView: View {
         AcademicDetailCard {
             HStack(spacing: AppSpacing.compact) {
                 MedicalLedgerMetric(title: "台账", value: "\(entries.count)", subtitle: "全部记录")
-                MedicalLedgerMetric(title: "待处理", value: "\(entries.filter { !$0.status.isClosed }.count)", subtitle: "未归档")
+                MedicalLedgerMetric(
+                    title: "待处理",
+                    value: "\(entries.filter { !$0.status.isClosed }.count)",
+                    subtitle: "未归档"
+                )
                 MedicalLedgerMetric(title: "需关注", value: "\(attentionCount)", subtitle: "临近/逾期")
             }
         }
@@ -541,34 +550,27 @@ struct MedicalLedgerView: View {
             .sorted { $0.importedAt < $1.importedAt }
     }
 
-    private func saveEntry(draft: MedicalLedgerDraft, pendingPhotos: [MedicalLedgerPendingPhoto], existingEntry: MedicalLedgerEntry?) {
+    private func saveEntry(
+        draft: MedicalLedgerDraft,
+        pendingPhotos: [MedicalLedgerPendingPhoto],
+        existingEntry: MedicalLedgerEntry?
+    ) -> Bool {
         do {
-            let entry = existingEntry ?? MedicalLedgerEntry()
-            draft.apply(to: entry)
-            if existingEntry == nil {
-                modelContext.insert(entry)
-            }
-
-            for pendingPhoto in pendingPhotos {
-                let stored = try MedicalLedgerPhotoStore.importImageData(
-                    pendingPhoto.jpegData,
-                    originalFilename: pendingPhoto.originalFilename
-                )
-                modelContext.insert(MedicalLedgerPhoto(
-                    entryID: entry.id.uuidString,
-                    originalFilename: pendingPhoto.originalFilename,
-                    localFilename: stored.localFilename
-                ))
-            }
-
-            try modelContext.save()
-            alertMessage = "台账已保存。"
+            let warning = try MedicalLedgerPersistence.save(
+                draft: draft,
+                pendingPhotos: pendingPhotos,
+                editing: existingEntry,
+                in: modelContext
+            )
+            alertMessage = warning ?? "台账已保存。"
+            return true
         } catch {
             alertMessage = "保存失败：\(error.localizedDescription)"
+            return false
         }
     }
 
-    private func deletePhoto(_ photo: MedicalLedgerPhoto) {
+    private func deletePhoto(_ photo: MedicalLedgerPhoto) -> Bool {
         deleteRecords([photo], photos: [photo])
     }
 
@@ -581,13 +583,15 @@ struct MedicalLedgerView: View {
         deleteRecords(entries + photos, photos: photos)
     }
 
-    private func deleteRecords(_ models: [any PersistentModel], photos: [MedicalLedgerPhoto]) {
+    @discardableResult
+    private func deleteRecords(_ models: [any PersistentModel], photos: [MedicalLedgerPhoto]) -> Bool {
         do {
             let files = photos.compactMap { photo in
                 MedicalLedgerPhotoStore.fileURL(for: photo).map { LocalFileCleanup.File(photo, url: $0) }
             }
             try LocalFileCleanup().delete(models, files: files, in: modelContext)
-        } catch { alertMessage = error.localizedDescription }
+            return true
+        } catch { alertMessage = error.localizedDescription; return false }
     }
 
     private func exportArchive() {
@@ -753,8 +757,8 @@ private struct MedicalLedgerDeadlineBadge: View {
 
 private struct MedicalLedgerEditorSheet: View {
     let entry: MedicalLedgerEntry?
-    let saveAction: (MedicalLedgerDraft, [MedicalLedgerPendingPhoto], MedicalLedgerEntry?) -> Void
-    let deletePhotoAction: (MedicalLedgerPhoto) -> Void
+    let saveAction: (MedicalLedgerDraft, [MedicalLedgerPendingPhoto], MedicalLedgerEntry?) -> Bool
+    let deletePhotoAction: (MedicalLedgerPhoto) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft: MedicalLedgerDraft
@@ -766,8 +770,8 @@ private struct MedicalLedgerEditorSheet: View {
     init(
         entry: MedicalLedgerEntry?,
         existingPhotos: [MedicalLedgerPhoto],
-        saveAction: @escaping (MedicalLedgerDraft, [MedicalLedgerPendingPhoto], MedicalLedgerEntry?) -> Void,
-        deletePhotoAction: @escaping (MedicalLedgerPhoto) -> Void
+        saveAction: @escaping (MedicalLedgerDraft, [MedicalLedgerPendingPhoto], MedicalLedgerEntry?) -> Bool,
+        deletePhotoAction: @escaping (MedicalLedgerPhoto) -> Bool
     ) {
         self.entry = entry
         self.saveAction = saveAction
@@ -796,16 +800,14 @@ private struct MedicalLedgerEditorSheet: View {
                 }
                 ToolbarItem(placement: .leafyTrailing) {
                     Button("保存") {
-                        saveAction(draft, pendingPhotos, entry)
-                        dismiss()
+                        if saveAction(draft, pendingPhotos, entry) { dismiss() }
                     }
                     .fontWeight(.semibold)
                 }
             }
-            .onChange(of: selectedPhotoItems) { _, items in
-                Task {
-                    await loadSelectedPhotos(items)
-                }
+            .task(id: selectedPhotoItems) {
+                guard !selectedPhotoItems.isEmpty else { return }
+                await loadSelectedPhotos(selectedPhotoItems)
             }
         }
     }
@@ -816,7 +818,7 @@ private struct MedicalLedgerEditorSheet: View {
             TextField("医院", text: $draft.hospitalName)
             TextField("科室", text: $draft.department)
             TextField("诊断或病情备注", text: $draft.diagnosisNote, axis: .vertical)
-                .lineLimit(2...4)
+                .lineLimit(2 ... 4)
             MedicalLedgerScenarioPicker(selection: $draft.scenario)
         }
     }
@@ -880,7 +882,7 @@ private struct MedicalLedgerEditorSheet: View {
     private var noteSection: some View {
         Section("备注") {
             TextField("补充说明", text: $draft.note, axis: .vertical)
-                .lineLimit(3...6)
+                .lineLimit(3 ... 6)
         }
     }
 
@@ -891,6 +893,7 @@ private struct MedicalLedgerEditorSheet: View {
         for (index, item) in items.enumerated() {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                try Task.checkCancellation()
                 let jpegData = try MedicalLedgerPhotoStore.normalizedJPEGData(from: data)
                 guard let image = UIImage(data: jpegData) else { continue }
                 loaded.append(MedicalLedgerPendingPhoto(
@@ -899,9 +902,11 @@ private struct MedicalLedgerEditorSheet: View {
                     image: image
                 ))
             } catch {
+                guard !Task.isCancelled else { return }
                 photoLoadError = "加载照片失败：\(error.localizedDescription)"
             }
         }
+        guard !Task.isCancelled else { return }
         pendingPhotos = loaded
         selectedPhotoItems = []
     }
@@ -911,8 +916,7 @@ private struct MedicalLedgerEditorSheet: View {
     }
 
     private func removeExistingPhoto(_ photo: MedicalLedgerPhoto) {
-        deletePhotoAction(photo)
-        existingPhotos.removeAll { $0.id == photo.id }
+        if deletePhotoAction(photo) { existingPhotos.removeAll { $0.id == photo.id } }
     }
 }
 
@@ -980,18 +984,13 @@ private struct MedicalLedgerPhotoStrip: View {
             HStack(spacing: 10) {
                 ForEach(photos, id: \.id) { photo in
                     ZStack(alignment: .topTrailing) {
-                        if let image = MedicalLedgerPhotoStore.image(for: photo) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            Image(systemName: "photo")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(AppTheme.tertiaryText)
-                        }
+                        MedicalStoredPhotoThumbnail(photo: photo)
                     }
                     .frame(width: 82, height: 82)
-                    .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    .background(
+                        AppTheme.softFill,
+                        in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                     .overlay(alignment: .topTrailing) {
                         Button {
@@ -1085,14 +1084,14 @@ private struct MedicalLedgerArchiveShareItem: Identifiable {
     var id: URL { url }
 }
 
-private struct MedicalLedgerPendingPhoto: Identifiable {
+struct MedicalLedgerPendingPhoto: Identifiable {
     let id = UUID()
     let originalFilename: String
     let jpegData: Data
     let image: UIImage
 }
 
-private struct MedicalLedgerDraft {
+struct MedicalLedgerDraft {
     var visitDate: Date
     var hospitalName: String
     var department: String
@@ -1118,7 +1117,11 @@ private struct MedicalLedgerDraft {
         actualReimbursementText = Self.optionalText(from: entry?.actualReimbursement)
         status = entry?.status ?? .organizing
         hasDeadline = entry?.reimbursementDeadline != nil
-        reimbursementDeadline = entry?.reimbursementDeadline ?? Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
+        reimbursementDeadline = entry?.reimbursementDeadline ?? Calendar.current.date(
+            byAdding: .day,
+            value: 30,
+            to: Date()
+        ) ?? Date()
         materials = entry?.materials ?? Set(MedicalPolicySnapshot.current.advice(for: scenario).materials)
         note = entry?.note ?? ""
     }
@@ -1169,5 +1172,110 @@ private struct MedicalLedgerDraft {
 #Preview {
     NavigationStack {
         MedicalMattersSectionView { _ in }
+    }
+}
+
+@MainActor
+enum MedicalLedgerPersistence {
+    static func save(
+        draft: MedicalLedgerDraft,
+        pendingPhotos: [MedicalLedgerPendingPhoto],
+        editing existing: MedicalLedgerEntry?,
+        in context: ModelContext,
+        cleanup: LocalFileCleanup? = nil,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> String? {
+        let cleanup = cleanup ?? LocalFileCleanup()
+        let entry = existing ?? MedicalLedgerEntry()
+        let previous = (
+            entry.visitDate,
+            entry.hospitalName,
+            entry.department,
+            entry.diagnosisNote,
+            entry.scenarioRawValue,
+            entry.totalExpense,
+            entry.estimatedReimbursement,
+            entry.actualReimbursement,
+            entry.statusRawValue,
+            entry.reimbursementDeadline,
+            entry.materialChecklistRawValue,
+            entry.note,
+            entry.updatedAt
+        )
+        var photos: [MedicalLedgerPhoto] = []
+        do {
+            for pending in pendingPhotos {
+                let filename = "\(UUID().uuidString).jpg"
+                let photo = MedicalLedgerPhoto(
+                    entryID: entry.id.uuidString,
+                    originalFilename: pending.originalFilename,
+                    localFilename: filename
+                )
+                try cleanup.enqueue([LocalFileCleanup.File(
+                    photo,
+                    url: MedicalLedgerPhotoStore.directoryURL.appendingPathComponent(filename)
+                )])
+                _ = try MedicalLedgerPhotoStore.importImageData(
+                    pending.jpegData,
+                    originalFilename: pending.originalFilename,
+                    filename: filename
+                )
+                photos.append(photo)
+            }
+            draft.apply(to: entry)
+            if existing == nil { context.insert(entry) }
+            for photo in photos { context.insert(photo) }
+            try LocalModelSave.save(context, undo: {
+                for photo in photos { context.delete(photo) }
+                if existing == nil { context.delete(entry) }
+                entry.visitDate = previous.0; entry.hospitalName = previous.1; entry.department = previous.2
+                entry.diagnosisNote = previous.3; entry.scenarioRawValue = previous.4; entry.totalExpense = previous.5
+                entry.estimatedReimbursement = previous.6; entry.actualReimbursement = previous.7; entry
+                    .statusRawValue = previous.8
+                entry.reimbursementDeadline = previous.9; entry.materialChecklistRawValue = previous.10
+                entry.note = previous.11; entry.updatedAt = previous.12
+            }, using: save)
+        } catch {
+            let original = error
+            do { try cleanup.retry(in: context) }
+            catch { throw MedicalLedgerSaveCleanupError(
+                original: original.localizedDescription,
+                cleanup: error.localizedDescription
+            ) }
+            throw original
+        }
+        do { try cleanup.retry(in: context); return nil }
+        catch { return "台账已保存，但本地文件清理未完成：\(error.localizedDescription)" }
+    }
+}
+
+private struct MedicalLedgerSaveCleanupError: LocalizedError {
+    let original: String
+    let cleanup: String
+    var errorDescription: String? { "台账未保存：\(original)。新增照片清理未完成：\(cleanup)" }
+}
+
+private struct MedicalStoredPhotoThumbnail: View {
+    let photo: MedicalLedgerPhoto
+    @State private var loader = ScheduleMemoImageLoader()
+    private var request: ScheduleMemoImageRequest {
+        ScheduleMemoImageRequest(sources: [.init(
+            id: photo.id,
+            url: MedicalLedgerPhotoStore.directoryURL.appendingPathComponent(photo.localFilename),
+            importedAt: photo.importedAt
+        )], revision: photo.updatedAt)
+    }
+    var body: some View {
+        Group {
+            if let image = loader.images(for: request)[photo.id] {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Image(systemName: "photo")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(AppTheme.tertiaryText)
+            }
+        }
+        .task(id: request) { await loader.load(request) }
+        .onDisappear { loader.reset() }
     }
 }

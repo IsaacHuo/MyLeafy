@@ -1,22 +1,26 @@
-# Summary
+# Problem and result
 
--
+Describe the concrete trigger and resulting behavior. Identify affected platforms and shared contracts.
 
-# Linked Issue
+# Related work
 
-Closes #
+Link the Issue when required by task size. Use `Closes #...` only when this PR satisfies that Issue's full acceptance; a single platform change must not close unfinished cross-platform work.
 
-# Changes
+# Validation evidence
 
--
+| Check | Actual result and command / evidence, or why not run |
+|---|---|
+| Formatting and static checks | |
+| Build | |
+| Automated tests / exact-commit CI | |
+| Simulator / real device / upgrade | |
 
-# Validation
+Do not describe an existing test, successful compilation or CI as real-device acceptance.
 
-- [ ] Ran the relevant local build or test
-- [ ] Checked screenshots or simulator behavior for UI changes
-- [ ] Confirmed no secrets, local config, or private user data were added
-- [ ] Updated docs when behavior or setup changed
+# Acceptance and delivery
 
-# Notes
+- Remaining acceptance, owner and linked follow-ups:
+- Released data / API migration and recovery implications, if affected:
+- Updated state / design / release evidence, or why not needed:
 
-Any follow-up work or reviewer context:
+Merging does not publish an app or authorize Cloudflare production deployment. Record independent platform delivery in the existing release index.

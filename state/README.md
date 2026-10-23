@@ -24,6 +24,7 @@ git     → What changed.                       （普通改动历史）
 |---|---|
 | `state/CURRENT.md` | 开发进度：当前阶段、重点、最近完成、进行中、已知问题、下一步 |
 | `state/ARCHITECTURE.md` | 当前代码结构：入口、模块、分层、数据流、依赖方向与行为约束 |
+| `state/PLATFORMS.md` | 双端主要能力的实现、验证证据、交付差异与关联 Issue；版本证据链接发布索引 |
 
 ## 维护原则
 

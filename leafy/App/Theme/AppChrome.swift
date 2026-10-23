@@ -238,15 +238,18 @@ struct LeafyOperationAlert: Identifiable {
         }
     }
 
-    static func success(_ message: String, buttonTitle: String? = nil, action: (() -> Void)? = nil) -> LeafyOperationAlert {
+    static func success(_ message: String, buttonTitle: String? = nil,
+                        action: (() -> Void)? = nil) -> LeafyOperationAlert {
         LeafyOperationAlert(kind: .success, message: message, buttonTitle: buttonTitle, action: action)
     }
 
-    static func failure(_ message: String, buttonTitle: String? = nil, action: (() -> Void)? = nil) -> LeafyOperationAlert {
+    static func failure(_ message: String, buttonTitle: String? = nil,
+                        action: (() -> Void)? = nil) -> LeafyOperationAlert {
         LeafyOperationAlert(kind: .failure, message: message, buttonTitle: buttonTitle, action: action)
     }
 
-    static func partial(_ message: String, buttonTitle: String? = nil, action: (() -> Void)? = nil) -> LeafyOperationAlert {
+    static func partial(_ message: String, buttonTitle: String? = nil,
+                        action: (() -> Void)? = nil) -> LeafyOperationAlert {
         LeafyOperationAlert(kind: .partial, message: message, buttonTitle: buttonTitle, action: action)
     }
 }
@@ -321,8 +324,8 @@ extension View {
                     .overlay(
                         shape.stroke(AppTheme.separator, lineWidth: 1)
                     )
-                }
             }
+        }
     }
 }
 
@@ -383,10 +386,16 @@ private struct LeafyCapsuleChipSurfaceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(isSelected ? AppTheme.accent(for: themeColorPreference) : AppTheme.cardElevated.opacity(0.96), in: Capsule())
+            .background(
+                isSelected ? AppTheme.accent(for: themeColorPreference) : AppTheme.cardElevated.opacity(0.96),
+                in: Capsule()
+            )
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? AppTheme.accent(for: themeColorPreference).opacity(0.18) : AppTheme.separator, lineWidth: 1)
+                    .stroke(
+                        isSelected ? AppTheme.accent(for: themeColorPreference).opacity(0.18) : AppTheme.separator,
+                        lineWidth: 1
+                    )
             )
     }
 }

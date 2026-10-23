@@ -38,8 +38,11 @@ final class TimetableConflictDayCache {
     private var entries: [DayKey: TimetableConflictDayContent] = [:]
     private let agendaCache = TimetableAgendaItemCache()
 
-    func content(metadata: TimetableDayMetadata, snapshot: TimetableGridSnapshot, totalClasses: Int) -> TimetableConflictDayContent {
-        if gridSignature != snapshot.signature || scheduleSignature != metadata.projectionSignature || language != .current || periodCount != totalClasses || periodSlots != TimetablePeriodSchedule.slots {
+    func content(metadata: TimetableDayMetadata, snapshot: TimetableGridSnapshot,
+                 totalClasses: Int) -> TimetableConflictDayContent {
+        if gridSignature != snapshot.signature || scheduleSignature != metadata
+            .projectionSignature || language != .current || periodCount != totalClasses || periodSlots !=
+            TimetablePeriodSchedule.slots {
             language = .current
             periodCount = totalClasses
             periodSlots = TimetablePeriodSchedule.slots
@@ -55,57 +58,73 @@ final class TimetableConflictDayCache {
             return calendar.date(bySettingHour: end ? slot.endHour : slot.startHour,
                                  minute: end ? slot.endMinute : slot.startMinute, second: 0, of: metadata.date)
         }
-        guard let dayStart = date(period: 1, end: false), let dayEnd = date(period: totalClasses, end: true) else { return .empty }
-        let values = agendaCache.items(metadata: metadata, gridSnapshot: snapshot, totalClasses: totalClasses).compactMap { item -> TimetableConflictDisplayItem? in
-            let start: Date?
-            let end: Date?
-            let note: String?
-            let location: String
-            var timeText = item.timeText.replacingOccurrences(of: "\n", with: "–")
-            switch item.kind {
-            case .course(let course):
-                start = date(period: course.duration.min() ?? 1, end: false)
-                end = date(period: course.duration.max() ?? 1, end: true)
-                note = snapshot.note(for: course, week: metadata.week)
-                location = course.timetableCardLocationText
-            case .cellReminder(let reminder, _):
-                start = reminder.resolvedStartDate ?? date(period: reminder.displayStartPeriod, end: false)
-                end = reminder.resolvedEndDate ?? date(period: reminder.displayEndPeriod, end: true)
-                note = nil
-                location = reminder.locationText
-            case .countdown(let projection):
-                start = projection.startsAt
-                end = projection.endsAt
-                note = nil
-                location = ""
-            case .exam(let projection):
-                start = projection.startsAt
-                // A missing duration keeps a short visual marker, not an invented end time.
-                end = projection.endsAt > projection.startsAt ? projection.endsAt : projection.startsAt.addingTimeInterval(20 * 60)
-                note = nil
-                location = projection.location
+        guard let dayStart = date(period: 1, end: false),
+              let dayEnd = date(period: totalClasses, end: true) else { return .empty }
+        let values = agendaCache.items(metadata: metadata, gridSnapshot: snapshot, totalClasses: totalClasses)
+            .compactMap { item -> TimetableConflictDisplayItem? in
+                let start: Date?
+                let end: Date?
+                let note: String?
+                let location: String
+                var timeText = item.timeText.replacingOccurrences(of: "\n", with: "–")
+                switch item.kind {
+                case .course(let course):
+                    start = date(period: course.duration.min() ?? 1, end: false)
+                    end = date(period: course.duration.max() ?? 1, end: true)
+                    note = snapshot.note(for: course, week: metadata.week)
+                    location = course.timetableCardLocationText
+                case .cellReminder(let reminder, _):
+                    start = reminder.resolvedStartDate ?? date(period: reminder.displayStartPeriod, end: false)
+                    end = reminder.resolvedEndDate ?? date(period: reminder.displayEndPeriod, end: true)
+                    note = nil
+                    location = reminder.locationText
+                case .countdown(let projection):
+                    start = projection.startsAt
+                    end = projection.endsAt
+                    note = nil
+                    location = ""
+                case .exam(let projection):
+                    start = projection.startsAt
+                    // A missing duration keeps a short visual marker, not an invented end time.
+                    end = projection.endsAt > projection.startsAt ? projection.endsAt : projection.startsAt
+                        .addingTimeInterval(20 * 60)
+                    note = nil
+                    location = projection.location
+                }
+                guard let start, let end, end > start else { return nil }
+                switch item.kind {
+                case .cellReminder, .countdown:
+                    timeText = "\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: start))–\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: end))"
+                default: break
+                }
+                let lower = max(start, dayStart).timeIntervalSinceReferenceDate
+                let upper = min(end, dayEnd).timeIntervalSinceReferenceDate
+                guard upper > lower else { return nil }
+                return .init(
+                    agenda: item,
+                    interval: .init(id: item.id, start: lower, end: upper),
+                    note: note,
+                    location: location,
+                    timeText: timeText
+                )
             }
-            guard let start, let end, end > start else { return nil }
-            switch item.kind {
-            case .cellReminder, .countdown:
-                timeText = "\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: start))–\(TimetableClock.formatter(DateFormatters.timeOnly).string(from: end))"
-            default: break
-            }
-            let lower = max(start, dayStart).timeIntervalSinceReferenceDate
-            let upper = min(end, dayEnd).timeIntervalSinceReferenceDate
-            guard upper > lower else { return nil }
-            return .init(agenda: item, interval: .init(id: item.id, start: lower, end: upper), note: note, location: location, timeText: timeText)
-        }
-        let result = TimetableConflictDayContent(layout: .make(intervals: values.map(\.interval)), items: Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) }))
+        let result = TimetableConflictDayContent(
+            layout: .make(intervals: values.map(\.interval)),
+            items: Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) })
+        )
         entries[key] = result
         return result
     }
 }
 
 nonisolated enum TimetableConflictGeometry {
-    static func rects(segments: [TimetableConflictSegment], width: CGFloat, metrics: TimetableLayoutMetrics) -> [CGRect] {
+    static func rects(segments: [TimetableConflictSegment], width: CGFloat,
+                      metrics: TimetableLayoutMetrics) -> [CGRect] {
         func y(_ timestamp: Double) -> CGFloat {
-            TimetableCurrentTimePosition.yPosition(for: Date(timeIntervalSinceReferenceDate: timestamp), metrics: metrics) ?? 0
+            TimetableCurrentTimePosition.yPosition(
+                for: Date(timeIntervalSinceReferenceDate: timestamp),
+                metrics: metrics
+            ) ?? 0
         }
         return segments.enumerated().compactMap { index, segment in
             let previousJoins = index > 0 && segments[index - 1].end == segment.start
@@ -116,8 +135,12 @@ nonisolated enum TimetableConflictGeometry {
             let top = rawTop + (previousJoins ? 0 : inset)
             let bottom = rawBottom - (nextJoins ? 0 : inset)
             let availableWidth = max(width - metrics.cardInset * 2, 1)
-            let left = metrics.cardInset + CGFloat(segment.leading) * availableWidth + (segment.leading > 0 ? metrics.laneSpacing / 2 : 0)
-            let right = metrics.cardInset + CGFloat(segment.trailing) * availableWidth - (segment.trailing < 1 ? metrics.laneSpacing / 2 : 0)
+            let left = metrics
+                .cardInset + CGFloat(segment.leading) * availableWidth +
+                (segment.leading > 0 ? metrics.laneSpacing / 2 : 0)
+            let right = metrics
+                .cardInset + CGFloat(segment.trailing) * availableWidth -
+                (segment.trailing < 1 ? metrics.laneSpacing / 2 : 0)
             guard bottom > top else { return nil }
             return CGRect(x: left, y: top, width: max(right - left, 1), height: bottom - top)
         }
@@ -179,8 +202,14 @@ struct TimetableConflictShape: Shape {
                 let outgoing = hypot(after.x - point.x, after.y - point.y)
                 let radius = min(5, min(incoming, outgoing) / 2)
                 guard incoming > 0, outgoing > 0 else { continue }
-                let entry = CGPoint(x: point.x + (before.x - point.x) * radius / incoming, y: point.y + (before.y - point.y) * radius / incoming)
-                let exit = CGPoint(x: point.x + (after.x - point.x) * radius / outgoing, y: point.y + (after.y - point.y) * radius / outgoing)
+                let entry = CGPoint(
+                    x: point.x + (before.x - point.x) * radius / incoming,
+                    y: point.y + (before.y - point.y) * radius / incoming
+                )
+                let exit = CGPoint(
+                    x: point.x + (after.x - point.x) * radius / outgoing,
+                    y: point.y + (after.y - point.y) * radius / outgoing
+                )
                 if index == 0 { path.move(to: entry) } else { path.addLine(to: entry) }
                 path.addQuadCurve(to: exit, control: point)
             }
@@ -211,7 +240,10 @@ struct TimetableConflictBlockView: View {
         let shape = TimetableConflictShape(rects: rects)
         ZStack(alignment: .topLeading) {
             shape.fill(background)
-            shape.stroke(isTodayCourse ? AppTheme.accentEmphasis(for: theme) : AppTheme.separator, lineWidth: isTodayCourse ? 1.5 : 0.7)
+            shape.stroke(
+                isTodayCourse ? AppTheme.accentEmphasis(for: theme) : AppTheme.separator,
+                lineWidth: isTodayCourse ? 1.5 : 0.7
+            )
             let primaryRegion = TimetableConflictGeometry.textRegion(in: rects, minimumHeight: 28 * scale)
             ForEach(Array(rects.enumerated()), id: \.offset) { _, box in
                 if !isSchedule, let primaryRegion, box.height >= 16 * scale, box.width >= 14 * scale,
@@ -225,7 +257,11 @@ struct TimetableConflictBlockView: View {
             }
             if let region = primaryRegion {
                 blockText(region: region)
-                    .frame(width: max(region.width - 8 * scale, 1), height: max(region.height - 8 * scale, 1), alignment: .topLeading)
+                    .frame(
+                        width: max(region.width - 8 * scale, 1),
+                        height: max(region.height - 8 * scale, 1),
+                        alignment: .topLeading
+                    )
                     .clipped()
                     .offset(x: region.minX + 4 * scale, y: region.minY + 4 * scale)
             }
@@ -233,7 +269,13 @@ struct TimetableConflictBlockView: View {
         .frame(width: width, height: height, alignment: .topLeading)
         .contentShape(shape)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([L10n.text(item.typeText, language: language), item.agenda.title, item.note ?? "", item.location, item.timeText].filter { !$0.isEmpty }.joined(separator: "，"))
+        .accessibilityLabel([
+            L10n.text(item.typeText, language: language),
+            item.agenda.title,
+            item.note ?? "",
+            item.location,
+            item.timeText
+        ].filter { !$0.isEmpty }.joined(separator: "，"))
     }
 
     private var isSchedule: Bool {
@@ -246,7 +288,8 @@ struct TimetableConflictBlockView: View {
     private func blockText(region: CGRect) -> some View {
         let availableHeight = max(region.height - 8 * scale, 0)
         let hasSupportingText = availableHeight > 48 * scale && (item.note?.isEmpty == false || !item.location.isEmpty)
-        let supportingHeight: CGFloat = hasSupportingText ? (item.note?.isEmpty == false ? 26 : 14) * scale : (!isSchedule && availableHeight > 36 * scale ? 12 * scale : 0)
+        let supportingHeight: CGFloat = hasSupportingText ? (item.note?.isEmpty == false ? 26 : 14) * scale :
+            (!isSchedule && availableHeight > 36 * scale ? 12 * scale : 0)
         let timeHeight: CGFloat = availableHeight > 92 * scale && region.width > 65 * scale ? 14 * scale : 0
         let titleLines = max(1, min(6, Int((availableHeight - supportingHeight - timeHeight) / (12.5 * scale))))
         return VStack(alignment: .leading, spacing: 3 * scale) {
@@ -308,7 +351,8 @@ struct TimetableConflictListSheet: View {
                             .font(.caption).foregroundStyle(item.agenda.tint)
                         Text(item.agenda.title).leafyHeadline().foregroundStyle(AppTheme.primaryText)
                         Text(item.timeText).leafySubheadline().foregroundStyle(AppTheme.secondaryText)
-                        if !item.location.isEmpty { Text(item.location).leafyBody().foregroundStyle(AppTheme.secondaryText) }
+                        if !item.location
+                            .isEmpty { Text(item.location).leafyBody().foregroundStyle(AppTheme.secondaryText) }
                         if let note = item.note { Text(note).leafyBody().foregroundStyle(AppTheme.primaryText) }
                     }
                     .fixedSize(horizontal: false, vertical: true).padding(.vertical, 6)

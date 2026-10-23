@@ -42,7 +42,7 @@ struct TeacherDetailSheet: View {
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
 
-                        ForEach((1...5).reversed(), id: \.self) { stars in
+                        ForEach((1 ... 5).reversed(), id: \.self) { stars in
                             TeacherRatingDistributionRow(
                                 stars: stars,
                                 count: teacher.ratingCountsByStars[stars] ?? 0,
@@ -190,7 +190,7 @@ struct CourseRatingDetailSheet: View {
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
 
-                        ForEach((1...5).reversed(), id: \.self) { stars in
+                        ForEach((1 ... 5).reversed(), id: \.self) { stars in
                             CourseRatingDistributionRow(
                                 stars: stars,
                                 count: course.ratingCountsByStars[stars] ?? 0,
@@ -338,7 +338,7 @@ struct DishDetailSheet: View {
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
 
-                        ForEach((1...5).reversed(), id: \.self) { stars in
+                        ForEach((1 ... 5).reversed(), id: \.self) { stars in
                             DishRatingDistributionRow(
                                 stars: stars,
                                 count: dish.ratingCountsByStars[stars] ?? 0,
@@ -517,7 +517,7 @@ struct TeacherStarPicker: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(1...5, id: \.self) { stars in
+            ForEach(1 ... 5, id: \.self) { stars in
                 Button {
                     selection = stars
                 } label: {
@@ -548,47 +548,4 @@ struct DishStarPicker: View {
     var body: some View {
         TeacherStarPicker(selection: $selection)
     }
-}
-
-struct CommunityMockPost: Identifiable {
-    let id: Int
-    let author: String
-    let title: String
-    let body: String
-    let timestamp: String
-    let likes: Int
-    let comments: Int
-    let tag: String
-    let avatarColor: Color
-    let photoLabels: [String]
-    let mockComments: [String]
-
-    static let samples: [CommunityMockPost] = [
-        CommunityMockPost(
-            id: 1,
-            author: "匿名同学",
-            title: "食堂晚饭有没有稳定不踩雷的窗口？",
-            body: "最近想固定一个晚饭窗口，不想每天随机试错。有没有那种价格稳定、出餐快、晚上也不容易翻车的推荐？",
-            timestamp: "今天 18:42",
-            likes: 23,
-            comments: 8,
-            tag: "食堂",
-            avatarColor: AppTheme.featureTints[0],
-            photoLabels: ["晚饭", "北林", "推荐"],
-            mockComments: ["一食堂二层的烤盘饭比较稳。", "三食堂窗口更新快，晚上选择多。"]
-        ),
-        CommunityMockPost(
-            id: 2,
-            author: "林学 23 级",
-            title: "图书馆闭馆前一小时人会突然少很多吗？",
-            body: "想找一个相对安静的时间段复习，白天人流太大。有人长期蹲馆的话，可以说一下晚上座位变化吗？",
-            timestamp: "昨天 21:15",
-            likes: 16,
-            comments: 5,
-            tag: "自习",
-            avatarColor: AppTheme.featureTints[2],
-            photoLabels: [],
-            mockComments: ["九点以后会明显松一点。", "考试周不一定，平时是这样的。"]
-        )
-    ]
 }

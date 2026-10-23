@@ -76,8 +76,9 @@ struct CareerPlanningSectionView: View {
         }
         .leafySheet(item: $editingTask) { task in
             CareerTaskEditorSheet(task: task) { _ in
-                saveContext()
-                operationAlert = .success(L10n.text("任务已保存。", language: leafyLanguage))
+                let saved = saveContext()
+                if saved { operationAlert = .success(L10n.text("任务已保存。", language: leafyLanguage)) }
+                return saved
             }
         }
         .leafySheet(isPresented: $isOpportunityEditorPresented) {
@@ -87,8 +88,9 @@ struct CareerPlanningSectionView: View {
         }
         .leafySheet(item: $editingOpportunity) { opportunity in
             CareerOpportunityEditorSheet(opportunity: opportunity) { _ in
-                saveContext()
-                operationAlert = .success(L10n.text("岗位已保存。", language: leafyLanguage))
+                let saved = saveContext()
+                if saved { operationAlert = .success(L10n.text("岗位已保存。", language: leafyLanguage)) }
+                return saved
             }
         }
         .alert("职业规划操作失败", isPresented: Binding(
@@ -238,7 +240,11 @@ struct CareerPlanningSectionView: View {
                 VStack(alignment: .leading, spacing: 9) {
                     CareerSuggestionRow(icon: "target", title: "岗位关键词匹配", detail: "用岗位描述检查简历关键词覆盖。")
                     CareerSuggestionRow(icon: "rectangle.grid.1x2", title: "投递进度看板", detail: "按关注、已投递、面试中和结束汇总进度。")
-                    CareerSuggestionRow(icon: "person.crop.rectangle.stack", title: "面试准备清单", detail: "记录项目经历、常见问题和复盘内容。")
+                    CareerSuggestionRow(
+                        icon: "person.crop.rectangle.stack",
+                        title: "面试准备清单",
+                        detail: "记录项目经历、常见问题和复盘内容。"
+                    )
                     CareerSuggestionRow(icon: "calendar.badge.clock", title: "宣讲会日历", detail: "把宣讲会、网申截止和面试时间放进日程。")
                     CareerSuggestionRow(icon: "building.2", title: "目标行业收藏", detail: "按城市、行业和单位类型整理长期目标。")
                 }
@@ -252,52 +258,16 @@ struct CareerPlanningSectionView: View {
                 resumeBeingReplaced = nil
                 return
             }
-            let stored = try CareerDocumentFileStore.importFile(from: url)
-
-            if let resumeBeingReplaced {
-                let previousLocalFilename = resumeBeingReplaced.localFilename
-                resumeBeingReplaced.originalFilename = url.lastPathComponent
-                resumeBeingReplaced.localFilename = stored.localFilename
-                resumeBeingReplaced.contentTypeIdentifier = stored.contentTypeIdentifier
-                resumeBeingReplaced.updatedAt = Date()
-
-                do {
-                    try modelContext.save()
-                } catch {
-                    modelContext.rollback()
-                    try? CareerDocumentFileStore.deleteFile(named: stored.localFilename)
-                    throw error
-                }
-
-                do {
-                    try CareerDocumentFileStore.deleteFile(named: previousLocalFilename)
-                    operationAlert = .success(L10n.text("简历文件已替换。", language: leafyLanguage))
-                } catch {
-                    alertMessage = "新简历已保存，但旧文件未能清理：\(error.localizedDescription)"
-                }
-            } else {
-                let title = url.deletingPathExtension().lastPathComponent
-                let resume = CareerResumeDocument(
-                    title: title.isEmpty ? "个人简历" : title,
-                    originalFilename: url.lastPathComponent,
-                    localFilename: stored.localFilename,
-                    contentTypeIdentifier: stored.contentTypeIdentifier
-                )
-                modelContext.insert(resume)
-
-                do {
-                    try modelContext.save()
-                } catch {
-                    modelContext.rollback()
-                    try? CareerDocumentFileStore.deleteFile(named: stored.localFilename)
-                    throw error
-                }
-
-                Task { @MainActor in
-                    await Task.yield()
-                    editingResume = resume
-                }
+            let result = try CareerResumePersistence.importFile(
+                from: url,
+                replacing: resumeBeingReplaced,
+                in: modelContext
+            )
+            if let warning = result.cleanupWarning { alertMessage = warning }
+            else if resumeBeingReplaced != nil {
+                operationAlert = .success(L10n.text("简历文件已替换。", language: leafyLanguage))
             }
+            if resumeBeingReplaced == nil { editingResume = result.document }
             resumeBeingReplaced = nil
         } catch {
             resumeBeingReplaced = nil
@@ -328,37 +298,40 @@ struct CareerPlanningSectionView: View {
 
     private func deleteResume(_ resume: CareerResumeDocument) {
         do {
-            try CareerDocumentFileStore.deleteFile(named: resume.localFilename)
-            modelContext.delete(resume)
-            try modelContext.save()
+            let files = CareerDocumentFileStore.fileURL(for: resume)
+                .map { [LocalFileCleanup.File(resume, url: $0)] } ?? []
+            try LocalFileCleanup().delete([resume], files: files, in: modelContext)
             operationAlert = .success(L10n.text("简历已删除。", language: leafyLanguage))
         } catch {
             alertMessage = error.localizedDescription
         }
     }
 
-    private func insertTask(_ task: CareerTask) {
+    private func insertTask(_ task: CareerTask) -> Bool {
         modelContext.insert(task)
-        saveContext()
+        guard saveContext(undo: { modelContext.delete(task) }) else { return false }
         operationAlert = .success(L10n.text("任务已添加。", language: leafyLanguage))
+        return true
     }
 
     private func toggleTask(_ task: CareerTask) {
+        let previous = (task.isCompleted, task.updatedAt)
         task.isCompleted.toggle()
         task.updatedAt = Date()
-        saveContext()
+        _ = saveContext(undo: { task.isCompleted = previous.0; task.updatedAt = previous.1 })
     }
 
     private func deleteTask(_ task: CareerTask) {
         modelContext.delete(task)
-        saveContext()
+        guard saveContext(undo: { modelContext.insert(task) }) else { return }
         operationAlert = .success(L10n.text("任务已删除。", language: leafyLanguage))
     }
 
-    private func insertOpportunity(_ opportunity: CareerOpportunity) {
+    private func insertOpportunity(_ opportunity: CareerOpportunity) -> Bool {
         modelContext.insert(opportunity)
-        saveContext()
+        guard saveContext(undo: { modelContext.delete(opportunity) }) else { return false }
         operationAlert = .success(L10n.text("岗位已添加。", language: leafyLanguage))
+        return true
     }
 
     private func openOpportunity(_ opportunity: CareerOpportunity) {
@@ -371,15 +344,17 @@ struct CareerPlanningSectionView: View {
 
     private func deleteOpportunity(_ opportunity: CareerOpportunity) {
         modelContext.delete(opportunity)
-        saveContext()
+        guard saveContext(undo: { modelContext.insert(opportunity) }) else { return }
         operationAlert = .success(L10n.text("岗位已删除。", language: leafyLanguage))
     }
 
-    private func saveContext() {
+    private func saveContext(undo: () -> Void = {}) -> Bool {
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: undo)
+            return true
         } catch {
             alertMessage = error.localizedDescription
+            return false
         }
     }
 }
@@ -438,10 +413,12 @@ private struct CareerResumeRow: View {
                             .foregroundStyle(AppTheme.primaryText)
                             .lineLimit(1)
 
-                        Text("\(resume.displayType) · \(resume.updatedAt.formatted(date: .abbreviated, time: .shortened))")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .lineLimit(1)
+                        Text(
+                            "\(resume.displayType) · \(resume.updatedAt.formatted(date: .abbreviated, time: .shortened))"
+                        )
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(1)
 
                         if !resume.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text(resume.note)
@@ -494,7 +471,10 @@ private struct CareerEmptyResumeRow: View {
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(AppTheme.secondaryText)
                     .frame(width: 38, height: 44)
-                    .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                    .background(
+                        AppTheme.softFill,
+                        in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                    )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("尚未导入简历")
@@ -716,15 +696,25 @@ private struct CareerSuggestionRow: View {
 
 private struct CareerResumeEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable var resume: CareerResumeDocument
+    @Environment(\.modelContext) private var modelContext
+    let resume: CareerResumeDocument
+    @State private var saveError: String?
+    @State private var title: String
+    @State private var note: String
+
+    init(resume: CareerResumeDocument) {
+        self.resume = resume
+        _title = State(initialValue: resume.title)
+        _note = State(initialValue: resume.note)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("标题", text: $resume.title)
-                    TextField("备注", text: $resume.note, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("标题", text: $title)
+                    TextField("备注", text: $note, axis: .vertical)
+                        .lineLimit(3 ... 6)
                 }
 
                 Section {
@@ -736,11 +726,24 @@ private struct CareerResumeEditorSheet: View {
             }
             .navigationTitle("编辑简历")
             .leafyInlineNavigationTitle()
+            .alert("保存失败", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("知道了", role: .cancel) {}
+            } message: { Text(saveError ?? "") }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") {
+                        let previous = (resume.title, resume.note, resume.updatedAt)
+                        resume.title = title
+                        resume.note = note
                         resume.updatedAt = Date()
-                        dismiss()
+                        do {
+                            try LocalModelSave.save(modelContext, undo: {
+                                resume.title = previous.0
+                                resume.note = previous.1
+                                resume.updatedAt = previous.2
+                            })
+                            dismiss()
+                        } catch { saveError = error.localizedDescription }
                     }
                     .fontWeight(.semibold)
                 }
@@ -753,7 +756,7 @@ private struct CareerTaskEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let task: CareerTask?
-    let onSave: (CareerTask) -> Void
+    let onSave: (CareerTask) -> Bool
 
     @State private var title: String
     @State private var note: String
@@ -764,7 +767,7 @@ private struct CareerTaskEditorSheet: View {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(task: CareerTask?, onSave: @escaping (CareerTask) -> Void) {
+    init(task: CareerTask?, onSave: @escaping (CareerTask) -> Bool) {
         self.task = task
         self.onSave = onSave
         _title = State(initialValue: task?.title ?? "")
@@ -783,7 +786,7 @@ private struct CareerTaskEditorSheet: View {
                         DatePicker("截止日期", selection: $dueAt, displayedComponents: .date)
                     }
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(task == nil ? "添加任务" : "编辑任务")
@@ -810,13 +813,17 @@ private struct CareerTaskEditorSheet: View {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let selectedDueAt = hasDueDate ? dueAt : nil
         if let task {
+            let previous = (task.title, task.note, task.dueAt, task.updatedAt)
             task.title = trimmedTitle
             task.note = trimmedNote
             task.dueAt = selectedDueAt
             task.updatedAt = Date()
-            onSave(task)
+            guard onSave(task) else {
+                task.title = previous.0; task.note = previous.1; task.dueAt = previous.2; task.updatedAt = previous.3
+                return
+            }
         } else {
-            onSave(CareerTask(title: trimmedTitle, note: trimmedNote, dueAt: selectedDueAt))
+            guard onSave(CareerTask(title: trimmedTitle, note: trimmedNote, dueAt: selectedDueAt)) else { return }
         }
         dismiss()
     }
@@ -826,7 +833,7 @@ private struct CareerOpportunityEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let opportunity: CareerOpportunity?
-    let onSave: (CareerOpportunity) -> Void
+    let onSave: (CareerOpportunity) -> Bool
 
     @State private var title: String
     @State private var organization: String
@@ -838,7 +845,7 @@ private struct CareerOpportunityEditorSheet: View {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(opportunity: CareerOpportunity?, onSave: @escaping (CareerOpportunity) -> Void) {
+    init(opportunity: CareerOpportunity?, onSave: @escaping (CareerOpportunity) -> Bool) {
         self.opportunity = opportunity
         self.onSave = onSave
         _title = State(initialValue: opportunity?.title ?? "")
@@ -866,7 +873,7 @@ private struct CareerOpportunityEditorSheet: View {
                         }
                     }
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(opportunity == nil ? "添加岗位" : "编辑岗位")
@@ -894,21 +901,35 @@ private struct CareerOpportunityEditorSheet: View {
         let trimmedURL = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         if let opportunity {
+            let previous = (
+                opportunity.title,
+                opportunity.organization,
+                opportunity.urlString,
+                opportunity.statusRawValue,
+                opportunity.note,
+                opportunity.updatedAt
+            )
             opportunity.title = trimmedTitle
             opportunity.organization = trimmedOrganization
             opportunity.urlString = trimmedURL
             opportunity.status = status
             opportunity.note = trimmedNote
             opportunity.updatedAt = Date()
-            onSave(opportunity)
+            guard onSave(opportunity) else {
+                opportunity.title = previous.0; opportunity.organization = previous.1; opportunity.urlString = previous
+                    .2
+                opportunity.statusRawValue = previous.3; opportunity.note = previous.4; opportunity.updatedAt = previous
+                    .5
+                return
+            }
         } else {
-            onSave(CareerOpportunity(
+            guard onSave(CareerOpportunity(
                 title: trimmedTitle,
                 organization: trimmedOrganization,
                 urlString: trimmedURL,
                 statusRawValue: status.rawValue,
                 note: trimmedNote
-            ))
+            )) else { return }
         }
         dismiss()
     }
@@ -998,7 +1019,6 @@ private struct CareerDocumentPreview: UIViewControllerRepresentable {
     }
 }
 
-
 enum CareerDocumentFileStore {
     struct StoredFile {
         let localFilename: String
@@ -1013,7 +1033,7 @@ enum CareerDocumentFileStore {
         UTType(filenameExtension: "docx") ?? .data
     ]
 
-    static func importFile(from sourceURL: URL) throws -> StoredFile {
+    static func importFile(from sourceURL: URL, filename: String? = nil) throws -> StoredFile {
         let didAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -1025,9 +1045,9 @@ enum CareerDocumentFileStore {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
         let extensionText = sourceURL.pathExtension
-        let localFilename = extensionText.isEmpty
+        let localFilename = filename ?? (extensionText.isEmpty
             ? UUID().uuidString
-            : "\(UUID().uuidString).\(extensionText)"
+            : "\(UUID().uuidString).\(extensionText)")
         let destinationURL = directoryURL.appendingPathComponent(localFilename)
 
         if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
@@ -1063,7 +1083,7 @@ enum CareerDocumentFileStore {
         }
     }
 
-    private static var directoryURL: URL {
+    static var directoryURL: URL {
         if AppRuntimeEnvironment.isRunningUnitTests {
             return FileManager.default.temporaryDirectory
                 .appendingPathComponent("LeafyCareerDocumentsTests", isDirectory: true)
@@ -1091,7 +1111,8 @@ private extension CareerResumeDocument {
         if contentType.conforms(to: .pdf) { return "PDF" }
         if contentType.conforms(to: .image) { return "图片" }
         if contentType.conforms(to: .plainText) { return "文本" }
-        if contentType.identifier.contains("word") || originalFilename.lowercased().hasSuffix(".docx") || originalFilename.lowercased().hasSuffix(".doc") {
+        if contentType.identifier.contains("word") || originalFilename.lowercased()
+            .hasSuffix(".docx") || originalFilename.lowercased().hasSuffix(".doc") {
             return "Word"
         }
         return "文件"
@@ -1127,4 +1148,72 @@ private extension CareerOpportunity {
         }
         return URL(string: "https://\(trimmed)")
     }
+}
+
+@MainActor
+enum CareerResumePersistence {
+    struct Result {
+        let document: CareerResumeDocument
+        let cleanupWarning: String?
+    }
+
+    static func importFile(from url: URL, replacing existing: CareerResumeDocument?, in context: ModelContext,
+                           cleanup: LocalFileCleanup? = nil,
+                           save: (ModelContext) throws -> Void = { try $0.save() }) throws -> Result {
+        let cleanup = cleanup ?? LocalFileCleanup()
+        let filename = UUID().uuidString + (url.pathExtension.isEmpty ? "" : "." + url.pathExtension)
+        let document = existing ?? CareerResumeDocument(
+            title: url.deletingPathExtension().lastPathComponent.isEmpty ? "个人简历" : url.deletingPathExtension()
+                .lastPathComponent,
+            originalFilename: url.lastPathComponent, localFilename: filename,
+            contentTypeIdentifier: UTType.data.identifier
+        )
+        let previous = (
+            document.originalFilename,
+            document.localFilename,
+            document.contentTypeIdentifier,
+            document.updatedAt
+        )
+        var files = [LocalFileCleanup.File(
+            document,
+            url: CareerDocumentFileStore.directoryURL.appendingPathComponent(filename)
+        )]
+        if let existing, let oldURL = CareerDocumentFileStore.fileURL(for: existing) {
+            files.append(LocalFileCleanup.File(existing, url: oldURL))
+        }
+        try cleanup.enqueue(files)
+        do {
+            let stored = try CareerDocumentFileStore.importFile(from: url, filename: filename)
+            document.originalFilename = url.lastPathComponent
+            document.localFilename = stored.localFilename
+            document.contentTypeIdentifier = stored.contentTypeIdentifier
+            document.updatedAt = Date()
+            if existing == nil { context.insert(document) }
+            try LocalModelSave.save(context, undo: {
+                if existing == nil { context.delete(document) }
+                document.originalFilename = previous.0
+                document.localFilename = previous.1
+                document.contentTypeIdentifier = previous.2
+                document.updatedAt = previous.3
+            }, using: save)
+        } catch {
+            let original = error
+            do { try cleanup.retry(in: context) }
+            catch { throw CareerResumeCleanupError(
+                original: original.localizedDescription,
+                cleanup: error.localizedDescription
+            ) }
+            throw original
+        }
+        var warning: String?
+        do { try cleanup.retry(in: context) }
+        catch { warning = "简历已保存，但本地文件清理未完成：\(error.localizedDescription)" }
+        return Result(document: document, cleanupWarning: warning)
+    }
+}
+
+private struct CareerResumeCleanupError: LocalizedError {
+    let original: String
+    let cleanup: String
+    var errorDescription: String? { "简历未保存：\(original)。新增文件清理未完成：\(cleanup)" }
 }

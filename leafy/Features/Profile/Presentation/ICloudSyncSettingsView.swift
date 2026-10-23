@@ -18,7 +18,10 @@ struct ICloudSyncSettingsView: View {
             }
             Section("同步状态") {
                 if sync.isBusy { ProgressView(sync.phase.title) }
-                if let date = sync.lastSuccess { LabeledContent("最近成功", value: date.formatted(date: .abbreviated, time: .shortened)) }
+                if let date = sync.lastSuccess { LabeledContent(
+                    "最近成功",
+                    value: date.formatted(date: .abbreviated, time: .shortened)
+                ) }
                 else { Text("尚未完成同步").foregroundStyle(.secondary) }
                 if sync.pendingCount > 0 { Text("待同步或待接收：\(sync.pendingCount) 项") }
                 if let failure = sync.failure { Text(failure).foregroundStyle(.red).textSelection(.enabled) }
@@ -34,7 +37,8 @@ struct ICloudSyncSettingsView: View {
                 Text("关闭同步会保留本机与云端数据。学校密码、登录会话和社区缓存不参与同步。学习资料、职业规划、医疗等其他模块本轮不参与同步。")
                     .font(.footnote).foregroundStyle(.secondary)
                 if ReviewDemoMode.isEnabled { Text("演示模式不支持 iCloud 同步。") }
-                Button("删除此身份云端数据", role: .destructive) { confirmsDelete = true }.disabled(sync.isBusy || ReviewDemoMode.isEnabled)
+                Button("删除此身份云端数据", role: .destructive) { confirmsDelete = true }
+                    .disabled(sync.isBusy || ReviewDemoMode.isEnabled)
             }
         }
         .navigationTitle("iCloud 同步")

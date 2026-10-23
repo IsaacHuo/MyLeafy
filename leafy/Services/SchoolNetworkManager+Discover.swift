@@ -3,9 +3,8 @@ import OSLog
 import SwiftSoup
 
 extension SchoolNetworkManager {
-
-
     func fetchExamSchedule() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地考试安排样例，不连接学校教务系统。")
         }
@@ -14,11 +13,16 @@ extension SchoolNetworkManager {
 
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable()
+        try scope.check()
         guard let url = URL(string: "\(baseURL)/jsxsd/xsks/xsksap_list") else {
             throw URLError(.badURL)
         }
 
-        var request = makeRequest(url: url, method: "POST", referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
+        var request = makeRequest(
+            url: url,
+            method: "POST",
+            referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp")
+        )
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         var components = URLComponents()
@@ -32,7 +36,7 @@ extension SchoolNetworkManager {
         let referer = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp")
         let requests = mergeCandidateRequests(
             [request] +
-            examScheduleDirectCandidateRequests(referer: referer)
+                examScheduleDirectCandidateRequests(referer: referer)
         )
 
         var lastHTML = ""
@@ -40,6 +44,7 @@ extension SchoolNetworkManager {
 
         for candidate in requests {
             let (html, response) = try await html(for: candidate)
+            try scope.check()
             lastHTML = html
             lastResponse = response
 
@@ -59,17 +64,26 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("考试安排页面返回了登录页。") +
-                pageDebugSummary(html: lastHTML, responseURL: lastResponse?.url, snapshotName: "last_exam_login_page.html")
+                    pageDebugSummary(
+                        html: lastHTML,
+                        responseURL: lastResponse?.url,
+                        snapshotName: "last_exam_login_page.html"
+                    )
             )
         }
 
         throw SchoolNetworkError.featureUnavailable(
             L10n.text("考试安排页面未返回可解析的数据。") +
-            pageDebugSummary(html: lastHTML, responseURL: lastResponse?.url, snapshotName: "last_exam_unexpected_page.html")
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_exam_unexpected_page.html"
+                )
         )
     }
 
     func fetchTeachingPlan() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地教学计划样例，不连接学校教务系统。")
         }
@@ -83,19 +97,21 @@ extension SchoolNetworkManager {
 
         let request = makeRequest(url: url, referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
         let (html, response) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
                 throw SchoolNetworkError.sessionExpired
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("教学计划页面返回了登录页。") +
-                pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_plan_login_page.html")
+                    pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_plan_login_page.html")
             )
         }
         return html
     }
 
     func fetchGraduationRequirements() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地培养方案样例，不连接学校教务系统。")
         }
@@ -109,19 +125,25 @@ extension SchoolNetworkManager {
 
         let request = makeRequest(url: url, referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
         let (html, response) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
                 throw SchoolNetworkError.sessionExpired
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("培养方案明细页面返回了登录页。") +
-                pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_graduation_requirements_login_page.html")
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: response.url,
+                        snapshotName: "last_graduation_requirements_login_page.html"
+                    )
             )
         }
         return html
     }
 
     func fetchGradeRankings() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地排名样例，不连接学校教务系统。")
         }
@@ -135,6 +157,7 @@ extension SchoolNetworkManager {
         }
 
         let gradesHTML = try await fetchGrades()
+        try scope.check()
         if (try? HTMLParser.parseGradeRankings(html: gradesHTML)) != nil {
             return gradesHTML
         }
@@ -154,6 +177,7 @@ extension SchoolNetworkManager {
         for request in requests {
             do {
                 let (html, response) = try await html(for: request)
+                try scope.check()
                 lastHTML = html
                 lastResponse = response
 
@@ -165,6 +189,7 @@ extension SchoolNetworkManager {
                     return html
                 }
             } catch {
+                try scope.check()
                 lastTransportError = error
             }
         }
@@ -175,11 +200,11 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("成绩排名页面返回了登录页。") +
-                pageDebugSummary(
-                    html: lastHTML,
-                    responseURL: lastResponse?.url,
-                    snapshotName: "last_grade_rankings_login_page.html"
-                )
+                    pageDebugSummary(
+                        html: lastHTML,
+                        responseURL: lastResponse?.url,
+                        snapshotName: "last_grade_rankings_login_page.html"
+                    )
             )
         }
 
@@ -189,11 +214,11 @@ extension SchoolNetworkManager {
 
         throw SchoolNetworkError.featureUnavailable(
             L10n.text("教务暂未开放成绩排名。") +
-            pageDebugSummary(
-                html: lastHTML,
-                responseURL: lastResponse?.url,
-                snapshotName: "last_grade_rankings_unavailable.html"
-            )
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_grade_rankings_unavailable.html"
+                )
         )
     }
 
@@ -241,21 +266,21 @@ extension SchoolNetworkManager {
 
     private func isExamSchedulePage(_ html: String) -> Bool {
         (html.contains("id=\"dataList\"") || html.contains("id='dataList'")) &&
-        (
-            html.contains("考试") ||
-            html.contains("ksap") ||
-            html.contains("xsks")
-        )
+            (
+                html.contains("考试") ||
+                    html.contains("ksap") ||
+                    html.contains("xsks")
+            )
     }
 
     private func isEmptyClassroomPage(_ html: String) -> Bool {
         (html.contains("id=\"dataList\"") || html.contains("id='dataList'")) &&
-        (
-            html.contains("tdvalue=") ||
-            html.contains("项目列表") ||
-            html.contains("jsjy_query2") ||
-            html.contains("教室")
-        )
+            (
+                html.contains("tdvalue=") ||
+                    html.contains("项目列表") ||
+                    html.contains("jsjy_query2") ||
+                    html.contains("教室")
+            )
     }
 
     private func extractGradeRankingCandidateRequests(from html: String, baseURL: URL) throws -> [URLRequest] {
@@ -321,6 +346,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchEmptyClassrooms(date: Date, start: Int, end: Int) async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地空教室样例，不连接学校教务系统。")
         }
@@ -329,17 +355,27 @@ extension SchoolNetworkManager {
 
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
         let activeConfig = await SemesterConfig.refreshRemoteIfAvailable()
+        try scope.check()
         var schoolCalendar = Calendar(identifier: .gregorian)
         schoolCalendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         let selectedDay = schoolCalendar.startOfDay(for: date)
-        let configurations = [activeConfig] + SemesterConfig.timelineConfigurations.filter { $0.semesterID != activeConfig.semesterID }
+        let configurations = [activeConfig] + SemesterConfig.timelineConfigurations
+            .filter { $0.semesterID != activeConfig.semesterID }
         guard let semesterConfig = configurations.first(where: { config in
-            let days = schoolCalendar.dateComponents([.day], from: schoolCalendar.startOfDay(for: config.semesterStartDate), to: selectedDay).day ?? -1
-            return (0..<(SemesterConfig.timetableWeekCapacity * 7)).contains(days)
+            let days = schoolCalendar.dateComponents(
+                [.day],
+                from: schoolCalendar.startOfDay(for: config.semesterStartDate),
+                to: selectedDay
+            ).day ?? -1
+            return (0 ..< (SemesterConfig.timetableWeekCapacity * 7)).contains(days)
         }) else {
             throw SchoolNetworkError.classroomDataUnavailable("所选日期不在已配置的学期内，请选择学期内的日期。")
         }
-        let days = schoolCalendar.dateComponents([.day], from: schoolCalendar.startOfDay(for: semesterConfig.semesterStartDate), to: selectedDay).day ?? 0
+        let days = schoolCalendar.dateComponents(
+            [.day],
+            from: schoolCalendar.startOfDay(for: semesterConfig.semesterStartDate),
+            to: selectedDay
+        ).day ?? 0
         let schedule = (week: days / 7 + 1, day: ((schoolCalendar.component(.weekday, from: selectedDay) + 5) % 7) + 1)
         let dateString = DateFormatters.queryDate.string(from: date)
 
@@ -373,23 +409,28 @@ extension SchoolNetworkManager {
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
         let (html, response) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
                 throw SchoolNetworkError.sessionExpired
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("空教室页面返回了登录页（%@ %d-%d节）。", dateString, start, end) +
-                pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_classroom_login_page.html")
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: response.url,
+                        snapshotName: "last_classroom_login_page.html"
+                    )
             )
         }
         guard isEmptyClassroomPage(html) else {
             throw SchoolNetworkError.classroomDataUnavailable(
                 L10n.text("（%@ %d-%d节）。", dateString, start, end) +
-                pageDebugSummary(
-                    html: html,
-                    responseURL: response.url,
-                    snapshotName: "last_classroom_unexpected_\(dateString)_\(start)_\(end).html"
-                )
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: response.url,
+                        snapshotName: "last_classroom_unexpected_\(dateString)_\(start)_\(end).html"
+                    )
             )
         }
         return html

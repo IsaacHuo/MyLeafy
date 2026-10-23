@@ -54,7 +54,6 @@ enum ScheduleRootTopBarLayout: Equatable {
         }
         return viewportWidth <= 350 ? .combinedActions : .regular
     }
-
 }
 
 struct ScheduleRootView: View {
@@ -128,11 +127,17 @@ struct ScheduleRootView: View {
                 .accessibilityHidden(primarySection != .memos)
 
             if primarySection == .schedules {
-                CustomScheduleListView(presentation: .daytraceRoot, onVerticalScroll: { receiveScroll($0, from: .schedules) })
-                    .transition(.opacity)
+                CustomScheduleListView(
+                    presentation: .daytraceRoot,
+                    onVerticalScroll: { receiveScroll($0, from: .schedules) }
+                )
+                .transition(.opacity)
             } else if primarySection == .reports {
-                ScheduleReportsView(presentation: .daytraceRoot, onVerticalScroll: { receiveScroll($0, from: .reports) })
-                    .transition(.opacity)
+                ScheduleReportsView(
+                    presentation: .daytraceRoot,
+                    onVerticalScroll: { receiveScroll($0, from: .reports) }
+                )
+                .transition(.opacity)
             }
         }
     }
@@ -584,7 +589,8 @@ struct ScheduleMemoFeedView: View {
             let reminderItems = reminders.compactMap { reminder -> PersonalScheduleFeedItem? in
                 guard let createdAt = reminder.createdAt,
                       let startsAt = reminder.resolvedStartDate,
-                      !linkedScheduleKeys.contains("\(ScheduleMemoLinkKind.timetableReminder.rawValue):\(reminder.id.uuidString)")
+                      !linkedScheduleKeys
+                          .contains("\(ScheduleMemoLinkKind.timetableReminder.rawValue):\(reminder.id.uuidString)")
                 else { return nil }
                 let endsAt = reminder.resolvedEndDate ?? startsAt.addingTimeInterval(45 * 60)
                 return PersonalScheduleFeedItem(
@@ -637,93 +643,96 @@ struct ScheduleMemoFeedView: View {
             audioRecords: audioRecords
         )
         configuredFeed(using: mediaIndex)
-        .leafySheet(item: $editingMemo) { memo in
-            if memo.kind == .audio {
-                ScheduleMemoEditorView(memo: memo)
-            } else {
-                ScheduleMemoAdvancedEditorView(memo: memo)
-            }
-        }
-        .leafySheet(item: $convertingMemo) { memo in
-            CustomScheduleEditorSheet(
-                presentation: .importantDate(
-                    nil,
-                    defaultContext: defaultTimetableContext(),
-                    prefillTitle: memoTitle(memo.body),
-                    prefillNote: memo.body
-                ),
-                onSaved: { reference in
-                    let previous = (memo.linkedScheduleKind, memo.linkedScheduleID, memo.updatedAt)
-                    memo.linkedScheduleKind = reference.kind
-                    memo.linkedScheduleID = reference.stableID
-                    memo.updatedAt = Date()
-                    do {
-                        try LocalModelSave.save(modelContext, undo: {
-                            memo.linkedScheduleKind = previous.0
-                            memo.linkedScheduleID = previous.1
-                            memo.updatedAt = previous.2
-                        })
-                    } catch {
-                        presentedAlert = .failure(id: UUID(), message: L10n.text("日程已创建，但随记关联保存失败：%@", error.localizedDescription))
-                    }
-                    importantDates = CustomScheduleStore.load()
+            .leafySheet(item: $editingMemo) { memo in
+                if memo.kind == .audio {
+                    ScheduleMemoEditorView(memo: memo)
+                } else {
+                    ScheduleMemoAdvancedEditorView(memo: memo)
                 }
-            )
-        }
-        .leafySheet(item: $editingSchedulePresentation, onDismiss: {
-            importantDates = CustomScheduleStore.load()
-        }) { presentation in
-            CustomScheduleEditorSheet(presentation: presentation)
-                .presentationDetents([.medium, .large])
-        }
-        .leafySheet(item: $shareCardSource) { source in
-            ScheduleMemoShareCardPreviewSheet(source: source)
-        }
-        .navigationDestination(isPresented: Binding(
-            get: { detailMemo != nil },
-            set: { if !$0 { detailMemo = nil } }
-        )) {
-            if let detailMemo {
-                ScheduleMemoDetailView(
-                    memo: detailMemo,
-                    images: mediaIndex.imagesByMemoID[detailMemo.id, default: []],
-                    attachments: mediaIndex.attachmentsByMemoID[detailMemo.id, default: []],
-                    audio: mediaIndex.audioByMemoID[detailMemo.id],
-                    audioPlayback: audioPlayback,
-                    linkedSchedule: linkedSchedule(for: detailMemo),
-                    onEdit: { editingMemo = detailMemo },
-                    onConvert: { convertingMemo = detailMemo },
-                    onShareCard: { makeShareCard(for: detailMemo) },
-                    onPin: { togglePin(detailMemo) },
-                    onTrash: {
-                        requestTrash(detailMemo, closesDetail: true)
+            }
+            .leafySheet(item: $convertingMemo) { memo in
+                CustomScheduleEditorSheet(
+                    presentation: .importantDate(
+                        nil,
+                        defaultContext: defaultTimetableContext(),
+                        prefillTitle: memoTitle(memo.body),
+                        prefillNote: memo.body
+                    ),
+                    onSaved: { reference in
+                        let previous = (memo.linkedScheduleKind, memo.linkedScheduleID, memo.updatedAt)
+                        memo.linkedScheduleKind = reference.kind
+                        memo.linkedScheduleID = reference.stableID
+                        memo.updatedAt = Date()
+                        do {
+                            try LocalModelSave.save(modelContext, undo: {
+                                memo.linkedScheduleKind = previous.0
+                                memo.linkedScheduleID = previous.1
+                                memo.updatedAt = previous.2
+                            })
+                        } catch {
+                            presentedAlert = .failure(
+                                id: UUID(),
+                                message: L10n.text("日程已创建，但随记关联保存失败：%@", error.localizedDescription)
+                            )
+                        }
+                        importantDates = CustomScheduleStore.load()
                     }
                 )
-                .leafyNavigationBarVisible()
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
-            importantDates = CustomScheduleStore.load()
-        }
-        .alert(item: $presentedAlert) { alert in
-            switch alert {
-            case .trash(let request):
-                Alert(
-                    title: Text("移到回收站？"),
-                    message: Text("这条随记会移到回收站，你可以稍后恢复。"),
-                    primaryButton: .destructive(Text("移到回收站")) {
-                        confirmTrash(request)
-                    },
-                    secondaryButton: .cancel(Text("取消"))
-                )
-            case .failure(_, let message):
-                Alert(
-                    title: Text("操作失败"),
-                    message: Text(message),
-                    dismissButton: .default(Text("知道了"))
-                )
+            .leafySheet(item: $editingSchedulePresentation, onDismiss: {
+                importantDates = CustomScheduleStore.load()
+            }) { presentation in
+                CustomScheduleEditorSheet(presentation: presentation)
+                    .presentationDetents([.medium, .large])
             }
-        }
+            .leafySheet(item: $shareCardSource) { source in
+                ScheduleMemoShareCardPreviewSheet(source: source)
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { detailMemo != nil },
+                set: { if !$0 { detailMemo = nil } }
+            )) {
+                if let detailMemo {
+                    ScheduleMemoDetailView(
+                        memo: detailMemo,
+                        images: mediaIndex.imagesByMemoID[detailMemo.id, default: []],
+                        attachments: mediaIndex.attachmentsByMemoID[detailMemo.id, default: []],
+                        audio: mediaIndex.audioByMemoID[detailMemo.id],
+                        audioPlayback: audioPlayback,
+                        linkedSchedule: linkedSchedule(for: detailMemo),
+                        onEdit: { editingMemo = detailMemo },
+                        onConvert: { convertingMemo = detailMemo },
+                        onShareCard: { makeShareCard(for: detailMemo) },
+                        onPin: { togglePin(detailMemo) },
+                        onTrash: {
+                            requestTrash(detailMemo, closesDetail: true)
+                        }
+                    )
+                    .leafyNavigationBarVisible()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
+                importantDates = CustomScheduleStore.load()
+            }
+            .alert(item: $presentedAlert) { alert in
+                switch alert {
+                case .trash(let request):
+                    Alert(
+                        title: Text("移到回收站？"),
+                        message: Text("这条随记会移到回收站，你可以稍后恢复。"),
+                        primaryButton: .destructive(Text("移到回收站")) {
+                            confirmTrash(request)
+                        },
+                        secondaryButton: .cancel(Text("取消"))
+                    )
+                case .failure(_, let message):
+                    Alert(
+                        title: Text("操作失败"),
+                        message: Text(message),
+                        dismissButton: .default(Text("知道了"))
+                    )
+                }
+            }
     }
 
     @ViewBuilder
@@ -804,7 +813,8 @@ struct ScheduleMemoFeedView: View {
             }
             .leafyCampusScrollEdges()
             .leafyVerticalScrollObserver(
-                enabled: presentation == .daytraceRoot && hasPositionedDaytraceFeed && !visibleFeedItems(using: mediaIndex).isEmpty,
+                enabled: presentation == .daytraceRoot && hasPositionedDaytraceFeed &&
+                    !visibleFeedItems(using: mediaIndex).isEmpty,
                 logicalTopOffset: searchRevealHeight,
                 onChange: onVerticalScroll
             )
@@ -1256,7 +1266,7 @@ private struct ScheduleMemoCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            ScheduleMemoPhotoStrip(images: images, layout: .feed)
+            ScheduleMemoPhotoStrip(images: images, revision: memo.updatedAt, layout: .feed)
 
             if let audio {
                 ScheduleMemoAudioPlayerBar(audio: audio, controller: audioPlayback)
@@ -1409,7 +1419,13 @@ private struct ScheduleMemoPhotoStrip: View {
     }
 
     let images: [ScheduleMemoImage]
+    let revision: Date
     let layout: Layout
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        .init(images: Array(images.prefix(ScheduleMemoImageStore.maximumImageCount)), revision: revision)
+    }
 
     @ViewBuilder
     var body: some View {
@@ -1421,6 +1437,8 @@ private struct ScheduleMemoPhotoStrip: View {
                     }
                 }
             }
+            .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+            .onDisappear { imageLoader.reset() }
         }
     }
 
@@ -1433,7 +1451,7 @@ private struct ScheduleMemoPhotoStrip: View {
 
     private func photoCell(_ imageRecord: ScheduleMemoImage) -> some View {
         Group {
-            if let image = ScheduleMemoImageStore.image(named: imageRecord.localFilename) {
+            if let image = imageLoader.images(for: imageRequest)[imageRecord.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -1566,18 +1584,19 @@ private struct ScheduleMemoDetailView: View {
 
     @State private var previewFile: ScheduleMemoPreviewFile?
 
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        .init(images: images, revision: memo.updatedAt)
+    }
+
     private var markdownResources: ScheduleMemoMarkdownResourceSet {
-        var imageMap: [UUID: UIImage] = [:]
-        for image in images {
-            if let value = ScheduleMemoImageStore.image(named: image.localFilename) {
-                imageMap[image.id] = value
-            }
-        }
         return .init(
-            images: imageMap,
+            images: imageLoader.images(for: imageRequest),
             imageOrder: images.map(\.id),
             attachmentNames: Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, $0.originalFilename) }),
-            attachmentOrder: attachments.map(\.id)
+            attachmentOrder: attachments.map(\.id),
+            isLoadingImages: imageLoader.isLoading(imageRequest)
         )
     }
 
@@ -1644,6 +1663,8 @@ private struct ScheduleMemoDetailView: View {
             .leafyAdaptiveContentWidth(maxWidth: 720)
             .padding(.vertical, AppSpacing.card)
         }
+        .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+        .onDisappear { imageLoader.reset() }
         .background(LeafyPageBackground())
         .navigationTitle("随记详情")
         .navigationBarTitleDisplayMode(.inline)
@@ -1794,7 +1815,10 @@ private struct ScheduleMemoComposerControlLayout: Layout {
     ) -> CGSize {
         let fallback = CGSize(width: 320, height: desiredHeight)
         let proposedSize = proposal.replacingUnspecifiedDimensions(by: fallback)
-        return CGSize(width: proposedSize.width, height: presentation == .fullscreen ? proposedSize.height : desiredHeight)
+        return CGSize(
+            width: proposedSize.width,
+            height: presentation == .fullscreen ? proposedSize.height : desiredHeight
+        )
     }
 
     func placeSubviews(
@@ -1995,6 +2019,7 @@ private struct ScheduleMemoComposer: View {
     @StateObject private var speech = ScheduleMemoSpeechRecognizer()
     @State private var text = ""
     @State private var speechBase = ""
+    @State private var photoLoadID = UUID()
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var fullPhotoItems: [PhotosPickerItem] = []
     @State private var draftImages: [ScheduleMemoDraftImage] = []
@@ -2139,6 +2164,7 @@ private struct ScheduleMemoComposer: View {
             Text(errorMessage ?? "")
         }
         .onDisappear {
+            photoLoadID = UUID()
             Task { await speech.stop() }
         }
     }
@@ -2239,8 +2265,8 @@ private struct ScheduleMemoComposer: View {
                     Spacer()
                     Button(action: toggleFullscreen) {
                         Image(systemName: presentation == .fullscreen
-                              ? "arrow.down.right.and.arrow.up.left"
-                              : "arrow.up.left.and.arrow.down.right")
+                            ? "arrow.down.right.and.arrow.up.left"
+                            : "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.secondaryText)
                             .frame(width: 44, height: 44)
@@ -2314,8 +2340,10 @@ private struct ScheduleMemoComposer: View {
 
     private var sendButton: some View {
         Button {
+            let scope = CampusOperationScope()
             Task {
                 await speech.stop()
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 save()
             }
         } label: {
@@ -2345,7 +2373,10 @@ private struct ScheduleMemoComposer: View {
                                 draftImages.removeAll { $0.id == draft.id }
                                 if let pickerItem = draft.pickerItem {
                                     photoItems = ScheduleMemoPhotoSelection.removing(pickerItem, from: photoItems)
-                                    fullPhotoItems = ScheduleMemoPhotoSelection.removing(pickerItem, from: fullPhotoItems)
+                                    fullPhotoItems = ScheduleMemoPhotoSelection.removing(
+                                        pickerItem,
+                                        from: fullPhotoItems
+                                    )
                                 }
                             }
                         }
@@ -2557,18 +2588,33 @@ private struct ScheduleMemoComposer: View {
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
+        let loadID = UUID()
+        photoLoadID = loadID
+        let scope = CampusOperationScope()
         var loaded: [ScheduleMemoDraftImage] = []
-        for item in items.prefix(ScheduleMemoImageStore.maximumImageCount) {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = ImageDataDecoder.decodedImage(from: data) else { continue }
-            loaded.append(.init(data: data, image: image, pickerItem: item))
+        do {
+            for item in items.prefix(ScheduleMemoImageStore.maximumImageCount) {
+                guard let data = try await item.loadTransferable(type: Data.self),
+                      let image = ImageDataDecoder.decodedImage(from: data) else {
+                    throw ScheduleMemoImageStoreError.invalidImage
+                }
+                try scope.check()
+                guard photoLoadID == loadID else { return }
+                loaded.append(.init(data: data, image: image, pickerItem: item))
+            }
+            try scope.check()
+            guard photoLoadID == loadID else { return }
+            let capturedImages = draftImages.filter { $0.pickerItem == nil }
+            draftImages = ScheduleMemoPhotoSelection.merging(
+                pickerItems: loaded,
+                capturedItems: capturedImages,
+                maximumCount: ScheduleMemoImageStore.maximumImageCount
+            )
+        } catch {
+            guard !scope.wasCancelled(error), photoLoadID == loadID else { return }
+            errorTitle = "无法添加图片"
+            errorMessage = error.localizedDescription
         }
-        let capturedImages = draftImages.filter { $0.pickerItem == nil }
-        draftImages = ScheduleMemoPhotoSelection.merging(
-            pickerItems: loaded,
-            capturedItems: capturedImages,
-            maximumCount: ScheduleMemoImageStore.maximumImageCount
-        )
     }
 
     @MainActor
@@ -2585,6 +2631,7 @@ private struct ScheduleMemoComposer: View {
 
     @MainActor
     private func persistMemo(kind: ScheduleMemoKind, title: String?, body: String) {
+        photoLoadID = UUID()
         var filenames: [String] = []
         var storedAttachments: [ScheduleMemoAttachmentStore.StoredFile] = []
         do {
@@ -2599,12 +2646,11 @@ private struct ScheduleMemoComposer: View {
                 ))
             }
             let memo = ScheduleMemo(body: body, kind: kind, title: title)
-            modelContext.insert(memo)
-            for (index, filename) in filenames.enumerated() {
-                modelContext.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: index, localFilename: filename))
+            var resources: [any PersistentModel] = filenames.enumerated().map { index, filename in
+                ScheduleMemoImage(memoID: memo.id, sortOrder: index, localFilename: filename)
             }
             for (index, file) in storedAttachments.enumerated() {
-                modelContext.insert(ScheduleMemoAttachment(
+                resources.append(ScheduleMemoAttachment(
                     id: file.id,
                     memoID: memo.id,
                     sortOrder: index,
@@ -2613,7 +2659,7 @@ private struct ScheduleMemoComposer: View {
                     contentTypeIdentifier: file.contentTypeIdentifier
                 ))
             }
-            try modelContext.save()
+            try ScheduleMemoPersistence.insert(memo, resources: resources, in: modelContext)
             text = ""
             speechBase = ""
             photoItems = []
@@ -2625,7 +2671,6 @@ private struct ScheduleMemoComposer: View {
         } catch {
             try? ScheduleMemoImageStore.deleteFiles(named: filenames)
             try? ScheduleMemoAttachmentStore.deleteFiles(named: storedAttachments.map(\.localFilename))
-            modelContext.rollback()
             errorTitle = "无法保存随记"
             errorMessage = error.localizedDescription
         }
@@ -2649,7 +2694,7 @@ private struct ScheduleMemoEditorView: View {
             Form {
                 Section("录音备注") {
                     TextField("添加一句备注（可选）", text: $bodyText, axis: .vertical)
-                        .lineLimit(5...14)
+                        .lineLimit(5 ... 14)
                 }
                 Section {
                     Text("正文里的 #标签 和 #学习/Swift 会自动成为标签。")
@@ -2661,12 +2706,12 @@ private struct ScheduleMemoEditorView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        memo.updateBody(bodyText)
                         do {
-                            try modelContext.save()
+                            _ = try ScheduleMemoPersistence.update(
+                                memo, title: memo.title, body: bodyText, in: modelContext
+                            )
                             dismiss()
                         } catch {
-                            modelContext.rollback()
                             errorMessage = error.localizedDescription
                         }
                     }
@@ -2721,7 +2766,8 @@ private struct ScheduleMemoReviewView: View {
                         ScheduleMemoCard(
                             memo: memo,
                             images: images.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
-                            attachments: attachments.filter { $0.memoID == memo.id }.sorted { $0.sortOrder < $1.sortOrder },
+                            attachments: attachments.filter { $0.memoID == memo.id }
+                                .sorted { $0.sortOrder < $1.sortOrder },
                             audio: audioRecords.first { $0.memoID == memo.id },
                             audioPlayback: audioPlayback,
                             linkedSchedule: nil,
@@ -2892,7 +2938,6 @@ private struct ScheduleMemoExportView: View {
     }
 }
 
-
 private struct ScheduleMemoStatisticsSummary: View {
     let statistics: ScheduleMemoStatistics
     var compact = false
@@ -2965,7 +3010,8 @@ struct ScheduleMemoDayView: View {
     var body: some View {
         List(dayMemos) { memo in
             VStack(alignment: .leading, spacing: 7) {
-                Text(memo.createdAt.formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                Text(memo.createdAt.formatted(date: .omitted, time: .shortened)).font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(memo.body.isEmpty ? (memo.kind == .audio ? "录音随记" : "图片随记") : memo.body)
             }
         }
@@ -3023,7 +3069,12 @@ private struct ScheduleMemoTrashView: View {
         .confirmationDialog("永久删除回收站中的全部随记？", isPresented: $confirmsEmpty, titleVisibility: .visible) {
             Button("永久删除全部", role: .destructive) {
                 do {
-                    try ScheduleMemoDeletionService.permanentlyDelete(trashed, images: images, audioRecords: audioRecords, in: modelContext)
+                    try ScheduleMemoDeletionService.permanentlyDelete(
+                        trashed,
+                        images: images,
+                        audioRecords: audioRecords,
+                        in: modelContext
+                    )
                 } catch { errorMessage = error.localizedDescription }
             }
         } message: { Text("图片和附件也会从本机删除，此操作无法撤销。") }

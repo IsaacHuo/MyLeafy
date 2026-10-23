@@ -133,7 +133,7 @@ data class CommunityBlockDto(
 data class FeedQuery(
     val limit: Int = 20,
     val campus_id: String,
-    val mode: String? = null,      // "hot" 时需带 days
+    val mode: String? = null, // "hot" 时需带 days
     val days: Int? = null,
     val category: String? = null,
     val search: String? = null,

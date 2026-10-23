@@ -44,7 +44,7 @@ class DatabaseUpgradeTest {
     @Test fun versionEightPreservesAccountsNotesAndMedicalAttachmentsWithoutInventingCredits() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "isolated-v8-v9-parity-test"
-        val photo = java.io.File(context.cacheDir, "migration-v8-photo.jpg").apply { writeBytes(byteArrayOf(1,2,3)) }
+        val photo = java.io.File(context.cacheDir, "migration-v8-photo.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         helper.createDatabase(name, 8).apply {
             execSQL("INSERT INTO grade_summaries VALUES('account-a','official',3.2,85,NULL)")
             execSQL("INSERT INTO courses VALUES('account-a','course','2026-2027-1','保留课程','教师','','','教室',1,'[1,2]','[6,7]')")
@@ -65,6 +65,35 @@ class DatabaseUpgradeTest {
             assertEquals(emptyList<FavoriteClassroomEntity>(), db.campusPersonalDao().favorites("account-a").first())
             org.junit.Assert.assertNull(db.campusPersonalDao().reminder("account-a").first())
         } finally { db.close(); context.deleteDatabase(name); photo.delete() }
+    }
+
+    @Test fun versionSixUpgradesWithoutLosingReleasedUserData() = runBlocking {
+        assertUpgradePreservesCourse("isolated-v6-v9-test", 6)
+    }
+
+    @Test fun versionFiveUpgradesWithoutLosingReleasedUserData() = runBlocking {
+        assertUpgradePreservesCourse("isolated-v5-v9-test", 5)
+    }
+
+    @Test fun versionFourUpgradesWithoutLosingReleasedUserData() = runBlocking {
+        assertUpgradePreservesCourse("isolated-v4-v9-test", 4)
+    }
+
+    private suspend fun assertUpgradePreservesCourse(name: String, fromVersion: Int) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        helper.createDatabase(name, fromVersion).apply {
+            execSQL("INSERT INTO courses VALUES('legacy','course','2026-2027-1','旧版课程','教师','','','教室',1,'[1,2]','[6,7]')")
+            execSQL("INSERT INTO grades VALUES('legacy','grade','2026-2027-1','旧版成绩','3','90','必修')")
+            close()
+        }
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, name).build()
+        try {
+            assertEquals("旧版课程", db.courseDao().coursesForSemester("legacy", "2026-2027-1").first().single().courseName)
+            val grade = db.gradeDao().all("legacy").first().single()
+            assertEquals("旧版成绩", grade.courseName)
+            org.junit.Assert.assertNull(grade.courseCode)
+            assertEquals(emptyList<FavoriteClassroomEntity>(), db.campusPersonalDao().favorites("legacy").first())
+        } finally { db.close(); context.deleteDatabase(name) }
     }
 
 }

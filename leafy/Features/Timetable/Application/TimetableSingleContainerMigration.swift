@@ -14,23 +14,35 @@ enum TimetableSingleContainerMigration {
         let removed = courses.filter { $0.sourceSemesterID != latest }
         let keys = Set(removed.flatMap { [$0.stableCourseKey, $0.legacyStableCourseKey] })
         let identifiers = removed.flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) }
+        let undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: context)
         do {
             for note in try context.fetch(FetchDescriptor<CourseNote>()) where keys.contains(note.courseKey) {
                 note.isUnassociated = true
-                note.sourceCourseTitle = removed.first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?.courseName ?? ""
+                note.sourceCourseTitle = removed
+                    .first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?
+                    .courseName ?? ""
             }
             for note in try context.fetch(FetchDescriptor<CourseOccurrenceNote>()) where keys.contains(note.courseKey) {
                 note.isUnassociated = true
-                note.sourceCourseTitle = removed.first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?.courseName ?? ""
+                note.sourceCourseTitle = removed
+                    .first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?
+                    .courseName ?? ""
             }
-            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>()) where keys.contains(setting.courseKey) {
+            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>())
+                where keys.contains(setting.courseKey) {
                 setting.isUnassociated = true
-                setting.sourceCourseTitle = removed.first { $0.stableCourseKey == setting.courseKey || $0.legacyStableCourseKey == setting.courseKey }?.courseName ?? ""
+                setting.sourceCourseTitle = removed
+                    .first { $0.stableCourseKey == setting.courseKey || $0.legacyStableCourseKey == setting.courseKey }?
+                    .courseName ?? ""
             }
             for course in removed { context.delete(course) }
             try context.save()
             defaults.set(true, forKey: key)
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
-        } catch { context.rollback(); throw error }
+        } catch {
+            for course in removed { context.insert(course) }
+            undoPersonalData()
+            throw error
+        }
     }
 }

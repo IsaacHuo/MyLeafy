@@ -125,7 +125,7 @@ flowchart LR
 
 ### 4.5 运营与管理
 
-- React-admin 管理界面和按资源加载的管理页面。
+- Tailwind/Radix 管理界面，使用 TanStack Query/Table 与 React Hook Form 按资源加载和管理状态。
 - `viewer`、`operator`、`super_admin` 角色。
 - 社区内容、用户、公告、反馈、目录数据、运行配置和管理员会话管理。
 - 服务端筛选的 CSV 导出、请求追踪和审计日志。

@@ -155,51 +155,51 @@ class OkHttpSchoolNetworkClient(
         captcha: String,
     ) = withContext(Dispatchers.IO) {
         authenticationMutex.withLock {
-        require(challenge.owner === this@OkHttpSchoolNetworkClient && challenge.consumed.compareAndSet(false, true)) { "验证码已失效，请刷新" }
-        if (challenge.generation != authenticationGeneration.get() || challenge.scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
-        preAuthenticationCookies.clear()
-        preAuthenticationCookies.putAll(challenge.candidateCookies)
-        try {
-        val key = challenge.key
-        val encoded = SchoolLoginEncoder.encodeKey(key, account, password)
-        if (encoded.isEmpty()) {
-            throw SchoolNetworkError.LoginFailed("登录密钥无效，请重试")
-        }
-
-        val bodyText = "useDogCode=&encoded=${SchoolLoginEncoder.formUrlEncode(encoded)}" +
-            "&RANDOMCODE=${SchoolLoginEncoder.formUrlEncode(captcha.trim())}"
-        val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
-        val request = requestBuilder("/Logon.do?method=logon", referer = baseUrl).post(body).build()
-
-        val response = executeAuthenticationCancellable(request)
-        if (!response.isSuccessful) { val code = response.code; response.close(); throw SchoolNetworkError.Unexpected("学校连接失败（HTTP $code）") }
-        val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
-        response.close()
-
-        SchoolPageDetector.extractLoginMessage(html)?.let {
-            throw SchoolNetworkError.LoginFailed(it)
-        }
-        if (SchoolPageDetector.isLoginPage(html)) {
-            throw SchoolNetworkError.LoginFailed("登录失败，请检查学号与验证码")
-        }
-        // Verify the candidate cookie jar before committing identity or touching the old session.
-        val verification = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
-        executeAuthenticationCancellable(verification).use {
-            if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
-            val page = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
-            if (!SchoolPageDetector.isAuthenticatedResponse(it.request.url.toString(), page)) {
-                throw SchoolNetworkError.LoginFailed("登录失败，请重试")
-            }
-        }
-        kotlinx.coroutines.currentCoroutineContext().ensureActive()
-        if (challenge.generation != authenticationGeneration.get() || challenge.scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
-        val identity = undergraduateIdentity(account)
-        cookieStore.save(preAuthenticationCookies.toMap(), identity.scopeKey, identity.portal.rawValue)
-        preAuthenticationCookies.clear()
-        sessionState.markLoggedIn(identity)
-        } finally {
+            require(challenge.owner === this@OkHttpSchoolNetworkClient && challenge.consumed.compareAndSet(false, true)) { "验证码已失效，请刷新" }
+            if (challenge.generation != authenticationGeneration.get() || challenge.scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
             preAuthenticationCookies.clear()
-        }
+            preAuthenticationCookies.putAll(challenge.candidateCookies)
+            try {
+                val key = challenge.key
+                val encoded = SchoolLoginEncoder.encodeKey(key, account, password)
+                if (encoded.isEmpty()) {
+                    throw SchoolNetworkError.LoginFailed("登录密钥无效，请重试")
+                }
+
+                val bodyText = "useDogCode=&encoded=${SchoolLoginEncoder.formUrlEncode(encoded)}" +
+                    "&RANDOMCODE=${SchoolLoginEncoder.formUrlEncode(captcha.trim())}"
+                val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+                val request = requestBuilder("/Logon.do?method=logon", referer = baseUrl).post(body).build()
+
+                val response = executeAuthenticationCancellable(request)
+                if (!response.isSuccessful) { val code = response.code; response.close(); throw SchoolNetworkError.Unexpected("学校连接失败（HTTP $code）") }
+                val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
+                response.close()
+
+                SchoolPageDetector.extractLoginMessage(html)?.let {
+                    throw SchoolNetworkError.LoginFailed(it)
+                }
+                if (SchoolPageDetector.isLoginPage(html)) {
+                    throw SchoolNetworkError.LoginFailed("登录失败，请检查学号与验证码")
+                }
+                // Verify the candidate cookie jar before committing identity or touching the old session.
+                val verification = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
+                executeAuthenticationCancellable(verification).use {
+                    if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
+                    val page = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
+                    if (!SchoolPageDetector.isAuthenticatedResponse(it.request.url.toString(), page)) {
+                        throw SchoolNetworkError.LoginFailed("登录失败，请重试")
+                    }
+                }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (challenge.generation != authenticationGeneration.get() || challenge.scope != sessionState.identity?.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+                val identity = undergraduateIdentity(account)
+                cookieStore.save(preAuthenticationCookies.toMap(), identity.scopeKey, identity.portal.rawValue)
+                preAuthenticationCookies.clear()
+                sessionState.markLoggedIn(identity)
+            } finally {
+                preAuthenticationCookies.clear()
+            }
         }
     }
 
@@ -211,8 +211,7 @@ class OkHttpSchoolNetworkClient(
                 if (SchoolPageDetector.isAuthenticatedResponse(response.request.url.toString(), html)) Result.success(Unit)
                 else Result.failure(SchoolNetworkError.SessionExpired)
             }
-        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (failure: Exception) { Result.failure(failure) }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { Result.failure(failure) }
     }
 
     override suspend fun fetchGraduatePublicKey(): String = notYet("研究生登录（RSA）")
@@ -243,8 +242,7 @@ class OkHttpSchoolNetworkClient(
             val page = if (pending.isEmpty()) {
                 rendered = true
                 onStage(AcademicStage.INITIALIZING_TIMETABLE)
-                val result = try { renderTimetable!!.invoke(lastPage!!.first, loadCookies()) }
-                catch (failure: kotlinx.coroutines.TimeoutCancellationException) { throw SchoolNetworkError.TimetableDataUnavailable }
+                val result = try { renderTimetable!!.invoke(lastPage!!.first, loadCookies()) } catch (failure: kotlinx.coroutines.TimeoutCancellationException) { throw SchoolNetworkError.TimetableDataUnavailable }
                 if (sessionState.identity?.scopeKey != identity.scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
                 cookieStore.save(result.cookies, identity.scopeKey, identity.portal.rawValue)
                 result.url to result.html
@@ -258,14 +256,12 @@ class OkHttpSchoolNetworkClient(
                         if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("获取课表失败（HTTP ${it.code}）")
                         it.request.url.toString() to SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
                     }
-                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                catch (failure: Exception) { lastFailure = failure; continue }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { lastFailure = failure; continue }
             }
             val (url, html) = page
             if (SchoolPageDetector.isLoginPage(html)) { loginPageSeen = true; continue }
             val matchingSemester = if (TimetablePageResolver.isTimetable(html)) {
-                try { TimetablePageResolver.verifySemester(html, semesterId); true }
-                catch (failure: SchoolNetworkError) { lastFailure = failure; false }
+                try { TimetablePageResolver.verifySemester(html, semesterId); true } catch (failure: SchoolNetworkError) { lastFailure = failure; false }
             } else false
             if (matchingSemester) {
                 onStage(AcademicStage.PROCESSING_TIMETABLE)

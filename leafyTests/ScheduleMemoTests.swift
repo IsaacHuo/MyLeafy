@@ -1,4 +1,5 @@
 import Foundation
+import Speech
 import SwiftData
 import XCTest
 @testable import Leafy
@@ -118,7 +119,7 @@ final class ScheduleMemoTests: XCTestCase {
     func testDailyReviewIsStableAndPrioritizesAnniversary() throws {
         let now = try date(2026, 8, 8, 12)
         let anniversary = ScheduleMemo(body: "去年今天", createdAt: try date(2025, 8, 8))
-        let older = (1...8).map { ScheduleMemo(body: "旧随记 \($0)", createdAt: try! date(2025, 7, $0)) }
+        let older = (1 ... 8).map { ScheduleMemo(body: "旧随记 \($0)", createdAt: try! date(2025, 7, $0)) }
         let first = ScheduleMemoReviewEngine.selection(from: [anniversary] + older, now: now, page: 0)
         let repeated = ScheduleMemoReviewEngine.selection(from: [anniversary] + older, now: now, page: 0)
 
@@ -145,7 +146,10 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(statistics.memoCount, 3)
         XCTAssertEqual(statistics.tagCount, 2)
         XCTAssertEqual(statistics.recordingDayCount, 2)
-        XCTAssertEqual(statistics.activityDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: now) })?.count, 2)
+        XCTAssertEqual(
+            statistics.activityDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: now) })?.count,
+            2
+        )
     }
 
     func testStatisticsSnapshotExcludesTrashAndCountsNaturalYearMonthsAndLeapDay() throws {
@@ -278,7 +282,7 @@ final class ScheduleMemoTests: XCTestCase {
         )
         XCTAssertEqual(
             ScheduleMemoStatisticsAccessibility.heatmapSummary(
-                days: (0..<30).map {
+                days: (0 ..< 30).map {
                     ScheduleMemoActivityDay(
                         date: Date(timeIntervalSince1970: TimeInterval($0) * 86_400),
                         count: $0 == 0 ? 2 : 0
@@ -346,6 +350,50 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(transaction.commit(), [1, 2, 4])
         transaction.pending = [1, 2, 4, 5]
         XCTAssertEqual(transaction.cancel(), [1, 2, 4])
+    }
+
+    func testStoppingSpeechWhilePermissionIsPendingCannotRestartMicrophone() async {
+        let requested = expectation(description: "Speech permission pending")
+        var permission: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>?
+        var microphoneRequests = 0
+        let recognizer = ScheduleMemoSpeechRecognizer(
+            speechAuthorization: {
+                await withCheckedContinuation {
+                    permission = $0
+                    requested.fulfill()
+                }
+            },
+            microphonePermission: { microphoneRequests += 1; return false },
+            recognitionAvailable: { true }
+        )
+        let starting = Task { await recognizer.start() }
+        await fulfillment(of: [requested], timeout: 3)
+        await recognizer.stop()
+        permission?.resume(returning: .authorized)
+        await starting.value
+        XCTAssertEqual(recognizer.state, .idle)
+        XCTAssertEqual(microphoneRequests, 0)
+    }
+
+    func testStoppingSpeechDuringMicrophonePermissionIgnoresLateDenial() async {
+        let requested = expectation(description: "Microphone permission pending")
+        var permission: CheckedContinuation<Bool, Never>?
+        let recognizer = ScheduleMemoSpeechRecognizer(
+            speechAuthorization: { .authorized },
+            microphonePermission: {
+                await withCheckedContinuation {
+                    permission = $0
+                    requested.fulfill()
+                }
+            },
+            recognitionAvailable: { true }
+        )
+        let starting = Task { await recognizer.start() }
+        await fulfillment(of: [requested], timeout: 3)
+        await recognizer.stop()
+        permission?.resume(returning: false)
+        await starting.value
+        XCTAssertEqual(recognizer.state, .idle)
     }
 
     func testFinalAudioDurationPreservesTimeCapturedBeforeRecorderStops() {
@@ -442,15 +490,31 @@ final class ScheduleMemoTests: XCTestCase {
         let setup = try AppModelContainerFactory.make()
         let context = setup.container.mainContext
         let memo = ScheduleMemo(body: "清理我")
+        let fileID = UUID().uuidString
         context.insert(memo)
-        context.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "unused.jpg"))
-        context.insert(ScheduleMemoAudio(memoID: memo.id, localFilename: "unused.m4a", duration: 1))
+        context.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "missing-\(fileID).jpg"))
+        context.insert(ScheduleMemoAttachment(
+            memoID: memo.id,
+            sortOrder: 0,
+            originalFilename: "unused.pdf",
+            localFilename: "missing-\(fileID).pdf",
+            contentTypeIdentifier: "com.adobe.pdf"
+        ))
+        context.insert(ScheduleMemoAudio(memoID: memo.id, localFilename: "missing-\(fileID).m4a", duration: 1))
         try context.save()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MemoAccountCleanup-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
 
-        try AppSessionResetter.deleteAllModels(in: context)
+        let warning = try AppSessionResetter.deleteLocalRecords(
+            in: context, cleanup: LocalFileCleanup(queueURL: directory.appendingPathComponent("cleanup.json"))
+        )
 
+        XCTAssertNil(warning)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemo>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoImage>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoAttachment>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoAudio>()), 0)
     }
 
@@ -466,7 +530,12 @@ final class ScheduleMemoTests: XCTestCase {
 
         do {
             let oldSchema = Schema([Course.self, Grade.self])
-            let configuration = ModelConfiguration("ScheduleMemoMigration", schema: oldSchema, url: storeURL, cloudKitDatabase: .none)
+            let configuration = ModelConfiguration(
+                "ScheduleMemoMigration",
+                schema: oldSchema,
+                url: storeURL,
+                cloudKitDatabase: .none
+            )
             let container = try ModelContainer(for: oldSchema, configurations: [configuration])
             container.mainContext.insert(Course(
                 id: courseID, courseName: "高等数学", teacher: "教师", room: "A101", dayOfWeek: 1, weeks: [1], duration: [1]
@@ -477,8 +546,19 @@ final class ScheduleMemoTests: XCTestCase {
             try container.mainContext.save()
         }
 
-        let expandedSchema = Schema([Course.self, Grade.self, ScheduleMemo.self, ScheduleMemoImage.self, ScheduleMemoAudio.self])
-        let configuration = ModelConfiguration("ScheduleMemoMigration", schema: expandedSchema, url: storeURL, cloudKitDatabase: .none)
+        let expandedSchema = Schema([
+            Course.self,
+            Grade.self,
+            ScheduleMemo.self,
+            ScheduleMemoImage.self,
+            ScheduleMemoAudio.self
+        ])
+        let configuration = ModelConfiguration(
+            "ScheduleMemoMigration",
+            schema: expandedSchema,
+            url: storeURL,
+            cloudKitDatabase: .none
+        )
         let container = try ModelContainer(for: expandedSchema, configurations: [configuration])
 
         XCTAssertEqual(try container.mainContext.fetch(FetchDescriptor<Course>()).map(\.id), [courseID])
@@ -486,7 +566,20 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<ScheduleMemo>()), 0)
     }
 
-    private func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, calendar: Calendar = .current) throws -> Date {
-        try XCTUnwrap(calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)))
+    private func date(
+        _ year: Int,
+        _ month: Int,
+        _ day: Int,
+        _ hour: Int = 0,
+        _ minute: Int = 0,
+        calendar: Calendar = .current
+    ) throws -> Date {
+        try XCTUnwrap(calendar.date(from: DateComponents(
+            year: year,
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute
+        )))
     }
 }

@@ -383,7 +383,7 @@ nonisolated enum ScheduleMemoTagParser {
 
     static func tags(in text: String) -> [String] {
         guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let range = NSRange(text.startIndex ..< text.endIndex, in: text)
         var seen = Set<String>()
         var result: [String] = []
 
@@ -476,7 +476,13 @@ struct ScheduleMemoStatistics: Equatable {
         calendar: Calendar = .current,
         weekCount: Int = 12
     ) -> ScheduleMemoStatistics {
-        snapshot(memos: memos, selectedYear: calendar.component(.year, from: now), now: now, calendar: calendar, weekCount: weekCount)
+        snapshot(
+            memos: memos,
+            selectedYear: calendar.component(.year, from: now),
+            now: now,
+            calendar: calendar,
+            weekCount: weekCount
+        )
     }
 
     static func snapshot(
@@ -498,7 +504,10 @@ struct ScheduleMemoStatistics: Equatable {
             result[(sundayBased + 5) % 7] += 1
         }
         let periods = ScheduleMemoTimePeriod.allCases.map { period in
-            ScheduleMemoTimePeriodFrequency(period: period, count: active.filter { Self.period(for: calendar.component(.hour, from: $0.createdAt)) == period }.count)
+            ScheduleMemoTimePeriodFrequency(
+                period: period,
+                count: active.filter { Self.period(for: calendar.component(.hour, from: $0.createdAt)) == period }.count
+            )
         }
         var tagCounts: [String: (display: String, count: Int)] = [:]
         for tag in active.flatMap(\.tags) {
@@ -512,16 +521,26 @@ struct ScheduleMemoStatistics: Equatable {
         let currentStreak = Self.streak(from: days, endingAt: today, calendar: calendar)
         let longestStreak = Self.longestStreak(from: days, calendar: calendar)
         let recent30Days = Self.dayRange(endingAt: today, count: 30, counts: counts, calendar: calendar)
-        let previous30Days = Self.dayRange(endingAt: calendar.date(byAdding: .day, value: -30, to: today) ?? today, count: 30, counts: counts, calendar: calendar)
-        let yearMonths = (1...12).map { month in
+        let previous30Days = Self.dayRange(
+            endingAt: calendar.date(byAdding: .day, value: -30, to: today) ?? today,
+            count: 30,
+            counts: counts,
+            calendar: calendar
+        )
+        let yearMonths = (1 ... 12).map { month in
             let monthMemos = active.filter {
                 let components = calendar.dateComponents([.year, .month], from: $0.createdAt)
                 return components.year == selectedYear && components.month == month
             }
-            return ScheduleMemoMonthStatistics(month: month, memoCount: monthMemos.count, recordingDayCount: Set(monthMemos.map { calendar.startOfDay(for: $0.createdAt) }).count)
+            return ScheduleMemoMonthStatistics(
+                month: month,
+                memoCount: monthMemos.count,
+                recordingDayCount: Set(monthMemos.map { calendar.startOfDay(for: $0.createdAt) }).count
+            )
         }
         let sortedDays = days.sorted()
-        let peak = counts.sorted { lhs, rhs in lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key }.first
+        let peak = counts.sorted { lhs, rhs in lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key }
+            .first
         let months = Set(active.compactMap { memo -> Int? in
             let components = calendar.dateComponents([.year, .month], from: memo.createdAt)
             guard let year = components.year, let month = components.month else { return nil }
@@ -531,15 +550,23 @@ struct ScheduleMemoStatistics: Equatable {
         let weekday = calendar.component(.weekday, from: today)
         let monday = calendar.date(byAdding: .day, value: -((weekday + 5) % 7), to: today) ?? today
         let firstDay = calendar.date(byAdding: .day, value: -(max(weekCount, 1) - 1) * 7, to: monday) ?? monday
-        let activityDays = Self.dayRange(startingAt: firstDay, count: max(weekCount, 1) * 7, counts: counts, calendar: calendar)
+        let activityDays = Self.dayRange(
+            startingAt: firstDay,
+            count: max(weekCount, 1) * 7,
+            counts: counts,
+            calendar: calendar
+        )
         return ScheduleMemoStatistics(
             memoCount: active.count, tagCount: uniqueTags.count, recordingDayCount: counts.count,
             activityDays: activityDays, currentStreak: currentStreak, longestStreak: longestStreak,
             selectedYear: selectedYear, selectedYearMonths: yearMonths, recent30Days: recent30Days,
-            recent30DayMemoCount: recent30Days.reduce(0) { $0 + $1.count }, previous30DayMemoCount: previous30Days.reduce(0) { $0 + $1.count },
-            recent30DayRecordingDayCount: recent30Days.filter { $0.count > 0 }.count, previous30DayRecordingDayCount: previous30Days.filter { $0.count > 0 }.count,
+            recent30DayMemoCount: recent30Days.reduce(0) { $0 + $1.count },
+            previous30DayMemoCount: previous30Days.reduce(0) { $0 + $1.count },
+            recent30DayRecordingDayCount: recent30Days.filter { $0.count > 0 }.count,
+            previous30DayRecordingDayCount: previous30Days.filter { $0.count > 0 }.count,
             weekdayDistribution: weekdayCounts, timePeriodDistribution: periods, topTags: Array(topTags),
-            firstRecordingDate: sortedDays.first, peakDate: peak?.key, peakMemoCount: peak?.value ?? 0, recordingMonthCount: months.count
+            firstRecordingDate: sortedDays.first, peakDate: peak?.key, peakMemoCount: peak?.value ?? 0,
+            recordingMonthCount: months.count
         )
     }
 
@@ -548,17 +575,21 @@ struct ScheduleMemoStatistics: Equatable {
     }
 
     private static func period(for hour: Int) -> ScheduleMemoTimePeriod {
-        switch hour { case 5...8: return .earlyMorning; case 9...11: return .morning; case 12...17: return .afternoon; case 18...23: return .evening; default: return .lateNight }
+        switch hour {
+        case 5 ... 8: return .earlyMorning; case 9 ... 11: return .morning; case 12 ...
+            17: return .afternoon; case 18 ... 23: return .evening; default: return .lateNight }
     }
 
-    private static func dayRange(endingAt end: Date, count: Int, counts: [Date: Int], calendar: Calendar) -> [ScheduleMemoActivityDay] {
+    private static func dayRange(endingAt end: Date, count: Int, counts: [Date: Int],
+                                 calendar: Calendar) -> [ScheduleMemoActivityDay] {
         let start = calendar.date(byAdding: .day, value: -(max(count, 1) - 1), to: end) ?? end
         return dayRange(startingAt: start, count: count, counts: counts, calendar: calendar)
     }
 
-    private static func dayRange(startingAt start: Date, count: Int, counts: [Date: Int], calendar: Calendar) -> [ScheduleMemoActivityDay] {
+    private static func dayRange(startingAt start: Date, count: Int, counts: [Date: Int],
+                                 calendar: Calendar) -> [ScheduleMemoActivityDay] {
         guard count > 0 else { return [] }
-        return (0..<count).compactMap { offset in
+        return (0 ..< count).compactMap { offset in
             guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
             return ScheduleMemoActivityDay(date: date, count: counts[date, default: 0])
         }
@@ -567,7 +598,11 @@ struct ScheduleMemoStatistics: Equatable {
     private static func streak(from days: Set<Date>, endingAt end: Date, calendar: Calendar) -> Int {
         var cursor = days.contains(end) ? end : (calendar.date(byAdding: .day, value: -1, to: end) ?? end)
         var result = 0
-        while days.contains(cursor) { result += 1; guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }; cursor = previous }
+        while days.contains(cursor) { result += 1; guard let previous = calendar.date(
+            byAdding: .day,
+            value: -1,
+            to: cursor
+        ) else { break }; cursor = previous }
         return result
     }
 
@@ -618,7 +653,7 @@ enum ScheduleMemoReviewEngine {
         guard !pool.isEmpty else { return [] }
 
         let start = (max(page, 0) * limit) % pool.count
-        return (0..<min(limit, pool.count)).map { pool[(start + $0) % pool.count] }
+        return (0 ..< min(limit, pool.count)).map { pool[(start + $0) % pool.count] }
     }
 
     private static func deterministicOrder(_ memos: [ScheduleMemo], seed: String) -> [ScheduleMemo] {

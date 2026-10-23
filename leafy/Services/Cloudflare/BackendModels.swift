@@ -1,9 +1,5 @@
 import Foundation
 
-
-
-
-
 nonisolated struct BackendErrorEnvelope: Decodable, LocalizedError, Sendable {
     let code: String
     let message: String

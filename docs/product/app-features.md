@@ -69,7 +69,7 @@ iOS 根 Tab：
 - 所有支持版本均使用原生 `TabView`；底部 Tab 保持系统切换行为，iOS 26 使用系统 Liquid Glass 外观。
 - 底部 Tab 不叠加页面透明度，切换时始终显示完整页面内容。
 
-Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigation，宽屏为 Navigation Rail。五个根入口始终存在；社区不支持或未登录时展示说明而不初始化社区请求。
+Android 使用 Material 3 Adaptive Navigation Suite：手机为 Bottom Navigation，宽屏为 Navigation Rail。三个根入口（课表、校园、我的）始终存在；社区与日迹从校园「校园生活」进入，社区不支持或未登录时展示说明而不初始化社区请求。
 
 全局能力：
 

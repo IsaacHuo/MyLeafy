@@ -42,8 +42,7 @@ internal fun UpdateInstallationHost(manager: AppUpdateManager, onError: (String?
                 manager.installationOpened()
                 launchInstaller(context, file)
             }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) {
+        } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) {
             manager.installationOpened()
             onError(error.message ?: "无法打开安装程序")
         }

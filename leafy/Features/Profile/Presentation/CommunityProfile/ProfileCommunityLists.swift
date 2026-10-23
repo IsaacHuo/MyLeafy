@@ -114,7 +114,12 @@ struct ProfileCommunityPostListView: View {
                                 selectedPost = post
                             }
                         )
-                        .listRowInsets(EdgeInsets(top: 6, leading: AppSpacing.page, bottom: 6, trailing: AppSpacing.page))
+                        .listRowInsets(EdgeInsets(
+                            top: 6,
+                            leading: AppSpacing.page,
+                            bottom: 6,
+                            trailing: AppSpacing.page
+                        ))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -149,17 +154,20 @@ struct ProfileCommunityPostListView: View {
                 posts.removeAll { $0.id == post.id }
                 selectedPost = nil
             }
-                .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .large])
         }
         .leafyOperationAlert($operationAlert)
     }
 
     private func load() async {
+        guard !isLoading else { return }
+        let scope = CampusOperationScope()
         isLoading = true
         defer { isLoading = false }
 
         await sessionManager.restoreProfileIfPossible()
         await sessionManager.bootstrapCommunityUser()
+        guard scope.isCurrent, !Task.isCancelled else { return }
 
         if let bootstrapError = sessionManager.bootstrapError {
             posts = []
@@ -174,17 +182,20 @@ struct ProfileCommunityPostListView: View {
         }
 
         do {
+            let loaded: [CommunityPost]
             switch kind {
             case .authored:
-                posts = try await dependencies.communityActivityRepository.fetchPosts(authoredBy: userID)
+                loaded = try await dependencies.communityActivityRepository.fetchPosts(authoredBy: userID)
             case .liked:
-                posts = try await dependencies.communityActivityRepository.fetchLikedPosts(by: userID)
+                loaded = try await dependencies.communityActivityRepository.fetchLikedPosts(by: userID)
             case .favorited:
-                posts = try await dependencies.communityActivityRepository.fetchFavoritedPosts(by: userID)
+                loaded = try await dependencies.communityActivityRepository.fetchFavoritedPosts(by: userID)
             }
+            try scope.check()
+            posts = loaded
             errorMessage = nil
         } catch {
-            posts = []
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -194,33 +205,45 @@ struct ProfileCommunityPostListView: View {
     }
 
     private func deletePost(_ post: CommunityPost) async {
+        let scope = CampusOperationScope()
         guard !deletingPostIDs.contains(post.id) else { return }
         deletingPostIDs.insert(post.id)
         defer { deletingPostIDs.remove(post.id) }
 
         do {
+            let updated: CommunityPost?
             switch kind {
             case .authored:
                 try await dependencies.communityActivityRepository.deletePost(postID: post.id)
+                updated = nil
             case .liked:
-                _ = try await dependencies.communityActivityRepository.togglePostLike(postID: post.id)
+                updated = try await dependencies.communityActivityRepository.togglePostLike(postID: post.id)
             case .favorited:
-                _ = try await dependencies.communityActivityRepository.togglePostFavorite(postID: post.id)
+                updated = try await dependencies.communityActivityRepository.togglePostFavorite(postID: post.id)
             }
-            posts.removeAll { $0.id == post.id }
+            try scope.check()
+            if let updated { applyPostChange(updated) }
+            else { posts.removeAll { $0.id == post.id } }
             if selectedPost?.id == post.id {
-                selectedPost = nil
+                selectedPost = posts.first { $0.id == post.id }
             }
             errorMessage = nil
             switch kind {
             case .authored:
                 operationAlert = .success(L10n.text("帖子已删除。", language: leafyLanguage))
             case .liked:
-                operationAlert = .success(L10n.text("已取消点赞。", language: leafyLanguage))
+                operationAlert = .success(L10n.text(
+                    updated?.viewerHasLiked == true ? "已点赞。" : "已取消点赞。",
+                    language: leafyLanguage
+                ))
             case .favorited:
-                operationAlert = .success(L10n.text("已取消收藏。", language: leafyLanguage))
+                operationAlert = .success(L10n.text(
+                    updated?.viewerHasFavorited == true ? "已收藏。" : "已取消收藏。",
+                    language: leafyLanguage
+                ))
             }
         } catch {
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -314,11 +337,14 @@ struct ProfileCommunityCommentListView: View {
     }
 
     private func load() async {
+        guard !isLoading else { return }
+        let scope = CampusOperationScope()
         isLoading = true
         defer { isLoading = false }
 
         await sessionManager.restoreProfileIfPossible()
         await sessionManager.bootstrapCommunityUser()
+        guard scope.isCurrent, !Task.isCancelled else { return }
 
         if let bootstrapError = sessionManager.bootstrapError {
             comments = []
@@ -327,25 +353,30 @@ struct ProfileCommunityCommentListView: View {
         }
 
         do {
-            comments = try await dependencies.communityActivityRepository.fetchMyComments()
+            let loaded = try await dependencies.communityActivityRepository.fetchMyComments()
+            try scope.check()
+            comments = loaded
             errorMessage = nil
         } catch {
-            comments = []
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
 
     private func delete(_ comment: CommunityComment) async {
+        let scope = CampusOperationScope()
         guard !deletingCommentIDs.contains(comment.id) else { return }
         deletingCommentIDs.insert(comment.id)
         defer { deletingCommentIDs.remove(comment.id) }
 
         do {
             try await dependencies.communityActivityRepository.deleteComment(commentID: comment.id)
+            try scope.check()
             comments.removeAll { $0.id == comment.id }
             errorMessage = nil
             operationAlert = .success(L10n.text("评论已删除。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -451,7 +482,12 @@ struct ProfileCommunityPollListView: View {
                             isBusy: activePollIDs.contains(poll.id),
                             onOpen: { selectedPoll = poll }
                         )
-                        .listRowInsets(EdgeInsets(top: 6, leading: AppSpacing.page, bottom: 6, trailing: AppSpacing.page))
+                        .listRowInsets(EdgeInsets(
+                            top: 6,
+                            leading: AppSpacing.page,
+                            bottom: 6,
+                            trailing: AppSpacing.page
+                        ))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -513,11 +549,14 @@ struct ProfileCommunityPollListView: View {
     }
 
     private func load() async {
+        guard !isLoading else { return }
+        let scope = CampusOperationScope()
         isLoading = true
         defer { isLoading = false }
 
         await sessionManager.restoreProfileIfPossible()
         await sessionManager.bootstrapCommunityUser()
+        guard scope.isCurrent, !Task.isCancelled else { return }
 
         if let bootstrapError = sessionManager.bootstrapError {
             authoredPolls = []
@@ -536,28 +575,32 @@ struct ProfileCommunityPollListView: View {
         do {
             async let authored = dependencies.communityActivityRepository.fetchMyAuthoredPolls()
             async let voted = dependencies.communityActivityRepository.fetchMyVotedPolls()
-            authoredPolls = try await authored
-            votedPolls = try await voted
+            let (loadedAuthored, loadedVoted) = try await(authored, voted)
+            try scope.check()
+            authoredPolls = loadedAuthored
+            votedPolls = loadedVoted
             errorMessage = nil
         } catch {
-            authoredPolls = []
-            votedPolls = []
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
 
     private func vote(poll: CommunityPoll, option: CommunityPollOption) async {
+        let scope = CampusOperationScope()
         guard !activePollIDs.contains(poll.id) else { return }
         activePollIDs.insert(poll.id)
         defer { activePollIDs.remove(poll.id) }
 
         do {
             let updatedPoll = try await dependencies.communityRepository.votePoll(pollID: poll.id, optionID: option.id)
+            try scope.check()
             replacePoll(updatedPoll)
             selectedPoll = updatedPoll
             errorMessage = nil
             operationAlert = .success(L10n.text("已记录你的选择。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -569,17 +612,23 @@ struct ProfileCommunityPollListView: View {
     }
 
     private func requestDeletion(poll: CommunityPoll) async {
+        let scope = CampusOperationScope()
         guard !activePollIDs.contains(poll.id) else { return }
         activePollIDs.insert(poll.id)
         defer { activePollIDs.remove(poll.id) }
 
         do {
-            let updatedPoll = try await dependencies.communityActivityRepository.requestPollDeletion(pollID: poll.id, reason: nil)
+            let updatedPoll = try await dependencies.communityActivityRepository.requestPollDeletion(
+                pollID: poll.id,
+                reason: nil
+            )
+            try scope.check()
             replacePoll(updatedPoll)
             selectedPoll = selectedPoll?.id == updatedPoll.id ? updatedPoll : selectedPoll
             errorMessage = nil
             operationAlert = .success(L10n.text("删除申请已提交。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -666,7 +715,10 @@ struct ProfileCommunityPollCompactCard: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .stroke(AppTheme.separator, lineWidth: 1)
@@ -698,10 +750,15 @@ struct ProfileCommunityPostCompactCard: View {
                     HStack(spacing: 8) {
                         Text(post.moderationStatusLabel ?? post.categoryLabel)
                             .microCaption()
-                            .foregroundStyle(post.moderationStatusLabel == nil ? AppTheme.accentEmphasis : AppTheme.warning)
+                            .foregroundStyle(post.moderationStatusLabel == nil ? AppTheme.accentEmphasis : AppTheme
+                                .warning)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background((post.moderationStatusLabel == nil ? AppTheme.softFill : AppTheme.warning.opacity(0.12)), in: Capsule())
+                            .background(
+                                (post.moderationStatusLabel == nil ? AppTheme.softFill : AppTheme.warning
+                                    .opacity(0.12)),
+                                in: Capsule()
+                            )
 
                         Text(post.relativeTimestamp)
                             .microCaption()

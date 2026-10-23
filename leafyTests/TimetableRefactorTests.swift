@@ -24,14 +24,14 @@ final class TimetableTableParserTests: XCTestCase {
         XCTAssertEqual(firstMonday.first { $0.courseName == "课程丁" }?.duration, [6, 7])
 
         let laterCourse = try XCTUnwrap(records.first { $0.courseName == "课程丙" })
-        XCTAssertEqual(laterCourse.weeks, Array(6...14) + [16])
+        XCTAssertEqual(laterCourse.weeks, Array(6 ... 14) + [16])
         XCTAssertEqual(laterCourse.teacher, "李老师")
         XCTAssertEqual(laterCourse.location, "二教")
         XCTAssertEqual(laterCourse.room, "703")
         let thursday = try XCTUnwrap(records.first { $0.courseName == "课程甲" })
         XCTAssertEqual(thursday.dayOfWeek, 4)
         XCTAssertEqual(thursday.duration, [1, 2])
-        XCTAssertEqual(thursday.weeks, [1, 2, 3] + Array(5...11))
+        XCTAssertEqual(thursday.weeks, [1, 2, 3] + Array(5 ... 11))
         let lastPeriod = try XCTUnwrap(records.first { $0.courseName == "课程戊" })
         XCTAssertEqual(lastPeriod.dayOfWeek, 7)
         XCTAssertEqual(lastPeriod.duration, [12])
@@ -50,7 +50,7 @@ final class TimetableTableParserTests: XCTestCase {
             let record = try XCTUnwrap(records.first { $0.courseName == "位置\(row)" })
             XCTAssertEqual(record.dayOfWeek, row + 1)
             XCTAssertEqual(record.duration, periods[row])
-            XCTAssertEqual(record.weeks, Array(1...20))
+            XCTAssertEqual(record.weeks, Array(1 ... 20))
         }
     }
 
@@ -110,7 +110,7 @@ final class TimetableTableParserTests: XCTestCase {
 
     func testMalformedSecondCourseInSameCellRejectsPartialResult() {
         let html = table(courses: [0: [1: course("有效课程", weeks: "1-4(周)")
-            + "<hr>课程信息存在但缺少周次"]])
+                + "<hr>课程信息存在但缺少周次"]])
         assertUnparseable(html)
     }
 
@@ -151,7 +151,7 @@ final class TimetableTableParserTests: XCTestCase {
         let periodLabels = ["12节", "34节", "5节", "67节", "89节", "1011节", "12节"]
         let rows = periodLabels.enumerated().map { row, label in
             let rowID = String(format: "%032d", row + 1)
-            let cells = (1...7).map { day in
+            let cells = (1 ... 7).map { day in
                 let content = courses[row]?[day] ?? "&nbsp;"
                 return """
                 <td><input type="hidden" value=""><input type="hidden" value="">
@@ -390,7 +390,7 @@ extension PerformanceRefactorTests {
     }
 
     func testContinuousZoomGeometryIsExactlyReversible() {
-        for step in 0...20 {
+        for step in 0 ... 20 {
             let progress = CGFloat(step) / 20
             let forward = TimetableZoomGeometry(
                 progress: progress,
@@ -596,7 +596,7 @@ extension PerformanceRefactorTests {
         let revision = controller.windowRevision
 
         controller.beginMagnification(centersToday: false)
-        for step in 0..<100 {
+        for step in 0 ..< 100 {
             controller.updateMagnification(1 + CGFloat(step) / 1_000)
         }
         XCTAssertEqual(controller.windowRevision, revision)
@@ -807,8 +807,26 @@ extension PerformanceRefactorTests {
 
     func testNearestAvailableWeekPrefersExactThenClosest() {
         let records = [
-            ParsedCourseRecord(courseName: "A", teacher: "", classInfo: "", room: "", location: "", dayOfWeek: 1, weeks: [2, 6], duration: [1]),
-            ParsedCourseRecord(courseName: "B", teacher: "", classInfo: "", room: "", location: "", dayOfWeek: 2, weeks: [10], duration: [2])
+            ParsedCourseRecord(
+                courseName: "A",
+                teacher: "",
+                classInfo: "",
+                room: "",
+                location: "",
+                dayOfWeek: 1,
+                weeks: [2, 6],
+                duration: [1]
+            ),
+            ParsedCourseRecord(
+                courseName: "B",
+                teacher: "",
+                classInfo: "",
+                room: "",
+                location: "",
+                dayOfWeek: 2,
+                weeks: [10],
+                duration: [2]
+            )
         ]
 
         XCTAssertEqual(TimetableRefreshUseCase.nearestAvailableWeek(from: records, preferredWeek: 6), 6)
@@ -1114,8 +1132,14 @@ extension PerformanceRefactorTests {
         }.joined(separator: "; ")
 
         XCTAssertEqual(courses.map(\.courseName).sorted(), ["数据结构", "森林生态学"])
-        XCTAssertTrue(courses.contains { $0.location == "二教" && $0.room == "205" && $0.weeks.contains(18) }, debugDescription)
-        XCTAssertTrue(courses.contains { $0.location == "二教" && $0.room == "301" && $0.weeks.contains(16) }, debugDescription)
+        XCTAssertTrue(
+            courses.contains { $0.location == "二教" && $0.room == "205" && $0.weeks.contains(18) },
+            debugDescription
+        )
+        XCTAssertTrue(
+            courses.contains { $0.location == "二教" && $0.room == "301" && $0.weeks.contains(16) },
+            debugDescription
+        )
         XCTAssertFalse(courses.contains { $0.weeks.contains(20) })
     }
 
@@ -1304,7 +1328,8 @@ extension PerformanceRefactorTests {
         let manager = SchoolNetworkManager.shared
         let baseURL = try XCTUnwrap(URL(string: "http://newjwxt.bjfu.edu.cn/jsxsd/xskb/xskb_list.do"))
         let currentURL = manager.timetableURL(baseURL, applyingSemesterID: "2026-2027-1")
-        let oldURL = try XCTUnwrap(URL(string: "http://newjwxt.bjfu.edu.cn/jsxsd/xskb/xskb_list.do?xnxq01id=2025-2026-2"))
+        let oldURL =
+            try XCTUnwrap(URL(string: "http://newjwxt.bjfu.edu.cn/jsxsd/xskb/xskb_list.do?xnxq01id=2025-2026-2"))
 
         XCTAssertTrue(manager.shouldUseCachedTimetableLandingURL(baseURL, preferredSemesterID: "2026-2027-1"))
         XCTAssertTrue(manager.shouldUseCachedTimetableLandingURL(currentURL, preferredSemesterID: "2026-2027-1"))
@@ -1325,7 +1350,11 @@ extension PerformanceRefactorTests {
         </html>
         """
 
-        XCTAssertEqual(SchoolNetworkManager.shared.timetableDocument(html: html, requestedSemesterID: "2026-2027-1").sourceSemesterID, "2025-2026-2")
+        XCTAssertEqual(
+            SchoolNetworkManager.shared.timetableDocument(html: html, requestedSemesterID: "2026-2027-1")
+                .sourceSemesterID,
+            "2025-2026-2"
+        )
     }
 
     @MainActor
@@ -1334,7 +1363,11 @@ extension PerformanceRefactorTests {
         <html><body><div id="kbcontent_1_1"></div></body></html>
         """
 
-        XCTAssertEqual(SchoolNetworkManager.shared.timetableDocument(html: html, requestedSemesterID: "2026-2027-1").sourceSemesterID, "2026-2027-1")
+        XCTAssertEqual(
+            SchoolNetworkManager.shared.timetableDocument(html: html, requestedSemesterID: "2026-2027-1")
+                .sourceSemesterID,
+            "2026-2027-1"
+        )
     }
 
     @MainActor
@@ -1367,7 +1400,15 @@ extension PerformanceRefactorTests {
         let exams = try HTMLParser.parseExams(html: html)
 
         XCTAssertEqual(exams, [
-            ExamArrangement(id: 1, courseID: "DS-001", name: "数据结构", date: "2026-06-20", start: "09:00", end: "11:00", location: "二教 205")
+            ExamArrangement(
+                id: 1,
+                courseID: "DS-001",
+                name: "数据结构",
+                date: "2026-06-20",
+                start: "09:00",
+                end: "11:00",
+                location: "二教 205"
+            )
         ])
     }
 
@@ -1382,7 +1423,15 @@ extension PerformanceRefactorTests {
         let exams = try HTMLParser.parseExams(html: html)
 
         XCTAssertEqual(exams, [
-            ExamArrangement(id: 2, courseID: "MATH-001", name: "高等数学 A", date: "2026-06-21", start: "14:00", end: "16:00", location: "主楼 112")
+            ExamArrangement(
+                id: 2,
+                courseID: "MATH-001",
+                name: "高等数学 A",
+                date: "2026-06-21",
+                start: "14:00",
+                end: "16:00",
+                location: "主楼 112"
+            )
         ])
     }
 
@@ -1435,7 +1484,7 @@ extension PerformanceRefactorTests {
     func testWidgetSnapshotKeepsMoreThanFourCourses() throws {
         // Source semester is provenance; the current container supplies actual dates.
         let date = semesterDate(week: 1, day: 1, hour: 8, minute: 0)
-        let courses = (1...5).map { index in
+        let courses = (1 ... 5).map { index in
             Course(
                 courseName: "Course \(index)",
                 teacher: "T",
@@ -1469,8 +1518,18 @@ extension PerformanceRefactorTests {
             if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
             else { SemesterRuntimeConfigCache.clear() }
         }
-        let firstWeekDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 8)))
-        let secondWeekDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 8)))
+        let firstWeekDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 9,
+            hour: 8
+        )))
+        let secondWeekDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 16,
+            hour: 8
+        )))
         let course = Course(
             courseName: "体育",
             teacher: "T",
@@ -1517,7 +1576,12 @@ extension PerformanceRefactorTests {
             if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
             else { SemesterRuntimeConfigCache.clear() }
         }
-        let referenceDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 8)))
+        let referenceDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 16,
+            hour: 8
+        )))
         let course = Course(
             courseName: "森林生态学",
             teacher: "陈老师",
@@ -1592,7 +1656,7 @@ extension PerformanceRefactorTests {
             currentWeek: 1,
             referenceDate: referenceDate,
             totalWeeks: 3,
-            customWeeks: 3...3
+            customWeeks: 3 ... 3
         )
         let customRangeDrafts = TimetableCalendarExportBuilder.drafts(
             courses: [course],
@@ -1604,7 +1668,7 @@ extension PerformanceRefactorTests {
             currentWeek: 1,
             referenceDate: referenceDate,
             totalWeeks: 3,
-            customWeeks: 1...2
+            customWeeks: 1 ... 2
         )
 
         XCTAssertEqual(currentWeekDrafts.map(\.occurrenceKey), [
@@ -1612,7 +1676,10 @@ extension PerformanceRefactorTests {
             "exam:7",
             "cellReminder:\(reminder.id.uuidString.lowercased())"
         ])
-        XCTAssertEqual(remainingDrafts.map(\.occurrenceKey), [course.occurrenceKey(week: 2), course.occurrenceKey(week: 3)])
+        XCTAssertEqual(
+            remainingDrafts.map(\.occurrenceKey),
+            [course.occurrenceKey(week: 2), course.occurrenceKey(week: 3)]
+        )
         XCTAssertEqual(fullDrafts.count, 3)
         XCTAssertEqual(customSingleWeekDrafts.map(\.occurrenceKey), [course.occurrenceKey(week: 3)])
         XCTAssertEqual(customRangeDrafts.map(\.occurrenceKey), [
@@ -1626,8 +1693,8 @@ extension PerformanceRefactorTests {
             currentWeek: 1,
             referenceDate: referenceDate,
             totalWeeks: 3,
-            customWeeks: 0...8
-        ), 1...3)
+            customWeeks: 0 ... 8
+        ), 1 ... 3)
 
         let draft = try XCTUnwrap(currentWeekDrafts.first)
         XCTAssertEqual(draft.title, "森林生态学")
@@ -1638,7 +1705,8 @@ extension PerformanceRefactorTests {
         XCTAssertTrue(draft.notes.contains("备注：交作业"))
         XCTAssertEqual(TimetableCalendarExportBuilder.occurrenceKey(from: draft.url), draft.occurrenceKey)
 
-        let reminderDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "cellReminder:\(reminder.id.uuidString.lowercased())" })
+        let reminderDraft = try XCTUnwrap(currentWeekDrafts
+            .first { $0.occurrenceKey == "cellReminder:\(reminder.id.uuidString.lowercased())" })
         XCTAssertEqual(reminderDraft.title, "预习植物分类")
         XCTAssertEqual(reminderDraft.location, "图书馆二层")
         XCTAssertTrue(reminderDraft.notes.contains("类型：日程"))
@@ -1646,7 +1714,10 @@ extension PerformanceRefactorTests {
         XCTAssertTrue(reminderDraft.notes.contains("节次：第 3-4 节"))
         XCTAssertTrue(reminderDraft.notes.contains("备注：带笔记本"))
         XCTAssertTrue(reminderDraft.notes.contains("本地通知：提前 20 分钟"))
-        XCTAssertEqual(TimetableCalendarExportBuilder.occurrenceKey(from: reminderDraft.url), reminderDraft.occurrenceKey)
+        XCTAssertEqual(
+            TimetableCalendarExportBuilder.occurrenceKey(from: reminderDraft.url),
+            reminderDraft.occurrenceKey
+        )
 
         let examDraft = try XCTUnwrap(currentWeekDrafts.first { $0.occurrenceKey == "exam:7" })
         XCTAssertEqual(examDraft.title, "考试：森林生态学")
@@ -1675,10 +1746,19 @@ extension PerformanceRefactorTests {
         ))
         let calendar = Calendar.current
         let semesterStart = calendar.startOfDay(for: SemesterConfig.startOfSemesterDate)
-        XCTAssertEqual(currentWeekInterval.start, try XCTUnwrap(calendar.date(byAdding: .day, value: 7, to: semesterStart)))
-        XCTAssertEqual(currentWeekInterval.end, try XCTUnwrap(calendar.date(byAdding: .day, value: 14, to: semesterStart)))
+        XCTAssertEqual(
+            currentWeekInterval.start,
+            try XCTUnwrap(calendar.date(byAdding: .day, value: 7, to: semesterStart))
+        )
+        XCTAssertEqual(
+            currentWeekInterval.end,
+            try XCTUnwrap(calendar.date(byAdding: .day, value: 14, to: semesterStart))
+        )
         XCTAssertEqual(remainingInterval.start, currentWeekInterval.start)
-        XCTAssertEqual(remainingInterval.end, try XCTUnwrap(calendar.date(byAdding: .day, value: 21, to: semesterStart)))
+        XCTAssertEqual(
+            remainingInterval.end,
+            try XCTUnwrap(calendar.date(byAdding: .day, value: 21, to: semesterStart))
+        )
         XCTAssertEqual(fullInterval.start, semesterStart)
         XCTAssertEqual(fullInterval.end, remainingInterval.end)
     }
@@ -1692,7 +1772,12 @@ extension PerformanceRefactorTests {
             if let savedConfig { SemesterRuntimeConfigCache.save(savedConfig) }
             else { SemesterRuntimeConfigCache.clear() }
         }
-        let referenceDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 8)))
+        let referenceDate = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 16,
+            hour: 8
+        )))
         let reminder = TimetableCellReminder(week: 2, dayOfWeek: 1, period: 3, title: "社团面试")
         let exam = ExamArrangement(
             id: 8,
@@ -1727,10 +1812,10 @@ extension PerformanceRefactorTests {
     func testManualCourseWeekSelectionNormalizesGapsAndBuildsSummary() {
         XCTAssertEqual(
             ManualCourseWeekSelection.normalized([16, 1, 8, 10, 8, 21, 0, 15, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14]),
-            Array(1...8) + Array(10...16)
+            Array(1 ... 8) + Array(10 ... 16)
         )
         XCTAssertEqual(
-            ManualCourseWeekSelection.summary(Array(1...8) + Array(10...16)),
+            ManualCourseWeekSelection.summary(Array(1 ... 8) + Array(10 ... 16)),
             "1–8、10–16 周"
         )
         XCTAssertEqual(ManualCourseWeekSelection.summary([]), "未选择")
@@ -1763,7 +1848,82 @@ extension PerformanceRefactorTests {
         """
         let exams = try CustomCampusCSVParser.parseExams(examCSV)
         XCTAssertEqual(exams, [
-            ExamArrangement(id: 1, courseID: "DS-001", name: "数据结构", date: "2026-06-20", start: "09:00", end: "11:00", location: "二教 205")
+            ExamArrangement(
+                id: 1,
+                courseID: "DS-001",
+                name: "数据结构",
+                date: "2026-06-20",
+                start: "09:00",
+                end: "11:00",
+                location: "二教 205"
+            )
         ])
+    }
+}
+
+extension TimetableTableParserTests {
+    func testAsyncParserMatchesSchoolRecordsAndVerifiedEmptyResults() async throws {
+        let html = table(courses: [0: [2: course("异步课表", weeks: "1-3(周)")]])
+        let expected = try HTMLParser.parseTimetableRecords(html: html)
+        let actual = try await TimetableRefreshUseCase.parseRecords(html: html)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        XCTAssertEqual(try encoder.encode(actual), try encoder.encode(expected))
+        let empty = try await TimetableRefreshUseCase.parseRecords(html: table())
+        XCTAssertTrue(empty.isEmpty)
+    }
+
+    func testAsyncParserRejectsMalformedPageInsteadOfReturningEmpty() async {
+        do {
+            _ = try await TimetableRefreshUseCase.parseRecords(html: "<html>服务暂时不可用</html>")
+            XCTFail("An invalid page must not replace cached courses")
+        } catch {
+            guard case HTMLParserError.timetableTableNotFound = error
+            else { return XCTFail("Unexpected error: \(error)") }
+        }
+    }
+
+    @MainActor
+    func testCancelledAsyncParserDoesNotReturnRecords() async {
+        let html = table(courses: [0: [1: course("取消", weeks: "1(周)")]])
+        let task = Task { try await TimetableRefreshUseCase.parseRecords(html: html) }
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Cancelled parsing must not return data to persist")
+        } catch {
+            XCTAssertTrue(error is CancellationError)
+        }
+    }
+}
+
+extension PerformanceRefactorTests {
+    @MainActor
+    func testSharedGradeFixturePreservesCourseCategoryHeaderSynonym() throws {
+        let grades = try HTMLParser.parseGrades(html: jwxtFixture("grades_with_rows.html"))
+        XCTAssertEqual(grades.count, 2)
+        let structures = try XCTUnwrap(grades.first { $0.courseCode == "DS-001" })
+        XCTAssertEqual(structures.type, "必修 · 专业核心")
+        XCTAssertEqual(structures.courseCategory, "专业核心")
+        let mathematics = try XCTUnwrap(grades.first { $0.courseCode == "MATH-001" })
+        XCTAssertEqual(mathematics.type, "必修 · 公共基础")
+        XCTAssertEqual(mathematics.courseCategory, "公共基础")
+    }
+
+    func testSharedClassroomFixturesUseCurrentMatrixTrustBoundary() throws {
+        let matrix = try HTMLParser.parseClassroomAvailability(html: jwxtFixture("empty_classrooms.html"))
+        XCTAssertEqual(Set(matrix.periods), Set(1 ... 12))
+        XCTAssertEqual(try matrix.availableRooms().map { $0.building + ":" + $0.room },
+                       ["学研A座:0304", "学研B座:0405", "二教:608"])
+        XCTAssertTrue(try HTMLParser.parseEmptyClassrooms(html: jwxtFixture("empty_classrooms_no_available.html"))
+            .isEmpty)
+        XCTAssertTrue(try HTMLParser.parseEmptyClassrooms(html: jwxtFixture("empty_classrooms_empty_table.html"))
+            .isEmpty)
+        XCTAssertThrowsError(try HTMLParser
+            .parseEmptyClassrooms(html: jwxtFixture("empty_classrooms_malformed_rows.html"))) { error in
+                guard case HTMLParserError.tableRowsUnparseable("教室占用行") = error else {
+                    return XCTFail("Unexpected shared matrix error: \(error)")
+                }
+            }
     }
 }

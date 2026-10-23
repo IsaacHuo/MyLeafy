@@ -12,11 +12,19 @@ struct TeachingCultivationSectionView: View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle("学校教学", subtitle: sectionSubtitle)
 
-            ToolEntryCard(title: "成绩查询", subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看个人课程成绩", icon: "chart.bar.doc.horizontal") {
+            ToolEntryCard(
+                title: "成绩查询",
+                subtitle: isCustomCampus ? "按模板导入成绩表，查看本地成绩记录" : "查看个人课程成绩",
+                icon: "chart.bar.doc.horizontal"
+            ) {
                 openRoute(.grades)
             }
 
-            ToolEntryCard(title: "考试安排", subtitle: isCustomCampus ? "手动添加或导入考试时间和地点" : "查看考试时间和地点", icon: "calendar.badge.clock") {
+            ToolEntryCard(
+                title: "考试安排",
+                subtitle: isCustomCampus ? "手动添加或导入考试时间和地点" : "查看考试时间和地点",
+                icon: "calendar.badge.clock"
+            ) {
                 openRoute(.examSchedule)
             }
 
@@ -64,7 +72,6 @@ struct ClassroomsSectionView: View {
             ToolEntryCard(title: "校园热力图", subtitle: "查看当前教学楼拥挤度", icon: "map.fill") {
                 openRoute(.campusHeatmap)
             }
-
         }
         .sheet(item: $browserItem) { item in
             LeafySafariView(url: item.url)
@@ -83,7 +90,11 @@ struct SportsSectionView: View {
         VStack(alignment: .leading, spacing: AppSpacing.card) {
             LeafySectionTitle("体育", subtitle: isCustomCampus ? "本地记录阳光长跑和体测，可按学校要求自定义长跑规则。" : "阳光长跑、体测和场馆开放集中管理。")
 
-            ToolEntryCard(title: "阳光长跑", subtitle: isCustomCampus ? "自定义目标次数、周期和假期周规则" : "每两周四次，满分 34 次", icon: "figure.run") {
+            ToolEntryCard(
+                title: "阳光长跑",
+                subtitle: isCustomCampus ? "自定义目标次数、周期和假期周规则" : "每两周四次，满分 34 次",
+                icon: "figure.run"
+            ) {
                 openRoute(.sunshineRun)
             }
 
@@ -145,7 +156,6 @@ private struct LeafySafariView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
-
 
 private struct LibrarySeatReservationBrowserItem: Identifiable {
     let id = UUID()

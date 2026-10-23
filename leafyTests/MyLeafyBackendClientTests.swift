@@ -5,7 +5,10 @@ import XCTest
 @MainActor
 final class MyLeafyBackendClientTests: XCTestCase {
     func testRejectsNonHTTPSOrigin() {
-        XCTAssertThrowsError(try MyLeafyBackendClient(baseURL: URL(string: "http://api.test.invalid")!, storage: BackendTestSessionStore()))
+        XCTAssertThrowsError(try MyLeafyBackendClient(
+            baseURL: URL(string: "http://api.test.invalid")!,
+            storage: BackendTestSessionStore()
+        ))
     }
 
     func testSignedSessionHeaderIsPersistedAndUsedForRequests() async throws {
@@ -36,7 +39,11 @@ final class MyLeafyBackendClientTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [BackendTestURLProtocol.self]
         let store = BackendTestSessionStore()
-        return (try MyLeafyBackendClient(baseURL: URL(string: "https://api.test.invalid")!, network: URLSession(configuration: configuration), storage: store), store)
+        return (
+            try MyLeafyBackendClient(baseURL: URL(string: "https://api.test.invalid")!,
+                                     network: URLSession(configuration: configuration), storage: store),
+            store
+        )
     }
 }
 
@@ -61,7 +68,10 @@ private nonisolated final class BackendTestURLProtocol: URLProtocol, @unchecked 
         case "/v1/auth/sign-in/anonymous":
             status = 200
             headers["set-auth-token"] = "signed-session.test"
-            payload = ["token": "unsigned-token-must-not-be-used", "user": ["id": "BA74D3B9-C806-4FCA-8BFC-1E5B60DD8D10", "isAnonymous": true]]
+            payload = [
+                "token": "unsigned-token-must-not-be-used",
+                "user": ["id": "BA74D3B9-C806-4FCA-8BFC-1E5B60DD8D10", "isAnonymous": true]
+            ]
         case "/v1/maintenance":
             status = 503
             headers["X-Request-ID"] = "request-for-test"
@@ -70,7 +80,12 @@ private nonisolated final class BackendTestURLProtocol: URLProtocol, @unchecked 
             status = 200
             payload = ["authorization": request.value(forHTTPHeaderField: "Authorization") ?? ""]
         }
-        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: status,
+            httpVersion: "HTTP/1.1",
+            headerFields: headers
+        )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: payload))
         client?.urlProtocolDidFinishLoading(self)

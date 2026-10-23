@@ -125,7 +125,8 @@ struct SunshineRunView: View {
         }
     }
 
-    private func addRecord(on date: Date, successMessage: String) {
+    @discardableResult
+    private func addRecord(on date: Date, successMessage: String) -> Bool {
         let calendar = Calendar.current
         guard !SunshineRunPlanner.isExcludedDate(
             date,
@@ -136,7 +137,7 @@ struct SunshineRunView: View {
             calendar: calendar
         ) else {
             operationAlert = .failure("假期周无需打卡，阳光长跑周期已跳过这一周。")
-            return
+            return false
         }
         guard SunshineRunPlanner.period(
             for: date,
@@ -148,11 +149,11 @@ struct SunshineRunView: View {
             calendar: calendar
         ) != nil else {
             operationAlert = .failure("只能补记本学期内的阳光长跑。")
-            return
+            return false
         }
         guard !SunshineRunPlanner.containsRecord(on: date, in: records, calendar: calendar) else {
             operationAlert = .failure("这一天已经记录过阳光长跑。")
-            return
+            return false
         }
 
         records.append(SunshineRunRecord(
@@ -163,7 +164,7 @@ struct SunshineRunView: View {
             excludedWeeks: excludedWeeks,
             calendar: calendar
         ))
-        persistRecords(successMessage: successMessage)
+        return persistRecords(successMessage: successMessage)
     }
 
     private func removeRecord(on date: Date, successMessage: String) {
@@ -173,14 +174,22 @@ struct SunshineRunView: View {
         persistRecords(successMessage: successMessage)
     }
 
-    private func persistRecords(successMessage: String) {
+    @discardableResult
+    private func persistRecords(successMessage: String) -> Bool {
         records = SunshineRunPlanner.normalizedRecords(records)
-        SunshineRunStore.saveRecords(records)
+        do { try SunshineRunStore.saveRecords(records) }
+        catch {
+            records = SunshineRunStore.loadRecords()
+            operationAlert = .failure(error.localizedDescription)
+            return false
+        }
         Task { await updateNotifications(successMessage: successMessage) }
+        return true
     }
 
     private func saveReminderSettings() {
-        reminderSettings.selectedWeekdays = SunshineRunReminderSettings.normalizedWeekdays(reminderSettings.selectedWeekdays)
+        reminderSettings.selectedWeekdays = SunshineRunReminderSettings
+            .normalizedWeekdays(reminderSettings.selectedWeekdays)
         SunshineRunStore.saveReminderSettings(reminderSettings)
         Task { await updateNotifications(successMessage: reminderSettings.isEnabled ? "阳光长跑提醒已保存。" : "阳光长跑提醒已关闭。") }
     }
@@ -198,6 +207,7 @@ struct SunshineRunView: View {
 
     @MainActor
     private func updateNotifications(successMessage: String) async {
+        let scope = CampusOperationScope()
         do {
             let updatedSettings = try await SunshineRunNotificationManager.updateNotifications(
                 settings: reminderSettings,
@@ -205,10 +215,12 @@ struct SunshineRunView: View {
                 rules: ruleSettings,
                 semesterContext: semesterContext
             )
+            try scope.check()
             reminderSettings = updatedSettings
             SunshineRunStore.saveReminderSettings(updatedSettings)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             var disabledSettings = reminderSettings
             disabledSettings.isEnabled = false
             disabledSettings.scheduledNotificationIDs = []
@@ -275,10 +287,13 @@ private struct SunshineRunCurrentPeriodCard: View {
                 Button {
                     onToggleToday()
                 } label: {
-                    Label(hasTodayRecord ? "撤销今日打卡" : "今天已跑", systemImage: hasTodayRecord ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                    Label(
+                        hasTodayRecord ? "撤销今日打卡" : "今天已跑",
+                        systemImage: hasTodayRecord ? "arrow.uturn.backward.circle" : "checkmark.circle.fill"
+                    )
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -296,15 +311,15 @@ private struct SunshineRunRuleSettingsCard: View {
                 Text("规则设置")
                     .leafyHeadline()
 
-                Stepper(value: $settings.totalTarget, in: 1...200) {
+                Stepper(value: $settings.totalTarget, in: 1 ... 200) {
                     Text("总目标 \(settings.totalTarget) 次")
                 }
 
-                Stepper(value: $settings.weeksPerPeriod, in: 1...8) {
+                Stepper(value: $settings.weeksPerPeriod, in: 1 ... 8) {
                     Text("每 \(settings.weeksPerPeriod) 周为一组")
                 }
 
-                Stepper(value: $settings.periodTarget, in: 1...30) {
+                Stepper(value: $settings.periodTarget, in: 1 ... 30) {
                     Text("每组目标 \(settings.periodTarget) 次")
                 }
 
@@ -355,7 +370,11 @@ private struct SunshineRunReminderCard: View {
                         Text("提醒星期")
                             .leafySubheadline()
                             .foregroundStyle(AppTheme.secondaryText)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], alignment: .leading, spacing: 8) {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 72), spacing: 8)],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
                             ForEach(weekdays, id: \.value) { weekday in
                                 Button {
                                     toggleWeekday(weekday.value)
@@ -364,9 +383,11 @@ private struct SunshineRunReminderCard: View {
                                         .font(.subheadline.weight(.semibold))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
-                                        .foregroundStyle(settings.normalizedSelectedWeekdays.contains(weekday.value) ? AppTheme.textOnAccent : AppTheme.primaryText)
+                                        .foregroundStyle(settings.normalizedSelectedWeekdays
+                                            .contains(weekday.value) ? AppTheme.textOnAccent : AppTheme.primaryText)
                                         .background(
-                                            settings.normalizedSelectedWeekdays.contains(weekday.value) ? AppTheme.accent : AppTheme.softFill,
+                                            settings.normalizedSelectedWeekdays.contains(weekday.value) ? AppTheme
+                                                .accent : AppTheme.softFill,
                                             in: Capsule()
                                         )
                                 }
@@ -427,8 +448,11 @@ private struct SunshineRunPeriodRow: View {
                     .background(AppTheme.softFill, in: Capsule())
             }
 
-            ProgressView(value: min(Double(progress.count), Double(progress.periodTarget)), total: Double(progress.periodTarget))
-                .tint(AppTheme.accent)
+            ProgressView(
+                value: min(Double(progress.count), Double(progress.periodTarget)),
+                total: Double(progress.periodTarget)
+            )
+            .tint(AppTheme.accent)
 
             Text("本组 \(progress.count) / \(progress.periodTarget) 次")
                 .font(.footnote)
@@ -445,13 +469,13 @@ private struct SunshineRunPeriodRow: View {
 
 private struct SunshineRunBackfillSheet: View {
     let semesterContext: SunshineRunSemesterContext
-    let onSave: (Date) -> Void
+    let onSave: (Date) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var date = Date()
 
     private var dateRange: ClosedRange<Date> {
-        semesterContext.startDate...semesterContext.endDate
+        semesterContext.startDate ... semesterContext.endDate
     }
 
     var body: some View {
@@ -474,8 +498,7 @@ private struct SunshineRunBackfillSheet: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(date)
-                        dismiss()
+                        if onSave(date) { dismiss() }
                     }
                 }
             }

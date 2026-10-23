@@ -3,6 +3,7 @@ export type ColumnConfig = {
   label: string;
   kind?: "text" | "date" | "number" | "boolean" | "json" | "image";
   sortable?: boolean;
+  fallback?: string;
 };
 
 export type FormFieldConfig = {
@@ -384,7 +385,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         label: "下架并关闭",
         action: "resolveModerationReport",
         tone: "danger",
-        visible: (r) => r.status === "open" || r.status === "reviewed",
+        visible: (r) =>
+          (r.target_type === "post" || r.target_type === "comment") &&
+          (r.status === "open" || r.status === "reviewed"),
         fields: [
           {
             source: "resolutionNote",
@@ -400,7 +403,9 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
         label: "下架并禁言",
         action: "resolveModerationReport",
         tone: "danger",
-        visible: (r) => r.status === "open" || r.status === "reviewed",
+        visible: (r) =>
+          (r.target_type === "post" || r.target_type === "comment") &&
+          (r.status === "open" || r.status === "reviewed"),
         fields: [
           {
             source: "resolutionNote",
@@ -416,6 +421,47 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
           { source: "mutedReason", label: "禁言原因", kind: "longtext" },
         ],
         fixed: { status: "resolved", hideContent: true, muteUser: true },
+        build: idParams,
+      },
+      {
+        label: "禁言并关闭",
+        action: "resolveModerationReport",
+        tone: "danger",
+        visible: (r) =>
+          r.target_type === "user" &&
+          (r.status === "open" || r.status === "reviewed"),
+        fields: [
+          {
+            source: "resolutionNote",
+            label: "处理备注",
+            kind: "longtext",
+            required: true,
+          },
+          {
+            source: "mutedUntil",
+            label: "禁言截止（留空默认一年）",
+            kind: "datetime",
+          },
+          { source: "mutedReason", label: "禁言原因", kind: "longtext" },
+        ],
+        fixed: { status: "resolved", hideContent: false, muteUser: true },
+        build: idParams,
+      },
+      {
+        label: "关闭举报（不禁言）",
+        action: "resolveModerationReport",
+        visible: (r) =>
+          r.target_type === "user" &&
+          (r.status === "open" || r.status === "reviewed"),
+        fields: [
+          {
+            source: "resolutionNote",
+            label: "处理备注",
+            kind: "longtext",
+            required: true,
+          },
+        ],
+        fixed: { status: "resolved", hideContent: false },
         build: idParams,
       },
       {
@@ -882,7 +928,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   sessions: {
     label: "会话",
     columns: columns(
-      ["admin.display_name", "管理员"],
+      ["admin.display_name", "管理员", "text", false, "系统"],
       ["is_current", "当前会话", "boolean"],
       ["last_seen_at", "最近活动", "date", true],
       ["expires_at", "过期", "date", true],
@@ -919,7 +965,7 @@ export const resourceConfigs: Record<string, ResourceConfig> = {
   "audit-logs": {
     label: "审计日志",
     columns: columns(
-      ["admin.display_name", "管理员"],
+      ["admin.display_name", "管理员", "text", false, "系统"],
       ["action", "动作", "text", true],
       ["target_type", "对象", "text", true],
       ["outcome", "结果", "text", true],
@@ -1098,11 +1144,12 @@ function communityBannerForm(editing: boolean): FormFieldConfig[] {
 }
 
 function columns(...items: any[]): ColumnConfig[] {
-  return items.map(([source, label, kind = "text", sortable = false]) => ({
+  return items.map(([source, label, kind = "text", sortable = false, fallback]) => ({
     source,
     label,
     kind,
     sortable,
+    ...(fallback == null ? {} : { fallback }),
   }));
 }
 

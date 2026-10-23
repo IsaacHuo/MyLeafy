@@ -69,7 +69,10 @@ enum LearningMaterialBatchImport {
             let originalError = error
             do { try cleanup.retry(in: context) }
             catch {
-                throw ImportCleanupError(original: originalError.localizedDescription, cleanup: error.localizedDescription)
+                throw ImportCleanupError(
+                    original: originalError.localizedDescription,
+                    cleanup: error.localizedDescription
+                )
             }
             throw originalError
         }

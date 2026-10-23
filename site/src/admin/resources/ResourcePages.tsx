@@ -244,7 +244,7 @@ export function ResourceList({
               ? dateLabel(value)
               : column.kind === "json"
                 ? JSON.stringify(value)
-                : valueLabel(value);
+                : valueLabel(value ?? column.fallback);
           return index === 0 ? (
             <Link
               to={`/${resource}/${encodeURIComponent(row.original.id)}`}
@@ -1188,7 +1188,7 @@ export function RecordDetailContent({
               <dd>
                 {c.kind === "date"
                   ? dateLabel(valueAt(record, c.source))
-                  : valueLabel(valueAt(record, c.source))}
+                  : valueLabel(valueAt(record, c.source) ?? c.fallback)}
               </dd>
             </div>
           ))}

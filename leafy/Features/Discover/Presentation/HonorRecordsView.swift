@@ -119,19 +119,9 @@ struct HonorRecordsView: View {
     private func handleImport(_ result: Result<[URL], Error>) {
         do {
             let urls = try result.get()
-            for url in urls {
-                let stored = try HonorRecordFileStore.importFile(from: url)
-                let title = url.deletingPathExtension().lastPathComponent
-                let record = HonorRecord(
-                    title: title.isEmpty ? L10n.text("新的荣誉记录", language: leafyLanguage) : title,
-                    originalFilename: url.lastPathComponent,
-                    localFilename: stored.localFilename,
-                    contentTypeIdentifier: stored.contentTypeIdentifier
-                )
-                modelContext.insert(record)
-                editorRecord = record
-            }
-            try modelContext.save()
+            let result = try HonorRecordPersistence.importFiles(urls, in: modelContext)
+            editorRecord = result.records.last
+            alertMessage = result.cleanupWarning
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -219,6 +209,15 @@ private struct HonorRecordRow: View {
 
 private struct HonorRecordThumbnail: View {
     let record: HonorRecord
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        ScheduleMemoImageRequest(sources: record.isImage ? [.init(
+            id: record.id,
+            url: HonorRecordFileStore.directoryURL.appendingPathComponent(record.localFilename),
+            importedAt: record.importedAt
+        )] : [], revision: record.updatedAt)
+    }
 
     var body: some View {
         ZStack {
@@ -226,7 +225,7 @@ private struct HonorRecordThumbnail: View {
                 .fill(AppTheme.softFill)
 
             if record.isImage,
-               let image = HonorRecordFileStore.image(for: record) {
+               let image = imageLoader.images(for: imageRequest)[record.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -242,6 +241,8 @@ private struct HonorRecordThumbnail: View {
                 .stroke(AppTheme.separator, lineWidth: 1)
         )
         .clipped()
+        .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+        .onDisappear { imageLoader.reset() }
     }
 }
 
@@ -249,16 +250,28 @@ private struct HonorRecordEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
 
-    @Bindable var record: HonorRecord
+    @Environment(\.modelContext) private var modelContext
+    let record: HonorRecord
+    @State private var saveError: String?
+    @State private var title: String
+    @State private var awardedAt: Date
+    @State private var note: String
+
+    init(record: HonorRecord) {
+        self.record = record
+        _title = State(initialValue: record.title)
+        _awardedAt = State(initialValue: record.awardedAt)
+        _note = State(initialValue: record.note)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("标题", text: $record.title)
-                    DatePicker("日期", selection: $record.awardedAt, displayedComponents: .date)
-                    TextField("备注", text: $record.note, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("标题", text: $title)
+                    DatePicker("日期", selection: $awardedAt, displayedComponents: .date)
+                    TextField("备注", text: $note, axis: .vertical)
+                        .lineLimit(3 ... 6)
                 }
 
                 Section {
@@ -270,11 +283,26 @@ private struct HonorRecordEditorSheet: View {
             }
             .navigationTitle("编辑荣誉")
             .leafyInlineNavigationTitle()
+            .alert("保存失败", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("知道了", role: .cancel) {}
+            } message: { Text(saveError ?? "") }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") {
+                        let previous = (record.title, record.awardedAt, record.note, record.updatedAt)
+                        record.title = title
+                        record.awardedAt = awardedAt
+                        record.note = note
                         record.updatedAt = Date()
-                        dismiss()
+                        do {
+                            try LocalModelSave.save(modelContext, undo: {
+                                record.title = previous.0
+                                record.awardedAt = previous.1
+                                record.note = previous.2
+                                record.updatedAt = previous.3
+                            })
+                            dismiss()
+                        } catch { saveError = error.localizedDescription }
                     }
                     .fontWeight(.semibold)
                 }
@@ -288,6 +316,14 @@ private struct HonorRecordPreviewSheet: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
 
     let record: HonorRecord
+    @State private var imageLoader = ScheduleMemoImageLoader()
+    private var imageRequest: ScheduleMemoImageRequest {
+        ScheduleMemoImageRequest(sources: record.isImage ? [.init(
+            id: record.id,
+            url: HonorRecordFileStore.directoryURL.appendingPathComponent(record.localFilename),
+            importedAt: record.importedAt
+        )] : [], revision: record.updatedAt)
+    }
 
     @State private var shareItem: HonorRecordShareItem?
     @State private var alertMessage: String?
@@ -299,12 +335,16 @@ private struct HonorRecordPreviewSheet: View {
                    let url = HonorRecordFileStore.fileURL(for: record) {
                     PDFPreview(url: url)
                         .ignoresSafeArea(edges: .bottom)
-                } else if let image = HonorRecordFileStore.image(for: record) {
+                } else if let image = imageLoader.images(for: imageRequest)[record.id] {
                     HonorRecordImagePreview(image: image)
+                } else if record.isImage && imageLoader.isLoading(imageRequest) {
+                    ProgressView()
                 } else {
                     ContentUnavailableView("无法预览文件", systemImage: "exclamationmark.triangle")
                 }
             }
+            .task(id: imageRequest) { await imageLoader.load(imageRequest) }
+            .onDisappear { imageLoader.reset() }
             .navigationTitle(record.title)
             .leafyInlineNavigationTitle()
             .toolbar {
@@ -391,13 +431,13 @@ private struct PDFPreview: UIViewRepresentable {
     }
 }
 
-private enum HonorRecordFileStore {
+enum HonorRecordFileStore {
     struct StoredFile {
         let localFilename: String
         let contentTypeIdentifier: String
     }
 
-    static func importFile(from sourceURL: URL) throws -> StoredFile {
+    static func importFile(from sourceURL: URL, filename: String? = nil) throws -> StoredFile {
         let didAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -409,9 +449,9 @@ private enum HonorRecordFileStore {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
         let extensionText = sourceURL.pathExtension
-        let localFilename = extensionText.isEmpty
+        let localFilename = filename ?? (extensionText.isEmpty
             ? UUID().uuidString
-            : "\(UUID().uuidString).\(extensionText)"
+            : "\(UUID().uuidString).\(extensionText)")
         let destinationURL = directoryURL.appendingPathComponent(localFilename)
 
         if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
@@ -433,19 +473,13 @@ private enum HonorRecordFileStore {
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
     }
 
-    static func image(for record: HonorRecord) -> UIImage? {
-        guard let url = fileURL(for: record) else { return nil }
-        return UIImage(contentsOfFile: url.path(percentEncoded: false))
-    }
-
-    static func deleteFile(named filename: String) throws {
-        let url = directoryURL.appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
-            try FileManager.default.removeItem(at: url)
+    static var directoryURL: URL {
+        if AppRuntimeEnvironment.isRunningUnitTests {
+            return FileManager.default.temporaryDirectory.appendingPathComponent(
+                "LeafyHonorRecordsTests",
+                isDirectory: true
+            )
         }
-    }
-
-    private static var directoryURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("HonorRecords", isDirectory: true)
@@ -476,4 +510,54 @@ private extension HonorRecord {
     NavigationStack {
         HonorRecordsView()
     }
+}
+
+@MainActor
+enum HonorRecordPersistence {
+    struct Result {
+        let records: [HonorRecord]
+        let cleanupWarning: String?
+    }
+
+    static func importFiles(_ urls: [URL], in context: ModelContext, cleanup: LocalFileCleanup? = nil,
+                            save: (ModelContext) throws -> Void = { try $0.save() }) throws -> Result {
+        let cleanup = cleanup ?? LocalFileCleanup()
+        var records: [HonorRecord] = []
+        do {
+            for url in urls {
+                let filename = UUID().uuidString + (url.pathExtension.isEmpty ? "" : "." + url.pathExtension)
+                let title = url.deletingPathExtension().lastPathComponent
+                let record = HonorRecord(title: title.isEmpty ? L10n.text("新的荣誉记录") : title,
+                                         originalFilename: url.lastPathComponent, localFilename: filename,
+                                         contentTypeIdentifier: UTType.data.identifier)
+                try cleanup.enqueue([LocalFileCleanup.File(
+                    record,
+                    url: HonorRecordFileStore.directoryURL.appendingPathComponent(filename)
+                )])
+                let stored = try HonorRecordFileStore.importFile(from: url, filename: filename)
+                record.contentTypeIdentifier = stored.contentTypeIdentifier
+                records.append(record)
+            }
+            for record in records { context.insert(record) }
+            try LocalModelSave.save(context, undo: { for record in records { context.delete(record) } }, using: save)
+        } catch {
+            let original = error
+            do { try cleanup.retry(in: context) }
+            catch { throw HonorImportCleanupError(
+                original: original.localizedDescription,
+                cleanup: error.localizedDescription
+            ) }
+            throw original
+        }
+        var warning: String?
+        do { try cleanup.retry(in: context) }
+        catch { warning = "荣誉记录已保存，但本地文件清理未完成：\(error.localizedDescription)" }
+        return Result(records: records, cleanupWarning: warning)
+    }
+}
+
+private struct HonorImportCleanupError: LocalizedError {
+    let original: String
+    let cleanup: String
+    var errorDescription: String? { "荣誉记录未保存：\(original)。新增文件清理未完成：\(cleanup)" }
 }

@@ -274,7 +274,6 @@ nonisolated enum CampusScopedDefaults {
         }
         return "leafy.campus.\(identity.scopeKey).\(baseKey)"
     }
-
 }
 
 nonisolated enum ActiveCampusContext {
@@ -305,7 +304,8 @@ protocol CampusAuthenticationProviding: AnyObject {
     var authenticatedDisplayName: String? { get }
 
     func fetchCaptcha(for portal: SchoolPortal) async throws -> (key: String, image: UIImage)
-    func performLogin(account: String, password: String, captcha: String, key: String, portal: SchoolPortal) async throws -> Bool
+    func performLogin(account: String, password: String, captcha: String, key: String,
+                      portal: SchoolPortal) async throws -> Bool
     func clearSession()
 }
 

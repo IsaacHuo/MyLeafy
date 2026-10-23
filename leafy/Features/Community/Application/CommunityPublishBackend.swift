@@ -1,7 +1,5 @@
 import Foundation
 
-
-
 nonisolated protocol CommunityPublishBackend: CommunityDirectMediaUploading {
     func pendingPostContext(postID: UUID) async throws -> CommunityPendingPostContext?
     func abortPendingPost(postID: UUID) async throws

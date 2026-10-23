@@ -3,7 +3,6 @@ import os
 
 nonisolated enum LeafyWidgetConstants {
     static let appGroupIdentifier = "group.com.isaachuo.leafy"
-    static let snapshotFilename = "leafy-widget-snapshot.json"
     static let snapshotArchiveFilename = "leafy-widget-snapshots.json"
     static let widgetKind = "LeafyTimetableWidget"
     static let selectedDayOffsetKey = "leafyWidget.selectedDayOffset"
@@ -180,17 +179,8 @@ nonisolated enum LeafyWidgetSnapshotStore {
         }
     }
 
-    static func clear() {
-        try? FileManager.default.removeItem(at: snapshotURL)
-        try? FileManager.default.removeItem(at: snapshotArchiveURL)
-    }
-
     private static var snapshotArchiveURL: URL {
         containerURL.appendingPathComponent(LeafyWidgetConstants.snapshotArchiveFilename)
-    }
-
-    private static var snapshotURL: URL {
-        containerURL.appendingPathComponent(LeafyWidgetConstants.snapshotFilename)
     }
 
     private static var containerURL: URL {

@@ -37,9 +37,7 @@ fun rememberCommunityWriteAction(
                     pending = null
                     action?.invoke()
                 } else needsAgreement = true
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { error = failure.toCommunityMessage("社区条款加载失败") }
-            finally { busy = false }
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.toCommunityMessage("社区条款加载失败") } finally { busy = false }
         }
     }
     if (pending != null) AlertDialog(
@@ -74,9 +72,7 @@ fun rememberCommunityWriteAction(
                             val action = pending
                             pending = null
                             action?.invoke()
-                        } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (failure: Exception) { error = failure.toCommunityMessage("操作失败") }
-                        finally { busy = false }
+                        } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.toCommunityMessage("操作失败") } finally { busy = false }
                     }
                 }
             }) { Text(if (busy) "请稍候" else if (needsAgreement) "同意并继续" else "重试") }

@@ -201,7 +201,8 @@ struct AcademicHubView: View {
                 isCustomCampus: isCustomCampus,
                 isCommunityEnabled: isCommunityEnabled,
                 isMedicalEnabled: isMedicalEnabled,
-                campusID: campusID)
+                campusID: campusID
+            )
         else {
             appNavigation.requestedAcademicRoute = nil
             sanitizeSelectedTab()
@@ -223,7 +224,8 @@ struct AcademicHubView: View {
                 isCustomCampus: isCustomCampus,
                 isCommunityEnabled: isCommunityEnabled,
                 isMedicalEnabled: isMedicalEnabled,
-                campusID: campusID),
+                campusID: campusID
+            ),
             CampusAcademicVisibility.isRouteVisible(
                 route,
                 isCustomCampus: isCustomCampus,
@@ -272,7 +274,8 @@ struct AcademicHubView: View {
                 isCustomCampus: isCustomCampus,
                 isCommunityEnabled: isCommunityEnabled,
                 isMedicalEnabled: isMedicalEnabled,
-                campusID: campusID)
+                campusID: campusID
+            )
         else {
             appNavigation.requestedClassroomLookup = nil
             sanitizeSelectedTab()
@@ -291,7 +294,8 @@ struct AcademicHubView: View {
                 isCustomCampus: isCustomCampus,
                 isCommunityEnabled: isCommunityEnabled,
                 isMedicalEnabled: isMedicalEnabled,
-                campusID: campusID)
+                campusID: campusID
+            )
         else { return }
         selectedTab = .cultivation
         navigationPath.removeAll()

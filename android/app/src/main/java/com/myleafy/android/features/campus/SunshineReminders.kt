@@ -75,8 +75,7 @@ class SunshineReminderReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try { val container = (context.applicationContext as MyLeafyApplication).container; container.restoreIdentity()
                 if (intent.hasExtra("scope")) container.sunshineReminderScheduler.deliver(intent) else container.sunshineReminderScheduler.reconcile()
-            } catch (failure: Exception) { android.util.Log.e("SunshineReminder", "Reminder delivery/recovery failed", failure) }
-            finally { result.finish() }
+            } catch (failure: Exception) { android.util.Log.e("SunshineReminder", "Reminder delivery/recovery failed", failure) } finally { result.finish() }
         }
     }
 }

@@ -37,10 +37,69 @@ describe("admin resource capabilities", () => {
     }
   });
 
+  it("labels the admin column and marks missing actors as system", () => {
+    for (const resource of ["sessions", "audit-logs"]) {
+      const column = resourceConfigs[resource].columns.find((candidate) => candidate.source === "admin.display_name");
+      expect(column?.label, resource).toBe("管理员");
+      expect(column?.fallback, resource).toBe("系统");
+    }
+  });
+
   it("does not expose moderation actions for terminal deleted records", () => {
     for (const resource of ["posts", "polls", "comments"]) {
       const visible = resourceConfigs[resource].actions?.filter((action) => !action.visible || action.visible({ status: "deleted" })) ?? [];
       expect(visible).toHaveLength(0);
+    }
+  });
+
+  it("never offers content takedown actions for user reports", () => {
+    const labelsFor = (target_type: string, status: string) =>
+      (resourceConfigs.reports.actions ?? [])
+        .filter((action) => !action.visible || action.visible({ target_type, status }))
+        .map((action) => action.label);
+
+    expect(labelsFor("user", "open")).toEqual([
+      "标记已看",
+      "禁言并关闭",
+      "关闭举报（不禁言）",
+      "驳回",
+    ]);
+    expect(labelsFor("user", "reviewed")).toEqual([
+      "禁言并关闭",
+      "关闭举报（不禁言）",
+      "驳回",
+    ]);
+    expect(labelsFor("user", "resolved")).toEqual([]);
+    expect(labelsFor("post", "open")).toEqual([
+      "标记已看",
+      "下架并关闭",
+      "下架并禁言",
+      "驳回",
+    ]);
+    expect(labelsFor("comment", "reviewed")).toEqual([
+      "下架并关闭",
+      "下架并禁言",
+      "驳回",
+    ]);
+    expect(labelsFor("user", "open").some((label) => label.includes("下架"))).toBe(false);
+  });
+
+  it("sends mute-only resolution for user reports", () => {
+    const actions = resourceConfigs.reports.actions ?? [];
+    expect(actions.find((action) => action.label === "禁言并关闭")?.fixed).toEqual({
+      status: "resolved",
+      hideContent: false,
+      muteUser: true,
+    });
+    expect(actions.find((action) => action.label === "关闭举报（不禁言）")?.fixed).toEqual({
+      status: "resolved",
+      hideContent: false,
+    });
+    for (const label of ["下架并关闭", "下架并禁言"]) {
+      expect(actions.find((action) => action.label === label)?.visible?.({
+        target_type: "user",
+        status: "open",
+      })).toBe(false);
     }
   });
 

@@ -26,7 +26,7 @@ final class PerformanceProjectionTests: XCTestCase {
     }
 
     func testMasonryProjectionPreservesAlternatingOrder() {
-        let columns = CommunityMasonryColumns(items: Array(0..<7))
+        let columns = CommunityMasonryColumns(items: Array(0 ..< 7))
 
         XCTAssertEqual(columns.left, [0, 2, 4, 6])
         XCTAssertEqual(columns.right, [1, 3, 5])

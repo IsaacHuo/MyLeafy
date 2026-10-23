@@ -112,21 +112,21 @@ fun ComprehensiveQualityScreen(
     val savedComponents = uiState.components.associateBy { it.kind }
     val dirty = !uiState.loading && (
         collegeName != (loadedRecord?.collegeName ?: collegeName) ||
-        academic != loadedRecord?.academicStandardScore?.toPlainString().orEmpty() ||
-        officialQuality != loadedRecord?.officialQualityScore?.toPlainString().orEmpty() ||
-        officialComposite != loadedRecord?.officialCompositeScore?.toPlainString().orEmpty() ||
-        note != loadedRecord?.note.orEmpty() ||
-        drafts.any { (kind, draft) ->
-            val saved = savedComponents[kind.name]
-            draft != ComponentDraft(
-                raw = saved?.rawScore?.toPlainString().orEmpty(),
-                peer = saved?.peerMaxScore?.toPlainString().orEmpty(),
-                official = saved?.officialStandardScore?.toPlainString().orEmpty(),
-                materialReady = saved?.materialReady ?: false,
-                note = saved?.note.orEmpty(),
-            )
-        }
-    )
+            academic != loadedRecord?.academicStandardScore?.toPlainString().orEmpty() ||
+            officialQuality != loadedRecord?.officialQualityScore?.toPlainString().orEmpty() ||
+            officialComposite != loadedRecord?.officialCompositeScore?.toPlainString().orEmpty() ||
+            note != loadedRecord?.note.orEmpty() ||
+            drafts.any { (kind, draft) ->
+                val saved = savedComponents[kind.name]
+                draft != ComponentDraft(
+                    raw = saved?.rawScore?.toPlainString().orEmpty(),
+                    peer = saved?.peerMaxScore?.toPlainString().orEmpty(),
+                    official = saved?.officialStandardScore?.toPlainString().orEmpty(),
+                    materialReady = saved?.materialReady ?: false,
+                    note = saved?.note.orEmpty(),
+                )
+            }
+        )
     val requestExit = com.myleafy.android.ui.components.rememberEditorExit(dirty, false, onBack)
     LaunchedEffect(collegeName, loadedRecord?.scopeKey, loadedRecord?.updatedAt, uiState.loading) {
         if (uiState.loading) return@LaunchedEffect
@@ -217,9 +217,7 @@ fun ComprehensiveQualityScreen(
         actions = {
             if (available) {
                 LeafyTextButton(enabled = result.isComplete, onClick = { owner.launch {
-                    try { previewImage = campusTextImage(context, "comprehensive", "$collegeName · 综素测算", listOf("2026届 · ${rule.sourceTitle}", "学业标准分 $academic", "综合成绩 ${result.compositeScore?.toPlainString()}", "综素贡献 ${result.qualityContribution?.toPlainString()}") + result.componentResults.map { "${it.kind.title}：标准分 ${it.standardScore?.toPlainString() ?: "未确认"} · 贡献 ${it.contribution?.toPlainString() ?: "未确认"}" } + "结果仅为本地测算，官方公示结果优先") }
-                    catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                    catch (failure: Exception) { viewModel.reportError(failure.message ?: "图片导出失败") }
+                    try { previewImage = campusTextImage(context, "comprehensive", "$collegeName · 综素测算", listOf("2026届 · ${rule.sourceTitle}", "学业标准分 $academic", "综合成绩 ${result.compositeScore?.toPlainString()}", "综素贡献 ${result.qualityContribution?.toPlainString()}") + result.componentResults.map { "${it.kind.title}：标准分 ${it.standardScore?.toPlainString() ?: "未确认"} · 贡献 ${it.contribution?.toPlainString() ?: "未确认"}" } + "结果仅为本地测算，官方公示结果优先") } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { viewModel.reportError(failure.message ?: "图片导出失败") }
                 } }) { Text("图片") }
                 LeafyActionIconButton(onClick = exportCsv) {
                     Icon(Icons.Outlined.Share, contentDescription = "导出综素测算 CSV")

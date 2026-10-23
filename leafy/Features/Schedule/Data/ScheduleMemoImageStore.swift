@@ -1,5 +1,4 @@
 import Foundation
-import os
 import UIKit
 
 enum ScheduleMemoImageStoreError: LocalizedError {
@@ -38,14 +37,6 @@ enum ScheduleMemoImageStore {
         return filename
     }
 
-    static func image(named filename: String) -> UIImage? {
-        let signpostState = LeafyPerformanceSignposter.imageProcessing.beginInterval("schedule-memo-image-load")
-        defer {
-            LeafyPerformanceSignposter.imageProcessing.endInterval("schedule-memo-image-load", signpostState)
-        }
-        return UIImage(contentsOfFile: fileURL(named: filename).path(percentEncoded: false))
-    }
-
     static func data(named filename: String) -> Data? {
         try? Data(contentsOf: fileURL(named: filename), options: .mappedIfSafe)
     }
@@ -60,12 +51,6 @@ enum ScheduleMemoImageStore {
         for filename in filenames {
             try deleteFile(named: filename, in: directory)
         }
-    }
-
-    static func deleteAllFiles(in directory: URL? = nil) throws {
-        let url = directory ?? directoryURL()
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
-        try FileManager.default.removeItem(at: url)
     }
 
     static func directoryURL(identity: CampusIdentity? = CampusIdentityStore.currentIdentity()) -> URL {
@@ -111,7 +96,7 @@ enum ScheduleMemoImageStore {
     private static func jpegData(for image: UIImage, maximumBytes: Int) -> Data? {
         var candidate = image
         var smallest: Data?
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             for quality in stride(from: CGFloat(0.84), through: 0.32, by: -0.08) {
                 guard let data = candidate.jpegData(compressionQuality: quality) else { continue }
                 if smallest == nil || data.count < (smallest?.count ?? .max) {

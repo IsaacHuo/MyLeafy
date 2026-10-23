@@ -62,16 +62,16 @@ class InitialAcademicSync(
                     val done = dao.checkpoints(identity.scopeKey, semester).map { it.kind }.toMutableSet()
                     // Preserve existing installations: a non-empty local copy already completed initialization.
                     if ("bootstrap" !in done) {
-                    for ((kind, present) in listOf(
-                        "timetable" to timetable.coursesForSemester(semester).first().isNotEmpty(),
-                        "grades" to academic.grades().first().isNotEmpty(),
-                        "exams" to academic.exams().first().any { it.date >= SemesterConfig.current.semesterStartDate.toString() },
-                    )) if (present && kind !in done) {
-                        ensureIdentity(identity.scopeKey)
-                        dao.checkpoint(AcademicSyncCheckpoint(identity.scopeKey, semester, kind, System.currentTimeMillis()))
-                        done += kind
-                    }
-                    dao.checkpoint(AcademicSyncCheckpoint(identity.scopeKey, semester, "bootstrap", System.currentTimeMillis()))
+                        for ((kind, present) in listOf(
+                            "timetable" to timetable.coursesForSemester(semester).first().isNotEmpty(),
+                            "grades" to academic.grades().first().isNotEmpty(),
+                            "exams" to academic.exams().first().any { it.date >= SemesterConfig.current.semesterStartDate.toString() },
+                        )) if (present && kind !in done) {
+                            ensureIdentity(identity.scopeKey)
+                            dao.checkpoint(AcademicSyncCheckpoint(identity.scopeKey, semester, kind, System.currentTimeMillis()))
+                            done += kind
+                        }
+                        dao.checkpoint(AcademicSyncCheckpoint(identity.scopeKey, semester, "bootstrap", System.currentTimeMillis()))
                     }
                     val succeeded = mutableListOf<String>()
                     val failed = linkedMapOf<String, String>()
@@ -112,8 +112,7 @@ class InitialAcademicSync(
                             dao.checkpoint(AcademicSyncCheckpoint(identity.scopeKey, semester, kind, System.currentTimeMillis()))
                             succeeded += label
                             completeRunningSteps()
-                        } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (error: Exception) {
+                        } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) {
                             val message = error.message ?: "同步失败，请重试"
                             failed[label] = message
                             val index = steps.indexOfLast { it.key == "initial:$kind" }
@@ -142,8 +141,7 @@ class InitialAcademicSync(
                         steps = steps.toList(),
                     )
                     if (failed.isEmpty()) { delay(4_000); mutable.value = InitialSyncState() }
-                } catch (cancelled: CancellationException) { throw cancelled }
-                catch (error: Exception) {
+                } catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) {
                     mutable.value = InitialSyncState(failures = mapOf("同步" to (error.message ?: "无法读取同步状态")))
                 }
             }

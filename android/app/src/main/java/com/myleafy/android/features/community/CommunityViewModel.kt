@@ -74,8 +74,7 @@ class CommunityViewModel(
                             retries = 0
                         }
                         break
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (failure: Exception) {
+                    } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) {
                         Logger.getLogger("CommunityViewModel").warning("$kind subscription interrupted: ${failure.javaClass.simpleName}")
                         if (failure.isPermanentTlsFailure()) {
                             // 证书被替换不会因为重连而恢复；停止无意义的后台重连并给出可操作提示。
@@ -206,8 +205,7 @@ class CommunityViewModel(
                         CachedFeed(posts, page.next_cursor, snapshot.selection, lastLoadedAt),
                     )
                 }
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) {
                 if (generation == requestGeneration) {
                     _uiState.value = _uiState.value.copy(
                         loadingMore = false,

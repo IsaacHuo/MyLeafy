@@ -130,6 +130,19 @@ async function setup(page: Page, role = "super_admin") {
     }
     const { action, params } = route.request().postDataJSON();
     calls.push({ action, params });
+    const adminAccounts: Record<string, any> = {
+      "admin-1": {
+        id: "admin-1",
+        username: "ops",
+        display_name: "运维管理员",
+        role: "operator",
+      },
+    };
+    // Mirrors backend adminHydrate: admin_id -> admin_accounts, missing ids stay null.
+    const withAdmin = (row: any) => ({
+      ...row,
+      admin: row.admin_id ? (adminAccounts[row.admin_id] ?? null) : null,
+    });
     const post = {
       id: "post-1",
       title: "测试图片帖子",
@@ -216,14 +229,37 @@ async function setup(page: Page, role = "super_admin") {
     else if (action === "listAdminSessions")
       data = {
         items: [
-          {
+          withAdmin({
             id: "session-1",
-            admin: { display_name: "管理员" },
+            admin_id: "admin-1",
             expires_at: "2099-01-01T00:00:00Z",
             is_current: false,
-          },
+          }),
         ],
         total: 1,
+      };
+    else if (action === "listAuditLogs")
+      data = {
+        items: [
+          withAdmin({
+            id: 2,
+            admin_id: "admin-1",
+            action: "disableAdmin",
+            target_type: "admin",
+            outcome: "success",
+            duration_ms: 12,
+            created_at: "2026-10-13T08:00:00Z",
+          }),
+          withAdmin({
+            id: 1,
+            admin_id: null,
+            action: "migrationReplay",
+            target_type: "system",
+            outcome: "success",
+            created_at: "2026-10-13T07:00:00Z",
+          }),
+        ],
+        total: 2,
       };
     else if (action === "workQueue")
       data = {
@@ -396,6 +432,25 @@ test("Studio data browsing, scopes, saved views, details and dangerous confirmat
     await page.evaluate(() => localStorage.getItem("leafy-admin-session")),
   ).toBeNull();
   expect(errors).toEqual([]);
+});
+test("sessions and audit logs show the owning admin name and a system placeholder", async ({
+  page,
+}) => {
+  await setup(page);
+  await navigate(page, "会话");
+  await expect(
+    page.getByRole("link", { name: "运维管理员", exact: true }),
+  ).toBeVisible();
+  await page.locator("tbody").getByRole("button", { name: "撤销", exact: true }).click();
+  await expect(page.getByText(/管理会话：运维管理员/)).toBeVisible();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await navigate(page, "审计日志");
+  await expect(
+    page.getByRole("link", { name: "运维管理员", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "系统", exact: true }),
+  ).toBeVisible();
 });
 test("viewer retains read access and cannot manage or see system diagnostics", async ({
   page,

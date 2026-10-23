@@ -5,7 +5,7 @@ nonisolated enum HTMLParserError: LocalizedError {
     case timetableTableNotFound
     case tableNotFound(String)
     case tableRowsUnparseable(String)
-    
+
     var errorDescription: String? {
         switch self {
         case .timetableTableNotFound:
@@ -144,7 +144,12 @@ nonisolated private struct GraduateScheduleRow: Decodable {
         var title: String?
 
         for key in container.allKeys {
-            let value = (try? container.decode(String.self, forKey: key)) ?? ""
+            let value: String
+            if key.stringValue == "mc" || key.stringValue.hasPrefix("z") {
+                value = try container.decodeIfPresent(String.self, forKey: key) ?? ""
+            } else {
+                value = (try? container.decode(String.self, forKey: key)) ?? ""
+            }
             if key.stringValue == "mc" {
                 title = value
             }
@@ -157,7 +162,6 @@ nonisolated private struct GraduateScheduleRow: Decodable {
 }
 
 class HTMLParser {
-    
     nonisolated private static let durationSlots: [[Int]] = [
         [1, 2], [3, 4], [5], [6, 7], [8, 9], [10, 11], [12]
     ]
@@ -233,9 +237,9 @@ class HTMLParser {
 
             if token.contains("-") {
                 let bounds = token.components(separatedBy: "-")
-                if bounds.count == 2, let start = Int(bounds[0]), let end = Int(bounds[1]), start <= end {
-                    weeks.formUnion(start...end)
-                }
+                guard bounds.count == 2, let start = Int(bounds[0]), let end = Int(bounds[1]),
+                      start >= 1, end <= totalWeeks, start <= end else { return [] }
+                weeks.formUnion(start ... end)
             } else if let week = Int(token) {
                 weeks.insert(week)
             }
@@ -266,12 +270,9 @@ class HTMLParser {
 
             if token.contains("-") {
                 let bounds = token.components(separatedBy: "-")
-                if bounds.count == 2,
-                   let start = Int(bounds[0]),
-                   let end = Int(bounds[1]),
-                   start <= end {
-                    weeks.formUnion(start...end)
-                }
+                guard bounds.count == 2, let start = Int(bounds[0]), let end = Int(bounds[1]),
+                      start >= 1, end <= totalWeeks, start <= end else { return [] }
+                weeks.formUnion(start ... end)
             } else if let week = Int(token) {
                 weeks.insert(week)
             }
@@ -289,20 +290,21 @@ class HTMLParser {
         let range = NSRange(compact.startIndex..., in: compact)
         guard let match = regex.firstMatch(in: compact, range: range),
               let startRange = Range(match.range(at: 1), in: compact),
-              let start = Int(compact[startRange]) else {
+              let start = Int(compact[startRange]), (1 ... 24).contains(start) else {
             return []
         }
 
         if let endRange = Range(match.range(at: 2), in: compact),
            let end = Int(compact[endRange]),
-           start <= end {
-            return Array(start...end)
+           start <= end, end <= 24 {
+            return Array(start ... end)
         }
 
         return [start]
     }
 
-    nonisolated private static func parseDayAndDuration(from element: Element) throws -> (dayOfWeek: Int, duration: [Int])? {
+    nonisolated private static func parseDayAndDuration(from element: Element) throws
+        -> (dayOfWeek: Int, duration: [Int])? {
         let id = try element.attr("id").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !id.isEmpty else { return nil }
 
@@ -310,8 +312,8 @@ class HTMLParser {
         guard parts.count >= 3,
               parts[0] == "kbcontent",
               let dayOfWeek = Int(parts[1]),
-              let periodIndex = Int(parts[2]),
-              (1...totalDays).contains(dayOfWeek) else {
+              let periodIndex = Int(parts[2]), (1 ... 24).contains(periodIndex),
+              (1 ... totalDays).contains(dayOfWeek) else {
             return nil
         }
 
@@ -375,7 +377,10 @@ class HTMLParser {
         return (data, parseWeeks(weeksString: weeksString))
     }
 
-    nonisolated private static func parseStudentBlock(_ block: Element, duration: [Int]) throws -> [(CourseData, [Int])] {
+    nonisolated private static func parseStudentBlock(_ block: Element, duration: [Int]) throws -> [(
+        CourseData,
+        [Int]
+    )] {
         func extractTexts(from node: Node) -> [String] {
             var results: [String] = []
             for child in node.getChildNodes() {
@@ -430,7 +435,8 @@ class HTMLParser {
         )
     }
 
-    nonisolated private static func makeCourseRecord(from data: CourseData, dayOfWeek: Int, weeks: [Int]) -> ParsedCourseRecord {
+    nonisolated private static func makeCourseRecord(from data: CourseData, dayOfWeek: Int,
+                                                     weeks: [Int]) -> ParsedCourseRecord {
         ParsedCourseRecord(
             courseName: data.courseName,
             teacher: data.teacher.isEmpty ? "未知" : data.teacher,
@@ -443,7 +449,8 @@ class HTMLParser {
         )
     }
 
-    nonisolated private static func parseGraduateCourseDetails(_ raw: String, duration: [Int], dayOfWeek: Int) -> [ParsedCourseRecord] {
+    nonisolated private static func parseGraduateCourseDetails(_ raw: String, duration: [Int],
+                                                               dayOfWeek: Int) throws -> [ParsedCourseRecord] {
         let normalized = raw
             .replacingOccurrences(of: "<br/><br/>", with: "\n")
             .replacingOccurrences(of: "<br />", with: "\n")
@@ -466,7 +473,11 @@ class HTMLParser {
         for entry in entries {
             let compact = entry.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
             let range = NSRange(compact.startIndex..., in: compact)
-            for match in regex.matches(in: compact, range: range) {
+            let matches = regex.matches(in: compact, range: range)
+            guard !matches.isEmpty, matches.reduce(0, { $0 + $1.range.length }) == range.length else {
+                throw HTMLParserError.tableRowsUnparseable("研究生课表")
+            }
+            for match in matches {
                 guard match.numberOfRanges >= 5,
                       let nameRange = Range(match.range(at: 1), in: compact),
                       let weeksRange = Range(match.range(at: 2), in: compact),
@@ -477,7 +488,9 @@ class HTMLParser {
 
                 let name = String(compact[nameRange])
                 let weeks = parseGraduateWeeks(String(compact[weeksRange]))
-                guard !name.isEmpty, !weeks.isEmpty else { continue }
+                guard !name.isEmpty, !weeks.isEmpty, weeks.allSatisfy({ (1 ... totalWeeks).contains($0) }) else {
+                    throw HTMLParserError.tableRowsUnparseable("研究生课表")
+                }
 
                 let classroom = String(compact[classroomRange])
                 let building = classroom.hasPrefix("A") || classroom.hasPrefix("B") || classroom.hasPrefix("C")
@@ -514,15 +527,21 @@ class HTMLParser {
                 let values = value.matches(for: #"\d+"#).compactMap(Int.init)
                 return values.isEmpty ? nil : values
             } ?? []
-            guard !periods.isEmpty else { continue }
+            let nonemptyCells = row.columns
+                .filter { $0.key.hasPrefix("z") && !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            guard !periods.isEmpty, periods.allSatisfy({ (1 ... 24).contains($0) }) else {
+                if nonemptyCells.isEmpty { continue }
+                throw HTMLParserError.tableRowsUnparseable("研究生课表")
+            }
 
-            for (key, value) in row.columns where key.hasPrefix("z") && !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            for (key, value) in row.columns
+                where key.hasPrefix("z") && !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 let dayDigits = key.matches(for: #"\d+"#)
                 guard let day = dayDigits.first.flatMap(Int.init),
-                      (1...totalDays).contains(day) else {
+                      (1 ... totalDays).contains(day) else {
                     continue
                 }
-                records.append(contentsOf: parseGraduateCourseDetails(value, duration: periods, dayOfWeek: day))
+                records.append(contentsOf: try parseGraduateCourseDetails(value, duration: periods, dayOfWeek: day))
             }
         }
 
@@ -534,7 +553,7 @@ class HTMLParser {
         }
         return .records(records)
     }
-    
+
     // Compare classes for continuous time merge
     nonisolated private static func compareCourseData(prev: CourseData, curr: CourseData) -> Int {
         if prev.courseName == curr.courseName &&
@@ -542,7 +561,6 @@ class HTMLParser {
             prev.location == curr.location &&
             prev.room == curr.room &&
             prev.classInfo == curr.classInfo {
-            
             if let last = prev.duration.last, let first = curr.duration.first, last + 1 == first {
                 return 1 // Merge durations
             }
@@ -553,7 +571,8 @@ class HTMLParser {
         return 0
     }
 
-    nonisolated private static func buildCourseRecords(from weeklySchedule: [[[(CourseData, [Int])]]]) throws -> [ParsedCourseRecord] {
+    nonisolated private static func buildCourseRecords(from weeklySchedule: [[[(CourseData, [Int])]]]) throws
+        -> [ParsedCourseRecord] {
         var uniqueCourses: [CourseMergeKey: ParsedCourseRecord] = [:]
         for (weekIndex, weekData) in weeklySchedule.enumerated() {
             let weekNumber = weekIndex + 1
@@ -607,7 +626,8 @@ class HTMLParser {
             // 学校把 1–2 节和第 12 节都写作“12节”，必须结合行序确认节次。
             let periodLabel = duration.map(String.init).joined() + "节"
             guard cells.count == totalDays + 1,
-                  try cells[0].text().replacingOccurrences(of: "\\s+", with: "", options: .regularExpression) == periodLabel,
+                  try cells[0].text()
+                      .replacingOccurrences(of: "\\s+", with: "", options: .regularExpression) == periodLabel,
                   try cells.allSatisfy({ cell in
                       let colspan = try cell.attr("colspan")
                       let rowspan = try cell.attr("rowspan")
@@ -636,11 +656,11 @@ class HTMLParser {
                     throw HTMLParserError.tableRowsUnparseable("课表")
                 }
                 for (data, weeks) in parsedBlocks {
-                    guard !data.courseName.isEmpty, weeks.contains(where: { (1...totalWeeks).contains($0) }) else {
+                    guard !data.courseName.isEmpty, weeks.contains(where: { (1 ... totalWeeks).contains($0) }) else {
                         throw HTMLParserError.tableRowsUnparseable("课表")
                     }
 
-                    for week in weeks where (1...totalWeeks).contains(week) {
+                    for week in weeks where (1 ... totalWeeks).contains(week) {
                         var existingList = weeklySchedule[week - 1][dayIndex]
                         if let previous = existingList.last {
                             let comparison = compareCourseData(prev: previous.0, curr: data)
@@ -678,7 +698,7 @@ class HTMLParser {
             for (data, weeks) in parsedBlocks {
                 guard !data.courseName.isEmpty, !weeks.isEmpty else { continue }
 
-                for week in weeks where (1...totalWeeks).contains(week) {
+                for week in weeks where (1 ... totalWeeks).contains(week) {
                     var existingList = weeklySchedule[week - 1][placement.dayOfWeek - 1]
                     if let previous = existingList.last {
                         let comparison = compareCourseData(prev: previous.0, curr: data)
@@ -741,7 +761,7 @@ class HTMLParser {
     static func parseTimetable(html: String) throws -> [Course] {
         try parseTimetableRecords(html: html).map { $0.makeCourse() }
     }
-    
+
     /// Read portal columns by heading; course identity must survive persistence.
     static func parseGrades(html: String) throws -> [Grade] {
         let document = try SwiftSoup.parse(html)
@@ -760,16 +780,18 @@ class HTMLParser {
             var grades: [Grade] = []
             for row in grid.rows.dropFirst(headerIndex + 1) {
                 func value(_ index: Int?) -> String { AcademicHTMLTable.value(row, at: index) }
-                if row.allSatisfy({ $0.isEmpty }) || row.joined().contains("暂无数据") || row.joined().contains("无记录") { continue }
+                if row.allSatisfy({ $0.isEmpty }) || row.joined().contains("暂无数据") || row.joined()
+                    .contains("无记录") { continue }
                 guard !value(termColumn).isEmpty, !value(nameColumn).isEmpty,
                       AcademicHTMLTable.decimal(value(creditColumn)) != nil else {
                     throw HTMLParserError.tableRowsUnparseable("成绩")
                 }
                 let attribute = value(column("课程属性"))
-                let category = value(column("课程分类", "课程性质"))
+                let category = value(column("课程分类", "课程类别", "课程性质"))
                 grades.append(Grade(
                     term: value(termColumn), courseName: value(nameColumn), credit: value(creditColumn),
-                    score: value(scoreColumn), type: [attribute, category].filter { !$0.isEmpty }.joined(separator: " · "),
+                    score: value(scoreColumn),
+                    type: [attribute, category].filter { !$0.isEmpty }.joined(separator: " · "),
                     courseCode: value(codeColumn).isEmpty ? nil : value(codeColumn),
                     courseAttribute: attribute, courseCategory: category, examNature: value(column("考试性质"))
                 ))
@@ -827,7 +849,8 @@ class HTMLParser {
         "查询无结果"
     ]
 
-    nonisolated private static func rowsRepresentVerifiedEmpty<S: Sequence>(_ rows: S) throws -> Bool where S.Element == Element {
+    nonisolated private static func rowsRepresentVerifiedEmpty<S: Sequence>(_ rows: S) throws -> Bool
+        where S.Element == Element {
         let text = try rows
             .map { try normalizedTableCellText($0) }
             .joined(separator: " ")
@@ -851,8 +874,12 @@ class HTMLParser {
             var orderedTerms: [String] = []
             var currentTerm = ""
             for row in grid.rows.dropFirst(headerIndex + 1) {
-                func value(_ names: String...) -> String { AcademicHTMLTable.value(row, at: AcademicHTMLTable.column(names, in: header)) }
-                if row.allSatisfy({ $0.isEmpty }) || row.joined().contains("暂无数据") || row.joined().contains("无记录") { continue }
+                func value(_ names: String...) -> String { AcademicHTMLTable.value(
+                    row,
+                    at: AcademicHTMLTable.column(names, in: header)
+                ) }
+                if row.allSatisfy({ $0.isEmpty }) || row.joined().contains("暂无数据") || row.joined()
+                    .contains("无记录") { continue }
                 let period = value("开课学期", "学期").isEmpty ? currentTerm : value("开课学期", "学期")
                 guard !period.isEmpty, !value("课程名称").isEmpty,
                       let credit = AcademicHTMLTable.decimal(value("学分")) else {
@@ -991,6 +1018,7 @@ class HTMLParser {
             return nil
         }
 
+        guard UserTimetableSettings.civilDate(from: date) != nil else { return nil }
         return (date, timeRange.start, timeRange.end)
     }
 
@@ -1017,8 +1045,11 @@ class HTMLParser {
         let pattern = #"(\d{1,2})[:：](\d{2})\s*(?:~|～|—|–|-|至|到)\s*(\d{1,2})[:：](\d{2})"#
         guard let groups = firstRegexGroups(in: text, pattern: pattern),
               groups.count == 4,
-              let startHour = Int(groups[0]),
-              let endHour = Int(groups[2]) else {
+              let startHour = Int(groups[0]), let startMinute = Int(groups[1]),
+              let endHour = Int(groups[2]), let endMinute = Int(groups[3]),
+              (0 ..< 24).contains(startHour), (0 ..< 24).contains(endHour),
+              (0 ..< 60).contains(startMinute), (0 ..< 60).contains(endMinute),
+              endHour * 60 + endMinute > startHour * 60 + startMinute else {
             return nil
         }
 
@@ -1034,9 +1065,9 @@ class HTMLParser {
 
         let pageText = try normalizedDocumentText(document)
         if let groups = firstRegexGroups(
-            in: pageText,
-            pattern: #"学分积为\s*([0-9.]+).*?班级排名第\s*(\d+)\s*名.*?专业排名第\s*(\d+)\s*名.*?专业总人数\s*(\d+)\s*人"#
-        ),
+               in: pageText,
+               pattern: #"学分积为\s*([0-9.]+).*?班级排名第\s*(\d+)\s*名.*?专业排名第\s*(\d+)\s*名.*?专业总人数\s*(\d+)\s*人"#
+           ),
            groups.count == 4,
            let classRank = Int(groups[1]),
            let majorRank = Int(groups[2]),
@@ -1156,14 +1187,29 @@ class HTMLParser {
         // Keep inline labels and values together, excluding data tables and non-visible markup.
         try summaryDocument.select("table,script,style,template,[hidden],[aria-hidden=true]").remove()
         let summaryText = try summaryDocument.text()
-        let officialGPA = try officialSummaryValue(in: document, summaryText: summaryText,
-            labels: ["平均学分绩点(GPA)", "平均绩点(GPA)", "平均学分绩点", "平均绩点", "学分绩点", "GPA"], maximum: 5)
+        let officialGPA = try officialSummaryValue(in: document,
+                                                   summaryText: summaryText,
+                                                   labels: [
+                                                       "平均学分绩点(GPA)",
+                                                       "平均绩点(GPA)",
+                                                       "平均学分绩点",
+                                                       "平均绩点",
+                                                       "学分绩点",
+                                                       "GPA"
+                                                   ],
+                                                   maximum: 5)
         let officialWeightedAverage = try officialSummaryValue(in: document, summaryText: summaryText,
-            labels: ["加权平均分", "加权均分"], maximum: 100)
-        let officialCreditPoint = try officialSummaryValue(in: document, summaryText: summaryText, labels: ["学分积"], maximum: nil)
+                                                               labels: ["加权平均分", "加权均分"], maximum: 100)
+        let officialCreditPoint = try officialSummaryValue(
+            in: document,
+            summaryText: summaryText,
+            labels: ["学分积"],
+            maximum: nil
+        )
         for table in try candidateDataTables(in: document) {
             let grid = try AcademicHTMLTable(table)
-            guard let headerIndex = grid.rows.firstIndex(where: { $0.contains("所得学分") && $0.contains("必修学分") }) else { continue }
+            guard let headerIndex = grid.rows.firstIndex(where: { $0.contains("所得学分") && $0.contains("必修学分") })
+            else { continue }
             let top = grid.rows[headerIndex]
             let totalColumn = AcademicHTMLTable.column(["所得学分"], in: top)!
             guard let dataIndex = grid.rows.indices.dropFirst(headerIndex + 1).first(where: {
@@ -1178,7 +1224,7 @@ class HTMLParser {
             for index in top.indices {
                 let group = AcademicHTMLTable.heading(top[index])
                 let leaf = AcademicHTMLTable.heading(AcademicHTMLTable.value(bottom, at: index))
-                let value = cells[index].isEmpty ? 0 : AcademicHTMLTable.decimal(cells[index])
+                let value = AcademicHTMLTable.decimal(cells[index])
                 guard group != "序号" else { continue }
                 guard let value else { throw HTMLParserError.tableRowsUnparseable("所得学分详情") }
                 let label = group == leaf ? group : group + "/" + leaf
@@ -1190,38 +1236,61 @@ class HTMLParser {
                     if leaf == "外专业" { crossMajor = value }
                 }
                 if group.contains("公共选修") || group.contains("通识选修") {
-                    if leaf == "总计" || leaf == "合计" || leaf == group { publicTotal = value; rawFields["公共选修总计"] = cells[index] }
+                    if leaf == "总计" || leaf == "合计" || leaf ==
+                        group { publicTotal = value; rawFields["公共选修总计"] = cells[index] }
                     else { buckets.append(GradeCreditBucket(name: bottom[index], credits: value)) }
                 }
             }
             rawFields["所得学分"] = cells[totalColumn]
             appendOfficialGradeSummaryFields(to: &rawFields, officialGPA: officialGPA,
-                officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint)
-            return GradeCreditSummary(totalCredits: AcademicHTMLTable.decimal(cells[totalColumn])!, requiredCredits: required,
-                professionalElectiveCredits: professional, professionalMajorElectiveCredits: major,
-                professionalCrossMajorElectiveCredits: crossMajor, publicElectiveCredits: publicTotal,
-                officialGPA: officialGPA, officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint,
-                publicElectiveBuckets: buckets, rawFields: rawFields, syncedAt: Date())
+                                             officialWeightedAverage: officialWeightedAverage,
+                                             officialCreditPoint: officialCreditPoint)
+            return GradeCreditSummary(
+                totalCredits: AcademicHTMLTable.decimal(cells[totalColumn])!,
+                requiredCredits: required,
+                professionalElectiveCredits: professional,
+                professionalMajorElectiveCredits: major,
+                professionalCrossMajorElectiveCredits: crossMajor,
+                publicElectiveCredits: publicTotal,
+                officialGPA: officialGPA,
+                officialWeightedAverage: officialWeightedAverage,
+                officialCreditPoint: officialCreditPoint,
+                publicElectiveBuckets: buckets,
+                rawFields: rawFields,
+                syncedAt: Date()
+            )
         }
         guard officialGPA != nil || officialWeightedAverage != nil || officialCreditPoint != nil else {
             throw HTMLParserError.tableNotFound("所得学分详情")
         }
         var rawFields: [String: String] = [:]
         appendOfficialGradeSummaryFields(to: &rawFields, officialGPA: officialGPA,
-            officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint)
+                                         officialWeightedAverage: officialWeightedAverage,
+                                         officialCreditPoint: officialCreditPoint)
         return GradeCreditSummary(totalCredits: 0, requiredCredits: 0, professionalElectiveCredits: 0,
-            professionalMajorElectiveCredits: 0, professionalCrossMajorElectiveCredits: 0, publicElectiveCredits: 0,
-            officialGPA: officialGPA, officialWeightedAverage: officialWeightedAverage, officialCreditPoint: officialCreditPoint,
-            publicElectiveBuckets: [], rawFields: rawFields, syncedAt: Date())
+                                  professionalMajorElectiveCredits: 0, professionalCrossMajorElectiveCredits: 0,
+                                  publicElectiveCredits: 0,
+                                  officialGPA: officialGPA, officialWeightedAverage: officialWeightedAverage,
+                                  officialCreditPoint: officialCreditPoint,
+                                  publicElectiveBuckets: [], rawFields: rawFields, syncedAt: Date())
     }
 
     private static func normalizedOfficialSummaryLabel(_ text: String) -> String {
         text.replacingOccurrences(of: "（", with: "(")
             .replacingOccurrences(of: "）", with: ")")
-            .replacingOccurrences(of: #"\s*\(\s*GPA\s*\)"#, with: "(GPA)", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(
+                of: #"\s*\(\s*GPA\s*\)"#,
+                with: "(GPA)",
+                options: [.regularExpression, .caseInsensitive]
+            )
     }
 
-    private static func officialSummaryValue(in document: Document, summaryText: String, labels: [String], maximum: Double?) throws -> Double? {
+    private static func officialSummaryValue(
+        in document: Document,
+        summaryText: String,
+        labels: [String],
+        maximum: Double?
+    ) throws -> Double? {
         // Only exact table label/value pairs or explicit prose summaries, never ranking-table numbers.
         for row in try document.select("tr").array() {
             let cells = row.children().array()
@@ -1234,7 +1303,8 @@ class HTMLParser {
         let text = normalizedOfficialSummaryLabel(summaryText)
         for label in labels {
             let pattern = NSRegularExpression.escapedPattern(for: label) + #"\s*(?:为|是|:|：)\s*([0-9]+(?:\.[0-9]+)?)"#
-            if let groups = firstRegexGroups(in: text, pattern: pattern, options: .caseInsensitive), let first = groups.first,
+            if let groups = firstRegexGroups(in: text, pattern: pattern, options: .caseInsensitive),
+               let first = groups.first,
                let value = Double(first), maximum.map({ value <= $0 }) ?? true { return value }
         }
         return nil
@@ -1255,34 +1325,6 @@ class HTMLParser {
         if let officialCreditPoint {
             rawFields["官方学分积"] = String(format: "%.4f", officialCreditPoint)
         }
-    }
-
-    private static func parseOfficialCreditPoint(in text: String) -> Double? {
-        parseOfficialDecimal(in: text, labels: ["学分积"], maxValue: nil)
-    }
-
-    private static func parseOfficialDecimal(in text: String, labels: [String], maxValue: Double?) -> Double? {
-        for label in labels {
-            let escapedLabel = NSRegularExpression.escapedPattern(for: label)
-            let patterns = [
-                "\(escapedLabel)\\s*(?:为|是|:|：)\\s*([0-9]+(?:\\.[0-9]+)?)"
-            ]
-
-            for pattern in patterns {
-                guard let groups = firstRegexGroups(in: text, pattern: pattern),
-                      let valueText = groups.first,
-                      let value = Double(valueText),
-                      value >= 0 else {
-                    continue
-                }
-                if let maxValue, value > maxValue {
-                    continue
-                }
-                return value
-            }
-        }
-
-        return nil
     }
 
     static func parseGraduationRequirements(html: String) throws -> [GraduationCreditRequirement] {
@@ -1354,7 +1396,7 @@ class HTMLParser {
             return nil
         }
 
-        return (1..<match.numberOfRanges).compactMap { index in
+        return (1 ..< match.numberOfRanges).compactMap { index in
             guard let matchRange = Range(match.range(at: index), in: text) else {
                 return nil
             }
@@ -1416,12 +1458,13 @@ class HTMLParser {
                 currentBody = []
                 currentLinks = []
             } else if currentTitle != nil {
-                let paragraphLinks = try paragraph.select("a[href]").array().compactMap { anchor -> TrainingProgramLink? in
-                    let href = try anchor.attr("href").trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !href.isEmpty, href != "#" else { return nil }
-                    let title = try normalizeProgramText(anchor.text())
-                    return TrainingProgramLink(title: title, href: href)
-                }
+                let paragraphLinks = try paragraph.select("a[href]").array()
+                    .compactMap { anchor -> TrainingProgramLink? in
+                        let href = try anchor.attr("href").trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !href.isEmpty, href != "#" else { return nil }
+                        let title = try normalizeProgramText(anchor.text())
+                        return TrainingProgramLink(title: title, href: href)
+                    }
 
                 for link in paragraphLinks where !currentLinks.contains(where: { $0.id == link.id }) {
                     currentLinks.append(link)
@@ -1440,7 +1483,8 @@ class HTMLParser {
         return sections
     }
 
-    private static func parseTrainingProgramCreditRequirements(from document: Document) throws -> [GraduationCreditRequirement] {
+    private static func parseTrainingProgramCreditRequirements(from document: Document) throws
+        -> [GraduationCreditRequirement] {
         var requirements: [GraduationCreditRequirement] = []
         var seenLabels = Set<String>()
 
@@ -1477,7 +1521,8 @@ class HTMLParser {
 
                     if isTrainingCreditLabel(cell), !cell.contains("毕业生应取得总学分"),
                        let credit = creditValue(after: index, in: cells) {
-                        let kind: GraduationCreditKind = cell.contains("本专业选修") ? .professionalElective : .classify(cell)
+                        let kind: GraduationCreditKind = cell
+                            .contains("本专业选修") ? .professionalElective : .classify(cell)
                         appendRequirement(label: cell, kind: kind, credit: credit)
                     }
                 }
@@ -1577,14 +1622,12 @@ class HTMLParser {
 
     private static func candidateDataTables(in document: Document) throws -> [Element] {
         var tables: [Element] = []
+        var seen = Set<ObjectIdentifier>()
         let selectors = ["#dataList", "table.Nsb_r_list", "table"]
 
         for selector in selectors {
             for table in try document.select(selector).array() {
-                let html = (try? table.outerHtml()) ?? UUID().uuidString
-                if !tables.contains(where: { ((try? $0.outerHtml()) ?? "") == html }) {
-                    tables.append(table)
-                }
+                if seen.insert(ObjectIdentifier(table)).inserted { tables.append(table) }
             }
         }
 
@@ -1638,24 +1681,8 @@ class HTMLParser {
         return result
     }
 
-    private static func firstValue(in rawFields: [String: String], matching names: [String]) -> String? {
-        for name in names {
-            let normalizedName = normalizedHeader(name)
-            if let exact = rawFields.first(where: { normalizedHeader($0.key) == normalizedName })?.value,
-               !exact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return exact
-            }
-
-            if let fuzzy = rawFields.first(where: { normalizedHeader($0.key).contains(normalizedName) || normalizedName.contains(normalizedHeader($0.key)) })?.value,
-               !fuzzy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return fuzzy
-            }
-        }
-
-        return nil
-    }
-
-    private static func valueAtHeaderIndex(cells: [String], header: [Int: String], matching names: [String]) -> String? {
+    private static func valueAtHeaderIndex(cells: [String], header: [Int: String],
+                                           matching names: [String]) -> String? {
         for (index, title) in header {
             let normalizedTitle = normalizedHeader(title)
             if names.contains(where: { normalizedTitle.contains(normalizedHeader($0)) }),
@@ -1696,7 +1723,7 @@ class HTMLParser {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let direct = Double(normalized) {
-            return direct
+            return direct.isFinite && direct >= 0 ? direct : nil
         }
 
         guard let regex = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?"#) else { return nil }
@@ -1709,47 +1736,9 @@ class HTMLParser {
         return Double(normalized[matchRange])
     }
 
-    private static func inferRankingRange(from header: [Int: String], rawFields: [String: String]) -> String {
-        let joined = (Array(header.values) + Array(rawFields.values)).joined(separator: " ")
-        if joined.contains("专业") { return "专业排名" }
-        if joined.contains("班") { return "班级排名" }
-        if joined.contains("年级") { return "年级排名" }
-        if joined.contains("学院") { return "学院排名" }
-        return "官方排名"
-    }
-
-    private static func isAggregateRequirementRow(courseName: String, cells: [String]) -> Bool {
-        let joined = cells.joined(separator: " ")
-        let compactCourse = courseName.replacingOccurrences(of: " ", with: "")
-
-        if compactCourse.isEmpty {
-            return true
-        }
-
-        return compactCourse == "合计"
-            || compactCourse == "小计"
-            || compactCourse == "总计"
-            || joined.contains("合计")
-            || joined.contains("小计")
-            || joined.contains("应修")
-            || joined.contains("要求")
-    }
-
-    nonisolated static func parseEmptyClassrooms(html: String, start: Int? = nil, end: Int? = nil) throws -> [EmptyClassroom] {
+    nonisolated static func parseEmptyClassrooms(html: String, start: Int? = nil,
+                                                 end: Int? = nil) throws -> [EmptyClassroom] {
         try parseClassroomAvailability(html: html).availableRooms(start: start, end: end)
-    }
-
-    private static func extractPlanExamText(from rowHTML: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: #"<!--.*?<td>(.*?)</td>.*?-->"#, options: [.dotMatchesLineSeparators]) else {
-            return ""
-        }
-        let range = NSRange(rowHTML.startIndex..., in: rowHTML)
-        guard let match = regex.firstMatch(in: rowHTML, options: [], range: range),
-              match.numberOfRanges > 1,
-              let textRange = Range(match.range(at: 1), in: rowHTML) else {
-            return ""
-        }
-        return String(rowHTML[textRange]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     nonisolated static func parseClassroomRow(_ text: String) -> (weight: Int, room: EmptyClassroom)? {
@@ -1791,7 +1780,10 @@ class HTMLParser {
             .replacingOccurrences(of: "（", with: "(")
             .replacingOccurrences(of: "）", with: ")")
         guard let regex = try? NSRegularExpression(pattern: #"^([^\(\d]+?)(\d+[A-Za-z]?)(?:\((\d+)\s*/\s*(\d+)\))?$"#),
-              let match = regex.firstMatch(in: normalizedText, range: NSRange(normalizedText.startIndex..., in: normalizedText)),
+              let match = regex.firstMatch(
+                  in: normalizedText,
+                  range: NSRange(normalizedText.startIndex..., in: normalizedText)
+              ),
               let buildingRange = Range(match.range(at: 1), in: normalizedText),
               let roomRange = Range(match.range(at: 2), in: normalizedText) else {
             return nil

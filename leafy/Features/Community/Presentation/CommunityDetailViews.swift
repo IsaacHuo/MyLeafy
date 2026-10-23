@@ -209,7 +209,7 @@ struct RealCommunityPostDetailSheet: View {
                 CommunityTermsAgreementSheet {
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
-                    .presentationDetents([.large])
+                .presentationDetents([.large])
             }
             .sheet(item: $attachmentPreview) { preview in
                 CommunityAttachmentPreviewSheet(url: preview.url)
@@ -327,7 +327,7 @@ struct RealCommunityPostDetailSheet: View {
 
     private var commentField: some View {
         TextField("写评论…", text: $commentBody, axis: .vertical)
-            .lineLimit(1...3)
+            .lineLimit(1 ... 3)
             .focused($isCommentFieldFocused)
             .onChange(of: commentBody) { previousBody, newBody in
                 guard let replyTarget else { return }
@@ -475,7 +475,7 @@ struct RealCommunityPostDetailSheet: View {
             )
             let (temporaryURL, response) = try await URLSession.shared.download(from: download.url)
             guard let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode) else {
+                  (200 ..< 300).contains(httpResponse.statusCode) else {
                 throw CommunityComposerAttachmentError.unreadableFile
             }
 
@@ -978,7 +978,6 @@ struct ZoomableRemotePreviewImage: View {
                 }
             }
     }
-
 }
 
 struct ZoomedRemoteImageDragModifier: ViewModifier {
@@ -1249,7 +1248,8 @@ struct CommunityLikeButton: View {
                     .lineLimit(1)
             }
             .font(.caption.weight(.semibold))
-            .foregroundStyle(isDisabled ? AppTheme.tertiaryText : (isLiked ? AppTheme.accentEmphasis : AppTheme.secondaryText))
+            .foregroundStyle(isDisabled ? AppTheme
+                .tertiaryText : (isLiked ? AppTheme.accentEmphasis : AppTheme.secondaryText))
         }
         .buttonStyle(.plain)
         .disabled(isDisabled || action == nil)
@@ -1315,7 +1315,10 @@ struct CommunityInlineError: View {
             .foregroundStyle(AppTheme.danger)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+            )
     }
 }
 

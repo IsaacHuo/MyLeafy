@@ -25,7 +25,6 @@ class LiveProfileRepository(
     private val onProfileUpdated: (ProfileDto) -> Unit = {},
 ) : ProfileRepository {
 
-
     override suspend fun fetchProfile(): ProfileDto? {
         val identity = sessionState.identity ?: return null
         val resolved = serviceProvider() ?: return null

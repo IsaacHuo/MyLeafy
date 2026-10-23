@@ -175,6 +175,36 @@ it("feedback type, audit action, session validity and rating filters change resu
     0,
   );
 });
+it("sessions and audit lists hydrate the owning admin and expose no password hash", async () => {
+  const { db, env, context } = fixture();
+  db.sqlite
+    .prepare(
+      "INSERT INTO admin_audit_logs(admin_id,action,target_type) VALUES(?,'updateAdmin','admin')",
+    )
+    .run(context.id);
+  db.sqlite
+    .prepare(
+      "INSERT INTO admin_audit_logs(admin_id,action,target_type) VALUES(NULL,'migrationReplay','system')",
+    )
+    .run();
+  const sessions = await adminList(env, context, "listAdminSessions", {
+    status: "all",
+  });
+  expect(sessions.items[0].admin).toMatchObject({
+    id: context.id,
+    username: "test",
+    display_name: "test",
+    role: "super_admin",
+  });
+  expect(sessions.items[0].admin).not.toHaveProperty("password_hash");
+  const logs = await adminList(env, context, "listAuditLogs", {});
+  const owned = logs.items.find((row) => row.action === "updateAdmin")!;
+  const system = logs.items.find((row) => row.action === "migrationReplay")!;
+  expect(owned.admin).toMatchObject({ id: context.id, display_name: "test" });
+  expect(owned.admin).not.toHaveProperty("password_hash");
+  expect(system.admin_id).toBeNull();
+  expect(system.admin).toBeNull();
+});
 it("diagnostics reject lower roles and show actual queues without fabricating logs", async () => {
   const { db, env, context } = fixture();
   await expect(

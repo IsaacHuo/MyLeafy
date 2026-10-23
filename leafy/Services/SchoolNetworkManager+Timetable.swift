@@ -75,7 +75,8 @@ extension SchoolNetworkManager {
             candidates.append(trimmed)
         }
 
-        if normalized.hasPrefix("http://") || normalized.hasPrefix("https://") || normalized.hasPrefix("/") || normalized.hasPrefix("jsxsd/") {
+        if normalized.hasPrefix("http://") || normalized.hasPrefix("https://") || normalized
+            .hasPrefix("/") || normalized.hasPrefix("jsxsd/") {
             append(normalized)
         }
 
@@ -200,14 +201,18 @@ extension SchoolNetworkManager {
         return semesterValue == trimmedSemesterID
     }
 
-    func fetchTimetableHTML(using request: URLRequest, preferredSemesterID: String? = nil) async throws -> (String, HTTPURLResponse) {
+    func fetchTimetableHTML(using request: URLRequest,
+                            preferredSemesterID: String? = nil) async throws -> (String, HTTPURLResponse) {
+        let scope = CampusOperationScope()
         let (pageHTML, response) = try await html(for: request)
+        try scope.check()
         if isTimetablePage(pageHTML) {
             return (pageHTML, response)
         }
 
         if let followUpRequest = try resolveTimetableRequest(from: pageHTML, preferredSemesterID: preferredSemesterID) {
             let (resolvedHTML, resolvedResponse) = try await html(for: followUpRequest)
+            try scope.check()
             if isTimetablePage(resolvedHTML) {
                 return (resolvedHTML, resolvedResponse)
             }
@@ -218,12 +223,17 @@ extension SchoolNetworkManager {
            let responseURL = response.url {
             for candidate in try extractTimetableCandidateRequests(from: pageHTML, baseURL: responseURL) {
                 let (candidateHTML, candidateResponse) = try await html(for: candidate)
+                try scope.check()
                 if isTimetablePage(candidateHTML) {
                     return (candidateHTML, candidateResponse)
                 }
 
-                if let followUpRequest = try resolveTimetableRequest(from: candidateHTML, preferredSemesterID: preferredSemesterID) {
+                if let followUpRequest = try resolveTimetableRequest(
+                    from: candidateHTML,
+                    preferredSemesterID: preferredSemesterID
+                ) {
                     let (resolvedHTML, resolvedResponse) = try await html(for: followUpRequest)
+                    try scope.check()
                     if isTimetablePage(resolvedHTML) {
                         return (resolvedHTML, resolvedResponse)
                     }
@@ -279,14 +289,17 @@ extension SchoolNetworkManager {
                let trimmedPreferredSemesterID,
                !trimmedPreferredSemesterID.isEmpty,
                let preferredOption = options.first(where: {
-                   ((try? $0.attr("value").trimmingCharacters(in: .whitespacesAndNewlines)) ?? "") == trimmedPreferredSemesterID
+                   ((try? $0.attr("value").trimmingCharacters(in: .whitespacesAndNewlines)) ?? "") ==
+                       trimmedPreferredSemesterID
                }) {
                 params[name] = try preferredOption.attr("value")
                 continue
             }
 
             let selectedOption = options.first(where: { $0.hasAttr("selected") })
-                ?? options.first(where: { !((try? $0.attr("value").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ?? true) })
+                ?? options
+                .first(where: {
+                    !((try? $0.attr("value").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ?? true) })
                 ?? options.first
 
             if let selectedOption {
@@ -326,19 +339,24 @@ extension SchoolNetworkManager {
     }
 
     func fetchTimetable() async throws -> FetchedTimetableDocument {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled { throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。") }
         if currentPortal == .graduate { return try await fetchGraduateTimetable() }
         let initial = try await fetchDefaultTimetable()
+        try scope.check()
         let options = try timetableTermOptions(in: initial.html, selector: "select[name=xnxq01id] option")
         for term in options {
             let document: FetchedTimetableDocument
             if term == resolvedTimetableSemesterID(from: initial.html) { document = initial }
             else { document = try await fetchDefaultTimetable(preferredSemesterID: term) }
-            let parsed = try HTMLParser.parseTimetableResult(html: document.html)
-            if !parsed.records.isEmpty { return document }
+            try scope.check()
+            let records = try await TimetableRefreshUseCase.parseRecords(html: document.html)
+            try scope.check()
+            if !records.isEmpty { return document }
         }
         // Some valid school responses omit term controls entirely.
-        _ = try HTMLParser.parseTimetableResult(html: initial.html)
+        _ = try await TimetableRefreshUseCase.parseRecords(html: initial.html)
+        try scope.check()
         return initial
     }
 
@@ -351,7 +369,9 @@ extension SchoolNetworkManager {
         })).sorted { $0.compare($1, options: .numeric) == .orderedDescending }
     }
 
-    private func fetchDefaultTimetable(preferredSemesterID requestedTerm: String? = nil) async throws -> FetchedTimetableDocument {
+    private func fetchDefaultTimetable(preferredSemesterID requestedTerm: String? = nil) async throws
+        -> FetchedTimetableDocument {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。")
         }
@@ -380,7 +400,10 @@ extension SchoolNetworkManager {
             candidateRequests.append(request)
         }
 
-        appendCandidate(makeRequest(url: self.timetableURL(timetableURL, applyingSemesterID: preferredSemesterID), referer: URL(string: "\(baseURL)/Logon.do?method=logon")))
+        appendCandidate(makeRequest(
+            url: self.timetableURL(timetableURL, applyingSemesterID: preferredSemesterID),
+            referer: URL(string: "\(baseURL)/Logon.do?method=logon")
+        ))
         appendCandidate(makeRequest(url: timetableURL, referer: mainURL))
         appendCandidate(makeRequest(url: mainURL, referer: rootURL))
         appendCandidate(makeRequest(url: upperMainURL, referer: rootURL))
@@ -395,7 +418,11 @@ extension SchoolNetworkManager {
         var lastResponse: HTTPURLResponse?
 
         for request in candidateRequests {
-            let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(using: request, preferredSemesterID: preferredSemesterID)
+            let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(
+                using: request,
+                preferredSemesterID: preferredSemesterID
+            )
+            try scope.check()
             lastHTML = candidateHTML
             lastResponse = candidateResponse
             persistLandingURL(candidateResponse.url)
@@ -414,6 +441,7 @@ extension SchoolNetworkManager {
 
         for mainCandidateURL in [mainURL, upperMainURL] {
             let (mainHTML, mainResponse) = try await html(from: mainCandidateURL)
+            try scope.check()
             lastHTML = mainHTML
             lastResponse = mainResponse
 
@@ -423,7 +451,11 @@ extension SchoolNetworkManager {
                 }
 
                 throw SchoolNetworkError.timetableDataUnavailable(
-                    pageDebugSummary(html: mainHTML, responseURL: mainResponse.url, snapshotName: "last_timetable_main_login_page.html")
+                    pageDebugSummary(
+                        html: mainHTML,
+                        responseURL: mainResponse.url,
+                        snapshotName: "last_timetable_main_login_page.html"
+                    )
                 )
             }
 
@@ -437,7 +469,11 @@ extension SchoolNetworkManager {
             _ = persistDebugHTML(mainHTML, filename: "last_timetable_main_page.html")
 
             for request in try extractTimetableCandidateRequests(from: mainHTML, baseURL: mainCandidateURL) {
-                let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(using: request, preferredSemesterID: preferredSemesterID)
+                let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(
+                    using: request,
+                    preferredSemesterID: preferredSemesterID
+                )
+                try scope.check()
                 lastHTML = candidateHTML
                 lastResponse = candidateResponse
                 persistLandingURL(candidateResponse.url)
@@ -459,10 +495,12 @@ extension SchoolNetworkManager {
             let renderedBootstrap: RenderedTimetableBootstrap?
             do {
                 let bootstrapper = await MainActor.run { TimetableWebViewBootstrapper(manager: self) }
+                try scope.check()
                 renderedBootstrap = try await bootstrapper.bootstrap()
             } catch {
                 renderedBootstrap = nil
             }
+            try scope.check()
 
             if let renderedBootstrap {
                 lastHTML = renderedBootstrap.html
@@ -482,7 +520,11 @@ extension SchoolNetworkManager {
                     guard let key = request.url?.absoluteString, !renderedSeen.contains(key) else { return nil }
                     renderedSeen.insert(key)
 
-                    let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(using: request, preferredSemesterID: preferredSemesterID)
+                    let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(
+                        using: request,
+                        preferredSemesterID: preferredSemesterID
+                    )
+                    try scope.check()
                     lastHTML = candidateHTML
                     lastResponse = candidateResponse
                     persistLandingURL(candidateResponse.url)
@@ -499,7 +541,8 @@ extension SchoolNetworkManager {
                 }
 
                 for frameSource in renderedBootstrap.frameSources {
-                    guard let frameURL = URL(string: frameSource, relativeTo: renderedBaseURL)?.absoluteURL else { continue }
+                    guard let frameURL = URL(string: frameSource, relativeTo: renderedBaseURL)?.absoluteURL
+                    else { continue }
                     if let html = try await tryCandidate(makeRequest(url: frameURL, referer: renderedBaseURL)) {
                         return timetableDocument(
                             html: html,
@@ -508,7 +551,10 @@ extension SchoolNetworkManager {
                     }
                 }
 
-                for request in try extractTimetableCandidateRequests(from: renderedBootstrap.html, baseURL: renderedBaseURL) {
+                for request in try extractTimetableCandidateRequests(
+                    from: renderedBootstrap.html,
+                    baseURL: renderedBaseURL
+                ) {
                     if let html = try await tryCandidate(request) {
                         return timetableDocument(
                             html: html,
@@ -525,13 +571,21 @@ extension SchoolNetworkManager {
             }
 
             throw SchoolNetworkError.timetableDataUnavailable(
-                pageDebugSummary(html: lastHTML, responseURL: lastResponse?.url, snapshotName: "last_timetable_initial_login_page.html")
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_timetable_initial_login_page.html"
+                )
             )
         }
 
         guard isTimetablePage(lastHTML) else {
             throw SchoolNetworkError.timetableDataUnavailable(
-                pageDebugSummary(html: lastHTML, responseURL: lastResponse?.url, snapshotName: "last_timetable_resolved_unexpected.html")
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_timetable_resolved_unexpected.html"
+                )
             )
         }
 
@@ -542,6 +596,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchGrades() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地成绩样例，不连接学校教务系统。")
         }
@@ -556,6 +611,7 @@ extension SchoolNetworkManager {
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = "kksj=&kcxz=&kcmc=&xsfs=all".data(using: .utf8)
         let (html, _) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html), await invalidateSessionIfNeeded() {
             throw SchoolNetworkError.sessionExpired
         }
@@ -563,6 +619,7 @@ extension SchoolNetworkManager {
     }
 
     private func fetchGraduateTimetable() async throws -> FetchedTimetableDocument {
+        let scope = CampusOperationScope()
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
         guard let url = URL(string: "\(graduateBaseURL)/student/pygl/py_kbcx_ew") else { throw URLError(.badURL) }
         func fetch(_ term: String?) async throws -> String {
@@ -571,26 +628,39 @@ extension SchoolNetworkManager {
             if let term { components.queryItems?.append(URLQueryItem(name: "termcode", value: term)) }
             let request = makeRequest(url: components.url!, referer: URL(string: "\(graduateBaseURL)/home/stulogin"))
             let (data, response) = try await self.data(for: preparedRequest(from: request))
-            if let response = response as? HTTPURLResponse { updatePersistedCookies(from: response, requestURL: request.url) }
+            try scope.check()
+            if let response = response as? HTTPURLResponse { updatePersistedCookies(
+                from: response,
+                requestURL: request.url
+            ) }
             let raw = String(data: data, encoding: .utf8) ?? ""
             if raw.contains("stulogin") || isLoginPage(raw) {
                 if await invalidateSessionIfNeeded() { throw SchoolNetworkError.sessionExpired }
                 throw SchoolNetworkError.timetableDataUnavailable("研究生课表返回登录页，请重新登录。")
             }
-            if raw.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") || raw.contains("<select") { return raw }
+            if raw.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{") || raw
+                .contains("<select") { return raw }
             let decrypted = decryptGraduateAES(raw)
             guard !decrypted.isEmpty else { throw SchoolNetworkError.timetableDataUnavailable("研究生课表数据解密失败。") }
             return decrypted
         }
         let initial = try await fetch(nil)
-        let options = try timetableTermOptions(in: initial, selector: "select[name=termcode] option, select[id=termcode] option")
+        try scope.check()
+        let options = try timetableTermOptions(
+            in: initial,
+            selector: "select[name=termcode] option, select[id=termcode] option"
+        )
         for term in options {
             let html = try await fetch(term)
-            if !(try HTMLParser.parseTimetableResult(html: html)).records.isEmpty {
+            try scope.check()
+            let records = try await TimetableRefreshUseCase.parseRecords(html: html)
+            try scope.check()
+            if !records.isEmpty {
                 return FetchedTimetableDocument(html: html, sourceSemesterID: term)
             }
         }
-        _ = try HTMLParser.parseTimetableResult(html: initial)
+        _ = try await TimetableRefreshUseCase.parseRecords(html: initial)
+        try scope.check()
         return FetchedTimetableDocument(html: initial, sourceSemesterID: "school-current")
     }
 }

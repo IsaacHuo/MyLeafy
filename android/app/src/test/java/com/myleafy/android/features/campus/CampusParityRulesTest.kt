@@ -26,8 +26,8 @@ class CampusParityRulesTest {
     }
     @Test fun officialTableRetainsZeroBucketsAndRawFields() {
         val result = JsoupHtmlParser().parseGradeSummary("""<p>平均学分绩点(GPA)：3.2</p><table><tr><th rowspan="2">所得学分</th><th rowspan="2">必修学分</th><th colspan="3">专业选修学分</th><th colspan="2">公共选修学分</th></tr><tr><th>总计</th><th>本专业</th><th>外专业</th><th>总计</th><th>美育</th></tr><tr><td>140</td><td>120</td><td>12</td><td>10</td><td>2</td><td>0</td><td></td></tr></table>""")
-        assertEquals(140.0,result.totalCredits!!,0.0); assertEquals(120.0,result.requiredCredits!!,0.0); assertEquals(10.0,result.professionalMajorElectiveCredits!!,0.0); assertEquals(2.0,result.professionalCrossMajorElectiveCredits!!,0.0)
-        assertEquals(0.0,result.publicElectiveCredits!!,0.0); assertEquals(0.0,result.publicElectiveBuckets.getValue("美育"),0.0); assertEquals("140",result.rawFields["所得学分"])
+        assertEquals(140.0, result.totalCredits!!, 0.0); assertEquals(120.0, result.requiredCredits!!, 0.0); assertEquals(10.0, result.professionalMajorElectiveCredits!!, 0.0); assertEquals(2.0, result.professionalCrossMajorElectiveCredits!!, 0.0)
+        assertEquals(0.0, result.publicElectiveCredits!!, 0.0); assertEquals(0.0, result.publicElectiveBuckets.getValue("美育"), 0.0); assertEquals("140", result.rawFields["所得学分"])
     }
     @Test fun invalidRecognizedCreditTableFails() {
         assertThrows(HtmlParseError::class.java) { JsoupHtmlParser().parseGradeSummary("<table><tr><th>所得学分</th><th>必修学分</th></tr><tr><td>140</td><td>待确认</td></tr></table>") }
@@ -43,13 +43,13 @@ class CampusParityRulesTest {
         assertEquals("森林,生态\"学\n实验", rows.single()[1]); assertEquals("2", rows.single()[2])
     }
     @Test fun invalidCsvReportsRowAndRejectsWholeFile() {
-        val failure=assertThrows(IllegalArgumentException::class.java) { GuestAcademicCsv.parse("courseID,name,date,start,end,location\nA,考试A,2026-12-01,09:00,11:00,三教\nB,考试B,2026-12-01,11:00,09:00,三教",GuestAcademicKind.EXAM) }
-        assertTrue(failure.message!!.contains("第 3 行")); assertThrows(IllegalArgumentException::class.java) { GuestAcademicCsv.parse("term,courseName,credit,score,type\nA,\"未闭合",GuestAcademicKind.GRADE) }
+        val failure = assertThrows(IllegalArgumentException::class.java) { GuestAcademicCsv.parse("courseID,name,date,start,end,location\nA,考试A,2026-12-01,09:00,11:00,三教\nB,考试B,2026-12-01,11:00,09:00,三教", GuestAcademicKind.EXAM) }
+        assertTrue(failure.message!!.contains("第 3 行")); assertThrows(IllegalArgumentException::class.java) { GuestAcademicCsv.parse("term,courseName,credit,score,type\nA,\"未闭合", GuestAcademicKind.GRADE) }
     }
     @Test fun singleContinuousAndUnknownClassroomCells() {
-        val matrix=JsoupHtmlParser().parseClassroomAvailability("<table id='dataList'><tr><th>星期一</th></tr><tr><td>教室</td><td tdvalue='0102'></td><td tdvalue='0304'></td></tr><tr jsbh='A'><td>A0304(20/10)</td><td>◆Ｌ</td><td></td></tr><tr jsbh='B'><td>B0405(20/10)</td><td></td><td>?</td></tr></table>")
-        assertEquals(ClassroomStatus.OCCUPIED,matrix.rows.first().slots.first().status); assertEquals("0405",matrix.available(1,2).single().room); assertEquals(ClassroomStatus.UNKNOWN,matrix.rows.last().slots.last().status)
-        assertThrows(IllegalStateException::class.java) { matrix.available(1,4) }; assertThrows(IllegalStateException::class.java) { matrix.available(1,12) }
+        val matrix = JsoupHtmlParser().parseClassroomAvailability("<table id='dataList'><tr><th>星期一</th></tr><tr><td>教室</td><td tdvalue='0102'></td><td tdvalue='0304'></td></tr><tr jsbh='A'><td>A0304(20/10)</td><td>◆Ｌ</td><td></td></tr><tr jsbh='B'><td>B0405(20/10)</td><td></td><td>?</td></tr></table>")
+        assertEquals(ClassroomStatus.OCCUPIED, matrix.rows.first().slots.first().status); assertEquals("0405", matrix.available(1, 2).single().room); assertEquals(ClassroomStatus.UNKNOWN, matrix.rows.last().slots.last().status)
+        assertThrows(IllegalStateException::class.java) { matrix.available(1, 4) }; assertThrows(IllegalStateException::class.java) { matrix.available(1, 12) }
     }
     @Test fun csvUsesPhysicalLineNumbersAndValidatesCreditAndTerm() {
         val header = "term,courseName,credit,score,type\r\n"
@@ -61,20 +61,20 @@ class CampusParityRulesTest {
             assertThrows(IllegalArgumentException::class.java) { GuestAcademicCsv.validate(GuestAcademicKind.GRADE, listOf("2026", "课程", credit, "通过", "")) }
         }
         assertThrows(IllegalArgumentException::class.java) { GuestAcademicCsv.validate(GuestAcademicKind.GRADE, listOf("", "课程", "0", "通过", "")) }
-        assertEquals("0", GuestAcademicCsv.parse("\uFEFF\"term\",courseName,credit,score,type\n2026,课程,0,通过,",GuestAcademicKind.GRADE).single()[2])
+        assertEquals("0", GuestAcademicCsv.parse("\uFEFF\"term\",courseName,credit,score,type\n2026,课程,0,通过,", GuestAcademicKind.GRADE).single()[2])
     }
     @Test fun runPeriodsUseRealEndExcludedWeeksAndDistinctDates() {
-        val config=SemesterRuntimeConfig.builtIn; val settings=SunshineRunSettingsEntity("test",weeksPerPeriod=2,excludedWeeks="3,4,5,17")
-        fun record(date:LocalDate)=SunshineRunRecordEntity(date.toString(),"test",date.toEpochDay(),99,100,1,1)
-        val records=listOf(record(config.semesterStartDate),record(config.semesterStartDate),record(config.semesterStartDate.plusWeeks(2)),record(SunshineRunPlanner.semesterEnd(config)),record(SunshineRunPlanner.semesterEnd(config).plusDays(1)))
-        val periods=SunshineRunPlanner.periods(records,settings,config)
-        assertEquals(1,periods.first().count); assertEquals(2,periods.sumOf { it.count }); assertEquals(SunshineRunPlanner.semesterEnd(config),periods.last().end)
-        assertNull(SunshineRunPlanner.period(config.semesterStartDate.plusWeeks(2),periods,config)); assertNull(SunshineRunPlanner.period(config.semesterStartDate.minusDays(1),periods,config))
-        assertNotNull(SunshineRunPlanner.period(config.semesterStartDate.plusWeeks(2),SunshineRunPlanner.periods(records,settings.copy(skipsExcludedWeeks=false),config),config))
+        val config = SemesterRuntimeConfig.builtIn; val settings = SunshineRunSettingsEntity("test", weeksPerPeriod = 2, excludedWeeks = "3,4,5,17")
+        fun record(date: LocalDate) = SunshineRunRecordEntity(date.toString(), "test", date.toEpochDay(), 99, 100, 1, 1)
+        val records = listOf(record(config.semesterStartDate), record(config.semesterStartDate), record(config.semesterStartDate.plusWeeks(2)), record(SunshineRunPlanner.semesterEnd(config)), record(SunshineRunPlanner.semesterEnd(config).plusDays(1)))
+        val periods = SunshineRunPlanner.periods(records, settings, config)
+        assertEquals(1, periods.first().count); assertEquals(2, periods.sumOf { it.count }); assertEquals(SunshineRunPlanner.semesterEnd(config), periods.last().end)
+        assertNull(SunshineRunPlanner.period(config.semesterStartDate.plusWeeks(2), periods, config)); assertNull(SunshineRunPlanner.period(config.semesterStartDate.minusDays(1), periods, config))
+        assertNotNull(SunshineRunPlanner.period(config.semesterStartDate.plusWeeks(2), SunshineRunPlanner.periods(records, settings.copy(skipsExcludedWeeks = false), config), config))
     }
     @Test fun fitnessMinutesSecondsAndCustomUnits() {
-        val record=FitnessTestRecordEntity("id","test",1,"1000米",245.0,"分秒","",1,1)
-        assertEquals("4分5秒",fitnessValue(record)); assertEquals("245 次",fitnessValue(record.copy(item="自定义",unit="次")))
-        assertEquals("4分6秒", fitnessValue(record.copy(value=245.6)))
+        val record = FitnessTestRecordEntity("id", "test", 1, "1000米", 245.0, "分秒", "", 1, 1)
+        assertEquals("4分5秒", fitnessValue(record)); assertEquals("245 次", fitnessValue(record.copy(item = "自定义", unit = "次")))
+        assertEquals("4分6秒", fitnessValue(record.copy(value = 245.6)))
     }
 }

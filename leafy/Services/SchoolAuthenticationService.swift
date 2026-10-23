@@ -334,6 +334,7 @@ struct SchoolAuthenticationService {
         progressReporter: AcademicOperationProgressReporter? = nil,
         policy: CaptchaRecoveryPolicy = .automatic
     ) async throws -> SchoolAuthenticationRecoveryResult {
+        let scope = CampusOperationScope()
         progressReporter?(.begin(.connectingAcademicSystem))
         let credential = matchingCredential(portal: portal)
         guard allowsAutomaticAttempt,
@@ -343,7 +344,7 @@ struct SchoolAuthenticationService {
         }
 
         let maximumAttempts = max(policy.maximumAttempts, 1)
-        for attempt in 1...maximumAttempts {
+        for attempt in 1 ... maximumAttempts {
             try Task.checkCancellation()
             if attempt > 1 {
                 try await Task.sleep(for: policy.retryDelay)
@@ -362,6 +363,7 @@ struct SchoolAuthenticationService {
                 throw error
             }
 
+            try scope.check()
             let captcha: String?
             do {
                 guard let cgImage = challenge.image.cgImage else {
@@ -378,6 +380,7 @@ struct SchoolAuthenticationService {
                 captcha = nil
             }
 
+            try scope.check()
             guard let captcha else {
                 progressReporter?(.fail(.recognizingCaptcha, "识别结果不可靠"))
                 if attempt == maximumAttempts {
@@ -452,7 +455,9 @@ struct SchoolAuthenticationService {
         portal: SchoolPortal,
         usesStoredCredential: Bool = true
     ) async throws -> SchoolCaptchaChallenge {
+        let scope = CampusOperationScope()
         let captcha = try await client.fetchCaptcha(for: portal)
+        try scope.check()
         return SchoolCaptchaChallenge(
             portal: portal,
             key: captcha.key,

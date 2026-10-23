@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+
+[*.{swift,kt,kts}]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 120
+
+[*.{kt,kts}]
+ktlint_code_style = android_studio
+# Formatting only. Naming, imports, declarations and string contents are not rewritten.
+ktlint_standard = disabled
+ktlint_standard_indent = enabled
+ktlint_standard_final-newline = enabled
+ktlint_standard_no-trailing-spaces = enabled
+ktlint_standard_no-multi-spaces = enabled
+ktlint_standard_no-consecutive-blank-lines = enabled
+ktlint_standard_comma-spacing = enabled
+ktlint_standard_colon-spacing = enabled
+ktlint_standard_op-spacing = enabled
+ktlint_standard_keyword-spacing = enabled
+ktlint_standard_paren-spacing = enabled
+ktlint_standard_curly-spacing = enabled
+ktlint_standard_square-brackets-spacing = enabled
+ktlint_standard_range-spacing = enabled
+ktlint_standard_unary-op-spacing = enabled
+
+[*.md]
+trim_trailing_whitespace = false

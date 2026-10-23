@@ -33,10 +33,11 @@ jobs:
       - name: Build website and admin
         run: npm run build
 
+      - name: Install browser runtimes and system dependencies
+        run: npx playwright install --with-deps chromium webkit
+
       - name: Browser acceptance tests
-        run: |
-          npx playwright install --with-deps chromium webkit
-          npm run test:e2e
+        run: npm run test:e2e
       - name: Preserve browser diagnostics
         if: always()
         uses: actions/upload-artifact@v4

@@ -314,7 +314,7 @@ nonisolated struct CommunityPostDeepLink: Equatable {
                 .queryItems?
                 .first(where: { $0.name == "id" })?
                 .value,
-                  let postID = UUID(uuidString: idValue)
+                let postID = UUID(uuidString: idValue)
             else { return nil }
             self.postID = postID
             return

@@ -43,7 +43,7 @@ nonisolated struct PersonalScheduleYearTimeline: Equatable, Sendable {
     }
 
     func date(page: Int, dayOfWeek: Int, calendar: Calendar = .current) -> Date? {
-        guard let weekStart = weekStart(at: page), (1...7).contains(dayOfWeek) else { return nil }
+        guard let weekStart = weekStart(at: page), (1 ... 7).contains(dayOfWeek) else { return nil }
         return calendar.date(byAdding: .day, value: dayOfWeek - 1, to: weekStart)
     }
 

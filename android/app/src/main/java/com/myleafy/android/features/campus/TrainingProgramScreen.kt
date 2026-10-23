@@ -189,29 +189,29 @@ private fun TeachingPlanContent(
                 }
             }
             if (section.term !in collapsed) {
-            items(section.courses, key = { "${section.term}-${it.courseCode}-${it.name}" }) { course ->
-                LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(LeafySpacing.card)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(course.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                            Text("${course.credit} 学分", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                        }
-                        if (course.courseCode.isNotBlank()) Text("课程编号：${course.courseCode}", style = MaterialTheme.typography.bodySmall)
-                        val meta = listOf(course.type, course.courseCategory, course.exam)
-                            .filter { it.isNotBlank() }
-                            .joinToString(" · ")
-                        if (meta.isNotBlank()) {
-                            Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        val detail = listOf(course.unit.takeIf { it.isNotBlank() }, course.duration.takeIf { it.isNotBlank() }?.let { "学时：$it" })
-                            .filterNotNull()
-                            .joinToString(" · ")
-                        if (detail.isNotBlank()) {
-                            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                items(section.courses, key = { "${section.term}-${it.courseCode}-${it.name}" }) { course ->
+                    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(LeafySpacing.card)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(course.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                                Text("${course.credit} 学分", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                            if (course.courseCode.isNotBlank()) Text("课程编号：${course.courseCode}", style = MaterialTheme.typography.bodySmall)
+                            val meta = listOf(course.type, course.courseCategory, course.exam)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" · ")
+                            if (meta.isNotBlank()) {
+                                Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            val detail = listOf(course.unit.takeIf { it.isNotBlank() }, course.duration.takeIf { it.isNotBlank() }?.let { "学时：$it" })
+                                .filterNotNull()
+                                .joinToString(" · ")
+                            if (detail.isNotBlank()) {
+                                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
@@ -288,12 +288,12 @@ private fun TrainingProgramContent(
                     Column(modifier = Modifier.padding(LeafySpacing.card)) {
                         com.myleafy.android.ui.components.LeafyDisclosureRow(section.title, section.title in expanded, onClick = { expanded = if (section.title in expanded) expanded - section.title else expanded + section.title })
                         if (section.title in expanded) {
-                        if (section.body.isNotBlank()) {
-                            Text(section.body, style = MaterialTheme.typography.bodyMedium)
-                        }
-                        section.links.forEach { link ->
-                            LeafyTextButton(onClick = { openExternalUrl(context, link.url) }) { Text(link.title) }
-                        }
+                            if (section.body.isNotBlank()) {
+                                Text(section.body, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            section.links.forEach { link ->
+                                LeafyTextButton(onClick = { openExternalUrl(context, link.url) }) { Text(link.title) }
+                            }
                         }
                     }
                 }

@@ -86,8 +86,7 @@ class TimetableWebBootstrap(private val context: Context) {
     private suspend fun WebView.evaluate(script: String): String = suspendCancellableCoroutine { continuation ->
         evaluateJavascript(script) { result ->
             if (continuation.isActive) {
-                try { continuation.resume(Json.parseToJsonElement(result).jsonPrimitive.content) }
-                catch (failure: Exception) { continuation.resumeWithException(failure) }
+                try { continuation.resume(Json.parseToJsonElement(result).jsonPrimitive.content) } catch (failure: Exception) { continuation.resumeWithException(failure) }
             }
         }
     }

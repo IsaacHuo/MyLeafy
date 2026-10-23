@@ -23,6 +23,7 @@ private final class CommunityNotificationsViewModel: ObservableObject {
     @Published private(set) var isMarkingAllRead = false
     @Published var errorMessage: String?
 
+    private var activeLoadID = UUID()
     private let repository: any CommunityNotificationRepository
     private let publishCoordinator = CommunityPublishCoordinator.shared
 
@@ -39,66 +40,87 @@ private final class CommunityNotificationsViewModel: ObservableObject {
     }
 
     func load() async {
+        guard !isUpdatingSettings else { return }
+        let scope = CampusOperationScope()
+        let loadID = UUID()
+        activeLoadID = loadID
         isLoading = true
-        defer { isLoading = false }
+        defer { if activeLoadID == loadID { isLoading = false } }
 
         do {
             try await repository.ensureAnonymousSession()
+            try scope.check()
+            guard activeLoadID == loadID else { return }
         } catch {
+            guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
             items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
             errorMessage = error.localizedDescription
             return
         }
 
         await CommunitySessionManager.shared.restoreProfileIfPossible()
+        guard scope.isCurrent, !Task.isCancelled, activeLoadID == loadID else { return }
 
         do {
-            settings = try await repository.fetchNotificationSettings()
+            let fetchedSettings = try await repository.fetchNotificationSettings()
+            try scope.check()
+            guard activeLoadID == loadID else { return }
+            settings = fetchedSettings
             if settings?.mutedAll == true {
                 items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
                 errorMessage = nil
                 return
             }
 
-            items = (
-                try await repository.fetchNotificationFeed(limit: 50) + publishCoordinator.notificationItems
-            ).sorted { $0.sortDate > $1.sortDate }
+            let fetched = try await repository.fetchNotificationFeed(limit: 50)
+            try scope.check()
+            guard activeLoadID == loadID else { return }
+            items = (fetched + publishCoordinator.notificationItems).sorted { $0.sortDate > $1.sortDate }
             errorMessage = nil
         } catch {
+            guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
             items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
             errorMessage = error.localizedDescription
         }
     }
 
     func setMutedAll(_ muted: Bool) async -> Bool {
+        let scope = CampusOperationScope()
         guard !isUpdatingSettings else { return false }
+        activeLoadID = UUID()
+        isLoading = false
         isUpdatingSettings = true
         defer { isUpdatingSettings = false }
 
         do {
-            settings = try await repository.updateNotificationSettings(mutedAll: muted)
+            let updated = try await repository.updateNotificationSettings(mutedAll: muted)
+            try scope.check()
+            settings = updated
             if muted {
                 items = publishCoordinator.notificationItems.sorted { $0.sortDate > $1.sortDate }
             } else {
-                items = (
-                    try await repository.fetchNotificationFeed(limit: 50) + publishCoordinator.notificationItems
-                ).sorted { $0.sortDate > $1.sortDate }
+                let fetched = try await repository.fetchNotificationFeed(limit: 50)
+                try scope.check()
+                items = (fetched + publishCoordinator.notificationItems).sorted { $0.sortDate > $1.sortDate }
             }
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func markAllRead() async -> Bool {
+        let scope = CampusOperationScope()
         guard !isMarkingAllRead, !isLoading, hasUnreadItems else { return false }
         isMarkingAllRead = true
         defer { isMarkingAllRead = false }
 
         do {
             try await repository.markNotificationFeedRead(announcementLimit: 500)
+            try scope.check()
             let readAt = ISO8601DateFormatter().string(from: Date())
             for item in items {
                 if case .publication(let notification) = item {
@@ -109,12 +131,14 @@ private final class CommunityNotificationsViewModel: ObservableObject {
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func dismissItem(_ item: NotificationFeedItem) async -> Bool {
+        let scope = CampusOperationScope()
         guard activeItemID == nil else { return false }
         activeItemID = item.id
         defer { activeItemID = nil }
@@ -124,11 +148,13 @@ private final class CommunityNotificationsViewModel: ObservableObject {
                 publishCoordinator.dismissNotification(taskID: notification.id)
             } else {
                 try await repository.dismissNotificationFeedItem(item)
+                try scope.check()
             }
             items.removeAll { $0.id == item.id }
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
@@ -153,6 +179,7 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         _ notification: CommunityPublishNotification,
         itemID: String
     ) async -> NotificationOpenResult? {
+        let scope = CampusOperationScope()
         publishCoordinator.markNotificationRead(taskID: notification.id)
         if let index = items.firstIndex(where: { $0.id == itemID }) {
             items[index] = .publication(
@@ -170,15 +197,19 @@ private final class CommunityNotificationsViewModel: ObservableObject {
                 errorMessage = "已发布的帖子暂时无法打开，请稍后重试。"
                 return nil
             }
+            try scope.check()
             errorMessage = nil
             return .post(post)
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
     }
 
-    private func openCommunityNotification(_ notification: CommunityNotification, itemID: String) async -> NotificationOpenResult? {
+    private func openCommunityNotification(_ notification: CommunityNotification,
+                                           itemID: String) async -> NotificationOpenResult? {
+        let scope = CampusOperationScope()
         guard let postID = notification.postID else {
             errorMessage = "这条通知没有关联帖子。"
             return nil
@@ -187,6 +218,7 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         do {
             if !notification.isRead {
                 try await repository.markNotificationRead(notificationID: notification.id)
+                try scope.check()
                 if let index = items.firstIndex(where: { $0.id == itemID }) {
                     items[index] = .community(notification.markingRead())
                 }
@@ -197,18 +229,23 @@ private final class CommunityNotificationsViewModel: ObservableObject {
                 return nil
             }
 
+            try scope.check()
             errorMessage = nil
             return .post(post)
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
     }
 
-    private func openSiteAnnouncement(_ announcement: SiteAnnouncement, itemID: String) async -> NotificationOpenResult? {
+    private func openSiteAnnouncement(_ announcement: SiteAnnouncement,
+                                      itemID: String) async -> NotificationOpenResult? {
+        let scope = CampusOperationScope()
         do {
             if !announcement.isRead {
                 try await repository.markSiteAnnouncementRead(announcementID: announcement.id)
+                try scope.check()
                 let readAt = ISO8601DateFormatter().string(from: Date())
                 let updatedAnnouncement = announcement.markingRead(at: readAt)
                 if let index = items.firstIndex(where: { $0.id == itemID }) {
@@ -221,6 +258,7 @@ private final class CommunityNotificationsViewModel: ObservableObject {
             errorMessage = nil
             return .announcement(announcement)
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
@@ -264,7 +302,12 @@ struct CommunityNotificationsSheet: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: AppSpacing.compact, leading: AppSpacing.page, bottom: AppSpacing.micro, trailing: AppSpacing.page))
+                .listRowInsets(EdgeInsets(
+                    top: AppSpacing.compact,
+                    leading: AppSpacing.page,
+                    bottom: AppSpacing.micro,
+                    trailing: AppSpacing.page
+                ))
 
                 if viewModel.isLoading && viewModel.items.isEmpty && !viewModel.isMutedAll {
                     Section {
@@ -312,7 +355,10 @@ struct CommunityNotificationsSheet: View {
                                 .leafyBody()
                                 .foregroundStyle(AppTheme.danger)
                                 .padding(14)
-                                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.cardBackground,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                         }
 
                         ForEach(viewModel.items) { item in
@@ -347,7 +393,12 @@ struct CommunityNotificationsSheet: View {
                                 }
                                 .tint(AppTheme.danger)
                             }
-                            .listRowInsets(EdgeInsets(top: 4, leading: AppSpacing.page, bottom: 4, trailing: AppSpacing.page))
+                            .listRowInsets(EdgeInsets(
+                                top: 4,
+                                leading: AppSpacing.page,
+                                bottom: 4,
+                                trailing: AppSpacing.page
+                            ))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                         }
@@ -601,9 +652,11 @@ private struct CommunityPublishTaskDetailSheet: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(media.displayName)
                                         .leafyBody()
-                                    Text(media.validated ? "已校验" : media.errorMessage ?? "\(Int(media.progress * 100))%")
+                                    Text(media.validated ? "已校验" : media
+                                        .errorMessage ?? "\(Int(media.progress * 100))%")
                                         .microCaption()
-                                        .foregroundStyle(media.errorMessage == nil ? AppTheme.secondaryText : AppTheme.danger)
+                                        .foregroundStyle(media.errorMessage == nil ? AppTheme.secondaryText : AppTheme
+                                            .danger)
                                 }
                                 Spacer()
                             }

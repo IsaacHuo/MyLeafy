@@ -396,18 +396,19 @@ enum GraduationCreditProgressCalculator {
         grades: [Grade],
         creditSummary: GradeCreditSummary? = nil
     ) -> GraduationCreditProgress {
-        let passedGrades = EffectiveGradeCourseResolver.resolve(from: grades).compactMap { course -> PassedGradeCredit? in
-            guard course.isPassed else {
-                return nil
-            }
+        let passedGrades = EffectiveGradeCourseResolver.resolve(from: grades)
+            .compactMap { course -> PassedGradeCredit? in
+                guard course.isPassed else {
+                    return nil
+                }
 
-            return PassedGradeCredit(
-                name: course.name,
-                credit: course.credit,
-                kind: GraduationCreditKind.classify(course.type + course.name),
-                category: fallbackCompletedCategory(type: course.type, courseName: course.name)
-            )
-        }
+                return PassedGradeCredit(
+                    name: course.name,
+                    credit: course.credit,
+                    kind: GraduationCreditKind.classify(course.type + course.name),
+                    category: fallbackCompletedCategory(type: course.type, courseName: course.name)
+                )
+            }
 
         let totalCompleted = creditSummary?.hasCreditTotals == true
             ? creditSummary?.totalCredits ?? 0
@@ -440,7 +441,10 @@ enum GraduationCreditProgressCalculator {
         }
 
         if let creditSummary, creditSummary.hasCreditTotals {
-            let publicKey = categoryKey(kind: .publicElective, category: GraduationCreditKind.publicElective.displayName)
+            let publicKey = categoryKey(
+                kind: .publicElective,
+                category: GraduationCreditKind.publicElective.displayName
+            )
             completedByCategory[publicKey] = (
                 creditSummary.publicElectiveCredits,
                 estimatedCourseCount(
@@ -449,7 +453,10 @@ enum GraduationCreditProgressCalculator {
                 )
             )
 
-            let professionalKey = categoryKey(kind: .professionalElective, category: GraduationCreditKind.professionalElective.displayName)
+            let professionalKey = categoryKey(
+                kind: .professionalElective,
+                category: GraduationCreditKind.professionalElective.displayName
+            )
             completedByCategory[professionalKey] = (
                 creditSummary.professionalMajorElectiveCredits,
                 estimatedCourseCount(
@@ -478,8 +485,10 @@ enum GraduationCreditProgressCalculator {
                 completedCredits: completed.credits,
                 completedCourseCount: completed.courses,
                 hasCompletedCredits: isKnown,
-                completedBuckets: requirement.kind == .publicElective ? (creditSummary?.publicCoveredBuckets ?? []) : [],
-                missingBucketNames: requirement.kind == .publicElective ? (creditSummary?.publicMissingBucketNames ?? []) : []
+                completedBuckets: requirement
+                    .kind == .publicElective ? (creditSummary?.publicCoveredBuckets ?? []) : [],
+                missingBucketNames: requirement
+                    .kind == .publicElective ? (creditSummary?.publicMissingBucketNames ?? []) : []
             )
         }
         .sorted { lhs, rhs in
@@ -510,7 +519,8 @@ enum GraduationCreditProgressCalculator {
         let requiredCredits: Double
     }
 
-    private static func groupedCategoryRequirements(from requirements: [GraduationCreditRequirement]) -> [CategoryRequirement] {
+    private static func groupedCategoryRequirements(from requirements: [GraduationCreditRequirement])
+        -> [CategoryRequirement] {
         let nonTotal = requirements.filter { $0.kind != .total }
         let aggregate = nonTotal.filter(\.isAggregate)
         let source = aggregate.isEmpty ? nonTotal : aggregate
@@ -526,7 +536,8 @@ enum GraduationCreditProgressCalculator {
                 grouped[key] = CategoryRequirement(
                     category: current.category,
                     kind: current.kind,
-                    requiredCredits: requirement.isAggregate ? max(current.requiredCredits, credits) : current.requiredCredits + credits
+                    requiredCredits: requirement.isAggregate ? max(current.requiredCredits, credits) : current
+                        .requiredCredits + credits
                 )
             } else {
                 grouped[key] = CategoryRequirement(
@@ -585,7 +596,6 @@ enum GraduationCreditProgressCalculator {
             return 3
         }
     }
-
 }
 
 private extension Double {
@@ -827,7 +837,10 @@ enum CustomScheduleStore {
     }
     static func loadForSync(defaults: UserDefaults = .standard) throws -> [CustomScheduleEvent] {
         let key = CampusScopedDefaults.key(storageKey, defaults: defaults)
-        if let data = defaults.data(forKey: key) { return try JSONDecoder().decode([CustomScheduleEvent].self, from: data) }
+        if let data = defaults.data(forKey: key) { return try JSONDecoder().decode(
+            [CustomScheduleEvent].self,
+            from: data
+        ) }
         guard let legacy = defaults.data(forKey: storageKey) else { return [] }
         let events = try JSONDecoder().decode([CustomScheduleEvent].self, from: legacy)
         // Adopt legacy unscoped data once, before any identity can sync it.
@@ -835,8 +848,8 @@ enum CustomScheduleStore {
         if key != storageKey { defaults.removeObject(forKey: storageKey) }
         return events
     }
-    static func save(_ events: [CustomScheduleEvent], defaults: UserDefaults = .standard) {
-        guard let data = try? JSONEncoder().encode(events) else { return }
+    static func save(_ events: [CustomScheduleEvent], defaults: UserDefaults = .standard) throws {
+        let data = try JSONEncoder().encode(events)
         let key = CampusScopedDefaults.key(storageKey, defaults: defaults)
         defaults.set(data, forKey: key)
         if key != storageKey { defaults.removeObject(forKey: storageKey) }
@@ -970,8 +983,14 @@ enum SchoolDataCache {
         load([ExamArrangement].self, forKey: examScheduleKey) ?? []
     }
 
-    static func saveExamSchedule(_ exams: [ExamArrangement], notifies: Bool = true) {
-        save(exams, forKey: examScheduleKey)
+    static func loadExamScheduleForEditing() throws -> [ExamArrangement] {
+        guard let data = UserDefaults.standard.data(forKey: scoped(examScheduleKey)) else { return [] }
+        return try JSONDecoder().decode([ExamArrangement].self, from: data)
+    }
+
+    static func saveExamSchedule(_ exams: [ExamArrangement], notifies: Bool = true) throws {
+        let data = try JSONEncoder().encode(exams)
+        UserDefaults.standard.set(data, forKey: scoped(examScheduleKey))
         UserDefaults.standard.set(Date(), forKey: scoped(lastExamSyncKey))
         if notifies {
             NotificationCenter.default.post(name: .schoolExamScheduleDidChange, object: nil)
@@ -984,13 +1003,13 @@ enum SchoolDataCache {
         _ exams: [ExamArrangement],
         now: Date = Date(),
         notifies: Bool = true
-    ) -> [ExamArrangement] {
+    ) throws -> [ExamArrangement] {
         let merged = SchoolExamScheduleMerger.merge(
             remote: exams,
-            cached: loadExamSchedule(),
+            cached: try loadExamScheduleForEditing(),
             now: now
         )
-        saveExamSchedule(merged, notifies: notifies)
+        try saveExamSchedule(merged, notifies: notifies)
         return merged
     }
 
@@ -1109,7 +1128,7 @@ enum SchoolDataCache {
         let scopedEmptyClassroomPrefix = scoped(emptyClassroomPrefix)
         let scopedClassroomUsagePrefix = scoped(classroomUsagePrefix)
         for key in defaults.dictionaryRepresentation().keys
-        where key.hasPrefix(scopedEmptyClassroomPrefix) || key.hasPrefix(scopedClassroomUsagePrefix) {
+            where key.hasPrefix(scopedEmptyClassroomPrefix) || key.hasPrefix(scopedClassroomUsagePrefix) {
             defaults.removeObject(forKey: key)
         }
     }
@@ -1153,7 +1172,6 @@ enum SchoolDataCache {
     private static func scoped(_ key: String) -> String {
         CampusScopedDefaults.key(key)
     }
-
 }
 
 enum SchoolCacheKind {
@@ -1191,6 +1209,15 @@ enum DateFormatters {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    /// Exam storage uses a locale-independent clock string, unlike display-only times.
+    static let examTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "HH:mm"
         return formatter
     }()
 

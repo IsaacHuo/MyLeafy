@@ -74,9 +74,13 @@ enum SchoolDataSyncService {
         let networkManager = ActiveCampusContext.networkManager
 
         if ReviewDemoMode.isEnabled {
-            ReviewDemoDataSeeder.seed(using: modelContext)
-            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
-            return .success(L10n.text("已刷新演示学校数据。社区数据仍使用真实服务。", language: language))
+            do {
+                try ReviewDemoDataSeeder.seed(using: modelContext)
+                LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
+                return .success(L10n.text("已刷新演示学校数据。社区数据仍使用真实服务。", language: language))
+            } catch {
+                return .failure(L10n.text("同步失败：%@", language: language, error.localizedDescription))
+            }
         }
 
         if ActiveCampusContext.identity?.isCustom == true {
@@ -112,7 +116,8 @@ enum SchoolDataSyncService {
             let document = try await networkManager.fetchTimetable()
             try scope.check()
             progressReporter?(.begin(.processingTimetable))
-            let records = try HTMLParser.parseTimetableResult(html: document.html).records
+            let records = try await TimetableRefreshUseCase.parseRecords(html: document.html)
+            try scope.check()
             progressReporter?(.begin(.savingTimetable))
             let persisted = try await persistTimetable(
                 records,
@@ -121,7 +126,11 @@ enum SchoolDataSyncService {
                 scope: scope
             )
             successfulOperationCount += 1
-            results.append(L10n.text("课表 %d 门", language: language, Set(persisted.sharedCourses.map(\.courseName)).count))
+            results.append(L10n.text(
+                "课表 %d 门",
+                language: language,
+                Set(persisted.sharedCourses.map(\.courseName)).count
+            ))
             if let warning = persisted.reminderWarning {
                 failedOperationCount += 1
                 results.append(warning)
@@ -136,7 +145,6 @@ enum SchoolDataSyncService {
             try scope.check()
         } catch {
             if scope.wasCancelled(error) { return .cancelled }
-            modelContext.rollback()
             if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
                 progressReporter?(.fail(.fetchingTimetable, error.localizedDescription))
                 return campusNetworkFailure(language: language)
@@ -215,8 +223,6 @@ enum SchoolDataSyncService {
                 progressReporter?(.begin(.processingExams))
                 let parsed = try HTMLParser.parseExams(html: html)
                 examScheduleToSave = parsed
-                successfulOperationCount += 1
-                results.append(L10n.text("考试 %d 条", language: language, parsed.count))
             } catch {
                 if scope.wasCancelled(error) { return .cancelled }
                 if SchoolDataSyncContinuationPolicy.shouldStop(after: error) {
@@ -291,7 +297,6 @@ enum SchoolDataSyncService {
                 successfulOperationCount += 1
                 results.append(L10n.text("成绩 %d 条", language: language, parsedGrades.count))
             } catch {
-                modelContext.rollback()
                 progressReporter?(.fail(.savingResults, error.localizedDescription))
                 failedOperationCount += 1
                 results.append(L10n.text("成绩保存失败：%@", language: language, error.localizedDescription))
@@ -307,8 +312,16 @@ enum SchoolDataSyncService {
             refreshedScopes.insert(.gradeSupplemental)
         }
         if let examScheduleToSave {
-            SchoolDataCache.saveRemoteExamSchedule(examScheduleToSave, notifies: false)
-            refreshedScopes.insert(.exams)
+            do {
+                try SchoolDataCache.saveRemoteExamSchedule(examScheduleToSave, notifies: false)
+                refreshedScopes.insert(.exams)
+                successfulOperationCount += 1
+                results.append(L10n.text("考试 %d 条", language: language, examScheduleToSave.count))
+            } catch {
+                failedOperationCount += 1
+                progressReporter?(.fail(.savingResults, error.localizedDescription))
+                results.append(L10n.text("考试保存失败：%@", language: language, error.localizedDescription))
+            }
         }
         if let teachingPlanToSave {
             SchoolDataCache.saveTeachingPlan(teachingPlanToSave, notifies: false)
@@ -319,7 +332,7 @@ enum SchoolDataSyncService {
             refreshedScopes.insert(.trainingProgram)
         }
 
-        if examScheduleToSave != nil {
+        if refreshedScopes.contains(.exams) {
             LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         }
         SchoolDataRefreshNotifier.post(refreshedScopes)
@@ -364,19 +377,17 @@ enum SchoolDataSyncService {
         return (saved.sharedCourses, reminderWarning)
     }
 
-    static func persistGrades(_ grades: [Grade], modelContext: ModelContext) throws {
-        for grade in fetch(Grade.self, from: modelContext) {
-            modelContext.delete(grade)
-        }
-        for grade in grades {
-            modelContext.insert(grade)
-        }
-        do {
-            try modelContext.save()
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
+    static func persistGrades(
+        _ grades: [Grade], modelContext: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws {
+        let previous = try modelContext.fetch(FetchDescriptor<Grade>())
+        for grade in previous { modelContext.delete(grade) }
+        for grade in grades { modelContext.insert(grade) }
+        try LocalModelSave.save(modelContext, undo: {
+            for grade in grades { modelContext.delete(grade) }
+            for grade in previous { modelContext.insert(grade) }
+        }, using: save)
     }
 
     private static func requiresReauthentication(
@@ -397,9 +408,5 @@ enum SchoolDataSyncService {
                 language: language
             )
         )
-    }
-
-    private static func fetch<T: PersistentModel>(_ model: T.Type, from modelContext: ModelContext) -> [T] {
-        (try? modelContext.fetch(FetchDescriptor<T>())) ?? []
     }
 }

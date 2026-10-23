@@ -214,7 +214,8 @@ nonisolated enum ClassroomLookupCatalog {
         return option
     }
 
-    static func roomOption(preferredBuilding: String?, preferredRoom: String?, in option: ClassroomLookupBuildingOption) -> ClassroomLookupRoomOption {
+    static func roomOption(preferredBuilding: String?, preferredRoom: String?,
+                           in option: ClassroomLookupBuildingOption) -> ClassroomLookupRoomOption {
         let rooms = option.rooms
         if let preferredBuilding,
            let preferredRoom,
@@ -281,7 +282,8 @@ nonisolated struct EmptyClassroomBuildingGroup: Identifiable, Equatable, Sendabl
             return (0, optionIndex * 100)
         }
 
-        if let optionIndex = ClassroomLookupCatalog.buildingOptions.firstIndex(where: { $0.buildings.contains(building) }),
+        if let optionIndex = ClassroomLookupCatalog.buildingOptions
+            .firstIndex(where: { $0.buildings.contains(building) }),
            let buildingIndex = ClassroomLookupCatalog.buildingOptions[optionIndex].buildings.firstIndex(of: building) {
             return (0, optionIndex * 100 + buildingIndex + 1)
         }

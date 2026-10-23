@@ -12,10 +12,12 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
     private var queuedBatchIDs: [UUID] = []
 
     init(store: ExternalLearningMaterialImportStore? = nil) {
-        self.store = store ?? (try? ExternalLearningMaterialImportStore.appGroupStore()) ?? ExternalLearningMaterialImportStore(
-            rootDirectory: FileManager.default.temporaryDirectory
-                .appendingPathComponent(ExternalLearningMaterialImport.stagingDirectoryName, isDirectory: true)
-        )
+        self
+            .store = store ?? (try? ExternalLearningMaterialImportStore.appGroupStore()) ??
+            ExternalLearningMaterialImportStore(
+                rootDirectory: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(ExternalLearningMaterialImport.stagingDirectoryName, isDirectory: true)
+            )
     }
 
     func handle(url: URL, isAuthenticated: Bool) -> Bool {
@@ -46,7 +48,8 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
         guard isAuthenticated, activeBatch == nil else { return }
 
         do {
-            let importedIDs = try modelContext.map { Set(try $0.fetch(FetchDescriptor<LearningMaterialDocument>()).map(\.id)) } ?? []
+            let importedIDs = try modelContext
+                .map { Set(try $0.fetch(FetchDescriptor<LearningMaterialDocument>()).map(\.id)) } ?? []
             let isImported: (ExternalLearningMaterialImportManifest) -> Bool = { manifest in
                 !manifest.items.isEmpty && manifest.items.allSatisfy { importedIDs.contains($0.id) }
             }
@@ -57,13 +60,12 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
                 activeBatch = manifest
                 return
             }
-            for manifest in store.pendingManifests() {
+            for manifest in try store.pendingManifests() {
                 if isImported(manifest) { try store.removeBatch(manifest.id); continue }
                 activeBatch = manifest
                 return
             }
         } catch { alertMessage = error.localizedDescription }
-
     }
 
     func cancel(_ batch: ExternalLearningMaterialImportManifest) {
@@ -89,7 +91,13 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
                 originalFilename: item.originalFilename, contentTypeIdentifier: item.contentTypeIdentifier
             )
         }
-        let result = try LearningMaterialBatchImport.importFiles(sources, to: destination, in: modelContext, cleanup: cleanup, save: save)
+        let result = try LearningMaterialBatchImport.importFiles(
+            sources,
+            to: destination,
+            in: modelContext,
+            cleanup: cleanup,
+            save: save
+        )
         alertMessage = result.cleanupWarning
         // From this point the database is authoritative; cleanup errors must not trigger a second import.
         do { try store.removeBatch(batch.id) }

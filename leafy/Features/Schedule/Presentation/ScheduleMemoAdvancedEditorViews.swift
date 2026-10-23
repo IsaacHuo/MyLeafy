@@ -9,17 +9,20 @@ struct ScheduleMemoMarkdownResourceSet {
     var imageOrder: [UUID] = []
     var attachmentNames: [UUID: String] = [:]
     var attachmentOrder: [UUID] = []
+    var isLoadingImages = false
 
     init(
         images: [UUID: UIImage] = [:],
         imageOrder: [UUID] = [],
         attachmentNames: [UUID: String] = [:],
-        attachmentOrder: [UUID] = []
+        attachmentOrder: [UUID] = [],
+        isLoadingImages: Bool = false
     ) {
         self.images = images
         self.imageOrder = Self.orderedIDs(imageOrder, available: Set(images.keys))
         self.attachmentNames = attachmentNames
         self.attachmentOrder = Self.orderedIDs(attachmentOrder, available: Set(attachmentNames.keys))
+        self.isLoadingImages = isLoadingImages
     }
 
     private static func orderedIDs(_ preferred: [UUID], available: Set<UUID>) -> [UUID] {
@@ -160,7 +163,7 @@ struct ScheduleMemoRichMarkdownView: View {
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 .accessibilityLabel(L10n.text("随记图片", language: leafyLanguage))
-        } else {
+        } else if !resources.isLoadingImages {
             missingResource(
                 L10n.text("图片已无法读取", language: leafyLanguage),
                 systemImage: "photo.badge.exclamationmark"
@@ -299,7 +302,10 @@ private struct ScheduleMemoSourceTextView: UIViewRepresentable {
         }
         let safe = NSRange(
             location: min(selection.location, view.text.utf16.count),
-            length: min(selection.length, max(view.text.utf16.count - min(selection.location, view.text.utf16.count), 0))
+            length: min(
+                selection.length,
+                max(view.text.utf16.count - min(selection.location, view.text.utf16.count), 0)
+            )
         )
         if view.selectedRange != safe {
             view.selectedRange = safe
@@ -350,6 +356,7 @@ struct ScheduleMemoAdvancedEditorView: View {
     @State private var draftAttachments: [ScheduleMemoEditorDraftAttachment] = []
     @State private var deletedImageIDs: Set<UUID> = []
     @State private var deletedAttachmentIDs: Set<UUID> = []
+    @State private var photoLoadID = UUID()
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showsPhotoPicker = false
     @State private var showsCamera = false
@@ -392,13 +399,15 @@ struct ScheduleMemoAdvancedEditorView: View {
         !isSaving && (memo.kind != .article || !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
+    @State private var imageLoader = ScheduleMemoImageLoader()
+
+    private var imageRequest: ScheduleMemoImageRequest {
+        .init(images: existingImages, revision: memo.updatedAt)
+    }
+
     private var resources: ScheduleMemoMarkdownResourceSet {
-        var imageMap = Dictionary(uniqueKeysWithValues: draftImages.map { ($0.id, $0.image) })
-        for image in existingImages {
-            if let value = ScheduleMemoImageStore.image(named: image.localFilename) {
-                imageMap[image.id] = value
-            }
-        }
+        var imageMap = imageLoader.images(for: imageRequest)
+        for image in draftImages { imageMap[image.id] = image.image }
         var names = Dictionary(uniqueKeysWithValues: draftAttachments.map { ($0.id, $0.originalFilename) })
         for attachment in existingAttachments {
             names[attachment.id] = attachment.originalFilename
@@ -407,7 +416,8 @@ struct ScheduleMemoAdvancedEditorView: View {
             images: imageMap,
             imageOrder: existingImages.map(\.id) + draftImages.map(\.id),
             attachmentNames: names,
-            attachmentOrder: existingAttachments.map(\.id) + draftAttachments.map(\.id)
+            attachmentOrder: existingAttachments.map(\.id) + draftAttachments.map(\.id),
+            isLoadingImages: imageLoader.isLoading(imageRequest)
         )
     }
 
@@ -445,11 +455,15 @@ struct ScheduleMemoAdvancedEditorView: View {
                 }
             }
         }
+        .task(id: imageRequest) { await imageLoader.load(imageRequest) }
         .interactiveDismissDisabled(hasChanges)
         .photosPicker(
             isPresented: $showsPhotoPicker,
             selection: $photoItems,
-            maxSelectionCount: max(ScheduleMemoImageStore.maximumImageCount - existingImages.count - draftImages.count, 1),
+            maxSelectionCount: max(
+                ScheduleMemoImageStore.maximumImageCount - existingImages.count - draftImages.count,
+                1
+            ),
             matching: .images
         )
         .onChange(of: photoItems) { _, items in
@@ -540,8 +554,8 @@ struct ScheduleMemoAdvancedEditorView: View {
                             ? L10n.text("未命名文章", language: leafyLanguage)
                             : title
                     )
-                        .font(.largeTitle.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.largeTitle.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 ScheduleMemoRichMarkdownView(source: source, resources: resources)
             }
@@ -564,17 +578,26 @@ struct ScheduleMemoAdvancedEditorView: View {
                 tool("strikethrough", label: L10n.text("删除线", language: leafyLanguage), command: .strikethrough)
                 tool("text.quote", label: L10n.text("引用", language: leafyLanguage), command: .quote)
                 Menu {
-                    Button(L10n.text("项目列表", language: leafyLanguage), systemImage: "list.bullet") { apply(.unorderedList) }
-                    Button(L10n.text("编号列表", language: leafyLanguage), systemImage: "list.number") { apply(.orderedList) }
+                    Button(L10n.text("项目列表", language: leafyLanguage), systemImage: "list.bullet") {
+                        apply(.unorderedList) }
+                    Button(L10n.text("编号列表", language: leafyLanguage), systemImage: "list.number") {
+                        apply(.orderedList) }
                     Button(L10n.text("待办事项", language: leafyLanguage), systemImage: "checklist") { apply(.task) }
                 } label: {
                     editorTool("list.bullet", label: L10n.text("列表", language: leafyLanguage))
                 }
                 Menu {
-                    Button(L10n.text("行内代码", language: leafyLanguage), systemImage: "chevron.left.forwardslash.chevron.right") { apply(.inlineCode) }
-                    Button(L10n.text("代码块", language: leafyLanguage), systemImage: "curlybraces.square") { apply(.codeBlock) }
+                    Button(
+                        L10n.text("行内代码", language: leafyLanguage),
+                        systemImage: "chevron.left.forwardslash.chevron.right"
+                    ) { apply(.inlineCode) }
+                    Button(L10n.text("代码块", language: leafyLanguage), systemImage: "curlybraces.square") {
+                        apply(.codeBlock) }
                 } label: {
-                    editorTool("chevron.left.forwardslash.chevron.right", label: L10n.text("代码", language: leafyLanguage))
+                    editorTool(
+                        "chevron.left.forwardslash.chevron.right",
+                        label: L10n.text("代码", language: leafyLanguage)
+                    )
                 }
                 tool("link", label: L10n.text("链接", language: leafyLanguage), command: .link)
                 tool("minus", label: L10n.text("分隔线", language: leafyLanguage), command: .divider)
@@ -616,7 +639,8 @@ struct ScheduleMemoAdvancedEditorView: View {
                 showsCamera = true
             }
             Button(L10n.text("文件", language: leafyLanguage), systemImage: "doc.badge.plus") {
-                guard existingAttachments.count + draftAttachments.count < ScheduleMemoAttachmentStore.maximumAttachmentCount else {
+                guard existingAttachments.count + draftAttachments.count < ScheduleMemoAttachmentStore
+                    .maximumAttachmentCount else {
                     errorMessage = L10n.text(
                         "一条随记最多添加 %d 个附件。",
                         language: leafyLanguage,
@@ -626,9 +650,11 @@ struct ScheduleMemoAdvancedEditorView: View {
                 }
                 showsFileImporter = true
             }
-            if !existingImages.isEmpty || !existingAttachments.isEmpty || !draftImages.isEmpty || !draftAttachments.isEmpty {
+            if !existingImages.isEmpty || !existingAttachments.isEmpty || !draftImages.isEmpty || !draftAttachments
+                .isEmpty {
                 Divider()
-                Button(L10n.text("插入已有内容", language: leafyLanguage), systemImage: "square.grid.2x2") { showsResources = true }
+                Button(L10n.text("插入已有内容", language: leafyLanguage), systemImage: "square.grid.2x2") {
+                    showsResources = true }
             }
         } label: {
             editorTool("plus", label: L10n.text("插入", language: leafyLanguage))
@@ -746,6 +772,9 @@ struct ScheduleMemoAdvancedEditorView: View {
 
     @MainActor
     private func addPhotos(_ items: [PhotosPickerItem]) async {
+        let loadID = UUID()
+        photoLoadID = loadID
+        let scope = CampusOperationScope()
         photoItems = []
         let remaining = max(ScheduleMemoImageStore.maximumImageCount - existingImages.count - draftImages.count, 0)
         for item in items.prefix(remaining) {
@@ -754,10 +783,15 @@ struct ScheduleMemoAdvancedEditorView: View {
                       let image = ImageDataDecoder.decodedImage(from: data) else {
                     throw ScheduleMemoImageStoreError.invalidImage
                 }
+                try scope.check()
+                guard photoLoadID == loadID,
+                      existingImages.count + draftImages.count < ScheduleMemoImageStore.maximumImageCount
+                else { return }
                 let draft = ScheduleMemoEditorDraftImage(id: UUID(), data: data, image: image)
                 draftImages.append(draft)
                 insert(.init(kind: .image, id: draft.id))
             } catch {
+                guard !scope.wasCancelled(error), photoLoadID == loadID else { return }
                 errorMessage = error.localizedDescription
                 return
             }
@@ -767,9 +801,13 @@ struct ScheduleMemoAdvancedEditorView: View {
     private func importAttachments(_ result: Result<[URL], Error>) {
         do {
             let urls = try result.get()
-            let remaining = max(ScheduleMemoAttachmentStore.maximumAttachmentCount - existingAttachments.count - draftAttachments.count, 0)
+            let remaining = max(
+                ScheduleMemoAttachmentStore.maximumAttachmentCount - existingAttachments.count - draftAttachments.count,
+                0
+            )
             guard urls.count <= remaining else {
-                throw ScheduleMemoAttachmentStoreError.tooManyAttachments(maximum: ScheduleMemoAttachmentStore.maximumAttachmentCount)
+                throw ScheduleMemoAttachmentStoreError
+                    .tooManyAttachments(maximum: ScheduleMemoAttachmentStore.maximumAttachmentCount)
             }
             for url in urls {
                 let accessed = url.startAccessingSecurityScopedResource()
@@ -802,10 +840,11 @@ struct ScheduleMemoAdvancedEditorView: View {
     @MainActor
     private func save() {
         guard canSave else { return }
+        photoLoadID = UUID()
         isSaving = true
         var newImageFilenames: [String] = []
         var newAttachmentFiles: [ScheduleMemoAttachmentStore.StoredFile] = []
-        var didSave = false
+        var insertedResources: [any PersistentModel] = []
 
         do {
             let availableImageIDs = Set(existingImages.map(\.id) + draftImages.map(\.id))
@@ -822,7 +861,7 @@ struct ScheduleMemoAdvancedEditorView: View {
             for draft in draftImages {
                 let filename = try ScheduleMemoImageStore.importImage(data: draft.data)
                 newImageFilenames.append(filename)
-                modelContext.insert(ScheduleMemoImage(
+                insertedResources.append(ScheduleMemoImage(
                     id: draft.id,
                     memoID: memo.id,
                     sortOrder: existingImages.count + newImageFilenames.count - 1,
@@ -836,7 +875,7 @@ struct ScheduleMemoAdvancedEditorView: View {
                     contentTypeIdentifier: draft.contentTypeIdentifier
                 )
                 newAttachmentFiles.append(stored)
-                modelContext.insert(ScheduleMemoAttachment(
+                insertedResources.append(ScheduleMemoAttachment(
                     id: draft.id,
                     memoID: memo.id,
                     sortOrder: existingAttachments.count + newAttachmentFiles.count - 1,
@@ -848,35 +887,41 @@ struct ScheduleMemoAdvancedEditorView: View {
 
             let removedImages = allImages.filter { deletedImageIDs.contains($0.id) }
             let removedAttachments = allAttachments.filter { deletedAttachmentIDs.contains($0.id) }
-            removedImages.forEach(modelContext.delete)
-            removedAttachments.forEach(modelContext.delete)
-
-            memo.title = memo.kind == .article
-                ? title.trimmingCharacters(in: .whitespacesAndNewlines)
-                : memo.title
-            memo.updateBody(source)
-            try modelContext.save()
-            didSave = true
-
-            try ScheduleMemoImageStore.deleteFiles(named: removedImages.map(\.localFilename))
-            try ScheduleMemoAttachmentStore.deleteFiles(named: removedAttachments.map(\.localFilename))
-            dismiss()
-        } catch {
-            if !didSave {
-                try? ScheduleMemoImageStore.deleteFiles(named: newImageFilenames)
-                try? ScheduleMemoAttachmentStore.deleteFiles(named: newAttachmentFiles.map(\.localFilename))
-                modelContext.rollback()
-            } else {
-                dismissAfterError = true
+            let files = removedImages.map {
+                LocalFileCleanup.File(
+                    $0,
+                    url: ScheduleMemoImageStore.directoryURL().appendingPathComponent($0.localFilename)
+                )
+            } + removedAttachments.compactMap { record in
+                ScheduleMemoAttachmentStore.fileURL(named: record.localFilename).map {
+                    LocalFileCleanup.File(record, url: $0)
+                }
             }
-            isSaving = false
-            errorMessage = didSave
-                ? L10n.text(
+            let cleanupWarning = try ScheduleMemoPersistence.update(
+                memo,
+                title: memo.kind == .article ? title.trimmingCharacters(in: .whitespacesAndNewlines) : memo.title,
+                body: source,
+                inserting: insertedResources,
+                removing: removedImages + removedAttachments,
+                files: files,
+                in: modelContext
+            )
+            if let cleanupWarning {
+                dismissAfterError = true
+                isSaving = false
+                errorMessage = L10n.text(
                     "随记已保存，但未能清理已移除的本地文件：%@",
                     language: leafyLanguage,
-                    error.localizedDescription
+                    cleanupWarning
                 )
-                : error.localizedDescription
+            } else {
+                dismiss()
+            }
+        } catch {
+            try? ScheduleMemoImageStore.deleteFiles(named: newImageFilenames)
+            try? ScheduleMemoAttachmentStore.deleteFiles(named: newAttachmentFiles.map(\.localFilename))
+            isSaving = false
+            errorMessage = error.localizedDescription
         }
     }
 }

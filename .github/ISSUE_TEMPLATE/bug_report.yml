@@ -1,49 +1,52 @@
 name: Bug report
-description: Report a reproducible problem in the app, website, or backend.
+description: Report a reproducible problem with platform and version evidence.
 title: "[Bug]: "
 labels: ["bug"]
 body:
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Affected platforms
+      multiple: true
+      options: [iOS, Android, Backend, Website / Admin, Repository tooling]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version / build or service commit
+      description: Name the installed binary or deployed service, not just the current source version.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Device / OS / distribution or service environment
+      placeholder: Android 16, official APK; iOS 26, TestFlight; staging / production
+    validations:
+      required: true
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What is broken?
-      placeholder: Timetable import fails after login.
+      label: Problem and actual behavior
+      description: Describe what failed and its impact.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
-      description: Write the shortest path that reproduces the problem.
-      placeholder: |
-        1. Open ...
-        2. Tap ...
-        3. See ...
+      description: Include fresh install or upgrade, identity type, and network conditions when relevant.
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
-      description: What should have happened?
+      label: Expected behavior / acceptance
     validations:
       required: true
   - type: textarea
-    id: actual
+    id: evidence
     attributes:
-      label: Actual behavior
-      description: What happened instead?
-    validations:
-      required: true
-  - type: input
-    id: environment
-    attributes:
-      label: Environment
-      description: Device, iOS version, app build, browser, or backend environment.
-      placeholder: iPhone 15, iOS 26.0, TestFlight 1.0.0
-  - type: textarea
-    id: notes
-    attributes:
-      label: Notes
-      description: Screenshots, logs, or related links. Do not include passwords, tokens, cookies, or private student data.
+      label: Evidence and related issues
+      description: Screenshots or safe logs; distinguish observed results from untested scenarios. Do not include credentials, cookies, tokens or private student data.

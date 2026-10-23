@@ -80,7 +80,10 @@ struct CustomScheduleListView: View {
     private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let presentation: SchedulePrimaryContentPresentation
 
-    init(presentation: SchedulePrimaryContentPresentation = .standalone, onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil) {
+    init(
+        presentation: SchedulePrimaryContentPresentation = .standalone,
+        onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
+    ) {
         self.onVerticalScroll = onVerticalScroll
         self.presentation = presentation
     }
@@ -106,31 +109,31 @@ struct CustomScheduleListView: View {
 
     var body: some View {
         configuredContent
-        .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
-            CustomScheduleEditorSheet(presentation: presentation)
-                .presentationDetents([.medium, .large])
-        }
-        .onAppear(perform: reloadImportantDates)
-        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
-            reloadImportantDates()
-        }
-        .leafyOperationAlert($operationAlert)
-        .confirmationDialog("删除这条日程？", isPresented: Binding(
-            get: { pendingDeleteItem != nil },
-            set: { if !$0 { pendingDeleteItem = nil } }
-        ), titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
-                if let item = pendingDeleteItem {
-                    delete(item)
+            .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
+                CustomScheduleEditorSheet(presentation: presentation)
+                    .presentationDetents([.medium, .large])
+            }
+            .onAppear(perform: reloadImportantDates)
+            .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
+                reloadImportantDates()
+            }
+            .leafyOperationAlert($operationAlert)
+            .confirmationDialog("删除这条日程？", isPresented: Binding(
+                get: { pendingDeleteItem != nil },
+                set: { if !$0 { pendingDeleteItem = nil } }
+            ), titleVisibility: .visible) {
+                Button("删除", role: .destructive) {
+                    if let item = pendingDeleteItem {
+                        delete(item)
+                    }
+                    pendingDeleteItem = nil
                 }
-                pendingDeleteItem = nil
+                Button("取消", role: .cancel) {
+                    pendingDeleteItem = nil
+                }
+            } message: {
+                Text("删除后无法恢复。")
             }
-            Button("取消", role: .cancel) {
-                pendingDeleteItem = nil
-            }
-        } message: {
-            Text("删除后无法恢复。")
-        }
     }
 
     @ViewBuilder
@@ -232,7 +235,11 @@ struct CustomScheduleListView: View {
         case .timetable(let reminder):
             editorPresentation = .timetable(context(for: reminder), allowsModeSelection: false)
         case .importantDate(let event, _):
-            editorPresentation = .importantDate(event, defaultContext: defaultTimetableContext(for: event.startsAt), allowsModeSelection: false)
+            editorPresentation = .importantDate(
+                event,
+                defaultContext: defaultTimetableContext(for: event.startsAt),
+                allowsModeSelection: false
+            )
         }
     }
 
@@ -240,10 +247,10 @@ struct CustomScheduleListView: View {
     private func delete(_ item: CustomScheduleListItem) {
         switch item {
         case .timetable(let reminder):
-            TimetableNotificationManager.cancelReminder(for: reminder)
-            modelContext.delete(reminder)
+            let notificationSnapshot = SyncedTimetableCellReminder(reminder).make()
             do {
-                try modelContext.save()
+                try LocalModelSave.delete(reminder, in: modelContext)
+                TimetableNotificationManager.cancelReminder(for: notificationSnapshot)
                 LeafyWidgetSnapshotBuilder.publish(
                     from: modelContext,
                     isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
@@ -253,12 +260,14 @@ struct CustomScheduleListView: View {
                 operationAlert = .failure(error.localizedDescription)
             }
         case .importantDate(let event, _):
-            var events = CustomScheduleStore.load()
-            events.removeAll { $0.id == event.id }
-            TimetableNotificationManager.cancelReminder(for: event)
-            CustomScheduleStore.save(events)
-            importantDateEvents = events
-            operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
+            do {
+                var events = try CustomScheduleStore.loadForSync()
+                events.removeAll { $0.id == event.id }
+                try CustomScheduleStore.save(events)
+                TimetableNotificationManager.cancelReminder(for: event)
+                importantDateEvents = events
+                operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
+            } catch { operationAlert = .failure(error.localizedDescription) }
         }
     }
 
@@ -267,7 +276,11 @@ struct CustomScheduleListView: View {
             week: reminder.week,
             day: reminder.dayOfWeek,
             period: reminder.displayStartPeriod,
-            date: reminder.resolvedStartDate ?? defaultDate(week: reminder.week, day: reminder.dayOfWeek, period: reminder.displayStartPeriod),
+            date: reminder.resolvedStartDate ?? defaultDate(
+                week: reminder.week,
+                day: reminder.dayOfWeek,
+                period: reminder.displayStartPeriod
+            ),
             occupiedPeriods: [],
             totalPeriods: TimetablePeriodSchedule.slots.count,
             reminder: reminder,
@@ -295,7 +308,6 @@ struct CustomScheduleListView: View {
             of: date
         ) ?? date
     }
-
 }
 
 struct CustomCountdownListView: View {

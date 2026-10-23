@@ -38,9 +38,9 @@ enum LeafyAppIconManager {
 
         UIApplication.shared.setAlternateIconName(iconName) { error in
             #if DEBUG
-            if let error {
-                print("Leafy alternate icon update failed: \(error)")
-            }
+                if let error {
+                    print("Leafy alternate icon update failed: \(error)")
+                }
             #endif
         }
     }
@@ -65,7 +65,6 @@ enum LeafyAppIconManager {
             return nil
         }
     }
-
 }
 
 private enum LeafyAppIconImageError: LocalizedError {

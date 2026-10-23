@@ -19,3 +19,30 @@ class SelectionTests(unittest.TestCase):
 
     def test_workflow_changes_validate_all_jobs(self):
         self.assertTrue(all(changes.affected(['.github/workflows/ci.yml']).values()))
+
+    def test_swift_formatting_configuration_selects_ios(self):
+        for path in ('.swiftformat', 'scripts/format-swift.sh'):
+            with self.subTest(path=path):
+                self.assertEqual(changes.affected([path]), dict(
+                    ios=True, android=False, backend=False, site=False, supabase=False))
+
+    def test_shared_editor_settings_select_both_clients(self):
+        self.assertEqual(changes.affected(['.editorconfig']), dict(
+            ios=True, android=True, backend=False, site=False, supabase=False))
+
+    def test_new_sources_and_gradle_configuration_select_their_platform(self):
+        for path, platform in (
+            ('LeafyExternalImportShared/NewImport.swift', 'ios'),
+            ('leafyTests/NewTests.swift', 'ios'),
+            ('android/app/src/androidTest/java/NewTest.kt', 'android'),
+            ('android/build.gradle.kts', 'android'),
+            ('android/gradle/libs.versions.toml', 'android'),
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(changes.affected([path])[platform])
+
+    def test_status_and_contribution_docs_do_not_build_clients(self):
+        self.assertFalse(any(changes.affected([
+            'state/PLATFORMS.md', 'AGENTS.md', 'CONTRIBUTING.md',
+            '.github/ISSUE_TEMPLATE/bug_report.yml', '.github/pull_request_template.md',
+        ]).values()))

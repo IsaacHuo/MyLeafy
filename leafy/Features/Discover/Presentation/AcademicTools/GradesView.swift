@@ -64,7 +64,7 @@ struct ManualGradeDraft: Equatable {
         guard !normalized.courseName.isEmpty else {
             throw ManualGradeValidationError.missingCourseName
         }
-        guard let creditValue = Double(normalized.credit), creditValue >= 0 else {
+        guard let creditValue = Double(normalized.credit), creditValue.isFinite, creditValue >= 0 else {
             throw ManualGradeValidationError.invalidCredit
         }
         guard !normalized.score.isEmpty else {
@@ -100,7 +100,8 @@ enum ManualGradeStore {
     static func save(
         draft: ManualGradeDraft,
         editing grade: Grade?,
-        in modelContext: ModelContext
+        in modelContext: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> Grade {
         let validatedDraft = try draft.validated()
         let target: Grade
@@ -117,6 +118,14 @@ enum ManualGradeStore {
             modelContext.insert(target)
         }
 
+        let previous = ManualGradeDraft(
+            term: target.term,
+            courseName: target.courseName,
+            credit: target.credit,
+            score: target.score,
+            type: target.type
+        )
+        let previousUpdatedAt = target.updatedAt
         target.term = validatedDraft.term
         target.courseName = validatedDraft.courseName
         target.credit = validatedDraft.credit
@@ -124,23 +133,24 @@ enum ManualGradeStore {
         target.type = validatedDraft.type
         target.updatedAt = Date()
 
-        do {
-            try modelContext.save()
-            return target
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
+        try LocalModelSave.save(modelContext, undo: {
+            if grade == nil { modelContext.delete(target) }
+            else {
+                target.term = previous.term
+                target.courseName = previous.courseName
+                target.credit = previous.credit
+                target.score = previous.score
+                target.type = previous.type
+                target.updatedAt = previousUpdatedAt
+            }
+        }, using: save)
+        return target
     }
 
-    static func delete(_ grade: Grade, in modelContext: ModelContext) throws {
+    static func delete(_ grade: Grade, in modelContext: ModelContext,
+                       save: (ModelContext) throws -> Void = { try $0.save() }) throws {
         modelContext.delete(grade)
-        do {
-            try modelContext.save()
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
+        try LocalModelSave.save(modelContext, undo: { modelContext.insert(grade) }, using: save)
     }
 }
 
@@ -478,9 +488,11 @@ struct GradesView: View {
         }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
-                ReviewDemoDataSeeder.seed(using: modelContext)
-                creditSummary = SchoolDataCache.loadGradeCreditSummary()
-                alertMessage = L10n.text("已刷新演示成绩数据。", language: leafyLanguage)
+                do {
+                    try ReviewDemoDataSeeder.seed(using: modelContext)
+                    creditSummary = SchoolDataCache.loadGradeCreditSummary()
+                    alertMessage = L10n.text("已刷新演示成绩数据。", language: leafyLanguage)
+                } catch { alertMessage = error.localizedDescription }
                 showAlert = true
             }
             return
@@ -800,7 +812,12 @@ private struct GradeAnalyticsCard: View {
                     subtitle: analytics.weightedAverageSourceText
                 )
                 analyticsItem(title: "总学分", value: format(analytics.totalCredits), subtitle: "有效课程")
-                analyticsItem(title: "风险课程", value: "\(analytics.riskCourseCount)", subtitle: "未通过", isRisk: analytics.riskCourseCount > 0)
+                analyticsItem(
+                    title: "风险课程",
+                    value: "\(analytics.riskCourseCount)",
+                    subtitle: "未通过",
+                    isRisk: analytics.riskCourseCount > 0
+                )
             }
         }
         .padding(.vertical, 4)
@@ -870,7 +887,10 @@ private struct GradeCSVImportGuideSheet: View {
                                 .textSelection(.enabled)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.fill,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                             Text("term 可写学期，credit 和 score 按学校原表填写；type 可写必修、选修、通识等分类。")
                                 .microCaption()
                                 .foregroundStyle(AppTheme.secondaryText)
@@ -886,7 +906,10 @@ private struct GradeCSVImportGuideSheet: View {
                                 .textSelection(.enabled)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.fill,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                         }
                     }
                 }
@@ -910,9 +933,9 @@ private struct GradeCSVImportGuideSheet: View {
     }
 
     private static let sampleCSV = """
-term,courseName,credit,score,type
-2025-2026-1,大学英语,2.0,88,必修
-"""
+    term,courseName,credit,score,type
+    2025-2026-1,大学英语,2.0,88,必修
+    """
 }
 
 struct GradeAnalyticsDetailView: View {
@@ -1108,7 +1131,10 @@ struct GradeAnalyticsDetailView: View {
         let officialText = displayedAnalytics.officialGPA == nil
             ? L10n.text("当前缓存没有解析到学校官方 GPA，因此 GPA 暂不展示。", language: leafyLanguage)
             : L10n.text("页面已解析到学校官方 GPA，GPA 展示只使用官方值。", language: leafyLanguage)
-        return officialText + L10n.text(" 其他统计为本地估算：学校课程按课程编号区分，同编号补考或重修优先取已通过且分数最高记录；缺少编号的旧记录不跨学期合并。文字等级只用于判断是否通过和计算学分，不换算成分数。", language: leafyLanguage)
+        return officialText + L10n.text(
+            " 其他统计为本地估算：学校课程按课程编号区分，同编号补考或重修优先取已通过且分数最高记录；缺少编号的旧记录不跨学期合并。文字等级只用于判断是否通过和计算学分，不换算成分数。",
+            language: leafyLanguage
+        )
     }
 
     private var supplementalStatistics: some View {
@@ -1252,19 +1278,19 @@ struct GradeAnalyticsDetailView: View {
     @MainActor
     private func generateSharePreview() {
         let content = GradeSummaryShareCard(analytics: displayedAnalytics)
-        .frame(width: 390)
-        .padding(18)
-        .background(
-            LinearGradient(
-                colors: [
-                    AppTheme.background,
-                    AppTheme.accentSoft.opacity(0.42),
-                    AppTheme.background
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            .frame(width: 390)
+            .padding(18)
+            .background(
+                LinearGradient(
+                    colors: [
+                        AppTheme.background,
+                        AppTheme.accentSoft.opacity(0.42),
+                        AppTheme.background
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             )
-        )
 
         let renderer = ImageRenderer(content: content)
         renderer.scale = UIScreen.main.scale
@@ -1356,7 +1382,8 @@ struct GradeAnalyticsDetailView: View {
         guard !isLoadingRankings else { return }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
-                ReviewDemoDataSeeder.refreshSchoolCaches()
+                do { try ReviewDemoDataSeeder.refreshSchoolCaches() }
+                catch { rankingMessage = error.localizedDescription; return }
                 rankings = SchoolDataCache.loadGradeRankings()
                 creditSummary = SchoolDataCache.loadGradeCreditSummary()
                 rankingMessage = ""
@@ -1413,7 +1440,8 @@ struct GradeAnalyticsDetailView: View {
                 return
             }
             await MainActor.run {
-                rankingMessage = error.localizedDescription.isEmpty ? L10n.text("教务暂未开放成绩排名。", language: leafyLanguage) : error.localizedDescription
+                rankingMessage = error.localizedDescription.isEmpty ? L10n
+                    .text("教务暂未开放成绩排名。", language: leafyLanguage) : error.localizedDescription
                 isLoadingRankings = false
                 if userInitiated, SchoolReauthentication.shouldPromptForUserInitiatedAccess(error) {
                     progressController.record(
@@ -1472,9 +1500,21 @@ private struct GradeOverviewCard: View {
             columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2),
             spacing: 10
         ) {
-            GradeMetricTile(title: "GPA", value: analytics.displayGPA.map(format) ?? "--", subtitle: analytics.gpaSourceText)
-            GradeMetricTile(title: "加权均分", value: analytics.displayWeightedAverage.map(format) ?? "--", subtitle: analytics.weightedAverageSourceText)
-            GradeMetricTile(title: "通过率", value: analytics.passRate.map(percent) ?? "--", subtitle: "\(analytics.effectiveCourseCount) 门有效课")
+            GradeMetricTile(
+                title: "GPA",
+                value: analytics.displayGPA.map(format) ?? "--",
+                subtitle: analytics.gpaSourceText
+            )
+            GradeMetricTile(
+                title: "加权均分",
+                value: analytics.displayWeightedAverage.map(format) ?? "--",
+                subtitle: analytics.weightedAverageSourceText
+            )
+            GradeMetricTile(
+                title: "通过率",
+                value: analytics.passRate.map(percent) ?? "--",
+                subtitle: "\(analytics.effectiveCourseCount) 门有效课"
+            )
             GradeMetricTile(
                 title: "已通过学分",
                 value: creditFormat(analytics.passedCredits),
@@ -1580,7 +1620,9 @@ private struct GradeMetricTile: View {
         .padding(12)
         .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(L10n.text(title, language: leafyLanguage)) \(value)，\(L10n.text(subtitle, language: leafyLanguage))")
+        .accessibilityLabel(
+            "\(L10n.text(title, language: leafyLanguage)) \(value)，\(L10n.text(subtitle, language: leafyLanguage))"
+        )
     }
 }
 
@@ -1623,7 +1665,7 @@ private struct GradeTermTrendChart: View {
                                 }
                         }
                     }
-                    .chartYScale(domain: 0...100)
+                    .chartYScale(domain: 0 ... 100)
                     .chartYAxis {
                         AxisMarks(position: .leading, values: [60, 70, 80, 90, 100]) { _ in
                             AxisGridLine()
@@ -2109,7 +2151,15 @@ private struct RankingAnalysisCard: View {
         let impactCourse = analytics.highImpactCourses.first
 
         if let impactCourse {
-            return L10n.text("当前均分 %@，官方 GPA %@。可优先检查 %@（%.1f 学分）；%@。", language: leafyLanguage, averageText, gpaText, impactCourse.name, impactCourse.credit, riskText)
+            return L10n.text(
+                "当前均分 %@，官方 GPA %@。可优先检查 %@（%.1f 学分）；%@。",
+                language: leafyLanguage,
+                averageText,
+                gpaText,
+                impactCourse.name,
+                impactCourse.credit,
+                riskText
+            )
         }
 
         return L10n.text("当前均分 %@，官方 GPA %@。可继续关注高学分课程；%@。", language: leafyLanguage, averageText, gpaText, riskText)
@@ -2150,7 +2200,11 @@ private struct GradeSummaryShareCard: View {
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
                 shareMetric("GPA", analytics.displayGPA.map(format) ?? "--", analytics.gpaSourceText)
-                shareMetric("均分", analytics.displayWeightedAverage.map(format) ?? "--", analytics.weightedAverageSourceText)
+                shareMetric(
+                    "均分",
+                    analytics.displayWeightedAverage.map(format) ?? "--",
+                    analytics.weightedAverageSourceText
+                )
                 shareMetric("学分", creditFormat(analytics.totalCredits), "\(creditFormat(analytics.passedCredits)) 已通过")
                 shareMetric("通过率", analytics.passRate.map(percent) ?? "--", "\(analytics.effectiveCourseCount) 门有效课")
             }

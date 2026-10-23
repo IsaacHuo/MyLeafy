@@ -172,10 +172,38 @@ final class TimetableWeatherAdviceTests: XCTestCase {
 
     func testScheduleItemsKeepOnlyTodayCurrentWeekFutureItems() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
-        let currentCourse = Course(courseName: "高等数学", teacher: "王老师", room: "一教 101", dayOfWeek: 1, weeks: [1], duration: [1, 2])
-        let otherWeekCourse = Course(courseName: "大学英语", teacher: "李老师", room: "二教 201", dayOfWeek: 1, weeks: [2], duration: [1])
-        let otherDayCourse = Course(courseName: "体育", teacher: "赵老师", room: "操场", dayOfWeek: 2, weeks: [1], duration: [1])
-        let pastReminder = TimetableCellReminder(week: 1, dayOfWeek: 1, period: 1, title: "晨读", startsAt: now.addingTimeInterval(-90 * 60), endsAt: now.addingTimeInterval(-30 * 60))
+        let currentCourse = Course(
+            courseName: "高等数学",
+            teacher: "王老师",
+            room: "一教 101",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1, 2]
+        )
+        let otherWeekCourse = Course(
+            courseName: "大学英语",
+            teacher: "李老师",
+            room: "二教 201",
+            dayOfWeek: 1,
+            weeks: [2],
+            duration: [1]
+        )
+        let otherDayCourse = Course(
+            courseName: "体育",
+            teacher: "赵老师",
+            room: "操场",
+            dayOfWeek: 2,
+            weeks: [1],
+            duration: [1]
+        )
+        let pastReminder = TimetableCellReminder(
+            week: 1,
+            dayOfWeek: 1,
+            period: 1,
+            title: "晨读",
+            startsAt: now.addingTimeInterval(-90 * 60),
+            endsAt: now.addingTimeInterval(-30 * 60)
+        )
         let futureReminder = TimetableCellReminder(week: 1, dayOfWeek: 1, period: 3, title: "交作业")
         let exam = ExamArrangement(
             id: 1,
@@ -200,7 +228,14 @@ final class TimetableWeatherAdviceTests: XCTestCase {
 
     func testRainSuggestionMentionsAffectedCourse() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
-        let course = Course(courseName: "高等数学", teacher: "王老师", room: "一教 101", dayOfWeek: 1, weeks: [1], duration: [1, 2])
+        let course = Course(
+            courseName: "高等数学",
+            teacher: "王老师",
+            room: "一教 101",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1, 2]
+        )
         let items = TimetableWeatherAdviceBuilder.scheduleItems(
             courses: [course],
             cellReminders: [],
@@ -209,7 +244,13 @@ final class TimetableWeatherAdviceTests: XCTestCase {
             now: now
         )
         let snapshot = makeSnapshot(hours: [
-            makeHour(date: classStartDate, temperature: 21, condition: "雨", symbolName: "cloud.rain", precipitationChance: 0.6)
+            makeHour(
+                date: classStartDate,
+                temperature: 21,
+                condition: "雨",
+                symbolName: "cloud.rain",
+                precipitationChance: 0.6
+            )
         ])
 
         let summary = TimetableWeatherAdviceBuilder.makeSummary(snapshot: snapshot, scheduleItems: items, now: now)
@@ -220,7 +261,12 @@ final class TimetableWeatherAdviceTests: XCTestCase {
 
     func testColdSuggestionAsksForExtraLayer() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
-        let item = TimetableWeatherScheduleItem(title: "早八", kind: .course, startsAt: classStartDate, endsAt: classEndDate)
+        let item = TimetableWeatherScheduleItem(
+            title: "早八",
+            kind: .course,
+            startsAt: classStartDate,
+            endsAt: classEndDate
+        )
         let snapshot = makeSnapshot(hours: [
             makeHour(
                 date: classStartDate,
@@ -252,7 +298,12 @@ final class TimetableWeatherAdviceTests: XCTestCase {
 
     func testHeatAndUVSuggestionsCanAppearTogether() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
-        let item = TimetableWeatherScheduleItem(title: "植物学", kind: .course, startsAt: classStartDate, endsAt: classEndDate)
+        let item = TimetableWeatherScheduleItem(
+            title: "植物学",
+            kind: .course,
+            startsAt: classStartDate,
+            endsAt: classEndDate
+        )
         let snapshot = makeSnapshot(hours: [
             makeHour(
                 date: classStartDate,
@@ -298,7 +349,12 @@ final class TimetableWeatherAdviceTests: XCTestCase {
 
     func testCalmWeatherUsesDefaultScheduleSuggestion() {
         let now = classStartDate.addingTimeInterval(-30 * 60)
-        let item = TimetableWeatherScheduleItem(title: "英语", kind: .course, startsAt: classStartDate, endsAt: classEndDate)
+        let item = TimetableWeatherScheduleItem(
+            title: "英语",
+            kind: .course,
+            startsAt: classStartDate,
+            endsAt: classEndDate
+        )
         let snapshot = makeSnapshot(hours: [
             makeHour(date: classStartDate, temperature: 22, condition: "多云", symbolName: "cloud.sun")
         ])
@@ -306,6 +362,20 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         let summary = TimetableWeatherAdviceBuilder.makeSummary(snapshot: snapshot, scheduleItems: [item], now: now)
 
         XCTAssertEqual(summary.suggestions.first?.id, "clear")
+    }
+
+    @MainActor
+    func testCancelledWeatherFetchDoesNotReturnOrOverwriteFreshCache() async {
+        let cached = makeSnapshot(hours: [makeHour(date: classStartDate, temperature: 18, condition: "晴")])
+        let cache = InMemoryTimetableWeatherCache(snapshot: cached, savedAt: Date())
+        let service = WeatherKitTimetableWeatherService(locationProvider: StubTimetableLocationProvider(),
+                                                        weatherFetcher: { _ in throw CancellationError() },
+                                                        cache: cache)
+        do {
+            _ = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+            XCTFail("Cancellation must not become cached success")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(cache.currentWeather(maxAge: 60), cached)
     }
 
     private var classStartDate: Date {
@@ -401,5 +471,49 @@ private final class InMemoryTimetableWeatherCache: TimetableWeatherCaching, @unc
             return nil
         }
         return snapshot
+    }
+}
+
+extension TimetableWeatherAdviceTests {
+    @MainActor
+    func testReusedWeatherServiceResolvesCurrentIdentityCacheAndRejectsOldResponse() async throws {
+        let previous = ActiveCampusContext.identity
+        let first = CampusIdentity(
+            campusID: .bjfu,
+            eduID: "weather-a-" + UUID().uuidString,
+            displayName: nil,
+            portal: .undergraduate
+        )
+        let second = CampusIdentity(
+            campusID: .custom,
+            eduID: "weather-b-" + UUID().uuidString,
+            displayName: nil,
+            portal: .undergraduate
+        )
+        let expected = makeSnapshot(hours: [])
+        let service = WeatherKitTimetableWeatherService(
+            locationProvider: StubTimetableLocationProvider(),
+            weatherFetcher: { _ in
+                await MainActor.run { CampusIdentityStore.activate(second) }
+                return expected
+            }
+        )
+        CampusIdentityStore.activate(first)
+        let firstKey = CampusScopedDefaults.key("timetableWeather.cache.v2")
+        let secondKey = CampusScopedDefaults.key("timetableWeather.cache.v2", identity: second)
+        defer {
+            UserDefaults.standard.removeObject(forKey: firstKey)
+            UserDefaults.standard.removeObject(forKey: secondKey)
+            if let previous { CampusIdentityStore.activate(previous) } else { CampusIdentityStore.clear() }
+        }
+        do {
+            _ = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+            XCTFail("The first identity response must be cancelled after switching identities")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertNil(service.cachedWeather(maxAge: 60))
+        _ = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+        XCTAssertEqual(service.cachedWeather(maxAge: 60), expected)
+        CampusIdentityStore.activate(first)
+        XCTAssertNil(service.cachedWeather(maxAge: 60))
     }
 }

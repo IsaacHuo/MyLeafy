@@ -40,8 +40,6 @@ nonisolated enum CommunityPublishMediaKind: String, Codable, Hashable, Sendable 
     case attachment
 }
 
-
-
 nonisolated struct CommunityPublishMediaItem: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     let kind: CommunityPublishMediaKind
@@ -262,7 +260,8 @@ nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSession
                 self.lock.unlock()
 
                 if tasks.contains(where: {
-                    Self.isCurrentBackendUpload($0.originalRequest?.url) && CommunityBackgroundTransferDescriptor.decode($0.taskDescription)?.key == descriptor.key
+                    Self.isCurrentBackendUpload($0.originalRequest?.url) && CommunityBackgroundTransferDescriptor
+                        .decode($0.taskDescription)?.key == descriptor.key
                 }) {
                     return
                 }
@@ -315,7 +314,7 @@ nonisolated final class CommunityBackgroundTransferManager: NSObject, URLSession
         if let error {
             result = .failure(error)
         } else if let response = task.response as? HTTPURLResponse,
-                  (200..<300).contains(response.statusCode) {
+                  (200 ..< 300).contains(response.statusCode) {
             result = .success(CommunityBackgroundTransferResult(statusCode: response.statusCode, data: data))
         } else {
             let status = (task.response as? HTTPURLResponse)?.statusCode ?? -1
@@ -374,15 +373,22 @@ final class CommunityPublishCoordinator: ObservableObject {
     private let notificationDismissedKey = "community.publish.notification.dismissed.ids"
     private let backend: any CommunityPublishBackend
     private var workers: [UUID: Task<Void, Never>] = [:]
+    private var workerIDs: [UUID: UUID] = [:]
     private var hasConfigured = false
 
     init(
         backend: any CommunityPublishBackend = CommunityBackendFactory.publish,
         rootDirectory: URL? = nil,
-        writeManifest: @escaping (Data, URL) throws -> Void = { try $0.write(to: $1, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
+        writeManifest: @escaping (Data, URL) throws -> Void = { try $0.write(
+            to: $1,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        ) }
     ) {
         self.backend = backend
-        self.rootDirectory = rootDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("CommunityPublishQueue", isDirectory: true)
+        self.rootDirectory = rootDirectory ?? FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0].appendingPathComponent("CommunityPublishQueue", isDirectory: true)
         self.writeManifest = writeManifest
         tasks = loadPersistedTasks()
         guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
@@ -398,6 +404,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             guard path.status == .satisfied else { return }
             Task { @MainActor [weak self] in
                 self?.resumeAutomaticallyRetryableTasks()
+                self?.resumePendingCancellations()
             }
         }
         networkMonitor.start(queue: networkMonitorQueue)
@@ -447,6 +454,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             CommunityBackgroundTransferManager.shared.reconnect()
         }
         resumeAutomaticallyRetryableTasks()
+        resumePendingCancellations()
         startQueuedWork()
     }
 
@@ -595,19 +603,14 @@ final class CommunityPublishCoordinator: ObservableObject {
               !tasks[index].state.isTerminal else { return }
         let previous = tasks[index]
         tasks[index].state = .cancelling
+        tasks[index].errorMessage = nil
         tasks[index].updatedAt = Date()
         guard persistTasks() else { tasks[index] = previous; return }
         workers[taskID]?.cancel()
         workers[taskID] = nil
         CommunityBackgroundTransferManager.shared.cancel(publishTaskID: taskID)
-        Task {
-            if (try? await backend.pendingPostContext(postID: taskID)) != nil {
-                try? await backend.abortPendingPost(postID: taskID)
-            }
-            await MainActor.run {
-                self.finishCancellation(taskID: taskID)
-            }
-        }
+        workerIDs[taskID] = nil
+        startCancellation(taskID: taskID)
     }
 
     func handleIdentityChange() {
@@ -651,7 +654,8 @@ final class CommunityPublishCoordinator: ObservableObject {
     private func resumeAutomaticallyRetryableTasks() {
         var resumedTaskIDs: [UUID] = []
         for index in tasks.indices
-        where isCurrentOwner(tasks[index]) && tasks[index].state == .failed && tasks[index].automaticallyRetryable == true {
+            where isCurrentOwner(tasks[index]) && tasks[index].state == .failed && tasks[index]
+            .automaticallyRetryable == true {
             tasks[index].state = .queued
             tasks[index].errorMessage = nil
             tasks[index].automaticallyRetryable = nil
@@ -681,11 +685,55 @@ final class CommunityPublishCoordinator: ObservableObject {
     }
 
     private func startWorker(taskID: UUID) {
-        guard workers[taskID] == nil, let task = tasks.first(where: { $0.id == taskID }), isCurrentOwner(task), !queueUnreadable, !queueWriteFailed else { return }
+        guard workers[taskID] == nil, let task = tasks.first(where: { $0.id == taskID }), isCurrentOwner(task),
+              !queueUnreadable, !queueWriteFailed else { return }
+        let workerID = UUID()
+        workerIDs[taskID] = workerID
         workers[taskID] = Task { [weak self] in
             await self?.process(taskID: taskID)
-            await MainActor.run {
-                self?.workers[taskID] = nil
+            self?.finishWorker(taskID: taskID, workerID: workerID)
+        }
+    }
+
+    private func finishWorker(taskID: UUID, workerID: UUID) {
+        guard workerIDs[taskID] == workerID else { return }
+        workers[taskID] = nil
+        workerIDs[taskID] = nil
+    }
+
+    private func resumePendingCancellations() {
+        for task in tasks where task.state == .cancelling && isCurrentOwner(task) {
+            startCancellation(taskID: task.id)
+        }
+    }
+
+    private func startCancellation(taskID: UUID) {
+        guard workers[taskID] == nil, !queueUnreadable, !queueWriteFailed,
+              let task = tasks.first(where: { $0.id == taskID }),
+              task.state == .cancelling, isCurrentOwner(task) else { return }
+        let workerID = UUID()
+        workerIDs[taskID] = workerID
+        workers[taskID] = Task { [weak self] in
+            guard let self else { return }
+            defer { finishWorker(taskID: taskID, workerID: workerID) }
+            let scope = CampusOperationScope()
+            do {
+                let pending = try await backend.pendingPostContext(postID: taskID)
+                try scope.check()
+                if pending?.status == "published" {
+                    complete(taskID: taskID)
+                    return
+                }
+                if pending != nil {
+                    try await backend.abortPendingPost(postID: taskID)
+                    try scope.check()
+                }
+                finishCancellation(taskID: taskID)
+            } catch {
+                guard !scope.wasCancelled(error) else { return }
+                updateTask(taskID) {
+                    $0.errorMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -757,46 +805,103 @@ final class CommunityPublishCoordinator: ObservableObject {
 
     private func processMedia(taskID: UUID, mediaID: UUID) async throws {
         guard try !requiredMedia(taskID: taskID, mediaID: mediaID).validated else { return }
-        try await processDirectMedia(backend, taskID: taskID, mediaID: mediaID, directory: taskDirectory(taskID: taskID, create: false))
+        try await processDirectMedia(
+            backend,
+            taskID: taskID,
+            mediaID: mediaID,
+            directory: taskDirectory(taskID: taskID, create: false)
+        )
     }
 
-    private func processDirectMedia(_ backend: any CommunityDirectMediaUploading, taskID: UUID, mediaID: UUID, directory: URL) async throws {
+    private func processDirectMedia(
+        _ backend: any CommunityDirectMediaUploading,
+        taskID: UUID,
+        mediaID: UUID,
+        directory: URL
+    ) async throws {
         var media = try requiredMedia(taskID: taskID, mediaID: mediaID)
         if !media.fullUploaded {
-            let component: CommunityBackgroundTransferDescriptor.Component = media.kind == .image ? .imageFull : .attachmentChunk
-            let path = try await backend.uploadMedia(kind: media.kind == .image ? "full" : "attachment", taskID: taskID, mediaID: mediaID, name: media.displayName, contentType: media.contentType, fileURL: directory.appendingPathComponent(media.localRelativePath), descriptor: CommunityBackgroundTransferDescriptor(publishTaskID: taskID, mediaID: mediaID, component: component, offset: 0, byteCount: Int64(media.byteSize)))
+            let component: CommunityBackgroundTransferDescriptor.Component = media
+                .kind == .image ? .imageFull : .attachmentChunk
+            let path = try await backend.uploadMedia(
+                kind: media.kind == .image ? "full" : "attachment",
+                taskID: taskID,
+                mediaID: mediaID,
+                name: media.displayName,
+                contentType: media.contentType,
+                fileURL: directory.appendingPathComponent(media.localRelativePath),
+                descriptor: CommunityBackgroundTransferDescriptor(
+                    publishTaskID: taskID,
+                    mediaID: mediaID,
+                    component: component,
+                    offset: 0,
+                    byteCount: Int64(media.byteSize)
+                )
+            )
             _ = try requiredTask(taskID)
-            updateMedia(taskID: taskID, mediaID: mediaID) { $0.remotePath = path; $0.fullUploaded = true; $0.progress = 0.5 }
+            updateMedia(taskID: taskID, mediaID: mediaID) {
+                $0.remotePath = path; $0.fullUploaded = true; $0.progress = 0.5 }
         }
         media = try requiredMedia(taskID: taskID, mediaID: mediaID)
         if media.kind == .image, !media.thumbnailUploaded {
-            guard let relative = media.thumbnailRelativePath else { throw CommunityServiceError.edgeFunctionRejected("图片缩略图不存在。") }
+            guard let relative = media.thumbnailRelativePath
+            else { throw CommunityServiceError.edgeFunctionRejected("图片缩略图不存在。") }
             let file = directory.appendingPathComponent(relative)
             let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            let path = try await backend.uploadMedia(kind: "thumb", taskID: taskID, mediaID: mediaID, name: "thumbnail.jpg", contentType: "image/jpeg", fileURL: file, descriptor: CommunityBackgroundTransferDescriptor(publishTaskID: taskID, mediaID: mediaID, component: .imageThumbnail, offset: 0, byteCount: Int64(size)))
+            let path = try await backend.uploadMedia(
+                kind: "thumb",
+                taskID: taskID,
+                mediaID: mediaID,
+                name: "thumbnail.jpg",
+                contentType: "image/jpeg",
+                fileURL: file,
+                descriptor: CommunityBackgroundTransferDescriptor(
+                    publishTaskID: taskID,
+                    mediaID: mediaID,
+                    component: .imageThumbnail,
+                    offset: 0,
+                    byteCount: Int64(size)
+                )
+            )
             _ = try requiredTask(taskID)
-            updateMedia(taskID: taskID, mediaID: mediaID) { $0.thumbnailRemotePath = path; $0.thumbnailUploaded = true; $0.progress = 0.9 }
+            updateMedia(taskID: taskID, mediaID: mediaID) {
+                $0.thumbnailRemotePath = path; $0.thumbnailUploaded = true; $0.progress = 0.9 }
         }
         media = try requiredMedia(taskID: taskID, mediaID: mediaID)
         guard let path = media.remotePath else { throw CommunityServiceError.edgeFunctionRejected("文件上传路径无效。") }
         setState(taskID, .validating)
         _ = try requiredTask(taskID)
         if media.kind == .image {
-            guard let thumbnail = media.thumbnailRemotePath else { throw CommunityServiceError.edgeFunctionRejected("图片上传路径无效。") }
-            try await self.backend.validateAndAttachPostImage(postID: taskID, imageID: mediaID, fullPath: path, thumbnailPath: thumbnail, sortOrder: media.sortOrder)
+            guard let thumbnail = media.thumbnailRemotePath
+            else { throw CommunityServiceError.edgeFunctionRejected("图片上传路径无效。") }
+            try await self.backend.validateAndAttachPostImage(
+                postID: taskID,
+                imageID: mediaID,
+                fullPath: path,
+                thumbnailPath: thumbnail,
+                sortOrder: media.sortOrder
+            )
         } else {
-            try await self.backend.validateAndAttachPostAttachment(postID: taskID, attachmentID: mediaID, objectPath: path, displayName: media.displayName, sortOrder: media.sortOrder)
+            try await self.backend.validateAndAttachPostAttachment(
+                postID: taskID,
+                attachmentID: mediaID,
+                objectPath: path,
+                displayName: media.displayName,
+                sortOrder: media.sortOrder
+            )
         }
         _ = try requiredTask(taskID)
         updateMedia(taskID: taskID, mediaID: mediaID) { $0.validated = true; $0.progress = 1; $0.errorMessage = nil }
         setState(taskID, .uploading)
     }
 
-    private func applyProgress(
+    func applyProgress(
         descriptor: CommunityBackgroundTransferDescriptor,
         progress: Double
     ) {
         guard let taskIndex = tasks.firstIndex(where: { $0.id == descriptor.publishTaskID }),
+              isCurrentOwner(tasks[taskIndex]), !tasks[taskIndex].state.isTerminal,
+              tasks[taskIndex].state != .cancelling, tasks[taskIndex].state != .failed,
               let mediaIndex = tasks[taskIndex].media.firstIndex(where: { $0.id == descriptor.mediaID }) else {
             return
         }
@@ -811,9 +916,11 @@ final class CommunityPublishCoordinator: ObservableObject {
             let uploaded = Double(descriptor.offset) + progress * Double(descriptor.byteCount)
             resolved = min(0.9, uploaded / Double(max(1, media.byteSize)) * 0.9)
         }
-        tasks[taskIndex].media[mediaIndex].progress = max(media.progress, resolved)
+        let updated = max(media.progress, resolved)
+        guard updated > media.progress else { return }
+        tasks[taskIndex].media[mediaIndex].progress = updated
         tasks[taskIndex].updatedAt = Date()
-        persistTasks()
+        // Byte progress is transient; upload paths and state changes persist recovery checkpoints.
     }
 
     private func setState(_ taskID: UUID, _ state: CommunityPublishTaskState) {
@@ -845,7 +952,10 @@ final class CommunityPublishCoordinator: ObservableObject {
 
     private func fail(taskID: UUID, error: Error) {
         guard tasks.contains(where: { $0.id == taskID && $0.state != .cancelling }) else { return }
-        logger.error("Community publish failed task=\(taskID.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .private)")
+        logger
+            .error(
+                "Community publish failed task=\(taskID.uuidString, privacy: .public) error=\(error.localizedDescription, privacy: .private)"
+            )
         updateTask(taskID) {
             $0.state = .failed
             $0.errorMessage = error.localizedDescription
@@ -918,8 +1028,10 @@ final class CommunityPublishCoordinator: ObservableObject {
         guard let task = tasks.first(where: { $0.id == taskID }) else {
             throw CommunityServiceError.edgeFunctionRejected("本地发布任务已不存在。")
         }
-        guard !Task.isCancelled, isCurrentOwner(task), task.state != .cancelling, task.state != .cancelled else { throw CancellationError() }
-        guard !queueWriteFailed, !queueUnreadable else { throw CommunityServiceError.edgeFunctionRejected(storageError ?? "发布队列无法保存。") }
+        guard !Task.isCancelled, isCurrentOwner(task), task.state != .cancelling,
+              task.state != .cancelled else { throw CancellationError() }
+        guard !queueWriteFailed,
+              !queueUnreadable else { throw CommunityServiceError.edgeFunctionRejected(storageError ?? "发布队列无法保存。") }
         return task
     }
 

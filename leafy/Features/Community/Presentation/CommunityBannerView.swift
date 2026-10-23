@@ -7,6 +7,7 @@ import UIKit
 @MainActor
 final class CommunityBannerViewModel: ObservableObject {
     @Published private(set) var banner: CommunityBanner?
+    private var activeLoadID: UUID?
     private let repository: any CommunityBannerRepository
 
     init(repository: any CommunityBannerRepository) {
@@ -14,15 +15,16 @@ final class CommunityBannerViewModel: ObservableObject {
     }
 
     func load(campusID: String, defaults: UserDefaults = .standard) async {
+        let loadID = UUID()
+        activeLoadID = loadID
+        let scope = CampusOperationScope()
         do {
-            guard let fetched = try await repository.fetchActiveBanner(campusID: campusID),
-                  !defaults.bool(forKey: fetched.dismissalKey)
-            else {
-                banner = nil
-                return
-            }
-            banner = fetched
+            let fetched = try await repository.fetchActiveBanner(campusID: campusID)
+            try scope.check()
+            guard activeLoadID == loadID else { return }
+            banner = fetched.flatMap { defaults.bool(forKey: $0.dismissalKey) ? nil : $0 }
         } catch {
+            guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
             banner = nil
             CommunityDiagnostics.log.error(
                 "Community banner load failed: \(error.localizedDescription, privacy: .public)"

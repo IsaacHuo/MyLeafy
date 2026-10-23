@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import UIKit
 
 nonisolated enum CommunityImageProcessingError: LocalizedError {
@@ -23,7 +24,11 @@ extension CommunityImageUpload {
         maxBytes: Int
     ) throws -> CommunityImageUpload {
         let renderedImage = image.leafyRenderedForUpload(maxPixelDimension: maxPixelDimension)
-        guard let data = renderedImage.leafyJPEGData(maxBytes: maxBytes) else {
+        guard let data = renderedImage.leafyJPEGData(maxBytes: maxBytes),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
             throw CommunityImageProcessingError.invalidImage
         }
 
@@ -31,8 +36,8 @@ extension CommunityImageUpload {
             data: data,
             mimeType: "image/jpeg",
             fileExtension: "jpg",
-            width: Int(renderedImage.size.width.rounded()),
-            height: Int(renderedImage.size.height.rounded())
+            width: width,
+            height: height
         )
     }
 
@@ -85,7 +90,7 @@ private extension UIImage {
         var candidateMaxDimension = max(size.width, size.height)
         var smallestData: Data?
 
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             for quality in qualities {
                 guard let data = candidateImage.jpegData(compressionQuality: quality) else {
                     continue

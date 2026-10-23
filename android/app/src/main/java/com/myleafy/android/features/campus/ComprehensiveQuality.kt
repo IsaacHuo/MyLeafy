@@ -156,7 +156,6 @@ object ComprehensiveQualityRuleCatalog {
         ComprehensiveQualityComponentRule(ComprehensiveQualityComponentKind.COMPETITION_AWARD, 1.5, "通常对应竞赛获奖、等级考试、文体竞赛等项目，认定目录以学院当年细则为准。"),
     )
 
-
     val allRules: List<ComprehensiveQualityCollegeRule> =
         listOf(
             readyRule("林学院", "北京林业大学林学院推荐2026届优秀应届本科毕业生免试攻读研究生工作方案", "https://lxy.bjfu.edu.cn/rcpy/bkspy/aeb8e3cab7c44a54b9417959459644e2.htm", "适用于林学院 2026 届普通推免生测算。", "2025-09-09"),

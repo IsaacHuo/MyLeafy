@@ -136,19 +136,25 @@ struct CommunityProfileEditorView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppSpacing.card) {
-
                 if let errorMessage {
                     Text(errorMessage)
                         .leafyBody()
                         .foregroundStyle(AppTheme.danger)
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                        .background(
+                            AppTheme.cardBackground,
+                            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        )
                 }
 
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 16) {
-                        CommunityAvatarPreview(image: mediaDraft.avatarPreview, profile: sessionManager.profile, size: 72)
+                        CommunityAvatarPreview(
+                            image: mediaDraft.avatarPreview,
+                            profile: sessionManager.profile,
+                            size: 72
+                        )
 
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
@@ -161,10 +167,13 @@ struct CommunityProfileEditorView: View {
                                                 .controlSize(.small)
                                         }
 
-                                        Text(isLoadingAvatar ? L10n.text("读取中", language: leafyLanguage) : L10n.text("选择头像", language: leafyLanguage))
-                                            .leafyBody()
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.86)
+                                        Text(isLoadingAvatar ? L10n.text("读取中", language: leafyLanguage) : L10n.text(
+                                            "选择头像",
+                                            language: leafyLanguage
+                                        ))
+                                        .leafyBody()
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.86)
                                     }
                                     .foregroundStyle(AppTheme.accentEmphasis)
                                     .padding(.horizontal, 14)
@@ -173,7 +182,7 @@ struct CommunityProfileEditorView: View {
                                     .contentShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(isLoadingAvatar)
+                                .disabled(isLoadingAvatar || isSaving)
 
                                 NavigationLink {
                                     CommunityProfileCoverEditorView(
@@ -250,7 +259,10 @@ struct CommunityProfileEditorView: View {
                     TextField(L10n.text("输入社区昵称", language: leafyLanguage), text: $nickname)
                         .leafyDisableAutocapitalization()
                         .padding(14)
-                        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                        .background(
+                            AppTheme.fill,
+                            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        )
                         .onChange(of: nickname) { _, newValue in
                             let limitedNickname = CommunityNickname.limited(newValue)
                             if limitedNickname != newValue {
@@ -271,9 +283,12 @@ struct CommunityProfileEditorView: View {
 
                     TextField(L10n.text("写一句个人签名", language: leafyLanguage), text: $bio, axis: .vertical)
                         .leafyDisableAutocapitalization()
-                        .lineLimit(2...4)
+                        .lineLimit(2 ... 4)
                         .padding(14)
-                        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                        .background(
+                            AppTheme.fill,
+                            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        )
                         .onChange(of: bio) { _, newValue in
                             let limitedBio = CommunityProfileBio.limited(newValue)
                             if limitedBio != newValue {
@@ -309,11 +324,7 @@ struct CommunityProfileEditorView: View {
             syncFieldsFromProfile()
             await loadPendingCampusRequest()
         }
-        .onChange(of: selectedAvatarItem) { _, newItem in
-            Task {
-                await loadSelectedAvatar(from: newItem)
-            }
-        }
+        .task(id: selectedAvatarItem) { await loadSelectedAvatar(from: selectedAvatarItem) }
         .photosPicker(
             isPresented: $showingAvatarPicker,
             selection: $selectedAvatarItem,
@@ -340,7 +351,10 @@ struct CommunityProfileEditorView: View {
                 }
             }
             ToolbarItem(placement: .leafyTrailing) {
-                Button(isSaving ? L10n.text("保存中", language: leafyLanguage) : L10n.text("保存", language: leafyLanguage)) {
+                Button(isSaving ? L10n.text("保存中", language: leafyLanguage) : L10n.text(
+                    "保存",
+                    language: leafyLanguage
+                )) {
                     Task {
                         switch await saveProfile() {
                         case .success:
@@ -353,7 +367,7 @@ struct CommunityProfileEditorView: View {
                         }
                     }
                 }
-                .disabled(isSaving || CommunityNickname.normalized(nickname).isEmpty)
+                .disabled(isSaving || isLoadingAvatar || CommunityNickname.normalized(nickname).isEmpty)
             }
         }
         .leafyOperationAlert($operationAlert)
@@ -420,6 +434,7 @@ struct CommunityProfileEditorView: View {
                 return
             }
 
+            try Task.checkCancellation()
             guard let image = ImageDataDecoder.decodedImage(from: data) else {
                 errorMessage = L10n.text("无法读取这张图片，请换一张头像。", language: leafyLanguage)
                 return
@@ -428,6 +443,7 @@ struct CommunityProfileEditorView: View {
             avatarCropDraft = CommunityAvatarCropDraft(image: image)
             errorMessage = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = L10n.text("加载头像失败：%@", language: leafyLanguage, error.localizedDescription)
         }
     }
@@ -457,10 +473,13 @@ struct CommunityProfileEditorView: View {
             return .failure(L10n.text("资料正在保存，请稍候。", language: leafyLanguage))
         }
 
+        let scope = CampusOperationScope()
         isSaving = true
         defer { isSaving = false }
 
         await sessionManager.bootstrapCommunityUser(force: true)
+        do { try scope.check() }
+        catch { return .failure(error.localizedDescription) }
         if let bootstrapError = sessionManager.bootstrapError {
             return .failure(bootstrapError)
         }
@@ -484,6 +503,7 @@ struct CommunityProfileEditorView: View {
                 cover: mediaDraft.coverUpload,
                 resetCoverToDefault: mediaDraft.resetCoverToDefault
             )
+            try scope.check()
             if let avatarUpload = mediaDraft.avatarUpload {
                 try? CommunityAvatarCache.shared.save(data: avatarUpload.data, for: updatedProfile)
             }
@@ -607,7 +627,10 @@ private struct CommunityCampusChangeSheet: View {
                             .foregroundStyle(AppTheme.danger)
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.cardBackground,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
                     }
 
                     CommunityCampusSelectionPanel(
@@ -688,8 +711,11 @@ private struct CommunityProfileCoverEditorView: View {
                                         .controlSize(.small)
                                 }
 
-                                Text(isLoadingCover ? L10n.text("读取中", language: leafyLanguage) : L10n.text("选择照片", language: leafyLanguage))
-                                    .leafyBody()
+                                Text(isLoadingCover ? L10n.text("读取中", language: leafyLanguage) : L10n.text(
+                                    "选择照片",
+                                    language: leafyLanguage
+                                ))
+                                .leafyBody()
                             }
                             .foregroundStyle(AppTheme.accentEmphasis)
                             .padding(.horizontal, 14)
@@ -698,7 +724,7 @@ private struct CommunityProfileCoverEditorView: View {
                             .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .disabled(isLoadingCover)
+                        .disabled(isLoadingCover || isSaving)
 
                         Button {
                             coverPreview = nil
@@ -714,6 +740,7 @@ private struct CommunityProfileCoverEditorView: View {
                                 .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .disabled(isSaving)
                     }
 
                     Text(statusText)
@@ -729,7 +756,10 @@ private struct CommunityProfileCoverEditorView: View {
                         .foregroundStyle(AppTheme.danger)
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                        .background(
+                            AppTheme.cardBackground,
+                            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        )
                 }
             }
         }
@@ -739,7 +769,10 @@ private struct CommunityProfileCoverEditorView: View {
         .leafyInlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .leafyTrailing) {
-                Button(isSaving ? L10n.text("保存中", language: leafyLanguage) : L10n.text("保存", language: leafyLanguage)) {
+                Button(isSaving ? L10n.text("保存中", language: leafyLanguage) : L10n.text(
+                    "保存",
+                    language: leafyLanguage
+                )) {
                     Task {
                         switch await onSave() {
                         case .success:
@@ -753,9 +786,9 @@ private struct CommunityProfileCoverEditorView: View {
                 }
                 .disabled(
                     isSaving ||
-                    isLoadingCover ||
-                    !canSaveProfile ||
-                    (coverUpload == nil && !resetCoverToDefault)
+                        isLoadingCover ||
+                        !canSaveProfile ||
+                        (coverUpload == nil && !resetCoverToDefault)
                 )
             }
         }
@@ -764,11 +797,7 @@ private struct CommunityProfileCoverEditorView: View {
             selection: $selectedCoverItem,
             matching: .images
         )
-        .onChange(of: selectedCoverItem) { _, newItem in
-            Task {
-                await loadSelectedCover(from: newItem)
-            }
-        }
+        .task(id: selectedCoverItem) { await loadSelectedCover(from: selectedCoverItem) }
         .leafySheet(item: $coverCropDraft) { draft in
             CommunityCoverCropSheet(image: draft.image) { croppedImage in
                 applyCroppedCover(croppedImage)
@@ -798,9 +827,11 @@ private struct CommunityProfileCoverEditorView: View {
                 return
             }
 
+            try Task.checkCancellation()
             coverCropDraft = CommunityCoverCropDraft(image: image)
             errorMessage = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = L10n.text("加载背景图失败：%@", language: leafyLanguage, error.localizedDescription)
         }
     }
@@ -827,7 +858,8 @@ private struct CommunityProfileCoverEditorView: View {
 }
 
 struct CommunityAvatarView: View {
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
 
     let profile: CommunityProfile?
     let size: CGFloat
@@ -879,6 +911,8 @@ struct CommunityAvatarView: View {
 
     @MainActor
     private func loadAvatar() async {
+        let scope = CampusOperationScope()
+        let requestID = avatarTaskID
         avatarImage = CommunityAvatarCache.shared.image(for: profile)
         guard avatarImage == nil,
               let profile,
@@ -888,15 +922,17 @@ struct CommunityAvatarView: View {
 
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard !Task.isCancelled,
+            try scope.check()
+            guard requestID == avatarTaskID, !Task.isCancelled,
                   let image = ImageDataDecoder.decodedImage(
-                    from: data,
-                    targetSize: CGSize(width: size, height: size)
+                      from: data,
+                      targetSize: CGSize(width: size, height: size)
                   )
             else { return }
             try? CommunityAvatarCache.shared.save(data: data, for: profile)
             avatarImage = image
         } catch {
+            guard !scope.wasCancelled(error), requestID == avatarTaskID else { return }
             avatarImage = nil
         }
     }
@@ -986,7 +1022,8 @@ private struct CommunityProfileCoverAspectModifier: ViewModifier {
 }
 
 struct CommunityProfileDefaultCover: View {
-    @AppStorage(AppThemeColorPreference.storageKey) private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage(AppThemeColorPreference.storageKey) private var appThemeColorPreferenceRaw = AppThemeColorPreference
+        .green.rawValue
 
     var body: some View {
         LinearGradient(

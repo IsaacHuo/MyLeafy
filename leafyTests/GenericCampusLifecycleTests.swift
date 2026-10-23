@@ -38,9 +38,21 @@ final class GenericCampusLifecycleTests: XCTestCase {
 
         XCTAssertEqual(tabs, [.cultivation, .learning, .sports, .career, .postgraduate])
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.grades, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.examSchedule, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.sunshineRun, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.emptyClassroom, isCustomCampus: true, isCommunityEnabled: false))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .examSchedule,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .sunshineRun,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .emptyClassroom,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
     }
 
     func testAcademicTabsIncludeBJFUSpecificSurfacesWhenAvailable() {
@@ -63,21 +75,67 @@ final class GenericCampusLifecycleTests: XCTestCase {
 
     func testCustomCampusRoutesHideBJFUSpecificToolsButKeepLocalLifecycleTools() {
         XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.grades, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.examSchedule, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.sunshineRun, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.fitnessTestRecords, isCustomCampus: true, isCommunityEnabled: false))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .examSchedule,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .sunshineRun,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .fitnessTestRecords,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
 
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.emptyClassroom, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.campusHeatmap, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.teachingPlan, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.trainingProgram, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.sportsVenues, isCustomCampus: true, isCommunityEnabled: false))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.medicalPolicy, isCustomCampus: true, isCommunityEnabled: false, isMedicalEnabled: true))
-        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(.medicalLedger, isCustomCampus: true, isCommunityEnabled: false, isMedicalEnabled: true))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .emptyClassroom,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .campusHeatmap,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .teachingPlan,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .trainingProgram,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .sportsVenues,
+            isCustomCampus: true,
+            isCommunityEnabled: false
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .medicalPolicy,
+            isCustomCampus: true,
+            isCommunityEnabled: false,
+            isMedicalEnabled: true
+        ))
+        XCTAssertFalse(CampusAcademicVisibility.isRouteVisible(
+            .medicalLedger,
+            isCustomCampus: true,
+            isCommunityEnabled: false,
+            isMedicalEnabled: true
+        ))
     }
 
     func testBJFUWithoutCommunityOnlyHidesRatings() {
-        let tabs = AcademicPrimaryTab.visibleCases(isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true)
+        let tabs = AcademicPrimaryTab.visibleCases(
+            isCustomCampus: false,
+            isCommunityEnabled: false,
+            isMedicalEnabled: true
+        )
 
         XCTAssertTrue(tabs.contains(.cultivation))
         XCTAssertTrue(tabs.contains(.classrooms))
@@ -85,8 +143,18 @@ final class GenericCampusLifecycleTests: XCTestCase {
         XCTAssertTrue(tabs.contains(.medical))
         XCTAssertTrue(tabs.contains(.weekendTravel))
         XCTAssertFalse(tabs.contains(.ratings))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.medicalPolicy, isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true))
-        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(.medicalLedger, isCustomCampus: false, isCommunityEnabled: false, isMedicalEnabled: true))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .medicalPolicy,
+            isCustomCampus: false,
+            isCommunityEnabled: false,
+            isMedicalEnabled: true
+        ))
+        XCTAssertTrue(CampusAcademicVisibility.isRouteVisible(
+            .medicalLedger,
+            isCustomCampus: false,
+            isCommunityEnabled: false,
+            isMedicalEnabled: true
+        ))
     }
 
     func testWeekendTravelTabOnlyAppearsForBJFUCampus() {
@@ -155,9 +223,9 @@ final class GenericCampusLifecycleTests: XCTestCase {
             coordinate: CampusCoordinate(latitude: 39.0842, longitude: 117.2009),
             distanceKilometers: 120,
             travelTimeHours: 1.5,
-            recommendedDays: 2...3,
+            recommendedDays: 2 ... 3,
             bestMonths: [1, 2, 6],
-            estimatedBudgetYuan: 300...700,
+            estimatedBudgetYuan: 300 ... 700,
             highlights: ["海河", "五大道", "古文化街", "津湾", "南市", "北安桥"],
         )
 
@@ -168,9 +236,9 @@ final class GenericCampusLifecycleTests: XCTestCase {
             coordinate: CampusCoordinate(latitude: 40.824, longitude: 114.885),
             distanceKilometers: 220,
             travelTimeHours: 2.5,
-            recommendedDays: 2...3,
+            recommendedDays: 2 ... 3,
             bestMonths: [1, 2, 6],
-            estimatedBudgetYuan: 450...900,
+            estimatedBudgetYuan: 450 ... 900,
             highlights: ["草原天路东线", "崇礼奥林匹克公园", "大境门历史街区", "张北草原音乐节", "太舞滑雪小镇", "康保草原"],
         )
 
@@ -197,7 +265,18 @@ final class GenericCampusLifecycleTests: XCTestCase {
         )
         XCTAssertEqual(
             ScheduleDestination.allCases,
-            [.memos, .scheduleHub, .customSchedules, .dailyReview, .tags, .export, .statistics, .scheduleReports, .trash, .timetableProcessing]
+            [
+                .memos,
+                .scheduleHub,
+                .customSchedules,
+                .dailyReview,
+                .tags,
+                .export,
+                .statistics,
+                .scheduleReports,
+                .trash,
+                .timetableProcessing
+            ]
         )
     }
 

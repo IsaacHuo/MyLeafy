@@ -26,18 +26,22 @@ nonisolated struct ICloudSyncDiagnostic {
         func collect(_ error: NSError, depth: Int) {
             guard depth < 5 else { return }
             errors.append(error)
-            if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError { collect(underlying, depth: depth + 1) }
+            if let underlying = error
+                .userInfo[NSUnderlyingErrorKey] as? NSError { collect(underlying, depth: depth + 1) }
             if let partial = error.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Error] {
                 for child in partial.values.prefix(8) { collect(child as NSError, depth: depth + 1) }
             }
         }
         collect(error as NSError, depth: 0)
-        let cloud = errors.first { $0.domain == CKErrorDomain && $0.code != CKError.partialFailure.rawValue && $0.code != CKError.batchRequestFailed.rawValue }
+        let cloud = errors
+            .first {
+                $0.domain == CKErrorDomain && $0.code != CKError.partialFailure.rawValue && $0.code != CKError
+                    .batchRequestFailed.rawValue }
         let status = errors.compactMap { ($0.userInfo["CKHTTPStatus"] as? NSNumber)?.intValue }.first
         let reason: String
         switch cloud?.code {
         case CKError.serverRejectedRequest.rawValue:
-            if let status, (500...599).contains(status) {
+            if let status, (500 ... 599).contains(status) {
                 reason = "iCloud 服务返回 HTTP \(status)，暂时无法完成请求。本机数据和待同步记录已保留，请稍后重试。"
             } else {
                 reason = "iCloud 服务拒绝了请求。本机数据已保留，请查看错误详情中的服务端原因。"
@@ -59,7 +63,16 @@ nonisolated struct ICloudSyncDiagnostic {
         // Only include diagnostic metadata. Never dump CKRecords, headers, tokens, or payloads.
         for item in errors {
             lines.append("\(item.domain) \(item.code)：\(item.localizedDescription)")
-            for key in [NSLocalizedFailureReasonErrorKey, "CKErrorDescription", "ServerMessage", "CKHTTPStatus", "RequestUUID", "CKRequestUUID", "OperationID", CKErrorRetryAfterKey] {
+            for key in [
+                NSLocalizedFailureReasonErrorKey,
+                "CKErrorDescription",
+                "ServerMessage",
+                "CKHTTPStatus",
+                "RequestUUID",
+                "CKRequestUUID",
+                "OperationID",
+                CKErrorRetryAfterKey
+            ] {
                 if let value = item.userInfo[key] as? String { lines.append("\(key)：" + String(value.prefix(2_000))) }
                 else if let value = item.userInfo[key] as? NSNumber { lines.append("\(key)：\(value)") }
             }

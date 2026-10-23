@@ -44,7 +44,7 @@ GitHub Environments 为 `staging`、`production`、`android-candidates`、`andro
 
 ## Cloudflare：验收指定提交
 
-staging 与 production 的部署按环境分别串行，恢复使用同一串行锁。相关 main 提交检查通过后，staging 依次执行：Pages 权限预检、记录旧部署 ID 与 D1 恢复书签、迁移、Worker、隔离社区冒烟、网站、公开核对。提交对比从当前 staging 的 `/health.commit` 开始，避免遗漏此前未部署的提交。Pages 使用 `.wrangler/deploy/config.json` 指向选定的环境配置，避免 Wrangler Pages 不支持的 `--config` 参数；生成文件不进 Git。
+staging 与 production 的部署按环境分别串行，恢复使用同一串行锁。相关 main 提交检查通过后，staging 依次执行：Pages 权限预检、记录旧部署 ID 与 D1 恢复书签、迁移、Worker、隔离社区冒烟、网站、公开核对。只有 Worker `/health` 与网站 `/release.json` 同属 staging、同一提交，才从该提交计算变化；网站尚未部署或提交不一致时重新准备，避免中途失败后的再次运行错误跳过。Pages 使用 `.wrangler/deploy/config.json` 指向选定的环境配置，避免 Wrangler Pages 不支持的 `--config` 参数；生成文件不进 Git。
 
 验收完毕，在 Actions 运行 **Publish accepted Cloudflare version**：
 
@@ -57,6 +57,13 @@ production 等待用户批准。工作流读取该运行的部署报告，核对
 报告中的 D1 书签标记恢复时间点，报告访问遵循仓库权限，不能复制到公开产品页面。客户端契约检查继续覆盖仓库内正式协议及 fixtures；发布人仍需确认在用旧客户端的契约兼容性。新字段优先做可选增量，不提前移除仍在用的接口。
 
 ## 发布前短清单
+
+按每个平台候选单独执行并记录 version/build（Android code）、精确源码、检查链接、验收人/日期和待处理项。合入 main、CI 成功和候选生成都不代表以下产品验收完成；不适用项注明原因。
+
+- 来源：精确候选源码的必需 CI result 成功，未将失败或取消任务当成通过；Swift / Kotlin 风格检查与现有构建测试均通过。
+- iOS：正式签名 Archive / TestFlight 的主 App、Widget、分享扩展 version/build 一致；按本版改动验证 SwiftData 升级、CloudKit 生产环境/双设备、通知、小组件和系统日历；未完成的实际设备结果明确保留。
+- 数据升级：从当前正式版覆盖升级，检查身份、课程、个人日程、随记/媒体、备注、提醒和设置。已有数据库与在用 API 契约必须有兼容或可验证迁移，失败可恢复，不能以全新安装成功代替升级验收。
+- 追溯：版本/build、精确源码、不可变 tag、发布说明、实际二进制一致；Android 同一 APK 的 SHA-256 / 正式证书核对，iOS 以 Apple 已发布归档/构建证据核对。缺失证据记录待核实，不用当前 main 补猜。
 
 - 客户端：首次启动、免登录、登录/重新认证、关键教务查询、失败保留缓存。真实教务会话由人工验收。
 - Android：原正式版覆盖升级保留身份/本地数据，来源授权、取消/继续安装、实际安装版本正确，损坏 APK 被拒绝。

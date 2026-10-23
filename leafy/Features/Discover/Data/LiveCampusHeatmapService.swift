@@ -40,9 +40,13 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
     }
 
     func loadStoredData() async -> CampusHeatmapOutcome {
+        let scope = CampusOperationScope()
         do {
-            return .success(try await cache.load())
+            let data = try await cache.load()
+            try scope.check()
+            return .success(data)
         } catch {
+            if scope.wasCancelled(error) { return .success(nil) }
             return .fallback(
                 storedData: nil,
                 errorMessage: "上次更新的数据无法读取：\(error.localizedDescription)",
@@ -52,6 +56,7 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
     }
 
     func update(_ request: CampusHeatmapRequest) async -> CampusHeatmapOutcome {
+        let scope = CampusOperationScope()
         do {
             let rooms: [EmptyClassroom]
             if await isDemoModeEnabled() {
@@ -65,6 +70,7 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
                 rooms = try parseEmptyClassrooms(html, request.startPeriod, request.endPeriod)
             }
 
+            try scope.check()
             let updatedData = CachedCampusHeatmapData(
                 date: request.date,
                 startPeriod: request.startPeriod,
@@ -74,9 +80,11 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
             )
 
             do {
-                try await cache.save(updatedData)
+                try await cache.save(updatedData, scope: scope)
+                try scope.check()
                 return .success(updatedData)
             } catch {
+                if scope.wasCancelled(error) { return .success(nil) }
                 return .fallback(
                     storedData: updatedData,
                     errorMessage: "本次数据已更新，但未能保存到本机：\(error.localizedDescription)",
@@ -84,18 +92,22 @@ nonisolated struct LiveCampusHeatmapService: CampusHeatmapServicing {
                 )
             }
         } catch {
+            if scope.wasCancelled(error) { return .success(nil) }
             let needsLogin = requiresReauthentication(error)
             let requestMessage = needsLogin
                 ? "教务登录状态已失效，请重新点击“更新数据”并登录。"
                 : "更新失败：\(error.localizedDescription)"
 
             do {
+                let stored = try await cache.load()
+                try scope.check()
                 return .fallback(
-                    storedData: try await cache.load(),
+                    storedData: stored,
                     errorMessage: requestMessage,
                     requiresReauthentication: needsLogin
                 )
             } catch let cacheError {
+                if scope.wasCancelled(cacheError) { return .success(nil) }
                 return .fallback(
                     storedData: nil,
                     errorMessage: "\(requestMessage) 上次更新的数据也无法读取：\(cacheError.localizedDescription)",
@@ -113,8 +125,9 @@ nonisolated struct SchoolDataCampusHeatmapCache: CampusHeatmapCaching {
         }
     }
 
-    func save(_ data: CachedCampusHeatmapData) async throws {
+    func save(_ data: CachedCampusHeatmapData, scope: CampusOperationScope) async throws {
         try await MainActor.run {
+            try scope.check()
             try SchoolDataCache.saveCampusHeatmapData(data)
         }
     }

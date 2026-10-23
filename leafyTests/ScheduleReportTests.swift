@@ -24,7 +24,7 @@ final class ScheduleReportTests: XCTestCase {
         var settings = ScheduleReportSettings(isEnabled: true)
         settings.set(ScheduleReportModeSetting(isEnabled: true, hour: 32, minute: -5), for: .eveningReport)
         settings.scheduledNotificationIDs = ["one", "two"]
-        ScheduleReportSettingsStore.save(settings, defaults: defaults)
+        try ScheduleReportSettingsStore.save(settings, defaults: defaults)
 
         let key = ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)
         let loaded = ScheduleReportSettingsStore.load(defaults: defaults)
@@ -142,8 +142,24 @@ final class ScheduleReportTests: XCTestCase {
                 Course(courseName: "数据结构", teacher: "周老师", room: "主楼 202", dayOfWeek: 2, weeks: [1], duration: [3, 4])
             ],
             exams: [
-                ExamArrangement(id: 1, courseID: "A", name: "高等数学期末", date: "2026-03-16", start: "09:00", end: "11:00", location: "101"),
-                ExamArrangement(id: 2, courseID: "B", name: "大学英语期末", date: "2026-03-16", start: "14:00", end: "16:00", location: "102")
+                ExamArrangement(
+                    id: 1,
+                    courseID: "A",
+                    name: "高等数学期末",
+                    date: "2026-03-16",
+                    start: "09:00",
+                    end: "11:00",
+                    location: "101"
+                ),
+                ExamArrangement(
+                    id: 2,
+                    courseID: "B",
+                    name: "大学英语期末",
+                    date: "2026-03-16",
+                    start: "14:00",
+                    end: "16:00",
+                    location: "102"
+                )
             ],
             countdowns: [
                 CustomCountdownEvent(id: "cet", title: "四级报名", targetDate: try makeDateTime("2026-03-14 12:00")),
@@ -161,7 +177,12 @@ final class ScheduleReportTests: XCTestCase {
         )
 
         let drafts = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now, calendar: calendar)
-        let repeatedDrafts = ScheduleReportPlanner.drafts(settings: settings, input: input, now: now, calendar: calendar)
+        let repeatedDrafts = ScheduleReportPlanner.drafts(
+            settings: settings,
+            input: input,
+            now: now,
+            calendar: calendar
+        )
         let morning = try XCTUnwrap(drafts.first { $0.mode == .morningReport })
         let evening = try XCTUnwrap(drafts.first { $0.mode == .eveningReport })
         let examDrafts = drafts.filter { $0.mode == .examDigest }
@@ -340,7 +361,7 @@ final class ScheduleReportTests: XCTestCase {
 
     func testNotificationCapacityReservesOtherPendingSlotsAndKeepsEarliestDrafts() throws {
         let base = try makeDateTime("2026-03-09 08:00")
-        let drafts = (0..<10).reversed().map { offset in
+        let drafts = (0 ..< 10).reversed().map { offset in
             ScheduleReportNotificationDraft(
                 id: "draft-\(offset)",
                 mode: .custom,

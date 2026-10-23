@@ -100,6 +100,17 @@
         }
       }
     },
+    "暂存文件清理失败：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staged files could not be removed: %@"
+          }
+        }
+      }
+    },
     "正在保存到 MyLeafy..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -151,6 +162,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This batch of external temporary file records has expired, please reopen from WeChat or QQ."
+          }
+        }
+      }
+    },
+    "这批外部文件暂存记录已损坏，请重新导入。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This batch of staged files is damaged. Import it again."
           }
         }
       }

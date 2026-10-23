@@ -238,7 +238,10 @@ final class ClassroomLookupServiceTests: XCTestCase {
         let matrix = try HTMLParser.parseClassroomAvailability(html: html)
         XCTAssertThrowsError(try matrix.availableRooms(start: 1, end: 2))
         XCTAssertThrowsError(try matrix.usage(for: ClassroomIdentity(building: "二教", room: "101")))
-        XCTAssertThrowsError(try HTMLParser.parseClassroomAvailability(html: html.replacingOccurrences(of: "tdvalue=", with: "other=")))
+        XCTAssertThrowsError(try HTMLParser.parseClassroomAvailability(html: html.replacingOccurrences(
+            of: "tdvalue=",
+            with: "other="
+        )))
     }
 
     func testKnownOccupancySymbolsSupportCombinationsAndMarkup() throws {
@@ -421,7 +424,13 @@ private final class InMemoryClassroomLookupCache: ClassroomLookupCaching {
         usageByKey[usageKey(date: date, building: building, room: room)] ?? []
     }
 
-    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String, scope: CampusOperationScope) {
+    func saveClassroomUsage(
+        _ usage: [ClassroomUsageSlot],
+        date: Date,
+        building: String,
+        room: String,
+        scope: CampusOperationScope
+    ) {
         usageByKey[usageKey(date: date, building: building, room: room)] = usage
     }
 

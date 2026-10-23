@@ -115,7 +115,7 @@ struct TeacherFilterToolbar: View {
                 Button("全部星级") {
                     selectedStars = nil
                 }
-                ForEach((1...5).reversed(), id: \.self) { stars in
+                ForEach((1 ... 5).reversed(), id: \.self) { stars in
                     Button {
                         selectedStars = stars
                     } label: {
@@ -268,7 +268,7 @@ struct CourseFilterToolbar: View {
                 Button("全部星级") {
                     selectedStars = nil
                 }
-                ForEach((1...5).reversed(), id: \.self) { stars in
+                ForEach((1 ... 5).reversed(), id: \.self) { stars in
                     Button {
                         selectedStars = stars
                     } label: {
@@ -414,7 +414,8 @@ struct DishFilterToolbar: View {
                     Button {
                         selectedCanteen = canteen
                         if let currentLocation = selectedLocation,
-                           !CampusDiningLocation.locations(for: canteen).contains(where: { $0.fullName == currentLocation }) {
+                           !CampusDiningLocation.locations(for: canteen)
+                               .contains(where: { $0.fullName == currentLocation }) {
                             selectedLocation = nil
                         }
                     } label: {
@@ -438,7 +439,10 @@ struct DishFilterToolbar: View {
                         selectedCanteen = location.canteen
                         selectedLocation = location.fullName
                     } label: {
-                        Label(location.displayName, systemImage: selectedLocation == location.fullName ? "checkmark.circle.fill" : "circle")
+                        Label(
+                            location.displayName,
+                            systemImage: selectedLocation == location.fullName ? "checkmark.circle.fill" : "circle"
+                        )
                     }
                 }
             } label: {
@@ -453,7 +457,7 @@ struct DishFilterToolbar: View {
                 Button("全部星级") {
                     selectedStars = nil
                 }
-                ForEach((1...5).reversed(), id: \.self) { stars in
+                ForEach((1 ... 5).reversed(), id: \.self) { stars in
                     Button {
                         selectedStars = stars
                     } label: {
@@ -579,16 +583,17 @@ struct CatalogSuggestionSheet: View {
 
     private var canSubmit: Bool {
         !trimmedName.isEmpty &&
-        !trimmedUnit.isEmpty &&
-        (context.type == .teacher || !trimmedTeacherName.isEmpty) &&
-        isCreditValid &&
-        !isSubmitting
+            !trimmedUnit.isEmpty &&
+            (context.type != .course || !trimmedTeacherName.isEmpty) &&
+            isCreditValid &&
+            !isSubmitting
     }
 
     init(context: CatalogSuggestionSheetContext) {
         self.context = context
         _name = State(initialValue: context.initialName)
-        _category = State(initialValue: context.initialCategory?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "公选课")
+        _category = State(initialValue: context.initialCategory?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty ?? "公选课")
         let initialLocation = context.initialLocation.flatMap(CampusDiningLocation.location(for:))
         _selectedCanteen = State(initialValue: initialLocation?.canteen)
         _selectedDishLocation = State(initialValue: initialLocation?.fullName)
@@ -613,7 +618,10 @@ struct CatalogSuggestionSheet: View {
                             .foregroundStyle(AppTheme.secondaryText)
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.cardBackground,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
@@ -685,7 +693,10 @@ struct CatalogSuggestionSheet: View {
                                 .scrollContentBackground(.hidden)
                                 .frame(minHeight: 92)
                                 .padding(10)
-                                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.cardBackground,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -763,7 +774,8 @@ struct CatalogSuggestionSheet: View {
             name: trimmedName,
             unit: trimmedUnit,
             teacherName: context.type == .course ? trimmedTeacherName : nil,
-            category: context.type == .course ? category.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "公选课" : nil,
+            category: context.type == .course ? category.trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty ?? "公选课" : nil,
             credit: context.type == .course ? parsedCredit : nil,
             initialStars: initialStars == 0 ? nil : initialStars,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
@@ -822,7 +834,10 @@ struct CatalogSuggestionOptionMenu: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 44)
-                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -856,7 +871,8 @@ struct CatalogSuggestionDiningLocationPicker: View {
                     set: { canteen in
                         selectedCanteen = canteen.isEmpty ? nil : canteen
                         if let selectedLocation,
-                           !CampusDiningLocation.locations(for: canteen).contains(where: { $0.fullName == selectedLocation }) {
+                           !CampusDiningLocation.locations(for: canteen)
+                               .contains(where: { $0.fullName == selectedLocation }) {
                             self.selectedLocation = nil
                         }
                     }
@@ -922,7 +938,10 @@ struct CatalogSuggestionPickerMenu: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 44)
-                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -952,7 +971,10 @@ struct CatalogSuggestionTextField: View {
                 .leafyBody()
                 .padding(.horizontal, 12)
                 .frame(height: 44)
-                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -1074,95 +1096,6 @@ struct RatingLoadMoreButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
-    }
-}
-
-struct CommunityPostCard: View {
-    let post: CommunityMockPost
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(post.avatarColor.opacity(0.18))
-                    .frame(width: 42, height: 42)
-                    .overlay(
-                        Text(String(post.author.prefix(1)))
-                            .font(.headline)
-                            .foregroundStyle(post.avatarColor)
-                    )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(post.author)
-                        .leafyHeadline()
-                        .foregroundStyle(AppTheme.primaryText)
-                    Text(post.timestamp)
-                        .microCaption()
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-
-                Spacer()
-            }
-
-            Text(post.title)
-                .leafyHeadline()
-                .foregroundStyle(AppTheme.primaryText)
-
-            Text(post.body)
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
-
-            if !post.photoLabels.isEmpty {
-                CommunityPhotoGrid(labels: post.photoLabels)
-            }
-
-            HStack(spacing: 16) {
-                CommunityStat(icon: "heart", value: "\(post.likes)")
-                CommunityStat(icon: "message", value: "\(post.comments)")
-                CommunityStat(icon: "bookmark", value: post.tag)
-            }
-        }
-        .padding(18)
-        .leafyCardStyle()
-    }
-}
-
-struct CommunityPhotoGrid: View {
-    let labels: [String]
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6)
-    ]
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
-            ForEach(labels, id: \.self) { label in
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(AppTheme.subtleGreenGradient)
-                    .frame(height: 88)
-                    .overlay(
-                        Text(label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppTheme.accentEmphasis)
-                    )
-            }
-        }
-    }
-}
-
-struct CommunityStat: View {
-    let icon: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-            Text(value)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(AppTheme.secondaryText)
     }
 }
 
@@ -1352,68 +1285,5 @@ struct DishCard: View {
         }
         .padding(18)
         .leafyCardStyle()
-    }
-}
-
-struct ComposerPlaceholderSheet: View {
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: AppSpacing.section) {
-                LeafySectionTitle("发布帖子", subtitle: "当前阶段先验证半屏模态和表单结构，发布行为继续使用 Mock。")
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("标题")
-                        .font(.headline)
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                        .fill(AppTheme.fill)
-                        .frame(height: 52)
-
-                    Text("正文")
-                        .font(.headline)
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                        .fill(AppTheme.fill)
-                        .frame(height: 160)
-                }
-                .padding(18)
-                .leafyCardStyle()
-
-                Spacer()
-            }
-            .padding(AppSpacing.page)
-            .background(LeafyPageBackground())
-            .navigationTitle("发布")
-            .leafyInlineNavigationTitle()
-        }
-    }
-}
-
-struct CommunityPostDetailSheet: View {
-    let post: CommunityMockPost
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.card) {
-                    CommunityPostCard(post: post)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("评论区")
-                            .font(.headline)
-                        ForEach(post.mockComments, id: \.self) { comment in
-                            Text(comment)
-                                .leafyBody()
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .leafyCardStyle()
-                        }
-                    }
-                }
-                .padding(AppSpacing.page)
-            }
-            .background(LeafyPageBackground())
-            .navigationTitle("帖子详情")
-            .leafyInlineNavigationTitle()
-        }
     }
 }

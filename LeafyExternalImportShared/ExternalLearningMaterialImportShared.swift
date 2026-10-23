@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UniformTypeIdentifiers
 
 nonisolated enum ExternalImportL10n {
@@ -42,9 +43,15 @@ enum ExternalLearningMaterialImportError: LocalizedError, Equatable {
     case fileTooLarge(String)
     case batchTooLarge
     case insufficientDiskSpace
+    case invalidManifest
+    case cleanupFailed(String, String)
 
     var errorDescription: String? {
         switch self {
+        case .invalidManifest:
+            return ExternalImportL10n.text("这批外部文件暂存记录已损坏，请重新导入。")
+        case .cleanupFailed(let original, let cleanup):
+            return original + "\n" + ExternalImportL10n.text("暂存文件清理失败：%@", cleanup)
         case .appGroupUnavailable:
             return ExternalImportL10n.text("无法访问 MyLeafy 共享暂存目录。")
         case .unsupportedFile(let filename):
@@ -122,6 +129,12 @@ enum ExternalLearningMaterialImport {
 
     static let supportedContentTypeIdentifiers: [String] = supportedContentTypes.map(\.identifier)
 
+    static func allowsDataRepresentationFallback(after error: Error) -> Bool {
+        let providerError = error as NSError
+        // NSItemProviderItemUnavailableError / NSItemProviderUnavailableCoercionError.
+        return providerError.domain == NSItemProvider.errorDomain && [-1000, -1200].contains(providerError.code)
+    }
+
     static func callbackURL(for batchID: UUID) -> URL {
         var components = URLComponents()
         components.scheme = callbackScheme
@@ -180,6 +193,7 @@ enum ExternalLearningMaterialImport {
 }
 
 struct ExternalLearningMaterialImportStore {
+    private static let logger = Logger(subsystem: "com.isaachuo.leafy", category: "ExternalImport")
     let rootDirectory: URL
     let fileManager: FileManager
 
@@ -212,26 +226,31 @@ struct ExternalLearningMaterialImportStore {
             throw ExternalLearningMaterialImportError.tooManyFiles
         }
         var items: [ExternalLearningMaterialImportItem] = []
-        try prepareBatchDirectory(id)
-
-        for url in urls {
-            let item = try stageFile(from: url, batchID: id)
-            items.append(item)
-            try validateBatch(items)
+        do {
+            try prepareBatchDirectory(id)
+            for url in urls {
+                items.append(try stageFile(from: url, batchID: id))
+                try validateBatch(items)
+            }
+            guard !items.isEmpty else { throw ExternalLearningMaterialImportError.emptyBatch }
+            let manifest = ExternalLearningMaterialImportManifest(id: id, source: source, items: items)
+            try writeManifest(manifest)
+            return manifest
+        } catch {
+            throw failure(error, cleaningBatch: id)
         }
+    }
 
-        guard !items.isEmpty else {
-            try? removeBatch(id)
-            throw ExternalLearningMaterialImportError.emptyBatch
+    func failure(_ original: Error, cleaningBatch id: UUID) -> Error {
+        do {
+            try removeBatch(id)
+            return original
+        } catch {
+            return ExternalLearningMaterialImportError.cleanupFailed(
+                original.localizedDescription,
+                error.localizedDescription
+            )
         }
-
-        let manifest = ExternalLearningMaterialImportManifest(
-            id: id,
-            source: source,
-            items: items
-        )
-        try writeManifest(manifest)
-        return manifest
     }
 
     func prepareBatchDirectory(_ batchID: UUID) throws {
@@ -248,6 +267,8 @@ struct ExternalLearningMaterialImportStore {
         originalFilename: String? = nil,
         itemID: UUID = UUID()
     ) throws -> ExternalLearningMaterialImportItem {
+        let didAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer { if didAccess { sourceURL.stopAccessingSecurityScopedResource() } }
         let filename = ExternalLearningMaterialImport.normalizedFilename(
             originalFilename ?? sourceURL.lastPathComponent
         )
@@ -263,7 +284,7 @@ struct ExternalLearningMaterialImportStore {
             throw ExternalLearningMaterialImportError.unsupportedFile(filename)
         }
 
-        let sourceBytes = byteCount(for: sourceURL)
+        let sourceBytes = try byteCount(for: sourceURL)
         guard sourceBytes <= ExternalLearningMaterialImport.maximumFileBytes else {
             throw ExternalLearningMaterialImportError.fileTooLarge(filename)
         }
@@ -273,24 +294,21 @@ struct ExternalLearningMaterialImportStore {
         let stagedFilename = stagedFilename(for: itemID, originalFilename: filename)
         let destinationURL = batchDirectoryURL(for: batchID).appendingPathComponent(stagedFilename)
 
-        let didAccess = sourceURL.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess {
-                sourceURL.stopAccessingSecurityScopedResource()
-            }
-        }
-
         if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
             try fileManager.removeItem(at: destinationURL)
         }
         try fileManager.copyItem(at: sourceURL, to: destinationURL)
+        let copiedBytes = try byteCount(for: destinationURL)
+        guard copiedBytes <= ExternalLearningMaterialImport.maximumFileBytes else {
+            throw ExternalLearningMaterialImportError.fileTooLarge(filename)
+        }
 
         return ExternalLearningMaterialImportItem(
             id: itemID,
             originalFilename: filename,
             stagedFilename: stagedFilename,
             contentTypeIdentifier: contentTypeIdentifier,
-            byteCount: byteCount(for: destinationURL)
+            byteCount: copiedBytes
         )
     }
 
@@ -309,6 +327,7 @@ struct ExternalLearningMaterialImportStore {
             throw ExternalLearningMaterialImportError.unsupportedFile(filename)
         }
 
+        guard !data.isEmpty else { throw ExternalLearningMaterialImportError.emptyBatch }
         guard data.count <= ExternalLearningMaterialImport.maximumDataFallbackBytes,
               Int64(data.count) <= ExternalLearningMaterialImport.maximumFileBytes else {
             throw ExternalLearningMaterialImportError.fileTooLarge(filename)
@@ -345,30 +364,43 @@ struct ExternalLearningMaterialImportStore {
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = Self.preciseISO8601DateDecodingStrategy
-        return try decoder.decode(
+        let manifest = try decoder.decode(
             ExternalLearningMaterialImportManifest.self,
             from: Data(contentsOf: url)
         )
+        guard manifest.id == id else { throw ExternalLearningMaterialImportError.invalidManifest }
+        try validateBatch(manifest.items)
+        return manifest
     }
 
-    func pendingManifests() -> [ExternalLearningMaterialImportManifest] {
+    func pendingManifests() throws -> [ExternalLearningMaterialImportManifest] {
         removeExpiredBatches()
-        guard let batchDirectories = try? fileManager.contentsOfDirectory(
-            at: rootDirectory,
-            includingPropertiesForKeys: nil
-        ) else { return [] }
-
-        return batchDirectories.compactMap { directory in
-            guard let batchID = UUID(uuidString: directory.lastPathComponent) else { return nil }
-            return try? loadManifest(id: batchID)
+        guard fileManager.fileExists(atPath: rootDirectory.path) else { return [] }
+        let batchDirectories = try fileManager.contentsOfDirectory(at: rootDirectory, includingPropertiesForKeys: nil)
+        return try batchDirectories.compactMap { directory in
+            guard let batchID = UUID(uuidString: directory.lastPathComponent),
+                  fileManager.fileExists(atPath: manifestURL(for: batchID).path) else { return nil }
+            return try loadManifest(id: batchID)
         }
         .sorted { $0.createdAt > $1.createdAt }
     }
 
-    func stagedFileURL(for item: ExternalLearningMaterialImportItem, in manifest: ExternalLearningMaterialImportManifest) throws -> URL {
-        let url = batchDirectoryURL(for: manifest.id).appendingPathComponent(item.stagedFilename)
+    func stagedFileURL(
+        for item: ExternalLearningMaterialImportItem,
+        in manifest: ExternalLearningMaterialImportManifest
+    ) throws -> URL {
+        try validateBatch(manifest.items)
+        guard manifest.items.contains(item) else { throw ExternalLearningMaterialImportError.invalidManifest }
+        let directory = batchDirectoryURL(for: manifest.id).resolvingSymlinksInPath().standardizedFileURL
+        let url = directory.appendingPathComponent(item.stagedFilename).resolvingSymlinksInPath().standardizedFileURL
+        guard url.deletingLastPathComponent() == directory
+        else { throw ExternalLearningMaterialImportError.invalidManifest }
         guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else {
             throw ExternalLearningMaterialImportError.missingStagedFile(item.originalFilename)
+        }
+        let actualBytes = try byteCount(for: url)
+        guard actualBytes == item.byteCount, actualBytes <= ExternalLearningMaterialImport.maximumFileBytes else {
+            throw ExternalLearningMaterialImportError.invalidManifest
         }
         return url
     }
@@ -387,12 +419,16 @@ struct ExternalLearningMaterialImportStore {
         ) else { return }
 
         for directory in directories {
+            guard UUID(uuidString: directory.lastPathComponent) != nil else { continue }
             let manifestDate = UUID(uuidString: directory.lastPathComponent)
                 .flatMap { try? loadManifest(id: $0).createdAt }
             let creationDate = try? directory.resourceValues(forKeys: [.creationDateKey]).creationDate
             let referenceDate = manifestDate ?? creationDate ?? .distantPast
             if now.timeIntervalSince(referenceDate) > ExternalLearningMaterialImport.stagingLifetime {
-                try? fileManager.removeItem(at: directory)
+                do { try fileManager.removeItem(at: directory) }
+                catch {
+                    Self.logger
+                        .error("Expired import cleanup failed: \(error.localizedDescription, privacy: .private)") }
             }
         }
     }
@@ -412,23 +448,45 @@ struct ExternalLearningMaterialImportStore {
         return "\(itemID.uuidString).\(fileExtension)"
     }
 
-    private func byteCount(for url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
+    private func byteCount(for url: URL) throws -> Int64 {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let size = values.fileSize, size > 0 else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return Int64(size)
     }
 
     private func validateBatch(_ items: [ExternalLearningMaterialImportItem]) throws {
         guard items.count <= ExternalLearningMaterialImport.maximumItemCount else {
             throw ExternalLearningMaterialImportError.tooManyFiles
         }
-        let total = items.reduce(Int64(0)) { $0 + max(0, $1.byteCount) }
+        guard !items.isEmpty else { throw ExternalLearningMaterialImportError.emptyBatch }
+        var ids = Set<UUID>()
+        var filenames = Set<String>()
+        for item in items {
+            guard ids.insert(item.id).inserted, filenames.insert(item.stagedFilename).inserted,
+                  item.byteCount > 0, item.byteCount <= ExternalLearningMaterialImport.maximumFileBytes,
+                  !item.stagedFilename.isEmpty, item.stagedFilename != ".", item.stagedFilename != "..",
+                  !item.stagedFilename.contains("/"), !item.stagedFilename.contains("\\"),
+                  ExternalLearningMaterialImport.isSupported(
+                      filename: item.originalFilename,
+                      contentTypeIdentifier: item.contentTypeIdentifier
+                  ) else {
+                throw ExternalLearningMaterialImportError.invalidManifest
+            }
+        }
+        let total = items.reduce(Int64(0)) { $0 + $1.byteCount }
         guard total <= ExternalLearningMaterialImport.maximumBatchBytes else {
             throw ExternalLearningMaterialImportError.batchTooLarge
         }
     }
 
     private func requireAvailableCapacity(_ additionalBytes: Int64) throws {
-        let values = try rootDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        var existingDirectory = rootDirectory
+        while !fileManager.fileExists(atPath: existingDirectory.path), existingDirectory.path != "/" {
+            existingDirectory.deleteLastPathComponent()
+        }
+        let values = try existingDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         if let capacity = values.volumeAvailableCapacityForImportantUsage,
            capacity < additionalBytes + 20 * 1024 * 1024 {
             throw ExternalLearningMaterialImportError.insufficientDiskSpace

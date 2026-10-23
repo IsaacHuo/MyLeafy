@@ -305,11 +305,17 @@
 				TargetAttributes = {
 					1119CC0B2F976BA0002A7E20 = {
 						CreatedOnToolsVersion = 26.4;
-                        SystemCapabilities = {
-                            com.apple.iCloud = { enabled = 1; };
-                            com.apple.Push = { enabled = 1; };
-                            com.apple.BackgroundModes = { enabled = 1; };
-                        };
+						SystemCapabilities = {
+							com.apple.BackgroundModes = {
+								enabled = 1;
+							};
+							com.apple.Push = {
+								enabled = 1;
+							};
+							com.apple.iCloud = {
+								enabled = 1;
+							};
+						};
 					};
 					A1B2C3D4E5F6000000000009 = {
 						CreatedOnToolsVersion = 26.4;
@@ -563,7 +569,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = leafy/leafy.entitlements;
-				LEAFY_CLOUDKIT_ENVIRONMENT = Development;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -583,7 +588,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2.5;
+				LEAFY_CLOUDKIT_ENVIRONMENT = Development;
+				MARKETING_VERSION = 3.2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaachuo.leafy;
 				PRODUCT_NAME = Leafy;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -605,7 +611,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = leafy/leafy.entitlements;
-				LEAFY_CLOUDKIT_ENVIRONMENT = Production;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -625,7 +630,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.2.5;
+				LEAFY_CLOUDKIT_ENVIRONMENT = Production;
+				MARKETING_VERSION = 3.2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.isaachuo.leafy;
 				PRODUCT_NAME = Leafy;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -656,7 +662,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.5;
+				MARKETING_VERSION = 3.2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.leafy-widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -687,7 +693,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.5;
+				MARKETING_VERSION = 3.2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.leafy-widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -768,7 +774,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.5;
+				MARKETING_VERSION = 3.2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.share-extension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -799,7 +805,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.2.5;
+				MARKETING_VERSION = 3.2.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.isaachuo.leafy.share-extension";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

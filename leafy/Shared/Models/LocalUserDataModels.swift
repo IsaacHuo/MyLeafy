@@ -164,11 +164,14 @@ final class TimetableCellReminder {
     }
 
     var displayEndPeriod: Int {
-        max(displayStartPeriod, min(endPeriod ?? displayStartPeriod, TimetablePeriodSchedule.slots.last?.period ?? displayStartPeriod))
+        max(
+            displayStartPeriod,
+            min(endPeriod ?? displayStartPeriod, TimetablePeriodSchedule.slots.last?.period ?? displayStartPeriod)
+        )
     }
 
     var displayPeriodRange: ClosedRange<Int> {
-        displayStartPeriod...displayEndPeriod
+        displayStartPeriod ... displayEndPeriod
     }
 
     var resolvedStartDate: Date? {
@@ -598,7 +601,8 @@ enum LearningMaterialFileStore {
         UTType(filenameExtension: "csv") ?? .data
     ]
 
-    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil, filename: String? = nil) throws -> StoredFile {
+    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil,
+                           filename: String? = nil) throws -> StoredFile {
         let didAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -609,7 +613,8 @@ enum LearningMaterialFileStore {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
-        let localFilename = filename ?? LearningMaterialLocalFile.localFilename(originalExtension: sourceURL.pathExtension)
+        let localFilename = filename ?? LearningMaterialLocalFile
+            .localFilename(originalExtension: sourceURL.pathExtension)
         let destinationURL = directoryURL.appendingPathComponent(localFilename)
 
         if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
@@ -639,13 +644,6 @@ enum LearningMaterialFileStore {
         if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
             try FileManager.default.removeItem(at: url)
         }
-    }
-
-    static func deleteAllFiles() throws {
-        guard FileManager.default.fileExists(atPath: directoryURL.path(percentEncoded: false)) else {
-            return
-        }
-        try FileManager.default.removeItem(at: directoryURL)
     }
 
     private static var directoryURL: URL {
@@ -678,13 +676,17 @@ extension LearningMaterialDocument {
         if contentType?.conforms(to: .image) == true { return "图片" }
         if contentType?.conforms(to: .plainText) == true { return "文本" }
         if contentType?.conforms(to: .rtf) == true || lowercasedName.hasSuffix(".rtf") { return "RTF" }
-        if lowercasedName.hasSuffix(".doc") || lowercasedName.hasSuffix(".docx") || lowercasedIdentifier.contains("word") {
+        if lowercasedName.hasSuffix(".doc") || lowercasedName.hasSuffix(".docx") || lowercasedIdentifier
+            .contains("word") {
             return "Word"
         }
-        if lowercasedName.hasSuffix(".ppt") || lowercasedName.hasSuffix(".pptx") || lowercasedIdentifier.contains("powerpoint") || lowercasedIdentifier.contains("presentation") {
+        if lowercasedName.hasSuffix(".ppt") || lowercasedName.hasSuffix(".pptx") || lowercasedIdentifier
+            .contains("powerpoint") || lowercasedIdentifier.contains("presentation") {
             return "PPT"
         }
-        if lowercasedName.hasSuffix(".xls") || lowercasedName.hasSuffix(".xlsx") || lowercasedName.hasSuffix(".csv") || lowercasedIdentifier.contains("excel") || lowercasedIdentifier.contains("spreadsheet") {
+        if lowercasedName.hasSuffix(".xls") || lowercasedName.hasSuffix(".xlsx") || lowercasedName
+            .hasSuffix(".csv") || lowercasedIdentifier.contains("excel") || lowercasedIdentifier
+            .contains("spreadsheet") {
             return "表格"
         }
         return "文件"
@@ -1026,7 +1028,6 @@ final class ComprehensiveQualityEvidenceDocument {
     }
 }
 
-
 @Model
 final class MedicalLedgerEntry {
     var id: UUID
@@ -1162,6 +1163,7 @@ enum FitnessTestUnit: String, CaseIterable, Identifiable {
 
 enum FitnessTestRecordFormatter {
     static func valueText(value: Double, unit: FitnessTestUnit) -> String {
+        guard value.isFinite, Int(exactly: value.rounded()) != nil else { return "--" }
         switch unit {
         case .minuteSecond:
             return minuteSecondText(seconds: value)
@@ -1173,7 +1175,8 @@ enum FitnessTestRecordFormatter {
     }
 
     static func minuteSecondText(seconds: Double) -> String {
-        let totalSeconds = Swift.max(Int(seconds.rounded()), 0)
+        guard seconds.isFinite, let rounded = Int(exactly: seconds.rounded()) else { return "--" }
+        let totalSeconds = Swift.max(rounded, 0)
         return "\(totalSeconds / 60)分\(totalSeconds % 60)秒"
     }
 
@@ -1189,13 +1192,15 @@ enum FitnessTestRecordFormatter {
     private static func decimalText(_ value: Double) -> String {
         let rounded = (value * 10).rounded() / 10
         if rounded.truncatingRemainder(dividingBy: 1) == 0 {
-            return String(Int(rounded))
+            guard let integer = Int(exactly: rounded) else { return "--" }
+            return String(integer)
         }
         return String(format: "%.1f", rounded)
     }
 
     private static func integerText(_ value: Double) -> String {
-        String(Int(value.rounded()))
+        guard let integer = Int(exactly: value.rounded()) else { return "--" }
+        return String(integer)
     }
 }
 

@@ -352,7 +352,8 @@ nonisolated struct CommunityProfile: Codable, Identifiable, Hashable, Sendable {
         avatarURL = try container.decodeIfPresent(URL.self, forKey: .avatarURL)
         signedCoverURL = try container.decodeIfPresent(URL.self, forKey: .signedCoverURL)
         coverURL = try container.decodeIfPresent(URL.self, forKey: .coverURL)
-        showsEduVerificationBadge = try container.decodeIfPresent(Bool.self, forKey: .showsEduVerificationBadge) ?? false
+        showsEduVerificationBadge = try container
+            .decodeIfPresent(Bool.self, forKey: .showsEduVerificationBadge) ?? false
     }
 }
 
@@ -814,8 +815,8 @@ nonisolated struct CommunityPost: Codable, Identifiable, Hashable, Sendable {
             bodyPreview,
             shareURL.absoluteString
         ]
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .joined(separator: "\n")
+        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        .joined(separator: "\n")
     }
 
     enum CodingKeys: String, CodingKey {
@@ -860,7 +861,7 @@ nonisolated enum LeafyLinkedTextBuilder {
                   let upperBound = AttributedString.Index(stringRange.upperBound, within: attributedText)
             else { continue }
 
-            attributedText[lowerBound..<upperBound].link = url
+            attributedText[lowerBound ..< upperBound].link = url
         }
 
         return attributedText
@@ -996,8 +997,8 @@ nonisolated enum CommunityFeedOrdering {
                 post.categoryLabel,
                 post.displayAuthorName
             ]
-                .map(normalized)
-                .joined(separator: " ")
+            .map(normalized)
+            .joined(separator: " ")
 
             return searchableText.localizedCaseInsensitiveContains(normalizedSearch)
         }
@@ -1202,10 +1203,16 @@ nonisolated struct CommunityCommentPage: Hashable, Sendable {
     let nextCursor: CommunityCommentCursor?
 }
 
-nonisolated struct CommunityCommentLikeState: Hashable, Sendable {
+nonisolated struct CommunityCommentLikeState: Codable, Hashable, Sendable {
     let commentID: UUID
     let likeCount: Int
     let viewerHasLiked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case commentID = "comment_id"
+        case likeCount = "like_count"
+        case viewerHasLiked = "viewer_has_liked"
+    }
 }
 
 nonisolated struct CommunityNotification: Codable, Identifiable, Hashable, Sendable {

@@ -104,7 +104,10 @@ nonisolated struct SharedTimetableCourse: Codable, Identifiable, Hashable, Senda
         return L10n.text("第 %@ 周", language: language, text)
     }
 
-    func durationText(language: AppLanguagePreference, slots: [TimetablePeriodSchedule.Slot] = TimetablePeriodSchedule.slots) -> String {
+    func durationText(
+        language: AppLanguagePreference,
+        slots: [TimetablePeriodSchedule.Slot] = TimetablePeriodSchedule.slots
+    ) -> String {
         guard let first = duration.min(), let last = duration.max() else {
             return L10n.text("节次待定", language: language)
         }
@@ -144,13 +147,13 @@ nonisolated struct SharedTimetableCourse: Codable, Identifiable, Hashable, Senda
             if value == previous + 1 {
                 previous = value
             } else {
-                ranges.append(start...previous)
+                ranges.append(start ... previous)
                 start = value
                 previous = value
             }
         }
 
-        ranges.append(start...previous)
+        ranges.append(start ... previous)
         return ranges
     }
 }
@@ -281,7 +284,11 @@ nonisolated struct SharedTimetableCalendar: Codable, Hashable, Sendable {
     func currentWeek(date: Date = Date()) -> Int {
         guard let startDate else { return 1 }
         let calendar = UserTimetableSettings.calendar
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: startDate), to: calendar.startOfDay(for: date)).day ?? 0
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: startDate),
+            to: calendar.startOfDay(for: date)
+        ).day ?? 0
         return max(1, min(20, days / 7 + 1))
     }
 }

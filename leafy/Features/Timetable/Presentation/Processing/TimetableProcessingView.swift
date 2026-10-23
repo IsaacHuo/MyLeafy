@@ -9,7 +9,7 @@ struct ManualCourseEditorItem: Identifiable, Hashable {
 
 nonisolated enum ManualCourseWeekSelection {
     static func normalized(_ weeks: some Sequence<Int>) -> [Int] {
-        Array(Set(weeks.filter { (1...SemesterConfig.supportedWeeks).contains($0) })).sorted()
+        Array(Set(weeks.filter { (1 ... SemesterConfig.supportedWeeks).contains($0) })).sorted()
     }
 
     static func summary(_ weeks: some Sequence<Int>) -> String {
@@ -27,11 +27,11 @@ nonisolated enum ManualCourseWeekSelection {
                 previousWeek = week
                 continue
             }
-            ranges.append(rangeStart...previousWeek)
+            ranges.append(rangeStart ... previousWeek)
             rangeStart = week
             previousWeek = week
         }
-        ranges.append(rangeStart...previousWeek)
+        ranges.append(rangeStart ... previousWeek)
 
         let text = ranges.map { range in
             range.lowerBound == range.upperBound
@@ -44,10 +44,11 @@ nonisolated enum ManualCourseWeekSelection {
 
 struct ManualCourseEditorSheet: View {
     let item: ManualCourseEditorItem
-    let onSave: (Course) -> Void
+    let onSave: (Course) throws -> Void
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var operationAlert: LeafyOperationAlert?
     @State private var courseName = ""
     @State private var teacher = ""
     @State private var location = ""
@@ -81,7 +82,7 @@ struct ManualCourseEditorSheet: View {
 
                 Section {
                     Picker("星期", selection: $dayOfWeek) {
-                        ForEach(1...7, id: \.self) { day in
+                        ForEach(1 ... 7, id: \.self) { day in
                             Text(dayTitle(day)).tag(day)
                         }
                     }
@@ -94,7 +95,7 @@ struct ManualCourseEditorSheet: View {
                     }
 
                     LazyVGrid(columns: weekColumns, spacing: 8) {
-                        ForEach(1...SemesterConfig.supportedWeeks, id: \.self) { week in
+                        ForEach(1 ... SemesterConfig.supportedWeeks, id: \.self) { week in
                             Button {
                                 if selectedWeeks.contains(week) {
                                     selectedWeeks.remove(week)
@@ -119,7 +120,7 @@ struct ManualCourseEditorSheet: View {
 
                     HStack {
                         Button("选择全部") {
-                            selectedWeeks = Set(1...SemesterConfig.supportedWeeks)
+                            selectedWeeks = Set(1 ... SemesterConfig.supportedWeeks)
                         }
                         Spacer()
                         Button("清空") {
@@ -135,13 +136,13 @@ struct ManualCourseEditorSheet: View {
 
                 Section("上课节次") {
                     Picker("开始节次", selection: $startPeriod) {
-                        ForEach(1...TimetablePeriodSchedule.slots.count, id: \.self) { period in
+                        ForEach(1 ... TimetablePeriodSchedule.slots.count, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
                         }
                     }
 
                     Picker("结束节次", selection: $endPeriod) {
-                        ForEach(1...TimetablePeriodSchedule.slots.count, id: \.self) { period in
+                        ForEach(1 ... TimetablePeriodSchedule.slots.count, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
                         }
                     }
@@ -159,6 +160,7 @@ struct ManualCourseEditorSheet: View {
                         .disabled(isSaveDisabled)
                 }
             }
+            .leafyOperationAlert($operationAlert)
             .onChange(of: startPeriod) { _, newValue in
                 if endPeriod < newValue {
                     endPeriod = newValue
@@ -171,19 +173,21 @@ struct ManualCourseEditorSheet: View {
         let trimmedName = courseName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(
-            Course(
-                courseName: trimmedName,
-                teacher: teacher.trimmingCharacters(in: .whitespacesAndNewlines),
-                classInfo: classInfo.trimmingCharacters(in: .whitespacesAndNewlines),
-                room: trimmedLocation,
-                location: trimmedLocation,
-                dayOfWeek: dayOfWeek,
-                weeks: ManualCourseWeekSelection.normalized(selectedWeeks),
-                duration: Array(startPeriod...endPeriod)
+        do {
+            try onSave(
+                Course(
+                    courseName: trimmedName,
+                    teacher: teacher.trimmingCharacters(in: .whitespacesAndNewlines),
+                    classInfo: classInfo.trimmingCharacters(in: .whitespacesAndNewlines),
+                    room: trimmedLocation,
+                    location: trimmedLocation,
+                    dayOfWeek: dayOfWeek,
+                    weeks: ManualCourseWeekSelection.normalized(selectedWeeks),
+                    duration: Array(startPeriod ... endPeriod)
+                )
             )
-        )
-        dismiss()
+            dismiss()
+        } catch { operationAlert = .failure(error.localizedDescription) }
     }
 
     private func dayTitle(_ day: Int) -> String {
@@ -227,7 +231,8 @@ struct TimetableProcessingView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("课表处理", systemImage: "slider.horizontal.3")
                             .leafyHeadline()
-                        Text(isCustomCampus ? "在这里集中完成手动添加课程、CSV 导入，以及清空当前通用入口本机课表数据。" : "此页面只处理通用入口的本机课表。北京林业大学入口请继续使用课表页右上角刷新教务课表。")
+                        Text(isCustomCampus ? "在这里集中完成手动添加课程、CSV 导入，以及清空当前通用入口本机课表数据。" :
+                            "此页面只处理通用入口的本机课表。北京林业大学入口请继续使用课表页右上角刷新教务课表。")
                             .leafyBody()
                             .foregroundStyle(AppTheme.secondaryText)
                     }
@@ -302,7 +307,7 @@ struct TimetableProcessingView: View {
         .leafyInlineNavigationTitle()
         .leafySheet(item: $editingManualCourse) { item in
             ManualCourseEditorSheet(item: item) { course in
-                saveManualCourse(course)
+                try saveManualCourse(course)
             }
             .presentationDetents([.large])
         }
@@ -317,7 +322,7 @@ struct TimetableProcessingView: View {
             isPresented: $isTimetableImportPresented,
             allowedContentTypes: [.commaSeparatedText, .plainText, .text]
         ) { result in
-            handleTimetableImport(result)
+            Task { await handleTimetableImport(result) }
         }
         .confirmationDialog(
             "清空当前通用入口本机课表？",
@@ -335,44 +340,42 @@ struct TimetableProcessingView: View {
     }
 
     @MainActor
-    private func saveManualCourse(_ course: Course) {
-        guard isCustomCampus else {
-            operationAlert = .failure("此操作仅用于通用入口。")
-            return
-        }
-
+    private func saveManualCourse(_ course: Course) throws {
+        guard isCustomCampus else { throw CocoaError(.userCancelled) }
         modelContext.insert(course)
-        do {
-            try modelContext.save()
-            TimetableCacheMetadata.lastSyncAt = Date()
-            TimetableCacheMetadata.lastFailureMessage = nil
-            SchoolDataRefreshNotifier.post(.timetable)
-            publishWidgetSnapshot()
-            operationAlert = .success(L10n.text("课程已添加。", language: leafyLanguage))
-        } catch {
-            operationAlert = .failure(error.localizedDescription)
-        }
+        try LocalModelSave.save(modelContext, undo: { modelContext.delete(course) })
+        TimetableCacheMetadata.lastSyncAt = Date()
+        TimetableCacheMetadata.lastFailureMessage = nil
+        SchoolDataRefreshNotifier.post(.timetable)
+        publishWidgetSnapshot()
+        operationAlert = .success(L10n.text("课程已添加。", language: leafyLanguage))
     }
 
     @MainActor
-    private func handleTimetableImport(_ result: Result<URL, Error>) {
+    private func handleTimetableImport(_ result: Result<URL, Error>) async {
         guard isCustomCampus else {
             operationAlert = .failure("此操作仅用于通用入口。")
             return
         }
 
+        let scope = CampusOperationScope()
         do {
             let url = try result.get()
-            let count = try CustomCampusImportService.importTimetable(
+            let imported = try await CustomCampusImportService.importTimetable(
                 from: url,
                 existingCourses: courses,
                 modelContext: modelContext
             )
-            TimetableCacheMetadata.lastFailureMessage = nil
+            try scope.check()
             SchoolDataRefreshNotifier.post(.timetable)
             publishWidgetSnapshot()
-            operationAlert = .success(L10n.text("已导入 %d 门课程。", language: leafyLanguage, count))
+            operationAlert = .success(imported.reminderWarning ?? L10n.text(
+                "已导入 %d 门课程。",
+                language: leafyLanguage,
+                imported.count
+            ))
         } catch {
+            guard !scope.wasCancelled(error) else { return }
             operationAlert = .failure(error.localizedDescription)
         }
     }
@@ -384,10 +387,14 @@ struct TimetableProcessingView: View {
             return
         }
 
-        TimetableNotificationManager.cancelAllCourseReminders(courses: courses)
-        TimetableNotificationManager.cancelAllCellReminders(cellReminders)
-        ScheduleReportNotificationManager.clearScheduledNotifications()
-
+        let removedCourses = courses
+        let removedCells = cellReminders
+        let courseNotificationIDs = removedCourses
+            .flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) }
+        let cellKeys = removedCells.map(\.cellKey)
+        let undoPersonalData: () -> Void
+        do { undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: modelContext) }
+        catch { operationAlert = .failure(error.localizedDescription); return }
         for course in courses {
             modelContext.delete(course)
         }
@@ -405,13 +412,27 @@ struct TimetableProcessingView: View {
         }
 
         do {
-            try modelContext.save()
-            SchoolDataCache.clearDiscoverCaches()
+            try LocalModelSave.save(modelContext, undo: {
+                for course in removedCourses { modelContext.insert(course) }
+                for reminder in removedCells { modelContext.insert(reminder) }
+                undoPersonalData()
+            })
+            LiveTimetableCourseReminderScheduler().cancel(identifiers: courseNotificationIDs)
+            TimetableNotificationManager.cancelCellReminders(cellKeys: cellKeys)
+            var notificationWarning: String?
+            do { try ScheduleReportNotificationManager.clearScheduledNotifications() }
+            catch {
+                notificationWarning = L10n.text(
+                    "课表数据已清空，但部分日程通知未清理：%@",
+                    language: leafyLanguage,
+                    error.localizedDescription
+                )
+            }
             TimetableCacheMetadata.clear()
             CustomScheduleStore.clear()
             SchoolDataRefreshNotifier.post(.all)
             publishWidgetSnapshot()
-            operationAlert = .success("当前通用入口本机课表数据已清空。")
+            operationAlert = .success(notificationWarning ?? L10n.text("当前通用入口本机课表数据已清空。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }
@@ -453,7 +474,10 @@ struct TimetableCSVImportGuideSheet: View {
                                 .textSelection(.enabled)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.fill,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                             Text("dayOfWeek 使用 1-7 表示周一到周日；weeks 和 duration 支持 1-16、1,3,5 这类写法。")
                                 .microCaption()
                                 .foregroundStyle(AppTheme.secondaryText)
@@ -469,7 +493,10 @@ struct TimetableCSVImportGuideSheet: View {
                                 .textSelection(.enabled)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.fill,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                         }
                     }
                 }
@@ -493,7 +520,7 @@ struct TimetableCSVImportGuideSheet: View {
     }
 
     private static let sampleCSV = """
-courseName,teacher,classInfo,room,location,dayOfWeek,weeks,duration
-高等数学,王老师,1班,A101,A101,1,1-16,1-2
-"""
+    courseName,teacher,classInfo,room,location,dayOfWeek,weeks,duration
+    高等数学,王老师,1班,A101,A101,1,1-16,1-2
+    """
 }

@@ -34,8 +34,7 @@ import java.util.UUID
     fun mutate(block: suspend () -> Unit) {
         if (busy) return
         busy = true
-        owner.launch { try { check(container.activeAppScopeStore.current.scopeKey == scope && container.activeAppScopeStore.current.isGuest) { "身份已切换" }; block(); error = null }
-            catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.message ?: "操作失败" } finally { busy = false } }
+        owner.launch { try { check(container.activeAppScopeStore.current.scopeKey == scope && container.activeAppScopeStore.current.isGuest) { "身份已切换" }; block(); error = null } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.message ?: "操作失败" } finally { busy = false } }
     }
     fun grade(id: String, row: List<String>) = GradeEntity(scope, id, row[0], row[1], row[2], row[3], row[4])
     fun exam(id: Int, row: List<String>) = ExamEntity(scope, id, row[0], row[1], row[2], row[3], row[4], row[5])
@@ -64,15 +63,14 @@ import java.util.UUID
     }, confirmButton = { TextButton(onClick = { manage = false }) { Text("完成") } })
     if (showEditor) {
         val initial = if (kind == GuestAcademicKind.GRADE) grades.firstOrNull { it.id == editing }?.let { listOf(it.term, it.courseName, it.credit, it.score, it.type) }
-            else exams.firstOrNull { it.id.toString() == editing }?.let { listOf(it.courseId, it.name, it.date, it.start, it.end, it.location) }
+        else exams.firstOrNull { it.id.toString() == editing }?.let { listOf(it.courseId, it.name, it.date, it.start, it.end, it.location) }
         key(scope, editing) { GuestAcademicEditor(kind, initial ?: List(kind.columns.size) { "" }, busy, error, { showEditor = false }) { row -> mutate {
             if (kind == GuestAcademicKind.GRADE) {
                 val old = grades.firstOrNull { it.id == editing }
                 val updated = old?.copy(term = row[0], courseName = row[1], credit = row[2], score = row[3], type = row[4])
                     ?: grade(UUID.randomUUID().toString(), row)
                 container.gradeDao.upsertAll(listOf(updated))
-            }
-            else container.examDao.upsertAll(listOf(exam(editing?.toInt() ?: ((exams.maxOfOrNull { it.id } ?: 0) + 1), row)))
+            } else container.examDao.upsertAll(listOf(exam(editing?.toInt() ?: ((exams.maxOfOrNull { it.id } ?: 0) + 1), row)))
             showEditor = false
         } } }
     }

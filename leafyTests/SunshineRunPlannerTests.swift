@@ -11,7 +11,12 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testPeriodsStartFromFirstWeekInTwoWeekGroups() throws {
         let start = try makeDate("2026-03-09")
-        let periods = SunshineRunPlanner.periods(semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar)
+        let periods = SunshineRunPlanner.periods(
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        )
 
         XCTAssertEqual(periods.count, 10)
         XCTAssertEqual(periods.map { "\($0.startWeek)-\($0.endWeek)" }, [
@@ -22,7 +27,12 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testPeriodsSkipExcludedHolidayWeeks() throws {
         let start = try makeDate("2026-03-09")
-        let periods = SunshineRunPlanner.periods(semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar)
+        let periods = SunshineRunPlanner.periods(
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        )
 
         XCTAssertEqual(periods.count, 10)
         XCTAssertEqual(periods.map { $0.activeWeeks }, [
@@ -35,9 +45,27 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testDateMapsToExpectedTwoWeekPeriod() throws {
         let start = try makeDate("2026-03-09")
-        let weekOne = try XCTUnwrap(SunshineRunPlanner.period(for: try makeDate("2026-03-09"), semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar))
-        let weekTwo = try XCTUnwrap(SunshineRunPlanner.period(for: try makeDate("2026-03-22"), semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar))
-        let weekThree = try XCTUnwrap(SunshineRunPlanner.period(for: try makeDate("2026-03-23"), semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar))
+        let weekOne = try XCTUnwrap(SunshineRunPlanner.period(
+            for: try makeDate("2026-03-09"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        ))
+        let weekTwo = try XCTUnwrap(SunshineRunPlanner.period(
+            for: try makeDate("2026-03-22"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        ))
+        let weekThree = try XCTUnwrap(SunshineRunPlanner.period(
+            for: try makeDate("2026-03-23"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        ))
 
         XCTAssertEqual(weekOne.startWeek, 1)
         XCTAssertEqual(weekTwo.startWeek, 1)
@@ -46,14 +74,38 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testExcludedHolidayWeekDoesNotAcceptRecords() throws {
         let start = try makeDate("2026-03-09")
-        let weekSeven = try XCTUnwrap(SunshineRunPlanner.period(for: try makeDate("2026-04-20"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar))
-        let weekEight = SunshineRunPlanner.period(for: try makeDate("2026-04-27"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar)
-        let weekNine = try XCTUnwrap(SunshineRunPlanner.period(for: try makeDate("2026-05-04"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar))
+        let weekSeven = try XCTUnwrap(SunshineRunPlanner.period(
+            for: try makeDate("2026-04-20"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        ))
+        let weekEight = SunshineRunPlanner.period(
+            for: try makeDate("2026-04-27"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        )
+        let weekNine = try XCTUnwrap(SunshineRunPlanner.period(
+            for: try makeDate("2026-05-04"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        ))
 
         XCTAssertEqual(weekSeven.activeWeeks, [7, 9])
         XCTAssertNil(weekEight)
         XCTAssertEqual(weekNine.startWeek, weekSeven.startWeek)
-        XCTAssertTrue(SunshineRunPlanner.isExcludedDate(try makeDate("2026-04-27"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar))
+        XCTAssertTrue(SunshineRunPlanner.isExcludedDate(
+            try makeDate("2026-04-27"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        ))
     }
 
     func testDailyRecordsDeduplicateAndGroupByPeriod() throws {
@@ -64,8 +116,20 @@ final class SunshineRunPlannerTests: XCTestCase {
             SunshineRunRecord(date: try makeDate("2026-03-24"), semesterStart: start, calendar: calendar)
         ]
 
-        let summary = SunshineRunPlanner.progressSummary(records: records, semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar)
-        let progresses = SunshineRunPlanner.periodProgresses(records: records, semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar)
+        let summary = SunshineRunPlanner.progressSummary(
+            records: records,
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        )
+        let progresses = SunshineRunPlanner.periodProgresses(
+            records: records,
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        )
 
         XCTAssertEqual(summary.totalCount, 2)
         XCTAssertEqual(progresses[0].count, 1)
@@ -74,7 +138,7 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testFullScoreProgressIsCappedAtThirtyFour() throws {
         let start = try makeDate("2026-03-09")
-        let records = try (0..<36).map { offset in
+        let records = try (0 ..< 36).map { offset in
             SunshineRunRecord(
                 date: try XCTUnwrap(calendar.date(byAdding: .day, value: offset, to: start)),
                 semesterStart: start,
@@ -82,7 +146,13 @@ final class SunshineRunPlannerTests: XCTestCase {
             )
         }
 
-        let summary = SunshineRunPlanner.progressSummary(records: records, semesterStart: start, totalWeeks: 20, excludedWeeks: [], calendar: calendar)
+        let summary = SunshineRunPlanner.progressSummary(
+            records: records,
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [],
+            calendar: calendar
+        )
 
         XCTAssertEqual(summary.totalCount, 36)
         XCTAssertEqual(summary.cappedTotalCount, 34)
@@ -92,7 +162,12 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testCustomRuleSettingsChangePeriodAndTargets() throws {
         let start = try makeDate("2026-03-09")
-        let rules = SunshineRunRuleSettings(totalTarget: 12, weeksPerPeriod: 3, periodTarget: 2, skipsExcludedWeeks: false)
+        let rules = SunshineRunRuleSettings(
+            totalTarget: 12,
+            weeksPerPeriod: 3,
+            periodTarget: 2,
+            skipsExcludedWeeks: false
+        )
         let records = [
             SunshineRunRecord(date: try makeDate("2026-03-10"), semesterStart: start, calendar: calendar),
             SunshineRunRecord(date: try makeDate("2026-03-17"), semesterStart: start, calendar: calendar),
@@ -145,8 +220,20 @@ final class SunshineRunPlannerTests: XCTestCase {
         let excludedWeeks = rules.excludedWeeks(in: context)
 
         XCTAssertEqual(excludedWeeks, [8, 15])
-        XCTAssertTrue(SunshineRunPlanner.isExcludedDate(try makeDate("2026-05-01"), semesterStart: start, totalWeeks: 20, excludedWeeks: excludedWeeks, calendar: calendar))
-        XCTAssertFalse(SunshineRunPlanner.isExcludedDate(try makeDate("2026-04-24"), semesterStart: start, totalWeeks: 20, excludedWeeks: excludedWeeks, calendar: calendar))
+        XCTAssertTrue(SunshineRunPlanner.isExcludedDate(
+            try makeDate("2026-05-01"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: excludedWeeks,
+            calendar: calendar
+        ))
+        XCTAssertFalse(SunshineRunPlanner.isExcludedDate(
+            try makeDate("2026-04-24"),
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: excludedWeeks,
+            calendar: calendar
+        ))
     }
 
     func testRuleSettingsCanDisableNationalHolidaySkippedWeeks() throws {
@@ -188,13 +275,43 @@ final class SunshineRunPlannerTests: XCTestCase {
     func testProgressSummaryIgnoresExcludedHolidayWeekRecords() throws {
         let start = try makeDate("2026-03-09")
         let records = [
-            SunshineRunRecord(date: try makeDate("2026-04-20"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar),
-            SunshineRunRecord(date: try makeDate("2026-04-27"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar),
-            SunshineRunRecord(date: try makeDate("2026-05-04"), semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar)
+            SunshineRunRecord(
+                date: try makeDate("2026-04-20"),
+                semesterStart: start,
+                totalWeeks: 20,
+                excludedWeeks: [8],
+                calendar: calendar
+            ),
+            SunshineRunRecord(
+                date: try makeDate("2026-04-27"),
+                semesterStart: start,
+                totalWeeks: 20,
+                excludedWeeks: [8],
+                calendar: calendar
+            ),
+            SunshineRunRecord(
+                date: try makeDate("2026-05-04"),
+                semesterStart: start,
+                totalWeeks: 20,
+                excludedWeeks: [8],
+                calendar: calendar
+            )
         ]
 
-        let summary = SunshineRunPlanner.progressSummary(records: records, semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar)
-        let progresses = SunshineRunPlanner.periodProgresses(records: records, semesterStart: start, totalWeeks: 20, excludedWeeks: [8], calendar: calendar)
+        let summary = SunshineRunPlanner.progressSummary(
+            records: records,
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        )
+        let progresses = SunshineRunPlanner.periodProgresses(
+            records: records,
+            semesterStart: start,
+            totalWeeks: 20,
+            excludedWeeks: [8],
+            calendar: calendar
+        )
 
         XCTAssertEqual(summary.totalCount, 2)
         XCTAssertEqual(progresses[3].count, 2)
@@ -262,7 +379,7 @@ final class SunshineRunPlannerTests: XCTestCase {
 
     func testNotificationPlanStopsAfterFullScore() throws {
         let start = try makeDate("2026-03-09")
-        let records = try (0..<34).map { offset in
+        let records = try (0 ..< 34).map { offset in
             SunshineRunRecord(
                 date: try XCTUnwrap(calendar.date(byAdding: .day, value: offset, to: start)),
                 semesterStart: start,

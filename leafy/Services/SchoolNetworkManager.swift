@@ -138,13 +138,15 @@ final class SchoolNetworkManager: ObservableObject {
 
     init() {
         let currentIdentity = CampusIdentityStore.currentIdentity()
-        let portal = SchoolPortal(rawValue: UserDefaults.standard.string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
+        let portal = SchoolPortal(rawValue: UserDefaults.standard
+            .string(forKey: CampusScopedDefaults.key("schoolPortal")) ?? "") ?? .undergraduate
         self.isLoggedIn = UserDefaults.standard.bool(forKey: CampusScopedDefaults.key("isLoggedIn"))
         self.persistedCookieValues = SchoolSessionCredentialStore.load(identity: currentIdentity, portal: portal)
         self.currentPortal = portal
         self.lastLandingURLString = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("lastLandingURL"))
         self.authenticatedEduID = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedEduID"))
-        self.authenticatedDisplayName = UserDefaults.standard.string(forKey: CampusScopedDefaults.key("authenticatedDisplayName"))
+        self.authenticatedDisplayName = UserDefaults.standard
+            .string(forKey: CampusScopedDefaults.key("authenticatedDisplayName"))
         if ReviewDemoMode.isEnabled {
             self.isLoggedIn = true
             self.authenticatedEduID = ReviewDemoDataSeeder.demoEduID

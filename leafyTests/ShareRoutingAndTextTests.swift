@@ -45,7 +45,7 @@ final class ShareRoutingAndTextTests: XCTestCase {
         let urlRange = try XCTUnwrap(plainText.range(of: "https://example.com/path?q=1"))
         let lowerBound = try XCTUnwrap(AttributedString.Index(urlRange.lowerBound, within: attributedText))
         let upperBound = try XCTUnwrap(AttributedString.Index(urlRange.upperBound, within: attributedText))
-        let links = attributedText[lowerBound..<upperBound].runs.compactMap(\.link)
+        let links = attributedText[lowerBound ..< upperBound].runs.compactMap(\.link)
 
         XCTAssertTrue(links.contains(URL(string: "https://example.com/path?q=1")!))
     }

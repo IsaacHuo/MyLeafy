@@ -199,7 +199,7 @@ private struct LeafyLegacyVerticalScrollObserver: UIViewRepresentable {
             if scrollView != nil, observation != nil { return }
             var ancestor = marker.superview
             // The background marker sits next to the hosting scroll view. Stop before the window.
-            for _ in 0..<5 {
+            for _ in 0 ..< 5 {
                 guard let view = ancestor, !(view is UIWindow) else { break }
                 if let found = (view as? UIScrollView) ?? findScrollView(in: view, excluding: marker, depth: 3) {
                     scrollView = found

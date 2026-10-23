@@ -91,5 +91,4 @@ final class ScheduleMemoMarkdownTests: XCTestCase {
             "第一段\n第二段"
         )
     }
-
 }

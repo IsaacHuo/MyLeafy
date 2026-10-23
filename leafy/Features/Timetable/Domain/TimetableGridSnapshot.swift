@@ -91,6 +91,7 @@ struct TimetableGridInputSignature: Equatable, Hashable {
         let id: UUID
         let name: String
         let teacher: String
+        let classInfo: String
         let location: String
         let room: String
         let sourceSemesterID: String
@@ -102,6 +103,7 @@ struct TimetableGridInputSignature: Equatable, Hashable {
             id = course.id
             name = course.courseName
             teacher = course.teacher
+            classInfo = course.classInfo
             location = course.location
             room = course.room
             sourceSemesterID = course.sourceSemesterID
@@ -225,7 +227,6 @@ struct TimetableCourseRenderValue: Identifiable, Hashable {
             week: semesterWeek
         )
     }
-
 }
 
 struct TimetableCellReminderRenderValue: Identifiable, Hashable {
@@ -247,7 +248,7 @@ struct TimetableCellReminderRenderValue: Identifiable, Hashable {
     let resolvedEndDate: Date?
 
     var displayPeriodRange: ClosedRange<Int> {
-        displayStartPeriod...displayEndPeriod
+        displayStartPeriod ... displayEndPeriod
     }
 
     @MainActor
@@ -382,7 +383,7 @@ struct TimetableGridSnapshot {
             courseWeekProjections: courseWeekProjections,
             cellReminderProjections: cellReminderProjections
         )
-        let visibleDays = hidesWeekends ? Array(1...5) : Array(1...7)
+        let visibleDays = hidesWeekends ? Array(1 ... 5) : Array(1 ... 7)
         let courseNotesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
         let courseNoteKeys = Set(courseNotesByKey.keys)
@@ -395,8 +396,8 @@ struct TimetableGridSnapshot {
         }
 
         var coursesByDay: [TimetableGridDayKey: [TimetableCourseRenderValue]] = [:]
-        for course in courseValues where (1...7).contains(course.dayOfWeek) {
-            for week in course.weeks where (1...totalWeeks).contains(week) {
+        for course in courseValues where (1 ... 7).contains(course.dayOfWeek) {
+            for week in course.weeks where (1 ... totalWeeks).contains(week) {
                 coursesByDay[TimetableGridDayKey(week: week, day: course.dayOfWeek), default: []].append(course)
             }
         }

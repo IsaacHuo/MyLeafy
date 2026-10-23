@@ -1,55 +1,42 @@
 # MyLeafy Android
 
-MyLeafy 的 Android 原生客户端（单 `app` module）。迁移方案与教务协议记录见
-[`docs/engineering/android-migration.md`](../docs/engineering/android-migration.md)。
+Android 原生客户端，与 iOS、Cloudflare 后端和官网共用仓库，独立发版。[跨端状态](../state/PLATFORMS.md) 区分实现、验证和正式交付；[当前架构](../state/ARCHITECTURE.md) 是代码结构入口，[对齐方案](../docs/engineering/android-migration.md) 记录取舍。
 
-## 技术栈
+## 技术与结构
 
-- Kotlin + Jetpack Compose + Material 3
-- Room（本地数据）、DataStore（设置）、Navigation Compose（导航 + 深链）
-- minSdk 29 / targetSdk 36 / compileSdk 36
-- 版本目录 `gradle/libs.versions.toml`
+Kotlin、Compose / Material 3、Room、DataStore、Navigation Compose、WorkManager / AlarmManager、OkHttp 与 jsoup。最低 API 29，target/compile SDK 36；依赖版本在 `gradle/libs.versions.toml`。新版业务调用 Cloudflare `/v1`，不接入旧 Supabase SDK。
 
-## 构建
+`app/src/main/java/com/myleafy/android/` 下：
+
+- `navigation/`：RootTab、MyLeafyNavHost 与深链；课表、校园、我的三个根入口，社区与日迹从校园「校园生活」进入。
+- `features/`：auth、timetable、community、schedule、campus、profile。
+- `core/`：校园作用域、Room、依赖、网络、偏好和凭据。
+- `parsers/`、`services/`、`shared/model/`：学校 HTML 解析、学校/Cloudflare 服务与 DTO。
+- `ui/`：主题、公共组件与根组合。
+
+无身份先显示北京林业大学与免登录入口，恢复身份后进入根导航。小屏底部导航、宽屏 Navigation Rail；二级页面隐藏根导航。云同步、Widget 等能力不根据旧 README 推断，逐项以状态矩阵及源码核对。
+
+## 构建与检查
+
+安装 JDK 17+ 和 Android SDK Platform 36，将本机 SDK 路径放在未跟踪的 `local.properties` 或 `ANDROID_HOME`。Gradle daemon 使用受版本控制的 `gradle/gradle-daemon-jvm.properties` 指定的 toolchain（当前 Oracle 24），由已有 resolver 查找/准备；不要为了格式工具改动应用 toolchain。
+
+从 android 目录执行：
 
 ```bash
-./gradlew assembleDebug            # 产出 app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest        # 纯 JVM 单元测试
-./gradlew connectedDebugAndroidTest # 运行 5 Tab / 二级导航设备烟雾测试
+./gradlew spotlessApply             # 修改自有 Kotlin 与 Gradle 脚本
+./gradlew spotlessCheck             # 只读检查
+./gradlew :app:assembleDebug
+./gradlew :app:testDebugUnitTest
+./gradlew :app:lintDebug
+./gradlew :app:verifyRoborazziDebug -Pscreenshot
 ```
 
-release 构建必须同时提供 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE_STORE_PASSWORD`、`MYLEAFY_RELEASE_KEY_ALIAS` 和 `MYLEAFY_RELEASE_KEY_PASSWORD`；缺任一项会直接失败，不会生成 unsigned APK。main CI 通过后，新 versionCode 由 Actions 准备私有签名候选；超级管理员在 admin 下载验收并手动决定发布到 Cloudflare 与 `android-vX.Y.Z` GitHub Release。发布使用原 APK，不重新构建。详见 [交付与发布](../docs/operations/delivery.md)。
+格式工具版本与只处理任务文件的方式见 [代码规范](../docs/engineering/code-style.md)。`connectedDebugAndroidTest` 需要独立设备；Debug 包名带 `.next`，可并存，但不能代替正式包覆盖升级验收。不要因格式变化重录截图。
 
-要求：JDK 17+，Android SDK Platform 36（`local.properties` 中 `sdk.dir`）。Windows 本地可直接使用 Android Studio 自带 JBR；本仓库的 wrapper 下载超时已放宽，适合首次获取 Gradle 分发包。
+## 服务配置与发布
 
-模拟器验收基线：Pixel 8、Android 16 / API 36、Google APIs x86_64。App 默认直接进入主界面，学校登录从“我的”进入。
+默认 API 为 `https://api.myleafy.space`；隔离环境传 `-PmyleafyApiOrigin=https://api-staging.myleafy.space`。本地 SDK、签名材料、凭据与学生数据禁止提交。
 
-若宿主机浏览器可访问教务、模拟器却收到 `502`，先检查 VPN/代理是否以全局模式接管模拟器 NAT 流量。应让 `newjwxt.bjfu.edu.cn` 和 `202.204.121.79` 直连，或在验收时关闭对应代理；不要把个人代理地址或凭据写进 App。可用 `adb shell settings get global http_proxy` 检查模拟器是否遗留系统代理。
+Release 构建必须配置 `MYLEAFY_RELEASE_STORE_FILE`、`MYLEAFY_RELEASE_STORE_PASSWORD`、`MYLEAFY_RELEASE_KEY_ALIAS`、`MYLEAFY_RELEASE_KEY_PASSWORD`，缺失即失败。main CI 通过后为新 versionCode 准备私有签名候选；超级管理员下载验收后授权发布同一 APK，不重新构建。来源、版本、SHA-256 和验收按 [交付手册](../docs/operations/delivery.md) 与 [发布索引](../docs/operations/release-notes.md) 核对。
 
-## 配置
-
-客户端默认使用 `https://api.myleafy.space`；隔离测试可传 Gradle 属性 `-PmyleafyApiOrigin=https://api-staging.myleafy.space`。新版源码不需要 Supabase 配置。服务端 Secret 与签名材料禁止写入客户端配置或提交到 Git。
-
-## 目录
-
-```
-app/src/main/java/com/myleafy/android/
-├── navigation/    # RootTab + MyLeafyNavHost + Routes（5 Tab + login + 深链）
-├── features/      # auth / timetable / community / schedule / campus / profile
-├── core/          # campus / data(local Room v2) / di / network / prefs(DataStore) / security
-├── parsers/       # HtmlParser 接口（jsoup 阶段 2）
-├── services/      # SupabaseConfig
-├── shared/model/  # 社区 DTO（snake_case，跨平台契约）
-└── ui/            # theme / 根组合 / 公共组件
-```
-
-## 状态
-
-Android 1.0.0 已具备可编译、可运行的五个根入口：课表与个人日程、社区核心交互、日迹本地 CRUD、校园学业工具，以及资料/偏好/同步/退出。尚未完成的共享、通知、Widget、媒体和长尾校园能力继续使用明确占位，不注入演示数据。
-
-当前 UI 壳采用 Material 3：5 个根页面保留底部导航，二级页面隐藏底栏并使用系统返回栏；常用未实现入口由 `FeatureDestination` 进入明确占位页。帮助中心、权限说明、关于与内置校历为可直接使用的静态页面。页面只展示真实 Room/教务/Supabase 数据，不注入演示数据；未登录、未配置或校园网不可达时展示真实空状态或错误。
-
-教务抓取、jsoup 解析与 Supabase 基础链路已经接入；后续功能范围按
-`docs/engineering/android-migration.md` 推进。
-
-2026-08-29 已在 `MyLeafy_API_36` 上真实验证本科验证码与登录。当前学校课表响应不含 Android 解析器支持的 `kbcontent/kbtable` 结构，因此课表同步会明确报“课表数据不可用”并保留本地缓存；WebView/bootstrap 回退留待后续教务专项完成。
+学校教务依赖校园网或学校认可的 VPN。出现学校网页能访问、设备请求却 502 时检查设备代理及网络路径，不把个人代理地址或凭据写入应用，也不关闭 TLS 校验。

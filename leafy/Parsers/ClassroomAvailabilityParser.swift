@@ -15,7 +15,7 @@ nonisolated struct ClassroomAvailabilityMatrix: Sendable {
         guard lower >= 1, upper <= 12, lower <= upper else {
             throw SchoolNetworkError.classroomDataUnavailable("请选择有效的起止节次。")
         }
-        let requested = Set(lower...upper)
+        let requested = Set(lower ... upper)
         guard requested.isSubset(of: Set(periods)) else {
             throw SchoolNetworkError.classroomDataUnavailable("学校结果缺少所选节次。")
         }
@@ -29,7 +29,7 @@ nonisolated struct ClassroomAvailabilityMatrix: Sendable {
     }
 
     func usage(for target: ClassroomIdentity) throws -> [ClassroomUsageSlot] {
-        guard let row = rows.first(where: { $0.room.identity == target }), Set(periods) == Set(1...12) else {
+        guard let row = rows.first(where: { $0.room.identity == target }), Set(periods) == Set(1 ... 12) else {
             throw SchoolNetworkError.classroomDataUnavailable("学校结果未包含所选教室的完整节次。")
         }
         guard !row.slots.contains(where: { $0.status == .unknown }) else {
@@ -53,7 +53,7 @@ extension HTMLParser {
             }
             let characters = Array(value)
             return try stride(from: 0, to: characters.count, by: 2).map { index in
-                guard let period = Int(String(characters[index...index + 1])), (1...12).contains(period) else {
+                guard let period = Int(String(characters[index ... index + 1])), (1 ... 12).contains(period) else {
                     throw HTMLParserError.tableRowsUnparseable("教室节次")
                 }
                 return period

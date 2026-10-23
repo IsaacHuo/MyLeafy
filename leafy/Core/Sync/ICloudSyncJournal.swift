@@ -9,13 +9,21 @@ nonisolated struct ICloudSyncValue: Codable, Equatable, Sendable {
     var deleted = false
     var filePath: String?
     var fileDigest: String?
-    var isPersonalText: Bool { ["ScheduleMemo/", "CourseNote/", "CourseOccurrenceNote/", "CustomSchedule/", "TimetableCellReminder/", "ManualExam/"].contains { key.hasPrefix($0) } }
+    var isPersonalText: Bool { [
+        "ScheduleMemo/",
+        "CourseNote/",
+        "CourseOccurrenceNote/",
+        "CustomSchedule/",
+        "TimetableCellReminder/",
+        "ManualExam/"
+    ].contains { key.hasPrefix($0) } }
     var recordName: String { Self.digest(Data(key.utf8)) }
     static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
     var isSingleton: Bool { key.hasPrefix("preference/") || key.hasPrefix("settings/") || key.hasPrefix("school/") }
     static func winner(local: Self, remote: Self) -> Self {
-        if local.isSingleton, local.modifiedAt != remote.modifiedAt { return local.modifiedAt > remote.modifiedAt ? local : remote }
+        if local.isSingleton,
+           local.modifiedAt != remote.modifiedAt { return local.modifiedAt > remote.modifiedAt ? local : remote }
         if local.deleted != remote.deleted { return local.deleted ? local : remote }
         if local.modifiedAt != remote.modifiedAt { return local.modifiedAt > remote.modifiedAt ? local : remote }
         if local.modifiedAt == .distantPast { return remote }
@@ -41,12 +49,15 @@ nonisolated struct ICloudSyncJournal: Codable {
     }
     func save(to url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(self).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try JSONEncoder().encode(self).write(
+            to: url,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        )
     }
     @discardableResult
     mutating func capture(_ values: [ICloudSyncValue], now: Date = Date()) -> Bool {
         var changed = false
-        let live = Dictionary(uniqueKeysWithValues: values.map { ($0.key, $0) })
+        let live = Set(values.map(\.key))
         for var value in values {
             if let previous = records[value.key], previous.payload == value.payload,
                previous.fileDigest == value.fileDigest, !previous.deleted { continue }
@@ -59,9 +70,37 @@ nonisolated struct ICloudSyncJournal: Codable {
             pending.insert(value.key)
             changed = true
         }
-        for (key, var value) in records where !value.deleted && live[key] == nil {
+        for (key, var value) in records where !value.deleted && !live.contains(key) {
             value.deleted = true; value.payload = Data(); value.modifiedAt = now; value.revision = UUID().uuidString
             records[key] = value; pending.insert(key); changed = true
+        }
+        return changed
+    }
+    /// Refresh only incoming keys; unrelated records waiting for assets cannot hide newly committed edits.
+    mutating func captureBeforeMerge(_ current: [ICloudSyncValue], incoming: [ICloudSyncValue],
+                                     now: Date = Date()) -> Bool {
+        var latest: [String: ICloudSyncValue] = [:]
+        for value in current { latest[value.key] = value }
+        var changed = false
+        for remote in incoming {
+            if var value = latest[remote.key] {
+                if value.payload == remote.payload && value.fileDigest == remote.fileDigest { continue }
+                if let previous = records[value.key] {
+                    if previous.deleted && !value.isSingleton { continue }
+                    if previous.payload == value.payload && previous.fileDigest == value.fileDigest && !previous
+                        .deleted { continue }
+                    value.modifiedAt = max(now, value.modifiedAt)
+                }
+                records[value.key] = value
+                pending.insert(value.key)
+                changed = true
+            } else if var previous = records[remote.key], !previous.deleted, !remote.deleted,
+                      !remote.key.hasPrefix("file/") {
+                previous.deleted = true; previous.payload = Data(); previous.modifiedAt = now
+                previous.revision = UUID().uuidString
+                records[previous.key] = previous; pending.insert(previous.key)
+                changed = true
+            }
         }
         return changed
     }

@@ -72,10 +72,8 @@ class CloudflareStagingContractTest {
             assertTrue(second.timetableSharing.viewableSnapshots("bjfu", viewerProfile.id, term).none { it.owner_id == ownerProfile.id })
             sharing.stopSharing()
         } finally {
-            try { if (viewerCreated) viewer.requestText("/v1/account", "DELETE") }
-            finally {
-                try { if (ownerCreated) owner.requestText("/v1/account", "DELETE") }
-                finally { viewer.close(); owner.close() }
+            try { if (viewerCreated) viewer.requestText("/v1/account", "DELETE") } finally {
+                try { if (ownerCreated) owner.requestText("/v1/account", "DELETE") } finally { viewer.close(); owner.close() }
             }
         }
     }

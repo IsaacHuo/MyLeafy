@@ -86,8 +86,8 @@ fun ScheduleEventEditorSheet(
             modifier = Modifier.verticalScroll(rememberScrollState()),
             titleContent = {
                 Text(
-                text = if (initial.id == null) "添加个人日程" else "编辑个人日程",
-                style = MaterialTheme.typography.headlineSmall,
+                    text = if (initial.id == null) "添加个人日程" else "编辑个人日程",
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             },
         ) {

@@ -54,7 +54,7 @@ nonisolated enum TimetablePeriodSchedule {
         return slots.first { slot in
             let start = slot.startHour * 60 + slot.startMinute
             let end = slot.endHour * 60 + slot.endMinute
-            return (start...end).contains(minutes)
+            return (start ... end).contains(minutes)
         }
     }
 
@@ -92,7 +92,8 @@ nonisolated enum TimetablePeriodSchedule {
         dayOfWeek: Int,
         period: Int
     ) -> Date? {
-        guard let slot = slot(for: period) else { return nil }
+        guard (1 ... SemesterConfig.timetableWeekCapacity).contains(week),
+              (1 ... 7).contains(dayOfWeek), let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
         let calendar = UserTimetableSettings.calendar
@@ -123,7 +124,8 @@ nonisolated enum TimetablePeriodSchedule {
         dayOfWeek: Int,
         period: Int
     ) -> Date? {
-        guard let slot = slot(for: period) else { return nil }
+        guard (1 ... SemesterConfig.timetableWeekCapacity).contains(week),
+              (1 ... 7).contains(dayOfWeek), let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
         let calendar = UserTimetableSettings.calendar
@@ -170,7 +172,7 @@ nonisolated enum TimetablePeriodSchedule {
         }
 
         guard let first = periods.first, let last = periods.last else { return nil }
-        return first...last
+        return first ... last
     }
 }
 
@@ -222,7 +224,6 @@ enum TimetableCacheMetadata {
     private static func scoped(_ key: String) -> String {
         CampusScopedDefaults.key(key)
     }
-
 }
 
 @MainActor
@@ -237,11 +238,28 @@ enum TimetableLocalDataSemesterMigration {
         reminderSettings: [CourseReminderSetting],
         cellReminders: [TimetableCellReminder],
         modelContext: ModelContext,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
         let key = CampusScopedDefaults.key(migrationKey, defaults: defaults)
         guard !defaults.bool(forKey: key) else { return }
 
+        let noteUndos = courseNotes.map { note in
+            let key = note.courseKey
+            return { note.courseKey = key }
+        }
+        let occurrenceUndos = occurrenceNotes.map { note in
+            let keys = (note.courseKey, note.occurrenceKey)
+            return { note.courseKey = keys.0; note.occurrenceKey = keys.1 }
+        }
+        let reminderUndos = reminderSettings.map { setting in
+            let key = setting.courseKey
+            return { setting.courseKey = key }
+        }
+        let cellUndos = cellReminders.map { reminder in
+            let dates = (reminder.startsAt, reminder.endsAt)
+            return { reminder.startsAt = dates.0; reminder.endsAt = dates.1 }
+        }
         let legacyCourses = courses.filter { $0.sourceSemesterID == legacySemesterID }
         let scopedKeyByLegacyKey = Dictionary(
             legacyCourses.map { ($0.legacyStableCourseKey, $0.stableCourseKey) },
@@ -289,7 +307,9 @@ enum TimetableLocalDataSemesterMigration {
             }
         }
 
-        try modelContext.save()
+        try LocalModelSave.save(modelContext, undo: {
+            for undo in noteUndos + occurrenceUndos + reminderUndos + cellUndos { undo() }
+        }, using: save)
         defaults.set(true, forKey: key)
     }
 }
@@ -516,7 +536,7 @@ enum TimetableNoteResolver {
 @MainActor
 enum TimetableNotificationManager {
     static let reminderOptions = [0, 5, 20, 30]
-    static let customReminderRange = 1...180
+    static let customReminderRange = 1 ... 180
 
     static func normalizedReminderMinutes(_ minutes: Int) -> Int {
         guard minutes > 0 else { return 0 }
@@ -563,12 +583,12 @@ enum TimetableNotificationManager {
         let now = Date()
         for week in course.weeks.sorted() {
             guard let triggerDate = reminderTriggerDate(
-                for: course,
-                week: week,
-                minutesBefore: minutesBefore,
-                anchorPeriod: anchorPeriod
-            ),
-                triggerDate > now
+                      for: course,
+                      week: week,
+                      minutesBefore: minutesBefore,
+                      anchorPeriod: anchorPeriod
+                  ),
+                  triggerDate > now
             else {
                 continue
             }
@@ -599,6 +619,8 @@ enum TimetableNotificationManager {
     }
 
     static func applyReminder(for reminder: TimetableCellReminder) async throws -> Bool {
+        let scope = CampusOperationScope()
+        try scope.check()
         cancelReminder(for: reminder)
         let minutesBefore = normalizedReminderMinutes(reminder.minutesBefore)
         guard minutesBefore > 0 else { return false }
@@ -610,7 +632,6 @@ enum TimetableNotificationManager {
             return false
         }
 
-        let center = try await authorizedNotificationCenter()
         let content = UNMutableNotificationContent()
         content.title = reminder.title
         if reminder.locationText.isEmpty {
@@ -627,11 +648,19 @@ enum TimetableNotificationManager {
             content: content,
             trigger: trigger
         )
+        let center = try await authorizedNotificationCenter()
+        try scope.check()
         try await center.add(request)
+        if !scope.isCurrent || Task.isCancelled {
+            center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+            throw CancellationError()
+        }
         return true
     }
 
     static func applyReminder(for event: CustomScheduleEvent) async throws -> Bool {
+        let scope = CampusOperationScope()
+        try scope.check()
         cancelReminder(for: event)
         let minutesBefore = normalizedReminderMinutes(event.minutesBefore)
         guard minutesBefore > 0 else { return false }
@@ -642,7 +671,6 @@ enum TimetableNotificationManager {
             return false
         }
 
-        let center = try await authorizedNotificationCenter()
         let content = UNMutableNotificationContent()
         content.title = event.title
         if event.locationText.isEmpty {
@@ -659,7 +687,13 @@ enum TimetableNotificationManager {
             content: content,
             trigger: trigger
         )
+        let center = try await authorizedNotificationCenter()
+        try scope.check()
         try await center.add(request)
+        if !scope.isCurrent || Task.isCancelled {
+            center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+            throw CancellationError()
+        }
         return true
     }
 
@@ -686,8 +720,13 @@ enum TimetableNotificationManager {
     }
 
     static func cancelAllCellReminders(_ reminders: [TimetableCellReminder]) {
-        let ids = reminders.map { notificationID(cellKey: $0.cellKey) }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+        cancelCellReminders(cellKeys: reminders.map(\.cellKey))
+    }
+
+    static func cancelCellReminders(cellKeys: [String]) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: cellKeys.map { notificationID(cellKey: $0) }
+        )
     }
 
     static func cancelAllCustomScheduleEvents(_ events: [CustomScheduleEvent]) {

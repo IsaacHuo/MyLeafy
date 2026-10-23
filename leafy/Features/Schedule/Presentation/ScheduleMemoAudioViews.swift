@@ -31,7 +31,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
 
                 if recorder.state == .ready {
                     TextField("添加一句备注（可选）", text: $note, axis: .vertical)
-                        .lineLimit(2...4)
+                        .lineLimit(2 ... 4)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 52)
                         .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -136,19 +136,17 @@ struct ScheduleMemoAudioRecorderSheet: View {
             let filename = try ScheduleMemoAudioStore.importRecording(from: sourceURL)
             storedFilename = filename
             let memo = ScheduleMemo(body: note, kind: .audio)
-            modelContext.insert(memo)
-            modelContext.insert(ScheduleMemoAudio(
+            let audio = ScheduleMemoAudio(
                 memoID: memo.id,
                 localFilename: filename,
                 duration: recorder.elapsed
-            ))
-            try modelContext.save()
+            )
+            try ScheduleMemoPersistence.insert(memo, resources: [audio], in: modelContext)
             dismiss()
         } catch {
             if let storedFilename {
                 try? ScheduleMemoAudioStore.deleteFile(named: storedFilename)
             }
-            modelContext.rollback()
             saveError = error.localizedDescription
         }
     }

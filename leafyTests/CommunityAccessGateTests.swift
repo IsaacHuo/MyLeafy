@@ -167,6 +167,39 @@ final class CommunityAccessGateTests: XCTestCase {
     }
 
     @MainActor
+    func testAccessGateCannotAuthorizeAcrossIdentityChangeDuringBootstrap() async {
+        let session = FakeCommunitySession(currentUserID: UUID())
+        session.onBootstrap = { CampusIdentityStore.activate(makeCustomIdentity()) }
+        let gate = CommunityAccessGate(sessionManager: session, termsChecker: FakeTermsChecker(accepted: true))
+        let result = await gate.evaluate(.rating)
+        if case .failed = result {} else { XCTFail("Old access evaluation authorized new identity") }
+    }
+
+    @MainActor
+    func testCommunityFeedPaginationCannotOverwriteNewRefreshOfSameQuery() async {
+        let repository = SuspendingCommunityRepository()
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: EmptyCommunityFeedCache())
+        let initial = (0 ..< 20).map { makeTestCommunityPost(title: "Old \($0)") }
+        let initialLoad = Task { await viewModel.load(query: .default) }
+        await repository.waitForFetch(query: .default)
+        await repository.resumeFetch(query: .default, posts: initial)
+        _ = await initialLoad.value
+
+        let pageQuery = CommunityFeedQuery(limit: 40)
+        let pagination = Task { await viewModel.loadMoreIfNeeded() }
+        await repository.waitForFetch(query: pageQuery)
+        let fresh = makeTestCommunityPost(title: "New refresh")
+        let refresh = Task { await viewModel.load(mode: .refresh, query: .default) }
+        await repository.waitForFetch(query: .default)
+        await repository.resumeFetch(query: .default, posts: [fresh])
+        _ = await refresh.value
+        await repository.resumeFetch(query: pageQuery, posts: initial)
+        await pagination.value
+        XCTAssertEqual(viewModel.posts, [fresh])
+        XCTAssertFalse(viewModel.isLoadingMore)
+    }
+
+    @MainActor
     func testCommunityFeedIgnoresStaleLoadAfterQueryChanges() async {
         let repository = SuspendingCommunityRepository()
         let viewModel = CommunityFeedViewModel(repository: repository, cache: EmptyCommunityFeedCache())
@@ -303,7 +336,14 @@ final class CommunityAccessGateTests: XCTestCase {
     func testActivePollPercentagesAreAvailableBeforeViewerVotes() {
         let id = UUID()
         let options = ["图书馆", "教学楼"].enumerated().map { index, title in
-            CommunityPollOption(id: UUID(), pollID: id, text: title, sortOrder: index, voteCount: 2, createdAt: "2026-05-28T00:00:00Z")
+            CommunityPollOption(
+                id: UUID(),
+                pollID: id,
+                text: title,
+                sortOrder: index,
+                voteCount: 2,
+                createdAt: "2026-05-28T00:00:00Z"
+            )
         }
         let pendingVotePoll = makeTestCommunityPoll(id: id, options: options, totalVoteCount: 4)
         XCTAssertEqual(
@@ -457,6 +497,7 @@ private final class FakeCommunitySession: CommunitySessionManaging {
     var communityAccessStatus: CommunityAccessStatus = .general
     var hasApprovedCommunityAccess: Bool = false
     private(set) var bootstrapForceValues: [Bool] = []
+    var onBootstrap: (() -> Void)?
 
     init(
         currentUserID: UUID?,
@@ -476,6 +517,7 @@ private final class FakeCommunitySession: CommunitySessionManaging {
 
     func bootstrapCommunityUser(force: Bool) async {
         bootstrapForceValues.append(force)
+        onBootstrap?()
     }
 }
 
@@ -547,7 +589,8 @@ private actor SuspendingCommunityRepository: CommunityRepository {
         []
     }
 
-    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?, limit: Int) async throws -> CommunityCommentPage {
+    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?,
+                             limit: Int) async throws -> CommunityCommentPage {
         CommunityCommentPage(threads: [], nextCursor: nil)
     }
 
@@ -555,7 +598,8 @@ private actor SuspendingCommunityRepository: CommunityRepository {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
-    func createComment(postID: UUID, body: String, parentCommentID: UUID?, replyToCommentID: UUID?) async throws -> CommunityComment {
+    func createComment(postID: UUID, body: String, parentCommentID: UUID?,
+                       replyToCommentID: UUID?) async throws -> CommunityComment {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -594,7 +638,11 @@ private actor SuspendingCommunityRepository: CommunityRepository {
     }
 
     @MainActor
-    func enqueuePostPublication(input: CreatePostInput, images: [CommunityImageUpload], attachments: [CommunityAttachmentUpload]) throws -> UUID {
+    func enqueuePostPublication(
+        input: CreatePostInput,
+        images: [CommunityImageUpload],
+        attachments: [CommunityAttachmentUpload]
+    ) throws -> UUID {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -630,11 +678,13 @@ private actor SuspendingCommunityRepository: CommunityRepository {
         []
     }
 
-    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int, offset: Int) async throws -> [CourseRatingSummary] {
+    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int,
+                                    offset: Int) async throws -> [CourseRatingSummary] {
         []
     }
 
-    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int, offset: Int) async throws -> [DishRatingSummary] {
+    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int,
+                                  offset: Int) async throws -> [DishRatingSummary] {
         []
     }
 
@@ -649,8 +699,10 @@ private actor SuspendingCommunityRepository: CommunityRepository {
     }
 
     func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem] { [] }
-    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
-    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
+    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError
+        .failure("未实现") }
+    func updateNotificationSettings(mutedAll: Bool) async throws
+        -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
     func markNotificationFeedRead(announcementLimit: Int) async throws {}
     func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {}
     func markNotificationRead(notificationID: UUID) async throws {}
@@ -726,7 +778,8 @@ private actor FakePollRepository: CommunityRepository {
         []
     }
 
-    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?, limit: Int) async throws -> CommunityCommentPage {
+    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?,
+                             limit: Int) async throws -> CommunityCommentPage {
         CommunityCommentPage(threads: [], nextCursor: nil)
     }
 
@@ -734,7 +787,8 @@ private actor FakePollRepository: CommunityRepository {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
-    func createComment(postID: UUID, body: String, parentCommentID: UUID?, replyToCommentID: UUID?) async throws -> CommunityComment {
+    func createComment(postID: UUID, body: String, parentCommentID: UUID?,
+                       replyToCommentID: UUID?) async throws -> CommunityComment {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -773,7 +827,11 @@ private actor FakePollRepository: CommunityRepository {
     }
 
     @MainActor
-    func enqueuePostPublication(input: CreatePostInput, images: [CommunityImageUpload], attachments: [CommunityAttachmentUpload]) throws -> UUID {
+    func enqueuePostPublication(
+        input: CreatePostInput,
+        images: [CommunityImageUpload],
+        attachments: [CommunityAttachmentUpload]
+    ) throws -> UUID {
         throw CommunityRepositoryTestError.failure("未实现")
     }
 
@@ -906,11 +964,13 @@ private actor FakePollRepository: CommunityRepository {
         []
     }
 
-    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int, offset: Int) async throws -> [CourseRatingSummary] {
+    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int,
+                                    offset: Int) async throws -> [CourseRatingSummary] {
         []
     }
 
-    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int, offset: Int) async throws -> [DishRatingSummary] {
+    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int,
+                                  offset: Int) async throws -> [DishRatingSummary] {
         []
     }
 
@@ -926,8 +986,10 @@ private actor FakePollRepository: CommunityRepository {
     }
 
     func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem] { [] }
-    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
-    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
+    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw CommunityRepositoryTestError
+        .failure("未实现") }
+    func updateNotificationSettings(mutedAll: Bool) async throws
+        -> CommunityNotificationSettings { throw CommunityRepositoryTestError.failure("未实现") }
     func markNotificationFeedRead(announcementLimit: Int) async throws {}
     func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {}
     func markNotificationRead(notificationID: UUID) async throws {}

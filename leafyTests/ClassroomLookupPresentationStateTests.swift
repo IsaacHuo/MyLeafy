@@ -10,7 +10,11 @@ final class ClassroomLookupPresentationStateTests: XCTestCase {
         let sameDay = ClassroomLookupRequest(date: date.addingTimeInterval(3600), building: "二教", room: "205")
         XCTAssertNotEqual(first.id, sameDay.id)
         XCTAssertEqual(first.queryKey, sameDay.queryKey)
-        let nextShanghaiDay = ClassroomLookupRequest(date: date.addingTimeInterval(16 * 3600), building: "二教", room: "205")
+        let nextShanghaiDay = ClassroomLookupRequest(
+            date: date.addingTimeInterval(16 * 3600),
+            building: "二教",
+            room: "205"
+        )
         XCTAssertNotEqual(first.queryKey, nextShanghaiDay.queryKey)
     }
 
@@ -19,7 +23,11 @@ final class ClassroomLookupPresentationStateTests: XCTestCase {
         let period = ClassroomLookupRequest(date: date, startPeriod: 1, endPeriod: 2)
         var state = ClassroomLookupPresentationState()
         state.begin(room)
-        XCTAssertTrue(state.accept(.success(.init(usage: [.init(period: 1, status: .available)])), for: room, matching: room.queryKey))
+        XCTAssertTrue(state.accept(
+            .success(.init(usage: [.init(period: 1, status: .available)])),
+            for: room,
+            matching: room.queryKey
+        ))
         state.finish(room)
         XCTAssertNotNil(state.outcome(for: room.queryKey))
         // Rendering must hide old data even before SwiftUI's onChange runs.
@@ -67,7 +75,11 @@ final class ClassroomLookupPresentationStateTests: XCTestCase {
         state.begin(old)
         state.updateQuery(to: new.queryKey)
         state.begin(new)
-        let staleError = ClassroomLookupOutcome.fallback(data: .init(), errorMessage: "登录失效", requiresReauthentication: true)
+        let staleError = ClassroomLookupOutcome.fallback(
+            data: .init(),
+            errorMessage: "登录失效",
+            requiresReauthentication: true
+        )
         XCTAssertFalse(state.accept(staleError, for: old, matching: new.queryKey))
         XCTAssertFalse(state.accept(.success(.init()), for: old, matching: new.queryKey))
         state.finish(old)

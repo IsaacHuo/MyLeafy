@@ -23,13 +23,6 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
-	<key>SUPABASE_COMMUNITY_EDGE_REGION</key>
-	<string>$(SUPABASE_COMMUNITY_EDGE_REGION)</string>
-	<key>SUPABASE_PUBLISHABLE_KEY</key>
-	<string>$(SUPABASE_PUBLISHABLE_KEY)</string>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SUPABASE_WEATHER_FUNCTION</key>
-	<string>$(SUPABASE_WEATHER_FUNCTION)</string>
+
 </dict>
 </plist>

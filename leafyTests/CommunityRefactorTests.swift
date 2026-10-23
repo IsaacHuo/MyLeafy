@@ -182,12 +182,18 @@ extension PerformanceRefactorTests {
     @MainActor
     func testCommunityFeedDoesNotPromptForCountsEditsOrOlderRankedItems() async throws {
         let original = makeCommunityPost(title: "原帖", createdAt: "2026-05-14T10:00:00Z")
-        let edited = makeCommunityPost(id: original.id, title: "修改后的正文", commentCount: 5, likeCount: 3, createdAt: original.createdAt)
+        let edited = makeCommunityPost(
+            id: original.id,
+            title: "修改后的正文",
+            commentCount: 5,
+            likeCount: 3,
+            createdAt: original.createdAt
+        )
         let older = makeCommunityPost(title: "旧帖进入排序", createdAt: "2026-05-13T10:00:00Z")
         let repository = FakeCommunityRepository(postResponses: [[original], [edited], [older, edited], [edited]])
         let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
         await viewModel.load()
-        for _ in 0..<3 {
+        for _ in 0 ..< 3 {
             viewModel.requestStagedRefresh(after: .zero)
             try await Task.sleep(for: .milliseconds(100))
             XCTAssertFalse(viewModel.hasPendingRefresh)
@@ -197,8 +203,14 @@ extension PerformanceRefactorTests {
     @MainActor
     func testHotFeedDoesNotCallAnExistingNewerRankedPostNewContent() async throws {
         let formatter = ISO8601DateFormatter()
-        let original = makeCommunityPost(likeCount: 10, createdAt: formatter.string(from: Date().addingTimeInterval(-300)))
-        let previouslyPublished = makeCommunityPost(likeCount: 20, createdAt: formatter.string(from: Date().addingTimeInterval(-60)))
+        let original = makeCommunityPost(
+            likeCount: 10,
+            createdAt: formatter.string(from: Date().addingTimeInterval(-300))
+        )
+        let previouslyPublished = makeCommunityPost(
+            likeCount: 20,
+            createdAt: formatter.string(from: Date().addingTimeInterval(-60))
+        )
         let repository = FakeCommunityRepository(postResponses: [[original], [previouslyPublished, original]])
         let viewModel = CommunityFeedViewModel(repository: repository, cache: FakeCommunityFeedCache())
         await viewModel.load(query: .hot)
@@ -380,7 +392,7 @@ extension PerformanceRefactorTests {
 
     @MainActor
     func testCommunityFeedPaginationKeepsExistingPollsWhenPollRefreshFails() async {
-        let initialPosts = (0..<20).map { makeCommunityPost(title: "帖子 \($0)") }
+        let initialPosts = (0 ..< 20).map { makeCommunityPost(title: "帖子 \($0)") }
         let nextPosts = initialPosts + [makeCommunityPost(title: "新增帖子")]
         let poll = makeCommunityPoll(
             question: "保留已有投票？",

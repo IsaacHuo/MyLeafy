@@ -87,8 +87,24 @@ extension PerformanceRefactorTests {
             targetDate: semesterDate(week: 2, day: 2, hour: 8, minute: 10)
         )
         let exams = [
-            ExamArrangement(id: 2, courseID: "B", name: "Second", date: "2026-03-16", start: "09:50", end: "10:35", location: "102"),
-            ExamArrangement(id: 1, courseID: "A", name: "First", date: "2026-03-16", start: "08:00", end: "08:45", location: "101")
+            ExamArrangement(
+                id: 2,
+                courseID: "B",
+                name: "Second",
+                date: "2026-03-16",
+                start: "09:50",
+                end: "10:35",
+                location: "102"
+            ),
+            ExamArrangement(
+                id: 1,
+                courseID: "A",
+                name: "First",
+                date: "2026-03-16",
+                start: "08:00",
+                end: "08:45",
+                location: "101"
+            )
         ]
 
         let snapshot = TimetableScheduleProjectionSnapshot.make(
@@ -108,29 +124,73 @@ extension PerformanceRefactorTests {
         let now = reviewDate(2026, 5, 14)
         let sameWeek = reviewDate(2026, 5, 13)
         let materials = [
-            LearningMaterialDocument(title: "CET", categoryRawValue: LearningMaterialCategory.cet.rawValue, originalFilename: "cet.pdf", localFilename: "cet.pdf", contentTypeIdentifier: UTType.pdf.identifier),
-            LearningMaterialDocument(projectID: projectID.uuidString, title: "Project", originalFilename: "p.pdf", localFilename: "p.pdf", contentTypeIdentifier: UTType.pdf.identifier)
+            LearningMaterialDocument(
+                title: "CET",
+                categoryRawValue: LearningMaterialCategory.cet.rawValue,
+                originalFilename: "cet.pdf",
+                localFilename: "cet.pdf",
+                contentTypeIdentifier: UTType.pdf.identifier
+            ),
+            LearningMaterialDocument(
+                projectID: projectID.uuidString,
+                title: "Project",
+                originalFilename: "p.pdf",
+                localFilename: "p.pdf",
+                contentTypeIdentifier: UTType.pdf.identifier
+            )
         ]
         let tasks = [
             LearningProjectTask(categoryRawValue: LearningMaterialCategory.cet.rawValue, title: "背单词"),
             LearningProjectTask(projectID: projectID.uuidString, title: "刷题", isCompleted: true)
         ]
         let records = [
-            StudyTimeRecord(categoryRawValue: LearningMaterialCategory.cet.rawValue, startedAt: sameWeek, endedAt: sameWeek.addingTimeInterval(3600), content: "听力", location: "图书馆"),
-            StudyTimeRecord(projectID: projectID.uuidString, startedAt: sameWeek, endedAt: sameWeek.addingTimeInterval(1800), content: "项目", location: "图书馆")
+            StudyTimeRecord(
+                categoryRawValue: LearningMaterialCategory.cet.rawValue,
+                startedAt: sameWeek,
+                endedAt: sameWeek.addingTimeInterval(3600),
+                content: "听力",
+                location: "图书馆"
+            ),
+            StudyTimeRecord(
+                projectID: projectID.uuidString,
+                startedAt: sameWeek,
+                endedAt: sameWeek.addingTimeInterval(1800),
+                content: "项目",
+                location: "图书馆"
+            )
         ]
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
-        let index = LearningWorkspaceIndex.make(materials: materials, tasks: tasks, records: records, now: now, calendar: calendar)
+        let index = LearningWorkspaceIndex.make(
+            materials: materials,
+            tasks: tasks,
+            records: records,
+            now: now,
+            calendar: calendar
+        )
 
         XCTAssertEqual(
             index.summary(for: .fixed(.cet)),
-            LearningWorkspaceSummary.make(destination: .fixed(.cet), materials: materials, tasks: tasks, records: records, now: now, calendar: calendar)
+            LearningWorkspaceSummary.make(
+                destination: .fixed(.cet),
+                materials: materials,
+                tasks: tasks,
+                records: records,
+                now: now,
+                calendar: calendar
+            )
         )
         XCTAssertEqual(
             index.summary(for: .project(projectID)),
-            LearningWorkspaceSummary.make(destination: .project(projectID), materials: materials, tasks: tasks, records: records, now: now, calendar: calendar)
+            LearningWorkspaceSummary.make(
+                destination: .project(projectID),
+                materials: materials,
+                tasks: tasks,
+                records: records,
+                now: now,
+                calendar: calendar
+            )
         )
         XCTAssertEqual(index.tasks(for: .fixed(.cet)).map(\.title), ["背单词"])
     }

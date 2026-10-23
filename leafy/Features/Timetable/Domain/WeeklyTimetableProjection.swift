@@ -21,7 +21,7 @@ struct WeeklyTimetableProjection {
         occurrenceNotes: [CourseOccurrenceNote],
         includesWeekends: Bool
     ) -> WeeklyTimetableProjection {
-        let days = Array(1...(includesWeekends ? 7 : 5))
+        let days = Array(1 ... (includesWeekends ? 7 : 5))
         let visibleDays = Set(days)
         let weekCourses = courses
             .filter { $0.weeks.contains(selection.week) && visibleDays.contains($0.dayOfWeek) }

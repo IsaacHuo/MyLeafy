@@ -17,14 +17,14 @@ nonisolated struct AcademicHTMLTable {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let rowSpan = min(max(Int(try cell.attr("rowspan")) ?? 1, 1), 500)
                 let colSpan = min(max(Int(try cell.attr("colspan")) ?? 1, 1), 100)
-                for r in rowIndex..<rowIndex + rowSpan {
+                for r in rowIndex ..< rowIndex + rowSpan {
                     while grid.count <= r { grid.append([:]) }
-                    for c in column..<column + colSpan { grid[r][c] = text }
+                    for c in column ..< column + colSpan { grid[r][c] = text }
                 }
                 column += colSpan
             }
         }
-        rows = grid.map { row in (0..<(row.keys.max().map { $0 + 1 } ?? 0)).map { row[$0] ?? "" } }
+        rows = grid.map { row in (0 ..< (row.keys.max().map { $0 + 1 } ?? 0)).map { row[$0] ?? "" } }
     }
 
     static func heading(_ text: String) -> String {

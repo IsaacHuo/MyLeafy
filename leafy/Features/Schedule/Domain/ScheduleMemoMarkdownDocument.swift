@@ -166,7 +166,7 @@ nonisolated enum ScheduleMemoMarkdownParser {
 
     private static func heading(in line: String) -> (level: Int, text: String)? {
         let count = line.prefix(while: { $0 == "#" }).count
-        guard (1...3).contains(count), line.dropFirst(count).first == " " else { return nil }
+        guard (1 ... 3).contains(count), line.dropFirst(count).first == " " else { return nil }
         return (count, String(line.dropFirst(count + 1)))
     }
 
@@ -231,7 +231,11 @@ nonisolated enum ScheduleMemoEditorMutation {
 
         switch command {
         case .heading(let level):
-            return prefixLines(String(repeating: "#", count: min(max(level, 1), 3)) + " ", text: text, selection: safeSelection)
+            return prefixLines(
+                String(repeating: "#", count: min(max(level, 1), 3)) + " ",
+                text: text,
+                selection: safeSelection
+            )
         case .bold:
             return wrap("**", "**", text: text, selection: safeSelection, placeholder: "粗体")
         case .italic:
@@ -302,9 +306,15 @@ nonisolated enum ScheduleMemoEditorMutation {
 
     private static func insertBlock(_ block: String, text: String, selection: NSRange) -> Result {
         let nsText = text as NSString
-        let needsLeadingBreak = selection.location > 0 && nsText.substring(with: NSRange(location: selection.location - 1, length: 1)) != "\n"
+        let needsLeadingBreak = selection.location > 0 && nsText.substring(with: NSRange(
+            location: selection.location - 1,
+            length: 1
+        )) != "\n"
         let end = selection.location + selection.length
-        let needsTrailingBreak = end < nsText.length && nsText.substring(with: NSRange(location: end, length: 1)) != "\n"
+        let needsTrailingBreak = end < nsText.length && nsText.substring(with: NSRange(
+            location: end,
+            length: 1
+        )) != "\n"
         let replacement = (needsLeadingBreak ? "\n" : "") + block + (needsTrailingBreak ? "\n" : "")
         let updated = nsText.replacingCharacters(in: selection, with: replacement)
         return Result(

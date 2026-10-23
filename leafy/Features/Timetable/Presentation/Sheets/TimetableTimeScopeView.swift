@@ -5,6 +5,10 @@ import UniformTypeIdentifiers
 import UIKit
 
 struct TimetableTimeScopeSnapshot: Equatable {
+    private let configuration: SemesterRuntimeConfig
+    private let configurations: [SemesterRuntimeConfig]
+    private let campusID: CampusID
+    private let calendar: Calendar
     let referenceDate: Date
     let currentWeek: Int
     let weekStartDate: Date
@@ -54,7 +58,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
         let monthStart = monthInterval?.start ?? displayedMonthDate
         let leadingDays = (calendar.component(.weekday, from: monthStart) + 5) % 7
         let gridStart = calendar.date(byAdding: .day, value: -leadingDays, to: monthStart) ?? monthStart
-        let monthDays = (0..<42).compactMap { offset -> TimetableTimeScopeDay? in
+        let monthDays = (0 ..< 42).compactMap { offset -> TimetableTimeScopeDay? in
             guard let date = calendar.date(byAdding: .day, value: offset, to: gridStart) else { return nil }
             let startOfDay = calendar.startOfDay(for: date)
             let event = AcademicCalendarEvents.event(
@@ -111,6 +115,10 @@ struct TimetableTimeScopeSnapshot: Equatable {
         }()
 
         return TimetableTimeScopeSnapshot(
+            configuration: semesterConfig,
+            configurations: configurations ?? [semesterConfig],
+            campusID: campusID,
+            calendar: calendar,
             referenceDate: today,
             currentWeek: currentWeek,
             weekStartDate: weekStart,
@@ -142,6 +150,12 @@ struct TimetableTimeScopeSnapshot: Equatable {
             } ?? L10n.text("校历更新后显示", language: language),
             vacationCategory: vacationEvent?.academicCategory
         )
+    }
+
+    func displayingMonth(_ date: Date, language: AppLanguagePreference) -> Self {
+        Self.make(currentWeek: currentWeek, referenceDate: referenceDate, displayedMonthDate: date,
+                  language: language, semesterConfig: configuration, configurations: configurations,
+                  campusID: campusID, calendar: calendar)
     }
 
     private static func makeYearMonths(
@@ -176,7 +190,7 @@ struct TimetableTimeScopeSnapshot: Equatable {
         let academicYearStart = semesterMonth >= 9 ? semesterYear : semesterYear - 1
 
         let hasKnownVacations = !vacations.isEmpty
-        return (1...12).compactMap { month in
+        return (1 ... 12).compactMap { month in
             let year = month >= 9 ? academicYearStart : academicYearStart + 1
             guard let monthStart = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
                   let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart)
@@ -223,7 +237,8 @@ struct TimetableTimeScopeSnapshot: Equatable {
         }
     }
 
-    private static func intervalsOverlap(_ firstStart: Date, _ firstEnd: Date, _ secondStart: Date, _ secondEnd: Date) -> Bool {
+    private static func intervalsOverlap(_ firstStart: Date, _ firstEnd: Date, _ secondStart: Date,
+                                         _ secondEnd: Date) -> Bool {
         firstStart < secondEnd && secondStart < firstEnd
     }
 
@@ -357,6 +372,7 @@ struct TimetableTimeScopeView: View {
             )
         }
         .onChange(of: snapshot) { _, newSnapshot in
+            fixedYearMonths = newSnapshot.yearMonths
             displayedSnapshot = makeDisplayedSnapshot(
                 displayedMonthDate: displayedSnapshot.displayedMonthDate,
                 language: leafyLanguage,
@@ -390,9 +406,9 @@ struct TimetableTimeScopeView: View {
 
             ScrollView(showsIndicators: false) {
                 timeScopeContent
-                .padding(.horizontal, AppSpacing.page)
-                .padding(.top, 28 * leafyControlScale)
-                .padding(.bottom, 48 * leafyControlScale)
+                    .padding(.horizontal, AppSpacing.page)
+                    .padding(.top, 28 * leafyControlScale)
+                    .padding(.bottom, 48 * leafyControlScale)
             }
 
             if isGatherOverlayVisible {
@@ -619,12 +635,7 @@ struct TimetableTimeScopeView: View {
         baseSnapshot: TimetableTimeScopeSnapshot? = nil
     ) -> TimetableTimeScopeSnapshot {
         let sourceSnapshot = baseSnapshot ?? snapshot
-        return TimetableTimeScopeSnapshot.make(
-            currentWeek: sourceSnapshot.currentWeek,
-            referenceDate: sourceSnapshot.referenceDate,
-            displayedMonthDate: displayedMonthDate,
-            language: language
-        )
+        return sourceSnapshot.displayingMonth(displayedMonthDate, language: language)
     }
 }
 
@@ -898,7 +909,10 @@ struct TimetableTimeScopeDayCell: View {
     var body: some View {
         VStack(spacing: 3 * leafyControlScale) {
             Text("\(day.dayNumber)")
-                .font(.system(size: 14 * leafyControlScale, weight: day.isToday || day.isInCurrentWeek ? .bold : .medium))
+                .font(.system(
+                    size: 14 * leafyControlScale,
+                    weight: day.isToday || day.isInCurrentWeek ? .bold : .medium
+                ))
                 .foregroundStyle(foreground)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -1049,7 +1063,8 @@ struct TimetableTimeScopeMonthMarkView: View {
 
             Text(mark.label)
                 .font(.system(size: 9 * leafyControlScale, weight: isDisplayed ? .bold : .medium))
-                .foregroundStyle(isDisplayed ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.tertiaryText)
+                .foregroundStyle(isDisplayed ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme
+                    .tertiaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
         }

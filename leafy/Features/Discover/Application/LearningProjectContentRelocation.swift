@@ -18,7 +18,6 @@ enum LearningProjectContentRelocation {
         }
         let models: [any PersistentModel] = scopedMaterials + scopedTasks + scopedRecords
         try LocalFileCleanup().delete(models, files: files, in: modelContext)
-
     }
 
     static func moveToUnfiled(
@@ -55,8 +54,28 @@ enum LearningProjectContentRelocation {
         tasks: [LearningProjectTask],
         records: [StudyTimeRecord],
         modelContext: ModelContext,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
+        let id = project.id.uuidString
+        let materialSnapshots = materials.filter { $0.projectID == id }.map { (
+            $0,
+            $0.projectID,
+            $0.categoryRawValue,
+            $0.updatedAt
+        ) }
+        let taskSnapshots = tasks.filter { $0.projectID == id }.map { (
+            $0,
+            $0.projectID,
+            $0.categoryRawValue,
+            $0.updatedAt
+        ) }
+        let recordSnapshots = records.filter { $0.projectID == id }.map { (
+            $0,
+            $0.projectID,
+            $0.categoryRawValue,
+            $0.updatedAt
+        ) }
         moveToUnfiled(
             projectID: project.id,
             materials: materials,
@@ -65,7 +84,18 @@ enum LearningProjectContentRelocation {
             updatedAt: updatedAt
         )
         modelContext.delete(project)
-        try modelContext.save()
+        try LocalModelSave.save(modelContext, undo: {
+            modelContext.insert(project)
+            for (record, projectID, category, date) in materialSnapshots {
+                record.projectID = projectID; record.categoryRawValue = category; record.updatedAt = date
+            }
+            for (record, projectID, category, date) in taskSnapshots {
+                record.projectID = projectID; record.categoryRawValue = category; record.updatedAt = date
+            }
+            for (record, projectID, category, date) in recordSnapshots {
+                record.projectID = projectID; record.categoryRawValue = category; record.updatedAt = date
+            }
+        }, using: save)
     }
 
     static func deleteProjectAndContents(
@@ -85,6 +115,5 @@ enum LearningProjectContentRelocation {
         let scopedRecords = records.filter { $0.projectID == projectIDString }
         let models: [any PersistentModel] = [project] + scopedMaterials + scopedTasks + scopedRecords
         try LocalFileCleanup().delete(models, files: files, in: modelContext)
-
     }
 }

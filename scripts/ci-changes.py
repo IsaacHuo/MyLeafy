@@ -8,6 +8,10 @@ import subprocess
 def affected(paths):
     result = dict.fromkeys(('ios', 'android', 'backend', 'site', 'supabase'), False)
     for path in paths:
+        if path == '.editorconfig':
+            result.update(ios=True, android=True)
+        if path in ('.swiftformat', 'scripts/format-swift.sh'):
+            result['ios'] = True
         if path.startswith(('.github/workflows/', 'scripts/ci-', 'scripts/test_ci_')):
             return dict.fromkeys(result, True)
         if path.startswith(('leafy/', 'leafyTests/', 'leafyWidget/', 'LeafyWidgetShared/',

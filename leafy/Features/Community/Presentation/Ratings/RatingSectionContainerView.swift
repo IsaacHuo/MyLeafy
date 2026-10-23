@@ -47,28 +47,28 @@ struct RatingSectionContainerView: View {
                 Group {
                     switch mode {
                     case .teachers:
-                    TeacherSectionView(
-                        selectedTeacher: $selectedTeacher,
-                        requestedTeacherName: $requestedTeacherName,
-                        refreshID: teacherRefreshID,
-                        isActive: true,
-                        store: workspace.teachers
-                    )
+                        TeacherSectionView(
+                            selectedTeacher: $selectedTeacher,
+                            requestedTeacherName: $requestedTeacherName,
+                            refreshID: teacherRefreshID,
+                            isActive: true,
+                            store: workspace.teachers
+                        )
                     case .courses:
-                    CourseSectionView(
-                        selectedCourse: $selectedCourse,
-                        refreshID: courseRefreshID,
-                        isActive: true,
-                        store: workspace.courses
-                    )
+                        CourseSectionView(
+                            selectedCourse: $selectedCourse,
+                            refreshID: courseRefreshID,
+                            isActive: true,
+                            store: workspace.courses
+                        )
                     case .dishes:
-                    DishSectionView(
-                        selectedDish: $selectedDish,
-                        refreshID: dishRefreshID,
-                        isActive: true,
-                        store: workspace.dishes
-                    )
-                }
+                        DishSectionView(
+                            selectedDish: $selectedDish,
+                            refreshID: dishRefreshID,
+                            isActive: true,
+                            store: workspace.dishes
+                        )
+                    }
                 }
                 .animation(.easeInOut(duration: 0.18), value: mode)
             } else {
@@ -181,26 +181,5 @@ nonisolated struct CampusDiningLocation: Identifiable, Hashable, Sendable {
 
     static func displayName(for fullName: String) -> String? {
         location(for: fullName)?.displayName
-    }
-}
-
-struct CommunitySectionView: View {
-    @Binding var selectedPost: CommunityMockPost?
-
-    private let posts = CommunityMockPost.samples
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.card) {
-            LeafySectionTitle("社区", subtitle: "当前阶段使用 Mock 数据，验证信息架构、帖子流与详情交互。")
-
-            ForEach(posts) { post in
-                Button {
-                    selectedPost = post
-                } label: {
-                    CommunityPostCard(post: post)
-                }
-                .buttonStyle(.plain)
-            }
-        }
     }
 }

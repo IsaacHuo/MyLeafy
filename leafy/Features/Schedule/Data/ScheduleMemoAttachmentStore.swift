@@ -174,7 +174,10 @@ enum ScheduleMemoAttachmentStore {
         in directory: URL? = nil,
         identity: CampusIdentity? = CampusIdentityStore.currentIdentity()
     ) -> URL? {
-        let url = (directory ?? directoryURL(identity: identity)).appendingPathComponent(localFilename, isDirectory: false)
+        let url = (directory ?? directoryURL(identity: identity)).appendingPathComponent(
+            localFilename,
+            isDirectory: false
+        )
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
     }
 
@@ -224,15 +227,6 @@ enum ScheduleMemoAttachmentStore {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else { return }
         try fileManager.removeItem(at: url)
-    }
-
-    static func deleteAllFiles(
-        identity: CampusIdentity? = CampusIdentityStore.currentIdentity(),
-        directory: URL? = nil
-    ) throws {
-        let url = directory ?? directoryURL(identity: identity)
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
-        try deleteFile(at: url)
     }
 
     static func directoryURL(identity: CampusIdentity? = CampusIdentityStore.currentIdentity()) -> URL {

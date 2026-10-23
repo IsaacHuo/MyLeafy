@@ -118,8 +118,7 @@ class CourseReminderScheduler(private val context: Context, private val scopes: 
             if (failures > 0) {
                 mutableError.value = "$failures 项课前提醒未能排期${lastFailure?.let { "：$it" } ?: "，请重试"}"
             }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Exception) {
+        } catch (cancelled: CancellationException) { throw cancelled } catch (failure: Exception) {
             mutableError.value = failure.message ?: "提醒排期失败，请重试"
             android.util.Log.e("CourseReminders", "Unable to schedule course reminders", failure)
         }
@@ -172,8 +171,7 @@ class CourseAlarmReceiver : BroadcastReceiver() {
                 container.restoreIdentity()
                 if (intent.action == CourseReminderScheduler.ACTION_DELIVER) container.courseReminderScheduler.deliver(intent)
                 else container.courseReminderScheduler.reconcile()
-            } catch (failure: Exception) { android.util.Log.e("CourseReminders", "Reminder delivery/recovery failed", failure) }
-            finally { pending.finish() }
+            } catch (failure: Exception) { android.util.Log.e("CourseReminders", "Reminder delivery/recovery failed", failure) } finally { pending.finish() }
         }
     }
 }

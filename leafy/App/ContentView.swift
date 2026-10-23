@@ -34,7 +34,10 @@ struct ContentView: View {
             .tint(AppTheme.accent(for: themeColorPreference))
             .environmentObject(appNavigation)
             .onAppear {
-                CommunityDiagnostics.log.info("ContentView appeared with selected tab \(String(describing: appNavigation.selectedRootTab), privacy: .public)")
+                CommunityDiagnostics.log
+                    .info(
+                        "ContentView appeared with selected tab \(String(describing: appNavigation.selectedRootTab), privacy: .public)"
+                    )
                 sanitizeUnavailableRootTab()
             }
             .onChange(of: appNavigation.selectedRootTab) { _, newTab in
@@ -45,7 +48,10 @@ struct ContentView: View {
                 appNavigation.sanitizeCampusSection(isCommunityEnabled: isCommunityEnabled)
             }
             .task {
-                CommunityDiagnostics.log.info("ContentView startup task began; communityEnabled=\(isCommunityEnabled, privacy: .public) options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
+                CommunityDiagnostics.log
+                    .info(
+                        "ContentView startup task began; communityEnabled=\(isCommunityEnabled, privacy: .public) options=\(CommunityDiagnosticsOptions.summary, privacy: .public)"
+                    )
                 if isCommunityEnabled {
                     await restoreCommunityNotificationBadge()
                 }
@@ -160,8 +166,10 @@ struct ContentView: View {
             communityNotificationBadgeViewModel.stop(reset: true)
             return
         }
+        let scope = CampusOperationScope()
         communitySessionManager.startBootstrapIfNeeded()
         await communitySessionManager.restoreProfileIfPossible()
+        guard scope.isCurrent, !Task.isCancelled, scenePhase == .active else { return }
         syncCommunityNotificationBadgeSubscription(profileID: communitySessionManager.currentUserID)
         await communityNotificationBadgeViewModel.refresh()
     }
@@ -210,7 +218,6 @@ private extension View {
         }
     }
 }
-
 
 #Preview {
     PreviewRoot()

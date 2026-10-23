@@ -112,18 +112,17 @@ class AppContainer(context: Context) {
             activeAppScopeStore.activateGuest()
         } else withContext(Dispatchers.IO) {
             schoolLoginCredentialStore.load(CampusID.bjfu.rawValue, "undergraduate", settings.eduId)?.let { cached ->
-            schoolSessionState.identity = CampusIdentity(
-                campusId = CampusID.bjfu,
-                eduId = cached.account,
-                displayName = null,
-                portal = SchoolPortal.UNDERGRADUATE,
-                kind = CampusIdentity.IdentityKind.SCHOOL_PORTAL,
-            )
+                schoolSessionState.identity = CampusIdentity(
+                    campusId = CampusID.bjfu,
+                    eduId = cached.account,
+                    displayName = null,
+                    portal = SchoolPortal.UNDERGRADUATE,
+                    kind = CampusIdentity.IdentityKind.SCHOOL_PORTAL,
+                )
             }
         }
         identityRestored = true
     }
-
 
     // 教务 HTML 解析器（jsoup，M2.3）
     val htmlParser: HtmlParser = JsoupHtmlParser()
@@ -137,10 +136,8 @@ class AppContainer(context: Context) {
         parser = htmlParser,
         renderTimetable = { url, cookies -> com.myleafy.android.core.network.okhttp.TimetableWebBootstrap(applicationContext).load(url, cookies) },
     )
-    val schoolAuthenticationRecovery = com.myleafy.android.features.auth.SchoolAuthenticationRecovery(
-        rawSchoolNetworkClient, activeAppScopeStore, backendLifecycle)
-    val schoolNetworkClient: SchoolNetworkClient = com.myleafy.android.features.auth.RecoveringSchoolNetworkClient(
-        rawSchoolNetworkClient, schoolAuthenticationRecovery, activeAppScopeStore)
+    val schoolAuthenticationRecovery = com.myleafy.android.features.auth.SchoolAuthenticationRecovery(rawSchoolNetworkClient, activeAppScopeStore, backendLifecycle)
+    val schoolNetworkClient: SchoolNetworkClient = com.myleafy.android.features.auth.RecoveringSchoolNetworkClient(rawSchoolNetworkClient, schoolAuthenticationRecovery, activeAppScopeStore)
 
     val timetableRepository: TimetableRepository =
         LiveTimetableRepository(schoolNetworkClient, database.courseDao(), activeAppScopeStore,
@@ -192,8 +189,7 @@ class AppContainer(context: Context) {
         backendLifecycle.launch {
             kotlinx.coroutines.flow.combine(activeAppScopeStore.scope, campusLifeRepository.sunshineRuns, campusLifeRepository.sunshineSettings,
                 activeAppScopeStore.scope.flatMapLatest { campusPersonalDao.reminder(it.scopeKey) }) { scope, runs, settings, reminder -> scope.scopeKey to Triple(runs, settings, reminder) }
-                .collect { try { sunshineReminderScheduler.reconcile() } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                    catch (failure: Exception) { android.util.Log.e("SunshineReminder", "Reminder reconciliation failed", failure) } }
+                .collect { try { sunshineReminderScheduler.reconcile() } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { android.util.Log.e("SunshineReminder", "Reminder reconciliation failed", failure) } }
         }
     }
 

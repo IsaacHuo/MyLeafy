@@ -108,7 +108,6 @@ final class PerformanceRefactorTests: XCTestCase {
         guard CGImageDestinationFinalize(destination) else { return nil }
         return data as Data
     }
-
 }
 
 func withTemporaryUserDefaults(_ body: (UserDefaults) -> Void) {
@@ -153,7 +152,7 @@ func semesterDate(week: Int, day: Int, hour: Int, minute: Int) -> Date {
 
 func seedThreeReviewSyncDays(defaults: UserDefaults) {
     let notificationCenter = NotificationCenter()
-    for day in 10...12 {
+    for day in 10 ... 12 {
         AppStoreReviewCoordinator.recordSuccessfulSync(
             kind: .timetable,
             date: reviewDate(2026, 5, day),
@@ -285,7 +284,8 @@ actor FakeCommunityRepository: CommunityRepository {
         []
     }
 
-    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?, limit: Int) async throws -> CommunityCommentPage {
+    func fetchCommentThreads(postID: UUID, cursor: CommunityCommentCursor?,
+                             limit: Int) async throws -> CommunityCommentPage {
         CommunityCommentPage(threads: [], nextCursor: nil)
     }
 
@@ -293,7 +293,8 @@ actor FakeCommunityRepository: CommunityRepository {
         throw PerformanceCommunityRepositoryTestError.failure("未实现")
     }
 
-    func createComment(postID: UUID, body: String, parentCommentID: UUID?, replyToCommentID: UUID?) async throws -> CommunityComment {
+    func createComment(postID: UUID, body: String, parentCommentID: UUID?,
+                       replyToCommentID: UUID?) async throws -> CommunityComment {
         throw PerformanceCommunityRepositoryTestError.failure("未实现")
     }
 
@@ -340,7 +341,11 @@ actor FakeCommunityRepository: CommunityRepository {
     }
 
     @MainActor
-    func enqueuePostPublication(input: CreatePostInput, images: [CommunityImageUpload], attachments: [CommunityAttachmentUpload]) throws -> UUID {
+    func enqueuePostPublication(
+        input: CreatePostInput,
+        images: [CommunityImageUpload],
+        attachments: [CommunityAttachmentUpload]
+    ) throws -> UUID {
         throw PerformanceCommunityRepositoryTestError.failure("未实现")
     }
 
@@ -384,11 +389,13 @@ actor FakeCommunityRepository: CommunityRepository {
         []
     }
 
-    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int, offset: Int) async throws -> [CourseRatingSummary] {
+    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int,
+                                    offset: Int) async throws -> [CourseRatingSummary] {
         []
     }
 
-    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int, offset: Int) async throws -> [DishRatingSummary] {
+    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int,
+                                  offset: Int) async throws -> [DishRatingSummary] {
         []
     }
 
@@ -405,8 +412,10 @@ actor FakeCommunityRepository: CommunityRepository {
     }
 
     func fetchNotificationFeed(limit: Int) async throws -> [NotificationFeedItem] { [] }
-    func fetchNotificationSettings() async throws -> CommunityNotificationSettings { throw PerformanceCommunityRepositoryTestError.failure("未实现") }
-    func updateNotificationSettings(mutedAll: Bool) async throws -> CommunityNotificationSettings { throw PerformanceCommunityRepositoryTestError.failure("未实现") }
+    func fetchNotificationSettings() async throws
+        -> CommunityNotificationSettings { throw PerformanceCommunityRepositoryTestError.failure("未实现") }
+    func updateNotificationSettings(mutedAll: Bool) async throws
+        -> CommunityNotificationSettings { throw PerformanceCommunityRepositoryTestError.failure("未实现") }
     func markNotificationFeedRead(announcementLimit: Int) async throws {}
     func dismissNotificationFeedItem(_ item: NotificationFeedItem) async throws {}
     func markNotificationRead(notificationID: UUID) async throws {}

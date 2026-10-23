@@ -54,8 +54,7 @@ fun shareCampusFile(context: Context, file: File, mime: String) {
                     BitmapFactory.decodeFile(file.path, options) ?: error("图片无法读取")
                 }
             }
-        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-        catch (failure: Exception) { error = failure.message ?: "预览失败" }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { error = failure.message ?: "预览失败" }
     }
     LeafyAlertDialog(onDismissRequest = onDismiss, title = { Text(file.name) }, text = {
         Column { error?.let { LeafyStatusBanner(it, isError = true) }

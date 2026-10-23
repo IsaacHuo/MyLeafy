@@ -326,6 +326,42 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     }
 
     @MainActor
+    func testSessionReplacementDuringRecognitionNeverSubmitsOldCredentials() async {
+        let client = FakeSchoolAuthenticationClient()
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3),
+            onRecognition: { await MainActor.run { ActiveCampusContext.networkManager.cancelInFlightRequests() } }
+        )
+        let service = makeService(client: client, recognizer: recognizer, credential: credential())
+        do {
+            _ = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true, policy: testPolicy)
+            XCTFail("The old recovery must be cancelled")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertTrue(client.loginCaptchas.isEmpty)
+    }
+
+    @MainActor
+    func testSchoolCookieBoundaryRejectsExternalOriginsAndUserInfo() {
+        let manager = SchoolNetworkManager()
+        XCTAssertTrue(manager.isSchoolURL(URL(string: manager.baseURL + "/jsxsd/xskb/xskb_list.do")!))
+        for raw in [
+            "https://example.com/kscj/kb",
+            "http://newjwxt.bjfu.edu.cn.evil.example/kb",
+            "http://user@newjwxt.bjfu.edu.cn/kb",
+            "http://newjwxt.bjfu.edu.cn:9999/kb"
+        ] {
+            let url = URL(string: raw)!
+            XCTAssertFalse(manager.isSchoolURL(url))
+            var request = URLRequest(url: url)
+            request.setValue("SESSION=secret", forHTTPHeaderField: "Cookie")
+            let prepared = manager.preparedRequest(from: request)
+            XCTAssertNil(prepared.value(forHTTPHeaderField: "Cookie"))
+            XCTAssertFalse(prepared.httpShouldHandleCookies)
+            XCTAssertTrue(manager.cookieHeaderValue(for: url).isEmpty)
+        }
+    }
+
+    @MainActor
     private func makeService(
         client: FakeSchoolAuthenticationClient,
         recognizer: FakeCaptchaRecognizer,
@@ -370,17 +406,21 @@ private nonisolated struct FakeCredentialProvider: SchoolLoginCredentialProvidin
 private nonisolated final class FakeCaptchaRecognizer: CaptchaRecognizing, @unchecked Sendable {
     private var results: [CaptchaResult]
     private(set) var callCount = 0
+    private let onRecognition: (@Sendable () async -> Void)?
 
-    init(result: CaptchaResult) {
+    init(result: CaptchaResult, onRecognition: (@Sendable () async -> Void)? = nil) {
         results = [result]
+        self.onRecognition = onRecognition
     }
 
     init(results: [CaptchaResult]) {
         self.results = results
+        self.onRecognition = nil
     }
 
     func recognize(_ image: CGImage) async throws -> CaptchaResult {
         callCount += 1
+        await onRecognition?()
         if results.count > 1 {
             return results.removeFirst()
         }

@@ -14,7 +14,7 @@ protocol WeatherServicing: Sendable {
 nonisolated struct WeatherKitWeatherService: WeatherServicing {
     private let locationProvider: @Sendable () -> CLLocation
     private let fetchLiveWeather: @Sendable (CLLocation) async throws -> CampusWeather
-    private let cache: CampusWeatherCaching
+    private let cache: CampusWeatherCaching?
 
     nonisolated init(
         locationProvider: @escaping @Sendable () -> CLLocation = {
@@ -31,7 +31,7 @@ nonisolated struct WeatherKitWeatherService: WeatherServicing {
                 )
             )
         },
-        cache: CampusWeatherCaching = UserDefaultsCampusWeatherCache()
+        cache: CampusWeatherCaching? = nil
     ) {
         self.locationProvider = locationProvider
         self.fetchLiveWeather = fetchLiveWeather
@@ -39,12 +39,21 @@ nonisolated struct WeatherKitWeatherService: WeatherServicing {
     }
 
     func fetchCurrentWeather() async throws -> CampusWeather {
+        let scope = CampusOperationScope()
+        let cache = cache ?? UserDefaultsCampusWeatherCache()
         do {
             let weather = try await fetchLiveWeather(locationProvider())
-            cache.save(weather)
+            try await MainActor.run {
+                try scope.check()
+                cache.save(weather)
+                NotificationCenter.default.post(name: .campusWeatherDidChange, object: nil)
+            }
+            try scope.check()
             return weather
         } catch {
+            if scope.wasCancelled(error) { throw CancellationError() }
             if let cachedWeather = cache.currentWeather(maxAge: Self.cacheMaxAge) {
+                try scope.check()
                 return cachedWeather
             }
             throw error
@@ -78,8 +87,6 @@ nonisolated struct WeatherKitWeatherService: WeatherServicing {
         return "天气"
     }
 }
-
-
 
 nonisolated struct CampusWeatherFunctionResponse: Decodable, Sendable {
     let temperature: Double
@@ -136,9 +143,7 @@ nonisolated struct UserDefaultsCampusWeatherCache: CampusWeatherCaching {
     }
 
     func currentWeather(maxAge: TimeInterval) -> CampusWeather? {
-        guard let data = userDefaults.data(forKey: key),
-              let cached = try? JSONDecoder().decode(CachedCampusWeather.self, from: data),
-              Date().timeIntervalSince(cached.savedAt) <= maxAge else {
+        guard let cached = cachedWeather(maxAge: maxAge, now: Date()) else {
             return nil
         }
 
@@ -146,6 +151,19 @@ nonisolated struct UserDefaultsCampusWeatherCache: CampusWeatherCaching {
             temperature: cached.temperature,
             condition: cached.condition
         )
+    }
+    func currentTemperatureSnapshot(maxAge: TimeInterval,
+                                    now: Date = Date()) -> (temperature: Double, observedAt: Date)? {
+        guard let cached = cachedWeather(maxAge: maxAge, now: now) else { return nil }
+        return (cached.temperature, cached.savedAt)
+    }
+
+    private func cachedWeather(maxAge: TimeInterval, now: Date) -> CachedCampusWeather? {
+        guard let data = userDefaults.data(forKey: key),
+              let cached = try? JSONDecoder().decode(CachedCampusWeather.self, from: data),
+              cached.temperature.isFinite,
+              (0 ... max(0, maxAge)).contains(now.timeIntervalSince(cached.savedAt)) else { return nil }
+        return cached
     }
 }
 
@@ -164,4 +182,8 @@ nonisolated enum CampusWeatherCondition {
             return L10n.text("天气")
         }
     }
+}
+
+extension Notification.Name {
+    static let campusWeatherDidChange = Notification.Name("campusWeatherDidChange")
 }

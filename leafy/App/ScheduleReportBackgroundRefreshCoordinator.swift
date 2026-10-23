@@ -47,6 +47,7 @@ final class ScheduleReportBackgroundRefreshCoordinator {
     private func handle(_ backgroundTask: BGAppRefreshTask) {
         schedule()
         let work = Task { @MainActor in
+            let scope = CampusOperationScope()
             let setup: AppModelContainerSetup
             do { setup = try AppModelContainerFactory.make() }
             catch {
@@ -65,10 +66,12 @@ final class ScheduleReportBackgroundRefreshCoordinator {
             }
 
             do {
+                try scope.check()
                 try await ScheduleReportNotificationManager.refreshIfEnabled(
                     modelContext: setup.container.mainContext,
                     weather: weather
                 )
+                try scope.check()
                 backgroundTask.setTaskCompleted(success: true)
             } catch is CancellationError {
                 backgroundTask.setTaskCompleted(success: false)

@@ -71,28 +71,28 @@ import com.myleafy.android.ui.theme.LeafySpacing
         val width = maxOf(maxWidth, 76.dp * density.fontScale.coerceAtLeast(1f) * values.size)
         val scrollable = width > maxWidth
         Column {
-        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            Canvas(Modifier.width(width).height(190.dp * density.fontScale.coerceIn(1f, 1.5f)).semantics {
-                contentDescription = values.joinToString("；") { "${it.first}：${it.second.gradeNumber()}" }
-            }) {
-                val segment = size.width / values.size; val maximum = values.maxOf { it.second }.coerceAtLeast(1.0)
-                val labelHeight = measurer.measure("学分\n结构", style).size.height.toFloat()
-                val numberHeight = measurer.measure("0", style).size.height.toFloat()
-                val bottom = size.height - labelHeight - 12.dp.toPx()
-                val plotHeight = (bottom - numberHeight - 12.dp.toPx()).coerceAtLeast(0f)
-                drawLine(guide, Offset(0f, bottom), Offset(size.width, bottom), 1.dp.toPx())
-                values.forEachIndexed { index, (label, value) ->
-                    val height = (value.coerceAtLeast(0.0) / maximum).toFloat() * plotHeight; val x = index * segment
-                    drawRect(color, Offset(x + segment * .25f, bottom - height), Size(segment * .5f, height))
-                    val constraint = Constraints(maxWidth = (segment - 8.dp.toPx()).toInt().coerceAtLeast(1))
-                    val number = measurer.measure(value.gradeNumber(), style, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = constraint)
-                    drawText(number, topLeft = Offset(x + (segment - number.size.width) / 2, bottom - height - number.size.height - 4.dp.toPx()))
-                    val name = measurer.measure(label, style, maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = constraint)
-                    drawText(name, topLeft = Offset(x + (segment - name.size.width) / 2, bottom + 8.dp.toPx()))
+            Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                Canvas(Modifier.width(width).height(190.dp * density.fontScale.coerceIn(1f, 1.5f)).semantics {
+                    contentDescription = values.joinToString("；") { "${it.first}：${it.second.gradeNumber()}" }
+                }) {
+                    val segment = size.width / values.size; val maximum = values.maxOf { it.second }.coerceAtLeast(1.0)
+                    val labelHeight = measurer.measure("学分\n结构", style).size.height.toFloat()
+                    val numberHeight = measurer.measure("0", style).size.height.toFloat()
+                    val bottom = size.height - labelHeight - 12.dp.toPx()
+                    val plotHeight = (bottom - numberHeight - 12.dp.toPx()).coerceAtLeast(0f)
+                    drawLine(guide, Offset(0f, bottom), Offset(size.width, bottom), 1.dp.toPx())
+                    values.forEachIndexed { index, (label, value) ->
+                        val height = (value.coerceAtLeast(0.0) / maximum).toFloat() * plotHeight; val x = index * segment
+                        drawRect(color, Offset(x + segment * .25f, bottom - height), Size(segment * .5f, height))
+                        val constraint = Constraints(maxWidth = (segment - 8.dp.toPx()).toInt().coerceAtLeast(1))
+                        val number = measurer.measure(value.gradeNumber(), style, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = constraint)
+                        drawText(number, topLeft = Offset(x + (segment - number.size.width) / 2, bottom - height - number.size.height - 4.dp.toPx()))
+                        val name = measurer.measure(label, style, maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = constraint)
+                        drawText(name, topLeft = Offset(x + (segment - name.size.width) / 2, bottom + 8.dp.toPx()))
+                    }
                 }
             }
-        }
-        if (scrollable) Text("左右滑动查看完整图表", style = style, modifier = Modifier.padding(top = LeafySpacing.tiny))
+            if (scrollable) Text("左右滑动查看完整图表", style = style, modifier = Modifier.padding(top = LeafySpacing.tiny))
         }
     }
 }

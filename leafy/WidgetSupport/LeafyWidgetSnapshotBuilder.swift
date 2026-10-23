@@ -14,7 +14,13 @@ enum LeafyWidgetSnapshotBuilder {
                 occurrenceNotes: try modelContext.fetch(FetchDescriptor<CourseOccurrenceNote>()),
                 reminders: try modelContext.fetch(FetchDescriptor<CourseReminderSetting>()),
                 cellReminders: try modelContext.fetch(FetchDescriptor<TimetableCellReminder>()),
-                schedules: CustomScheduleStore.load(), isAuthenticated: isAuthenticated, date: date
+                schedules: try CustomScheduleStore.loadForSync(),
+                examArrangements: isAuthenticated ? try SchoolDataCache.loadExamScheduleForEditing() : [],
+                weather: UserDefaultsCampusWeatherCache().currentTemperatureSnapshot(maxAge: 6 * 60 * 60, now: date)
+                    .map {
+                        LeafyWidgetWeatherSnapshot(celsius: $0.temperature, observedAt: $0.observedAt)
+                    },
+                isAuthenticated: isAuthenticated, date: date
             )
             Task { await WidgetSnapshotPublisher.shared.publish(archive) }
         } catch {
@@ -25,25 +31,28 @@ enum LeafyWidgetSnapshotBuilder {
 
     static func publishNeedsLogin(date: Date = Date()) {
         let archive = makeArchive(courses: [], notes: [], occurrenceNotes: [], reminders: [],
-                                  cellReminders: [], schedules: [], isAuthenticated: false, date: date)
+                                  cellReminders: [], schedules: [], examArrangements: [], weather: nil,
+                                  isAuthenticated: false, date: date)
         Task { await WidgetSnapshotPublisher.shared.publishNeedsLogin(archive) }
     }
 
     #if DEBUG
-    static func makeArchiveForTesting(
-        courses: [Course],
-        notes: [CourseNote] = [],
-        occurrenceNotes: [CourseOccurrenceNote] = [],
-        reminders: [CourseReminderSetting] = [],
-        cellReminders: [TimetableCellReminder] = [],
-        schedules: [CustomScheduleEvent] = [],
-        isAuthenticated: Bool,
-        date: Date
-    ) -> LeafyWidgetSnapshotArchive {
-        makeArchive(courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
-                    reminders: reminders, cellReminders: cellReminders,
-                    schedules: schedules, isAuthenticated: isAuthenticated, date: date)
-    }
+        static func makeArchiveForTesting(
+            courses: [Course],
+            notes: [CourseNote] = [],
+            occurrenceNotes: [CourseOccurrenceNote] = [],
+            reminders: [CourseReminderSetting] = [],
+            cellReminders: [TimetableCellReminder] = [],
+            schedules: [CustomScheduleEvent] = [],
+            isAuthenticated: Bool,
+            date: Date,
+            weather: LeafyWidgetWeatherSnapshot? = nil
+        ) -> LeafyWidgetSnapshotArchive {
+            makeArchive(courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
+                        reminders: reminders, cellReminders: cellReminders,
+                        schedules: schedules, examArrangements: SchoolDataCache.loadExamSchedule(), weather: weather,
+                        isAuthenticated: isAuthenticated, date: date)
+        }
     #endif
 
     private static func makeArchive(
@@ -53,6 +62,8 @@ enum LeafyWidgetSnapshotBuilder {
         reminders: [CourseReminderSetting],
         cellReminders: [TimetableCellReminder],
         schedules: [CustomScheduleEvent],
+        examArrangements: [ExamArrangement],
+        weather: LeafyWidgetWeatherSnapshot?,
         isAuthenticated: Bool,
         date: Date
     ) -> LeafyWidgetSnapshotArchive {
@@ -60,16 +71,18 @@ enum LeafyWidgetSnapshotBuilder {
         let configs = [SemesterConfig.current]
         let notesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
-        let remindersByKey = Dictionary(reminders.filter { !$0.isUnassociated }.map { ($0.courseKey, $0.minutesBefore) },
-                                       uniquingKeysWith: { _, latest in latest })
+        let remindersByKey = Dictionary(
+            reminders.filter { !$0.isUnassociated }.map { ($0.courseKey, $0.minutesBefore) },
+            uniquingKeysWith: { _, latest in latest }
+        )
         var items: [LeafyWidgetAgendaItem] = []
         if isAuthenticated {
             for course in courses {
                 let config = SemesterConfig.current
                 guard
-                      let first = course.duration.min(), let last = course.duration.max(),
-                      (1...7).contains(course.dayOfWeek) else { continue }
-                for week in Set(course.weeks).sorted() where (1...config.supportedWeeks).contains(week) {
+                    let first = course.duration.min(), let last = course.duration.max(),
+                    (1 ... 7).contains(course.dayOfWeek) else { continue }
+                for week in Set(course.weeks).sorted() where (1 ... config.supportedWeeks).contains(week) {
                     guard let start = TimetablePeriodSchedule.startDate(
                         semesterStartDate: config.semesterStartDate, week: week,
                         dayOfWeek: course.dayOfWeek, period: first
@@ -77,14 +90,16 @@ enum LeafyWidgetSnapshotBuilder {
                         semesterStartDate: config.semesterStartDate, week: week,
                         dayOfWeek: course.dayOfWeek, period: last
                     ), end > start else { continue }
-                    let minutes = TimetableNotificationManager.normalizedReminderMinutes(remindersByKey[course.stableCourseKey] ?? 0)
+                    let minutes = TimetableNotificationManager
+                        .normalizedReminderMinutes(remindersByKey[course.stableCourseKey] ?? 0)
                     items.append(LeafyWidgetAgendaItem(
                         id: "course-\(course.id.uuidString)-\(week)", kind: .course,
                         sourceID: course.id.uuidString, title: trimmed(course.courseName) ?? L10n.text("未命名课程"),
                         startsAt: start, endsAt: end, locationText: course.locationTextForShare,
                         teacherText: trimmed(course.teacher),
                         noteText: TimetableNoteResolver.effectiveNote(for: course, week: week,
-                            courseNotesByKey: notesByKey, occurrenceNotesByKey: occurrenceNotesByKey),
+                                                                      courseNotesByKey: notesByKey,
+                                                                      occurrenceNotesByKey: occurrenceNotesByKey),
                         reminderText: minutes > 0 ? L10n.text("提前 %d 分钟", language: language, minutes) : nil,
                         accentIndex: accentIndex(for: course.courseName)
                     ))
@@ -111,20 +126,20 @@ enum LeafyWidgetSnapshotBuilder {
             }
         }
         items.sort { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
-        let exams = isAuthenticated ? SchoolDataCache.loadExamSchedule().compactMap { exam -> LeafyWidgetExam? in
+        let exams = isAuthenticated ? examArrangements.compactMap { exam -> LeafyWidgetExam? in
             guard let start = exam.startsAt else { return nil }
             return LeafyWidgetExam(startsAt: start, endsAt: exam.endsAt ?? start,
-                text: L10n.text("考试：%@ · %@", language: language, exam.name, exam.date))
+                                   text: L10n.text("考试：%@ · %@", language: language, exam.name, exam.date))
         }.sorted { $0.startsAt < $1.startsAt } : []
         let firstSlot = TimetablePeriodSchedule.slots.first
         let lastSlot = TimetablePeriodSchedule.slots.last
-        return LeafyWidgetSnapshotArchive(
+        var archive = LeafyWidgetSnapshotArchive(
             generatedAt: date, isAuthenticated: isAuthenticated,
             semesters: configs.map { config in
                 LeafyWidgetSemester(id: config.semesterID, startsAt: config.semesterStartDate,
-                    weekCount: config.supportedWeeks,
-                    hasTimetableCache: !courses.isEmpty
-                        || TimetableCacheMetadata.lastSyncedSemesterID == config.semesterID)
+                                    weekCount: config.supportedWeeks,
+                                    hasTimetableCache: !courses.isEmpty
+                                        || TimetableCacheMetadata.lastSyncedSemesterID == config.semesterID)
             }, items: items, exams: exams,
             defaultStartMinute: firstSlot.map { $0.startHour * 60 + $0.startMinute } ?? 480,
             defaultEndMinute: lastSlot.map { $0.endHour * 60 + $0.endMinute } ?? 1305,
@@ -132,6 +147,8 @@ enum LeafyWidgetSnapshotBuilder {
                 L10n.text("最近同步：%@", language: language, DateFormatters.headerWithTime.string(from: $0))
             }, lastFailureText: trimmed(TimetableCacheMetadata.lastFailureMessage)
         )
+        archive.weather = isAuthenticated ? weather : nil
+        return archive
     }
 
     private static func accentIndex(for key: String) -> Int {

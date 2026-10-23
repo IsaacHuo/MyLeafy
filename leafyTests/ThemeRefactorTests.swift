@@ -26,7 +26,7 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(L10n.text("语言", language: .enUS), "Language")
         XCTAssertEqual(AppLanguagePreference.enUS.weekdayTitle(for: 1), "Monday")
         XCTAssertEqual(
-            (1...7).map { AppLanguagePreference.enUS.timetableWeekdayTitle(for: $0) },
+            (1 ... 7).map { AppLanguagePreference.enUS.timetableWeekdayTitle(for: $0) },
             ["Mon.", "Tues.", "Wed.", "Thurs.", "Fri.", "Sat.", "Sun."]
         )
         XCTAssertEqual(AcademicPrimaryTab.learning.compactTitle(language: .enUS), "Spaces")
@@ -105,7 +105,8 @@ extension PerformanceRefactorTests {
 
     func testTimetableBackgroundPaletteUsesMultipleImageColors() throws {
         let image = makePaletteTestImage(colors: [.systemBlue, .systemOrange])
-        let bluePalette = TimetableBackgroundPaletteExtractor.palette(from: try XCTUnwrap(makePaletteTestImage(colors: [.systemBlue]).cgImage))
+        let bluePalette = TimetableBackgroundPaletteExtractor
+            .palette(from: try XCTUnwrap(makePaletteTestImage(colors: [.systemBlue]).cgImage))
         let mixedPalette = TimetableBackgroundPaletteExtractor.palette(from: try XCTUnwrap(image.cgImage))
 
         XCTAssertEqual(mixedPalette.lightHexes.count, 7)
