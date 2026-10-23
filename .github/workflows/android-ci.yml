@@ -26,6 +26,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Check Kotlin and Gradle formatting
+        run: |
+          ./gradlew spotlessCheck || {
+            echo 'Run ./gradlew spotlessApply in android/ and commit the task-owned changes.'
+            exit 1
+          }
+
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug
 

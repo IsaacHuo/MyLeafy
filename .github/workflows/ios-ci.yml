@@ -20,6 +20,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check Swift formatting
+        run: |
+          bash scripts/format-swift.sh --check || {
+            echo 'Run bash scripts/format-swift.sh on your task-owned files and commit the result.'
+            exit 1
+          }
+
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:
