@@ -174,176 +174,175 @@ fun ProfileContent(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(LeafySpacing.page),
                 verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
             ) {
-            item {
-                when (val profileState = state) {
-                    is ProfileUiState.Local -> {
-                        val eduId = profileState.eduId?.takeIf { it.isNotBlank() }
-                        ProfileEntry(
-                            title = if (eduId != null) "MyLeafy" else if (profileState.campusId == "guest") "免登录模式" else "选择入口",
-                            subtitle = if (eduId != null) {
-                                "${schoolLabel(profileState.campusId)} · 学号 ${maskedStudentId(eduId)}"
-                            } else {
-                                if (profileState.campusId == "guest") "免登录使用 · 数据仅保存在本机" else "北林登录或免登录使用"
-                            },
-                            avatarLabel = "我",
-                            onClick = if (eduId == null) onLoginClick else null,
-                        )
-                    }
-                    is ProfileUiState.ProfileLoading -> {
-                        ProfileEntry(
-                            title = "正在加载资料…",
-                            subtitle = "读取当前校园身份",
-                            avatarLabel = "我",
-                            onClick = null,
-                        )
-                    }
-                    is ProfileUiState.Community -> {
-                        val name = profileState.profile.nickname.ifBlank {
-                            profileState.profile.display_name ?: "未命名"
-                        }
-                        ProfileEntry(
-                            title = name,
-                            subtitle = buildString {
-                                append("${schoolLabel(profileState.campusId)} · 学号 ${maskedStudentId(profileState.eduId)}")
-                                if (!profileState.profile.is_profile_complete) append(" · 资料待完善")
-                            },
-                            avatarLabel = name,
-                            avatarUrl = profileState.profile.avatar_url
-                                ?: profileState.profile.signed_avatar_url,
-                            onClick = onEditProfileClick,
-                        )
-                    }
-                    is ProfileUiState.Error -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+                item {
+                    when (val profileState = state) {
+                        is ProfileUiState.Local -> {
+                            val eduId = profileState.eduId?.takeIf { it.isNotBlank() }
                             ProfileEntry(
-                                title = "MyLeafy",
-                                subtitle = buildString {
-                                    append(schoolLabel(profileState.campusId))
-                                    profileState.eduId?.takeIf { it.isNotBlank() }?.let { append(" · 学号 ${maskedStudentId(it)}") }
+                                title = if (eduId != null) "MyLeafy" else if (profileState.campusId == "guest") "免登录模式" else "选择入口",
+                                subtitle = if (eduId != null) {
+                                    "${schoolLabel(profileState.campusId)} · 学号 ${maskedStudentId(eduId)}"
+                                } else {
+                                    if (profileState.campusId == "guest") "免登录使用 · 数据仅保存在本机" else "北林登录或免登录使用"
                                 },
+                                avatarLabel = "我",
+                                onClick = if (eduId == null) onLoginClick else null,
+                            )
+                        }
+                        is ProfileUiState.ProfileLoading -> {
+                            ProfileEntry(
+                                title = "正在加载资料…",
+                                subtitle = "读取当前校园身份",
                                 avatarLabel = "我",
                                 onClick = null,
                             )
-                            LeafyStatusBanner(message = profileState.message, isError = true)
+                        }
+                        is ProfileUiState.Community -> {
+                            val name = profileState.profile.nickname.ifBlank {
+                                profileState.profile.display_name ?: "未命名"
+                            }
+                            ProfileEntry(
+                                title = name,
+                                subtitle = buildString {
+                                    append("${schoolLabel(profileState.campusId)} · 学号 ${maskedStudentId(profileState.eduId)}")
+                                    if (!profileState.profile.is_profile_complete) append(" · 资料待完善")
+                                },
+                                avatarLabel = name,
+                                avatarUrl = profileState.profile.avatar_url
+                                    ?: profileState.profile.signed_avatar_url,
+                                onClick = onEditProfileClick,
+                            )
+                        }
+                        is ProfileUiState.Error -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.micro)) {
+                                ProfileEntry(
+                                    title = "MyLeafy",
+                                    subtitle = buildString {
+                                        append(schoolLabel(profileState.campusId))
+                                        profileState.eduId?.takeIf { it.isNotBlank() }?.let { append(" · 学号 ${maskedStudentId(it)}") }
+                                    },
+                                    avatarLabel = "我",
+                                    onClick = null,
+                                )
+                                LeafyStatusBanner(message = profileState.message, isError = true)
+                            }
                         }
                     }
                 }
-            }
 
-
-            item {
-                LeafySettingsGroup(title = "账户") {
-                    ProfileDestinationRow("切换入口", "北林登录 / 免登录使用", Icons.Outlined.People, onLoginClick)
+                item {
+                    LeafySettingsGroup(title = "账户") {
+                        ProfileDestinationRow("切换入口", "北林登录 / 免登录使用", Icons.Outlined.People, onLoginClick)
+                    }
                 }
-            }
-            item {
-                LeafySettingsGroup(title = "数据") {
-                    ProfileDestinationRow(
-                        title = "缓存与同步",
-                        description = "检查本地数据与学校同步状态",
-                        icon = Icons.Outlined.CloudSync,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_SYNC) },
-                    )
-                    if (state !is ProfileUiState.Local || state.campusId != "guest") {
+                item {
+                    LeafySettingsGroup(title = "数据") {
+                        ProfileDestinationRow(
+                            title = "缓存与同步",
+                            description = "检查本地数据与学校同步状态",
+                            icon = Icons.Outlined.CloudSync,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_SYNC) },
+                        )
+                        if (state !is ProfileUiState.Local || state.campusId != "guest") {
+                            LeafySettingsDivider()
+                            ProfileDestinationRow(
+                                title = "共享课表",
+                                description = "邀请同学查看课程安排",
+                                icon = Icons.Outlined.People,
+                                onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
+                            )
+                        }
+                    }
+                }
+                item {
+                    LeafySettingsGroup(title = "外观") {
+                        ProfileDestinationRow(
+                            title = "课表背景",
+                            description = if (!appearance.timetableBackground.enabled) "关闭" else if (appearance.timetableBackground.kind == "photo") "照片" else "纯色",
+                            icon = Icons.Outlined.Wallpaper,
+                            onClick = { onFeatureClick(FeatureDestination.TIMETABLE_BACKGROUND) },
+                        )
                         LeafySettingsDivider()
                         ProfileDestinationRow(
-                            title = "共享课表",
-                            description = "邀请同学查看课程安排",
-                            icon = Icons.Outlined.People,
-                            onClick = { onFeatureClick(FeatureDestination.PROFILE_SHARING) },
+                            title = "个性化",
+                            description = listOf(
+                                when (appearance.themeMode) { "dark" -> "深色"; "light" -> "浅色"; else -> "跟随系统" },
+                                if (appearance.hideWeekends) "五日课表" else "七日课表",
+                            ).joinToString(" · "),
+                            icon = Icons.Outlined.AutoAwesome,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_PERSONALIZATION) },
                         )
                     }
                 }
-            }
-            item {
-                LeafySettingsGroup(title = "外观") {
-                    ProfileDestinationRow(
-                        title = "课表背景",
-                        description = if (!appearance.timetableBackground.enabled) "关闭" else if (appearance.timetableBackground.kind == "photo") "照片" else "纯色",
-                        icon = Icons.Outlined.Wallpaper,
-                        onClick = { onFeatureClick(FeatureDestination.TIMETABLE_BACKGROUND) },
-                    )
-                    LeafySettingsDivider()
-                    ProfileDestinationRow(
-                        title = "个性化",
-                        description = listOf(
-                            when (appearance.themeMode) { "dark" -> "深色"; "light" -> "浅色"; else -> "跟随系统" },
-                            if (appearance.hideWeekends) "五日课表" else "七日课表",
-                        ).joinToString(" · "),
-                        icon = Icons.Outlined.AutoAwesome,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_PERSONALIZATION) },
-                    )
-                }
-            }
 
-            item {
-                LeafySettingsGroup(title = "帮助与资源") {
-                    ProfileDestinationRow(
-                        title = "检查更新",
-                        description = "获取最新的 Android 安装包",
-                        icon = Icons.Outlined.SystemUpdate,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_UPDATE) },
-                    )
-                    LeafySettingsDivider()
-                    ProfileDestinationRow(
-                        title = "帮助中心",
-                        description = "使用指南、常见问题与数据安全",
-                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_HELP) },
-                    )
-                    LeafySettingsDivider()
-                    ProfileDestinationRow(
-                        title = "权限管理",
-                        description = "查看权限状态并打开 Android 设置",
-                        icon = Icons.Outlined.Lock,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_PERMISSIONS) },
-                    )
-                    LeafySettingsDivider()
-                    ProfileDestinationRow(
-                        title = "反馈与举报",
-                        description = "提交问题、建议或联系项目支持",
-                        icon = Icons.Outlined.Feedback,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_FEEDBACK) },
-                    )
-                }
-            }
-
-            item {
-                LeafySettingsGroup(title = "关于") {
-                    ProfileDestinationRow(
-                        title = "了解 MyLeafy",
-                        description = "项目、版本、开源与支持信息",
-                        icon = Icons.Outlined.Info,
-                        onClick = { onFeatureClick(FeatureDestination.PROFILE_ABOUT) },
-                    )
-                }
-            }
-            item { ProfileDeveloperContactCard() }
-            val hasIdentity = isGuest || when (state) {
-                is ProfileUiState.Community -> true
-                is ProfileUiState.Local -> !state.eduId.isNullOrBlank()
-                is ProfileUiState.Error -> !state.eduId.isNullOrBlank()
-                ProfileUiState.ProfileLoading -> true
-            }
-            if (hasIdentity) {
                 item {
-                    LeafyDestructiveButton(
-                        onClick = { confirmLogout = true },
-                        enabled = !isSigningOut,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
-                        Text(
-                            when {
-                                isSigningOut -> "正在退出…"
-                                isGuest -> "退出免登录模式"
-                                else -> "退出登录"
-                            },
-                            modifier = Modifier.padding(start = LeafySpacing.micro),
+                    LeafySettingsGroup(title = "帮助与资源") {
+                        ProfileDestinationRow(
+                            title = "检查更新",
+                            description = "获取最新的 Android 安装包",
+                            icon = Icons.Outlined.SystemUpdate,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_UPDATE) },
+                        )
+                        LeafySettingsDivider()
+                        ProfileDestinationRow(
+                            title = "帮助中心",
+                            description = "使用指南、常见问题与数据安全",
+                            icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_HELP) },
+                        )
+                        LeafySettingsDivider()
+                        ProfileDestinationRow(
+                            title = "权限管理",
+                            description = "查看权限状态并打开 Android 设置",
+                            icon = Icons.Outlined.Lock,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_PERMISSIONS) },
+                        )
+                        LeafySettingsDivider()
+                        ProfileDestinationRow(
+                            title = "反馈与举报",
+                            description = "提交问题、建议或联系项目支持",
+                            icon = Icons.Outlined.Feedback,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_FEEDBACK) },
                         )
                     }
                 }
-            }
+
+                item {
+                    LeafySettingsGroup(title = "关于") {
+                        ProfileDestinationRow(
+                            title = "了解 MyLeafy",
+                            description = "项目、版本、开源与支持信息",
+                            icon = Icons.Outlined.Info,
+                            onClick = { onFeatureClick(FeatureDestination.PROFILE_ABOUT) },
+                        )
+                    }
+                }
+                item { ProfileDeveloperContactCard() }
+                val hasIdentity = isGuest || when (state) {
+                    is ProfileUiState.Community -> true
+                    is ProfileUiState.Local -> !state.eduId.isNullOrBlank()
+                    is ProfileUiState.Error -> !state.eduId.isNullOrBlank()
+                    ProfileUiState.ProfileLoading -> true
+                }
+                if (hasIdentity) {
+                    item {
+                        LeafyDestructiveButton(
+                            onClick = { confirmLogout = true },
+                            enabled = !isSigningOut,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
+                            Text(
+                                when {
+                                    isSigningOut -> "正在退出…"
+                                    isGuest -> "退出免登录模式"
+                                    else -> "退出登录"
+                                },
+                                modifier = Modifier.padding(start = LeafySpacing.micro),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
