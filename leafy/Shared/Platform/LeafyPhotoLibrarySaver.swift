@@ -25,6 +25,7 @@ enum LeafyPhotoLibrarySaveError: LocalizedError {
 enum LeafyPhotoLibrarySaver {
     static func save(_ image: UIImage) async throws {
         try await requireAddOnlyAuthorization()
+        try Task.checkCancellation()
         let _: Void = try await withCheckedThrowingContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
@@ -40,6 +41,7 @@ enum LeafyPhotoLibrarySaver {
             throw LeafyPhotoLibrarySaveError.unreadableImage
         }
         try await requireAddOnlyAuthorization()
+        try Task.checkCancellation()
         let _: Void = try await withCheckedThrowingContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
                 for url in urls {

@@ -166,6 +166,11 @@ struct DishSectionView: View {
                 actionTitle: "提交缺失菜品",
                 action: openDishSuggestion
             )
+            if canLoadMore {
+                RatingLoadMoreButton(isLoading: isLoadingMore) {
+                    scheduleDishLoad(reset: false)
+                }
+            }
         } else {
             if let errorMessage {
                 Text(errorMessage)

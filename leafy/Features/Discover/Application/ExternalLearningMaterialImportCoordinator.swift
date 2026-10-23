@@ -57,7 +57,7 @@ final class ExternalLearningMaterialImportCoordinator: ObservableObject {
                 activeBatch = manifest
                 return
             }
-            for manifest in store.pendingManifests() {
+            for manifest in try store.pendingManifests() {
                 if isImported(manifest) { try store.removeBatch(manifest.id); continue }
                 activeBatch = manifest
                 return

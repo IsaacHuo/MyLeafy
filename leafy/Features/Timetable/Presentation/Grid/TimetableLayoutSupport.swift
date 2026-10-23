@@ -546,6 +546,12 @@ struct SelectedCourseContext: Identifiable {
     let day: Int
     let date: Date
 
+    @MainActor
+    init(course: Course, week: Int, day: Int, date: Date) {
+        self.course = TimetableReminderRefreshPlan.courseSnapshot(course)
+        self.week = week; self.day = day; self.date = date
+    }
+
     var id: String {
         "\(course.id.uuidString)-\(week)-\(day)"
     }

@@ -28,6 +28,7 @@ struct LoginView: View {
     @State private var captchaRequestID = UUID()
     @State private var lastAutomaticCaptchaRefreshAt: Date?
 
+    @State private var authenticationRequestID = UUID()
     @State private var isLoggingIn = false
     @State private var isEnteringDemo = false
     @State private var isEnteringGuest = false
@@ -145,6 +146,8 @@ struct LoginView: View {
             }
             .onChange(of: selectedPortal) { _, newValue in
                 guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
+                authenticationRequestID = UUID()
+                isLoggingIn = false
                 schoolNetworkManager.currentPortal = newValue
                 restoreSchoolCredential(for: newValue)
                 Task { await fetchCaptcha() }
@@ -160,6 +163,8 @@ struct LoginView: View {
                 startAutomaticCaptchaRefresh()
             }
             .onDisappear {
+                authenticationRequestID = UUID()
+                captchaRequestID = UUID()
                 customSignUpCodeCooldownTask?.cancel()
                 customSignUpCodeCooldownTask = nil
             }
@@ -620,6 +625,11 @@ struct LoginView: View {
 
     @MainActor
     private func handleSelectedCampusChange() {
+        authenticationRequestID = UUID()
+        captchaRequestID = UUID()
+        schoolNetworkManager.cancelInFlightRequests()
+        isLoggingIn = false
+        isSendingCustomSignUpCode = false
         alertMessage = ""
         captchaLoadMessage = nil
         showAlert = false
@@ -715,6 +725,8 @@ struct LoginView: View {
             return
         }
 
+        guard !isCustomCampusSelected, !isGuestCampusSelected else { return }
+        let campus = selectedCampusID
         let portal = selectedPortal
         let requestID = UUID()
         captchaRequestID = requestID
@@ -724,7 +736,7 @@ struct LoginView: View {
 
         do {
             let result = try await schoolNetworkManager.fetchCaptcha(for: portal)
-            guard !Task.isCancelled, captchaRequestID == requestID, selectedPortal == portal else {
+            guard !Task.isCancelled, captchaRequestID == requestID, selectedPortal == portal, selectedCampusID == campus else {
                 return
             }
 
@@ -764,13 +776,13 @@ struct LoginView: View {
     private func performLogin() async {
         guard !isLoggingIn else { return }
 
-        await MainActor.run {
-            isLoggingIn = true
-        }
+        let requestID = UUID()
+        authenticationRequestID = requestID
+        await MainActor.run { isLoggingIn = true }
 
         do {
             if isCustomCampusSelected {
-                try await performCustomAuth()
+                try await performCustomAuth(requestID: requestID)
                 return
             }
 
@@ -785,6 +797,7 @@ struct LoginView: View {
             )
 
             await MainActor.run {
+                guard authenticationRequestID == requestID, !Task.isCancelled else { return }
                 isLoggingIn = false
                 if success {
                     schoolNetworkManager.isLoggedIn = true
@@ -795,7 +808,9 @@ struct LoginView: View {
             }
         } catch {
             await MainActor.run {
+                guard authenticationRequestID == requestID else { return }
                 isLoggingIn = false
+                guard !(error is CancellationError), !Task.isCancelled else { return }
                 alertMessage = loginErrorMessage(for: error)
                 showAlert = true
                 captchaCode = ""
@@ -803,20 +818,28 @@ struct LoginView: View {
         }
     }
 
-    private func performCustomAuth() async throws {
+    private func performCustomAuth(requestID: UUID) async throws {
+        let scope = CampusOperationScope()
+        let campus = selectedCampusID
+        let mode = customAuthMode
+        let email = username
+        let loginPassword = password
         let service = CustomCampusAuthService()
         let session: CustomCampusAuthSession
-        switch customAuthMode {
+        switch mode {
         case .signIn:
-            session = try await service.signIn(email: username, password: password)
+            session = try await service.signIn(email: email, password: loginPassword)
         case .signUp:
             let normalizedEmail = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard customSignUpCodeEmail == normalizedEmail, customSignUpCodePassword == password else {
                 throw CustomCampusAuthError.invalidCode
             }
-            session = try await service.verifySignUpCode(email: username, code: customSignUpCode)
+            session = try await service.verifySignUpCode(email: email, code: customSignUpCode)
         }
 
+        try scope.check()
+        guard authenticationRequestID == requestID, selectedCampusID == campus,
+              customAuthMode == mode, username == email, password == loginPassword else { throw CancellationError() }
         await MainActor.run {
             schoolNetworkManager.persistCustomCampusAuthSession(session)
             isLoggingIn = false
@@ -825,6 +848,9 @@ struct LoginView: View {
 
     private func sendCustomSignUpCode() async {
         guard !isSendingCustomSignUpCode else { return }
+        let scope = CampusOperationScope()
+        let requestID = authenticationRequestID
+        let campus = selectedCampusID
         let credentials = await MainActor.run {
             (
                 email: username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
@@ -854,6 +880,14 @@ struct LoginView: View {
             } else {
                 try await service.startSignUp(email: credentials.email, password: credentials.password)
             }
+            try scope.check()
+            guard authenticationRequestID == requestID, selectedCampusID == campus,
+                  customAuthMode == .signUp,
+                  username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == credentials.email,
+                  password == credentials.password else {
+                isSendingCustomSignUpCode = false
+                return
+            }
             await MainActor.run {
                 customSignUpCodeEmail = credentials.email
                 customSignUpCodePassword = credentials.password
@@ -869,7 +903,9 @@ struct LoginView: View {
             }
         } catch {
             await MainActor.run {
+                guard authenticationRequestID == requestID, scope.isCurrent else { return }
                 isSendingCustomSignUpCode = false
+                guard !(error is CancellationError), !Task.isCancelled else { return }
                 alertMessage = loginErrorMessage(for: error)
                 showAlert = true
             }
@@ -907,6 +943,8 @@ struct LoginView: View {
     private func enterGuestMode() {
         guard !isEnteringGuest else { return }
         isEnteringGuest = true
+        authenticationRequestID = UUID()
+        schoolNetworkManager.cancelInFlightRequests()
         schoolNetworkManager.persistGuestIdentity()
         isEnteringGuest = false
     }
@@ -914,8 +952,17 @@ struct LoginView: View {
     @MainActor
     private func enterDemoMode() {
         isEnteringDemo = true
-        ReviewDemoDataSeeder.enter(using: modelContext)
-        schoolNetworkManager.isLoggedIn = true
+        authenticationRequestID = UUID()
+        schoolNetworkManager.cancelInFlightRequests()
+        do {
+            try ReviewDemoDataSeeder.enter(using: modelContext)
+            schoolNetworkManager.isLoggedIn = true
+        } catch {
+            alertMessage = error.localizedDescription
+            showAlert = true
+            isEnteringDemo = false
+            return
+        }
         isEnteringDemo = false
 
         Task { @MainActor in

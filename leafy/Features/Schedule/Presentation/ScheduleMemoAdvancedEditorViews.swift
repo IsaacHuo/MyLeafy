@@ -353,6 +353,7 @@ struct ScheduleMemoAdvancedEditorView: View {
     @State private var draftAttachments: [ScheduleMemoEditorDraftAttachment] = []
     @State private var deletedImageIDs: Set<UUID> = []
     @State private var deletedAttachmentIDs: Set<UUID> = []
+    @State private var photoLoadID = UUID()
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showsPhotoPicker = false
     @State private var showsCamera = false
@@ -754,6 +755,9 @@ struct ScheduleMemoAdvancedEditorView: View {
 
     @MainActor
     private func addPhotos(_ items: [PhotosPickerItem]) async {
+        let loadID = UUID()
+        photoLoadID = loadID
+        let scope = CampusOperationScope()
         photoItems = []
         let remaining = max(ScheduleMemoImageStore.maximumImageCount - existingImages.count - draftImages.count, 0)
         for item in items.prefix(remaining) {
@@ -762,10 +766,13 @@ struct ScheduleMemoAdvancedEditorView: View {
                       let image = ImageDataDecoder.decodedImage(from: data) else {
                     throw ScheduleMemoImageStoreError.invalidImage
                 }
+                try scope.check()
+                guard photoLoadID == loadID, existingImages.count + draftImages.count < ScheduleMemoImageStore.maximumImageCount else { return }
                 let draft = ScheduleMemoEditorDraftImage(id: UUID(), data: data, image: image)
                 draftImages.append(draft)
                 insert(.init(kind: .image, id: draft.id))
             } catch {
+                guard !scope.wasCancelled(error), photoLoadID == loadID else { return }
                 errorMessage = error.localizedDescription
                 return
             }
@@ -810,6 +817,7 @@ struct ScheduleMemoAdvancedEditorView: View {
     @MainActor
     private func save() {
         guard canSave else { return }
+        photoLoadID = UUID()
         isSaving = true
         var newImageFilenames: [String] = []
         var newAttachmentFiles: [ScheduleMemoAttachmentStore.StoredFile] = []

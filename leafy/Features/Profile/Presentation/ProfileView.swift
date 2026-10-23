@@ -23,6 +23,7 @@ struct ProfileView: View {
     @AppStorage(TimetableBackgroundStore.filenameKey) private var timetableBackgroundFilename = ""
 
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
+    @State private var sessionOperationAlert: LeafyOperationAlert?
     @State private var showingLogoutAlert = false
     @State private var showingDeleteAccountConfirmation = false
     @State private var showingFinalDeleteAccountConfirmation = false
@@ -124,9 +125,11 @@ struct ProfileView: View {
                     position: .bottom
                 )
             }
+            .leafyOperationAlert($sessionOperationAlert)
             .alert(logoutConfirmationTitle, isPresented: $showingLogoutAlert) {
                 Button(logoutButtonTitle, role: .destructive) {
-                    AppSessionResetter.returnToLogin(modelContext: modelContext)
+                    do { try AppSessionResetter.returnToLogin(modelContext: modelContext) }
+                    catch { sessionOperationAlert = .failure(error.localizedDescription) }
                 }
                 Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
             } message: {
@@ -365,6 +368,7 @@ struct ProfileView: View {
         Button(logoutButtonTitle, role: .destructive) {
             showingLogoutAlert = true
         }
+        .disabled(isDeletingAccount)
     }
 
     private var deleteAccountButton: some View {
@@ -430,7 +434,7 @@ struct ProfileView: View {
                 appNavigation.completeAccountDeletion(
                     with: .deletedWithLocalCleanupWarning(localCleanupError.localizedDescription)
                 )
-                AppSessionResetter.returnToLogin()
+                try AppSessionResetter.returnToLogin()
             } else {
                 appNavigation.completeAccountDeletion(with: .deleted)
             }
@@ -1816,22 +1820,13 @@ private struct CacheAndSyncView: View {
     @Query private var reminders: [CourseReminderSetting]
     @Query private var cellReminders: [TimetableCellReminder]
     @Query private var favoriteClassrooms: [FavoriteClassroom]
-    @Query private var favoriteLinks: [FavoriteCampusLink]
     @Query private var postgraduateTargets: [PostgraduateTarget]
-    @Query private var careerResumes: [CareerResumeDocument]
-    @Query private var careerTasks: [CareerTask]
-    @Query private var careerOpportunities: [CareerOpportunity]
     @Query private var learningMaterials: [LearningMaterialDocument]
     @Query private var learningProjects: [LearningProject]
     @Query private var learningTasks: [LearningProjectTask]
     @Query private var studyTimeRecords: [StudyTimeRecord]
     @Query private var fitnessTestRecords: [FitnessTestRecord]
-    @Query private var medicalLedgerEntries: [MedicalLedgerEntry]
-    @Query private var medicalLedgerPhotos: [MedicalLedgerPhoto]
     @Query private var scheduleMemos: [ScheduleMemo]
-    @Query private var scheduleMemoImages: [ScheduleMemoImage]
-    @Query private var scheduleMemoAttachments: [ScheduleMemoAttachment]
-    @Query private var scheduleMemoAudioRecords: [ScheduleMemoAudio]
 
     @State private var isSyncing = false
     @State private var progressController = AcademicOperationProgressController()
@@ -2060,12 +2055,11 @@ private struct CacheAndSyncView: View {
         catch { operationAlert = .failure("无法暂停 iCloud 同步，尚未清除本机数据：\(error.localizedDescription)"); return }
         isClearing = true
 
-        for course in courses { modelContext.delete(course) }
-        for grade in grades { modelContext.delete(grade) }
+        let records: [any PersistentModel] = courses + grades
+        for record in records { modelContext.delete(record) }
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: { for record in records { modelContext.insert(record) } })
         } catch {
-            modelContext.rollback()
             isClearing = false
             operationAlert = .failure("教务缓存清除失败：\(error.localizedDescription)")
             return
@@ -2091,78 +2085,22 @@ private struct CacheAndSyncView: View {
         catch { operationAlert = .failure("无法暂停 iCloud 同步，尚未清除本机数据：\(error.localizedDescription)"); return }
         isClearing = true
 
+        let notificationCourses = courses.map(TimetableReminderRefreshPlan.courseSnapshot)
+        let notificationCells = cellReminders.map { SyncedTimetableCellReminder($0).make() }
+        var cleanupWarnings: [String] = []
+        let cleanupWarning: String?
         do {
-            try CareerDocumentFileStore.deleteAllFiles()
+            cleanupWarning = try AppSessionResetter.deleteLocalRecords(in: modelContext)
         } catch {
             isClearing = false
-            operationAlert = .failure("简历文件清除失败：\(error.localizedDescription)")
+            operationAlert = .failure("本地缓存清除失败：\(error.localizedDescription)")
             return
         }
 
-        do {
-            try SchoolLoginCredentialStore.deleteAll()
-        } catch {
-            isClearing = false
-            operationAlert = .failure("教务登录凭据清除失败：\(error.localizedDescription)")
-            return
-        }
-
-        TimetableNotificationManager.cancelAllCourseReminders(courses: courses)
-        TimetableNotificationManager.cancelAllCellReminders(cellReminders)
-        ScheduleReportNotificationManager.clearScheduledNotifications()
-
-        for course in courses { modelContext.delete(course) }
-        for grade in grades { modelContext.delete(grade) }
-        for note in notes { modelContext.delete(note) }
-        for note in occurrenceNotes { modelContext.delete(note) }
-        for reminder in reminders { modelContext.delete(reminder) }
-        for reminder in cellReminders { modelContext.delete(reminder) }
-        for favorite in favoriteClassrooms { modelContext.delete(favorite) }
-        for favorite in favoriteLinks { modelContext.delete(favorite) }
-        for target in postgraduateTargets { modelContext.delete(target) }
-        for resume in careerResumes { modelContext.delete(resume) }
-        for task in careerTasks { modelContext.delete(task) }
-        for opportunity in careerOpportunities { modelContext.delete(opportunity) }
-        for project in learningProjects { modelContext.delete(project) }
-        for task in learningTasks { modelContext.delete(task) }
-        for record in studyTimeRecords { modelContext.delete(record) }
-        for material in learningMaterials {
-            try? LearningMaterialFileStore.deleteFile(named: material.localFilename)
-            modelContext.delete(material)
-        }
-        for record in fitnessTestRecords { modelContext.delete(record) }
-        for photo in medicalLedgerPhotos {
-            try? MedicalLedgerPhotoStore.deleteFile(named: photo.localFilename)
-            modelContext.delete(photo)
-        }
-        for entry in medicalLedgerEntries { modelContext.delete(entry) }
-        MedicalLedgerPhotoStore.deleteAllFiles()
-        do {
-            try ScheduleMemoImageStore.deleteAllFiles()
-        } catch {
-            isClearing = false
-            operationAlert = .failure("随记图片清除失败：\(error.localizedDescription)")
-            return
-        }
-        do {
-            try ScheduleMemoAttachmentStore.deleteAllFiles()
-        } catch {
-            isClearing = false
-            operationAlert = .failure("随记附件清除失败：\(error.localizedDescription)")
-            return
-        }
-        do {
-            try ScheduleMemoAudioStore.deleteAllFiles()
-        } catch {
-            isClearing = false
-            operationAlert = .failure("随记录音清除失败：\(error.localizedDescription)")
-            return
-        }
-        for image in scheduleMemoImages { modelContext.delete(image) }
-        for attachment in scheduleMemoAttachments { modelContext.delete(attachment) }
-        for audio in scheduleMemoAudioRecords { modelContext.delete(audio) }
-        for memo in scheduleMemos { modelContext.delete(memo) }
-
+        TimetableNotificationManager.cancelAllCourseReminders(courses: notificationCourses)
+        TimetableNotificationManager.cancelAllCellReminders(notificationCells)
+        do { try ScheduleReportNotificationManager.clearScheduledNotifications() }
+        catch { cleanupWarnings.append("本地记录已清除，但提醒配置清理未完成：\(error.localizedDescription)") }
         SchoolDataCache.clearDiscoverCaches()
         TimetableCacheMetadata.clear()
         CustomScheduleStore.clear()
@@ -2170,13 +2108,23 @@ private struct CacheAndSyncView: View {
         SunshineRunNotificationManager.cancelScheduledNotifications(settings: sunshineRunSettings)
         SunshineRunStore.clear()
         ScheduleReportSettingsStore.clear()
-        AppSessionResetter.returnToLogin(modelContext: modelContext)
-        do {
-            try modelContext.save()
-        } catch {
-            modelContext.rollback()
+        do { try SchoolLoginCredentialStore.deleteAll() }
+        catch {
             isClearing = false
-            operationAlert = .failure("本地缓存清除失败：\(error.localizedDescription)")
+            operationAlert = .failure("本地记录已清除，但登录凭据清除失败：\(error.localizedDescription)")
+            return
+        }
+        do { try AppSessionResetter.returnToLogin(modelContext: modelContext) }
+        catch {
+            isClearing = false
+            operationAlert = .failure(error.localizedDescription)
+            return
+        }
+        if let cleanupWarning { cleanupWarnings.append(cleanupWarning) }
+        if !cleanupWarnings.isEmpty {
+            isClearing = false
+            refreshCacheSummary()
+            operationAlert = .partial(cleanupWarnings.joined(separator: "；"))
             return
         }
 

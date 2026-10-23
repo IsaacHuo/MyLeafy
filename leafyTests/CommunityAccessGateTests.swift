@@ -167,6 +167,39 @@ final class CommunityAccessGateTests: XCTestCase {
     }
 
     @MainActor
+    func testAccessGateCannotAuthorizeAcrossIdentityChangeDuringBootstrap() async {
+        let session = FakeCommunitySession(currentUserID: UUID())
+        session.onBootstrap = { CampusIdentityStore.activate(makeCustomIdentity()) }
+        let gate = CommunityAccessGate(sessionManager: session, termsChecker: FakeTermsChecker(accepted: true))
+        let result = await gate.evaluate(.rating)
+        if case .failed = result {} else { XCTFail("Old access evaluation authorized new identity") }
+    }
+
+    @MainActor
+    func testCommunityFeedPaginationCannotOverwriteNewRefreshOfSameQuery() async {
+        let repository = SuspendingCommunityRepository()
+        let viewModel = CommunityFeedViewModel(repository: repository, cache: EmptyCommunityFeedCache())
+        let initial = (0..<20).map { makeTestCommunityPost(title: "Old \($0)") }
+        let initialLoad = Task { await viewModel.load(query: .default) }
+        await repository.waitForFetch(query: .default)
+        await repository.resumeFetch(query: .default, posts: initial)
+        _ = await initialLoad.value
+
+        let pageQuery = CommunityFeedQuery(limit: 40)
+        let pagination = Task { await viewModel.loadMoreIfNeeded() }
+        await repository.waitForFetch(query: pageQuery)
+        let fresh = makeTestCommunityPost(title: "New refresh")
+        let refresh = Task { await viewModel.load(mode: .refresh, query: .default) }
+        await repository.waitForFetch(query: .default)
+        await repository.resumeFetch(query: .default, posts: [fresh])
+        _ = await refresh.value
+        await repository.resumeFetch(query: pageQuery, posts: initial)
+        await pagination.value
+        XCTAssertEqual(viewModel.posts, [fresh])
+        XCTAssertFalse(viewModel.isLoadingMore)
+    }
+
+    @MainActor
     func testCommunityFeedIgnoresStaleLoadAfterQueryChanges() async {
         let repository = SuspendingCommunityRepository()
         let viewModel = CommunityFeedViewModel(repository: repository, cache: EmptyCommunityFeedCache())
@@ -457,6 +490,7 @@ private final class FakeCommunitySession: CommunitySessionManaging {
     var communityAccessStatus: CommunityAccessStatus = .general
     var hasApprovedCommunityAccess: Bool = false
     private(set) var bootstrapForceValues: [Bool] = []
+    var onBootstrap: (() -> Void)?
 
     init(
         currentUserID: UUID?,
@@ -476,6 +510,7 @@ private final class FakeCommunitySession: CommunitySessionManaging {
 
     func bootstrapCommunityUser(force: Bool) async {
         bootstrapForceValues.append(force)
+        onBootstrap?()
     }
 }
 

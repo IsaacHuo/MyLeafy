@@ -15,79 +15,117 @@ enum ICloudLocalData {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(value)
     }
-    static func capture(context: ModelContext, journal: ICloudSyncJournal) throws -> [ICloudSyncValue] {
+    static func capture(context: ModelContext, journal: ICloudSyncJournal, onlyKeys: Set<String>? = nil) throws -> [ICloudSyncValue] {
+        func includes(_ key: String) -> Bool { onlyKeys?.contains(key) ?? true }
+        func includesKind(_ kind: String) -> Bool { onlyKeys?.contains(where: { $0.hasPrefix(kind + "/") }) ?? true }
         var result: [ICloudSyncValue] = []
         func append<T: Encodable>(_ key: String, _ value: T, date: Date = Date()) throws {
+            guard includes(key) else { return }
             result.append(ICloudSyncValue(key: key, payload: try encode(value), modifiedAt: date))
         }
         func models<T: ICloudModelValue>(_ type: T.Type) throws {
+            guard includesKind(T.kind) else { return }
             for model in try context.fetch(FetchDescriptor<T.Model>()) {
                 let value = T(model)
                 try append(T.kind + "/" + value.id.uuidString.lowercased(), value, date: value.syncDate)
             }
         }
-        let courses = try context.fetch(FetchDescriptor<Course>()).map(SyncedCourse.init).sorted { $0.id.uuidString < $1.id.uuidString }
-        if !courses.isEmpty || journal.records["school/courses"] != nil {
-            try append("school/courses", courses, date: TimetableCacheMetadata.lastSyncAt ?? .distantPast)
+        if includes("school/courses") {
+            let courses = try context.fetch(FetchDescriptor<Course>()).map(SyncedCourse.init).sorted { $0.id.uuidString < $1.id.uuidString }
+            if !courses.isEmpty || journal.records["school/courses"] != nil {
+                try append("school/courses", courses, date: TimetableCacheMetadata.lastSyncAt ?? .distantPast)
+            }
         }
         let isManual = ActiveCampusContext.identity?.isCustom == true
         if isManual {
             try models(SyncedGrade.self)
-            var exams = SchoolDataCache.loadExamSchedule()
-            var prepared = false
-            let previousDate = SchoolDataCache.lastSyncDate(for: .examSchedule)
-            for index in exams.indices where exams[index].syncID == nil {
-                exams[index].syncID = UUID()
-                exams[index].updatedAt = exams[index].updatedAt ?? previousDate
-                prepared = true
-            }
-            if prepared { SchoolDataCache.saveExamSchedule(exams, notifies: false) }
-            for exam in exams {
-                guard let id = exam.syncID else { throw CocoaError(.fileReadCorruptFile) }
-                try append("ManualExam/" + id.uuidString.lowercased(), examValue(exam, localID: examID(id)), date: exam.updatedAt ?? .distantPast)
+            if includesKind("ManualExam") {
+                var exams = try SchoolDataCache.loadExamScheduleForEditing()
+                var prepared = false
+                let previousDate = SchoolDataCache.lastSyncDate(for: .examSchedule)
+                for index in exams.indices where exams[index].syncID == nil {
+                    exams[index].syncID = UUID()
+                    exams[index].updatedAt = exams[index].updatedAt ?? previousDate
+                    prepared = true
+                }
+                if prepared { try SchoolDataCache.saveExamSchedule(exams, notifies: false) }
+                for exam in exams {
+                    guard let id = exam.syncID else { throw CocoaError(.fileReadCorruptFile) }
+                    try append("ManualExam/" + id.uuidString.lowercased(), examValue(exam, localID: examID(id)), date: exam.updatedAt ?? .distantPast)
+                }
             }
         } else {
-            let grades = try context.fetch(FetchDescriptor<Grade>()).map(SyncedGrade.init).sorted { $0.id.uuidString < $1.id.uuidString }
-            if !grades.isEmpty || journal.records["school/grades"] != nil { try append("school/grades", grades, date: SchoolDataCache.lastSyncDate(for: .gradeDetails) ?? .distantPast) }
-            let supplemental = ICloudGradeSupplemental(rankings: SchoolDataCache.loadGradeRankings(), summary: SchoolDataCache.loadGradeCreditSummary())
-            if !supplemental.rankings.isEmpty || supplemental.summary != nil || journal.records["school/gradeSupplemental"] != nil {
-                try append("school/gradeSupplemental", supplemental, date: SchoolDataCache.lastSyncDate(for: .gradeRankings) ?? .distantPast)
+            if includes("school/grades") {
+                let grades = try context.fetch(FetchDescriptor<Grade>()).map(SyncedGrade.init).sorted { $0.id.uuidString < $1.id.uuidString }
+                if !grades.isEmpty || journal.records["school/grades"] != nil { try append("school/grades", grades, date: SchoolDataCache.lastSyncDate(for: .gradeDetails) ?? .distantPast) }
             }
-            let exams = SchoolDataCache.loadExamSchedule()
-            if !exams.isEmpty || journal.records["school/exams"] != nil { try append("school/exams", exams, date: SchoolDataCache.lastSyncDate(for: .examSchedule) ?? .distantPast) }
+            if includes("school/gradeSupplemental") {
+                let supplemental = ICloudGradeSupplemental(rankings: SchoolDataCache.loadGradeRankings(), summary: SchoolDataCache.loadGradeCreditSummary())
+                if !supplemental.rankings.isEmpty || supplemental.summary != nil || journal.records["school/gradeSupplemental"] != nil {
+                    try append("school/gradeSupplemental", supplemental, date: SchoolDataCache.lastSyncDate(for: .gradeRankings) ?? .distantPast)
+                }
+            }
+            if includes("school/exams") {
+                let exams = try SchoolDataCache.loadExamScheduleForEditing()
+                if !exams.isEmpty || journal.records["school/exams"] != nil { try append("school/exams", exams, date: SchoolDataCache.lastSyncDate(for: .examSchedule) ?? .distantPast) }
+            }
         }
         try models(SyncedCourseNote.self); try models(SyncedCourseOccurrenceNote.self)
         try models(SyncedCourseReminderSetting.self); try models(SyncedTimetableCellReminder.self)
         try models(SyncedScheduleMemo.self); try models(SyncedScheduleMemoImage.self)
         try models(SyncedScheduleMemoAttachment.self); try models(SyncedScheduleMemoAudio.self)
-        for event in try CustomScheduleStore.loadForSync() { try append("CustomSchedule/" + event.id, event, date: event.updatedAt ?? event.createdAt ?? .distantPast) }
+        if includesKind("CustomSchedule") {
+            for event in try CustomScheduleStore.loadForSync() { try append("CustomSchedule/" + event.id, event, date: event.updatedAt ?? event.createdAt ?? .distantPast) }
+        }
         let defaults = UserDefaults.standard
-        for key in preferenceKeys {
+        for key in preferenceKeys where includes("preference/" + key) {
             if let value = defaults.object(forKey: key) {
                 let data = try PropertyListSerialization.data(fromPropertyList: ["value": value], format: .binary, options: 0)
                 try append("preference/" + key, data, date: journal.records["preference/" + key] == nil ? .distantPast : Date())
             }
         }
         // Independent fields preserve concurrent date and period edits on different devices.
-        let settings = UserTimetableSettingsStore.load()
-        let settingsDate = defaults.object(forKey: CampusScopedDefaults.key(UserTimetableSettingsStore.key + ".editedAt")) as? Date ?? .distantPast
-        try append("settings/timetable/academicYear", settings.academicYear, date: settingsDate)
-        try append("settings/timetable/term", settings.term, date: settingsDate)
-        try append("settings/timetable/firstMonday", settings.firstMondayString, date: settingsDate)
-        try append("settings/timetable/periods", settings.periods, date: settingsDate)
+        if includesKind("settings") {
+            let settings = UserTimetableSettingsStore.load()
+            let settingsDate = defaults.object(forKey: CampusScopedDefaults.key(UserTimetableSettingsStore.key + ".editedAt")) as? Date ?? .distantPast
+            try append("settings/timetable/academicYear", settings.academicYear, date: settingsDate)
+            try append("settings/timetable/term", settings.term, date: settingsDate)
+            try append("settings/timetable/firstMonday", settings.firstMondayString, date: settingsDate)
+            try append("settings/timetable/periods", settings.periods, date: settingsDate)
+        }
         func file(_ path: String) throws {
+            guard includes("file/" + path) else { return }
             let url = try fileURL(path)
             if FileManager.default.fileExists(atPath: url.path) {
                 let digest = try fileDigest(url)
                 result.append(ICloudSyncValue(key: "file/" + path, payload: Data(), modifiedAt: Date(), filePath: path, fileDigest: digest))
             } else if let previous = journal.records["file/" + path], !previous.deleted {
                 result.append(previous)
-            } else { throw ICloudSyncFailure.message("附件文件缺失：\(url.lastPathComponent)。请恢复文件后重试同步。") }
+            } else if onlyKeys == nil { throw ICloudSyncFailure.message("附件文件缺失：\(url.lastPathComponent)。请恢复文件后重试同步。") }
         }
-        for image in try context.fetch(FetchDescriptor<ScheduleMemoImage>()) { try file("images/" + image.localFilename) }
-        for attachment in try context.fetch(FetchDescriptor<ScheduleMemoAttachment>()) { try file("attachments/" + attachment.localFilename) }
-        for audio in try context.fetch(FetchDescriptor<ScheduleMemoAudio>()) { try file("audio/" + audio.localFilename) }
-        if let filename = defaults.string(forKey: TimetableBackgroundStore.filenameKey), !filename.isEmpty { try file("background/" + filename) }
+        if includesKind("file") {
+            for image in try context.fetch(FetchDescriptor<ScheduleMemoImage>()) { try file("images/" + image.localFilename) }
+            for attachment in try context.fetch(FetchDescriptor<ScheduleMemoAttachment>()) { try file("attachments/" + attachment.localFilename) }
+            for audio in try context.fetch(FetchDescriptor<ScheduleMemoAudio>()) { try file("audio/" + audio.localFilename) }
+            if let filename = defaults.string(forKey: TimetableBackgroundStore.filenameKey), !filename.isEmpty { try file("background/" + filename) }
+        }
+        return try uniqueCaptureValues(result)
+    }
+
+    static func uniqueCaptureValues(_ values: [ICloudSyncValue]) throws -> [ICloudSyncValue] {
+        var seen: [String: ICloudSyncValue] = [:]
+        var result: [ICloudSyncValue] = []
+        for value in values {
+            if let previous = seen[value.key] {
+                guard previous.payload == value.payload, previous.deleted == value.deleted,
+                      previous.filePath == value.filePath, previous.fileDigest == value.fileDigest else {
+                    throw ICloudSyncFailure.message(L10n.text("本机同步数据含有重复且不一致的标识，已保留现有数据，请先检查本地记录。"))
+                }
+                continue
+            }
+            seen[value.key] = value
+            result.append(value)
+        }
         return result
     }
 
@@ -164,6 +202,11 @@ enum ICloudLocalData {
             }
             let dto = try decoder.decode(T.self, from: value.payload)
             guard dto.id == id else { throw CocoaError(.fileReadCorruptFile) }
+            if let cell = dto as? SyncedTimetableCellReminder {
+                guard (1...7).contains(cell.dayOfWeek), (1...24).contains(cell.period),
+                      cell.startsAt != nil || (1...20).contains(cell.week),
+                      cell.endPeriod.map({ (cell.period...24).contains($0) }) ?? true else { throw CocoaError(.fileReadCorruptFile) }
+            }
             if let model = matches.first { dto.apply(to: model) } else { context.insert(dto.make()) }
             for duplicate in matches.dropFirst() { context.delete(duplicate) }
         }
@@ -175,7 +218,7 @@ enum ICloudLocalData {
         case "ManualExam":
             guard ActiveCampusContext.identity?.isCustom == true,
                   let id = UUID(uuidString: String(value.key.dropFirst("ManualExam/".count))) else { throw CocoaError(.fileReadCorruptFile) }
-            let existing = SchoolDataCache.loadExamSchedule()
+            let existing = try SchoolDataCache.loadExamScheduleForEditing()
             var exams = existing.filter { $0.syncID != id }
             if !value.deleted {
                 let exam = try decoder.decode(ExamArrangement.self, from: value.payload)
@@ -183,7 +226,7 @@ enum ICloudLocalData {
                 let localID = existing.first { $0.syncID == id }?.id ?? examID(id)
                 exams.append(examValue(exam, localID: localID))
             }
-            SchoolDataCache.saveExamSchedule(exams)
+            try SchoolDataCache.saveExamSchedule(exams)
         case "CourseNote": try models(SyncedCourseNote.self)
         case "CourseOccurrenceNote": try models(SyncedCourseOccurrenceNote.self)
         case "CourseReminderSetting": try models(SyncedCourseReminderSetting.self)
@@ -200,7 +243,12 @@ enum ICloudLocalData {
             switch value.key {
             case "school/courses":
                 let old = try context.fetch(FetchDescriptor<Course>())
-                let incoming = value.deleted ? [] : try decoder.decode([SyncedCourse].self, from: value.payload).map { $0.make() }
+                let dtos = value.deleted ? [] : try decoder.decode([SyncedCourse].self, from: value.payload)
+                guard Set(dtos.map(\.id)).count == dtos.count, dtos.allSatisfy({
+                    (1...7).contains($0.dayOfWeek) && !$0.weeks.isEmpty && $0.weeks.allSatisfy((1...20).contains)
+                        && !$0.duration.isEmpty && $0.duration.allSatisfy((1...24).contains)
+                }) else { throw CocoaError(.fileReadCorruptFile) }
+                let incoming = dtos.map { $0.make() }
                 try TimetableLocalDataReassociation(oldCourses: old, newCourses: incoming, context: context).apply(to: context)
                 for item in old { context.delete(item) }
                 for item in incoming { context.insert(item) }
@@ -213,7 +261,7 @@ enum ICloudLocalData {
                     SchoolDataCache.saveGradeRankings(supplemental.rankings, notifies: false)
                     if let summary = supplemental.summary { SchoolDataCache.saveGradeCreditSummary(summary, notifies: false) }
                 }
-            case "school/exams": SchoolDataCache.saveExamSchedule(value.deleted ? [] : try decoder.decode([ExamArrangement].self, from: value.payload))
+            case "school/exams": try SchoolDataCache.saveExamSchedule(value.deleted ? [] : try decoder.decode([ExamArrangement].self, from: value.payload))
             default: throw CocoaError(.fileReadCorruptFile)
             }
         case "CustomSchedule":
@@ -224,7 +272,7 @@ enum ICloudLocalData {
                 guard event.id == id else { throw CocoaError(.fileReadCorruptFile) }
                 events.append(event)
             }
-            CustomScheduleStore.save(events)
+            try CustomScheduleStore.save(events)
         case "preference":
             let key = String(value.key.dropFirst("preference/".count))
             guard preferenceKeys.contains(key) else { throw CocoaError(.fileReadCorruptFile) }

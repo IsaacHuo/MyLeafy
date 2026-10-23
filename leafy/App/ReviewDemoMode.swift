@@ -32,17 +32,25 @@ enum ReviewDemoDataSeeder {
     }
 
     @MainActor
-    static func enter(using modelContext: ModelContext) {
+    static func enter(using modelContext: ModelContext) throws {
         ReviewDemoMode.isEnabled = true
         ActiveCampusContext.networkManager.persistDemoIdentity(eduID: demoEduID, displayName: displayName)
-        seedIfNeeded(using: modelContext)
+        do {
+            // The login context predates identity activation and may be an in-memory store.
+            let context = AppRuntimeEnvironment.isRunningUnitTests ? modelContext : try AppModelContainerFactory.make().container.mainContext
+            try seedIfNeeded(using: context)
+        } catch {
+            ReviewDemoMode.disable()
+            ActiveCampusContext.networkManager.clearSession()
+            throw error
+        }
     }
 
     @MainActor
-    static func seedIfNeeded(using modelContext: ModelContext) {
+    static func seedIfNeeded(using modelContext: ModelContext) throws {
         guard ReviewDemoMode.isEnabled else { return }
         if !UserDefaults.standard.bool(forKey: seededKey) {
-            seed(using: modelContext)
+            try seed(using: modelContext)
             UserDefaults.standard.set(true, forKey: seededKey)
         } else {
             ActiveCampusContext.networkManager.persistDemoIdentity(eduID: demoEduID, displayName: displayName)
@@ -50,13 +58,27 @@ enum ReviewDemoDataSeeder {
     }
 
     @MainActor
-    static func seed(using modelContext: ModelContext) {
-        preserveCurrentSchoolDataIfNeeded(using: modelContext)
-        replace(Course.self, in: modelContext, with: sampleCourses)
-        replace(Grade.self, in: modelContext, with: sampleGrades)
-        ensureFavoriteClassrooms(in: modelContext)
-        seedSchoolCaches()
-        try? modelContext.save()
+    static func seed(
+        using modelContext: ModelContext,
+        defaults: UserDefaults = .standard,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws {
+        let oldCourses = try modelContext.fetch(FetchDescriptor<Course>())
+        let oldGrades = try modelContext.fetch(FetchDescriptor<Grade>())
+        let favorites = try modelContext.fetch(FetchDescriptor<FavoriteClassroom>())
+        try preserveCurrentSchoolDataIfNeeded(courses: oldCourses, grades: oldGrades, defaults: defaults)
+        var added: [any PersistentModel] = sampleCourses + sampleGrades
+        if !favorites.contains(where: { $0.building == "二教" && $0.room == "205" }) {
+            added.append(FavoriteClassroom(building: "二教", room: "205"))
+        }
+        let removed: [any PersistentModel] = oldCourses + oldGrades
+        removed.forEach { modelContext.delete($0) }
+        added.forEach { modelContext.insert($0) }
+        try LocalModelSave.save(modelContext, undo: {
+            added.forEach { modelContext.delete($0) }
+            removed.forEach { modelContext.insert($0) }
+        }, using: save)
+        try seedSchoolCaches()
     }
 
     /// Refreshing the timetable must not reseed grades, exams, or other school caches.
@@ -77,16 +99,18 @@ enum ReviewDemoDataSeeder {
     }
 
     @MainActor
-    static func exit(using modelContext: ModelContext? = nil) {
+    static func exit(
+        using modelContext: ModelContext? = nil,
+        defaults: UserDefaults = .standard,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws {
+        if let modelContext { try restorePreservedSchoolData(using: modelContext, defaults: defaults, save: save) }
         ReviewDemoMode.isEnabled = false
         UserDefaults.standard.removeObject(forKey: seededKey)
-        if let modelContext {
-            restorePreservedSchoolData(using: modelContext)
-        }
     }
 
-    static func refreshSchoolCaches() {
-        seedSchoolCaches()
+    static func refreshSchoolCaches() throws {
+        try seedSchoolCaches()
     }
 
     static func demoEduID(userDefaults: UserDefaults) -> String {
@@ -334,9 +358,9 @@ enum ReviewDemoDataSeeder {
         ]
     }
 
-    private static func seedSchoolCaches() {
+    private static func seedSchoolCaches() throws {
         let today = Date()
-        SchoolDataCache.saveExamSchedule([
+        try SchoolDataCache.saveExamSchedule([
             ExamArrangement(id: 1, courseID: "DS-001", name: "数据结构", date: futureDateString(days: 9), start: "09:00", end: "11:00", location: "二教 205"),
             ExamArrangement(id: 2, courseID: "MATH-001", name: "高等数学 A", date: futureDateString(days: 16), start: "14:00", end: "16:00", location: "主楼 112")
         ])
@@ -393,78 +417,54 @@ enum ReviewDemoDataSeeder {
     }
 
     @MainActor
-    private static func ensureFavoriteClassrooms(in modelContext: ModelContext) {
-        let descriptor = FetchDescriptor<FavoriteClassroom>()
-        let favorites = (try? modelContext.fetch(descriptor)) ?? []
-        if !favorites.contains(where: { $0.building == "二教" && $0.room == "205" }) {
-            modelContext.insert(FavoriteClassroom(building: "二教", room: "205"))
-        }
-    }
-
-    @MainActor
-    private static func preserveCurrentSchoolDataIfNeeded(using modelContext: ModelContext) {
-        let defaults = UserDefaults.standard
-        guard defaults.data(forKey: courseBackupKey) == nil,
-              defaults.data(forKey: gradeBackupKey) == nil,
-              defaults.dictionary(forKey: defaultsBackupKey) == nil else {
+    private static func preserveCurrentSchoolDataIfNeeded(courses: [Course], grades: [Grade], defaults: UserDefaults) throws {
+        let keys = [courseBackupKey, gradeBackupKey, defaultsBackupKey]
+        if keys.contains(where: { defaults.object(forKey: $0) != nil }) {
+            _ = try preservedValues(defaults: defaults)
             return
         }
-
-        let courses = ((try? modelContext.fetch(FetchDescriptor<Course>())) ?? []).map(CourseBackup.init)
-        let grades = ((try? modelContext.fetch(FetchDescriptor<Grade>())) ?? []).map(GradeBackup.init)
-        if let data = try? JSONEncoder().encode(courses) {
-            defaults.set(data, forKey: courseBackupKey)
-        }
-        if let data = try? JSONEncoder().encode(grades) {
-            defaults.set(data, forKey: gradeBackupKey)
-        }
-
-        let snapshot = defaults.dictionaryRepresentation().filter { key, _ in
-            key.hasPrefix("schoolCache.") || key.hasPrefix("timetable.")
-        }
+        let courseData = try JSONEncoder().encode(courses.map(CourseBackup.init))
+        let gradeData = try JSONEncoder().encode(grades.map(GradeBackup.init))
+        let prefixes = ["schoolCache.", "timetable.", CampusScopedDefaults.key("schoolCache."), CampusScopedDefaults.key("timetable.")]
+        let snapshot = defaults.dictionaryRepresentation().filter { key, _ in prefixes.contains(where: key.hasPrefix) }
+        defaults.set(courseData, forKey: courseBackupKey)
+        defaults.set(gradeData, forKey: gradeBackupKey)
         defaults.set(snapshot, forKey: defaultsBackupKey)
     }
 
+    private static func preservedValues(defaults: UserDefaults) throws -> ([CourseBackup], [GradeBackup], [String: Any]) {
+        guard let courseData = defaults.data(forKey: courseBackupKey),
+              let gradeData = defaults.data(forKey: gradeBackupKey),
+              let snapshot = defaults.dictionary(forKey: defaultsBackupKey) else { throw CocoaError(.fileReadCorruptFile) }
+        let courses = try JSONDecoder().decode([CourseBackup].self, from: courseData)
+        let grades = try JSONDecoder().decode([GradeBackup].self, from: gradeData)
+        guard courses.allSatisfy({ $0.id != nil && $0.sourceSemesterID != nil }),
+              grades.allSatisfy({ $0.id != nil }) else {
+            throw ReviewDemoBackupError()
+        }
+        return (courses, grades, snapshot)
+    }
+
     @MainActor
-    private static func restorePreservedSchoolData(using modelContext: ModelContext) {
-        deleteAll(Course.self, in: modelContext)
-        deleteAll(Grade.self, in: modelContext)
+    private static func restorePreservedSchoolData(
+        using modelContext: ModelContext, defaults: UserDefaults,
+        save: (ModelContext) throws -> Void
+    ) throws {
+        let keys = [courseBackupKey, gradeBackupKey, defaultsBackupKey]
+        guard keys.contains(where: { defaults.object(forKey: $0) != nil }) else { return }
+        let (courses, grades, snapshot) = try preservedValues(defaults: defaults)
+        let removed: [any PersistentModel] = try modelContext.fetch(FetchDescriptor<Course>()) + modelContext.fetch(FetchDescriptor<Grade>())
+        let restored: [any PersistentModel] = try courses.map { try $0.makeCourse() } + grades.map { try $0.makeGrade() }
+        removed.forEach { modelContext.delete($0) }
+        restored.forEach { modelContext.insert($0) }
+        try LocalModelSave.save(modelContext, undo: {
+            restored.forEach { modelContext.delete($0) }
+            removed.forEach { modelContext.insert($0) }
+        }, using: save)
         SchoolDataCache.clearDiscoverCaches()
         TimetableCacheMetadata.clear()
-
-        let defaults = UserDefaults.standard
-        if let data = defaults.data(forKey: courseBackupKey),
-           let courses = try? JSONDecoder().decode([CourseBackup].self, from: data) {
-            courses.map(\.course).forEach { modelContext.insert($0) }
-        }
-        if let data = defaults.data(forKey: gradeBackupKey),
-           let grades = try? JSONDecoder().decode([GradeBackup].self, from: data) {
-            grades.map(\.grade).forEach { modelContext.insert($0) }
-        }
-        if let snapshot = defaults.dictionary(forKey: defaultsBackupKey) {
-            for (key, value) in snapshot {
-                defaults.set(value, forKey: key)
-            }
-        }
-
-        defaults.removeObject(forKey: courseBackupKey)
-        defaults.removeObject(forKey: gradeBackupKey)
-        defaults.removeObject(forKey: defaultsBackupKey)
-        try? modelContext.save()
-    }
-
-    @MainActor
-    private static func replace<T: PersistentModel>(_ type: T.Type, in modelContext: ModelContext, with values: [T]) {
-        deleteAll(type, in: modelContext)
-        values.forEach { modelContext.insert($0) }
-    }
-
-    @MainActor
-    private static func deleteAll<T: PersistentModel>(_ type: T.Type, in modelContext: ModelContext) {
-        let descriptor = FetchDescriptor<T>()
-        for item in (try? modelContext.fetch(descriptor)) ?? [] {
-            modelContext.delete(item)
-        }
+        for (key, value) in snapshot { defaults.set(value, forKey: key) }
+        for key in keys { defaults.removeObject(forKey: key) }
     }
 
     private static func futureDateString(days: Int) -> String {
@@ -473,6 +473,8 @@ enum ReviewDemoDataSeeder {
     }
 
     private struct CourseBackup: Codable {
+        let id: UUID?
+        let sourceSemesterID: String?
         let courseName: String
         let teacher: String
         let classInfo: String
@@ -483,6 +485,8 @@ enum ReviewDemoDataSeeder {
         let duration: [Int]
 
         init(_ course: Course) {
+            id = course.id
+            sourceSemesterID = course.sourceSemesterID
             courseName = course.courseName
             teacher = course.teacher
             classInfo = course.classInfo
@@ -493,8 +497,10 @@ enum ReviewDemoDataSeeder {
             duration = course.duration
         }
 
-        var course: Course {
-            Course(
+        func makeCourse() throws -> Course {
+            guard let id, let sourceSemesterID else { throw CocoaError(.fileReadCorruptFile) }
+            return Course(
+                id: id,
                 courseName: courseName,
                 teacher: teacher,
                 classInfo: classInfo,
@@ -502,12 +508,15 @@ enum ReviewDemoDataSeeder {
                 location: location,
                 dayOfWeek: dayOfWeek,
                 weeks: weeks,
-                duration: duration
+                duration: duration,
+                sourceSemesterID: sourceSemesterID
             )
         }
     }
 
     private struct GradeBackup: Codable {
+        let id: UUID?
+        let updatedAt: Date?
         let term: String
         let courseName: String
         let credit: String
@@ -519,6 +528,8 @@ enum ReviewDemoDataSeeder {
         let examNature: String?
 
         init(_ grade: Grade) {
+            id = grade.id
+            updatedAt = grade.updatedAt
             term = grade.term
             courseName = grade.courseName
             credit = grade.credit
@@ -530,8 +541,15 @@ enum ReviewDemoDataSeeder {
             examNature = grade.examNature
         }
 
-        var grade: Grade {
-            Grade(term: term, courseName: courseName, credit: credit, score: score, type: type, courseCode: courseCode, courseAttribute: courseAttribute, courseCategory: courseCategory, examNature: examNature)
+        func makeGrade() throws -> Grade {
+            guard let id else { throw CocoaError(.fileReadCorruptFile) }
+            let model = Grade(id: id, term: term, courseName: courseName, credit: credit, score: score, type: type, courseCode: courseCode, courseAttribute: courseAttribute, courseCategory: courseCategory, examNature: examNature)
+            model.updatedAt = updatedAt
+            return model
         }
     }
+}
+
+private struct ReviewDemoBackupError: LocalizedError {
+    var errorDescription: String? { L10n.text("演示备份缺少原始记录标识或学期，已保留备份和当前数据，尚未恢复。") }
 }

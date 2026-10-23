@@ -169,7 +169,8 @@ struct ExamScheduleView: View {
             return
         }
         if ReviewDemoMode.isEnabled {
-            ReviewDemoDataSeeder.refreshSchoolCaches()
+            do { try ReviewDemoDataSeeder.refreshSchoolCaches() }
+            catch { errorMessage = error.localizedDescription; return }
             await MainActor.run {
                 guard scope.isCurrent, !Task.isCancelled else { return }
                 exams = SchoolDataCache.loadExamSchedule()
@@ -228,9 +229,9 @@ struct ExamScheduleView: View {
             try scope.check()
             progressReporter?(.begin(.processingExams))
             let parsed = try HTMLParser.parseExams(html: html)
-            await MainActor.run {
-                guard scope.isCurrent, !Task.isCancelled else { return }
-                exams = SchoolDataCache.saveRemoteExamSchedule(parsed)
+            try await MainActor.run {
+                try scope.check()
+                exams = try SchoolDataCache.saveRemoteExamSchedule(parsed)
                 if userInitiated {
                     progressController.completeCurrentStep()
                     progressController.clear()
@@ -276,23 +277,32 @@ struct ExamScheduleView: View {
     }
 
     @MainActor
-    private func upsertExam(_ input: ExamArrangement) {
-        var exam = input
-        exam.syncID = SchoolDataCache.loadExamSchedule().first { $0.id == input.id }?.syncID ?? input.syncID ?? UUID()
-        exam.updatedAt = Date()
-        var updated = exams.filter { $0.id != exam.id }
-        updated.append(exam)
-        exams = updated.sorted { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
-        SchoolDataCache.saveExamSchedule(exams)
-        errorMessage = nil
-        operationAlert = .success(L10n.text("考试安排已保存。"))
+    private func upsertExam(_ input: ExamArrangement) -> Bool {
+        do {
+            let cached = try SchoolDataCache.loadExamScheduleForEditing()
+            var exam = input
+            exam.syncID = cached.first { $0.id == input.id }?.syncID ?? input.syncID ?? UUID()
+            exam.updatedAt = Date()
+            var updated = cached.filter { $0.id != exam.id }
+            updated.append(exam)
+            updated.sort { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
+            try SchoolDataCache.saveExamSchedule(updated)
+            exams = updated
+            errorMessage = nil
+            operationAlert = .success(L10n.text("考试安排已保存。"))
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
     }
 
     @MainActor
-    private func deleteExam(_ exam: ExamArrangement) {
-        exams.removeAll { $0.id == exam.id }
-        SchoolDataCache.saveExamSchedule(exams)
-        operationAlert = .success(L10n.text("考试安排已删除。"))
+    private func deleteExam(_ exam: ExamArrangement) -> Bool {
+        do {
+            let updated = try SchoolDataCache.loadExamScheduleForEditing().filter { $0.id != exam.id }
+            try SchoolDataCache.saveExamSchedule(updated)
+            exams = updated
+            operationAlert = .success(L10n.text("考试安排已删除。"))
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
     }
 }
 
@@ -368,8 +378,8 @@ private struct ExamEditorItem: Identifiable, Hashable {
 
 private struct ExamEditorSheet: View {
     let item: ExamEditorItem
-    let onSave: (ExamArrangement) -> Void
-    let onDelete: (ExamArrangement) -> Void
+    let onSave: (ExamArrangement) -> Bool
+    let onDelete: (ExamArrangement) -> Bool
 
     @Environment(\.dismiss) private var dismiss
 
@@ -382,8 +392,8 @@ private struct ExamEditorSheet: View {
 
     init(
         item: ExamEditorItem,
-        onSave: @escaping (ExamArrangement) -> Void,
-        onDelete: @escaping (ExamArrangement) -> Void
+        onSave: @escaping (ExamArrangement) -> Bool,
+        onDelete: @escaping (ExamArrangement) -> Bool
     ) {
         self.item = item
         self.onSave = onSave
@@ -399,8 +409,15 @@ private struct ExamEditorSheet: View {
         _location = State(initialValue: exam?.location ?? "")
     }
 
+    private var isEndAfterStart: Bool {
+        let calendar = Calendar.current
+        let start = calendar.dateComponents([.hour, .minute], from: startTime)
+        let end = calendar.dateComponents([.hour, .minute], from: endTime)
+        return (end.hour ?? 0) * 60 + (end.minute ?? 0) > (start.hour ?? 0) * 60 + (start.minute ?? 0)
+    }
+
     private var isSaveDisabled: Bool {
-        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !isEndAfterStart
     }
 
     var body: some View {
@@ -416,13 +433,17 @@ private struct ExamEditorSheet: View {
                     DatePicker("日期", selection: $date, displayedComponents: .date)
                     DatePicker("开始", selection: $startTime, displayedComponents: .hourAndMinute)
                     DatePicker("结束", selection: $endTime, displayedComponents: .hourAndMinute)
+                    if !isEndAfterStart {
+                        Text("结束时间必须晚于开始时间。")
+                            .font(.footnote)
+                            .foregroundStyle(AppTheme.danger)
+                    }
                 }
 
                 if let exam = item.exam {
                     Section {
                         Button("删除考试", role: .destructive) {
-                            onDelete(exam)
-                            dismiss()
+                            if onDelete(exam) { dismiss() }
                         }
                     }
                 }
@@ -443,6 +464,7 @@ private struct ExamEditorSheet: View {
     }
 
     private func save() {
+        guard !isSaveDisabled else { return }
         let calendar = Calendar.current
         let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
         let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
@@ -458,21 +480,16 @@ private struct ExamEditorSheet: View {
             second: 0,
             of: date
         ) ?? startDate
-        let normalizedEndDate = endDate > startDate
-            ? endDate
-            : (calendar.date(byAdding: .hour, value: 2, to: startDate) ?? startDate)
-
         let exam = ExamArrangement(
             id: item.exam?.id ?? Self.newExamID(),
             courseID: courseID.trimmingCharacters(in: .whitespacesAndNewlines),
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             date: DateFormatters.queryDate.string(from: startDate),
-            start: DateFormatters.timeOnly.string(from: startDate),
-            end: DateFormatters.timeOnly.string(from: normalizedEndDate),
+            start: DateFormatters.examTime.string(from: startDate),
+            end: DateFormatters.examTime.string(from: endDate),
             location: location.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-        onSave(exam)
-        dismiss()
+        if onSave(exam) { dismiss() }
     }
 
     private static func newExamID() -> Int {
@@ -666,7 +683,8 @@ struct TeachingAndCultivationView: View {
         guard !isRefreshing else { return }
 
         if ReviewDemoMode.isEnabled {
-            ReviewDemoDataSeeder.refreshSchoolCaches()
+            do { try ReviewDemoDataSeeder.refreshSchoolCaches() }
+            catch { operationAlert = .failure(error.localizedDescription); return }
             SchoolDataRefreshNotifier.post([.teachingPlan, .trainingProgram])
             operationAlert = .success(L10n.text("同步完成，已刷新演示教学计划和培养方案。"))
             return
@@ -906,7 +924,8 @@ struct TeachingPlanView: View {
 
         let cachedSections = SchoolDataCache.loadTeachingPlan()
         if ReviewDemoMode.isEnabled {
-            ReviewDemoDataSeeder.refreshSchoolCaches()
+            do { try ReviewDemoDataSeeder.refreshSchoolCaches() }
+            catch { errorMessage = error.localizedDescription; return }
             await MainActor.run {
                 sections = SchoolDataCache.loadTeachingPlan()
                 errorMessage = nil
@@ -1120,7 +1139,7 @@ private struct GraduationProgressSummaryView: View {
     }
 
     private func categoryIcon(_ category: GraduationCreditCategoryProgress) -> String {
-        guard category.hasCompletedCredits else { return "官方要求，已修学分尚未确认" }
+        guard category.hasCompletedCredits else { return "info.circle" }
         if category.kind == .publicElective || category.kind == .professionalElective {
             return category.isSatisfied ? "checkmark.circle.fill" : "circle.dashed"
         }
@@ -1459,7 +1478,8 @@ struct TrainingProgramView: View {
         let cachedDocument = SchoolDataCache.loadTrainingProgram()
         let cachedRequirements = cachedDocument?.creditRequirements ?? SchoolDataCache.loadGraduationRequirements()
         if ReviewDemoMode.isEnabled {
-            ReviewDemoDataSeeder.refreshSchoolCaches()
+            do { try ReviewDemoDataSeeder.refreshSchoolCaches() }
+            catch { errorMessage = error.localizedDescription; return }
             await MainActor.run {
                 guard scope.isCurrent, !Task.isCancelled else { return }
                 document = SchoolDataCache.loadTrainingProgram()

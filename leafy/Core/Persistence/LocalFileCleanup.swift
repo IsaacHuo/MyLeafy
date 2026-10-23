@@ -14,6 +14,7 @@ extension LearningMaterialDocument: LocalFileRecord {}
 extension HonorRecord: LocalFileRecord {}
 extension ComprehensiveQualityEvidenceDocument: LocalFileRecord {}
 extension MedicalLedgerPhoto: LocalFileRecord {}
+extension CareerResumeDocument: LocalFileRecord {}
 
 @MainActor
 struct LocalFileCleanup {
@@ -74,17 +75,18 @@ struct LocalFileCleanup {
     func retry(in context: ModelContext) throws {
         let pending = try load()
         guard !pending.isEmpty else { return }
-        var liveIDs: [String: Set<UUID>] = [:]
+        var liveFiles: [String: Set<String>] = [:]
         for name in Set(pending.map(\.ownerType)) {
             guard context.container.schema.entitiesByName[name] != nil else { throw CocoaError(.fileReadCorruptFile) }
             switch name {
-            case "ScheduleMemoImage": liveIDs[name] = try ids(ScheduleMemoImage.self, in: context)
-            case "ScheduleMemoAttachment": liveIDs[name] = try ids(ScheduleMemoAttachment.self, in: context)
-            case "ScheduleMemoAudio": liveIDs[name] = try ids(ScheduleMemoAudio.self, in: context)
-            case "LearningMaterialDocument": liveIDs[name] = try ids(LearningMaterialDocument.self, in: context)
-            case "HonorRecord": liveIDs[name] = try ids(HonorRecord.self, in: context)
-            case "ComprehensiveQualityEvidenceDocument": liveIDs[name] = try ids(ComprehensiveQualityEvidenceDocument.self, in: context)
-            case "MedicalLedgerPhoto": liveIDs[name] = try ids(MedicalLedgerPhoto.self, in: context)
+            case "ScheduleMemoImage": liveFiles[name] = try references(ScheduleMemoImage.self, in: context)
+            case "ScheduleMemoAttachment": liveFiles[name] = try references(ScheduleMemoAttachment.self, in: context)
+            case "ScheduleMemoAudio": liveFiles[name] = try references(ScheduleMemoAudio.self, in: context)
+            case "LearningMaterialDocument": liveFiles[name] = try references(LearningMaterialDocument.self, in: context)
+            case "HonorRecord": liveFiles[name] = try references(HonorRecord.self, in: context)
+            case "ComprehensiveQualityEvidenceDocument": liveFiles[name] = try references(ComprehensiveQualityEvidenceDocument.self, in: context)
+            case "MedicalLedgerPhoto": liveFiles[name] = try references(MedicalLedgerPhoto.self, in: context)
+            case "CareerResumeDocument": liveFiles[name] = try references(CareerResumeDocument.self, in: context)
             default: throw CocoaError(.fileReadCorruptFile)
             }
         }
@@ -92,7 +94,7 @@ struct LocalFileCleanup {
         var failure: Error?
         for file in pending {
             // Prepared operations whose database commit failed must never delete live files.
-            guard !liveIDs[file.ownerType, default: []].contains(file.ownerID) else { continue }
+            guard liveFiles[file.ownerType]?.contains(file.url.lastPathComponent) != true else { continue }
             guard FileManager.default.fileExists(atPath: file.url.path) else { continue }
             do { try removeFile(file.url) }
             catch { remaining.append(file); failure = error }
@@ -101,8 +103,8 @@ struct LocalFileCleanup {
         if let failure { throw failure }
     }
 
-    private func ids<T: LocalFileRecord>(_ type: T.Type, in context: ModelContext) throws -> Set<UUID> {
-        Set(try context.fetch(FetchDescriptor<T>()).map(\.id))
+    private func references<T: LocalFileRecord>(_ type: T.Type, in context: ModelContext) throws -> Set<String> {
+        Set(try context.fetch(FetchDescriptor<T>()).map(\.localFilename))
     }
 
     private func load() throws -> [File] {

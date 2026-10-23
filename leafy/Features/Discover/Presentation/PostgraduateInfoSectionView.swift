@@ -301,8 +301,9 @@ struct PostgraduateInfoSectionView: View {
             : "已维护来源不可用时，仍可从上方研招网、学信网和学校研究生院入口继续查询。"
     }
 
-    private func saveTarget(_ draft: PostgraduateTargetDraft, for target: PostgraduateTarget?) {
+    private func saveTarget(_ draft: PostgraduateTargetDraft, for target: PostgraduateTarget?) -> Bool {
         if let target {
+            let previous = (target.school, target.unit, target.major, target.direction, target.examYear, target.subjects, target.scoreAndPlanNote, target.personalNote, target.updatedAt)
             target.school = draft.school
             target.unit = draft.unit
             target.major = draft.major
@@ -312,10 +313,13 @@ struct PostgraduateInfoSectionView: View {
             target.scoreAndPlanNote = draft.scoreAndPlanNote
             target.personalNote = draft.personalNote
             target.updatedAt = Date()
-            save(successMessage: "考研目标已保存。")
+            return save(successMessage: "考研目标已保存。", undo: {
+                target.school = previous.0; target.unit = previous.1; target.major = previous.2; target.direction = previous.3
+                target.examYear = previous.4; target.subjects = previous.5; target.scoreAndPlanNote = previous.6
+                target.personalNote = previous.7; target.updatedAt = previous.8
+            })
         } else {
-            modelContext.insert(
-                PostgraduateTarget(
+            let inserted = PostgraduateTarget(
                     school: draft.school,
                     unit: draft.unit,
                     major: draft.major,
@@ -325,16 +329,18 @@ struct PostgraduateInfoSectionView: View {
                     scoreAndPlanNote: draft.scoreAndPlanNote,
                     personalNote: draft.personalNote
                 )
-            )
-            save(successMessage: "考研目标已添加。")
+            modelContext.insert(inserted)
+            return save(successMessage: "考研目标已添加。", undo: { modelContext.delete(inserted) })
         }
     }
 
     private func toggleFocus(_ target: PostgraduateTarget) {
+        let previous = targets.map { ($0, $0.stateRawValue, $0.updatedAt) }
+        let undo = { for (record, state, date) in previous { record.stateRawValue = state; record.updatedAt = date } }
         if target.state == .focused {
             target.state = .active
             target.updatedAt = Date()
-            save(successMessage: "已取消聚焦。")
+            save(successMessage: "已取消聚焦。", undo: undo)
             return
         }
 
@@ -344,24 +350,26 @@ struct PostgraduateInfoSectionView: View {
         }
         target.state = .focused
         target.updatedAt = Date()
-        save(successMessage: "已设为当前看板目标。")
+        save(successMessage: "已设为当前看板目标。", undo: undo)
     }
 
     private func archiveTarget(_ target: PostgraduateTarget) {
+        let previous = (target.stateRawValue, target.updatedAt)
         target.state = .archived
         target.updatedAt = Date()
-        save(successMessage: "考研目标已归档。")
+        save(successMessage: "考研目标已归档。", undo: { target.stateRawValue = previous.0; target.updatedAt = previous.1 })
     }
 
     private func restoreTarget(_ target: PostgraduateTarget) {
+        let previous = (target.stateRawValue, target.updatedAt)
         target.state = .active
         target.updatedAt = Date()
-        save(successMessage: "考研目标已恢复。")
+        save(successMessage: "考研目标已恢复。", undo: { target.stateRawValue = previous.0; target.updatedAt = previous.1 })
     }
 
     private func deleteTarget(_ target: PostgraduateTarget) {
         modelContext.delete(target)
-        save(successMessage: "考研目标已删除。")
+        save(successMessage: "考研目标已删除。", undo: { modelContext.insert(target) })
     }
 
     private func toggleTimelineNode(_ node: PostgraduateTimelineNode) {
@@ -372,12 +380,15 @@ struct PostgraduateInfoSectionView: View {
         }
     }
 
-    private func save(successMessage: String) {
+    @discardableResult
+    private func save(successMessage: String, undo: () -> Void) -> Bool {
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: undo)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
+            return true
         } catch {
             operationAlert = .failure(error.localizedDescription)
+            return false
         }
     }
 
@@ -393,10 +404,14 @@ struct PostgraduateInfoSectionView: View {
             return
         }
 
+        let scope = CampusOperationScope()
         do {
-            sources = try await PostgraduateInfoService.shared.fetchPublishedSources()
+            let loaded = try await PostgraduateInfoService.shared.fetchPublishedSources()
+            try scope.check()
+            sources = loaded
             sourceError = nil
         } catch {
+            if scope.wasCancelled(error) { return }
             sourceError = error.localizedDescription
         }
     }
@@ -782,7 +797,7 @@ private struct PostgraduateTargetEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let item: PostgraduateTargetSheetItem
-    let onSave: (PostgraduateTargetDraft) -> Void
+    let onSave: (PostgraduateTargetDraft) -> Bool
 
     @State private var draft: PostgraduateTargetDraft
 
@@ -790,7 +805,7 @@ private struct PostgraduateTargetEditorSheet: View {
         draft.school.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(item: PostgraduateTargetSheetItem, onSave: @escaping (PostgraduateTargetDraft) -> Void) {
+    init(item: PostgraduateTargetSheetItem, onSave: @escaping (PostgraduateTargetDraft) -> Bool) {
         self.item = item
         self.onSave = onSave
         _draft = State(initialValue: PostgraduateTargetDraft(target: item.target))
@@ -832,8 +847,7 @@ private struct PostgraduateTargetEditorSheet: View {
                     Button("保存") {
                         var trimmedDraft = draft
                         trimmedDraft.trimWhitespace()
-                        onSave(trimmedDraft)
-                        dismiss()
+                        if onSave(trimmedDraft) { dismiss() }
                     }
                     .disabled(isSaveDisabled)
                 }

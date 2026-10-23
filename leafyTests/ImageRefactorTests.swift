@@ -61,7 +61,9 @@ extension PerformanceRefactorTests {
         format.scale = 1
         let source = UIGraphicsImageRenderer(size: CGSize(width: 6, height: 10), format: format).image { context in
             UIColor.systemRed.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 6, height: 10))
+            context.fill(CGRect(x: 0, y: 0, width: 6, height: 5))
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 5, width: 6, height: 5))
         }
         let data = try XCTUnwrap(jpegData(from: source, orientation: 6))
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
@@ -71,10 +73,47 @@ extension PerformanceRefactorTests {
         let loaded = await ScheduleMemoImageLoader.readImage(url)
         let decoded = try XCTUnwrap(loaded)
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 6), format: format)
-        func rendered(_ image: UIImage) -> Data? {
-            renderer.image { _ in image.draw(in: CGRect(x: 0, y: 0, width: 10, height: 6)) }.pngData()
+        func renderedPixels(_ image: UIImage) throws -> [UInt8] {
+            let raster = try XCTUnwrap(renderer.image { _ in
+                image.draw(in: CGRect(x: 0, y: 0, width: 10, height: 6))
+            }.cgImage)
+            var bytes = [UInt8](repeating: 0, count: 10 * 6 * 4)
+            try bytes.withUnsafeMutableBytes { buffer in
+                let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: 10, height: 6,
+                    bitsPerComponent: 8, bytesPerRow: 40, space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(raster, in: CGRect(x: 0, y: 0, width: 10, height: 6))
+            }
+            return bytes
         }
         XCTAssertEqual(decoded.size, original.size)
-        XCTAssertEqual(rendered(decoded), rendered(original))
+        let before = try renderedPixels(original)
+        let after = try renderedPixels(decoded)
+        XCTAssertEqual(before.count, after.count)
+        XCTAssertTrue(zip(before, after).allSatisfy { abs(Int($0) - Int($1)) <= 2 },
+                      "Display preparation must preserve the oriented pixels within 8-bit color rounding")
+    }
+}
+
+
+extension PerformanceRefactorTests {
+    @MainActor
+    func testRepeatedCompressionReportsActualEncodedPixelDimensions() async throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 96, height: 64), format: format).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 96, height: 64))
+        }
+        let source = try XCTUnwrap(image.pngData())
+        let actorResult = try await CommunityImageProcessor.shared.compressedJPEG(from: source, maxPixelDimension: 96, maxBytes: 1)
+        let uiResult = try CommunityImageUpload.compressedJPEG(from: image, maxPixelDimension: 96, maxBytes: 1)
+        for upload in [actorResult.upload, uiResult] {
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(upload.data as CFData, nil))
+            let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+            XCTAssertEqual(upload.width, properties[kCGImagePropertyPixelWidth] as? Int)
+            XCTAssertEqual(upload.height, properties[kCGImagePropertyPixelHeight] as? Int)
+            XCTAssertLessThan(try XCTUnwrap(upload.width), 96)
+        }
     }
 }

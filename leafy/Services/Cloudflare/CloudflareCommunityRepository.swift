@@ -35,7 +35,11 @@ nonisolated struct CloudflareCommunityRepository: CommunityRepository, Community
         return result.profile
     }
     func deleteCurrentAccount() async throws {
+        let scope = await CampusOperationScope()
+        let userID = currentAuthUserID
         let response: CommunityAccountDeletionResponse = try await request("/v1/account", method: "DELETE", body: Empty())
+        try await scope.check()
+        guard userID == currentAuthUserID else { throw CancellationError() }
         guard response.deleted else { throw CommunityServiceError.accountDeletionFailed }
         try await client().signOut(localOnly: true)
     }
@@ -49,10 +53,13 @@ nonisolated struct CloudflareCommunityRepository: CommunityRepository, Community
         return result.profiles
     }
     func updateProfile(input: CommunityProfileUpdateInput, avatar: CommunityImageUpload?, cover: CommunityImageUpload?, resetCoverToDefault: Bool) async throws -> CommunityProfile {
+        let scope = await CampusOperationScope()
         let nickname = CommunityNickname.normalized(input.nickname)
         guard !nickname.isEmpty else { throw CommunityServiceError.profileCompletionRequired }
         let avatarPath: String? = if let avatar { try await uploadProfileImage(avatar, kind: "avatar") } else { nil }
+        try await scope.check()
         let coverPath: String? = if !resetCoverToDefault, let cover { try await uploadProfileImage(cover, kind: "cover") } else { nil }
+        try await scope.check()
         return try await request("/v1/profile", method: "PATCH", body: ProfilePatch(nickname: nickname, bio: CommunityProfileBio.normalized(input.bio), major: input.major, grade: input.grade, showsBadge: input.showsEduVerificationBadge, avatarPath: avatarPath, coverPath: coverPath, resetCover: resetCoverToDefault))
     }
     private func uploadProfileImage(_ image: CommunityImageUpload, kind: String) async throws -> String {
@@ -60,7 +67,7 @@ nonisolated struct CloudflareCommunityRepository: CommunityRepository, Community
         let uploaded: Uploaded = try await client().upload(data: image.data, contentType: image.mimeType, query: query(["kind":kind,"upload_id":image.id.uuidString.lowercased(),"name":"image.jpg"]))
         return uploaded.path
     }
-    private struct ProfilePatch: Encodable {
+    struct ProfilePatch: Encodable {
         let nickname: String
         let bio: String?
         let major: String?
@@ -96,7 +103,9 @@ nonisolated struct CloudflareCommunityRepository: CommunityRepository, Community
     func fetchCurrentCampusMembershipRequest() async throws -> CommunityCampusMembershipRequest? { try await get("/v1/campus/membership") }
     func submitCommunitySchoolChangeRequest(campusID: String) async throws -> CommunityCampusMembershipRequest { try await request("/v1/campus/change", body: ["campus_id":campusID]) }
     func submitCampusMembershipRequest(schoolName: String) async throws -> CommunityProfile {
+        let scope = await CampusOperationScope()
         let _: CommunityCampusMembershipRequest = try await request("/v1/campus/membership", body: ["school_name":schoolName])
+        try await scope.check()
         guard let profile = try await fetchCurrentProfile() else { throw CommunityServiceError.missingAuthenticatedUser }; return profile
     }
     func hasAcceptedCurrentTerms() async throws -> Bool {
@@ -153,9 +162,7 @@ nonisolated struct CloudflareCommunityRepository: CommunityRepository, Community
         return try await request("/v1/community/comments", body: Input(id: requestID, request_id: requestID, post_id: postID, body: body, parent_comment_id: parentCommentID, reply_to_comment_id: replyToCommentID))
     }
     func toggleCommentLike(commentID: UUID) async throws -> CommunityCommentLikeState {
-        struct State: Decodable { let comment_id: UUID; let like_count: Int; let viewer_has_liked: Bool }
-        let state: State = try await request("/v1/community/comments/\(commentID)/toggle-like", body: ["request_id":UUID().uuidString])
-        return CommunityCommentLikeState(commentID: state.comment_id, likeCount: state.like_count, viewerHasLiked: state.viewer_has_liked)
+        try await request("/v1/community/comments/\(commentID)/toggle-like", body: ["request_id":UUID().uuidString])
     }
     func togglePostLike(postID: UUID) async throws -> CommunityPost { try await request("/v1/community/posts/\(postID)/toggle-like", body: Empty()) }
     func togglePostFavorite(postID: UUID) async throws -> CommunityPost { try await request("/v1/community/posts/\(postID)/toggle-favorite", body: Empty()) }

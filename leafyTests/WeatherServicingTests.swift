@@ -71,6 +71,53 @@ final class WeatherServicingTests: XCTestCase {
         }
     }
 
+    func testCachedTemperatureSnapshotPreservesObservationTimeAndExpires() throws {
+        let suite = "WeatherSnapshot-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let cache = UserDefaultsCampusWeatherCache(userDefaults: defaults)
+        cache.save(.init(temperature: 18, condition: "晴"))
+        let initial = try XCTUnwrap(cache.currentTemperatureSnapshot(maxAge: 60))
+        let later = try XCTUnwrap(cache.currentTemperatureSnapshot(maxAge: 60, now: initial.observedAt.addingTimeInterval(30)))
+        XCTAssertEqual(later.observedAt, initial.observedAt)
+        XCTAssertEqual(later.temperature, 18)
+        XCTAssertNil(cache.currentTemperatureSnapshot(maxAge: 60, now: initial.observedAt.addingTimeInterval(61)))
+    }
+
+    @MainActor
+    func testReusedDefaultWeatherServiceWritesOnlyCurrentIdentityCache() async throws {
+        let manager = ActiveCampusContext.networkManager
+        let service = WeatherKitWeatherService(fetchLiveWeather: { _ in .init(temperature: 21, condition: "晴") })
+        var keys: [String] = []
+        defer {
+            for key in keys { UserDefaults.standard.removeObject(forKey: key) }
+            manager.clearSession()
+        }
+        for id in ["weather-scope-a", "weather-scope-b"] {
+            manager.persistAuthenticatedIdentity(eduID: id, displayName: id)
+            let key = CampusScopedDefaults.key("campusWeather.cache.v1")
+            keys.append(key)
+            _ = try await service.fetchCurrentWeather()
+            XCTAssertNotNil(UserDefaults.standard.data(forKey: key))
+        }
+        XCTAssertNotEqual(keys[0], keys[1])
+    }
+
+    @MainActor
+    func testOldWeatherResponseCannotWriteAfterIdentityChanges() async {
+        let manager = ActiveCampusContext.networkManager
+        manager.persistAuthenticatedIdentity(eduID: "weather-old", displayName: "Old")
+        let oldKey = CampusScopedDefaults.key("campusWeather.cache.v1")
+        defer { UserDefaults.standard.removeObject(forKey: oldKey); manager.clearSession() }
+        let service = WeatherKitWeatherService(fetchLiveWeather: { _ in
+            await MainActor.run { ActiveCampusContext.networkManager.persistAuthenticatedIdentity(eduID: "weather-new", displayName: "New") }
+            return .init(temperature: 21, condition: "晴")
+        })
+        do { _ = try await service.fetchCurrentWeather(); XCTFail("Old response must cancel") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertNil(UserDefaults.standard.data(forKey: oldKey))
+    }
+
 
 }
 

@@ -61,11 +61,12 @@ nonisolated struct UserTimetableSettings: Codable, Equatable, Sendable {
         && firstMonday == Self.monday(containing: firstMonday)
         && (1...24).contains(periods.count)
         && periods.enumerated().allSatisfy { index, slot in
+            guard slot.period == index + 1, (0..<24).contains(slot.startHour),
+                  (0..<24).contains(slot.endHour), (0..<60).contains(slot.startMinute),
+                  (0..<60).contains(slot.endMinute) else { return false }
             let start = slot.startHour * 60 + slot.startMinute
             let end = slot.endHour * 60 + slot.endMinute
-            return slot.period == index + 1 && (0..<24).contains(slot.startHour)
-                && (0..<24).contains(slot.endHour) && (0..<60).contains(slot.startMinute)
-                && (0..<60).contains(slot.endMinute) && start < end
+            return start < end
                 && (index == 0 || periods[index - 1].endHour * 60 + periods[index - 1].endMinute <= start)
         }
     }

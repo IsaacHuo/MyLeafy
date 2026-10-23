@@ -31,6 +31,7 @@ struct LeafyApp: App {
     @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw = LeafyAppIconAppearancePreference.green.rawValue
     @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
     @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system.rawValue
+    @State private var demoDataFailure: String?
     @State private var modelContainerSetup: AppModelContainerSetup?
     @State private var storageFailure: String?
     @State private var fileCleanupFailure: String?
@@ -162,6 +163,10 @@ struct LeafyApp: App {
             } message: {
                 Text(authCallbackMessage ?? "")
             }
+            .alert(L10n.text("操作失败", language: languagePreference), isPresented: Binding(
+                get: { demoDataFailure != nil }, set: { if !$0 { demoDataFailure = nil } }
+            )) { Button(L10n.text("知道了", language: languagePreference), role: .cancel) {} }
+            message: { Text(demoDataFailure ?? "") }
             .leafyAccountDeletionOutcomeAlert(outcome: $appNavigation.accountDeletionOutcome)
             .alert("本地文件清理未完成", isPresented: Binding(
                 get: { fileCleanupFailure != nil }, set: { if !$0 { fileCleanupFailure = nil } }
@@ -192,7 +197,8 @@ struct LeafyApp: App {
                     CommunityPublishCoordinator.shared.configureAndResume()
                 }
                 if ReviewDemoMode.isEnabled {
-                    ReviewDemoDataSeeder.seedIfNeeded(using: sharedModelContainer.mainContext)
+                    do { try ReviewDemoDataSeeder.seedIfNeeded(using: sharedModelContainer.mainContext) }
+                    catch { demoDataFailure = error.localizedDescription }
                 }
                 refreshSemesterRuntimeConfig(force: true, prefetchTrigger: .foreground)
                 refreshWidgetSnapshot()
@@ -287,6 +293,9 @@ struct LeafyApp: App {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .campusWeatherDidChange)) { _ in
+                refreshWidgetSnapshot()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
                 refreshScheduleReportNotifications()
             }
@@ -377,10 +386,12 @@ struct LeafyApp: App {
 
     @MainActor
     private func handleCustomCampusAuthCallback(_ url: URL) async {
+        let scope = CampusOperationScope()
         do {
             guard let session = try await CustomCampusAuthService().restoreSession(from: url) else {
                 return
             }
+            try scope.check()
             if networkManager.hasCachedIdentity, ActiveCampusContext.identity?.isCustom != true {
                 authCallbackMessage = L10n.text(
                     "邮箱绑定请回到 App 输入邮件验证码完成。",
@@ -396,6 +407,7 @@ struct LeafyApp: App {
                 session.email
             )
         } catch {
+            guard scope.isCurrent, !Task.isCancelled, !(error is CancellationError) else { return }
             authCallbackMessage = L10n.text(
                 "邮箱验证链接无法自动完成。%@",
                 language: languagePreference,
@@ -472,19 +484,16 @@ struct LeafyApp: App {
     @MainActor
     private func refreshTimetableNotificationsForCurrentLanguage() async {
         guard modelContainerSetup != nil, !Task.isCancelled else { return }
+        let scope = CampusOperationScope()
         let context = ModelContext(sharedModelContainer)
-        let courses = ((try? context.fetch(FetchDescriptor<Course>())) ?? []).map(TimetableReminderRefreshPlan.courseSnapshot)
-        let currentCoursesByKey = Dictionary(
-            courses
-                .map { ($0.stableCourseKey, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        let courseSettings = (try? context.fetch(FetchDescriptor<CourseReminderSetting>())) ?? []
-        let cellReminders = ((try? context.fetch(FetchDescriptor<TimetableCellReminder>())) ?? []).map { SyncedTimetableCellReminder($0).make() }
-
         do {
+            let courses = try context.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot)
+            let currentCoursesByKey = Dictionary(courses.map { ($0.stableCourseKey, $0) }, uniquingKeysWith: { first, _ in first })
+            let courseSettings = try context.fetch(FetchDescriptor<CourseReminderSetting>()).map { SyncedCourseReminderSetting($0).make() }
+            let cellReminders = try context.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() }
+            let events = try CustomScheduleStore.loadForSync()
             for setting in courseSettings where !setting.isUnassociated && setting.minutesBefore > 0 {
-                try Task.checkCancellation()
+                try scope.check()
                 guard let course = currentCoursesByKey[setting.courseKey] else { continue }
                 try await TimetableNotificationManager.applyReminder(
                     minutesBefore: setting.minutesBefore,
@@ -493,11 +502,11 @@ struct LeafyApp: App {
                 )
             }
             for reminder in cellReminders where reminder.minutesBefore > 0 {
-                try Task.checkCancellation()
+                try scope.check()
                 _ = try await TimetableNotificationManager.applyReminder(for: reminder)
             }
-            for event in CustomScheduleStore.load() where event.minutesBefore > 0 {
-                try Task.checkCancellation()
+            for event in events where event.minutesBefore > 0 {
+                try scope.check()
                 _ = try await TimetableNotificationManager.applyReminder(for: event)
             }
         } catch is CancellationError {
@@ -509,6 +518,7 @@ struct LeafyApp: App {
 
     @MainActor
     private func refreshSunshineRunNotificationsForCurrentLanguage() async {
+        let scope = CampusOperationScope()
         let settings = SunshineRunStore.loadReminderSettings()
         guard settings.isEnabled else { return }
 
@@ -519,6 +529,7 @@ struct LeafyApp: App {
                 records: SunshineRunStore.loadRecords(),
                 rules: SunshineRunStore.loadRuleSettings()
             )
+            try scope.check()
             SunshineRunStore.saveReminderSettings(updatedSettings)
         } catch is CancellationError {
             return

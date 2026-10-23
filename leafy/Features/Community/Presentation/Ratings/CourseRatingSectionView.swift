@@ -164,6 +164,11 @@ struct CourseSectionView: View {
                     action: openCourseSuggestion
                 )
             }
+            if canLoadMore {
+                RatingLoadMoreButton(isLoading: isLoadingMore) {
+                    scheduleCourseLoad(reset: false)
+                }
+            }
         } else {
             if let errorMessage {
                 Text(errorMessage)

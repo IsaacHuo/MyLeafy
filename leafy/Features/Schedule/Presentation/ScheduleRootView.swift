@@ -2006,6 +2006,7 @@ private struct ScheduleMemoComposer: View {
     @StateObject private var speech = ScheduleMemoSpeechRecognizer()
     @State private var text = ""
     @State private var speechBase = ""
+    @State private var photoLoadID = UUID()
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var fullPhotoItems: [PhotosPickerItem] = []
     @State private var draftImages: [ScheduleMemoDraftImage] = []
@@ -2150,6 +2151,7 @@ private struct ScheduleMemoComposer: View {
             Text(errorMessage ?? "")
         }
         .onDisappear {
+            photoLoadID = UUID()
             Task { await speech.stop() }
         }
     }
@@ -2325,8 +2327,10 @@ private struct ScheduleMemoComposer: View {
 
     private var sendButton: some View {
         Button {
+            let scope = CampusOperationScope()
             Task {
                 await speech.stop()
+                guard scope.isCurrent, !Task.isCancelled else { return }
                 save()
             }
         } label: {
@@ -2568,18 +2572,33 @@ private struct ScheduleMemoComposer: View {
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
+        let loadID = UUID()
+        photoLoadID = loadID
+        let scope = CampusOperationScope()
         var loaded: [ScheduleMemoDraftImage] = []
-        for item in items.prefix(ScheduleMemoImageStore.maximumImageCount) {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = ImageDataDecoder.decodedImage(from: data) else { continue }
-            loaded.append(.init(data: data, image: image, pickerItem: item))
+        do {
+            for item in items.prefix(ScheduleMemoImageStore.maximumImageCount) {
+                guard let data = try await item.loadTransferable(type: Data.self),
+                      let image = ImageDataDecoder.decodedImage(from: data) else {
+                    throw ScheduleMemoImageStoreError.invalidImage
+                }
+                try scope.check()
+                guard photoLoadID == loadID else { return }
+                loaded.append(.init(data: data, image: image, pickerItem: item))
+            }
+            try scope.check()
+            guard photoLoadID == loadID else { return }
+            let capturedImages = draftImages.filter { $0.pickerItem == nil }
+            draftImages = ScheduleMemoPhotoSelection.merging(
+                pickerItems: loaded,
+                capturedItems: capturedImages,
+                maximumCount: ScheduleMemoImageStore.maximumImageCount
+            )
+        } catch {
+            guard !scope.wasCancelled(error), photoLoadID == loadID else { return }
+            errorTitle = "无法添加图片"
+            errorMessage = error.localizedDescription
         }
-        let capturedImages = draftImages.filter { $0.pickerItem == nil }
-        draftImages = ScheduleMemoPhotoSelection.merging(
-            pickerItems: loaded,
-            capturedItems: capturedImages,
-            maximumCount: ScheduleMemoImageStore.maximumImageCount
-        )
     }
 
     @MainActor
@@ -2596,6 +2615,7 @@ private struct ScheduleMemoComposer: View {
 
     @MainActor
     private func persistMemo(kind: ScheduleMemoKind, title: String?, body: String) {
+        photoLoadID = UUID()
         var filenames: [String] = []
         var storedAttachments: [ScheduleMemoAttachmentStore.StoredFile] = []
         do {

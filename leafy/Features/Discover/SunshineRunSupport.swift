@@ -553,9 +553,12 @@ enum SunshineRunStore {
         return SunshineRunPlanner.normalizedRecords(records)
     }
 
-    static func saveRecords(_ records: [SunshineRunRecord]) {
+    static func saveRecords(_ records: [SunshineRunRecord]) throws {
+        if let existing = UserDefaults.standard.data(forKey: scoped(recordsKey)) {
+            _ = try JSONDecoder().decode([SunshineRunRecord].self, from: existing)
+        }
         let normalizedRecords = SunshineRunPlanner.normalizedRecords(records)
-        guard let data = try? JSONEncoder().encode(normalizedRecords) else { return }
+        let data = try JSONEncoder().encode(normalizedRecords)
         UserDefaults.standard.set(data, forKey: scoped(recordsKey))
     }
 
@@ -608,6 +611,8 @@ enum SunshineRunStore {
 
 @MainActor
 enum SunshineRunNotificationManager {
+    private static var runID = UUID()
+
     static func updateNotifications(
         settings: SunshineRunReminderSettings,
         records: [SunshineRunRecord],
@@ -630,6 +635,9 @@ enum SunshineRunNotificationManager {
         semesterContext: SunshineRunSemesterContext,
         now: Date = Date()
     ) async throws -> SunshineRunReminderSettings {
+        let scope = CampusOperationScope()
+        let currentRun = UUID()
+        runID = currentRun
         cancelScheduledNotifications(settings: settings)
 
         var updatedSettings = settings
@@ -652,7 +660,15 @@ enum SunshineRunNotificationManager {
         }
 
         let center = try await authorizedNotificationCenter()
-        for item in planItems {
+        try scope.check()
+        guard runID == currentRun else { throw CancellationError() }
+        let pending = await center.pendingNotificationRequests()
+        try scope.check()
+        guard runID == currentRun else { throw CancellationError() }
+        let otherPendingCount = pending.filter { !$0.identifier.hasPrefix("leafy.sunshineRun.") }.count
+        let slots = max(0, ScheduleReportNotificationCapacityPlanner.systemLimit - otherPendingCount)
+        guard slots > 0 else { throw SunshineRunNotificationCapacityError() }
+        let requests = planItems.prefix(slots).map { item in
             let content = UNMutableNotificationContent()
             content.title = L10n.text("阳光长跑提醒")
             content.body = L10n.text("%@这一组还差 %d 次。", item.periodTitle, item.remainingCount)
@@ -660,11 +676,11 @@ enum SunshineRunNotificationManager {
 
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            let request = UNNotificationRequest(identifier: item.id, content: content, trigger: trigger)
-            try await center.add(request)
-            updatedSettings.scheduledNotificationIDs.append(item.id)
+            return UNNotificationRequest(identifier: item.id + "." + currentRun.uuidString, content: content, trigger: trigger)
         }
-
+        updatedSettings.scheduledNotificationIDs = try await LocalNotificationBatch.install(requests, scope: scope,
+            isCurrent: { runID == currentRun }, add: { try await center.add($0) },
+            remove: { center.removePendingNotificationRequests(withIdentifiers: $0) })
         return updatedSettings
     }
 
@@ -685,4 +701,33 @@ enum SunshineRunNotificationManager {
 
         return center
     }
+}
+
+@MainActor
+enum LocalNotificationBatch {
+    static func install(_ requests: [UNNotificationRequest], scope: CampusOperationScope,
+                        isCurrent: () -> Bool,
+                        add: (UNNotificationRequest) async throws -> Void,
+                        remove: ([String]) -> Void) async throws -> [String] {
+        var attemptedIDs: [String] = []
+        do {
+            for request in requests {
+                try scope.check()
+                guard isCurrent() else { throw CancellationError() }
+                attemptedIDs.append(request.identifier)
+                try await add(request)
+                try scope.check()
+                guard isCurrent() else { throw CancellationError() }
+            }
+            return attemptedIDs
+        } catch {
+            remove(attemptedIDs)
+            throw error
+        }
+    }
+
+}
+
+private struct SunshineRunNotificationCapacityError: LocalizedError {
+    var errorDescription: String? { "系统待发送通知已满，请减少其他提醒后重试阳光长跑提醒。" }
 }

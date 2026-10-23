@@ -39,7 +39,7 @@ nonisolated enum CustomCampusCSVParser {
     static func parseTimetable(_ text: String) throws -> [ParsedCourseRecord] {
         try rows(from: text, requiredColumns: timetableColumns).map { row in
             let lineNumber = row.lineNumber
-            guard let dayOfWeek = Int(required("dayOfWeek", in: row).digitsOnly),
+            guard let dayOfWeek = Int(required("dayOfWeek", in: row)),
                   (1...7).contains(dayOfWeek) else {
                 throw CustomCampusImportError.invalidRow(lineNumber, "dayOfWeek 需要是 1 到 7。")
             }
@@ -74,6 +74,9 @@ nonisolated enum CustomCampusCSVParser {
             guard !score.isEmpty else {
                 throw CustomCampusImportError.invalidRow(row.lineNumber, "score 不能为空。")
             }
+            guard AcademicHTMLTable.decimal(required("credit", in: row)) != nil else {
+                throw CustomCampusImportError.invalidRow(row.lineNumber, "credit 需要是有效的非负学分。")
+            }
 
             return CustomCampusImportedGrade(
                 term: required("term", in: row),
@@ -94,8 +97,15 @@ nonisolated enum CustomCampusCSVParser {
             guard !name.isEmpty else {
                 throw CustomCampusImportError.invalidRow(row.lineNumber, "name 不能为空。")
             }
-            guard !date.isEmpty, !start.isEmpty, !end.isEmpty else {
-                throw CustomCampusImportError.invalidRow(row.lineNumber, "date/start/end 不能为空。")
+            func minutes(_ raw: String) -> Int? {
+                let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
+                guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]),
+                      (0..<24).contains(hour), (0..<60).contains(minute) else { return nil }
+                return hour * 60 + minute
+            }
+            guard UserTimetableSettings.civilDate(from: date) != nil,
+                  let startMinute = minutes(start), let endMinute = minutes(end), endMinute > startMinute else {
+                throw CustomCampusImportError.invalidRow(row.lineNumber, "date/start/end 需要是有效日期与起止时间。")
             }
 
             return ExamArrangement(
@@ -111,7 +121,7 @@ nonisolated enum CustomCampusCSVParser {
     }
 
     private static func rows(from text: String, requiredColumns: [String]) throws -> [CSVRow] {
-        let records = parseCSVRecords(text)
+        let records = try parseCSVRecords(text)
             .filter { record in
                 !record.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             }
@@ -128,8 +138,14 @@ nonisolated enum CustomCampusCSVParser {
             throw CustomCampusImportError.missingColumns(missing)
         }
 
+        guard Set(headers).count == headers.count else {
+            throw CustomCampusImportError.invalidRow(1, "字段名不能重复。")
+        }
         var result: [CSVRow] = []
         for (index, record) in records.dropFirst().enumerated() {
+            guard record.count == headers.count else {
+                throw CustomCampusImportError.invalidRow(index + 2, "字段数量与表头不一致。")
+            }
             var values: [String: String] = [:]
             for (columnIndex, header) in headers.enumerated() {
                 values[header] = (record[safe: columnIndex] ?? "")
@@ -140,59 +156,46 @@ nonisolated enum CustomCampusCSVParser {
         return result
     }
 
-    private static func parseCSVRecords(_ text: String) -> [[String]] {
+    private static func parseCSVRecords(_ text: String) throws -> [[String]] {
         var records: [[String]] = []
         var record: [String] = []
         var field = ""
-        var iterator = Array(text).makeIterator()
-        var isInsideQuotes = false
-
-        while let character = iterator.next() {
-            switch character {
-            case "\"":
-                if isInsideQuotes, let next = iterator.next() {
-                    if next == "\"" {
-                        field.append(next)
-                    } else {
-                        isInsideQuotes = false
-                        switch next {
-                        case ",":
-                            record.append(field)
-                            field = ""
-                        case "\n":
-                            record.append(field)
-                            records.append(record)
-                            record = []
-                            field = ""
-                        case "\r":
-                            continue
-                        default:
-                            field.append(next)
-                        }
+        let characters = Array(text)
+        var index = 0
+        var insideQuotes = false
+        var closedQuotes = false
+        while index < characters.count {
+            let character = characters[index]
+            if insideQuotes {
+                if character == "\"" {
+                    if index + 1 < characters.count, characters[index + 1] == "\"" {
+                        field.append(character); index += 1
+                    } else { insideQuotes = false; closedQuotes = true }
+                } else { field.append(character) }
+            } else {
+                switch character {
+                case "\"":
+                    guard field.isEmpty, !closedQuotes else {
+                        throw CustomCampusImportError.invalidRow(records.count + 1, "引号位置无效。")
                     }
-                } else {
-                    isInsideQuotes.toggle()
+                    insideQuotes = true
+                case ",":
+                    record.append(field); field = ""; closedQuotes = false
+                case "\n", "\r":
+                    record.append(field); records.append(record)
+                    field = ""; record = []; closedQuotes = false
+                    if character == "\r", index + 1 < characters.count, characters[index + 1] == "\n" { index += 1 }
+                default:
+                    guard !closedQuotes || character.isWhitespace else {
+                        throw CustomCampusImportError.invalidRow(records.count + 1, "引号后存在多余内容。")
+                    }
+                    if !closedQuotes { field.append(character) }
                 }
-            case "," where !isInsideQuotes:
-                record.append(field)
-                field = ""
-            case "\n" where !isInsideQuotes:
-                record.append(field)
-                records.append(record)
-                record = []
-                field = ""
-            case "\r" where !isInsideQuotes:
-                continue
-            default:
-                field.append(character)
             }
+            index += 1
         }
-
-        if !field.isEmpty || !record.isEmpty {
-            record.append(field)
-            records.append(record)
-        }
-
+        guard !insideQuotes else { throw CustomCampusImportError.invalidRow(records.count + 1, "引号未闭合。") }
+        if !field.isEmpty || !record.isEmpty || closedQuotes { record.append(field); records.append(record) }
         return records
     }
 
@@ -219,16 +222,18 @@ nonisolated enum CustomCampusCSVParser {
         var numbers: [Int] = []
         for rawToken in tokens {
             let token = rawToken
-                .replacingOccurrences(of: "[^0-9\\-~]", with: "", options: .regularExpression)
-            guard !token.isEmpty else { continue }
+            let maximum = fieldName == "weeks" ? SemesterConfig.timetableWeekCapacity : 24
+            guard token.range(of: #"^[0-9]+(?:[-~][0-9]+)?$"#, options: .regularExpression) != nil else {
+                throw CustomCampusImportError.invalidRow(lineNumber, "\(fieldName) 需要是数字或范围。")
+            }
 
             if token.contains("-") || token.contains("~") {
                 let parts = token.split { $0 == "-" || $0 == "~" }.compactMap { Int($0) }
-                guard parts.count == 2, parts[0] <= parts[1] else {
+                guard parts.count == 2, parts[0] >= 1, parts[0] <= parts[1], parts[1] <= maximum else {
                     throw CustomCampusImportError.invalidRow(lineNumber, "\(fieldName) 范围无效。")
                 }
                 numbers.append(contentsOf: parts[0]...parts[1])
-            } else if let number = Int(token) {
+            } else if let number = Int(token), (1...maximum).contains(number) {
                 numbers.append(number)
             } else {
                 throw CustomCampusImportError.invalidRow(lineNumber, "\(fieldName) 需要是数字或范围。")
@@ -249,19 +254,17 @@ enum CustomCampusImportService {
         from url: URL,
         existingCourses: [Course],
         modelContext: ModelContext
-    ) throws -> Int {
+    ) async throws -> (count: Int, reminderWarning: String?) {
+        let scope = CampusOperationScope()
         let records = try CustomCampusCSVParser.parseTimetable(loadText(from: url))
-        for course in existingCourses {
-            modelContext.delete(course)
-        }
-        for course in records.map({ $0.makeCourse() }) {
-            modelContext.insert(course)
-        }
-        try modelContext.save()
+        let saved = try TimetableRefreshUseCase().persist(records: records, existingCourses: existingCourses,
+            modelContext: modelContext, allowsEmpty: true)
+        let warning = await saved.reminders.restore()
+        try scope.check()
         TimetableCacheMetadata.lastSyncAt = Date()
-        TimetableCacheMetadata.lastFailureMessage = nil
+        TimetableCacheMetadata.lastFailureMessage = warning
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
-        return records.count
+        return (records.count, warning)
     }
 
     static func importGrades(
@@ -270,13 +273,7 @@ enum CustomCampusImportService {
         modelContext: ModelContext
     ) throws -> Int {
         let records = try CustomCampusCSVParser.parseGrades(loadText(from: url))
-        for grade in existingGrades {
-            modelContext.delete(grade)
-        }
-        for grade in records.map({ $0.makeGrade() }) {
-            modelContext.insert(grade)
-        }
-        try modelContext.save()
+        try SchoolDataSyncService.persistGrades(records.map { $0.makeGrade() }, modelContext: modelContext)
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         return records.count
     }
@@ -285,7 +282,7 @@ enum CustomCampusImportService {
         let records = try CustomCampusCSVParser.parseExams(loadText(from: url)).map { input in
             var exam = input; exam.syncID = UUID(); exam.updatedAt = Date(); return exam
         }
-        SchoolDataCache.saveExamSchedule(records)
+        try SchoolDataCache.saveExamSchedule(records)
         LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: true)
         return records.count
     }
@@ -313,10 +310,6 @@ private extension Array {
 }
 
 private extension String {
-    nonisolated var digitsOnly: String {
-        replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
-    }
-
     nonisolated func trimmingPrefix(_ prefix: String) -> String {
         hasPrefix(prefix) ? String(dropFirst(prefix.count)) : self
     }

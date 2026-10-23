@@ -28,6 +28,30 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
     @Published private(set) var transcript = ""
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    private let speechAuthorization: @MainActor () async -> SFSpeechRecognizerAuthorizationStatus
+    private let microphonePermission: @MainActor () async -> Bool
+    private let recognitionAvailable: @MainActor () -> Bool
+
+    init(
+        speechAuthorization: @escaping @MainActor () async -> SFSpeechRecognizerAuthorizationStatus = {
+            await withCheckedContinuation { continuation in
+                SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+            }
+        },
+        microphonePermission: @escaping @MainActor () async -> Bool = {
+            await withCheckedContinuation { continuation in
+                AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
+            }
+        },
+        recognitionAvailable: @escaping @MainActor () -> Bool = {
+            guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")) else { return false }
+            return recognizer.isAvailable && recognizer.supportsOnDeviceRecognition
+        }
+    ) {
+        self.speechAuthorization = speechAuthorization
+        self.microphonePermission = microphonePermission
+        self.recognitionAvailable = recognitionAvailable
+    }
     private let audioEngine = AVAudioEngine()
     private let audioSessionController = ScheduleMemoAudioSessionController()
     private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -47,23 +71,32 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
 
     func start() async {
         await stop(resetState: false)
-        guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
+        guard !Task.isCancelled else { return }
+        let sessionID = UUID()
+        activeSessionID = sessionID
+        guard let recognizer, recognitionAvailable() else {
             state = .unavailable("当前设备不支持离线语音转写，请继续使用文字或图片记录。")
             return
         }
 
         state = .requestingPermission
-        guard await requestSpeechAuthorization() == .authorized else {
+        let authorization = await speechAuthorization()
+        guard activeSessionID == sessionID, !Task.isCancelled else { return }
+        guard authorization == .authorized else {
             state = .unavailable("未获得语音识别权限，可在系统设置中允许后重试。")
             return
         }
-        guard await requestMicrophonePermission() else {
+        let microphoneGranted = await microphonePermission()
+        guard activeSessionID == sessionID, !Task.isCancelled else { return }
+        guard microphoneGranted else {
             state = .unavailable("未获得麦克风权限，可在系统设置中允许后重试。")
             return
         }
 
         do {
             try await audioSessionController.activate()
+            guard activeSessionID == sessionID else { return }
+            guard !Task.isCancelled else { await stop(); return }
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
@@ -80,8 +113,6 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
 
-            let sessionID = UUID()
-            activeSessionID = sessionID
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }
@@ -97,6 +128,7 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
             }
             state = .listening
         } catch {
+            guard activeSessionID == sessionID else { return }
             await stop(resetState: false)
             state = .unavailable("无法启动麦克风，请检查设备音频状态后重试。")
         }
@@ -122,20 +154,6 @@ final class ScheduleMemoSpeechRecognizer: ObservableObject {
 
     func clearMessage() {
         if case .unavailable = state { state = .idle }
-    }
-
-    private func requestSpeechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
-        }
-    }
-
-    private func requestMicrophonePermission() async -> Bool {
-        await withCheckedContinuation { continuation in
-            AVAudioApplication.requestRecordPermission {
-                continuation.resume(returning: $0)
-            }
-        }
     }
 
     deinit {

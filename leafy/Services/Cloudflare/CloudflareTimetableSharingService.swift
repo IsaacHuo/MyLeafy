@@ -18,8 +18,11 @@ nonisolated protocol TimetableSharing: Sendable {
 nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
     private let backend = CloudflareCommunityRepository()
     private func requireProfile() async throws -> CommunityProfile {
+        let scope = await CampusOperationScope()
         try await backend.ensureAnonymousSession()
+        try await scope.check()
         guard let profile = try await backend.fetchCurrentProfile() else { throw TimetableSharingError.missingProfile }
+        try await scope.check()
         guard profile.isProfileComplete else { throw TimetableSharingError.profileCompletionRequired }
         return profile
     }
@@ -35,8 +38,10 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
     }
     @discardableResult
     func publishExistingSnapshotIfNeeded(courses: [SharedTimetableCourse]) async -> Bool {
+        let scope = await CampusOperationScope()
         do {
             guard try await fetchMySnapshot() != nil else { return false }
+            try await scope.check()
             _ = try await publishSnapshot(courses: courses)
             return true
         } catch {
@@ -51,37 +56,53 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
         return all.filter { seen.insert($0.ownerID).inserted }
     }
     func fetchMySnapshot() async throws -> SharedTimetableSnapshot? {
+        let scope = await CampusOperationScope()
         let profile = try await requireProfile()
+        try await scope.check()
         return try await snapshots().first { $0.ownerID == profile.id }
     }
     func fetchViewableSnapshots() async throws -> [SharedTimetableSnapshot] {
+        let scope = await CampusOperationScope()
         let profile = try await requireProfile()
+        try await scope.check()
         return try await snapshots().filter { $0.ownerID != profile.id }
     }
     func fetchMyShareMembers() async throws -> [TimetableShareMember] {
+        let scope = await CampusOperationScope()
         _ = try await requireProfile()
+        try await scope.check()
         return try await backend.get("/v1/timetables/members")
     }
     func fetchMyInvites() async throws -> [TimetableInvite] {
+        let scope = await CampusOperationScope()
         _ = try await requireProfile()
+        try await scope.check()
         return try await backend.get("/v1/timetables/invites")
     }
     func createInvite() async throws -> TimetableInvite {
+        let scope = await CampusOperationScope()
         _ = try await requireProfile()
+        try await scope.check()
         return try await backend.request("/v1/timetables/invites", body: CloudflareCommunityRepository.Empty())
     }
     func acceptInvite(code: String) async throws -> SharedTimetableSnapshot {
+        let scope = await CampusOperationScope()
         _ = try await requireProfile()
+        try await scope.check()
         return try await backend.request("/v1/timetables/invites/accept", body: ["code":TimetableSharingService.normalizeInviteCode(code)])
     }
     func revokeShare(viewerID: UUID) async throws {
+        let scope = await CampusOperationScope()
         let members = try await fetchMyShareMembers()
+        try await scope.check()
         guard let member = members.first(where: { $0.viewerID == viewerID }) else { throw TimetableSharingError.notShareOwner }
         try await backend.perform("/v1/timetables/members/\(member.id)", method: "DELETE")
     }
     func stopSharing() async throws { try await backend.perform("/v1/timetables/stop") }
     func leaveShare(ownerID: UUID) async throws {
+        let scope = await CampusOperationScope()
         let members: [TimetableShareMember] = try await backend.get("/v1/timetables/members", backend.query(["direction":"viewing"]))
+        try await scope.check()
         guard let member = members.first(where: { $0.ownerID == ownerID }) else { throw TimetableSharingError.notShareOwner }
         try await backend.perform("/v1/timetables/members/\(member.id)/leave")
     }

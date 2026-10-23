@@ -212,13 +212,14 @@ final class CommunityFeedViewModel: ObservableObject {
 
     private func fetchSnapshot(query: CommunityFeedQuery) async throws -> CommunityFeedSnapshot {
         let requestedAt = Date()
+        let scope = CampusOperationScope()
         try await CommunityTimeout.run(
             seconds: 10,
             message: L10n.text("社区会话建立超时，请检查网络后重试。")
         ) { [repository] in
             try await repository.ensureAnonymousSession()
         }
-        try Task.checkCancellation()
+        try scope.check()
 
         async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: query)
         async let pollsRequest: [CommunityPoll] = loadPollsIfNeeded(query: query)
@@ -238,6 +239,7 @@ final class CommunityFeedViewModel: ObservableObject {
             )
         }
 
+        try scope.check()
         return CommunityFeedSnapshot(
             query: query,
             posts: loadedPosts,
@@ -494,8 +496,10 @@ final class CommunityFeedViewModel: ObservableObject {
         stagedRefreshTask = nil
         clearPendingSnapshot()
         let baseQuery = currentQuery
+        let loadID = activeLoadID
+        let scope = CampusOperationScope()
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        defer { if activeLoadID == loadID { isLoadingMore = false } }
 
         do {
             async let postsRequest: [CommunityPost] = loadPostsIfNeeded(query: nextQuery)
@@ -511,13 +515,13 @@ final class CommunityFeedViewModel: ObservableObject {
                 loadedPolls = try await pollsRequest
                 didLoadPolls = true
             } catch {
-                guard !Task.isCancelled, currentQuery == baseQuery else { return }
+                guard !Task.isCancelled, scope.isCurrent, activeLoadID == loadID, currentQuery == baseQuery else { return }
                 CommunityDiagnostics.log.error("Community feed polls load more failed: \(error.localizedDescription, privacy: .public)")
                 pollErrorMessage = L10n.text("社区投票加载失败，请重试。")
                 loadedPolls = existingPolls
                 didLoadPolls = false
             }
-            guard !Task.isCancelled, currentQuery == baseQuery else { return }
+            guard !Task.isCancelled, scope.isCurrent, activeLoadID == loadID, currentQuery == baseQuery else { return }
 
             currentQuery = nextQuery
             if didLoadPolls {
@@ -533,7 +537,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             CommunityDiagnostics.log.info("Community feed load more finished with \(loadedPosts.count) posts and \(loadedPolls.count) polls")
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !scope.wasCancelled(error), activeLoadID == loadID, currentQuery == baseQuery else { return }
             CommunityDiagnostics.log.error("Community feed load more failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = L10n.text("社区内容加载失败，请重试。")
             hasMoreItems = false
@@ -559,6 +563,7 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     func toggleLike(postID: UUID) async -> String? {
+        let scope = CampusOperationScope()
         guard !activeLikePostIDs.contains(postID) else { return nil }
         clearPendingSnapshot()
         activeLikePostIDs.insert(postID)
@@ -566,6 +571,7 @@ final class CommunityFeedViewModel: ObservableObject {
 
         do {
             let updatedPost = try await repository.togglePostLike(postID: postID)
+            try scope.check()
             if let index = posts.firstIndex(where: { $0.id == postID }) {
                 posts[index] = updatedPost
                 replacePostInItems(updatedPost)
@@ -574,11 +580,13 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             return actionErrorMessage(for: error)
         }
     }
 
     func toggleFavorite(postID: UUID) async -> String? {
+        let scope = CampusOperationScope()
         guard !activeFavoritePostIDs.contains(postID) else { return nil }
         clearPendingSnapshot()
         activeFavoritePostIDs.insert(postID)
@@ -586,6 +594,7 @@ final class CommunityFeedViewModel: ObservableObject {
 
         do {
             let updatedPost = try await repository.togglePostFavorite(postID: postID)
+            try scope.check()
             if let index = posts.firstIndex(where: { $0.id == postID }) {
                 posts[index] = updatedPost
                 replacePostInItems(updatedPost)
@@ -594,6 +603,7 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             return actionErrorMessage(for: error)
         }
     }
@@ -611,20 +621,25 @@ final class CommunityFeedViewModel: ObservableObject {
     }
 
     func report(post: CommunityPost, reason: String) async -> String? {
+        let scope = CampusOperationScope()
         do {
             try await repository.reportPost(postID: post.id, reason: reason)
+            try scope.check()
             removePost(post)
             errorMessage = nil
             return nil
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             return actionErrorMessage(for: error)
         }
     }
 
     func blockAuthor(of post: CommunityPost) async -> String? {
+        let scope = CampusOperationScope()
         clearPendingSnapshot()
         do {
             try await repository.blockUser(userID: post.authorID, reason: "用户主动屏蔽")
+            try scope.check()
             posts.removeAll { $0.authorID == post.authorID }
             items.removeAll { item in
                 if case .post(let existingPost) = item {
@@ -636,22 +651,27 @@ final class CommunityFeedViewModel: ObservableObject {
             errorMessage = nil
             return nil
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             return actionErrorMessage(for: error)
         }
     }
 
     func delete(post: CommunityPost) async -> String? {
+        let scope = CampusOperationScope()
         do {
             try await repository.deletePost(postID: post.id)
+            try scope.check()
             removePost(post)
             errorMessage = nil
             return nil
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             return actionErrorMessage(for: error)
         }
     }
 
     func votePoll(pollID: UUID, optionID: UUID) async -> CommunityPoll? {
+        let scope = CampusOperationScope()
         guard !activePollIDs.contains(pollID) else { return nil }
         clearPendingSnapshot()
         activePollIDs.insert(pollID)
@@ -659,10 +679,12 @@ final class CommunityFeedViewModel: ObservableObject {
 
         do {
             let updatedPoll = try await repository.votePoll(pollID: pollID, optionID: optionID)
+            try scope.check()
             replacePollInItems(updatedPoll)
             errorMessage = nil
             return updatedPoll
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             errorMessage = actionErrorMessage(for: error)
             return nil
         }

@@ -23,7 +23,7 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
     var isUsable: Bool {
         !semesterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !graduateTimetableTermCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        supportedWeeks > 0 &&
+        (1...SemesterConfig.timetableWeekCapacity).contains(supportedWeeks) &&
         Self.date(from: semesterStartDateString) != nil
     }
 
@@ -108,10 +108,7 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
     ]
 
     private static func date(from string: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = UserTimetableSettings.calendar.timeZone
-        return formatter.date(from: string)
+        UserTimetableSettings.civilDate(from: string)
     }
 }
 
@@ -173,96 +170,83 @@ nonisolated enum SemesterRuntimeConfigCache {
 
 actor SemesterRuntimeConfigService {
     static let shared = SemesterRuntimeConfigService()
+    typealias ActiveFetcher = @Sendable (CampusID) async throws -> SemesterRuntimeConfig
+    typealias TimelineFetcher = @Sendable (CampusID) async throws -> [SemesterRuntimeConfig]
 
     private let minimumRefreshInterval: TimeInterval = 60 * 60
-    private var activeRefreshTask: Task<SemesterRuntimeConfig, Never>?
-    private var activeTimelineRefreshTask: Task<[SemesterRuntimeConfig], Never>?
-    private var lastAttemptAt: Date?
-    private var lastTimelineAttemptAt: Date?
+    private var activeRefreshTasks: [String: Task<SemesterRuntimeConfig, Never>] = [:]
+    private var activeTimelineRefreshTasks: [String: Task<[SemesterRuntimeConfig], Never>] = [:]
+    private var lastAttempts: [String: Date] = [:]
+    private var lastTimelineAttempts: [String: Date] = [:]
+    private let fetchActive: ActiveFetcher
+    private let fetchTimeline: TimelineFetcher
 
-    private init() {}
+    init(fetchActive: ActiveFetcher? = nil, fetchTimeline: TimelineFetcher? = nil) {
+        self.fetchActive = fetchActive ?? Self.fetchRemoteActiveConfig
+        self.fetchTimeline = fetchTimeline ?? Self.fetchRemoteTimelineConfigs
+    }
+
+    private static var scopeKey: String {
+        ActiveCampusContext.identity?.scopeKey ?? "unscoped:" + ActiveCampusContext.descriptor.id.rawValue
+    }
 
     func refreshFromRemoteIfAvailable(force: Bool = false) async -> SemesterRuntimeConfig {
-        if !force,
-           let lastAttemptAt,
-           Date().timeIntervalSince(lastAttemptAt) < minimumRefreshInterval {
-            return SemesterConfig.schoolCurrent
-        }
-
-        if let activeRefreshTask {
-            return await activeRefreshTask.value
-        }
-
+        let key = Self.scopeKey
+        let campusID = ActiveCampusContext.descriptor.id
         let previous = SemesterConfig.schoolCurrent
+        if let task = activeRefreshTasks[key] { return await task.value }
+        if !force, let last = lastAttempts[key], Date().timeIntervalSince(last) < minimumRefreshInterval { return previous }
         let task = Task<SemesterRuntimeConfig, Never> {
             do {
-                let remoteConfig = try await Self.fetchRemoteActiveConfig()
-                guard remoteConfig.isActive, remoteConfig.isUsable else {
-                    return previous
+                let remote = try await fetchActive(campusID)
+                return await MainActor.run {
+                    guard key == Self.scopeKey, remote.isActive, remote.isUsable else { return previous }
+                    SemesterRuntimeConfigCache.save(remote)
+                    if remote != previous { NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil) }
+                    return remote
                 }
-                SemesterRuntimeConfigCache.save(remoteConfig)
-                return remoteConfig
-            } catch {
-                return previous
-            }
+            } catch { return previous }
         }
-
-        activeRefreshTask = task
-        lastAttemptAt = Date()
+        activeRefreshTasks[key] = task
+        lastAttempts[key] = Date()
         let result = await task.value
-        activeRefreshTask = nil
-
-        if result != previous {
-            await MainActor.run {
-                NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil)
-            }
-        }
-
+        activeRefreshTasks[key] = nil
         return result
     }
 
     func refreshTimelineFromRemoteIfAvailable(force: Bool = false) async -> [SemesterRuntimeConfig] {
+        let key = Self.scopeKey
+        let campusID = ActiveCampusContext.descriptor.id
         let cached = SemesterConfig.timelineConfigurations
-        if !force,
-           let lastTimelineAttemptAt,
-           Date().timeIntervalSince(lastTimelineAttemptAt) < minimumRefreshInterval {
-            return cached
-        }
-        if let activeTimelineRefreshTask {
-            return await activeTimelineRefreshTask.value
-        }
-
+        if let task = activeTimelineRefreshTasks[key] { return await task.value }
+        if !force, let last = lastTimelineAttempts[key], Date().timeIntervalSince(last) < minimumRefreshInterval { return cached }
         let task = Task<[SemesterRuntimeConfig], Never> {
             do {
-                let remote = try await Self.fetchRemoteTimelineConfigs()
-                guard !remote.isEmpty else { return cached }
-                SemesterRuntimeConfigTimelineCache.save(remote)
-                return remote
-            } catch {
-                return cached
-            }
+                let remote = try await fetchTimeline(campusID)
+                return await MainActor.run {
+                    guard key == Self.scopeKey, !remote.isEmpty, remote.allSatisfy(\.isUsable) else { return cached }
+                    SemesterRuntimeConfigTimelineCache.save(remote)
+                    if remote != cached { NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil) }
+                    return remote
+                }
+            } catch { return cached }
         }
-        activeTimelineRefreshTask = task
-        lastTimelineAttemptAt = Date()
+        activeTimelineRefreshTasks[key] = task
+        lastTimelineAttempts[key] = Date()
         let result = await task.value
-        activeTimelineRefreshTask = nil
-        if result != cached {
-            await MainActor.run {
-                NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil)
-            }
-        }
+        activeTimelineRefreshTasks[key] = nil
         return result
     }
 
-    private static func fetchRemoteActiveConfig() async throws -> SemesterRuntimeConfig {
-        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue)], authenticated: false)
+    private static func fetchRemoteActiveConfig(campusID: CampusID) async throws -> SemesterRuntimeConfig {
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: campusID.rawValue)], authenticated: false)
         guard let record = records.first else { throw URLError(.resourceUnavailable) }
         return record.runtimeConfig
     }
 
-    private static func fetchRemoteTimelineConfigs() async throws -> [SemesterRuntimeConfig] {
-        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: ActiveCampusContext.descriptor.id.rawValue), URLQueryItem(name: "include_history", value: "true")], authenticated: false)
-        return records.map(\.runtimeConfig).filter(\.isUsable)
+    private static func fetchRemoteTimelineConfigs(campusID: CampusID) async throws -> [SemesterRuntimeConfig] {
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: campusID.rawValue), URLQueryItem(name: "include_history", value: "true")], authenticated: false)
+        return records.map(\.runtimeConfig)
     }
 }
 

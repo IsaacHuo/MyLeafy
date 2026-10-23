@@ -16,8 +16,10 @@ struct LeafyTimetableProvider: TimelineProvider {
         if context.isPreview {
             completion(previewEntry())
         } else {
-            completion(LeafyTimetableEntry(date: Date(), archive: LeafyWidgetSnapshotStore.loadArchive(),
-                selectedDayOffset: LeafyWidgetSnapshotStore.selectedDayOffset, temperatureText: "--°"))
+            let now = Date()
+            let archive = LeafyWidgetSnapshotStore.loadArchive()
+            completion(LeafyTimetableEntry(date: now, archive: archive,
+                selectedDayOffset: LeafyWidgetSnapshotStore.selectedDayOffset, temperatureText: archive?.temperatureText(at: now) ?? "--°"))
         }
     }
 
@@ -25,18 +27,12 @@ struct LeafyTimetableProvider: TimelineProvider {
         let now = Date()
         let archive = LeafyWidgetSnapshotStore.loadArchive()
         let dayOffset = LeafyWidgetSnapshotStore.selectedDayOffset
-        Task {
-            let temperature = context.family == .systemSmall
-                ? await LeafyWidgetWeatherService.currentTemperatureText() : ""
-            let dates = archive?.timelineDates(from: now) ?? [now]
-            let entries = dates.map {
-                LeafyTimetableEntry(date: $0, archive: archive, selectedDayOffset: dayOffset,
-                                   temperatureText: temperature)
-            }
-            // Reload periodically for weather; the supplied boundaries remain usable if the
-            // system defers the reload. Dates and active items never depend on app foregrounding.
-            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(20 * 60))))
+        let dates = archive?.timelineDates(from: now) ?? [now]
+        let entries = dates.map {
+            LeafyTimetableEntry(date: $0, archive: archive, selectedDayOffset: dayOffset,
+                               temperatureText: archive?.temperatureText(at: $0) ?? "--°")
         }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(20 * 60))))
     }
 
     func previewEntry() -> LeafyTimetableEntry {

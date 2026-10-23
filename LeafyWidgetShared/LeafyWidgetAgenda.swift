@@ -59,6 +59,20 @@ nonisolated struct LeafyWidgetExam: Codable, Hashable, Sendable {
     var text: String
 }
 
+nonisolated struct LeafyWidgetWeatherSnapshot: Codable, Hashable, Sendable {
+    var celsius: Double
+    var observedAt: Date
+
+    var expiresAt: Date { observedAt.addingTimeInterval(6 * 60 * 60) }
+
+    func temperatureText(at date: Date) -> String {
+        let rounded = celsius.rounded()
+        guard rounded.isFinite, rounded > Double(Int.min), rounded < Double(Int.max),
+              date >= observedAt, date < expiresAt else { return "--°" }
+        return "\(Int(rounded))°"
+    }
+}
+
 nonisolated struct LeafyWidgetSnapshotArchive: Codable, Hashable, Sendable {
     static let currentSchemaVersion = 2
     var schemaVersion = currentSchemaVersion
@@ -71,6 +85,11 @@ nonisolated struct LeafyWidgetSnapshotArchive: Codable, Hashable, Sendable {
     var defaultEndMinute: Int
     var syncText: String?
     var lastFailureText: String?
+    var weather: LeafyWidgetWeatherSnapshot? = nil
+
+    func temperatureText(at date: Date) -> String {
+        isAuthenticated ? weather?.temperatureText(at: date) ?? "--°" : "--°"
+    }
 
     static var calendar: Calendar {
         var calendar = Calendar.current
@@ -122,6 +141,9 @@ nonisolated struct LeafyWidgetSnapshotArchive: Codable, Hashable, Sendable {
         let end = calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: now))
             ?? now.addingTimeInterval(86400)
         var dates = Set([now, end])
+        if isAuthenticated, let expiration = weather?.expiresAt, expiration > now, expiration < end {
+            dates.insert(expiration)
+        }
         if let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) {
             dates.insert(midnight)
         }

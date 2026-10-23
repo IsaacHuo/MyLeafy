@@ -173,7 +173,7 @@ struct CommunityProfileEditorView: View {
                                     .contentShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
-                                .disabled(isLoadingAvatar)
+                                .disabled(isLoadingAvatar || isSaving)
 
                                 NavigationLink {
                                     CommunityProfileCoverEditorView(
@@ -309,11 +309,7 @@ struct CommunityProfileEditorView: View {
             syncFieldsFromProfile()
             await loadPendingCampusRequest()
         }
-        .onChange(of: selectedAvatarItem) { _, newItem in
-            Task {
-                await loadSelectedAvatar(from: newItem)
-            }
-        }
+        .task(id: selectedAvatarItem) { await loadSelectedAvatar(from: selectedAvatarItem) }
         .photosPicker(
             isPresented: $showingAvatarPicker,
             selection: $selectedAvatarItem,
@@ -353,7 +349,7 @@ struct CommunityProfileEditorView: View {
                         }
                     }
                 }
-                .disabled(isSaving || CommunityNickname.normalized(nickname).isEmpty)
+                .disabled(isSaving || isLoadingAvatar || CommunityNickname.normalized(nickname).isEmpty)
             }
         }
         .leafyOperationAlert($operationAlert)
@@ -420,6 +416,7 @@ struct CommunityProfileEditorView: View {
                 return
             }
 
+            try Task.checkCancellation()
             guard let image = ImageDataDecoder.decodedImage(from: data) else {
                 errorMessage = L10n.text("无法读取这张图片，请换一张头像。", language: leafyLanguage)
                 return
@@ -428,6 +425,7 @@ struct CommunityProfileEditorView: View {
             avatarCropDraft = CommunityAvatarCropDraft(image: image)
             errorMessage = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = L10n.text("加载头像失败：%@", language: leafyLanguage, error.localizedDescription)
         }
     }
@@ -457,10 +455,13 @@ struct CommunityProfileEditorView: View {
             return .failure(L10n.text("资料正在保存，请稍候。", language: leafyLanguage))
         }
 
+        let scope = CampusOperationScope()
         isSaving = true
         defer { isSaving = false }
 
         await sessionManager.bootstrapCommunityUser(force: true)
+        do { try scope.check() }
+        catch { return .failure(error.localizedDescription) }
         if let bootstrapError = sessionManager.bootstrapError {
             return .failure(bootstrapError)
         }
@@ -484,6 +485,7 @@ struct CommunityProfileEditorView: View {
                 cover: mediaDraft.coverUpload,
                 resetCoverToDefault: mediaDraft.resetCoverToDefault
             )
+            try scope.check()
             if let avatarUpload = mediaDraft.avatarUpload {
                 try? CommunityAvatarCache.shared.save(data: avatarUpload.data, for: updatedProfile)
             }
@@ -698,7 +700,7 @@ private struct CommunityProfileCoverEditorView: View {
                             .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .disabled(isLoadingCover)
+                        .disabled(isLoadingCover || isSaving)
 
                         Button {
                             coverPreview = nil
@@ -714,6 +716,7 @@ private struct CommunityProfileCoverEditorView: View {
                                 .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .disabled(isSaving)
                     }
 
                     Text(statusText)
@@ -764,11 +767,7 @@ private struct CommunityProfileCoverEditorView: View {
             selection: $selectedCoverItem,
             matching: .images
         )
-        .onChange(of: selectedCoverItem) { _, newItem in
-            Task {
-                await loadSelectedCover(from: newItem)
-            }
-        }
+        .task(id: selectedCoverItem) { await loadSelectedCover(from: selectedCoverItem) }
         .leafySheet(item: $coverCropDraft) { draft in
             CommunityCoverCropSheet(image: draft.image) { croppedImage in
                 applyCroppedCover(croppedImage)
@@ -798,9 +797,11 @@ private struct CommunityProfileCoverEditorView: View {
                 return
             }
 
+            try Task.checkCancellation()
             coverCropDraft = CommunityCoverCropDraft(image: image)
             errorMessage = nil
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = L10n.text("加载背景图失败：%@", language: leafyLanguage, error.localizedDescription)
         }
     }
@@ -879,6 +880,8 @@ struct CommunityAvatarView: View {
 
     @MainActor
     private func loadAvatar() async {
+        let scope = CampusOperationScope()
+        let requestID = avatarTaskID
         avatarImage = CommunityAvatarCache.shared.image(for: profile)
         guard avatarImage == nil,
               let profile,
@@ -888,7 +891,8 @@ struct CommunityAvatarView: View {
 
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard !Task.isCancelled,
+            try scope.check()
+            guard requestID == avatarTaskID, !Task.isCancelled,
                   let image = ImageDataDecoder.decodedImage(
                     from: data,
                     targetSize: CGSize(width: size, height: size)
@@ -897,6 +901,7 @@ struct CommunityAvatarView: View {
             try? CommunityAvatarCache.shared.save(data: data, for: profile)
             avatarImage = image
         } catch {
+            guard !scope.wasCancelled(error), requestID == avatarTaskID else { return }
             avatarImage = nil
         }
     }

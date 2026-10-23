@@ -285,23 +285,25 @@ struct LearningWorkspaceView: View {
         workspaceIndex = LearningWorkspaceIndex.make(materials: materials, tasks: tasks, records: records)
     }
 
-    private func insertProject(_ draft: LearningProjectDraft) {
-        modelContext.insert(LearningProject(
+    private func insertProject(_ draft: LearningProjectDraft) -> Bool {
+        let inserted = LearningProject(
             title: draft.title,
             kindRawValue: draft.kind.rawValue,
             goal: draft.goal,
             isArchived: draft.isArchived
-        ))
-        save(successMessage: "学习空间已创建。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "学习空间已创建。", undo: { modelContext.delete(inserted) })
     }
 
-    private func update(_ project: LearningProject, with draft: LearningProjectDraft) {
+    private func update(_ project: LearningProject, with draft: LearningProjectDraft) -> Bool {
+        let previous = (project.title, project.kindRawValue, project.goal, project.isArchived, project.updatedAt)
         project.title = draft.title
         project.kind = draft.kind
         project.goal = draft.goal
         project.isArchived = draft.isArchived
         project.updatedAt = Date()
-        save(successMessage: "学习空间已保存。")
+        return save(successMessage: "学习空间已保存。", undo: { project.title = previous.0; project.kindRawValue = previous.1; project.goal = previous.2; project.isArchived = previous.3; project.updatedAt = previous.4 })
     }
 
     private func deleteProjectKeepingContents(_ project: LearningProject) {
@@ -334,12 +336,15 @@ struct LearningWorkspaceView: View {
         }
     }
 
-    private func save(successMessage: String) {
+    @discardableResult
+    private func save(successMessage: String, undo: () -> Void) -> Bool {
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: undo)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
+            return true
         } catch {
             operationAlert = .failure(error.localizedDescription)
+            return false
         }
     }
 }
@@ -479,30 +484,40 @@ private struct LearningMaterialEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
 
-    @Bindable var material: LearningMaterialDocument
+    @Environment(\.modelContext) private var modelContext
+    let material: LearningMaterialDocument
+    @State private var title: String
+    @State private var category: LearningMaterialCategory
+    @State private var courseName: String
+    @State private var note: String
+    @State private var saveError: String?
     let lockedCategory: LearningMaterialCategory?
 
     init(material: LearningMaterialDocument, lockedCategory: LearningMaterialCategory? = nil) {
         self.material = material
         self.lockedCategory = lockedCategory
+        _title = State(initialValue: material.title)
+        _category = State(initialValue: material.category)
+        _courseName = State(initialValue: material.courseName)
+        _note = State(initialValue: material.note)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(L10n.text("资料标题", language: leafyLanguage), text: $material.title)
+                    TextField(L10n.text("资料标题", language: leafyLanguage), text: $title)
                     if let lockedCategory {
                         LabeledContent(L10n.text("分类", language: leafyLanguage), value: L10n.text(lockedCategory.rawValue, language: leafyLanguage))
                     } else {
-                        Picker(L10n.text("分类", language: leafyLanguage), selection: categoryBinding) {
+                        Picker(L10n.text("分类", language: leafyLanguage), selection: $category) {
                             ForEach(LearningMaterialCategory.allCases) { category in
                                 Text(L10n.text(category.rawValue, language: leafyLanguage)).tag(category)
                             }
                         }
                     }
-                    TextField(L10n.text("课程/考试", language: leafyLanguage), text: $material.courseName)
-                    TextField(L10n.text("备注", language: leafyLanguage), text: $material.note, axis: .vertical)
+                    TextField(L10n.text("课程/考试", language: leafyLanguage), text: $courseName)
+                    TextField(L10n.text("备注", language: leafyLanguage), text: $note, axis: .vertical)
                         .lineLimit(3...6)
                 }
 
@@ -515,6 +530,9 @@ private struct LearningMaterialEditorSheet: View {
             }
             .navigationTitle(L10n.text("编辑学习资料", language: leafyLanguage))
             .leafyInlineNavigationTitle()
+            .alert("保存失败", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("知道了", role: .cancel) {}
+            } message: { Text(saveError ?? "") }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.text("完成", language: leafyLanguage)) {
@@ -526,25 +544,21 @@ private struct LearningMaterialEditorSheet: View {
         }
     }
 
-    private var categoryBinding: Binding<LearningMaterialCategory> {
-        Binding(
-            get: { material.category },
-            set: { material.category = $0 }
-        )
-    }
-
     private func save() {
-        let trimmedTitle = material.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        material.title = trimmedTitle.isEmpty
-            ? material.originalFilename
-            : trimmedTitle
-        if let lockedCategory {
-            material.category = lockedCategory
-        }
-        material.courseName = material.courseName.trimmingCharacters(in: .whitespacesAndNewlines)
-        material.note = material.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previous = (material.title, material.categoryRawValue, material.courseName, material.note, material.updatedAt)
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        material.title = trimmedTitle.isEmpty ? material.originalFilename : trimmedTitle
+        material.category = lockedCategory ?? category
+        material.courseName = courseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        material.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         material.updatedAt = Date()
-        dismiss()
+        do {
+            try LocalModelSave.save(modelContext, undo: {
+                material.title = previous.0; material.categoryRawValue = previous.1
+                material.courseName = previous.2; material.note = previous.3; material.updatedAt = previous.4
+            })
+            dismiss()
+        } catch { saveError = error.localizedDescription }
     }
 }
 
@@ -1367,39 +1381,42 @@ struct LearningWorkspaceDetailView: View {
         }
     }
 
-    private func insertTask(_ draft: LearningProjectTaskDraft) {
-        modelContext.insert(LearningProjectTask(
+    private func insertTask(_ draft: LearningProjectTaskDraft) -> Bool {
+        let inserted = LearningProjectTask(
             projectID: destination.projectID,
             categoryRawValue: destination.fixedCategory?.rawValue ?? LearningMaterialCategory.other.rawValue,
             title: draft.title,
             note: draft.note,
             dueAt: draft.dueAt
-        ))
-        save(successMessage: "任务已添加。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "任务已添加。", undo: { modelContext.delete(inserted) })
     }
 
-    private func update(_ task: LearningProjectTask, with draft: LearningProjectTaskDraft) {
+    private func update(_ task: LearningProjectTask, with draft: LearningProjectTaskDraft) -> Bool {
+        let previous = (task.title, task.note, task.dueAt, task.updatedAt)
         task.title = draft.title
         task.note = draft.note
         task.dueAt = draft.dueAt
         task.updatedAt = Date()
-        save(successMessage: "任务已保存。")
+        return save(successMessage: "任务已保存。", undo: { task.title = previous.0; task.note = previous.1; task.dueAt = previous.2; task.updatedAt = previous.3 })
     }
 
     private func toggle(_ task: LearningProjectTask) {
+        let previous = (task.isCompleted, task.updatedAt)
         task.isCompleted.toggle()
         task.updatedAt = Date()
-        save(successMessage: task.isCompleted ? "任务已完成。" : "任务已恢复。")
+        save(successMessage: task.isCompleted ? "任务已完成。" : "任务已恢复。", undo: { task.isCompleted = previous.0; task.updatedAt = previous.1 })
     }
 
     private func deleteTask(_ task: LearningProjectTask) {
         modelContext.delete(task)
-        save(successMessage: "任务已删除。")
+        save(successMessage: "任务已删除。", undo: { modelContext.insert(task) })
     }
 
-    private func insertRecord(_ draft: StudyTimeRecordDraft) {
+    private func insertRecord(_ draft: StudyTimeRecordDraft) -> Bool {
         let now = Date()
-        modelContext.insert(StudyTimeRecord(
+        let inserted = StudyTimeRecord(
             projectID: draft.projectID,
             categoryRawValue: draft.categoryRawValue,
             startedAt: draft.startedAt,
@@ -1409,11 +1426,13 @@ struct LearningWorkspaceDetailView: View {
             note: draft.note,
             createdAt: now,
             updatedAt: now
-        ))
-        save(successMessage: "记录已添加。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "记录已添加。", undo: { modelContext.delete(inserted) })
     }
 
-    private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) {
+    private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) -> Bool {
+        let previous = (record.startedAt, record.endedAt, record.projectID, record.categoryRawValue, record.content, record.location, record.note, record.updatedAt)
         record.startedAt = draft.startedAt
         record.endedAt = draft.endedAt
         record.projectID = draft.projectID
@@ -1422,18 +1441,18 @@ struct LearningWorkspaceDetailView: View {
         record.location = draft.location
         record.note = draft.note
         record.updatedAt = Date()
-        save(successMessage: "记录已保存。")
+        return save(successMessage: "记录已保存。", undo: { record.startedAt = previous.0; record.endedAt = previous.1; record.projectID = previous.2; record.categoryRawValue = previous.3; record.content = previous.4; record.location = previous.5; record.note = previous.6; record.updatedAt = previous.7 })
     }
 
     private func deleteRecord(_ record: StudyTimeRecord) {
         modelContext.delete(record)
-        save(successMessage: "记录已删除。")
+        save(successMessage: "记录已删除。", undo: { modelContext.insert(record) })
     }
 
-    private func stopFocusSession(_ session: StudyFocusSession, endedAt: Date) {
+    private func stopFocusSession(_ session: StudyFocusSession, endedAt: Date) -> Bool {
         let endedAt = max(endedAt, session.startedAt.addingTimeInterval(60))
         let now = Date()
-        modelContext.insert(StudyTimeRecord(
+        let inserted = StudyTimeRecord(
             projectID: focusTopic.projectID,
             categoryRawValue: focusTopic.categoryRawValue,
             startedAt: session.startedAt,
@@ -1442,8 +1461,9 @@ struct LearningWorkspaceDetailView: View {
             location: "图书馆",
             createdAt: now,
             updatedAt: now
-        ))
-        save(successMessage: "专注记录已保存。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "专注记录已保存。", undo: { modelContext.delete(inserted) })
     }
 
     @MainActor
@@ -1470,13 +1490,14 @@ struct LearningWorkspaceDetailView: View {
         studyTimeShareItem = StudyTimeShareItem(image: image)
     }
 
-    private func update(_ project: LearningProject, with draft: LearningProjectDraft) {
+    private func update(_ project: LearningProject, with draft: LearningProjectDraft) -> Bool {
+        let previous = (project.title, project.kindRawValue, project.goal, project.isArchived, project.updatedAt)
         project.title = draft.title
         project.kind = draft.kind
         project.goal = draft.goal
         project.isArchived = draft.isArchived
         project.updatedAt = Date()
-        save(successMessage: "学习空间已保存。")
+        return save(successMessage: "学习空间已保存。", undo: { project.title = previous.0; project.kindRawValue = previous.1; project.goal = previous.2; project.isArchived = previous.3; project.updatedAt = previous.4 })
     }
 
     private func deleteProjectKeepingContents(_ project: LearningProject) {
@@ -1524,12 +1545,15 @@ struct LearningWorkspaceDetailView: View {
         }
     }
 
-    private func save(successMessage: String) {
+    @discardableResult
+    private func save(successMessage: String, undo: () -> Void) -> Bool {
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: undo)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
+            return true
         } catch {
             operationAlert = .failure(error.localizedDescription)
+            return false
         }
     }
 
@@ -1617,7 +1641,7 @@ private struct LearningProjectEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let project: LearningProject?
-    let onSave: (LearningProjectDraft) -> Void
+    let onSave: (LearningProjectDraft) -> Bool
 
     @State private var title: String
     @State private var kind: LearningProjectKind
@@ -1628,7 +1652,7 @@ private struct LearningProjectEditorSheet: View {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(project: LearningProject?, onSave: @escaping (LearningProjectDraft) -> Void) {
+    init(project: LearningProject?, onSave: @escaping (LearningProjectDraft) -> Bool) {
         self.project = project
         self.onSave = onSave
         _title = State(initialValue: project?.title ?? "")
@@ -1664,13 +1688,13 @@ private struct LearningProjectEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(LearningProjectDraft(
+                        let saved = onSave(LearningProjectDraft(
                             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                             kind: kind,
                             goal: goal.trimmingCharacters(in: .whitespacesAndNewlines),
                             isArchived: isArchived
                         ))
-                        dismiss()
+                        if saved { dismiss() }
                     }
                     .disabled(isSaveDisabled)
                 }
@@ -1689,7 +1713,7 @@ private struct LearningProjectTaskEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let task: LearningProjectTask?
-    let onSave: (LearningProjectTaskDraft) -> Void
+    let onSave: (LearningProjectTaskDraft) -> Bool
 
     @State private var title: String
     @State private var note: String
@@ -1700,7 +1724,7 @@ private struct LearningProjectTaskEditorSheet: View {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    init(task: LearningProjectTask?, onSave: @escaping (LearningProjectTaskDraft) -> Void) {
+    init(task: LearningProjectTask?, onSave: @escaping (LearningProjectTaskDraft) -> Bool) {
         self.task = task
         self.onSave = onSave
         _title = State(initialValue: task?.title ?? "")
@@ -1732,12 +1756,12 @@ private struct LearningProjectTaskEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(LearningProjectTaskDraft(
+                        let saved = onSave(LearningProjectTaskDraft(
                             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
                             dueAt: hasDueDate ? dueAt : nil
                         ))
-                        dismiss()
+                        if saved { dismiss() }
                     }
                     .disabled(isSaveDisabled)
                 }
@@ -1900,7 +1924,7 @@ private struct StudyFocusTimerPanel: View {
     let lockedTopic: StudyFocusTopicOption?
     @Binding var selectedTopic: StudyFocusTopicOption
     @Binding var activeSession: StudyFocusSession?
-    let stopAction: (StudyFocusSession, Date) -> Void
+    let stopAction: (StudyFocusSession, Date) -> Bool
 
     private var effectiveTopic: StudyFocusTopicOption {
         lockedTopic ?? selectedTopic
@@ -1945,8 +1969,7 @@ private struct StudyFocusTimerPanel: View {
 
                     Button(role: .destructive) {
                         let session = activeSession
-                        self.activeSession = nil
-                        stopAction(session, Date())
+                        if stopAction(session, Date()) { self.activeSession = nil }
                     } label: {
                         Label("停止并保存", systemImage: "stop.fill")
                             .font(.subheadline.weight(.semibold))
@@ -2202,9 +2225,9 @@ struct StudyTimeRecordsView: View {
         }
     }
 
-    private func insert(_ draft: StudyTimeRecordDraft) {
+    private func insert(_ draft: StudyTimeRecordDraft) -> Bool {
         let now = Date()
-        modelContext.insert(StudyTimeRecord(
+        let inserted = StudyTimeRecord(
             projectID: draft.projectID,
             categoryRawValue: draft.categoryRawValue,
             startedAt: draft.startedAt,
@@ -2214,11 +2237,13 @@ struct StudyTimeRecordsView: View {
             note: draft.note,
             createdAt: now,
             updatedAt: now
-        ))
-        save(successMessage: "记录已添加。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "记录已添加。", undo: { modelContext.delete(inserted) })
     }
 
-    private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) {
+    private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) -> Bool {
+        let previous = (record.startedAt, record.endedAt, record.projectID, record.categoryRawValue, record.content, record.location, record.note, record.updatedAt)
         record.startedAt = draft.startedAt
         record.endedAt = draft.endedAt
         record.projectID = draft.projectID
@@ -2227,18 +2252,18 @@ struct StudyTimeRecordsView: View {
         record.location = draft.location
         record.note = draft.note
         record.updatedAt = Date()
-        save(successMessage: "记录已保存。")
+        return save(successMessage: "记录已保存。", undo: { record.startedAt = previous.0; record.endedAt = previous.1; record.projectID = previous.2; record.categoryRawValue = previous.3; record.content = previous.4; record.location = previous.5; record.note = previous.6; record.updatedAt = previous.7 })
     }
 
     private func delete(_ record: StudyTimeRecord) {
         modelContext.delete(record)
-        save(successMessage: "记录已删除。")
+        save(successMessage: "记录已删除。", undo: { modelContext.insert(record) })
     }
 
-    private func stopFocusSession(_ session: StudyFocusSession, endedAt: Date) {
+    private func stopFocusSession(_ session: StudyFocusSession, endedAt: Date) -> Bool {
         let endedAt = max(endedAt, session.startedAt.addingTimeInterval(60))
         let now = Date()
-        modelContext.insert(StudyTimeRecord(
+        let inserted = StudyTimeRecord(
             projectID: session.topic.projectID,
             categoryRawValue: session.topic.categoryRawValue,
             startedAt: session.startedAt,
@@ -2247,8 +2272,9 @@ struct StudyTimeRecordsView: View {
             location: "图书馆",
             createdAt: now,
             updatedAt: now
-        ))
-        save(successMessage: "专注记录已保存。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "专注记录已保存。", undo: { modelContext.delete(inserted) })
     }
 
     @MainActor
@@ -2273,12 +2299,15 @@ struct StudyTimeRecordsView: View {
         shareItem = StudyTimeShareItem(image: image)
     }
 
-    private func save(successMessage: String) {
+    @discardableResult
+    private func save(successMessage: String, undo: () -> Void) -> Bool {
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: undo)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
+            return true
         } catch {
             operationAlert = .failure(error.localizedDescription)
+            return false
         }
     }
 }
@@ -2419,7 +2448,7 @@ private struct StudyTimeRecordEditorView: View {
     let record: StudyTimeRecord?
     let topicOptions: [StudyFocusTopicOption]
     let lockedTopic: StudyFocusTopicOption?
-    let onSave: (StudyTimeRecordDraft) -> Void
+    let onSave: (StudyTimeRecordDraft) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
@@ -2455,7 +2484,7 @@ private struct StudyTimeRecordEditorView: View {
         topicOptions: [StudyFocusTopicOption],
         initialTopic: StudyFocusTopicOption,
         lockedTopic: StudyFocusTopicOption? = nil,
-        onSave: @escaping (StudyTimeRecordDraft) -> Void
+        onSave: @escaping (StudyTimeRecordDraft) -> Bool
     ) {
         let now = Date()
         let defaultStart = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
@@ -2526,7 +2555,7 @@ private struct StudyTimeRecordEditorView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(StudyTimeRecordDraft(
+                        let saved = onSave(StudyTimeRecordDraft(
                             projectID: effectiveTopic.projectID,
                             categoryRawValue: effectiveTopic.categoryRawValue,
                             startedAt: startedAt,
@@ -2535,7 +2564,7 @@ private struct StudyTimeRecordEditorView: View {
                             location: location,
                             note: trimmedNote
                         ))
-                        dismiss()
+                        if saved { dismiss() }
                     }
                     .disabled(isSaveDisabled)
                 }

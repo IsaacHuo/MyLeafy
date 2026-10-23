@@ -137,12 +137,12 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
 
     private let makeLocationProvider: @MainActor @Sendable () -> any TimetableLocationProviding
     private let weatherFetcher: WeatherFetcher
-    private let cache: any TimetableWeatherCaching
+    private let cache: (any TimetableWeatherCaching)?
 
     init(
         locationProvider: (any TimetableLocationProviding)? = nil,
         weatherFetcher: @escaping WeatherFetcher = WeatherKitTimetableWeatherService.fetchWeatherKitSnapshot,
-        cache: any TimetableWeatherCaching = UserDefaultsTimetableWeatherCache()
+        cache: (any TimetableWeatherCaching)? = nil
     ) {
         self.makeLocationProvider = {
             locationProvider ?? CoreLocationTimetableLocationProvider()
@@ -156,17 +156,27 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
     }
 
     func cachedWeather(maxAge: TimeInterval = Self.cacheMaxAge) -> TimetableWeatherSnapshot? {
-        cache.currentWeather(maxAge: maxAge)
+        (cache ?? UserDefaultsTimetableWeatherCache()).currentWeather(maxAge: maxAge)
     }
 
     func fetchCurrentWeather(requestsPermissionIfNeeded: Bool) async throws -> TimetableWeatherSnapshot {
+        let identityKey = ActiveCampusContext.identity?.scopeKey
+        let cache = cache ?? UserDefaultsTimetableWeatherCache()
         do {
+            try Task.checkCancellation()
             let locationProvider = makeLocationProvider()
             let location = try await locationProvider.currentLocation(requestsPermissionIfNeeded: requestsPermissionIfNeeded)
+            try Task.checkCancellation()
+            guard identityKey == ActiveCampusContext.identity?.scopeKey else { throw CancellationError() }
             let snapshot = try await weatherFetcher(location)
+            try Task.checkCancellation()
+            guard identityKey == ActiveCampusContext.identity?.scopeKey else { throw CancellationError() }
             cache.save(snapshot)
             return snapshot
         } catch {
+            if identityKey != ActiveCampusContext.identity?.scopeKey || Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
             if let cached = cache.currentWeather(maxAge: Self.cacheMaxAge) {
                 return cached
             }
@@ -263,7 +273,7 @@ nonisolated struct UserDefaultsTimetableWeatherCache: TimetableWeatherCaching {
         key: String = "timetableWeather.cache.v2"
     ) {
         self.userDefaults = userDefaults
-        self.key = key
+        self.key = CampusScopedDefaults.key(key, defaults: userDefaults)
     }
 
     func save(_ snapshot: TimetableWeatherSnapshot) {
@@ -314,6 +324,7 @@ final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationPr
                 throw TimetableWeatherServiceError.permissionRequired
             }
             let status = await requestAuthorization()
+            try Task.checkCancellation()
             guard Self.isAuthorized(status) else {
                 throw TimetableWeatherServiceError.permissionDenied
             }
@@ -329,11 +340,13 @@ final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationPr
             throw TimetableWeatherServiceError.locationUnavailable
         }
 
+        try Task.checkCancellation()
         return try await requestOneShotLocation()
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        guard let continuation = authorizationContinuation else { return }
+        guard manager.authorizationStatus != .notDetermined,
+              let continuation = authorizationContinuation else { return }
         authorizationContinuation = nil
         continuation.resume(returning: manager.authorizationStatus)
     }

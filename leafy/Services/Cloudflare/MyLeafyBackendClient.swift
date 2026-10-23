@@ -256,6 +256,12 @@ actor MyLeafyBackendClient {
 
     private func send(path: String, query: [URLQueryItem] = [], method: String, body: Data? = nil,
                       contentType: String = "application/json", authenticated: Bool) async throws -> (Int, HTTPURLResponse, Data) {
+        let generation = sessionGeneration
+        let token = currentSession?.token
+        let scope = await CampusOperationScope()
+        try await scope.check()
+        guard generation == sessionGeneration,
+              !authenticated || token == currentSession?.token else { throw CancellationError() }
         guard path.hasPrefix("/v1/") else {
             throw MyLeafyBackendError(status: 0, code: "invalid_api_path", message: "后台请求路径无效。", requestID: nil)
         }
@@ -273,6 +279,9 @@ actor MyLeafyBackendClient {
             request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
         }
         let (data, response) = try await network.data(for: request)
+        try await scope.check()
+        guard generation == sessionGeneration,
+              !authenticated || token == currentSession?.token else { throw CancellationError() }
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200..<300).contains(response.statusCode) else {
             if authenticated && response.statusCode == 401 && request.value(forHTTPHeaderField: "Authorization") == currentSession.map({ "Bearer \($0.token)" }) {

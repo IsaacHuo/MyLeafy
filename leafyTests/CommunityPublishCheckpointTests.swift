@@ -69,6 +69,42 @@ final class CommunityPublishCheckpointTests: XCTestCase {
         }
     }
 
+    func testCancellationFailureKeepsFilesAndRestartRetriesCancellation() async throws {
+        let (directory, task) = try fixture()
+        var cancellingTask = task
+        cancellingTask.state = .cancelling
+        try JSONEncoder().encode([cancellingTask]).write(to: directory.appendingPathComponent("tasks.json"))
+        let backend = CancellationPublishBackend()
+        let failed = expectation(description: "Cancellation failure checkpoint")
+        var reportedFailure = false
+        let coordinator = CommunityPublishCoordinator(backend: backend, rootDirectory: directory, writeManifest: { data, url in
+            try data.write(to: url, options: .atomic)
+            let saved = try JSONDecoder().decode([CommunityPublishTask].self, from: data)
+            if !reportedFailure, saved.first?.state == .cancelling, saved.first?.errorMessage != nil {
+                reportedFailure = true
+                failed.fulfill()
+            }
+        })
+        coordinator.configureAndResume()
+        await fulfillment(of: [failed], timeout: 5)
+        let files = directory.appendingPathComponent(task.id.uuidString.lowercased())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: files.path))
+        XCTAssertEqual(coordinator.tasks.first?.state, .cancelling)
+        XCTAssertNotNil(coordinator.tasks.first?.errorMessage)
+
+        await backend.allowAbort()
+        let completed = expectation(description: "Cancellation resumed after restart")
+        let restarted = CommunityPublishCoordinator(backend: backend, rootDirectory: directory, writeManifest: { data, url in
+            try data.write(to: url, options: .atomic)
+            let saved = try JSONDecoder().decode([CommunityPublishTask].self, from: data)
+            if saved.first?.state == .cancelled { completed.fulfill() }
+        })
+        restarted.configureAndResume()
+        await fulfillment(of: [completed], timeout: 5)
+        XCTAssertEqual(restarted.tasks.first?.state, .cancelled)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: files.path))
+    }
+
     private func descriptor(_ task: CommunityPublishTask) -> CommunityBackgroundTransferDescriptor {
         .init(publishTaskID: task.id, mediaID: task.media[0].id, component: .imageFull, offset: 0, byteCount: 100)
     }
@@ -94,6 +130,23 @@ private actor CheckpointPublishBackend: CommunityPublishBackend {
     func requireCapabilities(for mediaKinds: Set<CommunityPublishMediaKind>) async throws {}
     func pendingPostContext(postID: UUID) async throws -> CommunityPendingPostContext? { nil }
     func abortPendingPost(postID: UUID) async throws {}
+    func createPendingPost(id: UUID, input: CreatePostInput, imageCount: Int, attachmentCount: Int) async throws -> UUID { id }
+    func fetchPost(postID: UUID) async throws -> CommunityPost? { nil }
+    func validateAndAttachPostImage(postID: UUID, imageID: UUID, fullPath: String, thumbnailPath: String, sortOrder: Int) async throws {}
+    func validateAndAttachPostAttachment(postID: UUID, attachmentID: UUID, objectPath: String, displayName: String, sortOrder: Int) async throws {}
+    func uploadMedia(kind: String, taskID: UUID, mediaID: UUID, name: String, contentType: String, fileURL: URL, descriptor: CommunityBackgroundTransferDescriptor) async throws -> String { kind }
+}
+
+private actor CancellationPublishBackend: CommunityPublishBackend {
+    private var abortFails = true
+    func allowAbort() { abortFails = false }
+    func requireCapabilities(for mediaKinds: Set<CommunityPublishMediaKind>) async throws {}
+    func pendingPostContext(postID: UUID) async throws -> CommunityPendingPostContext? {
+        .init(postID: postID, authorID: UUID(), status: "pending")
+    }
+    func abortPendingPost(postID: UUID) async throws {
+        if abortFails { throw URLError(.notConnectedToInternet) }
+    }
     func createPendingPost(id: UUID, input: CreatePostInput, imageCount: Int, attachmentCount: Int) async throws -> UUID { id }
     func fetchPost(postID: UUID) async throws -> CommunityPost? { nil }
     func validateAndAttachPostImage(postID: UUID, imageID: UUID, fullPath: String, thumbnailPath: String, sortOrder: Int) async throws {}

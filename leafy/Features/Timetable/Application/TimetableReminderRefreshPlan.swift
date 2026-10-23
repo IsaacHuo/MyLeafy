@@ -19,7 +19,9 @@ struct LiveTimetableCourseReminderScheduler: TimetableCourseReminderScheduling {
     func schedule(course: Course, minutesBefore: Int, anchorPeriod: Int?) async throws {
         // Restoring existing settings (including background prefetch) must not open a
         // permission prompt. Explicit reminder editing retains its existing consent flow.
+        let scope = CampusOperationScope()
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        try scope.check()
         guard status == .authorized || status == .provisional || status == .ephemeral else {
             throw TimetableNotificationError.permissionDenied
         }
@@ -37,6 +39,7 @@ struct TimetableReminderRefreshPlan {
 
     let obsoleteIdentifiers: [String]
     let schedules: [Schedule]
+    private let scope = CampusOperationScope()
 
     init(oldIdentifiers: [String], courses: [Course], settings: [CourseReminderSetting]) throws {
         obsoleteIdentifiers = oldIdentifiers
@@ -75,7 +78,6 @@ struct TimetableReminderRefreshPlan {
     /// Called only after the database commit. Rebuilding from persisted settings on every
     /// successful refresh also retries any previously failed notification scheduling.
     func restore(using scheduler: any TimetableCourseReminderScheduling = LiveTimetableCourseReminderScheduler()) async -> String? {
-        let scope = CampusOperationScope()
         guard scope.isCurrent, !Task.isCancelled else { return nil }
         scheduler.cancel(identifiers: obsoleteIdentifiers)
         var failureCount = 0

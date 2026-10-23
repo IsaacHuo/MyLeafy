@@ -84,25 +84,7 @@ extension PerformanceRefactorTests {
         XCTAssertNil(CareerDocumentFileStore.fileURL(for: productResume))
     }
 
-    func testFirstValueMapKeepsFirstRemoteValueForDuplicateKeys() throws {
-        let postID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
-        let profileID = UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
-        let pollID = UUID(uuidString: "00000000-0000-0000-0000-000000000103")!
-        let firstOptionID = UUID(uuidString: "00000000-0000-0000-0000-000000000201")!
-        let secondOptionID = UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
-        let firstSignedURL = URL(string: "https://example.com/first")!
-        let secondSignedURL = URL(string: "https://example.com/second")!
 
-        let postOrder = LeafyFirstValueMap.build([(postID, 0), (postID, 1)])
-        let profileMap = LeafyFirstValueMap.build([(profileID, "first"), (profileID, "second")])
-        let signedMap = LeafyFirstValueMap.build([("images/post.jpg", firstSignedURL), ("images/post.jpg", secondSignedURL)])
-        let voteMap = LeafyFirstValueMap.build([(pollID, firstOptionID), (pollID, secondOptionID)])
-
-        XCTAssertEqual(postOrder[postID], 0)
-        XCTAssertEqual(profileMap[profileID], "first")
-        XCTAssertEqual(signedMap["images/post.jpg"], firstSignedURL)
-        XCTAssertEqual(voteMap[pollID], firstOptionID)
-    }
 
     func testCustomCampusRegistrationUsesSignupRequestsWithoutPasswordUpdate() async throws {
         AuthRecordingURLProtocol.reset()

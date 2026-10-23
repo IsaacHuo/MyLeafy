@@ -188,49 +188,22 @@ final class CommunityProfileModelTests: XCTestCase {
         XCTAssertEqual(request.fromCampusID, "tsinghua")
     }
 
-    func testCommunityProfileUpdateEncodesNilCoverPathAsNull() throws {
-        let update = CommunityProfileUpdate(
-            nickname: "Leafy",
-            avatarPath: "profile-avatars/user/avatar.jpg",
-            coverPath: nil,
-            bio: nil,
-            major: nil,
-            grade: nil,
-            profileEditedAt: "2026-06-12T00:00:00Z",
-            isProfileComplete: true,
-            showsEduVerificationBadge: false,
-            updatedAt: "2026-06-12T00:00:00Z"
+    func testCurrentRESTProfilePatchResetsCoverWithoutCampusAuthorityFields() throws {
+        let update = CloudflareCommunityRepository.ProfilePatch(
+            nickname: "Leafy", bio: nil, major: nil, grade: nil, showsBadge: false,
+            avatarPath: nil, coverPath: nil, resetCover: true
         )
-
-        let data = try JSONEncoder().encode(update)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertTrue(object.keys.contains("cover_path"))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(update)) as? [String: Any])
         XCTAssertTrue(object["cover_path"] is NSNull)
-    }
-
-    func testCommunityProfileUpdateDoesNotEncodeCampusMembershipFields() throws {
-        let update = CommunityProfileUpdate(
-            nickname: "Leafy",
-            avatarPath: nil,
-            coverPath: nil,
-            bio: "你好",
-            major: "信息学院",
-            grade: "2024级",
-            profileEditedAt: "2026-06-23T00:00:00Z",
-            isProfileComplete: true,
-            showsEduVerificationBadge: false,
-            updatedAt: "2026-06-23T00:00:00Z"
-        )
-
-        let data = try JSONEncoder().encode(update)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
         XCTAssertFalse(object.keys.contains("campus_id"))
-        XCTAssertFalse(object.keys.contains("community_campus_id"))
         XCTAssertFalse(object.keys.contains("community_access_status"))
-        XCTAssertFalse(object.keys.contains("community_school_name"))
-        XCTAssertFalse(object.keys.contains("community_request_id"))
+        XCTAssertFalse(object.keys.contains("community_campus_id"))
+        let unchangedCover = CloudflareCommunityRepository.ProfilePatch(
+            nickname: "Leafy", bio: nil, major: nil, grade: nil, showsBadge: false,
+            avatarPath: nil, coverPath: nil, resetCover: false
+        )
+        let unchanged = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(unchangedCover)) as? [String: Any])
+        XCTAssertFalse(unchanged.keys.contains("cover_path"))
     }
 
     func testCommunityNotificationMarkingReadPreservesPayload() {

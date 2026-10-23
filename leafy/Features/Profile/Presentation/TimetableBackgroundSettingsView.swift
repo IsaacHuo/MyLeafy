@@ -21,6 +21,7 @@ struct TimetableBackgroundSettingsView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var previewImage: UIImage?
     @State private var isImporting = false
+    @State private var importRequestID = UUID()
     @State private var previewLoadFailed = false
     @State private var operationAlert: LeafyOperationAlert?
 
@@ -137,9 +138,8 @@ struct TimetableBackgroundSettingsView: View {
         .background(LeafyPageBackground())
         .navigationTitle(L10n.text("课表背景", language: leafyLanguage))
         .leafyInlineNavigationTitle()
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            Task { await importBackground(from: newItem) }
-        }
+        .task(id: selectedPhotoItem) { await importBackground(from: selectedPhotoItem) }
+        .onDisappear { importRequestID = UUID() }
         .onChange(of: settingsSignature) { _, _ in
             TimetableBackgroundStore.notifySettingsDidChange(configuration: storedConfiguration)
         }
@@ -387,29 +387,49 @@ struct TimetableBackgroundSettingsView: View {
     @MainActor
     private func importBackground(from item: PhotosPickerItem?) async {
         guard let item else { return }
+        let requestID = UUID()
+        importRequestID = requestID
+        let scope = CampusOperationScope()
+        let oldFilename = backgroundFilename
+        let oldKind = kindRaw
         isImporting = true
         defer {
-            isImporting = false
-            selectedPhotoItem = nil
+            if importRequestID == requestID { isImporting = false; selectedPhotoItem = nil }
         }
 
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
                 throw TimetableBackgroundImageError.invalidImage
             }
-            let result = try await TimetableBackgroundStore.importImageData(data, replacing: backgroundFilename)
+            try scope.check()
+            guard importRequestID == requestID, oldFilename == backgroundFilename, oldKind == kindRaw else { return }
+            let result = try await TimetableBackgroundStore.importImageData(data)
+            let image = await TimetableBackgroundStore.image(filename: result.filename)
+            guard scope.isCurrent, !Task.isCancelled, importRequestID == requestID,
+                  oldFilename == backgroundFilename, oldKind == kindRaw else {
+                try TimetableBackgroundStore.discardImage(named: result.filename)
+                return
+            }
+            guard let image else {
+                try TimetableBackgroundStore.discardImage(named: result.filename)
+                throw TimetableBackgroundImageError.invalidImage
+            }
+            previewImage = image
             backgroundFilename = result.filename
             lightPaletteHexes = TimetableBackgroundStore.serialize(hexes: result.palette.lightHexes)
             darkPaletteHexes = TimetableBackgroundStore.serialize(hexes: result.palette.darkHexes)
             kindRaw = TimetableBackgroundKind.photo.rawValue
             backgroundIsEnabled = true
-            previewImage = await TimetableBackgroundStore.image(filename: result.filename)
             previewLoadFailed = false
             TimetableBackgroundStore.notifySettingsDidChange(configuration: storedConfiguration)
-            operationAlert = .success(L10n.text("课表背景照片已保存。", language: leafyLanguage))
-        } catch is CancellationError {
-            return
+            do {
+                try TimetableBackgroundStore.discardImage(named: oldFilename)
+                operationAlert = .success(L10n.text("课表背景照片已保存。", language: leafyLanguage))
+            } catch {
+                operationAlert = .partial("课表背景已保存，但旧照片清理失败：\(error.localizedDescription)")
+            }
         } catch {
+            if scope.wasCancelled(error) { return }
             operationAlert = .failure(L10n.text("加载照片失败：%@", language: leafyLanguage, error.localizedDescription))
         }
     }
@@ -450,6 +470,8 @@ struct TimetableBackgroundSettingsView: View {
     }
 
     private func removeBackground() {
+        importRequestID = UUID()
+        isImporting = false
         do {
             try TimetableBackgroundStore.removeBackground(filename: backgroundFilename)
             backgroundIsEnabled = false

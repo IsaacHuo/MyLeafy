@@ -772,3 +772,16 @@ private final class RecordingTimetableCourseReminderScheduler: TimetableCourseRe
 private enum InjectedSaveError: Error {
     case failure
 }
+
+extension TimetableTeacherReassociationTests {
+    func testReminderPlanFromAnObsoleteSessionCannotCancelOrScheduleNotifications() async throws {
+        let course = makeCourse(teacher: "教师甲")
+        let plan = try TimetableReminderRefreshPlan(oldIdentifiers: ["old"], courses: [course],
+            settings: [CourseReminderSetting(courseKey: course.stableCourseKey, minutesBefore: 10)])
+        ActiveCampusContext.networkManager.cancelInFlightRequests()
+        let scheduler = RecordingTimetableCourseReminderScheduler()
+        _ = await plan.restore(using: scheduler)
+        XCTAssertTrue(scheduler.cancelCalls.isEmpty)
+        XCTAssertTrue(scheduler.scheduleCalls.isEmpty)
+    }
+}

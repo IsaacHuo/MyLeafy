@@ -1070,6 +1070,7 @@ struct CustomScheduleEditorSheet: View {
         guard !isSaving else { return }
         focusedField = nil
         isSaving = true
+        let scope = CampusOperationScope()
 
         let outcome: SaveOutcome
         if selectedWeekAndDay != nil, selectedPeriodRange != nil {
@@ -1077,6 +1078,7 @@ struct CustomScheduleEditorSheet: View {
         } else {
             outcome = await saveImportantDate()
         }
+        guard scope.isCurrent, !Task.isCancelled else { return }
         isSaving = false
 
         switch outcome {
@@ -1101,9 +1103,11 @@ struct CustomScheduleEditorSheet: View {
         let trimmedNote = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
 
+        let original = reminderRecord
+        let undoOriginal = original.map(TimetableLocalEdits.cellReminderUndo)
+        let oldCellKey = original?.cellKey
         let record: TimetableCellReminder
-        if let existing = reminderRecord {
-            TimetableNotificationManager.cancelReminder(for: existing)
+        if let existing = original {
             existing.week = weekAndDay.week
             existing.dayOfWeek = weekAndDay.day
             existing.period = periodRange.lowerBound
@@ -1141,11 +1145,18 @@ struct CustomScheduleEditorSheet: View {
             record = newRecord
         }
 
-        removeDuplicateReminders(keeping: record, cellKey: record.cellKey)
-
+        let duplicates = reminders.filter { $0.cellKey == record.cellKey && $0.id != record.id }
+        let duplicateKeys = duplicates.map(\.cellKey)
+        for duplicate in duplicates { modelContext.delete(duplicate) }
         do {
-            try modelContext.save()
-            removeSourceImportantDateIfNeeded()
+            try LocalModelSave.save(modelContext, undo: {
+                if let undoOriginal { undoOriginal() } else { modelContext.delete(record) }
+                for duplicate in duplicates { modelContext.insert(duplicate) }
+            })
+            TimetableNotificationManager.cancelCellReminders(cellKeys: duplicateKeys + (oldCellKey.map { [$0] } ?? []))
+            var sourceCleanupWarning: String?
+            do { try removeSourceImportantDateIfNeeded() }
+            catch { sourceCleanupWarning = L10n.text("日程已保存，但原记录未移除：%@", language: leafyLanguage, error.localizedDescription) }
             publishWidgetSnapshot()
             onSaved?(.init(kind: .timetableReminder, stableID: record.id.uuidString))
             let scheduledCount: Int
@@ -1157,7 +1168,7 @@ struct CustomScheduleEditorSheet: View {
                 )
             }
             _ = scheduledCount
-            return .saved
+            return sourceCleanupWarning.map(SaveOutcome.savedWithWarning) ?? .saved
         } catch {
             return .failed(error.localizedDescription)
         }
@@ -1171,7 +1182,10 @@ struct CustomScheduleEditorSheet: View {
         else { return .failed(L10n.text("请检查日程标题和时间。", language: leafyLanguage)) }
 
         let reminderMinutes = selectedReminderOption.minutes(customMinutes: customReminderMinutes)
-        var events = CustomScheduleStore.load()
+        let previousEvents: [CustomScheduleEvent]
+        do { previousEvents = try CustomScheduleStore.loadForSync() }
+        catch { return .failed(error.localizedDescription) }
+        var events = previousEvents
         let event = CustomScheduleEvent(
             id: importantDateID,
             title: trimmed,
@@ -1187,7 +1201,6 @@ struct CustomScheduleEditorSheet: View {
         )
 
         if let index = events.firstIndex(where: { $0.id == event.id }) {
-            TimetableNotificationManager.cancelReminder(for: events[index])
             events[index] = event
         } else {
             events.append(event)
@@ -1196,18 +1209,20 @@ struct CustomScheduleEditorSheet: View {
             if lhs.startsAt != rhs.startsAt { return lhs.startsAt < rhs.startsAt }
             return lhs.title.localizedCompare(rhs.title) == .orderedAscending
         }
-        CustomScheduleStore.save(events)
-
+        do { try CustomScheduleStore.save(events) }
+        catch { return .failed(error.localizedDescription) }
         if let sourceReminder = context.reminder {
-            TimetableNotificationManager.cancelReminder(for: sourceReminder)
-            modelContext.delete(sourceReminder)
+            let oldCellKey = sourceReminder.cellKey
             do {
-                try modelContext.save()
+                try LocalModelSave.delete(sourceReminder, in: modelContext)
+                TimetableNotificationManager.cancelCellReminders(cellKeys: [oldCellKey])
             } catch {
+                do { try CustomScheduleStore.save(previousEvents) }
+                catch { return .savedWithWarning(L10n.text("日程已保存，但原记录未移除：%@", language: leafyLanguage, error.localizedDescription)) }
                 return .failed(error.localizedDescription)
             }
         }
-
+        TimetableNotificationManager.cancelReminder(for: event)
         publishWidgetSnapshot()
         onSaved?(.init(kind: .importantDate, stableID: event.id))
 
@@ -1235,20 +1250,19 @@ struct CustomScheduleEditorSheet: View {
     @MainActor
     private func deleteReminder() {
         let records = context.reminder.map { [$0] } ?? reminders.filter { $0.cellKey == cellKey }
-        for record in records {
-            TimetableNotificationManager.cancelReminder(for: record)
-            modelContext.delete(record)
-        }
-
+        let keys = records.map(\.cellKey)
+        for record in records { modelContext.delete(record) }
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: {
+                for record in records { modelContext.insert(record) }
+            })
+            TimetableNotificationManager.cancelCellReminders(cellKeys: keys)
             publishWidgetSnapshot()
             operationAlert = .success(
                 L10n.text("日程已删除。", language: leafyLanguage),
                 action: { dismiss() }
             )
         } catch {
-            modelContext.rollback()
             operationAlert = .failure(error.localizedDescription)
         }
     }
@@ -1256,32 +1270,23 @@ struct CustomScheduleEditorSheet: View {
     @MainActor
     private func deleteImportantDate() {
         guard let event = presentation.importantDateEvent else { return }
-        var events = CustomScheduleStore.load()
-        events.removeAll { $0.id == event.id }
-        TimetableNotificationManager.cancelReminder(for: event)
-        CustomScheduleStore.save(events)
-        publishWidgetSnapshot()
-        operationAlert = .success(
-            L10n.text("日程已删除。", language: leafyLanguage),
-            action: { dismiss() }
-        )
+        do {
+            var events = try CustomScheduleStore.loadForSync()
+            events.removeAll { $0.id == event.id }
+            try CustomScheduleStore.save(events)
+            TimetableNotificationManager.cancelReminder(for: event)
+            publishWidgetSnapshot()
+            operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage), action: { dismiss() })
+        } catch { operationAlert = .failure(error.localizedDescription) }
     }
 
-    @MainActor
-    private func removeDuplicateReminders(keeping keptRecord: TimetableCellReminder, cellKey: String) {
-        for record in reminders where record.cellKey == cellKey && record.id != keptRecord.id {
-            TimetableNotificationManager.cancelReminder(for: record)
-            modelContext.delete(record)
-        }
-    }
-
-    private func removeSourceImportantDateIfNeeded() {
+    private func removeSourceImportantDateIfNeeded() throws {
         guard let sourceEvent = presentation.importantDateEvent else { return }
-        var events = CustomScheduleStore.load()
+        var events = try CustomScheduleStore.loadForSync()
         guard events.contains(where: { $0.id == sourceEvent.id }) else { return }
         events.removeAll { $0.id == sourceEvent.id }
+        try CustomScheduleStore.save(events)
         TimetableNotificationManager.cancelReminder(for: sourceEvent)
-        CustomScheduleStore.save(events)
     }
 
     private func scheduleInfoRow(title: String, value: String, icon: String) -> some View {
@@ -1321,13 +1326,7 @@ struct CustomScheduleEditorSheet: View {
     private func academicYearWeekAndDayIfSupported(for date: Date) -> (week: Int, day: Int)? {
         let calendar = UserTimetableSettings.calendar
         let current = calendar.startOfDay(for: date)
-        let configurations = SemesterConfig.timelineConfigurations
-        let timetable = AcademicYearTimetable(
-            configurations: configurations,
-            semanticEvents: configurations.flatMap(\.calendarEvents),
-            referenceDate: Date(),
-            calendar: calendar
-        )
+        let timetable = AcademicYearTimetable(container: SemesterConfig.current, calendar: calendar)
         guard let week = timetable.pageIndex(containing: current) else { return nil }
         let weekday = calendar.component(.weekday, from: current)
         return (week, ((weekday + 5) % 7) + 1)
@@ -1622,7 +1621,15 @@ struct CourseDetailSheet: View {
         }
     }
 
+    private func requireCurrentCourse() throws {
+        guard allCourses.contains(where: { $0.id == course.id }) else {
+            throw NSError(domain: "leafy.timetable", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: L10n.text("课表已更新，请重试。", language: leafyLanguage)])
+        }
+    }
+
     private func persistSelectedNote(_ text: String) throws {
+        try requireCurrentCourse()
         switch selectedNoteScope {
         case .course:
             try TimetableLocalEdits.setCourseNote(text, courseKey: courseKey, in: modelContext)
@@ -1665,6 +1672,7 @@ struct CourseDetailSheet: View {
         let anchorPeriod = TimetableNotificationManager.resolvedAnchorPeriod(selectedReminderAnchorPeriod, for: course)
         let snapshot = TimetableReminderRefreshPlan.courseSnapshot(course)
         do {
+            try requireCurrentCourse()
             try TimetableLocalEdits.setReminder(
                 courseKey: courseKey, minutesBefore: reminderMinutes, anchorPeriod: anchorPeriod, in: modelContext
             )

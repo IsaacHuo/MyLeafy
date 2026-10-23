@@ -131,6 +131,28 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
         }
     }
 
+    func testSavingCorruptDraftPreservesOriginalManifest() throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        let ownerID = UUID(), id = UUID()
+        let directory = draftDirectory(fixture: fixture, ownerID: ownerID, draftID: id)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("manifest.json")
+        let original = Data("damaged but recoverable".utf8)
+        try original.write(to: url)
+        XCTAssertThrowsError(try fixture.repository.saveDraft(id: id, ownerProfileID: ownerID, input: makeInput(), images: [], attachments: []))
+        XCTAssertEqual(try Data(contentsOf: url), original)
+    }
+
+    func testComposerCleanupOnlyOwnsDirectStagingFiles() throws {
+        let root = try CommunityComposerAttachmentTypes.stagingDirectory()
+        XCTAssertTrue(CommunityComposerAttachmentTypes.isStagedAttachment(root.appendingPathComponent("pending.pdf")))
+        let draftURL = root.deletingLastPathComponent()
+            .appendingPathComponent("CommunityPostDrafts/v1/owner/draft/attachment.pdf")
+        XCTAssertFalse(CommunityComposerAttachmentTypes.isStagedAttachment(draftURL))
+        XCTAssertFalse(CommunityComposerAttachmentTypes.isStagedAttachment(root.appendingPathComponent("nested/file.pdf")))
+    }
+
     func testBlankDraftContentDoesNotQualifyForAutosave() {
         let draft = CommunityPostDraft(
             id: UUID(),

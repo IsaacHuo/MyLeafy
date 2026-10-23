@@ -3,6 +3,7 @@ import Combine
 import QuickLook
 import SwiftUI
 import UIKit
+import os
 
 struct ScheduleMemoCameraView: View {
     @Environment(\.dismiss) private var dismiss
@@ -193,16 +194,18 @@ private final class ScheduleMemoCameraController: NSObject, ObservableObject, AV
     private var currentInput: AVCaptureDeviceInput?
     private var currentPosition: AVCaptureDevice.Position = .back
     private var isConfigured = false
+    private let isActive = OSAllocatedUnfairLock(initialState: false)
     private var captureCompletion: ((UIImage) -> Void)?
 
     func start() {
+        isActive.withLock { $0 = true }
         state = .loading
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             configureAndStart()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] isGranted in
-                guard let self else { return }
+                guard let self, self.isActive.withLock({ $0 }) else { return }
                 if isGranted {
                     self.configureAndStart()
                 } else {
@@ -217,6 +220,8 @@ private final class ScheduleMemoCameraController: NSObject, ObservableObject, AV
     }
 
     func stop() {
+        isActive.withLock { $0 = false }
+        captureCompletion = nil
         sessionQueue.async { [weak self] in
             guard let self, self.session.isRunning else { return }
             self.session.stopRunning()
@@ -293,7 +298,7 @@ private final class ScheduleMemoCameraController: NSObject, ObservableObject, AV
         let data = photo.fileDataRepresentation()
         let errorDescription = error?.localizedDescription
         Task { @MainActor [weak self] in
-            guard let self else { return }
+            guard let self, self.isActive.withLock({ $0 }) else { return }
             let completion = self.captureCompletion
             self.captureCompletion = nil
             self.isCapturing = false
@@ -311,17 +316,23 @@ private final class ScheduleMemoCameraController: NSObject, ObservableObject, AV
 
     private func configureAndStart() {
         sessionQueue.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.isActive.withLock({ $0 }) else { return }
             do {
                 if !self.isConfigured {
                     try self.configureSession()
                 }
                 guard !self.session.isRunning else {
-                    DispatchQueue.main.async { self.state = .ready }
+                    DispatchQueue.main.async {
+                        guard self.isActive.withLock({ $0 }) else { return }
+                        self.state = .ready
+                    }
                     return
                 }
                 self.session.startRunning()
-                DispatchQueue.main.async { self.state = .ready }
+                DispatchQueue.main.async {
+                        guard self.isActive.withLock({ $0 }) else { return }
+                        self.state = .ready
+                    }
             } catch {
                 DispatchQueue.main.async {
                     self.state = .unavailable(error.localizedDescription)

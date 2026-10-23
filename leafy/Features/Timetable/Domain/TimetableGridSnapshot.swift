@@ -91,6 +91,7 @@ struct TimetableGridInputSignature: Equatable, Hashable {
         let id: UUID
         let name: String
         let teacher: String
+        let classInfo: String
         let location: String
         let room: String
         let sourceSemesterID: String
@@ -102,6 +103,7 @@ struct TimetableGridInputSignature: Equatable, Hashable {
             id = course.id
             name = course.courseName
             teacher = course.teacher
+            classInfo = course.classInfo
             location = course.location
             room = course.room
             sourceSemesterID = course.sourceSemesterID

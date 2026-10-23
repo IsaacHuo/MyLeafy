@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import UIKit
 @testable import Leafy
 
 @MainActor
@@ -232,7 +233,7 @@ final class TimetablePersonalSyncTests: XCTestCase {
         let localExamID = UUID(), remoteExamID = UUID()
         let localExam = ExamArrangement(id: 1, courseID: "A", name: "本机考试", date: "2026-12-01", start: "08:00", end: "10:00", location: "101", syncID: localExamID)
         let remoteExam = ExamArrangement(id: 1, courseID: "B", name: "另一台设备的考试", date: "2026-12-02", start: "08:00", end: "10:00", location: "202", syncID: remoteExamID)
-        SchoolDataCache.saveExamSchedule([localExam], notifies: false)
+        try SchoolDataCache.saveExamSchedule([localExam], notifies: false)
         let exam = ICloudSyncValue(key: "ManualExam/" + remoteExamID.uuidString.lowercased(), payload: try ICloudLocalData.encode(remoteExam), modifiedAt: Date())
         try ICloudLocalData.apply(exam, context: context)
         let merged = SchoolDataCache.loadExamSchedule()
@@ -258,5 +259,171 @@ final class TimetablePersonalSyncTests: XCTestCase {
         _ = try ICloudLocalData.conflictCopy(value, context: context)
         try context.save()
         XCTAssertEqual(try context.fetch(FetchDescriptor<ScheduleMemo>()).count, 2)
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testFailedTimetableReplacementRestoresAssociationsAndUnrelatedEditor() throws {
+        let context = try context()
+        context.autosaveEnabled = false
+        let old = record().makeCourse(semesterID: "old")
+        let note = CourseNote(courseKey: old.stableCourseKey, text: "original")
+        let occurrence = CourseOccurrenceNote(courseKey: old.stableCourseKey,
+            occurrenceKey: old.occurrenceKey(week: 2), week: 2, dayOfWeek: 1, text: "occurrence")
+        let reminder = CourseReminderSetting(courseKey: old.stableCourseKey, minutesBefore: 15)
+        let grade = Grade(term: "local", courseName: "unrelated", credit: "2", score: "80", type: "必修")
+        context.insert(old); context.insert(note); context.insert(occurrence); context.insert(reminder); context.insert(grade)
+        try context.save()
+        grade.score = "unsaved grade"
+        note.text = "unsaved note"
+        let pendingNote = CourseNote(courseKey: "other", text: "pending insert")
+        context.insert(pendingNote)
+        XCTAssertThrowsError(try TimetableRefreshUseCase().persist(records: [record(day: 3, teacher: "new")],
+            existingCourses: [old], modelContext: context, semesterID: "new", save: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Course>()).map(\.id), [old.id])
+        XCTAssertEqual(note.courseKey, old.stableCourseKey)
+        XCTAssertEqual(note.text, "unsaved note")
+        XCTAssertFalse(note.isUnassociated)
+        XCTAssertEqual(occurrence.dayOfWeek, 1)
+        XCTAssertEqual(occurrence.courseKey, old.stableCourseKey)
+        XCTAssertEqual(reminder.courseKey, old.stableCourseKey)
+        XCTAssertEqual(grade.score, "unsaved grade")
+        XCTAssertTrue(try context.fetch(FetchDescriptor<CourseNote>()).contains { $0.id == pendingNote.id })
+        try context.save()
+        XCTAssertEqual(try ModelContext(context.container).fetch(FetchDescriptor<Grade>()).first?.score, "unsaved grade")
+    }
+
+    func testCSVRejectsUnboundedRangesMalformedQuotesAndInvalidColumns() {
+        let header = CustomCampusCSVParser.timetableColumns.joined(separator: ",") + "\n"
+        for row in ["A,,,,,1,1-999999999,1", "A,,,,,-1,1,1", "A,,,,,1,0,1", "A,,,,,1,1,25", "\"A,,,,,1,1,1", "A,,,,,1,1,1,extra"] {
+            XCTAssertThrowsError(try CustomCampusCSVParser.parseTimetable(header + row), row)
+        }
+        XCTAssertThrowsError(try CustomCampusCSVParser.parseGrades("term,courseName,credit,score,type,score\nterm,A,1,90,type,10"))
+    }
+
+    func testCSVPreservesQuotedCommasQuotesAndMultilineFields() throws {
+        let csv = "term,courseName,credit,score,type\r\nterm,\"A, B\"\"C\nD\",1,90,type\r\n"
+        let result = try CustomCampusCSVParser.parseGrades(csv)
+        XCTAssertEqual(result.first?.courseName, "A, B\"C\nD")
+    }
+
+    func testUserPeriodValidationRejectsOverflowBeforeArithmetic() {
+        var settings = UserTimetableSettingsStore.load()
+        settings.periods = [.init(period: 1, startHour: Int.max, startMinute: Int.max, endHour: 10, endMinute: 0)]
+        XCTAssertFalse(settings.isValid)
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testGridCacheInvalidatesWhenOnlyClassInformationChanges() {
+        let course = record().makeCourse(semesterID: "source")
+        let cache = TimetableGridSnapshotCache()
+        _ = cache.snapshot(courses: [course], notes: [], occurrenceNotes: [], cellReminders: [], hidesWeekends: false, totalWeeks: 20)
+        course.classInfo = "updated class"
+        let refreshed = cache.snapshot(courses: [course], notes: [], occurrenceNotes: [], cellReminders: [], hidesWeekends: false, totalWeeks: 20)
+        XCTAssertEqual(cache.buildCount, 2)
+        XCTAssertEqual(refreshed.layouts(day: 1, week: 1).first?.course.classInfo, "updated class")
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testOpenCourseDetailsRetainValueSnapshotAfterSchoolReplacement() throws {
+        let context = try context()
+        let managed = record().makeCourse(semesterID: "source")
+        context.insert(managed); try context.save()
+        let selection = SelectedCourseContext(course: managed, week: 2, day: 1, date: Date())
+        context.delete(managed); try context.save()
+        XCTAssertEqual(selection.course.courseName, "数据结构")
+        XCTAssertEqual(selection.course.teacher, "林老师")
+        XCTAssertEqual(selection.week, 2)
+        XCTAssertNil(selection.course.modelContext)
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testWeeklyShareHeightUsesConfiguredPeriodCount() {
+        XCTAssertEqual(WeeklyTimetableGrid.totalHeight(rowHeight: 50, headerHeight: 42, columnSpacing: 3, totalPeriods: 24), 42 + 3 + 24 * 50 + 23 * 2)
+        XCTAssertEqual(WeeklyTimetableGrid.totalHeight(rowHeight: 50, headerHeight: 42, columnSpacing: 3, totalPeriods: 1), 95)
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testBackgroundPreparationKeepsLiveImageUntilConfigurationCommit() async throws {
+        let data = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+            UIColor.green.setFill(); context.cgContext.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }.pngData())
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: TimetableBackgroundStore.filenameKey)
+        let first = try await TimetableBackgroundStore.importImageData(data)
+        var secondFilename: String?
+        defer {
+            defaults.set(previous, forKey: TimetableBackgroundStore.filenameKey)
+            try? TimetableBackgroundStore.discardImage(named: first.filename)
+            if let secondFilename { try? TimetableBackgroundStore.discardImage(named: secondFilename) }
+        }
+        defaults.set(first.filename, forKey: TimetableBackgroundStore.filenameKey)
+        let second = try await TimetableBackgroundStore.importImageData(data)
+        secondFilename = second.filename
+        try TimetableBackgroundStore.discardImage(named: first.filename)
+        let liveImage = await TimetableBackgroundStore.image(filename: first.filename)
+        XCTAssertNotNil(liveImage, "Preparing or discarding another import must not delete the configured image")
+        defaults.set(second.filename, forKey: TimetableBackgroundStore.filenameKey)
+        try TimetableBackgroundStore.discardImage(named: first.filename)
+        let removedImage = await TimetableBackgroundStore.image(filename: first.filename)
+        XCTAssertNil(removedImage)
+    }
+
+    func testBackgroundFileOperationsRejectTraversal() async {
+        for filename in ["../Leafy.store", "..", "a/b.jpg", "a\\b.jpg"] {
+            XCTAssertThrowsError(try TimetableBackgroundStore.discardImage(named: filename))
+            XCTAssertThrowsError(try TimetableBackgroundStore.removeBackground(filename: filename))
+            let image = await TimetableBackgroundStore.image(filename: filename)
+            XCTAssertNil(image)
+        }
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testFailedLegacyKeyMigrationRestoresOnlyItsOwnChanges() throws {
+        let context = try context()
+        context.autosaveEnabled = false
+        let course = record().makeCourse(semesterID: "2025-2026-2")
+        let note = CourseNote(courseKey: course.legacyStableCourseKey, text: "saved")
+        let reminder = TimetableCellReminder(week: 1, dayOfWeek: 1, period: 1, title: "legacy")
+        context.insert(course); context.insert(note); context.insert(reminder); try context.save()
+        note.text = "unsaved editor"
+        let name = "migration-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertThrowsError(try TimetableLocalDataSemesterMigration.migrateIfNeeded(courses: [course],
+            courseNotes: [note], occurrenceNotes: [], reminderSettings: [], cellReminders: [reminder],
+            modelContext: context, defaults: defaults, save: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
+        XCTAssertEqual(note.courseKey, course.legacyStableCourseKey)
+        XCTAssertEqual(note.text, "unsaved editor")
+        XCTAssertNil(reminder.startsAt)
+        XCTAssertNil(reminder.endsAt)
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testCSVRejectsInvalidGradeCreditsAndExamDatesBeforeReplacement() {
+        for credit in ["nan", "-1", "invalid"] {
+            XCTAssertThrowsError(try CustomCampusCSVParser.parseGrades("term,courseName,credit,score,type\nt,A,\(credit),90,type"))
+        }
+        for row in ["id,exam,2026-02-30,08:00,10:00,room", "id,exam,2026-02-28,25:00,26:00,room", "id,exam,2026-02-28,10:00,08:00,room"] {
+            XCTAssertThrowsError(try CustomCampusCSVParser.parseExams(CustomCampusCSVParser.examColumns.joined(separator: ",") + "\n" + row))
+        }
+    }
+}
+
+extension TimetablePersonalSyncTests {
+    func testPeriodDatesRejectCorruptWeekAndWeekdayBeforeOffsetArithmetic() {
+        let start = SemesterConfig.startOfSemesterDate
+        for (week, day) in [(Int.max, 1), (Int.min, 1), (0, 1), (21, 1), (1, Int.max), (1, Int.min), (1, 0), (1, 8)] {
+            XCTAssertNil(TimetablePeriodSchedule.startDate(semesterStartDate: start, week: week, dayOfWeek: day, period: 1))
+            XCTAssertNil(TimetablePeriodSchedule.endDate(semesterStartDate: start, week: week, dayOfWeek: day, period: 1))
+        }
+        XCTAssertNotNil(TimetablePeriodSchedule.startDate(semesterStartDate: start, week: 20, dayOfWeek: 7, period: 1))
+        XCTAssertNotNil(TimetablePeriodSchedule.endDate(semesterStartDate: start, week: 20, dayOfWeek: 7, period: 1))
     }
 }

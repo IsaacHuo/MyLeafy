@@ -461,6 +461,7 @@ struct CommunityUserProfileView: View {
     @MainActor
     private func load() async {
         guard !isLoading else { return }
+        let scope = CampusOperationScope()
         isLoading = true
         defer { isLoading = false }
 
@@ -472,6 +473,7 @@ struct CommunityUserProfileView: View {
             }
         }
 
+        guard scope.isCurrent, !Task.isCancelled else { return }
         guard let targetID = profile?.id ?? profileID else {
             errorMessage = sessionManager.bootstrapError ?? CommunityServiceError.missingAuthenticatedUser.localizedDescription
             posts = []
@@ -489,6 +491,7 @@ struct CommunityUserProfileView: View {
             async let statsRequest = fetchProfileStats(targetID)
 
             let (loadedProfile, loadedPosts, loadedStats) = try await (profileRequest, postsRequest, statsRequest)
+            try scope.check()
             if let loadedProfile {
                 profile = loadedProfile
             }
@@ -496,12 +499,11 @@ struct CommunityUserProfileView: View {
             profileStats = loadedStats
             errorMessage = nil
         } catch {
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
             if profile == nil {
                 profile = initialProfile
             }
-            profileStats = nil
-            posts = []
         }
     }
 

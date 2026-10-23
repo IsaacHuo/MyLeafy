@@ -641,13 +641,6 @@ enum LearningMaterialFileStore {
         }
     }
 
-    static func deleteAllFiles() throws {
-        guard FileManager.default.fileExists(atPath: directoryURL.path(percentEncoded: false)) else {
-            return
-        }
-        try FileManager.default.removeItem(at: directoryURL)
-    }
-
     private static var directoryURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -1162,6 +1155,7 @@ enum FitnessTestUnit: String, CaseIterable, Identifiable {
 
 enum FitnessTestRecordFormatter {
     static func valueText(value: Double, unit: FitnessTestUnit) -> String {
+        guard value.isFinite, Int(exactly: value.rounded()) != nil else { return "--" }
         switch unit {
         case .minuteSecond:
             return minuteSecondText(seconds: value)
@@ -1173,7 +1167,8 @@ enum FitnessTestRecordFormatter {
     }
 
     static func minuteSecondText(seconds: Double) -> String {
-        let totalSeconds = Swift.max(Int(seconds.rounded()), 0)
+        guard seconds.isFinite, let rounded = Int(exactly: seconds.rounded()) else { return "--" }
+        let totalSeconds = Swift.max(rounded, 0)
         return "\(totalSeconds / 60)分\(totalSeconds % 60)秒"
     }
 
@@ -1189,13 +1184,15 @@ enum FitnessTestRecordFormatter {
     private static func decimalText(_ value: Double) -> String {
         let rounded = (value * 10).rounded() / 10
         if rounded.truncatingRemainder(dividingBy: 1) == 0 {
-            return String(Int(rounded))
+            guard let integer = Int(exactly: rounded) else { return "--" }
+            return String(integer)
         }
         return String(format: "%.1f", rounded)
     }
 
     private static func integerText(_ value: Double) -> String {
-        String(Int(value.rounded()))
+        guard let integer = Int(exactly: value.rounded()) else { return "--" }
+        return String(integer)
     }
 }
 

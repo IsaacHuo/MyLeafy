@@ -125,7 +125,8 @@ struct SunshineRunView: View {
         }
     }
 
-    private func addRecord(on date: Date, successMessage: String) {
+    @discardableResult
+    private func addRecord(on date: Date, successMessage: String) -> Bool {
         let calendar = Calendar.current
         guard !SunshineRunPlanner.isExcludedDate(
             date,
@@ -136,7 +137,7 @@ struct SunshineRunView: View {
             calendar: calendar
         ) else {
             operationAlert = .failure("假期周无需打卡，阳光长跑周期已跳过这一周。")
-            return
+            return false
         }
         guard SunshineRunPlanner.period(
             for: date,
@@ -148,11 +149,11 @@ struct SunshineRunView: View {
             calendar: calendar
         ) != nil else {
             operationAlert = .failure("只能补记本学期内的阳光长跑。")
-            return
+            return false
         }
         guard !SunshineRunPlanner.containsRecord(on: date, in: records, calendar: calendar) else {
             operationAlert = .failure("这一天已经记录过阳光长跑。")
-            return
+            return false
         }
 
         records.append(SunshineRunRecord(
@@ -163,7 +164,7 @@ struct SunshineRunView: View {
             excludedWeeks: excludedWeeks,
             calendar: calendar
         ))
-        persistRecords(successMessage: successMessage)
+        return persistRecords(successMessage: successMessage)
     }
 
     private func removeRecord(on date: Date, successMessage: String) {
@@ -173,10 +174,17 @@ struct SunshineRunView: View {
         persistRecords(successMessage: successMessage)
     }
 
-    private func persistRecords(successMessage: String) {
+    @discardableResult
+    private func persistRecords(successMessage: String) -> Bool {
         records = SunshineRunPlanner.normalizedRecords(records)
-        SunshineRunStore.saveRecords(records)
+        do { try SunshineRunStore.saveRecords(records) }
+        catch {
+            records = SunshineRunStore.loadRecords()
+            operationAlert = .failure(error.localizedDescription)
+            return false
+        }
         Task { await updateNotifications(successMessage: successMessage) }
+        return true
     }
 
     private func saveReminderSettings() {
@@ -198,6 +206,7 @@ struct SunshineRunView: View {
 
     @MainActor
     private func updateNotifications(successMessage: String) async {
+        let scope = CampusOperationScope()
         do {
             let updatedSettings = try await SunshineRunNotificationManager.updateNotifications(
                 settings: reminderSettings,
@@ -205,10 +214,12 @@ struct SunshineRunView: View {
                 rules: ruleSettings,
                 semesterContext: semesterContext
             )
+            try scope.check()
             reminderSettings = updatedSettings
             SunshineRunStore.saveReminderSettings(updatedSettings)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             var disabledSettings = reminderSettings
             disabledSettings.isEnabled = false
             disabledSettings.scheduledNotificationIDs = []
@@ -445,7 +456,7 @@ private struct SunshineRunPeriodRow: View {
 
 private struct SunshineRunBackfillSheet: View {
     let semesterContext: SunshineRunSemesterContext
-    let onSave: (Date) -> Void
+    let onSave: (Date) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var date = Date()
@@ -474,8 +485,7 @@ private struct SunshineRunBackfillSheet: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(date)
-                        dismiss()
+                        if onSave(date) { dismiss() }
                     }
                 }
             }

@@ -551,8 +551,10 @@ struct TimetableSharingView: View {
 
     @MainActor
     private func bootstrapAndLoad() async {
+        let scope = CampusOperationScope()
         loadState = .loading
         await sessionManager.bootstrapCommunityUser()
+        guard scope.isCurrent, !Task.isCancelled else { return }
         guard canUseSharing else {
             loadState = .loaded
             return
@@ -568,6 +570,7 @@ struct TimetableSharingView: View {
         }
         guard !isLoading else { return }
 
+        let scope = CampusOperationScope()
         let shouldShowInlineFailure = loadState != .loaded
         isLoading = true
         defer { isLoading = false }
@@ -578,12 +581,15 @@ struct TimetableSharingView: View {
             async let viewerMembers = service.fetchMyShareMembers()
             async let ownerInvites = service.fetchMyInvites()
 
-            mySnapshot = try await snapshot
-            viewableSnapshots = try await shared
-            members = try await viewerMembers
-            invites = try await ownerInvites
+            let (loadedSnapshot, loadedShared, loadedMembers, loadedInvites) = try await (snapshot, shared, viewerMembers, ownerInvites)
+            try scope.check()
+            mySnapshot = loadedSnapshot
+            viewableSnapshots = loadedShared
+            members = loadedMembers
+            invites = loadedInvites
             loadState = .loaded
         } catch {
+            if scope.wasCancelled(error) { return }
             if shouldShowInlineFailure {
                 loadState = .failed(error.localizedDescription)
             } else {
@@ -594,6 +600,7 @@ struct TimetableSharingView: View {
 
     @MainActor
     private func shareLatestTimetable() async {
+        let scope = CampusOperationScope()
         guard actionPhase == .idle, canStartSharing else { return }
         let snapshotCourses = courses
             .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID }
@@ -602,15 +609,19 @@ struct TimetableSharingView: View {
 
         do {
             actionPhase = .publishing
-            mySnapshot = try await service.publishSnapshot(courses: snapshotCourses)
+            let published = try await service.publishSnapshot(courses: snapshotCourses)
+            try scope.check()
+            mySnapshot = published
             didPublish = true
 
             actionPhase = .creatingInvite
             let invite = try await service.createInvite()
+            try scope.check()
             invites.removeAll { $0.id == invite.id }
             invites.insert(invite, at: 0)
             generatedInvite = invite
         } catch {
+            if scope.wasCancelled(error) { actionPhase = .idle; return }
             if didPublish {
                 operationAlert = .failure(
                     L10n.text(
@@ -629,6 +640,7 @@ struct TimetableSharingView: View {
 
     @MainActor
     private func updateSharedTimetable() async {
+        let scope = CampusOperationScope()
         guard actionPhase == .idle,
               canUseSharing,
               !courses.isEmpty else { return }
@@ -639,43 +651,55 @@ struct TimetableSharingView: View {
         defer { actionPhase = .idle }
 
         do {
-            mySnapshot = try await service.publishSnapshot(courses: snapshotCourses)
+            let published = try await service.publishSnapshot(courses: snapshotCourses)
+            try scope.check()
+            mySnapshot = published
             operationAlert = .success(L10n.text("共享课表已更新。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             operationAlert = .failure(error.localizedDescription)
         }
     }
 
     @MainActor
     private func revoke(_ member: TimetableShareMember) async {
+        let scope = CampusOperationScope()
         do {
             try await service.revokeShare(viewerID: member.viewerID)
+            try scope.check()
             members.removeAll { $0.id == member.id }
             operationAlert = .success(L10n.text("查看权限已撤销。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             operationAlert = .failure(error.localizedDescription)
         }
     }
 
     @MainActor
     private func stopSharing() async {
+        let scope = CampusOperationScope()
         do {
             try await service.stopSharing()
+            try scope.check()
             members = []
             invites = []
             operationAlert = .success(L10n.text("已停止共享。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             operationAlert = .failure(error.localizedDescription)
         }
     }
 
     @MainActor
     private func leave(_ snapshot: SharedTimetableSnapshot) async {
+        let scope = CampusOperationScope()
         do {
             try await service.leaveShare(ownerID: snapshot.ownerID)
+            try scope.check()
             viewableSnapshots.removeAll { $0.id == snapshot.id }
             operationAlert = .success(L10n.text("共享课表已移除。", language: leafyLanguage))
         } catch {
+            if scope.wasCancelled(error) { return }
             operationAlert = .failure(error.localizedDescription)
         }
     }
@@ -990,15 +1014,18 @@ private struct AcceptTimetableInviteSheet: View {
 
     @MainActor
     private func accept() async {
+        let scope = CampusOperationScope()
         guard !isAccepting else { return }
         isAccepting = true
         defer { isAccepting = false }
 
         do {
             let snapshot = try await service.acceptInvite(code: normalizedCode)
+            try scope.check()
             onAccepted(snapshot)
             dismiss()
         } catch {
+            if scope.wasCancelled(error) { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -1965,135 +1992,5 @@ private struct SharedTimetableGridCourseDetailSheet: View {
 
     private var dateText: String {
         DateFormatters.fullDate(language: leafyLanguage).string(from: context.date)
-    }
-}
-
-private struct SharedTimetableSnapshotDetailView: View {
-    @Environment(\.leafyLanguage) private var leafyLanguage
-    let snapshot: SharedTimetableSnapshot
-
-    @State private var currentWeek = SemesterConfig.currentWeek()
-
-    private var weekCourses: [SharedTimetableCourse] {
-        snapshot.courses
-            .filter { $0.weeks.contains(currentWeek) }
-            .sorted { lhs, rhs in
-                if lhs.dayOfWeek != rhs.dayOfWeek { return lhs.dayOfWeek < rhs.dayOfWeek }
-                return (lhs.duration.min() ?? 0) < (rhs.duration.min() ?? 0)
-            }
-    }
-
-    private var daysWithCourses: [Int] {
-        Array(Set(weekCourses.map(\.dayOfWeek))).sorted()
-    }
-
-    var body: some View {
-        List {
-            Section {
-                HStack(spacing: 12) {
-                    CommunityAvatarView(profile: snapshot.owner, size: 52)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(snapshot.ownerDisplayName)
-                            .leafyHeadline()
-                            .foregroundStyle(AppTheme.primaryText)
-                        Text("\(snapshot.courseCount) 门课程 · \(snapshot.publishedRelativeText)")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-            }
-            .listRowBackground(AppTheme.cardBackground)
-
-            if weekCourses.isEmpty {
-                Section("第 \(currentWeek) 周") {
-                    Text("这一周没有课程安排。")
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-                .listRowBackground(AppTheme.cardBackground)
-            } else {
-                ForEach(daysWithCourses, id: \.self) { day in
-                    Section(dayTitle(day)) {
-                        ForEach(weekCourses.filter { $0.dayOfWeek == day }) { course in
-                            SharedTimetableCourseRow(course: course)
-                        }
-                    }
-                    .listRowBackground(AppTheme.cardBackground)
-                }
-            }
-        }
-        .leafyInsetGroupedListStyle()
-        .scrollContentBackground(.hidden)
-        .background(LeafyPageBackground())
-        .navigationTitle("共享课表")
-        .leafyInlineNavigationTitle()
-        .toolbar {
-            ToolbarItem(placement: .leafyTrailing) {
-                Menu {
-                    ForEach(1...SemesterConfig.supportedWeeks, id: \.self) { week in
-                        Button(weekTitle(week)) {
-                            currentWeek = week
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(weekTitle(currentWeek))
-                        Image(systemName: "chevron.down")
-                    }
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in
-            currentWeek = SemesterConfig.currentWeek()
-        }
-    }
-
-    private func weekTitle(_ week: Int) -> String {
-        L10n.text("第 %d 周", language: leafyLanguage, week)
-    }
-
-    private func dayTitle(_ day: Int) -> String {
-        SharedTimetableCourse(
-            courseName: "",
-            teacher: "",
-            room: "",
-            location: "",
-            dayOfWeek: day,
-            weeks: [],
-            duration: []
-        )
-        .dayTitle(language: leafyLanguage)
-    }
-}
-
-private struct SharedTimetableCourseRow: View {
-    @Environment(\.leafyLanguage) private var leafyLanguage
-    let course: SharedTimetableCourse
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(course.displayCourseName)
-                .leafyHeadline()
-                .foregroundStyle(AppTheme.primaryText)
-
-            Label(course.durationText(language: leafyLanguage), systemImage: "clock")
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-
-            Label(course.locationText, systemImage: "mappin.and.ellipse")
-                .microCaption()
-                .foregroundStyle(AppTheme.secondaryText)
-
-            if !course.teacher.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Label(course.teacher, systemImage: "person")
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-            }
-
-            Text(course.weeksText(language: leafyLanguage))
-                .microCaption()
-                .foregroundStyle(AppTheme.tertiaryText)
-        }
-        .padding(.vertical, 4)
     }
 }

@@ -275,26 +275,24 @@ enum ScheduleReportSettingsStore {
     private static let key = "scheduleReport.settings.v2"
 
     static func load(defaults: UserDefaults = .standard) -> ScheduleReportSettings {
-        let currentKey = scopedKey(key, defaults: defaults)
-        guard let data = defaults.data(forKey: currentKey),
-              let settings = try? JSONDecoder().decode(ScheduleReportSettings.self, from: data)
-        else { return .disabled }
+        (try? loadForEditing(defaults: defaults)) ?? .disabled
+    }
+
+    static func loadForEditing(defaults: UserDefaults = .standard) throws -> ScheduleReportSettings {
+        guard let data = defaults.data(forKey: scopedKey(key, defaults: defaults)) else { return .disabled }
+        let settings = try JSONDecoder().decode(ScheduleReportSettings.self, from: data)
         var normalized = ScheduleReportSettings(
-            isEnabled: settings.isEnabled,
-            modeSettings: settings.modeSettings,
-            reminders: settings.reminders,
-            scheduledNotificationIDs: settings.scheduledNotificationIDs,
-            scheduledCount: settings.scheduledCount,
-            waitingCount: settings.waitingCount
-        )
+            isEnabled: settings.isEnabled, modeSettings: settings.modeSettings, reminders: settings.reminders,
+            scheduledNotificationIDs: settings.scheduledNotificationIDs, scheduledCount: settings.scheduledCount, waitingCount: settings.waitingCount)
         normalized.deriveEnabledState()
         return normalized
     }
 
-    static func save(_ settings: ScheduleReportSettings, defaults: UserDefaults = .standard) {
+    static func save(_ settings: ScheduleReportSettings, defaults: UserDefaults = .standard) throws {
+        _ = try loadForEditing(defaults: defaults)
         var normalized = settings
         normalized.deriveEnabledState()
-        guard let data = try? JSONEncoder().encode(normalized) else { return }
+        let data = try JSONEncoder().encode(normalized)
         defaults.set(data, forKey: scopedKey(key, defaults: defaults))
     }
 
@@ -1023,12 +1021,17 @@ enum ScheduleReportNotificationCapacityPlanner {
 
 @MainActor
 enum ScheduleReportNotificationManager {
+    private static var runID = UUID()
+
     static func updateNotifications(
         settings: ScheduleReportSettings,
         input: ScheduleReportInput,
         weather: TimetableWeatherSnapshot? = nil,
         now: Date = Date()
     ) async throws -> ScheduleReportSettings {
+        let scope = CampusOperationScope()
+        let currentRun = UUID()
+        runID = currentRun
         var updatedSettings = ScheduleReportPlanner.resolvingReminderSources(
             in: settings,
             input: input,
@@ -1050,7 +1053,11 @@ enum ScheduleReportNotificationManager {
         }
 
         let center = try await authorizedNotificationCenter()
+        try scope.check()
+        guard runID == currentRun else { throw CancellationError() }
         let pendingRequests = await center.pendingNotificationRequests()
+        try scope.check()
+        guard runID == currentRun else { throw CancellationError() }
         let previousIDs = Set(settings.scheduledNotificationIDs)
         let otherPendingCount = pendingRequests.filter {
             !previousIDs.contains($0.identifier)
@@ -1065,9 +1072,10 @@ enum ScheduleReportNotificationManager {
         updatedSettings.waitingCount = max(0, drafts.count - selectedDrafts.count)
 
         cancelScheduledNotifications(settings: settings)
-        do {
-            for draft in selectedDrafts {
-                try Task.checkCancellation()
+        center.removePendingNotificationRequests(withIdentifiers: pendingRequests.filter {
+            $0.identifier.hasPrefix("leafy.scheduleReport.") || $0.identifier.hasPrefix("leafy.scheduleReminder.")
+        }.map(\.identifier))
+        let requests = selectedDrafts.map { draft in
                 let content = UNMutableNotificationContent()
                 content.title = draft.title
                 content.body = draft.body
@@ -1076,14 +1084,11 @@ enum ScheduleReportNotificationManager {
 
                 let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: draft.fireDate)
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-                let request = UNNotificationRequest(identifier: draft.id, content: content, trigger: trigger)
-                try await center.add(request)
-                updatedSettings.scheduledNotificationIDs.append(draft.id)
-            }
-        } catch {
-            center.removePendingNotificationRequests(withIdentifiers: selectedDrafts.map(\.id))
-            throw error
+                return UNNotificationRequest(identifier: draft.id + "." + currentRun.uuidString, content: content, trigger: trigger)
         }
+        updatedSettings.scheduledNotificationIDs = try await LocalNotificationBatch.install(requests, scope: scope,
+            isCurrent: { runID == currentRun }, add: { try await center.add($0) },
+            remove: { center.removePendingNotificationRequests(withIdentifiers: $0) })
 
         return updatedSettings
     }
@@ -1093,12 +1098,22 @@ enum ScheduleReportNotificationManager {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: settings.scheduledNotificationIDs)
     }
 
-    static func clearScheduledNotifications(defaults: UserDefaults = .standard) {
-        let settings = ScheduleReportSettingsStore.load(defaults: defaults)
+    static func clearScheduledNotifications(defaults: UserDefaults = .standard) throws {
+        let clearRun = UUID()
+        runID = clearRun
+        Task { @MainActor in
+            let center = UNUserNotificationCenter.current()
+            let pending = await center.pendingNotificationRequests()
+            guard runID == clearRun else { return }
+            center.removePendingNotificationRequests(withIdentifiers: pending.filter {
+                $0.identifier.hasPrefix("leafy.scheduleReport.") || $0.identifier.hasPrefix("leafy.scheduleReminder.")
+            }.map(\.identifier))
+        }
+        let settings = try ScheduleReportSettingsStore.loadForEditing(defaults: defaults)
         cancelScheduledNotifications(settings: settings)
         var clearedSettings = settings
         clearedSettings.scheduledNotificationIDs = []
-        ScheduleReportSettingsStore.save(clearedSettings, defaults: defaults)
+        try ScheduleReportSettingsStore.save(clearedSettings, defaults: defaults)
     }
 
     static func refreshIfEnabled(
@@ -1106,16 +1121,18 @@ enum ScheduleReportNotificationManager {
         weather: TimetableWeatherSnapshot? = nil,
         defaults: UserDefaults = .standard
     ) async throws {
-        let settings = ScheduleReportSettingsStore.load(defaults: defaults)
+        let scope = CampusOperationScope()
+        let settings = try ScheduleReportSettingsStore.loadForEditing(defaults: defaults)
         guard settings.isEnabled else { return }
 
-        let input = ScheduleReportDataSource.input(modelContext: modelContext)
+        let input = try ScheduleReportDataSource.inputForScheduling(modelContext: modelContext)
         let updatedSettings = try await updateNotifications(
             settings: settings,
             input: input,
             weather: weather
         )
-        ScheduleReportSettingsStore.save(updatedSettings, defaults: defaults)
+        try scope.check()
+        try ScheduleReportSettingsStore.save(updatedSettings, defaults: defaults)
     }
 
     private static func authorizedNotificationCenter() async throws -> UNUserNotificationCenter {
@@ -1141,6 +1158,15 @@ enum ScheduleReportDataSource {
             exams: SchoolDataCache.loadExamSchedule(),
             countdowns: CustomScheduleStore.load(),
             cellReminders: fetch(TimetableCellReminder.self, in: modelContext)
+        )
+    }
+
+    static func inputForScheduling(modelContext: ModelContext) throws -> ScheduleReportInput {
+        ScheduleReportInput(
+            courses: try modelContext.fetch(FetchDescriptor<Course>()).filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID },
+            exams: try SchoolDataCache.loadExamScheduleForEditing(),
+            countdowns: try CustomScheduleStore.loadForSync(),
+            cellReminders: try modelContext.fetch(FetchDescriptor<TimetableCellReminder>())
         )
     }
 

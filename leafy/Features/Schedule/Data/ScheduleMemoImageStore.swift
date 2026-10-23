@@ -53,11 +53,6 @@ enum ScheduleMemoImageStore {
         }
     }
 
-    static func deleteAllFiles(in directory: URL? = nil) throws {
-        let url = directory ?? directoryURL()
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
-        try FileManager.default.removeItem(at: url)
-    }
 
     static func directoryURL(identity: CampusIdentity? = CampusIdentityStore.currentIdentity()) -> URL {
         if let identity,

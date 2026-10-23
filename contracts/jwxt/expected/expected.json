@@ -181,7 +181,7 @@
       "kind": "empty_classrooms",
       "result": "error",
       "error": "table_rows_unparseable",
-      "detail": "空教室"
+      "detail": "教室占用行"
     }
   }
 }
