@@ -1,43 +1,54 @@
 # 贡献规范
 
-日常流程：**说明任务 → 从 main 建短期分支 → 本地验证 → 推送并等待 CI result → 快进合入 main → 验收 → 手动发布**。
+MyLeafy 使用一个 Monorepo、`main + codex/*` 短期分支和统一 `CI result`；iOS、Android 独立实现、验证和发版。工程与数据保护原则见 [AGENTS.md](AGENTS.md)。
 
-任务至少说明问题、验收标准和影响范围。小改动在聊天中说明即可；较大功能或架构决策写入 `docs/`。Issue 和 PR 可选，较大改动建议用 PR 展示结果，不要求第二个人批准。
+## 任务、Issue 与 PR
 
-## 分支与合并
+任务先说明问题、涉及平台、共享契约、验收条件和发布边界。先查现有 [Issues](https://github.com/IsaacHuo/MyLeafy/issues) 及关联事项，避免重复创建。
 
-1. 确认工作区干净，fetch origin，将 main 快进到 origin/main，核对两者一致。
-2. 从这个提交创建 `codex/<task>` 短期分支，不在 main 写任务代码。
-3. 运行与风险相称的本地检查，推送分支。**当前提交的 CI result 通过后才合入 main**；失败或取消不能算通过。
-4. 快进合入 main，推送并核对本地/远程 main 一致，完成后删除本任务分支。
+- 明确 Bug、跨端需求与技术债先建或复用 Issue。小文案和局部维护可以直接走任务分支及 CI。
+- 大任务使用 PR，说明具体问题、结果与真实验证；不强制第二个人批准，不要求每个 commit 创建 Issue。
+- 跨端复杂需求使用总 Issue 与平台子 Issue，各自关联 PR 和验收条件。一个平台可以先完成和发布；总 Issue 不因单端合入自动关闭。
+- 标签仅使用必要维度：平台 `ios/android/backend/admin`，工作类型沿用 `bug/enhancement/documentation` 并补 `maintenance`，优先级 `P0/P1/P2`。P0 表示严重安全、数据损失或核心功能不可用，P1 为近期重要工作，P2 为常规改进。
+- 单一 [MyLeafy Development](https://github.com/users/IsaacHuo/projects/1) Projects 看板关联本仓库。状态为 Backlog（待评估）、Ready（验收明确）、In Progress、Acceptance（待验收）、Done（Issue 验收满足）。发布状态以发行证据单独记录，不能从看板列推断。
 
-工作区有未提交改动、main 分叉或无法快进时，保留现场并请求明确解决，不 reset、覆盖或强推。详细规则以 [AGENTS.md](AGENTS.md) 为准。
+## 分支与工作区
 
-## 验证与文档
+1. fetch origin，在安全 checkout 切到 main，只用快进更新并核对与 origin/main 一致，再创建 `codex/<task>`。
+2. 存在无关未提交改动时检查所有权并保留，安全时使用独立 worktree 继续。不要自动 stash、reset、覆盖或混入其他人的 diff。
+3. 完成风险相称的本地验证，推送分支并等待当前提交的 `CI result` 通过。失败、取消或其他提交的成功都不能算当前提交通过。
+4. 主线前进时先更新任务分支并重新验证当前提交，再快进集成 main，推送并核对本地/远程一致；完成后删除本任务分支。
 
-`CI result` 汇总按依赖选择的各端检查。任务分支检查相对 main 的累计改动；PR 检查相对目标分支；main 检查本次提交范围。后台和 admin 契约、共享 fixtures、工作流修改会触发相关端检查。手动运行 CI 检查全部范围。
+只有继续会丢失或覆盖工作、所有权不明、冲突无法安全解决、main 分叉或无法快进时才暂停请求解决。不得强推 main 绕过门禁。
 
-| 范围 | 日常自动验证 |
+## 代码风格与验证
+
+[代码规范与工具](docs/engineering/code-style.md) 定义固定版本、范围及命令。Swift 用 `bash scripts/format-swift.sh [任务路径...]`，Android 在 android 内运行 `./gradlew spotlessApply spotlessCheck`。不要格式化他人的未提交工作；纯格式化和功能修改分开提交。
+
+CI 只检查源码；风格检查失败时按同一工具修复。范围选择覆盖相关跨目录依赖：共享 contracts 触发相关客户端和后端；Swift 主 App 变化仍触发后端契约扫描；工作流修改验证全部范围。手动 CI 检查全部范围。
+
+| 范围 | 自动验证 |
 |---|---|
-| 仓库 | 私有文件/密钥、分层边界、范围选择规则 |
-| iOS | Xcode 26.6、iOS 17 最低目标构建、离线 XCTest；中文测试环境，英文行为由显式语言用例验证 |
-| Android | JDK 17、受版本控制的 Gradle、构建、JVM、lint、截图差异 |
-| 后端 | 锁定 Node 与 npm 依赖、类型/客户端契约、业务/迁移/发行脚本、Worker dry-run |
-| 官网/admin | 类型、单元、生产构建、Chromium/WebKit/iPad WebKit 关键浏览器流程 |
-| 旧 Supabase | Deno 类型/业务契约、本地数据库迁移与权限测试 |
+| 仓库 | 私有文件/密钥、分层边界、CI 范围选择规则 |
+| iOS | 固定 SwiftFormat；Xcode 26.6、iOS 17 最低目标构建、离线 XCTest；中文环境与显式英文用例 |
+| Android | 固定 Spotless / ktlint；现有 Gradle/JVM toolchain、Debug 构建、JVM、Android Lint、Roborazzi |
+| Backend | 锁定 Node/npm 依赖、类型、客户端契约、业务/迁移/发行脚本、Worker dry-run |
+| 官网/admin | 类型、单元、生产构建、Chromium/WebKit/iPad WebKit 浏览器流程 |
+| 旧 Supabase | Deno 类型/业务契约、本地数据库迁移和权限 |
 
-自动化使用合成数据和离线样本，不依赖真实学校账号、验证码或校园网络。失败时在 Actions 下载 XCTest、浏览器或 Android 诊断产物。真实学校会话与手机覆盖升级按发布清单人工验收。
+测试代码存在、测试编译成功、测试执行通过要分别表述；本地、CI、Simulator、真机和真实学校会话各自标明。自动测试使用合成数据和离线样本，不依赖学生账号、验证码或校园网。真机覆盖升级和产品交互按发布清单人工验收。
 
-不提交 `.env`、本地配置、签名材料、token、cookie、学生个人信息或管理员凭据。设计及理由写 `docs/`，已实现结构与状态写 `state/`，可复用根因写 `logs/`，普通历史留给 Git。
+## 文档与跨端状态
 
-## 发布
+- 设计与理由进入 docs，现状进入 state，可复用排查进入 logs，普通历史保留在 Git。
+- [PLATFORMS](state/PLATFORMS.md) 是主要功能的跨端实现、验证和交付差异入口；[ARCHITECTURE](state/ARCHITECTURE.md) 保存当前结构和行为约束。
+- 主要功能状态或架构变化同次更新 state；跨端事项只更新受影响的平台与证据，不覆盖另一端独立结果。
+- 平台差异明确归类：需要对齐、平台特有、刻意保留或待产品决定。版本号独立，不强制同步发版。
+- 已发行用户数据、持久化格式和在用 API 需要必要兼容或明确迁移和恢复；不能按内部代码清理方式直接删除。
+- 不提交本地配置、签名材料、token、Cookie、学生个人信息或管理员凭据。
 
-Android 版本名与 versionCode 更新后，经过 main CI 的正式签名 APK 进入私有 draft 候选。超级管理员在 **admin → Android 版本** 下载验收并决定发布；发布复用同一 APK。不要从 Actions 绕过验收公开新包。
+## 发布与追溯
 
-iOS 在 Xcode 归档和上传，在 App Store Connect 使用 TestFlight、送审和发布。Apple 正式发布后，运行 **Record released iOS version**，记录对应提交、版本和 build。主 App、Widget 和 Share Extension 版本必须一致；GitHub Release 只记录源码，不生成未签名安装包。
+[交付手册](docs/operations/delivery.md) 集中维护发布步骤与验收短清单，[发布索引](docs/operations/release-notes.md) 记录版本/build、源码、tag、产物或商店证据及验收边界，GitHub Release 保存对外说明和产物。
 
-Cloudflare 合入主线后准备 staging；验收通过后运行 **Publish accepted Cloudflare version**，指定提交和 staging 运行，等待 production 人工批准。数据库迁移、Worker、网站依次进行，前一步失败停止后续步骤。Pages 自动生产部署必须先关闭。
-
-正式 tag 和安装包路径不可覆盖。撤回 Android 仅停止推荐，已安装版本通过更高 versionCode 修复；Worker/网站恢复和 D1 数据恢复分别处理。
-
-配置、验收、失败重试及恢复操作见 [交付与发布手册](docs/operations/delivery.md)。
+Android 继续使用私有候选与管理员授权，发布同一 APK；iOS 继续使用 Xcode / App Store Connect，Apple 发布后再记录源码；Cloudflare 生产部署仍需所有者批准。CI 通过、合入 main 或更新源码版本都不会自动代表正式发布。

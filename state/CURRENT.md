@@ -2,7 +2,11 @@
 
 Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development entitlement verified in signed app; repaired iCloud runtime acceptance pending)
 
+工程与文档核对：2026-10-23。上述 Last verified 仍保留原有 iOS 签名/真机范围，不代表本轮重新验收云同步或产品发布。跨端主要能力、独立验证及交付差异见 [PLATFORMS](PLATFORMS.md)。
+
 ## Current Focus
+
+- **双端代码规范与仓库协作**：SwiftFormat 0.64.1、Spotless 8.10.4 / ktlint 1.8.0 已固定，全部自有 Swift/Kotlin/Gradle 源码完成纯排版收敛，风格检查进入现有 CI result；根配置变更具有双端范围回归。iOS 17 最低目标本地构建通过，199 个 Swift 修改文件的编译器解析字符串值一致；本轮完整自动化结果以精确提交 CI 为准，不替代真机/升级验收。AGENTS / CONTRIBUTING、模板、发布索引与跨端状态分工统一；后续验收/源码追溯/日迹组件拆分分别登记在 [#36–39](https://github.com/IsaacHuo/MyLeafy/issues?q=is%3Aissue+is%3Aopen)。本轮不改变业务、数据库、版本或生产审批。
 
 - **Android 与 iOS 对齐优化（2026-10-23）**：本轮只改 Android，未改任何请求范围或产品能力。账号密码链路：备份规则排除 Keystore 密文、解密失败与“无凭据”分离、凭据/登出改为持久写、改学号清空旧密码、登录成功与自动填充保存解耦、验证码在回前台/网络恢复时重试、登录表单支持 Autofill 并收敛为单卡分组。课表拉取：可信空结果不再直接覆盖已有课表、同步过程改为步骤卡（运行/完成/失败原因）、下拉刷新改为覆盖层不再顶动网格、首次同步复用步骤模型、课前提醒排期移出主线程并只取消过期闹钟、教务请求可取消。视觉：统一 24dp 卡片 + 1px 描边 + 浅色投影、页面主题渐变、课程块 12dp + 今日描边、课表色改为同基色明度阶梯、中性色统一为绿灰族、alpha 语义 token 化、暗色 card/modal 层级分离。其他：评论 cursor 分页与作者昵称、Feed 进程内缓存与刷新深度、通知 work 先入队后清理、日迹读取失败保留上次数据、正文 `#标签` 生效、图片继续缩尺寸、点赞/收藏改用最新状态、删除日程级联提醒、CI 增加 instrumented job 与 release 编译/lint、release 开启 R8/shrinkResources。验证：JVM 186 项（179 通过、7 外部探测跳过）、lint 0 error、73 张 Roborazzi 基线重录并 verify 通过、R8 release 打包（临时测试签名）通过、isolated API 36 模拟器 instrumented 47 项全部通过；新增 CI instrumented job 待远端首次执行。真机、Release 帧时与基线 profile 未做。
 

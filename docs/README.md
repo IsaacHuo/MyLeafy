@@ -10,6 +10,7 @@ git     → What changed.                       （普通改动历史）
 ```
 
 - **当前代码结构与分层**：见 [`state/ARCHITECTURE.md`](../state/ARCHITECTURE.md)。
+- **双端实现、验证与交付差异**：见 [`state/PLATFORMS.md`](../state/PLATFORMS.md)。
 - **当前开发进度与重点**：见 [`state/CURRENT.md`](../state/CURRENT.md)。
 - **可复用的调试与根因知识**：见 [`logs/`](../logs/)。
 
@@ -34,7 +35,7 @@ git     → What changed.                       （普通改动历史）
 
 | 文档 | 内容 |
 |---|---|
-| [App 产品设计](design/app-design.md) | 产品目标、五项根导航、日迹入口、核心页面和全局状态 |
+| [App 产品设计](design/app-design.md) | 产品目标、iOS 三 Tab / Android 五 Tab、核心页面和全局状态 |
 | [UI 风格规范](design/ui-style-guide.md) | 主题、字体、间距、白色日迹卡片、Tag 胶囊、评分星级、组件、动效和可访问性 |
 | [UI 实现总结](design/ui-implementation.md) | 当前 iOS 页面与组件的设计实现 |
 
@@ -42,6 +43,7 @@ git     → What changed.                       （普通改动历史）
 
 | 文档 | 内容 |
 |---|---|
+| [代码规范](engineering/code-style.md) | 固定格式工具、作用范围、本地/CI 命令与排版边界 |
 | [Cloudflare 后端](engineering/cloudflare-migration.md) | Workers、D1、R2、认证与迁移验证 |
 | [旧 Supabase 服务](engineering/supabase.md) | 旧版仍在使用的 Auth、RLS、Storage、Functions |
 | [运营后台](engineering/admin-console.md) | Web 后台、RBAC、代理、安全、开发和测试 |
@@ -66,8 +68,8 @@ git     → What changed.                       （普通改动历史）
 
 - 文档默认使用中文，代码标识、命令和协议名保留原文。
 - **职责边界**：本文档记录设计与规划（What we intend）；当前实现与进度进入 [`state/`](../state/)，排查知识进入 [`logs/`](../logs/)。不要把现状和设计混写在同一文档。
-- 当前产品事实进入 Product、Design 或 Engineering；发布记录和复盘进入 Operations。
-- Product、Design 和 Engineering 默认描述当前 `main`，不嵌入容易过期的版本/build 限定；正式版本、tag 和源码提交统一记录在发布记录中。
+- 当前产品事实以 state 为权威；Product、Design、Engineering 描述对应设计与理由，通过链接引用现状。发布流程和发行证据进入 Operations。
+- 设计文档明确区分已采纳设计与未来方案，不重复维护状态或容易过期的版本/build；正式版本、tag 和源码提交统一记录在发布索引中。
 - 不建立通用历史归档目录。仍有明确复用价值的历史材料放入具体运维分类，无维护价值的临时计划和操作记录直接删除。
 - 链接使用仓库相对路径，不写本机绝对路径。
 - 用户可见能力必须注明数据来源、可用条件和失败边界。

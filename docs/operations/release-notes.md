@@ -2,9 +2,36 @@
 
 本文是 MyLeafy 正式版本、源码锚点和用户可见更新摘要的唯一记录入口。App Store 实际使用过的短文案与根据 Git 历史补录的版本摘要分开标注；特定审核过程见 [`app-store/`](app-store/)。正式 tag 创建后不得移动、覆盖或强制更新。
 
-iOS 发布通过 GitHub Actions 的 `Cut iOS Release` workflow（`workflow_dispatch`）完成：它会用当前 `main` 构建未签名的 `.xcarchive`，在 `main` 上创建 `vX.Y` tag，并生成一个挂载归档的 draft Release。确认草稿内容后手动发布即可；App Store 提交流程仍为人工操作。
+iOS 通过 Xcode 与 App Store Connect 归档、验收和发布。Apple 正式发布后，运行 **Record released iOS version**，核对二进制对应的源码、version/build、main 来源及精确提交 CI，创建不可变 annotated tag 与源码 Release；不构建未签名归档。具体步骤与验收清单见[交付手册](delivery.md)。
 
-Android 使用独立候选准备与管理员验收发布流程，以及 `android-vX.Y.Z` tag。主线 CI 通过后构建正式签名候选；管理员验收并授权后，发布同一 APK、SHA-256 与构建信息。具体流程见 [交付与发布](delivery.md)；不会构建或修改 iOS 归档。
+Android 使用独立候选准备与管理员验收发布流程，以及 `android-vX.Y.Z` tag。main CI 为新 code 准备私有签名候选；超级管理员验收并授权后发布同一 APK、SHA-256 与构建信息。不因源码合入或候选生成而标为正式发布。
+
+## 当前发行索引
+
+核对日期：2026-10-23（Asia/Shanghai）。GitHub Release/tag、商店和当前源码是不同证据；公开商店查询不能证明内部 build 和源码提交。当前功能差异见 [PLATFORMS](../../state/PLATFORMS.md)。
+
+| 平台 / 版本 | 状态与分发证据 | Build / code | 源码 / tag | 验收边界 |
+|---|---|---|---|---|
+| iOS 3.2.5 | [中国区 App Store](https://apps.apple.com/cn/app/id6763968535) / [公开查询](https://itunes.apple.com/lookup?id=6763968535&country=cn)，发布时间 2026-10-18 06:49 +08:00 | 待核实 | 待核实；不能从当前 main 推断 | 商店上架已核实；精确二进制、build 与源码对应关系见 [#38](https://github.com/IsaacHuo/MyLeafy/issues/38) |
+| iOS 3.0 | GitHub 草稿，不作为正式发行证据 | 待核实 | 草稿 target 为 main，不是确定源码锚点 | 不推断 App Store 交付或测试结果 |
+| iOS 2.9 | [正式 GitHub 源码记录](https://github.com/IsaacHuo/MyLeafy/releases/tag/v2.9)，历史记录见下文 | 27（仓库既有 Apple 记录） | `6d5c0331266b49461153fb47b9a17a1f37e5a230` / `v2.9` | 本轮未重新验收历史二进制 |
+| Android 1.2.6 | 私有 `android-candidate-10`，未正式发布 | 10 | `592c54b30d84bcd089eecf1034cd53ba10c0b9ce` | 待所有者下载、正式包覆盖升级及管理员授权，见 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37) |
+| Android 1.2.4 | [正式 Release 与 APK](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.4)，2026-10-09 | 8 | `c9ff99fd8373a7acc3895a01d835bfbcd7ca5a0c` / `android-v1.2.4` | 正式发布记录已核实；本轮未重做真机验收 |
+
+Android 1.2.4 正式 APK 的 GitHub asset SHA-256 为 `332b5d80aec17d63805e09c7896ba6181b2a1b6589c1372994f837730e0205f9`；同一 Release 附构建信息与校验文件。1.2.6 私有候选 APK 的 asset SHA-256 为 `4e80c223ac7043e0b937546e6ed0b0e548ba0de2b9d3d7f78e179cee8eecaa80`。这里核对的是发行元数据，未重新下载或安装 APK。
+
+## 其他正式 Android 源码锚点
+
+以下来自 GitHub 正式 Release 与 tag，更新说明和产物链接直接使用 Release，不再复制长篇摘要。历史真机结果只在有原始证据时补录。
+
+| 版本 | code | 正式源码 | Release |
+|---|---|---|---|
+| 1.2.2 | 6 | `39af5c96df85fcb1284cfc33a2e38ac77b211d26` | [android-v1.2.2](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.2) |
+| 1.2.1 | 5 | `766f8a7a661143cfba2c26e6adf8986776c61e88` | [android-v1.2.1](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.1) |
+| 1.2.0 | 4 | `8c8e4b8418250a89ed89fa9bf59f579081c00a34` | [android-v1.2.0](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.2.0) |
+| 1.1.0 | 3 | `5cbc577a56f84aace46d4dd5d977632056115d83` | [android-v1.1.0](https://github.com/IsaacHuo/MyLeafy/releases/tag/android-v1.1.0) |
+
+新增发行沿用上面的最小字段：平台/version、状态、versionCode/build、精确源码、不可变 tag、正式产物或商店证据、验收结果/缺口和核对日期。源码版本变化不自动新增正式发行，未核实字段明确保留；不要移动旧 tag 补齐缺失信息。
 
 ## Android 1.0.1
 
@@ -20,20 +47,6 @@ Android 使用独立候选准备与管理员验收发布流程，以及 `android
 | 真机验收 | Xiaomi 24069RA21C / Android 16：保留身份与本地数据覆盖安装、冷启动及社区加载通过 |
 
 此热修复保留登录失败原因，并为社区 TLS 连接被当前网络拦截的情况提供安全、可操作的提示；不会关闭证书主机名校验。
-
-## 未发布
-
-- 根导航为课表、社区、日迹、校园、我的；日迹顶部提供随记、日程、推送。
-- 课表按单个学年浏览，学校单学期课表保留 20 周数据范围；随记和个人日程按校园身份保存在本地。
-- 日迹卡片使用白色系统表面，Tag 使用白字主题色胶囊；筛选显示当前 Tag 并提供“全部随记”，评分详情星级居中。
-- 日迹输入器支持聚焦展开、逐行增高和长文本放大编辑；加号菜单不再提供新建文章入口，历史文章仍可查看和编辑。
-- “记录”分组新增“记录日迹”，提供自然年、近 30 天、连续记录、习惯与里程碑统计，并可在本机生成只含聚合数据的分享图片。
-- 校园一级领域“空闲教室”调整为“自习安排”，专注记录移入“学习空间”；编辑资料和“我的”主页隐藏竖向滚动指示器。
-- 教务同步现在区分完整成功、部分成功和失败；异常或无法识别的空页面不会覆盖最近成功缓存。
-- 改进系统大字体、英文界面、记录日迹图表读屏、社区局部错误恢复和发布重试可靠性。
-- 课表双指缩放改为同一日期列布局内的可逆连续形变：本周让今天居中，其他周从周一至周三进入；三日视图支持每次三个自然日的左右分页并缩回当前页面所属周。时间视图年度缩略恢复 1–12 月自然顺序，照片背景替换后立即刷新并默认完整显示。
-- 课程教师可直达评价页；投票卡片无需先投票即可查看各选项比例；阳光长跑采用 2026–2027 第一学期日期和假期周。
-- 新建个人日程会以同一条记录同时显示在日程列表和随记流，并按真实创建时间参与随记搜索与排序。
 
 ## Android 1.0.0
 

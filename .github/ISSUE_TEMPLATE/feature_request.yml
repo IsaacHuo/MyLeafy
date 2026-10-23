@@ -1,31 +1,38 @@
 name: Feature request
-description: Suggest a small product or engineering improvement.
+description: Define a product or engineering improvement and its acceptance criteria.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What user need or engineering problem does this address?
-      placeholder: Students need a faster way to...
+      label: Problem / user need
+    validations:
+      required: true
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Affected platforms
+      multiple: true
+      options: [iOS, Android, Backend, Website / Admin, Repository tooling]
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed solution
-      description: Describe the smallest useful version of the change.
+      label: Smallest useful solution and boundaries
+      description: Identify shared contracts and intentional platform differences. Existing app versions may release independently.
     validations:
       required: true
   - type: textarea
-    id: scope
+    id: acceptance
     attributes:
-      label: Scope
-      description: Which parts of the project are affected?
-      placeholder: iOS app, widgets, Supabase, website, admin console, docs
+      label: Acceptance criteria by affected platform
+      description: Separate implementation, automated checks, device acceptance and publication. Link platform sub-issues for larger work.
+    validations:
+      required: true
   - type: textarea
-    id: alternatives
+    id: context
     attributes:
-      label: Alternatives considered
-      description: Optional. Note any simpler workaround or rejected approach.
+      label: Existing behavior / versions / alternatives
+      description: Link current state, related issues and simpler alternatives. Do not include private data.
