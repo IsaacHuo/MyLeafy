@@ -202,7 +202,8 @@ struct GradeAnalytics: Hashable {
                 credit: course.credit,
                 score: course.score,
                 rawScore: course.rawScore,
-                type: course.type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("未分类") : course.type,
+                type: course.type.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("未分类") : course
+                    .type,
                 isPassed: course.isPassed,
                 attemptCount: course.attemptCount,
                 isIncludedInStatistics: course.score != nil
@@ -249,7 +250,8 @@ struct GradeAnalytics: Hashable {
             medianScore: medianScore,
             standardDeviation: standardDeviation,
             riskCourseCount: parsedCourses.filter { !$0.isPassed }.count,
-            passRate: parsedCourses.isEmpty ? nil : Double(parsedCourses.filter(\.isPassed).count) / Double(parsedCourses.count),
+            passRate: parsedCourses
+                .isEmpty ? nil : Double(parsedCourses.filter(\.isPassed).count) / Double(parsedCourses.count),
             passedCredits: passedCredits,
             rawRecordCount: grades.count,
             effectiveCourseCount: parsedCourses.count,
@@ -339,7 +341,6 @@ struct GradeAnalytics: Hashable {
         }
         return lhs.name.localizedCompare(rhs.name) == .orderedAscending
     }
-
 }
 
 enum EffectiveGradeCourseResolver {
@@ -398,7 +399,7 @@ enum EffectiveGradeCourseResolver {
     static func numericScore(from text: String) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let value = Double(trimmed) {
-            return value.isFinite && (0...100).contains(value) ? value : nil
+            return value.isFinite && (0 ... 100).contains(value) ? value : nil
         }
 
         return nil
@@ -439,7 +440,6 @@ enum EffectiveGradeCourseResolver {
         let courseKey = code.isEmpty
             ? [grade.term, normalizedCourseName(grade.courseName), String(credit)].joined(separator: "|")
             : "code|" + code
-
 
         return Attempt(
             recordID: grade.id,

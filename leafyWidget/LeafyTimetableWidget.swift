@@ -19,7 +19,8 @@ struct LeafyTimetableProvider: TimelineProvider {
             let now = Date()
             let archive = LeafyWidgetSnapshotStore.loadArchive()
             completion(LeafyTimetableEntry(date: now, archive: archive,
-                selectedDayOffset: LeafyWidgetSnapshotStore.selectedDayOffset, temperatureText: archive?.temperatureText(at: now) ?? "--°"))
+                                           selectedDayOffset: LeafyWidgetSnapshotStore.selectedDayOffset,
+                                           temperatureText: archive?.temperatureText(at: now) ?? "--°"))
         }
     }
 
@@ -30,7 +31,7 @@ struct LeafyTimetableProvider: TimelineProvider {
         let dates = archive?.timelineDates(from: now) ?? [now]
         let entries = dates.map {
             LeafyTimetableEntry(date: $0, archive: archive, selectedDayOffset: dayOffset,
-                               temperatureText: archive?.temperatureText(at: $0) ?? "--°")
+                                temperatureText: archive?.temperatureText(at: $0) ?? "--°")
         }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(20 * 60))))
     }
@@ -55,8 +56,9 @@ struct LeafyTimetableProvider: TimelineProvider {
         }
         let start = max(now.addingTimeInterval(1800), day.addingTimeInterval(9 * 3600))
         archive.items.append(LeafyWidgetAgendaItem(id: "preview-schedule", kind: .schedule,
-            sourceID: "preview", title: "图书馆自习", startsAt: start,
-            endsAt: start.addingTimeInterval(3600), locationText: "图书馆", accentIndex: 2))
+                                                   sourceID: "preview", title: "图书馆自习", startsAt: start,
+                                                   endsAt: start.addingTimeInterval(3600), locationText: "图书馆",
+                                                   accentIndex: 2))
         return LeafyTimetableEntry(date: now, archive: archive, selectedDayOffset: 0, temperatureText: "23°")
     }
 }
@@ -103,7 +105,7 @@ private struct LeafyWidgetEntryView: View {
         .invalidatableContent()
         .containerBackground(for: .widget) { LeafyWidgetBackground(palette: palette) }
         .widgetURL(entry.archive?.isAuthenticated == true
-                   ? LeafyWidgetRoute.timetable.url : LeafyWidgetRoute.cacheSync.url)
+            ? LeafyWidgetRoute.timetable.url : LeafyWidgetRoute.cacheSync.url)
     }
 }
 
@@ -202,14 +204,14 @@ private struct LeafyDayWidgetView: View {
                     .lineLimit(1).minimumScaleFactor(0.85)
                 HStack(spacing: 4) {
                     Text(date.formatted(.dateTime.month(.twoDigits).day(.twoDigits)
-                        .locale(LeafyWidgetLanguagePreference.current.locale)))
+                            .locale(LeafyWidgetLanguagePreference.current.locale)))
                     if isSmall { Text(entry.temperatureText) }
                 }
                 .font(.system(size: 9, weight: .medium)).foregroundStyle(palette.secondary)
             }
             Spacer(minLength: 0)
             LeafyWidgetDaySwitchControl(selectedDayOffset: entry.selectedDayOffset, palette: palette,
-                                       isSmall: isSmall)
+                                        isSmall: isSmall)
         }
         .frame(height: 31)
     }
@@ -237,7 +239,8 @@ private struct LeafyAgendaRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 5) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(item.kind == .schedule ? palette.brand : palette.courseAccents[item.accentIndex % palette.courseAccents.count])
+                .fill(item.kind == .schedule ? palette.brand : palette
+                    .courseAccents[item.accentIndex % palette.courseAccents.count])
                 .frame(width: 3)
                 .widgetAccentable()
             VStack(alignment: .leading, spacing: 1) {
@@ -269,7 +272,6 @@ private struct LeafyAgendaRow: View {
                     }
                     .font(.system(size: 9)).foregroundStyle(palette.secondary).lineLimit(1)
                 }
-
             }
         }
         .frame(height: isSmall ? 24 : 20, alignment: .top)

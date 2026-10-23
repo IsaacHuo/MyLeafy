@@ -64,7 +64,8 @@ struct CourseSectionView: View {
     @State private var suggestionSheet: CatalogSuggestionSheetContext?
 
     private var hasActiveFilters: Bool {
-        selectedCategory != nil || selectedStars != nil || !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        selectedCategory != nil || selectedStars != nil || !search.trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
     }
 
     var body: some View {
@@ -176,7 +177,10 @@ struct CourseSectionView: View {
                     .foregroundStyle(AppTheme.danger)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    .background(
+                        AppTheme.cardBackground,
+                        in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    )
             }
 
             ForEach(filteredCourses) { summary in
@@ -248,14 +252,16 @@ struct CourseSectionView: View {
 
         do {
             try await dependencies.communityRepository.ensureAnonymousSession()
-            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCategory == requestSelectedCategory else { return }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch,
+                  selectedCategory == requestSelectedCategory else { return }
             let fetchedCourses = try await dependencies.communityRepository.fetchCourseRatingSummaries(
                 search: search,
                 category: selectedCategory,
                 limit: pageSize,
                 offset: reset ? 0 : courses.count
             )
-                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCategory == requestSelectedCategory else { return }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch,
+                  selectedCategory == requestSelectedCategory else { return }
             if reset {
                 courses = fetchedCourses
             } else {
@@ -266,7 +272,8 @@ struct CourseSectionView: View {
             store.load.complete(loadID)
             errorMessage = nil
         } catch {
-            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCategory == requestSelectedCategory else { return }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch,
+                  selectedCategory == requestSelectedCategory else { return }
             errorMessage = error.localizedDescription
         }
         updateDerivedCourseState()

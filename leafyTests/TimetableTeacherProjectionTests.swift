@@ -21,14 +21,14 @@ final class TimetableTeacherProjectionTests: XCTestCase {
             totalWeeks: 14
         )
 
-        let mondayTeachersByWeek = (2...14).compactMap { week in
+        let mondayTeachersByWeek = (2 ... 14).compactMap { week in
             snapshot.layouts(day: 1, week: week)
                 .first { $0.course.displayCourseName == "课程甲" }
                 .map { (week, $0.course.teacher) }
         }
         XCTAssertEqual(
             mondayTeachersByWeek.map(\.0),
-            Array(2...9) + Array(11...14)
+            Array(2 ... 9) + Array(11 ... 14)
         )
         XCTAssertEqual(
             mondayTeachersByWeek.map(\.1),

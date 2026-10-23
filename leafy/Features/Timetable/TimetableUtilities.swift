@@ -54,7 +54,7 @@ nonisolated enum TimetablePeriodSchedule {
         return slots.first { slot in
             let start = slot.startHour * 60 + slot.startMinute
             let end = slot.endHour * 60 + slot.endMinute
-            return (start...end).contains(minutes)
+            return (start ... end).contains(minutes)
         }
     }
 
@@ -92,8 +92,8 @@ nonisolated enum TimetablePeriodSchedule {
         dayOfWeek: Int,
         period: Int
     ) -> Date? {
-        guard (1...SemesterConfig.timetableWeekCapacity).contains(week),
-              (1...7).contains(dayOfWeek), let slot = slot(for: period) else { return nil }
+        guard (1 ... SemesterConfig.timetableWeekCapacity).contains(week),
+              (1 ... 7).contains(dayOfWeek), let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
         let calendar = UserTimetableSettings.calendar
@@ -124,8 +124,8 @@ nonisolated enum TimetablePeriodSchedule {
         dayOfWeek: Int,
         period: Int
     ) -> Date? {
-        guard (1...SemesterConfig.timetableWeekCapacity).contains(week),
-              (1...7).contains(dayOfWeek), let slot = slot(for: period) else { return nil }
+        guard (1 ... SemesterConfig.timetableWeekCapacity).contains(week),
+              (1 ... 7).contains(dayOfWeek), let slot = slot(for: period) else { return nil }
 
         let dayOffset = (week - 1) * 7 + (dayOfWeek - 1)
         let calendar = UserTimetableSettings.calendar
@@ -172,7 +172,7 @@ nonisolated enum TimetablePeriodSchedule {
         }
 
         guard let first = periods.first, let last = periods.last else { return nil }
-        return first...last
+        return first ... last
     }
 }
 
@@ -224,7 +224,6 @@ enum TimetableCacheMetadata {
     private static func scoped(_ key: String) -> String {
         CampusScopedDefaults.key(key)
     }
-
 }
 
 @MainActor
@@ -537,7 +536,7 @@ enum TimetableNoteResolver {
 @MainActor
 enum TimetableNotificationManager {
     static let reminderOptions = [0, 5, 20, 30]
-    static let customReminderRange = 1...180
+    static let customReminderRange = 1 ... 180
 
     static func normalizedReminderMinutes(_ minutes: Int) -> Int {
         guard minutes > 0 else { return 0 }
@@ -584,12 +583,12 @@ enum TimetableNotificationManager {
         let now = Date()
         for week in course.weeks.sorted() {
             guard let triggerDate = reminderTriggerDate(
-                for: course,
-                week: week,
-                minutesBefore: minutesBefore,
-                anchorPeriod: anchorPeriod
-            ),
-                triggerDate > now
+                      for: course,
+                      week: week,
+                      minutesBefore: minutesBefore,
+                      anchorPeriod: anchorPeriod
+                  ),
+                  triggerDate > now
             else {
                 continue
             }

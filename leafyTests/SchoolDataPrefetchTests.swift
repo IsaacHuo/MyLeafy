@@ -355,7 +355,7 @@ final class SchoolDataPrefetchTests: XCTestCase {
 
     @MainActor
     private func waitUntil(_ predicate: @escaping @MainActor () -> Bool) async {
-        for _ in 0..<20 {
+        for _ in 0 ..< 20 {
             if predicate() { return }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }

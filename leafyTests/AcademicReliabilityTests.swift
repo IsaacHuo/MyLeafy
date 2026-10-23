@@ -99,7 +99,11 @@ final class AcademicReliabilityTests: XCTestCase {
         XCTAssertEqual(document.tables?.count, 1)
         XCTAssertTrue(document.sections[0].body.contains("第二课堂"))
         let summary = try HTMLParser.parseGradeCreditSummary(html: creditSummaryFixture)
-        let progress = GraduationCreditProgressCalculator.calculate(requirements: document.creditRequirements, grades: [], creditSummary: summary)
+        let progress = GraduationCreditProgressCalculator.calculate(
+            requirements: document.creditRequirements,
+            grades: [],
+            creditSummary: summary
+        )
         XCTAssertEqual(progress.totalRequiredCredits, 167)
         XCTAssertEqual(progress.totalCompletedCredits, 102.5)
         let professional = try XCTUnwrap(progress.categories.first { $0.kind == .professionalElective })
@@ -117,7 +121,10 @@ final class AcademicReliabilityTests: XCTestCase {
         let url = directory.appendingPathComponent("grades.store")
         try autoreleasepool {
             let schema = Schema(versionedSchema: OriginalGradeSchema.self)
-            let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: url))
+            let container = try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(schema: schema, url: url)
+            )
             let context = ModelContext(container)
             context.insert(OriginalGradeSchema.Grade(term: "2025-1", courseName: "保留的成绩"))
             try context.save()
@@ -137,7 +144,15 @@ final class AcademicReliabilityTests: XCTestCase {
         let container = try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = ModelContext(container)
         context.insert(Grade(term: "2025-1", courseName: "旧课程", credit: "2", score: "80", type: "必修"))
-        context.insert(Grade(term: "2025-2", courseName: "新课程", credit: "3", score: "90", type: "必修", courseCode: "NEW-1", examNature: "正常考试"))
+        context.insert(Grade(
+            term: "2025-2",
+            courseName: "新课程",
+            credit: "3",
+            score: "90",
+            type: "必修",
+            courseCode: "NEW-1",
+            examNature: "正常考试"
+        ))
         try context.save()
         let restored = try ModelContext(container).fetch(FetchDescriptor<Grade>())
         XCTAssertEqual(restored.count, 2)
@@ -190,17 +205,26 @@ extension AcademicReliabilityTests {
         let html = #"{"rows":[{"mc":"1,2节","z1":"课程甲[1-4周]教师[A101]","z2":"课程乙[2-3周]教师[B201]"}]}"#
         let records = try HTMLParser.parseTimetableRecords(html: html)
         XCTAssertEqual(Set(records.map(\.courseName)), ["课程甲", "课程乙"])
-        XCTAssertEqual(records.first { $0.courseName == "课程甲" }?.weeks, [1,2,3,4])
+        XCTAssertEqual(records.first { $0.courseName == "课程甲" }?.weeks, [1, 2, 3, 4])
     }
 
     func testExamParserRejectsInvalidCalendarDateAndTimeWithoutCachingPartialRows() {
         let header = "<table id='dataList'><tr><th>课程名称</th><th>考试时间</th></tr>"
-        for time in ["2026-02-30 09:00-10:00", "2026-06-20 25:00-26:00", "2026-06-20 09:80-10:00", "2026-06-20 10:00-09:00"] {
-            XCTAssertThrowsError(try HTMLParser.parseExams(html: header + "<tr><td>考试</td><td>\(time)</td></tr></table>"))
+        for time in [
+            "2026-02-30 09:00-10:00",
+            "2026-06-20 25:00-26:00",
+            "2026-06-20 09:80-10:00",
+            "2026-06-20 10:00-09:00"
+        ] {
+            XCTAssertThrowsError(try HTMLParser
+                .parseExams(html: header + "<tr><td>考试</td><td>\(time)</td></tr></table>"))
         }
     }
 
     func testBlankOfficialCreditCellIsNotConvertedToVerifiedZero() {
-        XCTAssertThrowsError(try HTMLParser.parseGradeCreditSummary(html: creditSummaryFixture.replacingOccurrences(of: "<td>90</td>", with: "<td></td>")))
+        XCTAssertThrowsError(try HTMLParser.parseGradeCreditSummary(html: creditSummaryFixture.replacingOccurrences(
+            of: "<td>90</td>",
+            with: "<td></td>"
+        )))
     }
 }

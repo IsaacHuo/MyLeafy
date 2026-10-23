@@ -13,8 +13,19 @@ final class Course {
     var dayOfWeek: Int
     var weeks: [Int]
     var duration: [Int]
-    
-    init(id: UUID = UUID(), courseName: String, teacher: String, classInfo: String = "", room: String, location: String = "", dayOfWeek: Int, weeks: [Int], duration: [Int], sourceSemesterID: String = SemesterConfig.currentSemesterID) {
+
+    init(
+        id: UUID = UUID(),
+        courseName: String,
+        teacher: String,
+        classInfo: String = "",
+        room: String,
+        location: String = "",
+        dayOfWeek: Int,
+        weeks: [Int],
+        duration: [Int],
+        sourceSemesterID: String = SemesterConfig.currentSemesterID
+    ) {
         self.id = id
         self.sourceSemesterID = sourceSemesterID
         self.courseName = courseName

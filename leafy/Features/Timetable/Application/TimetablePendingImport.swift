@@ -25,7 +25,10 @@ enum TimetablePendingImportStore {
         let url = try url()
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let pending = TimetablePendingImport(records: records, sourceSemesterID: semesterID, fetchedAt: Date())
-        try JSONEncoder().encode(pending).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try JSONEncoder().encode(pending).write(
+            to: url,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+        )
     }
     static func clear() throws {
         let url = try url()

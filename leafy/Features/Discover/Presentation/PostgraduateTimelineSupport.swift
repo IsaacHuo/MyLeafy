@@ -182,15 +182,40 @@ private extension PostgraduateTimelinePhase {
     func window(forExamYear examYear: Int) -> PostgraduateTimelineWindow {
         switch self {
         case .explore:
-            return PostgraduateTimelineWindow(startYear: examYear - 1, startMonth: 3, endYear: examYear - 1, endMonth: 6)
+            return PostgraduateTimelineWindow(
+                startYear: examYear - 1,
+                startMonth: 3,
+                endYear: examYear - 1,
+                endMonth: 6
+            )
         case .catalog:
-            return PostgraduateTimelineWindow(startYear: examYear - 1, startMonth: 7, endYear: examYear - 1, endMonth: 9)
+            return PostgraduateTimelineWindow(
+                startYear: examYear - 1,
+                startMonth: 7,
+                endYear: examYear - 1,
+                endMonth: 9
+            )
         case .registration:
-            return PostgraduateTimelineWindow(startYear: examYear - 1, startMonth: 10, endYear: examYear - 1, endMonth: 10)
+            return PostgraduateTimelineWindow(
+                startYear: examYear - 1,
+                startMonth: 10,
+                endYear: examYear - 1,
+                endMonth: 10
+            )
         case .confirmation:
-            return PostgraduateTimelineWindow(startYear: examYear - 1, startMonth: 11, endYear: examYear - 1, endMonth: 11)
+            return PostgraduateTimelineWindow(
+                startYear: examYear - 1,
+                startMonth: 11,
+                endYear: examYear - 1,
+                endMonth: 11
+            )
         case .initialExam:
-            return PostgraduateTimelineWindow(startYear: examYear - 1, startMonth: 12, endYear: examYear - 1, endMonth: 12)
+            return PostgraduateTimelineWindow(
+                startYear: examYear - 1,
+                startMonth: 12,
+                endYear: examYear - 1,
+                endMonth: 12
+            )
         case .scoreLine:
             return PostgraduateTimelineWindow(startYear: examYear, startMonth: 2, endYear: examYear, endMonth: 3)
         case .retest:

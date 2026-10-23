@@ -132,7 +132,7 @@ nonisolated struct LeafyWidgetSnapshotArchive: Codable, Hashable, Sendable {
         let start = calendar.startOfDay(for: date)
         let weekday = (calendar.component(.weekday, from: start) + 5) % 7
         let monday = calendar.date(byAdding: .day, value: -weekday, to: start) ?? start
-        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+        return (0 ..< 7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
     }
 
     /// Boundaries keep active/upcoming state and calendar days correct without opening the app.
@@ -237,7 +237,8 @@ nonisolated struct LeafyWidgetWeekBlock: Identifiable, Sendable {
                 blocks.append(Self(id: "more-\(first.id)", segment: first, lane: 1, laneCount: 2,
                                    hiddenCount: assigned.count - visible.count,
                                    startMinute: first.startMinute,
-                                   endMinute: group.map { max($0.endMinute, $0.startMinute + minimumMinutes) }.max() ?? first.endMinute))
+                                   endMinute: group.map { max($0.endMinute, $0.startMinute + minimumMinutes) }
+                                       .max() ?? first.endMinute))
             }
             return blocks
         }

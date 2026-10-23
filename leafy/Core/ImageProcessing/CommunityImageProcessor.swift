@@ -79,7 +79,7 @@ actor CommunityImageProcessor: CommunityImageProcessing {
         var smallestSize = (width: image.width, height: image.height)
         var currentMaxDimension = CGFloat(max(image.width, image.height))
 
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             for quality in qualities {
                 guard let data = jpegData(from: candidateImage, quality: quality) else {
                     continue

@@ -297,7 +297,10 @@ extension SchoolDataRefreshTests {
     @MainActor
     func testFailedGradeReplacementRetainsBothGradesAndUnrelatedPendingValues() throws {
         let schema = Schema([Grade.self, CourseNote.self])
-        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let container = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        )
         let context = container.mainContext
         context.autosaveEnabled = false
         let old = Grade(term: "old", courseName: "old grade", credit: "2", score: "80", type: "必修")
@@ -307,7 +310,8 @@ extension SchoolDataRefreshTests {
         old.score = "unsaved grade"
         let incoming = Grade(term: "new", courseName: "incoming", credit: "3", score: "90", type: "必修")
         XCTAssertThrowsError(try SchoolDataSyncService.persistGrades([incoming], modelContext: context,
-            save: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
+                                                                     save: { _ in
+                                                                         throw CocoaError(.fileWriteOutOfSpace) }))
         XCTAssertEqual(try context.fetch(FetchDescriptor<Grade>()).map(\.id), [old.id])
         XCTAssertEqual(old.score, "unsaved grade")
         XCTAssertEqual(note.text, "unsaved editor")

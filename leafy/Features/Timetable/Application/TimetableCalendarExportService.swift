@@ -85,17 +85,17 @@ enum TimetableCalendarExportBuilder {
         let resolvedCurrentWeek = max(1, min(currentWeek, resolvedTotalWeeks))
         switch range {
         case .currentWeek:
-            return resolvedCurrentWeek...resolvedCurrentWeek
+            return resolvedCurrentWeek ... resolvedCurrentWeek
         case .remainingSemester:
             let startWeek = SemesterConfig.currentWeek(date: referenceDate)
-            return min(startWeek, resolvedTotalWeeks)...resolvedTotalWeeks
+            return min(startWeek, resolvedTotalWeeks) ... resolvedTotalWeeks
         case .fullSemester:
-            return 1...resolvedTotalWeeks
+            return 1 ... resolvedTotalWeeks
         case .customWeeks:
-            let selectedWeeks = customWeeks ?? resolvedCurrentWeek...resolvedCurrentWeek
+            let selectedWeeks = customWeeks ?? resolvedCurrentWeek ... resolvedCurrentWeek
             let startWeek = max(1, min(selectedWeeks.lowerBound, resolvedTotalWeeks))
             let endWeek = max(1, min(selectedWeeks.upperBound, resolvedTotalWeeks))
-            return min(startWeek, endWeek)...max(startWeek, endWeek)
+            return min(startWeek, endWeek) ... max(startWeek, endWeek)
         }
     }
 
@@ -148,10 +148,10 @@ enum TimetableCalendarExportBuilder {
             .compactMap(draft(exam:))
 
         return (courseDrafts + reminderDrafts + examDrafts)
-        .sorted { lhs, rhs in
-            if lhs.startDate != rhs.startDate { return lhs.startDate < rhs.startDate }
-            return lhs.title < rhs.title
-        }
+            .sorted { lhs, rhs in
+                if lhs.startDate != rhs.startDate { return lhs.startDate < rhs.startDate }
+                return lhs.title < rhs.title
+            }
     }
 
     static func exportInterval(
@@ -237,7 +237,8 @@ enum TimetableCalendarExportBuilder {
         let occurrenceKey = cellReminderKey(reminder)
         return TimetableCalendarEventDraft(
             occurrenceKey: occurrenceKey,
-            title: reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("日程") : reminder.title,
+            title: reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.text("日程") : reminder
+                .title,
             location: reminder.locationText,
             notes: notesText(reminder: reminder),
             startDate: startDate,
@@ -376,7 +377,12 @@ final class TimetableCalendarExportService {
         }
 
         // Build value drafts before the permission suspension; school refresh may replace models.
-        let weeks = TimetableCalendarExportBuilder.weekRange(for: range, currentWeek: currentWeek, referenceDate: referenceDate, customWeeks: customWeeks)
+        let weeks = TimetableCalendarExportBuilder.weekRange(
+            for: range,
+            currentWeek: currentWeek,
+            referenceDate: referenceDate,
+            customWeeks: customWeeks
+        )
         try await ensureFullCalendarAccess()
         try scope.check()
         guard let calendar = eventStore.defaultCalendarForNewEvents, calendar.allowsContentModifications else {
@@ -420,7 +426,6 @@ final class TimetableCalendarExportService {
         } catch { eventStore.reset(); throw error }
     }
 
-
     func exportPersonalSchedules(_ items: [PersonalScheduleExportItem]) async throws -> TimetableCalendarExportResult {
         let scope = CampusOperationScope()
         try await ensureFullCalendarAccess()
@@ -441,14 +446,17 @@ final class TimetableCalendarExportService {
                 if existing == nil {
                     // EventKit queries have a bounded interval: search near each actual date.
                     let predicate = eventStore.predicateForEvents(withStart: item.start.addingTimeInterval(-86400),
-                        end: item.start.addingTimeInterval(86400), calendars: nil)
+                                                                  end: item.start.addingTimeInterval(86400),
+                                                                  calendars: nil)
                     existing = eventStore.events(matching: predicate).first { $0.url == url }
                 }
                 let event = existing ?? EKEvent(eventStore: eventStore)
                 if existing == nil { created += 1 } else { updated += 1 }
                 apply(TimetableCalendarEventDraft(occurrenceKey: item.key, title: item.title,
-                    location: item.location, notes: item.note, startDate: item.start,
-                    endDate: item.end ?? item.start.addingTimeInterval(45 * 60), url: url), to: event, defaultCalendar: calendar)
+                                                  location: item.location, notes: item.note, startDate: item.start,
+                                                  endDate: item.end ?? item.start.addingTimeInterval(45 * 60),
+                                                  url: url),
+                      to: event, defaultCalendar: calendar)
                 event.alarms = item.minutesBefore > 0 ? [EKAlarm(relativeOffset: -Double(item.minutesBefore * 60))] : []
                 try eventStore.save(event, span: .thisEvent, commit: false)
                 savedEvents.append((item.key, event))
@@ -466,7 +474,7 @@ final class TimetableCalendarExportService {
     private func courseWeek(from key: String) -> Int? {
         guard !key.hasPrefix("personalSchedule:"), !key.hasPrefix("cellReminder:"), !key.hasPrefix("exam:"),
               key.contains("|week:"), let week = key.components(separatedBy: "|week:").last.flatMap(Int.init),
-              (1...20).contains(week) else { return nil }
+              (1 ... 20).contains(week) else { return nil }
         return week
     }
 
@@ -481,7 +489,8 @@ final class TimetableCalendarExportService {
         var events: [String: EKEvent] = [:]
         for event in leafyEvents(in: interval) { events[event.calendarItemIdentifier] = event }
         for (key, identifier) in ledger where courseWeek(from: key) != nil {
-            if let event = eventStore.event(withIdentifier: identifier), event.url == TimetableCalendarExportBuilder.url(for: key) {
+            if let event = eventStore.event(withIdentifier: identifier),
+               event.url == TimetableCalendarExportBuilder.url(for: key) {
                 events[event.calendarItemIdentifier] = event
             }
             ledger.removeValue(forKey: key)
@@ -489,7 +498,8 @@ final class TimetableCalendarExportService {
         do {
             for event in events.values {
                 try eventStore.remove(event, span: .thisEvent, commit: false)
-                if let key = TimetableCalendarExportBuilder.occurrenceKey(from: event.url) { ledger.removeValue(forKey: key) }
+                if let key = TimetableCalendarExportBuilder
+                    .occurrenceKey(from: event.url) { ledger.removeValue(forKey: key) }
             }
             try scope.check()
             if !events.isEmpty { try eventStore.commit() }

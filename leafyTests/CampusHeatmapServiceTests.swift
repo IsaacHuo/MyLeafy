@@ -93,7 +93,11 @@ final class CampusHeatmapServiceTests: XCTestCase {
 
         XCTAssertTrue(storedData.matches(CampusHeatmapRequest(date: date, startPeriod: 3, endPeriod: 4)))
         XCTAssertFalse(storedData.matches(CampusHeatmapRequest(date: date, startPeriod: 4, endPeriod: 4)))
-        XCTAssertFalse(storedData.matches(CampusHeatmapRequest(date: date.addingTimeInterval(86_400), startPeriod: 3, endPeriod: 4)))
+        XCTAssertFalse(storedData.matches(CampusHeatmapRequest(
+            date: date.addingTimeInterval(86_400),
+            startPeriod: 3,
+            endPeriod: 4
+        )))
     }
 
     func testLoadStoredDataDoesNotFetchRemoteData() async {
@@ -224,11 +228,15 @@ final class CampusHeatmapServiceTests: XCTestCase {
         let service = LiveCampusHeatmapService(
             fetchEmptyClassroomsHTML: { _, _, _ in
                 await MainActor.run {
-                    ActiveCampusContext.networkManager.persistAuthenticatedIdentity(eduID: "heatmap-b", displayName: "B")
+                    ActiveCampusContext.networkManager.persistAuthenticatedIdentity(
+                        eduID: "heatmap-b",
+                        displayName: "B"
+                    )
                 }
                 return "<html></html>"
             }, parseEmptyClassrooms: { _, _, _ in [.init(building: "二教", room: "101")] },
-            isDemoModeEnabled: { false }, cache: cache)
+            isDemoModeEnabled: { false }, cache: cache
+        )
         let result = await service.update(.init(date: Date(), startPeriod: 1, endPeriod: 2))
         XCTAssertEqual(cache.saveCount, 0)
         XCTAssertNil(result.storedData)

@@ -14,16 +14,24 @@ nonisolated struct PersonalScheduleExportItem: Equatable, Sendable {
 
 @MainActor
 enum PersonalScheduleExport {
-    static func items(reminders: [TimetableCellReminder], events: [CustomScheduleEvent]) throws -> [PersonalScheduleExportItem] {
+    static func items(reminders: [TimetableCellReminder],
+                      events: [CustomScheduleEvent]) throws -> [PersonalScheduleExportItem] {
         let cells = try reminders.map { reminder in
             guard let start = reminder.resolvedStartDate else { throw CocoaError(.fileReadCorruptFile) }
-            return PersonalScheduleExportItem(key: TimetableCalendarExportBuilder.cellReminderKey(reminder), title: reminder.title,
-                start: start, end: reminder.endsAt ?? (reminder.startsAt == nil ? reminder.resolvedEndDate : nil),
-                location: reminder.locationText, note: reminder.noteText, minutesBefore: reminder.minutesBefore)
+            return PersonalScheduleExportItem(
+                key: TimetableCalendarExportBuilder.cellReminderKey(reminder),
+                title: reminder.title,
+                start: start,
+                end: reminder.endsAt ?? (reminder.startsAt == nil ? reminder.resolvedEndDate : nil),
+                location: reminder.locationText,
+                note: reminder.noteText,
+                minutesBefore: reminder.minutesBefore
+            )
         }
         return (cells + events.map {
             PersonalScheduleExportItem(key: "personalSchedule:" + $0.id, title: $0.title,
-                start: $0.startsAt, end: $0.endsAt, location: $0.locationText, note: $0.noteText, minutesBefore: $0.minutesBefore)
+                                       start: $0.startsAt, end: $0.endsAt, location: $0.locationText, note: $0.noteText,
+                                       minutesBefore: $0.minutesBefore)
         }).sorted { ($0.start, $0.key) < ($1.start, $1.key) }
     }
     static func text(_ items: [PersonalScheduleExportItem]) -> String {
@@ -83,7 +91,8 @@ struct PersonalScheduleExportView: View {
                     } catch { if scope.isCurrent { message = error.localizedDescription } }
                 }
             } else {
-                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ScheduleExport-" + UUID().uuidString)
+                let directory = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("ScheduleExport-" + UUID().uuidString)
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 let url = directory.appendingPathComponent("MyLeafy-日程.txt")
                 try PersonalScheduleExport.text(items).write(to: url, atomically: true, encoding: .utf8)

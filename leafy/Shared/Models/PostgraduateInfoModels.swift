@@ -69,8 +69,8 @@ nonisolated struct PostgraduateSource: Codable, Identifiable, Hashable, Sendable
             major,
             examYear.map { "\($0)" }
         ]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
         return parts.isEmpty ? "通用信息" : parts.joined(separator: " · ")
     }
 

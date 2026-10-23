@@ -104,9 +104,9 @@ final class TimetableTeacherParserTests: XCTestCase {
     func testAdjacentPeriodsWithDifferentTeachersStaySeparateInBothHTMLPaths() throws {
         let entries = [
             TimetableTeacherParserFixtures.Entry(courseName: "连续换师课程", teacher: "教师甲", weeks: "2周",
-                dayOfWeek: 1, periodIndex: 1, room: "二教101"),
+                                                 dayOfWeek: 1, periodIndex: 1, room: "二教101"),
             TimetableTeacherParserFixtures.Entry(courseName: "连续换师课程", teacher: "教师乙", weeks: "2周",
-                dayOfWeek: 1, periodIndex: 2, room: "二教101")
+                                                 dayOfWeek: 1, periodIndex: 2, room: "二教101")
         ]
         for html in [TimetableTeacherParserFixtures.completeTableHTML(entries: entries),
                      TimetableTeacherParserFixtures.independentContentHTML(entries: entries)] {
@@ -131,12 +131,12 @@ final class TimetableTeacherParserTests: XCTestCase {
 
         let weeksByTeacher = Dictionary(uniqueKeysWithValues: courseRecords.map { ($0.teacher, $0.weeks) })
         if courseName == "课程甲" {
-            XCTAssertEqual(weeksByTeacher["教师甲"], Array(2...9), file: file, line: line)
-            XCTAssertEqual(weeksByTeacher["教师乙"], Array(11...14), file: file, line: line)
+            XCTAssertEqual(weeksByTeacher["教师甲"], Array(2 ... 9), file: file, line: line)
+            XCTAssertEqual(weeksByTeacher["教师乙"], Array(11 ... 14), file: file, line: line)
         } else {
             XCTAssertEqual(weeksByTeacher["教师甲"], [2, 3], file: file, line: line)
             XCTAssertEqual(weeksByTeacher["教师乙"], [6, 7], file: file, line: line)
-            XCTAssertEqual(weeksByTeacher["教师丙"], Array(8...11), file: file, line: line)
+            XCTAssertEqual(weeksByTeacher["教师丙"], Array(8 ... 11), file: file, line: line)
         }
     }
 
@@ -195,7 +195,7 @@ enum TimetableTeacherParserFixtures {
         let headings = ["", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
         let periodLabels = ["12节", "34节", "5节", "67节", "89节", "1011节", "12节"]
         let rows = periodLabels.enumerated().map { row, label in
-            let cells = (1...7).map { day in
+            let cells = (1 ... 7).map { day in
                 let content = entries
                     .filter { $0.dayOfWeek == day && $0.periodIndex == row + 1 }
                     .map { markup(for: $0) }

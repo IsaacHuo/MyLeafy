@@ -227,7 +227,6 @@ struct TimetableCourseRenderValue: Identifiable, Hashable {
             week: semesterWeek
         )
     }
-
 }
 
 struct TimetableCellReminderRenderValue: Identifiable, Hashable {
@@ -249,7 +248,7 @@ struct TimetableCellReminderRenderValue: Identifiable, Hashable {
     let resolvedEndDate: Date?
 
     var displayPeriodRange: ClosedRange<Int> {
-        displayStartPeriod...displayEndPeriod
+        displayStartPeriod ... displayEndPeriod
     }
 
     @MainActor
@@ -384,7 +383,7 @@ struct TimetableGridSnapshot {
             courseWeekProjections: courseWeekProjections,
             cellReminderProjections: cellReminderProjections
         )
-        let visibleDays = hidesWeekends ? Array(1...5) : Array(1...7)
+        let visibleDays = hidesWeekends ? Array(1 ... 5) : Array(1 ... 7)
         let courseNotesByKey = TimetableNoteResolver.courseNotesByKey(notes)
         let occurrenceNotesByKey = TimetableNoteResolver.occurrenceNotesByKey(occurrenceNotes)
         let courseNoteKeys = Set(courseNotesByKey.keys)
@@ -397,8 +396,8 @@ struct TimetableGridSnapshot {
         }
 
         var coursesByDay: [TimetableGridDayKey: [TimetableCourseRenderValue]] = [:]
-        for course in courseValues where (1...7).contains(course.dayOfWeek) {
-            for week in course.weeks where (1...totalWeeks).contains(week) {
+        for course in courseValues where (1 ... 7).contains(course.dayOfWeek) {
+            for week in course.weeks where (1 ... totalWeeks).contains(week) {
                 coursesByDay[TimetableGridDayKey(week: week, day: course.dayOfWeek), default: []].append(course)
             }
         }

@@ -88,8 +88,6 @@ nonisolated struct WeatherKitWeatherService: WeatherServicing {
     }
 }
 
-
-
 nonisolated struct CampusWeatherFunctionResponse: Decodable, Sendable {
     let temperature: Double
     let conditionKey: String
@@ -154,7 +152,8 @@ nonisolated struct UserDefaultsCampusWeatherCache: CampusWeatherCaching {
             condition: cached.condition
         )
     }
-    func currentTemperatureSnapshot(maxAge: TimeInterval, now: Date = Date()) -> (temperature: Double, observedAt: Date)? {
+    func currentTemperatureSnapshot(maxAge: TimeInterval,
+                                    now: Date = Date()) -> (temperature: Double, observedAt: Date)? {
         guard let cached = cachedWeather(maxAge: maxAge, now: now) else { return nil }
         return (cached.temperature, cached.savedAt)
     }
@@ -163,10 +162,9 @@ nonisolated struct UserDefaultsCampusWeatherCache: CampusWeatherCaching {
         guard let data = userDefaults.data(forKey: key),
               let cached = try? JSONDecoder().decode(CachedCampusWeather.self, from: data),
               cached.temperature.isFinite,
-              (0...max(0, maxAge)).contains(now.timeIntervalSince(cached.savedAt)) else { return nil }
+              (0 ... max(0, maxAge)).contains(now.timeIntervalSince(cached.savedAt)) else { return nil }
         return cached
     }
-
 }
 
 private nonisolated struct CachedCampusWeather: Codable {

@@ -2,7 +2,6 @@ import XCTest
 @testable import Leafy
 
 final class CommunityThreadsAndPublishQueueTests: XCTestCase {
-
     func testCommentLikeRESTResponseRequiresSingleObjectWithCompleteState() throws {
         let id = UUID()
         let payload = Data("{\"comment_id\":\"\(id)\",\"like_count\":4,\"viewer_has_liked\":true}".utf8)
@@ -11,7 +10,10 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
         XCTAssertEqual(state.likeCount, 4)
         XCTAssertTrue(state.viewerHasLiked)
         XCTAssertThrowsError(try JSONDecoder().decode(CommunityCommentLikeState.self, from: Data("[{}]".utf8)))
-        XCTAssertThrowsError(try JSONDecoder().decode(CommunityCommentLikeState.self, from: Data("{\"comment_id\":\"\(id)\",\"like_count\":4}".utf8)))
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            CommunityCommentLikeState.self,
+            from: Data("{\"comment_id\":\"\(id)\",\"like_count\":4}".utf8)
+        ))
     }
 
     func testCommentInteractionPolicyAllowsReplyingToOwnVisiblePublishedComment() {
@@ -434,7 +436,6 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
             images: []
         )
     }
-
 }
 
 private enum CommunityCommentLikeToggleOutcome: Sendable {

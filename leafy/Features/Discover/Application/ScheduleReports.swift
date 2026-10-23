@@ -134,7 +134,7 @@ enum ScheduleReminderAvailability: String, Codable, Hashable {
 struct ScheduleReminder: Codable, Hashable, Identifiable {
     static let defaultBody = "你设置的提醒时间到了。"
     static let presetLeadMinutes = [0, 10, 30, 60, 1_440, 4_320, 10_080]
-    static let customLeadMinuteRange = 1...10_080
+    static let customLeadMinuteRange = 1 ... 10_080
 
     var id: UUID
     var isEnabled: Bool
@@ -283,7 +283,9 @@ enum ScheduleReportSettingsStore {
         let settings = try JSONDecoder().decode(ScheduleReportSettings.self, from: data)
         var normalized = ScheduleReportSettings(
             isEnabled: settings.isEnabled, modeSettings: settings.modeSettings, reminders: settings.reminders,
-            scheduledNotificationIDs: settings.scheduledNotificationIDs, scheduledCount: settings.scheduledCount, waitingCount: settings.waitingCount)
+            scheduledNotificationIDs: settings.scheduledNotificationIDs, scheduledCount: settings.scheduledCount,
+            waitingCount: settings.waitingCount
+        )
         normalized.deriveEnabledState()
         return normalized
     }
@@ -391,15 +393,26 @@ enum ScheduleReportPlanner {
     ) -> String {
         switch mode {
         case .morningReport:
-            return reportBody(for: calendar.startOfDay(for: referenceDate), input: input, label: "今天", calendar: calendar)
+            return reportBody(
+                for: calendar.startOfDay(for: referenceDate),
+                input: input,
+                label: "今天",
+                calendar: calendar
+            )
         case .eveningReport:
-            let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: referenceDate)) ?? referenceDate
+            let tomorrow = calendar
+                .date(byAdding: .day, value: 1, to: calendar.startOfDay(for: referenceDate)) ?? referenceDate
             return reportBody(for: tomorrow, input: input, label: "明天", includesAllCourses: true, calendar: calendar)
         case .examDigest:
             return upcomingExamSummary(input.exams, from: referenceDate, days: lookaheadDays, calendar: calendar)
                 ?? "未来 7 天暂无考试安排。"
         case .countdownDigest:
-            return upcomingImportantDateSummary(input.countdowns, from: referenceDate, days: lookaheadDays, calendar: calendar)
+            return upcomingImportantDateSummary(
+                input.countdowns,
+                from: referenceDate,
+                days: lookaheadDays,
+                calendar: calendar
+            )
                 ?? "未来 7 天暂无重要日期。"
         case .calendarDigest:
             return calendarDigestSummary(from: referenceDate, calendar: calendar)
@@ -422,7 +435,7 @@ enum ScheduleReportPlanner {
 
         switch mode {
         case .morningReport:
-            return (0..<lookaheadDays).compactMap { dayOffset in
+            return (0 ..< lookaheadDays).compactMap { dayOffset in
                 let reportDay = calendar.date(byAdding: .day, value: dayOffset, to: startDay) ?? startDay
                 guard let fireDate = fireDate(on: reportDay, setting: setting, calendar: calendar),
                       fireDate > now else { return nil }
@@ -441,7 +454,7 @@ enum ScheduleReportPlanner {
                 )
             }
         case .eveningReport:
-            return (0..<lookaheadDays).compactMap { dayOffset in
+            return (0 ..< lookaheadDays).compactMap { dayOffset in
                 let fireDay = calendar.date(byAdding: .day, value: dayOffset, to: startDay) ?? startDay
                 let reportDay = calendar.date(byAdding: .day, value: 1, to: fireDay) ?? fireDay
                 guard let fireDate = fireDate(on: fireDay, setting: setting, calendar: calendar),
@@ -694,12 +707,12 @@ enum ScheduleReportPlanner {
     ) -> [ScheduleReportNotificationDraft] {
         let occurrences = exams.flatMap { exam -> [ExamReminderOccurrence] in
             guard let examDate = exam.startsAt else { return [] }
-            return (1...7).compactMap { daysBefore in
+            return (1 ... 7).compactMap { daysBefore in
                 guard let fireDay = calendar.date(
-                    byAdding: .day,
-                    value: -daysBefore,
-                    to: calendar.startOfDay(for: examDate)
-                ),
+                          byAdding: .day,
+                          value: -daysBefore,
+                          to: calendar.startOfDay(for: examDate)
+                      ),
                       let fireDate = fireDate(on: fireDay, setting: setting, calendar: calendar),
                       fireDate > now else { return nil }
                 return ExamReminderOccurrence(fireDate: fireDate, exam: exam, daysBefore: daysBefore)
@@ -732,10 +745,10 @@ enum ScheduleReportPlanner {
         let occurrences = events.flatMap { event -> [ImportantDateReminderOccurrence] in
             [5, 3, 1].compactMap { daysBefore in
                 guard let fireDay = calendar.date(
-                    byAdding: .day,
-                    value: -daysBefore,
-                    to: calendar.startOfDay(for: event.startsAt)
-                ),
+                          byAdding: .day,
+                          value: -daysBefore,
+                          to: calendar.startOfDay(for: event.startsAt)
+                      ),
                       let fireDate = fireDate(on: fireDay, setting: setting, calendar: calendar),
                       fireDate > now else { return nil }
                 return ImportantDateReminderOccurrence(
@@ -928,7 +941,7 @@ enum ScheduleReportPlanner {
         now: Date,
         calendar: Calendar
     ) -> Date? {
-        for dayOffset in 0..<lookaheadDays {
+        for dayOffset in 0 ..< lookaheadDays {
             let day = calendar.date(byAdding: .day, value: dayOffset, to: startDay) ?? startDay
             guard let fireDate = fireDate(on: day, setting: setting, calendar: calendar),
                   fireDate > now else { continue }
@@ -986,7 +999,9 @@ enum ScheduleReportWeatherSupplementBuilder {
         let representative = hours.first(where: { calendar.component(.hour, from: $0.date) >= 8 })
             ?? hours.first!
         let advice: String
-        if hours.contains(where: { $0.precipitationChance >= 0.35 || $0.symbolName.contains("rain") || $0.symbolName.contains("snow") }) {
+        if hours
+            .contains(where: {
+                $0.precipitationChance >= 0.35 || $0.symbolName.contains("rain") || $0.symbolName.contains("snow") }) {
             advice = "出门建议带伞，并留意路面湿滑"
         } else if minimum <= 8 {
             advice = "早晚偏凉，建议加一层衣物"
@@ -1076,26 +1091,43 @@ enum ScheduleReportNotificationManager {
             $0.identifier.hasPrefix("leafy.scheduleReport.") || $0.identifier.hasPrefix("leafy.scheduleReminder.")
         }.map(\.identifier))
         let requests = selectedDrafts.map { draft in
-                let content = UNMutableNotificationContent()
-                content.title = draft.title
-                content.body = draft.body
-                content.sound = .default
-                content.userInfo = ["url": draft.targetURL.absoluteString]
+            let content = UNMutableNotificationContent()
+            content.title = draft.title
+            content.body = draft.body
+            content.sound = .default
+            content.userInfo = ["url": draft.targetURL.absoluteString]
 
-                let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: draft.fireDate)
-                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-                return UNNotificationRequest(identifier: draft.id + "." + currentRun.uuidString, content: content, trigger: trigger)
+            let components = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: draft.fireDate
+            )
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            return UNNotificationRequest(
+                identifier: draft.id + "." + currentRun.uuidString,
+                content: content,
+                trigger: trigger
+            )
         }
         updatedSettings.scheduledNotificationIDs = try await LocalNotificationBatch.install(requests, scope: scope,
-            isCurrent: { runID == currentRun }, add: { try await center.add($0) },
-            remove: { center.removePendingNotificationRequests(withIdentifiers: $0) })
+                                                                                            isCurrent: {
+                                                                                                runID == currentRun },
+                                                                                            add: {
+                                                                                                try await center
+                                                                                                    .add($0) },
+                                                                                            remove: {
+                                                                                                center
+                                                                                                    .removePendingNotificationRequests(
+                                                                                                        withIdentifiers: $0
+                                                                                                    )
+                                                                                            })
 
         return updatedSettings
     }
 
     static func cancelScheduledNotifications(settings: ScheduleReportSettings) {
         guard !settings.scheduledNotificationIDs.isEmpty else { return }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: settings.scheduledNotificationIDs)
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: settings.scheduledNotificationIDs)
     }
 
     static func clearScheduledNotifications(defaults: UserDefaults = .standard) throws {
@@ -1163,7 +1195,8 @@ enum ScheduleReportDataSource {
 
     static func inputForScheduling(modelContext: ModelContext) throws -> ScheduleReportInput {
         ScheduleReportInput(
-            courses: try modelContext.fetch(FetchDescriptor<Course>()).filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID },
+            courses: try modelContext.fetch(FetchDescriptor<Course>())
+                .filter { $0.sourceSemesterID == SemesterConfig.currentSemesterID },
             exams: try SchoolDataCache.loadExamScheduleForEditing(),
             countdowns: try CustomScheduleStore.loadForSync(),
             cellReminders: try modelContext.fetch(FetchDescriptor<TimetableCellReminder>())

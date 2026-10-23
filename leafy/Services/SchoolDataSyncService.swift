@@ -126,7 +126,11 @@ enum SchoolDataSyncService {
                 scope: scope
             )
             successfulOperationCount += 1
-            results.append(L10n.text("课表 %d 门", language: language, Set(persisted.sharedCourses.map(\.courseName)).count))
+            results.append(L10n.text(
+                "课表 %d 门",
+                language: language,
+                Set(persisted.sharedCourses.map(\.courseName)).count
+            ))
             if let warning = persisted.reminderWarning {
                 failedOperationCount += 1
                 results.append(warning)
@@ -405,5 +409,4 @@ enum SchoolDataSyncService {
             )
         )
     }
-
 }

@@ -9,12 +9,30 @@ import SwiftData
 extension PerformanceRefactorTests {
     func testPeriodRangeUsesOverlappingClassSlots() throws {
         let calendar = Calendar.current
-        let start = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 8, minute: 10)))
+        let start = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 9,
+            hour: 8,
+            minute: 10
+        )))
         let end = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 9, minute: 0)))
-        let gapStart = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 12, minute: 20)))
-        let gapEnd = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 13, minute: 0)))
+        let gapStart = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 9,
+            hour: 12,
+            minute: 20
+        )))
+        let gapEnd = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 3,
+            day: 9,
+            hour: 13,
+            minute: 0
+        )))
 
-        XCTAssertEqual(TimetablePeriodSchedule.periodRange(overlapping: start, endDate: end), 1...2)
+        XCTAssertEqual(TimetablePeriodSchedule.periodRange(overlapping: start, endDate: end), 1 ... 2)
         XCTAssertNil(TimetablePeriodSchedule.periodRange(overlapping: gapStart, endDate: gapEnd))
         XCTAssertNil(TimetablePeriodSchedule.periodRange(overlapping: end, endDate: start))
     }
@@ -83,8 +101,6 @@ extension PerformanceRefactorTests {
         try CareerDocumentFileStore.deleteAllFiles()
         XCTAssertNil(CareerDocumentFileStore.fileURL(for: productResume))
     }
-
-
 
     func testCustomCampusRegistrationUsesSignupRequestsWithoutPasswordUpdate() async throws {
         AuthRecordingURLProtocol.reset()
@@ -543,27 +559,65 @@ extension PerformanceRefactorTests {
         let sameWeek = reviewDate(2026, 5, 13)
         let oldDate = reviewDate(2026, 4, 1)
         let materials = [
-            LearningMaterialDocument(title: "CET", categoryRawValue: LearningMaterialCategory.cet.rawValue, originalFilename: "cet.pdf", localFilename: "cet.pdf", contentTypeIdentifier: UTType.pdf.identifier),
-            LearningMaterialDocument(projectID: projectID.uuidString, title: "Project", originalFilename: "p.pdf", localFilename: "p.pdf", contentTypeIdentifier: UTType.pdf.identifier)
+            LearningMaterialDocument(
+                title: "CET",
+                categoryRawValue: LearningMaterialCategory.cet.rawValue,
+                originalFilename: "cet.pdf",
+                localFilename: "cet.pdf",
+                contentTypeIdentifier: UTType.pdf.identifier
+            ),
+            LearningMaterialDocument(
+                projectID: projectID.uuidString,
+                title: "Project",
+                originalFilename: "p.pdf",
+                localFilename: "p.pdf",
+                contentTypeIdentifier: UTType.pdf.identifier
+            )
         ]
         let tasks = [
             LearningProjectTask(categoryRawValue: LearningMaterialCategory.cet.rawValue, title: "背单词"),
             LearningProjectTask(projectID: projectID.uuidString, title: "刷题", isCompleted: true)
         ]
         let records = [
-            StudyTimeRecord(categoryRawValue: LearningMaterialCategory.cet.rawValue, startedAt: sameWeek, endedAt: sameWeek.addingTimeInterval(3600), content: "听力", location: "图书馆"),
-            StudyTimeRecord(projectID: projectID.uuidString, startedAt: oldDate, endedAt: oldDate.addingTimeInterval(1800), content: "项目", location: "图书馆")
+            StudyTimeRecord(
+                categoryRawValue: LearningMaterialCategory.cet.rawValue,
+                startedAt: sameWeek,
+                endedAt: sameWeek.addingTimeInterval(3600),
+                content: "听力",
+                location: "图书馆"
+            ),
+            StudyTimeRecord(
+                projectID: projectID.uuidString,
+                startedAt: oldDate,
+                endedAt: oldDate.addingTimeInterval(1800),
+                content: "项目",
+                location: "图书馆"
+            )
         ]
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
 
-        let fixed = LearningWorkspaceSummary.make(destination: .fixed(.cet), materials: materials, tasks: tasks, records: records, now: now, calendar: calendar)
+        let fixed = LearningWorkspaceSummary.make(
+            destination: .fixed(.cet),
+            materials: materials,
+            tasks: tasks,
+            records: records,
+            now: now,
+            calendar: calendar
+        )
         XCTAssertEqual(fixed.materialCount, 1)
         XCTAssertEqual(fixed.pendingTaskCount, 1)
         XCTAssertEqual(fixed.weekDuration, 3600)
 
-        let project = LearningWorkspaceSummary.make(destination: .project(projectID), materials: materials, tasks: tasks, records: records, now: now, calendar: calendar)
+        let project = LearningWorkspaceSummary.make(
+            destination: .project(projectID),
+            materials: materials,
+            tasks: tasks,
+            records: records,
+            now: now,
+            calendar: calendar
+        )
         XCTAssertEqual(project.materialCount, 1)
         XCTAssertEqual(project.completedTaskCount, 1)
         XCTAssertEqual(project.totalDuration, 1800)
@@ -572,15 +626,45 @@ extension PerformanceRefactorTests {
     func testStudyTimeRecordsWithoutTopicBelongToOtherSpace() throws {
         let projectID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000125"))
         let now = reviewDate(2026, 5, 14)
-        let unscopedRecord = StudyTimeRecord(startedAt: now, endedAt: now.addingTimeInterval(900), content: "专注学习", location: "图书馆")
-        let fixedRecord = StudyTimeRecord(categoryRawValue: LearningMaterialCategory.exam.rawValue, startedAt: now, endedAt: now.addingTimeInterval(1200), content: "专业课", location: "图书馆")
-        let projectRecord = StudyTimeRecord(projectID: projectID.uuidString, startedAt: now, endedAt: now.addingTimeInterval(1800), content: "项目", location: "图书馆")
+        let unscopedRecord = StudyTimeRecord(
+            startedAt: now,
+            endedAt: now.addingTimeInterval(900),
+            content: "专注学习",
+            location: "图书馆"
+        )
+        let fixedRecord = StudyTimeRecord(
+            categoryRawValue: LearningMaterialCategory.exam.rawValue,
+            startedAt: now,
+            endedAt: now.addingTimeInterval(1200),
+            content: "专业课",
+            location: "图书馆"
+        )
+        let projectRecord = StudyTimeRecord(
+            projectID: projectID.uuidString,
+            startedAt: now,
+            endedAt: now.addingTimeInterval(1800),
+            content: "项目",
+            location: "图书馆"
+        )
         let records = [unscopedRecord, fixedRecord, projectRecord]
 
         XCTAssertTrue(unscopedRecord.belongs(to: .fixed(.other)))
-        XCTAssertEqual(LearningWorkspaceSummary.make(destination: .fixed(.other), materials: [], tasks: [], records: records, now: now).totalDuration, 900)
-        XCTAssertEqual(LearningWorkspaceSummary.make(destination: .fixed(.exam), materials: [], tasks: [], records: records, now: now).totalDuration, 1200)
-        XCTAssertEqual(LearningWorkspaceSummary.make(destination: .project(projectID), materials: [], tasks: [], records: records, now: now).totalDuration, 1800)
+        XCTAssertEqual(
+            LearningWorkspaceSummary
+                .make(destination: .fixed(.other), materials: [], tasks: [], records: records, now: now).totalDuration,
+            900
+        )
+        XCTAssertEqual(
+            LearningWorkspaceSummary
+                .make(destination: .fixed(.exam), materials: [], tasks: [], records: records, now: now).totalDuration,
+            1200
+        )
+        XCTAssertEqual(
+            LearningWorkspaceSummary
+                .make(destination: .project(projectID), materials: [], tasks: [], records: records, now: now)
+                .totalDuration,
+            1800
+        )
         let index = LearningWorkspaceIndex.make(materials: [], tasks: [], records: records, now: now)
         XCTAssertEqual(index.summary(for: .fixed(.other)).totalDuration, 900)
         XCTAssertEqual(records.learningDuration, 3900)
@@ -639,10 +723,27 @@ extension PerformanceRefactorTests {
         let projectID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000456"))
         let now = reviewDate(2026, 5, 14)
         let updatedAt = reviewDate(2026, 5, 15)
-        let material = LearningMaterialDocument(projectID: projectID.uuidString, title: "Project", originalFilename: "p.pdf", localFilename: "p.pdf", contentTypeIdentifier: UTType.pdf.identifier)
+        let material = LearningMaterialDocument(
+            projectID: projectID.uuidString,
+            title: "Project",
+            originalFilename: "p.pdf",
+            localFilename: "p.pdf",
+            contentTypeIdentifier: UTType.pdf.identifier
+        )
         let task = LearningProjectTask(projectID: projectID.uuidString, title: "刷题")
-        let record = StudyTimeRecord(projectID: projectID.uuidString, startedAt: now, endedAt: now.addingTimeInterval(1800), content: "项目", location: "图书馆")
-        let otherMaterial = LearningMaterialDocument(title: "Other", originalFilename: "o.pdf", localFilename: "o.pdf", contentTypeIdentifier: UTType.pdf.identifier)
+        let record = StudyTimeRecord(
+            projectID: projectID.uuidString,
+            startedAt: now,
+            endedAt: now.addingTimeInterval(1800),
+            content: "项目",
+            location: "图书馆"
+        )
+        let otherMaterial = LearningMaterialDocument(
+            title: "Other",
+            originalFilename: "o.pdf",
+            localFilename: "o.pdf",
+            contentTypeIdentifier: UTType.pdf.identifier
+        )
         let materials = [material, otherMaterial]
         let tasks = [task]
         let records = [record]
@@ -663,10 +764,32 @@ extension PerformanceRefactorTests {
         XCTAssertEqual(record.projectID, "")
         XCTAssertEqual(record.category, .other)
 
-        let project = LearningWorkspaceSummary.make(destination: .project(projectID), materials: materials, tasks: tasks, records: records, now: now)
-        XCTAssertEqual(project, LearningWorkspaceSummary(materialCount: 0, taskCount: 0, completedTaskCount: 0, recordCount: 0, totalDuration: 0, weekDuration: 0))
+        let project = LearningWorkspaceSummary.make(
+            destination: .project(projectID),
+            materials: materials,
+            tasks: tasks,
+            records: records,
+            now: now
+        )
+        XCTAssertEqual(
+            project,
+            LearningWorkspaceSummary(
+                materialCount: 0,
+                taskCount: 0,
+                completedTaskCount: 0,
+                recordCount: 0,
+                totalDuration: 0,
+                weekDuration: 0
+            )
+        )
 
-        let other = LearningWorkspaceSummary.make(destination: .fixed(.other), materials: materials, tasks: tasks, records: records, now: now)
+        let other = LearningWorkspaceSummary.make(
+            destination: .fixed(.other),
+            materials: materials,
+            tasks: tasks,
+            records: records,
+            now: now
+        )
         XCTAssertEqual(other.materialCount, 2)
         XCTAssertEqual(other.taskCount, 1)
         XCTAssertEqual(other.recordCount, 1)
@@ -730,19 +853,31 @@ extension PerformanceRefactorTests {
 
     func testLearningMaterialDisplayTypeUsesContentTypeAndFilename() {
         XCTAssertEqual(
-            LearningMaterialDocument.displayType(contentTypeIdentifier: UTType.pdf.identifier, originalFilename: "exam.pdf"),
+            LearningMaterialDocument.displayType(
+                contentTypeIdentifier: UTType.pdf.identifier,
+                originalFilename: "exam.pdf"
+            ),
             "PDF"
         )
         XCTAssertEqual(
-            LearningMaterialDocument.displayType(contentTypeIdentifier: UTType.data.identifier, originalFilename: "课件.pptx"),
+            LearningMaterialDocument.displayType(
+                contentTypeIdentifier: UTType.data.identifier,
+                originalFilename: "课件.pptx"
+            ),
             "PPT"
         )
         XCTAssertEqual(
-            LearningMaterialDocument.displayType(contentTypeIdentifier: UTType.data.identifier, originalFilename: "成绩表.xlsx"),
+            LearningMaterialDocument.displayType(
+                contentTypeIdentifier: UTType.data.identifier,
+                originalFilename: "成绩表.xlsx"
+            ),
             "表格"
         )
         XCTAssertEqual(
-            LearningMaterialDocument.displayType(contentTypeIdentifier: UTType.data.identifier, originalFilename: "notes.unknown"),
+            LearningMaterialDocument.displayType(
+                contentTypeIdentifier: UTType.data.identifier,
+                originalFilename: "notes.unknown"
+            ),
             "文件"
         )
     }

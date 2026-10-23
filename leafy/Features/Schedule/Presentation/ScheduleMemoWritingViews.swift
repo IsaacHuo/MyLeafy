@@ -330,9 +330,9 @@ private final class ScheduleMemoCameraController: NSObject, ObservableObject, AV
                 }
                 self.session.startRunning()
                 DispatchQueue.main.async {
-                        guard self.isActive.withLock({ $0 }) else { return }
-                        self.state = .ready
-                    }
+                    guard self.isActive.withLock({ $0 }) else { return }
+                    self.state = .ready
+                }
             } catch {
                 DispatchQueue.main.async {
                     self.state = .unavailable(error.localizedDescription)

@@ -302,10 +302,10 @@ private struct SchoolReauthenticationSheet: View {
 
     private var canSubmit: Bool {
         !isLoggingIn && !isCaptchaLoading &&
-        challenge != nil &&
-        !account.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !password.isEmpty &&
-        !captchaCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            challenge != nil &&
+            !account.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !password.isEmpty &&
+            !captchaCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     init(

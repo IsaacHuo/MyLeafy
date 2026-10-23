@@ -33,8 +33,14 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
         let calendar = SharedTimetableCalendar.current
         let semesterID = SemesterConfig.currentSemesterID
         try await scope.check()
-        struct Input: Encodable { let semester_id: String; let courses: [SharedTimetableCourse]; let calendar_config: SharedTimetableCalendar }
-        return try await backend.request("/v1/timetables", method: "PUT", body: Input(semester_id: semesterID, courses: courses, calendar_config: calendar))
+        struct Input: Encodable {
+            let semester_id: String; let courses: [SharedTimetableCourse]; let calendar_config: SharedTimetableCalendar
+        }
+        return try await backend.request(
+            "/v1/timetables",
+            method: "PUT",
+            body: Input(semester_id: semesterID, courses: courses, calendar_config: calendar)
+        )
     }
     @discardableResult
     func publishExistingSnapshotIfNeeded(courses: [SharedTimetableCourse]) async -> Bool {
@@ -45,7 +51,8 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
             _ = try await publishSnapshot(courses: courses)
             return true
         } catch {
-            CommunityDiagnostics.log.error("Cloudflare shared timetable refresh failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Cloudflare shared timetable refresh failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
@@ -89,21 +96,29 @@ nonisolated struct CloudflareTimetableSharingService: TimetableSharing {
         let scope = await CampusOperationScope()
         _ = try await requireProfile()
         try await scope.check()
-        return try await backend.request("/v1/timetables/invites/accept", body: ["code":TimetableSharingService.normalizeInviteCode(code)])
+        return try await backend.request(
+            "/v1/timetables/invites/accept",
+            body: ["code": TimetableSharingService.normalizeInviteCode(code)]
+        )
     }
     func revokeShare(viewerID: UUID) async throws {
         let scope = await CampusOperationScope()
         let members = try await fetchMyShareMembers()
         try await scope.check()
-        guard let member = members.first(where: { $0.viewerID == viewerID }) else { throw TimetableSharingError.notShareOwner }
+        guard let member = members.first(where: { $0.viewerID == viewerID })
+        else { throw TimetableSharingError.notShareOwner }
         try await backend.perform("/v1/timetables/members/\(member.id)", method: "DELETE")
     }
     func stopSharing() async throws { try await backend.perform("/v1/timetables/stop") }
     func leaveShare(ownerID: UUID) async throws {
         let scope = await CampusOperationScope()
-        let members: [TimetableShareMember] = try await backend.get("/v1/timetables/members", backend.query(["direction":"viewing"]))
+        let members: [TimetableShareMember] = try await backend.get(
+            "/v1/timetables/members",
+            backend.query(["direction": "viewing"])
+        )
         try await scope.check()
-        guard let member = members.first(where: { $0.ownerID == ownerID }) else { throw TimetableSharingError.notShareOwner }
+        guard let member = members.first(where: { $0.ownerID == ownerID })
+        else { throw TimetableSharingError.notShareOwner }
         try await backend.perform("/v1/timetables/members/\(member.id)/leave")
     }
 }

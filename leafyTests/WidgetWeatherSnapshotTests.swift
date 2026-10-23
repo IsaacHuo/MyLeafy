@@ -10,7 +10,10 @@ final class WidgetWeatherSnapshotTests: XCTestCase {
         object.removeValue(forKey: "weather")
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let archive = try decoder.decode(LeafyWidgetSnapshotArchive.self, from: JSONSerialization.data(withJSONObject: object))
+        let archive = try decoder.decode(
+            LeafyWidgetSnapshotArchive.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
         XCTAssertNil(archive.weather)
         XCTAssertEqual(archive.temperatureText(at: archive.generatedAt), "--°")
     }

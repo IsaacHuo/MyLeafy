@@ -32,7 +32,16 @@ nonisolated struct CustomCampusImportedGrade: Equatable, Sendable {
 }
 
 nonisolated enum CustomCampusCSVParser {
-    static let timetableColumns = ["courseName", "teacher", "classInfo", "room", "location", "dayOfWeek", "weeks", "duration"]
+    static let timetableColumns = [
+        "courseName",
+        "teacher",
+        "classInfo",
+        "room",
+        "location",
+        "dayOfWeek",
+        "weeks",
+        "duration"
+    ]
     static let gradeColumns = ["term", "courseName", "credit", "score", "type"]
     static let examColumns = ["courseID", "name", "date", "start", "end", "location"]
 
@@ -40,12 +49,16 @@ nonisolated enum CustomCampusCSVParser {
         try rows(from: text, requiredColumns: timetableColumns).map { row in
             let lineNumber = row.lineNumber
             guard let dayOfWeek = Int(required("dayOfWeek", in: row)),
-                  (1...7).contains(dayOfWeek) else {
+                  (1 ... 7).contains(dayOfWeek) else {
                 throw CustomCampusImportError.invalidRow(lineNumber, "dayOfWeek 需要是 1 到 7。")
             }
 
             let weeks = try parseIntegerSequence(required("weeks", in: row), lineNumber: lineNumber, fieldName: "weeks")
-            let duration = try parseIntegerSequence(required("duration", in: row), lineNumber: lineNumber, fieldName: "duration")
+            let duration = try parseIntegerSequence(
+                required("duration", in: row),
+                lineNumber: lineNumber,
+                fieldName: "duration"
+            )
             let courseName = required("courseName", in: row)
             guard !courseName.isEmpty else {
                 throw CustomCampusImportError.invalidRow(lineNumber, "courseName 不能为空。")
@@ -100,7 +113,7 @@ nonisolated enum CustomCampusCSVParser {
             func minutes(_ raw: String) -> Int? {
                 let parts = raw.split(separator: ":", omittingEmptySubsequences: false)
                 guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]),
-                      (0..<24).contains(hour), (0..<60).contains(minute) else { return nil }
+                      (0 ..< 24).contains(hour), (0 ..< 60).contains(minute) else { return nil }
                 return hour * 60 + minute
             }
             guard UserTimetableSettings.civilDate(from: date) != nil,
@@ -232,8 +245,8 @@ nonisolated enum CustomCampusCSVParser {
                 guard parts.count == 2, parts[0] >= 1, parts[0] <= parts[1], parts[1] <= maximum else {
                     throw CustomCampusImportError.invalidRow(lineNumber, "\(fieldName) 范围无效。")
                 }
-                numbers.append(contentsOf: parts[0]...parts[1])
-            } else if let number = Int(token), (1...maximum).contains(number) {
+                numbers.append(contentsOf: parts[0] ... parts[1])
+            } else if let number = Int(token), (1 ... maximum).contains(number) {
                 numbers.append(number)
             } else {
                 throw CustomCampusImportError.invalidRow(lineNumber, "\(fieldName) 需要是数字或范围。")
@@ -258,7 +271,7 @@ enum CustomCampusImportService {
         let scope = CampusOperationScope()
         let records = try CustomCampusCSVParser.parseTimetable(loadText(from: url))
         let saved = try TimetableRefreshUseCase().persist(records: records, existingCourses: existingCourses,
-            modelContext: modelContext, allowsEmpty: true)
+                                                          modelContext: modelContext, allowsEmpty: true)
         let warning = await saved.reminders.restore()
         try scope.check()
         TimetableCacheMetadata.lastSyncAt = Date()

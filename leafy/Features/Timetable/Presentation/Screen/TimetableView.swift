@@ -342,87 +342,88 @@ struct TimetableView: View {
 
     private var rootBaseLifecycle: some View {
         rootDataLifecycle
-        .onChange(of: appNavigation.requestedTimetableCourseID) { _, requestedID in
-            handleTimetableCourseDeepLink(requestedID)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
-            reloadCustomCountdownEvents()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .schoolExamScheduleDidChange)) { _ in
-            reloadExamArrangements()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { notification in
-            handleSchoolDataRefresh(notification)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in
-            applySemesterRuntimeConfig(SemesterConfig.current)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
-            handleNationalCalendarRuntimeConfigChange()
-        }
+            .onChange(of: appNavigation.requestedTimetableCourseID) { _, requestedID in
+                handleTimetableCourseDeepLink(requestedID)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
+                reloadCustomCountdownEvents()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .schoolExamScheduleDidChange)) { _ in
+                reloadExamArrangements()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { notification in
+                handleSchoolDataRefresh(notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)) { _ in
+                applySemesterRuntimeConfig(SemesterConfig.current)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .nationalCalendarRuntimeConfigDidChange)) { _ in
+                handleNationalCalendarRuntimeConfigChange()
+            }
     }
 
     private var rootPresentationLifecycle: some View {
         rootNavigation
-        .task {
-            await initializeTimetableIfNeeded()
-            await maintainTimetableWeatherPreview()
-        }
-        .onAppear(perform: handleAppear)
-        .onChange(of: scenePhase) { _, newPhase in
-            handleScenePhaseChange(newPhase)
-        }
-        .onChange(of: currentWeek) { _, newValue in
-            handleCurrentWeekChange(newValue)
-        }
-        .onChange(of: continuousViewport.windowRevision) { _, _ in
-            handleContinuousWindowRevision()
-        }
-        .onChange(of: continuousViewport.phase) { _, phase in
-            guard phase == .idle else { return }
-            settledDisplayMode = continuousViewport.isThreeDay ? .threeDay : .week
-            if hasDeferredContinuousPayloadRefresh {
-                refreshContinuousDayPayloads()
+            .task {
+                await initializeTimetableIfNeeded()
+                await maintainTimetableWeatherPreview()
             }
-            syncReturnButtonVisibility(for: currentWeek)
-        }
-        .onChange(of: isTimetablePagingDragActive) { _, isActive in
-            if !isActive { continuousViewport.cancelPaging(reducesMotion: accessibilityReduceMotion) }
-        }
-        .onChange(of: timetableHidesWeekends) { _, _ in
-            handleWeekendVisibilityChange()
-        }
+            .onAppear(perform: handleAppear)
+            .onChange(of: scenePhase) { _, newPhase in
+                handleScenePhaseChange(newPhase)
+            }
+            .onChange(of: currentWeek) { _, newValue in
+                handleCurrentWeekChange(newValue)
+            }
+            .onChange(of: continuousViewport.windowRevision) { _, _ in
+                handleContinuousWindowRevision()
+            }
+            .onChange(of: continuousViewport.phase) { _, phase in
+                guard phase == .idle else { return }
+                settledDisplayMode = continuousViewport.isThreeDay ? .threeDay : .week
+                if hasDeferredContinuousPayloadRefresh {
+                    refreshContinuousDayPayloads()
+                }
+                syncReturnButtonVisibility(for: currentWeek)
+            }
+            .onChange(of: isTimetablePagingDragActive) { _, isActive in
+                if !isActive { continuousViewport.cancelPaging(reducesMotion: accessibilityReduceMotion) }
+            }
+            .onChange(of: timetableHidesWeekends) { _, _ in
+                handleWeekendVisibilityChange()
+            }
     }
 
     private var rootDataLifecycle: some View {
         rootPresentationLifecycle
-        .onChange(of: courses.count) { _, _ in
-            handleCoursesCountChange()
-        }
-        .onChange(of: courseNotes.count) { _, _ in
-            handleCourseNotesCountChange()
-        }
-        .onChange(of: occurrenceNotes.count) { _, _ in
-            handleCourseNotesCountChange()
-        }
-        .onChange(of: courseReminderSettings.count) { _, _ in
-            handleCourseReminderSettingsCountChange()
-        }
-        .onChange(of: cellReminders.count) { _, _ in
-            handleCellRemindersCountChange()
-        }
-        .onChange(of: timetableRenderInput.signature) { _, _ in
-            handleTimetableGridInputChange()
-        }
+            .onChange(of: courses.count) { _, _ in
+                handleCoursesCountChange()
+            }
+            .onChange(of: courseNotes.count) { _, _ in
+                handleCourseNotesCountChange()
+            }
+            .onChange(of: occurrenceNotes.count) { _, _ in
+                handleCourseNotesCountChange()
+            }
+            .onChange(of: courseReminderSettings.count) { _, _ in
+                handleCourseReminderSettingsCountChange()
+            }
+            .onChange(of: cellReminders.count) { _, _ in
+                handleCellRemindersCountChange()
+            }
+            .onChange(of: timetableRenderInput.signature) { _, _ in
+                handleTimetableGridInputChange()
+            }
     }
 
     private var rootBackgroundLifecycle: some View {
         rootBaseLifecycle
-        .onReceive(NotificationCenter.default.publisher(for: .timetableBackgroundSettingsDidChange)) { notification in
-            let configuration = notification.userInfo?[TimetableBackgroundStore.configurationUserInfoKey]
-                as? TimetableBackgroundConfiguration
-            reloadTimetableBackground(configuration: configuration)
-        }
+            .onReceive(NotificationCenter.default
+                .publisher(for: .timetableBackgroundSettingsDidChange)) { notification in
+                    let configuration = notification.userInfo?[TimetableBackgroundStore.configurationUserInfoKey]
+                        as? TimetableBackgroundConfiguration
+                    reloadTimetableBackground(configuration: configuration)
+            }
     }
 
     private var timetablePageBackground: some View {
@@ -441,124 +442,125 @@ struct TimetableView: View {
 
     private var rootSheets: some View {
         rootLifecycle
-        .leafySheet(item: $selectedCourseContext) { context in
+            .leafySheet(item: $selectedCourseContext) { context in
                 CourseDetailSheet(context: context)
-                .presentationDetents([.medium, .large])
-        }
-        .leafySheet(item: $selectedCellReminderContext) { context in
-            CustomScheduleEditorSheet(presentation: .timetable(context))
-                .presentationDetents([.medium, .large])
-        }
-        .leafySheet(item: $selectedCustomScheduleEditor, onDismiss: reloadCustomCountdownEvents) { presentation in
-            CustomScheduleEditorSheet(presentation: presentation)
-                .presentationDetents([.medium, .large])
-        }
-        .leafySheet(item: $selectedConflictSelection, onDismiss: {
-            if let item = pendingConflictItem {
-                pendingConflictItem = nil
-                handleConflictItemTap(item)
+                    .presentationDetents([.medium, .large])
             }
-        }) { selection in
-            TimetableConflictListSheet(selection: selection) { item in
-                pendingConflictItem = item
-                selectedConflictSelection = nil
+            .leafySheet(item: $selectedCellReminderContext) { context in
+                CustomScheduleEditorSheet(presentation: .timetable(context))
+                    .presentationDetents([.medium, .large])
             }
-            .presentationDetents([.medium, .large])
-        }
-        .leafySheet(item: $selectedDaySummary) { selection in
-            DayScheduleSummarySheet(
-                selection: selection,
-                courses: selection.semesterID.map { semesterID in
-                    courses
-                } ?? [],
-                exams: cachedExamArrangements,
-                lastSyncAt: lastSyncAt,
-                lastFailureMessage: lastFailureMessage
-            )
-            .presentationDetents([.medium, .large])
-        }
-        .leafySheet(isPresented: $isExportSheetPresented) {
-            TimetableExportSheet(
-                currentWeek: selectedSemesterWeek,
-                courses: selectedSemesterCourses,
-                courseNotes: courseNotes,
-                occurrenceNotes: occurrenceNotes,
-                cellReminders: cellReminders,
-                exams: cachedExamArrangements,
-                lastSyncAt: lastSyncAt,
-                lastFailureMessage: lastFailureMessage,
-                includesWeekendsByDefault: !timetableHidesWeekends
-            )
-            .presentationDetents([.large])
-        }
-        .leafySheet(isPresented: $isWeatherAdvicePresented, onDismiss: {
-            Task { await refreshTimetableWeatherPreview() }
-        }) {
-            TimetableWeatherAdviceSheet(
-                currentWeek: selectedSemesterWeek,
-                courses: selectedSemesterCourses,
-                cellReminders: cellReminders,
-                exams: cachedExamArrangements,
-                weatherPreview: $cachedTimetableWeather
-            )
-            .presentationDetents([.medium, .large])
-        }
-        .popover(isPresented: $isWeekPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-            TimetableWeekPickerPanel(
-                model: academicYearMenuModel,
-                selectedDate: selectedTimelineDate,
-                referenceDate: Date(),
-                overviewSnapshot: selectedTimeScopeSnapshot,
-                onSelect: selectTimetableWeek
-            )
-            .frame(idealWidth: 420, idealHeight: 520)
-            .leafyModalSurface()
-            .presentationDetents([.medium, .large])
-            .presentationCompactAdaptation(.sheet)
-        }
+            .leafySheet(item: $selectedCustomScheduleEditor, onDismiss: reloadCustomCountdownEvents) { presentation in
+                CustomScheduleEditorSheet(presentation: presentation)
+                    .presentationDetents([.medium, .large])
+            }
+            .leafySheet(item: $selectedConflictSelection, onDismiss: {
+                if let item = pendingConflictItem {
+                    pendingConflictItem = nil
+                    handleConflictItemTap(item)
+                }
+            }) { selection in
+                TimetableConflictListSheet(selection: selection) { item in
+                    pendingConflictItem = item
+                    selectedConflictSelection = nil
+                }
+                .presentationDetents([.medium, .large])
+            }
+            .leafySheet(item: $selectedDaySummary) { selection in
+                DayScheduleSummarySheet(
+                    selection: selection,
+                    courses: selection.semesterID.map { semesterID in
+                        courses
+                    } ?? [],
+                    exams: cachedExamArrangements,
+                    lastSyncAt: lastSyncAt,
+                    lastFailureMessage: lastFailureMessage
+                )
+                .presentationDetents([.medium, .large])
+            }
+            .leafySheet(isPresented: $isExportSheetPresented) {
+                TimetableExportSheet(
+                    currentWeek: selectedSemesterWeek,
+                    courses: selectedSemesterCourses,
+                    courseNotes: courseNotes,
+                    occurrenceNotes: occurrenceNotes,
+                    cellReminders: cellReminders,
+                    exams: cachedExamArrangements,
+                    lastSyncAt: lastSyncAt,
+                    lastFailureMessage: lastFailureMessage,
+                    includesWeekendsByDefault: !timetableHidesWeekends
+                )
+                .presentationDetents([.large])
+            }
+            .leafySheet(isPresented: $isWeatherAdvicePresented, onDismiss: {
+                Task { await refreshTimetableWeatherPreview() }
+            }) {
+                TimetableWeatherAdviceSheet(
+                    currentWeek: selectedSemesterWeek,
+                    courses: selectedSemesterCourses,
+                    cellReminders: cellReminders,
+                    exams: cachedExamArrangements,
+                    weatherPreview: $cachedTimetableWeather
+                )
+                .presentationDetents([.medium, .large])
+            }
+            .popover(isPresented: $isWeekPickerPresented, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+                TimetableWeekPickerPanel(
+                    model: academicYearMenuModel,
+                    selectedDate: selectedTimelineDate,
+                    referenceDate: Date(),
+                    overviewSnapshot: selectedTimeScopeSnapshot,
+                    onSelect: selectTimetableWeek
+                )
+                .frame(idealWidth: 420, idealHeight: 520)
+                .leafyModalSurface()
+                .presentationDetents([.medium, .large])
+                .presentationCompactAdaptation(.sheet)
+            }
     }
 
     private var rootAlerts: some View {
         rootSheets
-        .alert("提示", isPresented: $showAlert) {
-            if requiresPeriodConfiguration {
-                Button("补全课表作息") { appNavigation.openProfileRoute(.timetableSettings); requiresPeriodConfiguration = false }
+            .alert("提示", isPresented: $showAlert) {
+                if requiresPeriodConfiguration {
+                    Button("补全课表作息") {
+                        appNavigation.openProfileRoute(.timetableSettings); requiresPeriodConfiguration = false }
+                }
+                if emptyResultIdentity != nil {
+                    Button("清空学校课程", role: .destructive) { clearConfirmedEmptyTimetable() }
+                }
+                Button("保留当前数据", role: .cancel) { emptyResultIdentity = nil }
+            } message: {
+                Text(alertMessage)
             }
-            if emptyResultIdentity != nil {
-                Button("清空学校课程", role: .destructive) { clearConfirmedEmptyTimetable() }
+            .alert("欢迎使用 \(AppBrand.displayName)", isPresented: onboardingAlertBinding) {
+                Button("知道了", role: .cancel) {
+                    hasSeenTimetableOnboarding = true
+                }
+            } message: {
+                Text(onboardingMessage)
             }
-            Button("保留当前数据", role: .cancel) { emptyResultIdentity = nil }
-        } message: {
-            Text(alertMessage)
-        }
-        .alert("欢迎使用 \(AppBrand.displayName)", isPresented: onboardingAlertBinding) {
-            Button("知道了", role: .cancel) {
-                hasSeenTimetableOnboarding = true
-            }
-        } message: {
-            Text(onboardingMessage)
-        }
-        .alert(item: $courseNotePreview) { preview in
-            Alert(
-                title: Text("课程备注"),
-                message: Text(preview.message),
-                dismissButton: .default(Text("知道了"))
-            )
-        }
-        .schoolReauthenticationSheet(
-            request: $reauthenticationRequest,
-            networkManager: networkManager,
-            operationKind: .timetable,
-            progressController: progressController
-        ) { _ in
-            Task {
-                await fetchAndParseTimetable(
-                    userInitiated: true,
-                    allowsAutomaticRecovery: false
+            .alert(item: $courseNotePreview) { preview in
+                Alert(
+                    title: Text("课程备注"),
+                    message: Text(preview.message),
+                    dismissButton: .default(Text("知道了"))
                 )
             }
-        }
-        .academicOperationProgress(progressController)
+            .schoolReauthenticationSheet(
+                request: $reauthenticationRequest,
+                networkManager: networkManager,
+                operationKind: .timetable,
+                progressController: progressController
+            ) { _ in
+                Task {
+                    await fetchAndParseTimetable(
+                        userInitiated: true,
+                        allowsAutomaticRecovery: false
+                    )
+                }
+            }
+            .academicOperationProgress(progressController)
     }
 
     private var onboardingAlertBinding: Binding<Bool> {
@@ -591,7 +593,8 @@ struct TimetableView: View {
             )
             try TimetableSingleContainerMigration.run(context: modelContext)
         } catch {
-            Self.dataLogger.error("Failed to migrate historical timetable data: \(error.localizedDescription, privacy: .public)")
+            Self.dataLogger
+                .error("Failed to migrate historical timetable data: \(error.localizedDescription, privacy: .public)")
         }
         syncAcademicYearDataProjections()
         syncTimetableScheduleProjectionSnapshot()
@@ -693,8 +696,12 @@ struct TimetableView: View {
                 occupiedPeriods: snapshot.occupiedPeriods(day: preparedDay.dayOfWeek, week: week),
                 reminders: reminders,
                 reminderPeriods: Set(reminders.flatMap { Array($0.displayPeriodRange) }),
-                countdownPeriods: Set(metadata.countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) }),
-                conflictContent: conflictDayCache.content(metadata: metadata, snapshot: snapshot, totalClasses: totalClasses)
+                countdownPeriods: Set(metadata.countdowns.flatMap { Array($0.startPeriod ... $0.endPeriod) }),
+                conflictContent: conflictDayCache.content(
+                    metadata: metadata,
+                    snapshot: snapshot,
+                    totalClasses: totalClasses
+                )
             )
         }
         hasDeferredContinuousPayloadRefresh = false
@@ -846,7 +853,8 @@ struct TimetableView: View {
         timetableGridSnapshot = nil
         syncTimetableGridSnapshot()
 
-        let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? SemesterConfig.currentWeek(date: referenceDate)
+        let referencePage = academicYearTimetable.pageIndex(containing: referenceDate) ?? SemesterConfig
+            .currentWeek(date: referenceDate)
         if positionsToReferenceDate {
             currentWeek = referencePage
         } else {
@@ -884,11 +892,11 @@ struct TimetableView: View {
             var semesterWeekByDisplayWeek: [Int: Int] = [:]
             for semesterWeek in course.weeks {
                 guard let occurrenceDate = UserTimetableSettings.calendar.date(
-                    byAdding: .day,
-                    value: (semesterWeek - 1) * 7 + (course.dayOfWeek - 1),
-                    to: config.semesterStartDate
-                ), isDateInDisplayedAcademicYear(occurrenceDate),
-                   let displayWeek = academicYearTimetable.pageIndex(containing: occurrenceDate) else {
+                          byAdding: .day,
+                          value: (semesterWeek - 1) * 7 + (course.dayOfWeek - 1),
+                          to: config.semesterStartDate
+                      ), isDateInDisplayedAcademicYear(occurrenceDate),
+                      let displayWeek = academicYearTimetable.pageIndex(containing: occurrenceDate) else {
                     continue
                 }
                 displayWeeks.append(displayWeek)
@@ -914,7 +922,8 @@ struct TimetableView: View {
         timetableCellReminderProjections = reminderProjections
     }
 
-    private func reloadTimetableBackground(configuration suppliedConfiguration: TimetableBackgroundConfiguration? = nil) {
+    private func reloadTimetableBackground(configuration suppliedConfiguration: TimetableBackgroundConfiguration? =
+        nil) {
         timetableBackgroundLoadTask?.cancel()
         let configuration = suppliedConfiguration ?? TimetableBackgroundConfiguration.load()
         let previousConfiguration = timetableBackgroundConfiguration
@@ -1075,7 +1084,6 @@ struct TimetableView: View {
     private func scheduleQuickAccessAction(_ action: TimetableQuickAccessAction) {
         pendingQuickAccessAction = action
         isQuickAccessPresented = false
-
     }
 
     private func completeQuickAccessDismissal() {
@@ -1176,7 +1184,7 @@ struct TimetableView: View {
         if !occupiedPeriods.contains(preferred) {
             return preferred
         }
-        return (1...totalClasses).first { !occupiedPeriods.contains($0) } ?? preferred
+        return (1 ... totalClasses).first { !occupiedPeriods.contains($0) } ?? preferred
     }
 
     private var toolbarReturnButton: some View {
@@ -1197,7 +1205,7 @@ struct TimetableView: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .frame(minHeight: 44)
-            .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
+                .foregroundStyle(AppTheme.accentEmphasis(for: themeColorPreference))
         }
         .accessibilityLabel(weekPickerAccessibilityLabel)
         .accessibilityHint("选择要查看的教学周或假期")
@@ -1303,9 +1311,9 @@ struct TimetableView: View {
                 let dayCount = timetableHidesWeekends ? 5 : 7
                 let metrics = layoutMetrics(for: geometry.size, dayCount: dayCount)
                 continuousTimetable(gridSnapshot: gridSnapshot, metrics: metrics)
-                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-                .onAppear { timetableViewportSize = geometry.size }
-                .onChange(of: geometry.size) { _, size in timetableViewportSize = size }
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                    .onAppear { timetableViewportSize = geometry.size }
+                    .onChange(of: geometry.size) { _, size in timetableViewportSize = size }
             }
         }
         .simultaneousGesture(timetableMagnificationGesture)
@@ -1371,7 +1379,8 @@ struct TimetableView: View {
                 transaction.isContinuous = true
                 withTransaction(transaction) {
                     if continuousViewport.phase != .paging {
-                        guard continuousViewport.beginPaging(viewportWidth: continuousContentViewportWidth) else { return }
+                        guard continuousViewport.beginPaging(viewportWidth: continuousContentViewportWidth)
+                        else { return }
                     }
                     continuousViewport.updatePaging(translation: value.translation.width)
                 }
@@ -1571,7 +1580,6 @@ struct TimetableView: View {
             )
     }
 
-
     private func layoutMetrics(for size: CGSize, dayCount: Int) -> TimetableLayoutMetrics {
         timetableLayoutMetricsCache.metrics(
             size: size,
@@ -1595,7 +1603,7 @@ struct TimetableView: View {
 
     private func timeAxis(metrics: TimetableLayoutMetrics) -> some View {
         ZStack(alignment: .topLeading) {
-            ForEach(1...totalClasses, id: \.self) { classIndex in
+            ForEach(1 ... totalClasses, id: \.self) { classIndex in
                 let slot = TimetablePeriodSchedule.slot(for: classIndex)
                 VStack(spacing: 0) {
                     Text("\(classIndex)")
@@ -1645,7 +1653,7 @@ struct TimetableView: View {
             ?? Set(reminders.flatMap { Array($0.displayPeriodRange) })
         let countdowns = metadata.countdowns
         let countdownPeriods = preparedPayload?.countdownPeriods
-            ?? Set(countdowns.flatMap { Array($0.startPeriod...$0.endPeriod) })
+            ?? Set(countdowns.flatMap { Array($0.startPeriod ... $0.endPeriod) })
 
         return ZStack(alignment: .topLeading) {
             timetableGridBackground(width: width, metrics: metrics)
@@ -1654,13 +1662,13 @@ struct TimetableView: View {
                 .contentShape(Rectangle())
                 .gesture(
                     SpatialTapGesture().onEnded { value in
-                        guard let period = (1...totalClasses).first(where: { candidate in
-                            let minY = yPosition(forClass: candidate, metrics: metrics)
-                            return value.location.y >= minY && value.location.y <= minY + metrics.rowHeight
-                        }),
-                        !occupiedPeriods.contains(period),
-                        !reminderPeriods.contains(period),
-                        !countdownPeriods.contains(period) else { return }
+                        guard let period = (1 ... totalClasses).first(where: { candidate in
+                                  let minY = yPosition(forClass: candidate, metrics: metrics)
+                                  return value.location.y >= minY && value.location.y <= minY + metrics.rowHeight
+                              }),
+                              !occupiedPeriods.contains(period),
+                              !reminderPeriods.contains(period),
+                              !countdownPeriods.contains(period) else { return }
 
                         selectedCellReminderContext = TimetableCellReminderContext(
                             week: week,
@@ -1675,7 +1683,7 @@ struct TimetableView: View {
                 )
                 .accessibilityHidden(true)
 
-            if let accessiblePeriod = (1...totalClasses).first(where: {
+            if let accessiblePeriod = (1 ... totalClasses).first(where: {
                 !occupiedPeriods.contains($0)
                     && !reminderPeriods.contains($0)
                     && !countdownPeriods.contains($0)
@@ -1702,7 +1710,11 @@ struct TimetableView: View {
                 ?? conflictDayCache.content(metadata: metadata, snapshot: gridSnapshot, totalClasses: totalClasses)
             ForEach(content.layout.blocks) { block in
                 if let item = content.items[block.id] {
-                    let rects = TimetableConflictGeometry.rects(segments: block.segments, width: width, metrics: metrics)
+                    let rects = TimetableConflictGeometry.rects(
+                        segments: block.segments,
+                        width: width,
+                        metrics: metrics
+                    )
                     TimetableConflictBlockView(
                         item: item,
                         rects: rects,
@@ -1722,13 +1734,18 @@ struct TimetableView: View {
             }
             ForEach(content.layout.groups) { group in
                 let segment = TimetableConflictSegment(start: group.start, end: group.end, leading: 0, trailing: 1)
-                if let rect = TimetableConflictGeometry.rects(segments: [segment], width: width, metrics: metrics).first {
+                if let rect = TimetableConflictGeometry.rects(segments: [segment], width: width, metrics: metrics)
+                    .first {
                     Button {
                         let items = group.itemIDs.compactMap { content.items[$0] }.sorted {
                             if $0.interval.start != $1.interval.start { return $0.interval.start < $1.interval.start }
                             return $0.id < $1.id
                         }
-                        selectedConflictSelection = TimetableConflictSelection(id: group.id, date: metadata.date, items: items)
+                        selectedConflictSelection = TimetableConflictSelection(
+                            id: group.id,
+                            date: metadata.date,
+                            items: items
+                        )
                     } label: {
                         Text(L10n.text("%d 项安排", language: leafyLanguage, group.itemIDs.count))
                             .font(.system(size: 10.5 * leafyControlScale, weight: .semibold))
@@ -1774,7 +1791,12 @@ struct TimetableView: View {
                 handleStaleTimetableSnapshot()
                 return
             }
-            selectedCourseContext = SelectedCourseContext(course: current, week: value.semesterWeek(for: item.week) ?? item.week, day: item.day, date: item.date)
+            selectedCourseContext = SelectedCourseContext(
+                course: current,
+                week: value.semesterWeek(for: item.week) ?? item.week,
+                day: item.day,
+                date: item.date
+            )
         } else {
             handleAgendaItemTap(item)
         }
@@ -1888,7 +1910,10 @@ struct TimetableView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                .stroke(metadata.isToday || metadata.event != nil || metadata.hasExam ? Color.clear : AppTheme.separator, lineWidth: 1)
+                .stroke(
+                    metadata.isToday || metadata.event != nil || metadata.hasExam ? Color.clear : AppTheme.separator,
+                    lineWidth: 1
+                )
         )
         .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
     }
@@ -1981,7 +2006,7 @@ struct TimetableView: View {
 
     private func timetableGridBackground(width: CGFloat, metrics: TimetableLayoutMetrics) -> some View {
         Canvas { context, _ in
-            for classIndex in 1...totalClasses {
+            for classIndex in 1 ... totalClasses {
                 let isBreakBoundary = classIndex == 5 || classIndex == 9
                 let rect = CGRect(
                     x: 0,
@@ -2092,7 +2117,7 @@ struct TimetableView: View {
             totalWeeks: totalWeeks
         )
         guard timetableGridSnapshot?.signature != snapshot.signature ||
-              timetableGridSnapshot?.totalWeeks != snapshot.totalWeeks
+            timetableGridSnapshot?.totalWeeks != snapshot.totalWeeks
         else { return }
         timetableGridSnapshot = snapshot
         refreshContinuousDayPayloads()
@@ -2317,7 +2342,7 @@ struct TimetableView: View {
         let scope = CampusOperationScope()
         do {
             let saved = try TimetableRefreshUseCase().persist(records: [], existingCourses: courses,
-                modelContext: modelContext, allowsEmpty: true)
+                                                              modelContext: modelContext, allowsEmpty: true)
             Task { @MainActor in
                 guard scope.isCurrent, !Task.isCancelled else { return }
                 _ = await saved.reminders.restore()
@@ -2384,7 +2409,6 @@ struct TimetableView: View {
             ) ?? weekStart
         )
     }
-
 }
 
 private struct TimetableWeekPickerPanel: View {
@@ -2536,18 +2560,18 @@ private struct TimetableWeekPickerPanel: View {
                 .font(.subheadline.weight(isSelected ? .semibold : .regular))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
-            .background(
-                isSelected ? tint : AppTheme.fill,
-                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-            )
-            .overlay {
-                if isCurrent && !isSelected {
-                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                        .stroke(tint, lineWidth: 1.5)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(isSelected ? Color.white : AppTheme.primaryText)
+                .background(
+                    isSelected ? tint : AppTheme.fill,
+                    in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                )
+                .overlay {
+                    if isCurrent && !isSelected {
+                        RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                            .stroke(tint, lineWidth: 1.5)
+                    }
                 }
-            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(

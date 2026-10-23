@@ -43,7 +43,6 @@ enum TimetableBackgroundKind: String, CaseIterable, Identifiable {
             return L10n.text("纯色", language: language)
         }
     }
-
 }
 
 struct TimetableBackgroundPalette: Equatable {
@@ -200,7 +199,10 @@ enum TimetableBackgroundStore {
             let url = directory.appendingPathComponent(filename)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try Task.checkCancellation()
-            try processed.jpegData.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try processed.jpegData.write(
+                to: url,
+                options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+            )
             return TimetableBackgroundImportResult(filename: filename, palette: processed.palette)
         }
         let result = try await withTaskCancellationHandler {
@@ -307,7 +309,6 @@ enum TimetableBackgroundStore {
             try FileManager.default.removeItem(at: url)
         }
     }
-
 }
 
 extension Notification.Name {
@@ -349,7 +350,7 @@ enum TimetableBackgroundImageProcessor {
         var longestSide = CGFloat(max(image.width, image.height))
         var smallestData: Data?
 
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             for quality in qualities {
                 guard let data = jpegData(from: candidate, quality: quality) else { continue }
                 if smallestData == nil || data.count < (smallestData?.count ?? Int.max) {
@@ -493,7 +494,7 @@ enum TimetableBackgroundPaletteExtractor {
         let lightBrightness: [CGFloat] = [0.92, 0.88, 0.94, 0.89, 0.93, 0.87, 0.91]
         let darkBrightness: [CGFloat] = [0.30, 0.34, 0.27, 0.32, 0.36, 0.29, 0.33]
 
-        let lightHexes = (0..<7).map { index in
+        let lightHexes = (0 ..< 7).map { index in
             let source = candidates[index % candidates.count].hsb
             let hueOffset = candidates.count < 4 ? offsets[index] : offsets[index] * 0.45
             return colorHex(
@@ -503,7 +504,7 @@ enum TimetableBackgroundPaletteExtractor {
             )
         }
 
-        let darkHexes = (0..<7).map { index in
+        let darkHexes = (0 ..< 7).map { index in
             let source = candidates[index % candidates.count].hsb
             let hueOffset = candidates.count < 4 ? offsets[index] * 0.72 : offsets[index] * 0.32
             return colorHex(

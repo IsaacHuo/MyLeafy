@@ -47,28 +47,28 @@ struct RatingSectionContainerView: View {
                 Group {
                     switch mode {
                     case .teachers:
-                    TeacherSectionView(
-                        selectedTeacher: $selectedTeacher,
-                        requestedTeacherName: $requestedTeacherName,
-                        refreshID: teacherRefreshID,
-                        isActive: true,
-                        store: workspace.teachers
-                    )
+                        TeacherSectionView(
+                            selectedTeacher: $selectedTeacher,
+                            requestedTeacherName: $requestedTeacherName,
+                            refreshID: teacherRefreshID,
+                            isActive: true,
+                            store: workspace.teachers
+                        )
                     case .courses:
-                    CourseSectionView(
-                        selectedCourse: $selectedCourse,
-                        refreshID: courseRefreshID,
-                        isActive: true,
-                        store: workspace.courses
-                    )
+                        CourseSectionView(
+                            selectedCourse: $selectedCourse,
+                            refreshID: courseRefreshID,
+                            isActive: true,
+                            store: workspace.courses
+                        )
                     case .dishes:
-                    DishSectionView(
-                        selectedDish: $selectedDish,
-                        refreshID: dishRefreshID,
-                        isActive: true,
-                        store: workspace.dishes
-                    )
-                }
+                        DishSectionView(
+                            selectedDish: $selectedDish,
+                            refreshID: dishRefreshID,
+                            isActive: true,
+                            store: workspace.dishes
+                        )
+                    }
                 }
                 .animation(.easeInOut(duration: 0.18), value: mode)
             } else {

@@ -22,9 +22,9 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
 
     var isUsable: Bool {
         !semesterID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !graduateTimetableTermCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        (1...SemesterConfig.timetableWeekCapacity).contains(supportedWeeks) &&
-        Self.date(from: semesterStartDateString) != nil
+            !graduateTimetableTermCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            (1 ... SemesterConfig.timetableWeekCapacity).contains(supportedWeeks) &&
+            Self.date(from: semesterStartDateString) != nil
     }
 
     static let builtIn = SemesterRuntimeConfig(
@@ -43,9 +43,29 @@ nonisolated struct SemesterRuntimeConfig: Codable, Hashable, Sendable {
         supportedWeeks: 20,
         graduateTimetableTermCode: "46",
         calendarEvents: [
-            SchoolCalendarEvent(id: "bjfu-sports-2026", title: "运动会停课", startDateString: "2026-04-24", endDateString: "2026-04-24", kind: .closure),
-            SchoolCalendarEvent(id: "bjfu-semester-end-2026-spring", title: "学期结束", startDateString: "2026-07-26", endDateString: "2026-07-26", kind: .holiday, academicCategory: .semesterEnd),
-            SchoolCalendarEvent(id: "bjfu-summer-break-2026", title: "暑假", startDateString: "2026-07-27", endDateString: "2026-09-06", kind: .holiday, academicCategory: .summerBreak)
+            SchoolCalendarEvent(
+                id: "bjfu-sports-2026",
+                title: "运动会停课",
+                startDateString: "2026-04-24",
+                endDateString: "2026-04-24",
+                kind: .closure
+            ),
+            SchoolCalendarEvent(
+                id: "bjfu-semester-end-2026-spring",
+                title: "学期结束",
+                startDateString: "2026-07-26",
+                endDateString: "2026-07-26",
+                kind: .holiday,
+                academicCategory: .semesterEnd
+            ),
+            SchoolCalendarEvent(
+                id: "bjfu-summer-break-2026",
+                title: "暑假",
+                startDateString: "2026-07-27",
+                endDateString: "2026-09-06",
+                kind: .holiday,
+                academicCategory: .summerBreak
+            )
         ],
         updatedAt: nil,
         isActive: false
@@ -165,7 +185,6 @@ nonisolated enum SemesterRuntimeConfigCache {
     private static func scopedKey(defaults: UserDefaults) -> String {
         CampusScopedDefaults.key(key, defaults: defaults)
     }
-
 }
 
 actor SemesterRuntimeConfigService {
@@ -195,14 +214,18 @@ actor SemesterRuntimeConfigService {
         let campusID = ActiveCampusContext.descriptor.id
         let previous = SemesterConfig.schoolCurrent
         if let task = activeRefreshTasks[key] { return await task.value }
-        if !force, let last = lastAttempts[key], Date().timeIntervalSince(last) < minimumRefreshInterval { return previous }
+        if !force, let last = lastAttempts[key],
+           Date().timeIntervalSince(last) < minimumRefreshInterval { return previous }
         let task = Task<SemesterRuntimeConfig, Never> {
             do {
                 let remote = try await fetchActive(campusID)
                 return await MainActor.run {
                     guard key == Self.scopeKey, remote.isActive, remote.isUsable else { return previous }
                     SemesterRuntimeConfigCache.save(remote)
-                    if remote != previous { NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil) }
+                    if remote != previous { NotificationCenter.default.post(
+                        name: .semesterRuntimeConfigDidChange,
+                        object: nil
+                    ) }
                     return remote
                 }
             } catch { return previous }
@@ -219,14 +242,18 @@ actor SemesterRuntimeConfigService {
         let campusID = ActiveCampusContext.descriptor.id
         let cached = SemesterConfig.timelineConfigurations
         if let task = activeTimelineRefreshTasks[key] { return await task.value }
-        if !force, let last = lastTimelineAttempts[key], Date().timeIntervalSince(last) < minimumRefreshInterval { return cached }
+        if !force, let last = lastTimelineAttempts[key],
+           Date().timeIntervalSince(last) < minimumRefreshInterval { return cached }
         let task = Task<[SemesterRuntimeConfig], Never> {
             do {
                 let remote = try await fetchTimeline(campusID)
                 return await MainActor.run {
                     guard key == Self.scopeKey, !remote.isEmpty, remote.allSatisfy(\.isUsable) else { return cached }
                     SemesterRuntimeConfigTimelineCache.save(remote)
-                    if remote != cached { NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil) }
+                    if remote != cached { NotificationCenter.default.post(
+                        name: .semesterRuntimeConfigDidChange,
+                        object: nil
+                    ) }
                     return remote
                 }
             } catch { return cached }
@@ -239,13 +266,24 @@ actor SemesterRuntimeConfigService {
     }
 
     private static func fetchRemoteActiveConfig(campusID: CampusID) async throws -> SemesterRuntimeConfig {
-        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: campusID.rawValue)], authenticated: false)
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get(
+            "/v1/runtime/semester",
+            query: [URLQueryItem(name: "campus_id", value: campusID.rawValue)],
+            authenticated: false
+        )
         guard let record = records.first else { throw URLError(.resourceUnavailable) }
         return record.runtimeConfig
     }
 
     private static func fetchRemoteTimelineConfigs(campusID: CampusID) async throws -> [SemesterRuntimeConfig] {
-        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/semester", query: [URLQueryItem(name: "campus_id", value: campusID.rawValue), URLQueryItem(name: "include_history", value: "true")], authenticated: false)
+        let records: [RemoteSemesterRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get(
+            "/v1/runtime/semester",
+            query: [
+                URLQueryItem(name: "campus_id", value: campusID.rawValue),
+                URLQueryItem(name: "include_history", value: "true")
+            ],
+            authenticated: false
+        )
         return records.map(\.runtimeConfig)
     }
 }
@@ -376,8 +414,10 @@ nonisolated struct SemesterConfig {
         if ActiveCampusContext.descriptor.id == .guest {
             return SemesterConfig.current
         }
-        async let nationalCalendarRefresh: NationalCalendarRuntimeConfig = NationalHolidayCalendar.refreshRemoteIfAvailable(force: force)
-        async let timelineRefresh: [SemesterRuntimeConfig] = SemesterRuntimeConfigService.shared.refreshTimelineFromRemoteIfAvailable(force: force)
+        async let nationalCalendarRefresh: NationalCalendarRuntimeConfig = NationalHolidayCalendar
+            .refreshRemoteIfAvailable(force: force)
+        async let timelineRefresh: [SemesterRuntimeConfig] = SemesterRuntimeConfigService.shared
+            .refreshTimelineFromRemoteIfAvailable(force: force)
         let semesterConfig = await SemesterRuntimeConfigService.shared.refreshFromRemoteIfAvailable(force: force)
         _ = await nationalCalendarRefresh
         _ = await timelineRefresh
@@ -702,13 +742,48 @@ nonisolated struct NationalCalendarRuntimeConfig: Codable, Hashable, Sendable {
     static let builtIn = NationalCalendarRuntimeConfig(
         year: 2026,
         holidays: [
-            NationalHolidayEvent(id: "new-year-2026", title: "元旦", startDateString: "2026-01-01", endDateString: "2026-01-03"),
-            NationalHolidayEvent(id: "spring-festival-2026", title: "春节", startDateString: "2026-02-15", endDateString: "2026-02-23"),
-            NationalHolidayEvent(id: "qingming-2026", title: "清明", startDateString: "2026-04-04", endDateString: "2026-04-06"),
-            NationalHolidayEvent(id: "labor-2026", title: "五一", startDateString: "2026-05-01", endDateString: "2026-05-05"),
-            NationalHolidayEvent(id: "dragonboat-2026", title: "端午", startDateString: "2026-06-19", endDateString: "2026-06-21"),
-            NationalHolidayEvent(id: "midautumn-2026", title: "中秋", startDateString: "2026-09-25", endDateString: "2026-09-27"),
-            NationalHolidayEvent(id: "national-day-2026", title: "国庆", startDateString: "2026-10-01", endDateString: "2026-10-07")
+            NationalHolidayEvent(
+                id: "new-year-2026",
+                title: "元旦",
+                startDateString: "2026-01-01",
+                endDateString: "2026-01-03"
+            ),
+            NationalHolidayEvent(
+                id: "spring-festival-2026",
+                title: "春节",
+                startDateString: "2026-02-15",
+                endDateString: "2026-02-23"
+            ),
+            NationalHolidayEvent(
+                id: "qingming-2026",
+                title: "清明",
+                startDateString: "2026-04-04",
+                endDateString: "2026-04-06"
+            ),
+            NationalHolidayEvent(
+                id: "labor-2026",
+                title: "五一",
+                startDateString: "2026-05-01",
+                endDateString: "2026-05-05"
+            ),
+            NationalHolidayEvent(
+                id: "dragonboat-2026",
+                title: "端午",
+                startDateString: "2026-06-19",
+                endDateString: "2026-06-21"
+            ),
+            NationalHolidayEvent(
+                id: "midautumn-2026",
+                title: "中秋",
+                startDateString: "2026-09-25",
+                endDateString: "2026-09-27"
+            ),
+            NationalHolidayEvent(
+                id: "national-day-2026",
+                title: "国庆",
+                startDateString: "2026-10-01",
+                endDateString: "2026-10-07"
+            )
         ],
         solarTerms: [
             SolarTermEvent(id: "minor-cold-2026", title: "小寒", dateString: "2026-01-05"),
@@ -819,7 +894,10 @@ actor NationalCalendarRuntimeConfigService {
     }
 
     private static func fetchRemoteActiveConfig() async throws -> NationalCalendarRuntimeConfig {
-        let records: [RemoteNationalCalendarRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get("/v1/runtime/calendar", authenticated: false)
+        let records: [RemoteNationalCalendarRuntimeConfigRecord] = try await MyLeafyBackendEnvironment.client().get(
+            "/v1/runtime/calendar",
+            authenticated: false
+        )
         guard let record = records.first else { throw URLError(.resourceUnavailable) }
         return record.runtimeConfig
     }
@@ -995,5 +1073,6 @@ nonisolated enum AcademicCalendarEvents {
 
 extension Notification.Name {
     nonisolated static let semesterRuntimeConfigDidChange = Notification.Name("semesterRuntimeConfigDidChange")
-    nonisolated static let nationalCalendarRuntimeConfigDidChange = Notification.Name("nationalCalendarRuntimeConfigDidChange")
+    nonisolated static let nationalCalendarRuntimeConfigDidChange = Notification
+        .Name("nationalCalendarRuntimeConfigDidChange")
 }

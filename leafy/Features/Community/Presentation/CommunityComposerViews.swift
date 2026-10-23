@@ -160,7 +160,10 @@ struct CommunityComposerSheet: View {
                     }
                 }
                 ToolbarItem(placement: .leafyTrailing) {
-                    Button(isSubmitting ? L10n.text("发布中", language: leafyLanguage) : L10n.text("发布", language: leafyLanguage)) {
+                    Button(isSubmitting ? L10n.text("发布中", language: leafyLanguage) : L10n.text(
+                        "发布",
+                        language: leafyLanguage
+                    )) {
                         Task { await submitCurrentMode() }
                     }
                     .disabled(isSubmitDisabled)
@@ -216,7 +219,7 @@ struct CommunityComposerSheet: View {
                 CommunityTermsAgreementSheet {
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
-                    .presentationDetents([.large])
+                .presentationDetents([.large])
             }
             .confirmationDialog(
                 "是否存入草稿箱？",
@@ -765,7 +768,7 @@ struct CommunityComposerSheet: View {
             }
             draftAttachments = payload.attachments.map(CommunityDraftAttachment.init(upload:))
             for url in previousAttachmentURLs
-            where url.path.contains("CommunityComposerAttachments")
+                where url.path.contains("CommunityComposerAttachments")
                 && !draftAttachments.contains(where: { $0.upload.localURL == url }) {
                 try? FileManager.default.removeItem(at: url)
             }

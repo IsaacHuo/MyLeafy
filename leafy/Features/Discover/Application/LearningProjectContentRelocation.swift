@@ -18,7 +18,6 @@ enum LearningProjectContentRelocation {
         }
         let models: [any PersistentModel] = scopedMaterials + scopedTasks + scopedRecords
         try LocalFileCleanup().delete(models, files: files, in: modelContext)
-
     }
 
     static func moveToUnfiled(
@@ -59,9 +58,24 @@ enum LearningProjectContentRelocation {
         save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
         let id = project.id.uuidString
-        let materialSnapshots = materials.filter { $0.projectID == id }.map { ($0, $0.projectID, $0.categoryRawValue, $0.updatedAt) }
-        let taskSnapshots = tasks.filter { $0.projectID == id }.map { ($0, $0.projectID, $0.categoryRawValue, $0.updatedAt) }
-        let recordSnapshots = records.filter { $0.projectID == id }.map { ($0, $0.projectID, $0.categoryRawValue, $0.updatedAt) }
+        let materialSnapshots = materials.filter { $0.projectID == id }.map { (
+            $0,
+            $0.projectID,
+            $0.categoryRawValue,
+            $0.updatedAt
+        ) }
+        let taskSnapshots = tasks.filter { $0.projectID == id }.map { (
+            $0,
+            $0.projectID,
+            $0.categoryRawValue,
+            $0.updatedAt
+        ) }
+        let recordSnapshots = records.filter { $0.projectID == id }.map { (
+            $0,
+            $0.projectID,
+            $0.categoryRawValue,
+            $0.updatedAt
+        ) }
         moveToUnfiled(
             projectID: project.id,
             materials: materials,
@@ -101,6 +115,5 @@ enum LearningProjectContentRelocation {
         let scopedRecords = records.filter { $0.projectID == projectIDString }
         let models: [any PersistentModel] = [project] + scopedMaterials + scopedTasks + scopedRecords
         try LocalFileCleanup().delete(models, files: files, in: modelContext)
-
     }
 }

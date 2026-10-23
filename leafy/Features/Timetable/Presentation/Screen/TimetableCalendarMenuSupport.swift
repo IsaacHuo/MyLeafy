@@ -50,27 +50,28 @@ nonisolated struct TimetableCalendarMenuModel {
         var stagesByAcademicYear: [String: [TimetableCalendarMenuStage]] = [:]
         for configuration in sortedConfigurations {
             let academicYear = Self.academicYearTitle(semesterID: configuration.semesterID)
-            let weeks: [TimetableCalendarMenuWeek] = (1...SemesterConfig.timetableWeekCapacity).compactMap { weekNumber -> TimetableCalendarMenuWeek? in
-                guard let targetDate = calendar.date(
-                    byAdding: .day,
-                    value: (weekNumber - 1) * 7,
-                    to: configuration.semesterStartDate
-                ) else { return nil }
-                let targetTimetable = timetable.contains(targetDate)
-                    ? timetable
-                    : AcademicYearTimetable(
-                        configurations: sortedConfigurations,
-                        semanticEvents: sortedConfigurations.flatMap(\.calendarEvents),
-                        referenceDate: targetDate,
-                        calendar: calendar
+            let weeks: [TimetableCalendarMenuWeek] = (1 ... SemesterConfig.timetableWeekCapacity)
+                .compactMap { weekNumber -> TimetableCalendarMenuWeek? in
+                    guard let targetDate = calendar.date(
+                        byAdding: .day,
+                        value: (weekNumber - 1) * 7,
+                        to: configuration.semesterStartDate
+                    ) else { return nil }
+                    let targetTimetable = timetable.contains(targetDate)
+                        ? timetable
+                        : AcademicYearTimetable(
+                            configurations: sortedConfigurations,
+                            semanticEvents: sortedConfigurations.flatMap(\.calendarEvents),
+                            referenceDate: targetDate,
+                            calendar: calendar
+                        )
+                    guard let page = targetTimetable.pageIndex(containing: targetDate) else { return nil }
+                    return TimetableCalendarMenuWeek(
+                        page: page,
+                        weekNumber: weekNumber,
+                        targetDate: targetDate
                     )
-                guard let page = targetTimetable.pageIndex(containing: targetDate) else { return nil }
-                return TimetableCalendarMenuWeek(
-                    page: page,
-                    weekNumber: weekNumber,
-                    targetDate: targetDate
-                )
-            }
+                }
             let semester = TimetableCalendarMenuSemester(
                 semesterID: configuration.semesterID,
                 title: Self.semesterSeasonTitle(
@@ -94,11 +95,11 @@ nonisolated struct TimetableCalendarMenuModel {
                 guard let category = event.academicCategory,
                       let startDate = event.startDate,
                       let target = Self.vacationTarget(
-                        for: event,
-                        timetable: timetable,
-                        configurations: sortedConfigurations,
-                        referenceDate: referenceDate,
-                        calendar: calendar
+                          for: event,
+                          timetable: timetable,
+                          configurations: sortedConfigurations,
+                          referenceDate: referenceDate,
+                          calendar: calendar
                       ) else { continue }
                 let identity = "\(academicYear)-\(category.rawValue)"
                 guard seenVacations.insert(identity).inserted else { continue }

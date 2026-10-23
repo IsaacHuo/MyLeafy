@@ -45,20 +45,32 @@ enum ScheduleMemoDeletionService {
         cleanup: LocalFileCleanup? = nil, save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws {
         let ids = Set(memos.map(\.id))
-        let ownedImages = try (images.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoImage>()) : images).filter { ids.contains($0.memoID) }
-        let ownedAttachments = try (attachments.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoAttachment>()) : attachments).filter { ids.contains($0.memoID) }
-        let ownedAudio = try (audioRecords.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoAudio>()) : audioRecords).filter { ids.contains($0.memoID) }
+        let ownedImages = try (images.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoImage>()) : images)
+            .filter { ids.contains($0.memoID) }
+        let ownedAttachments = try (attachments.isEmpty ? context
+            .fetch(FetchDescriptor<ScheduleMemoAttachment>()) : attachments).filter { ids.contains($0.memoID) }
+        let ownedAudio = try (audioRecords.isEmpty ? context.fetch(FetchDescriptor<ScheduleMemoAudio>()) : audioRecords)
+            .filter { ids.contains($0.memoID) }
         let files = ownedImages.map {
-            LocalFileCleanup.File($0, url: (imageDirectory ?? ScheduleMemoImageStore.directoryURL()).appendingPathComponent($0.localFilename))
+            LocalFileCleanup.File(
+                $0,
+                url: (imageDirectory ?? ScheduleMemoImageStore.directoryURL()).appendingPathComponent($0.localFilename)
+            )
         } + ownedAttachments.compactMap { record in
-            ScheduleMemoAttachmentStore.fileURL(named: record.localFilename, in: attachmentDirectory).map { LocalFileCleanup.File(record, url: $0) }
+            ScheduleMemoAttachmentStore.fileURL(named: record.localFilename, in: attachmentDirectory)
+                .map { LocalFileCleanup.File(
+                    record,
+                    url: $0
+                ) }
         } + ownedAudio.compactMap { record in
-            ScheduleMemoAudioStore.fileURL(named: record.localFilename, in: audioDirectory).map { LocalFileCleanup.File(record, url: $0) }
+            ScheduleMemoAudioStore.fileURL(named: record.localFilename, in: audioDirectory).map { LocalFileCleanup.File(
+                record,
+                url: $0
+            ) }
         }
         let models: [any PersistentModel] = memos + ownedImages + ownedAttachments + ownedAudio
         try (cleanup ?? LocalFileCleanup()).delete(models, files: files, in: context, save: save)
     }
-
 }
 
 nonisolated enum ScheduleMemoLinkResolver {

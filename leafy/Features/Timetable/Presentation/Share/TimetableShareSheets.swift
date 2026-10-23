@@ -205,7 +205,7 @@ struct TimetableExportSheet: View {
         onSelect: @escaping (Int) -> Void
     ) -> some View {
         Menu {
-            ForEach(1...totalWeeks, id: \.self) { candidateWeek in
+            ForEach(1 ... totalWeeks, id: \.self) { candidateWeek in
                 Button("第 \(candidateWeek) 周") {
                     onSelect(candidateWeek)
                 }
@@ -303,7 +303,7 @@ struct TimetableExportSheet: View {
     private var customWeekRange: ClosedRange<Int> {
         let startWeek = clampedCustomWeek(customStartWeek)
         let endWeek = clampedCustomWeek(customEndWeek)
-        return min(startWeek, endWeek)...max(startWeek, endWeek)
+        return min(startWeek, endWeek) ... max(startWeek, endWeek)
     }
 
     private var customWeekRangeTitle: String {
@@ -315,7 +315,11 @@ struct TimetableExportSheet: View {
 
     private func dateFor(day: Int, week: Int) -> Date {
         let offset = (week - 1) * 7 + (day - 1)
-        return UserTimetableSettings.calendar.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? Date()
+        return UserTimetableSettings.calendar.date(
+            byAdding: .day,
+            value: offset,
+            to: SemesterConfig.startOfSemesterDate
+        ) ?? Date()
     }
 
     private func clampedCustomWeek(_ week: Int) -> Int {
@@ -405,7 +409,10 @@ struct DayScheduleSummarySheet: View {
                 .padding(AppSpacing.page)
             }
             .background(LeafyPageBackground())
-            .navigationTitle(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text("今日视图", language: leafyLanguage) : L10n.text("日程视图", language: leafyLanguage))
+            .navigationTitle(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text(
+                "今日视图",
+                language: leafyLanguage
+            ) : L10n.text("日程视图", language: leafyLanguage))
             .leafyInlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .leafyTrailing) {
@@ -447,7 +454,10 @@ struct DayScheduleSummarySheet: View {
 
         return candidates
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? L10n.text(ActiveCampusContext.descriptor.defaultStudentDisplayName, language: leafyLanguage)
+            .first(where: { !$0.isEmpty }) ?? L10n.text(
+                ActiveCampusContext.descriptor.defaultStudentDisplayName,
+                language: leafyLanguage
+            )
     }
 
     @MainActor
@@ -588,7 +598,10 @@ struct WeekScheduleSheet: View {
 
         return candidates
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? L10n.text(ActiveCampusContext.descriptor.defaultStudentDisplayName, language: leafyLanguage)
+            .first(where: { !$0.isEmpty }) ?? L10n.text(
+                ActiveCampusContext.descriptor.defaultStudentDisplayName,
+                language: leafyLanguage
+            )
     }
 
     @MainActor
@@ -700,7 +713,11 @@ struct WeekScheduleCard: View {
                     textScale: 0.96
                 )
             }
-            .frame(height: WeeklyTimetableGrid.totalHeight(rowHeight: 50, headerHeight: 42, columnSpacing: WeeklyTimetableGrid.compactColumnSpacing))
+            .frame(height: WeeklyTimetableGrid.totalHeight(
+                rowHeight: 50,
+                headerHeight: 42,
+                columnSpacing: WeeklyTimetableGrid.compactColumnSpacing
+            ))
         }
         .padding(18)
         .leafyCardStyle()
@@ -721,7 +738,11 @@ struct WeekScheduleCard: View {
 
     private func date(for day: Int) -> Date {
         let offset = (selection.week - 1) * 7 + (day - 1)
-        return UserTimetableSettings.calendar.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? selection.date
+        return UserTimetableSettings.calendar.date(
+            byAdding: .day,
+            value: offset,
+            to: SemesterConfig.startOfSemesterDate
+        ) ?? selection.date
     }
 }
 
@@ -789,9 +810,13 @@ struct WeekScheduleShareImageCard: View {
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
                 Spacer()
-                Text(L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.tertiaryText)
+                Text(L10n.text(
+                    "分享于 %@",
+                    language: leafyLanguage,
+                    TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())
+                ))
+                .microCaption()
+                .foregroundStyle(AppTheme.tertiaryText)
             }
         }
         .padding(18)
@@ -838,7 +863,7 @@ struct WeeklyTimetableGrid: View {
     }
 
     static func totalHeight(rowHeight: CGFloat, headerHeight: CGFloat, columnSpacing: CGFloat,
-        totalPeriods: Int = TimetablePeriodSchedule.slots.count) -> CGFloat {
+                            totalPeriods: Int = TimetablePeriodSchedule.slots.count) -> CGFloat {
         headerHeight + columnSpacing + CGFloat(totalPeriods) * rowHeight + CGFloat(max(totalPeriods - 1, 0)) * 2
     }
 
@@ -847,7 +872,7 @@ struct WeeklyTimetableGrid: View {
     private let cardInset: CGFloat = 2
     private let laneSpacing: CGFloat = 2
 
-    private var days: [Int] { Array(1...(includesWeekends ? 7 : 5)) }
+    private var days: [Int] { Array(1 ... (includesWeekends ? 7 : 5)) }
 
     private var gridProjection: WeeklyTimetableProjection {
         WeeklyTimetableProjection.make(
@@ -1013,16 +1038,16 @@ struct WeeklyTimetableGrid: View {
 
     private var periodAxis: some View {
         ZStack(alignment: .topLeading) {
-            ForEach(1...totalPeriods, id: \.self) { period in
+            ForEach(1 ... totalPeriods, id: \.self) { period in
                 Text("\(period)")
                     .font(.system(size: 12 * textScale, weight: .semibold))
-                .foregroundStyle(AppTheme.secondaryText)
-                .frame(width: axisWidth, height: rowHeight)
-                .background(
-                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                        .fill(AppTheme.cardBackground.opacity(0.52))
-                )
-                .position(x: axisWidth * 0.5, y: yPosition(period: period) + rowHeight * 0.5)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(width: axisWidth, height: rowHeight)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                            .fill(AppTheme.cardBackground.opacity(0.52))
+                    )
+                    .position(x: axisWidth * 0.5, y: yPosition(period: period) + rowHeight * 0.5)
             }
         }
     }
@@ -1030,7 +1055,7 @@ struct WeeklyTimetableGrid: View {
     private var gridBackground: some View {
         ZStack(alignment: .topLeading) {
             ForEach(days, id: \.self) { day in
-                ForEach(1...totalPeriods, id: \.self) { period in
+                ForEach(1 ... totalPeriods, id: \.self) { period in
                     RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                         .fill(backgroundFillColor(for: period))
                         .frame(width: dayWidth, height: rowHeight)
@@ -1099,7 +1124,11 @@ struct WeeklyTimetableGrid: View {
 
     private func date(for day: Int) -> Date {
         let offset = (selection.week - 1) * 7 + (day - 1)
-        return UserTimetableSettings.calendar.date(byAdding: .day, value: offset, to: SemesterConfig.startOfSemesterDate) ?? selection.date
+        return UserTimetableSettings.calendar.date(
+            byAdding: .day,
+            value: offset,
+            to: SemesterConfig.startOfSemesterDate
+        ) ?? selection.date
     }
 }
 
@@ -1133,7 +1162,11 @@ struct DayScheduleSummaryCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text("%@ 今日视图", language: leafyLanguage, AppBrand.displayName) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
+                    Text(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text(
+                        "%@ 今日视图",
+                        language: leafyLanguage,
+                        AppBrand.displayName
+                    ) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
                         .microCaption()
                         .foregroundStyle(AppTheme.accentEmphasis)
                     Text(TimetableClock.formatter(DateFormatters.header).string(from: selection.date))
@@ -1168,9 +1201,13 @@ struct DayScheduleSummaryCard: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(dayCourses.isEmpty ? L10n.text("课程", language: leafyLanguage) : L10n.text("课程 %d 门", language: leafyLanguage, dayCourses.count))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
+                Text(dayCourses.isEmpty ? L10n.text("课程", language: leafyLanguage) : L10n.text(
+                    "课程 %d 门",
+                    language: leafyLanguage,
+                    dayCourses.count
+                ))
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
 
                 if dayCourses.isEmpty {
                     Text("这一天没有课程安排。")
@@ -1228,9 +1265,12 @@ struct DayScheduleSummaryCard: View {
             return L10n.text("正在使用本地缓存，上次同步失败：%@", language: leafyLanguage, lastFailureMessage)
         }
 
-        return L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date()))
+        return L10n.text(
+            "分享于 %@",
+            language: leafyLanguage,
+            TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())
+        )
     }
-
 }
 
 struct TimetableShareIcon: View {
@@ -1353,7 +1393,11 @@ struct DayScheduleShareImageCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text("%@ 今日视图", language: leafyLanguage, AppBrand.displayName) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
+                    Text(UserTimetableSettings.calendar.isDateInToday(selection.date) ? L10n.text(
+                        "%@ 今日视图",
+                        language: leafyLanguage,
+                        AppBrand.displayName
+                    ) : L10n.text("%@ 日程视图", language: leafyLanguage, AppBrand.displayName))
                         .microCaption()
                         .foregroundStyle(AppTheme.accentEmphasis)
                     Text(TimetableClock.formatter(DateFormatters.header).string(from: selection.date))
@@ -1392,9 +1436,13 @@ struct DayScheduleShareImageCard: View {
 
             Divider()
             VStack(alignment: .leading, spacing: 10) {
-                Text(dayCourses.isEmpty ? L10n.text("课程", language: leafyLanguage) : L10n.text("课程 %d 门", language: leafyLanguage, dayCourses.count))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
+                Text(dayCourses.isEmpty ? L10n.text("课程", language: leafyLanguage) : L10n.text(
+                    "课程 %d 门",
+                    language: leafyLanguage,
+                    dayCourses.count
+                ))
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
 
                 if dayCourses.isEmpty {
                     Text("这一天没有课程安排。")
@@ -1430,9 +1478,13 @@ struct DayScheduleShareImageCard: View {
                     .microCaption()
                     .foregroundStyle(AppTheme.tertiaryText)
                 Spacer()
-                Text(L10n.text("分享于 %@", language: leafyLanguage, TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.tertiaryText)
+                Text(L10n.text(
+                    "分享于 %@",
+                    language: leafyLanguage,
+                    TimetableClock.formatter(DateFormatters.headerWithTime).string(from: Date())
+                ))
+                .microCaption()
+                .foregroundStyle(AppTheme.tertiaryText)
             }
         }
         .padding(18)

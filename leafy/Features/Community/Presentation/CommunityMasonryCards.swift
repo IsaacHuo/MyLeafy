@@ -59,7 +59,10 @@ struct CommunityMasonryPostCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .stroke(cardStrokeColor, lineWidth: cardStrokeWidth)
@@ -203,7 +206,6 @@ struct CommunityMasonryPostCard: View {
             .padding(.vertical, 3)
             .background(AppTheme.accentSoft, in: Capsule())
     }
-
 }
 
 struct CommunityMasonryColumns<Item> {

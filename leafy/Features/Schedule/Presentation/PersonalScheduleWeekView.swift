@@ -76,7 +76,8 @@ struct PersonalScheduleBlockView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
 
     let value: PersonalScheduleBlockValue
     let height: CGFloat

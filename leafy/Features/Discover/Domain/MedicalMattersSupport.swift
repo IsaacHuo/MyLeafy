@@ -145,14 +145,28 @@ struct MedicalPolicySnapshot: Equatable {
     let hospitalInfoUpdatedAt = "2026-06-01"
     let sourceTitle = "北京林业大学学生版公费医疗一图读懂"
     let sourceURL = URL(string: "https://news.qq.com/rain/a/20240523A04DUW00")!
-    let sourceImageURL = URL(string: "https://inews.gtimg.com/om_bt/Otw6ahOJpLAFy_nt4oNhGUyUPvbujM4hKY7irA7T3WxOAAA/641")!
-    let hospitalInfoURL = URL(string: "https://map.beijing.gov.cn/place?categoryId=sqwsfwjg&placeId=6a1d4d9d107bae2ad874f4bc")!
+    let sourceImageURL =
+        URL(string: "https://inews.gtimg.com/om_bt/Otw6ahOJpLAFy_nt4oNhGUyUPvbujM4hKY7irA7T3WxOAAA/641")!
+    let hospitalInfoURL =
+        URL(string: "https://map.beijing.gov.cn/place?categoryId=sqwsfwjg&placeId=6a1d4d9d107bae2ad874f4bc")!
 
     let reimbursementRates: [MedicalReimbursementRate] = [
         MedicalReimbursementRate(id: "clinic-campus", category: "门诊、急诊", target: "校医院", rate: 90, note: "学生校内就诊比例"),
         MedicalReimbursementRate(id: "clinic-contract", category: "门诊、急诊", target: "合同医院", rate: 80, note: "北医三院等合同医院"),
-        MedicalReimbursementRate(id: "clinic-specialist", category: "门诊、急诊", target: "非合同医院及专科医院", rate: 70, note: "按转诊和专科规则办理"),
-        MedicalReimbursementRate(id: "inpatient", category: "住院", target: "合同医院、专科医院、急诊方式住院的医保定点医院", rate: 95, note: "住院费用比例")
+        MedicalReimbursementRate(
+            id: "clinic-specialist",
+            category: "门诊、急诊",
+            target: "非合同医院及专科医院",
+            rate: 70,
+            note: "按转诊和专科规则办理"
+        ),
+        MedicalReimbursementRate(
+            id: "inpatient",
+            category: "住院",
+            target: "合同医院、专科医院、急诊方式住院的医保定点医院",
+            rate: 95,
+            note: "住院费用比例"
+        )
     ]
 
     let hospitalName = "北京林业大学社区卫生服务中心（北京林业大学医院）"
@@ -279,10 +293,18 @@ extension MedicalLedgerEntry {
     }
 
     var estimatedOrCalculatedReimbursement: Double? {
-        estimatedReimbursement ?? MedicalLedgerCalculator.estimatedReimbursement(totalExpense: totalExpense, scenario: scenario)
+        estimatedReimbursement ?? MedicalLedgerCalculator.estimatedReimbursement(
+            totalExpense: totalExpense,
+            scenario: scenario
+        )
     }
 
     func deadlineState(now: Date = Date(), calendar: Calendar = .current) -> MedicalLedgerDeadlineState {
-        MedicalLedgerCalculator.deadlineState(deadline: reimbursementDeadline, status: status, now: now, calendar: calendar)
+        MedicalLedgerCalculator.deadlineState(
+            deadline: reimbursementDeadline,
+            status: status,
+            now: now,
+            calendar: calendar
+        )
     }
 }

@@ -127,7 +127,6 @@ enum AppAppearancePreference: String, CaseIterable, Identifiable {
             return .light
         }
     }
-
 }
 
 enum AppThemeColorPreference: String, CaseIterable, Identifiable {
@@ -223,7 +222,6 @@ enum AppThemeColorPreference: String, CaseIterable, Identifiable {
             Double(value & 0xFF)
         )
     }
-
 }
 
 private struct LeafyThemeColorPreferenceKey: EnvironmentKey {
@@ -515,7 +513,6 @@ enum AppTheme {
 
         return Int(hashValue % UInt32(colorCount))
     }
-
 }
 
 enum AppRadius {

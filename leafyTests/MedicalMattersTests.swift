@@ -26,7 +26,12 @@ final class MedicalMattersTests: XCTestCase {
         let overdue = try! XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 6, day: 20)))
 
         XCTAssertEqual(
-            MedicalLedgerCalculator.deadlineState(deadline: dueSoon, status: .readyToSubmit, now: now, calendar: calendar),
+            MedicalLedgerCalculator.deadlineState(
+                deadline: dueSoon,
+                status: .readyToSubmit,
+                now: now,
+                calendar: calendar
+            ),
             .dueSoon(days: 7)
         )
         XCTAssertEqual(
@@ -62,7 +67,10 @@ final class MedicalMattersTests: XCTestCase {
         XCTAssertTrue(csv.contains("预计报销"))
 
         let manifestData = try MedicalLedgerExporter.makeManifestData(entries: [entry], photos: [photo])
-        let manifest = try JSONDecoder.leafyISO8601.decode(MedicalLedgerExporter.ExportManifest.self, from: manifestData)
+        let manifest = try JSONDecoder.leafyISO8601.decode(
+            MedicalLedgerExporter.ExportManifest.self,
+            from: manifestData
+        )
         XCTAssertEqual(manifest.entries.first?.estimatedReimbursement, 160)
         XCTAssertEqual(manifest.photos.first?.archivePath, "photos/\(entry.id.uuidString)/local-receipt.jpg")
 

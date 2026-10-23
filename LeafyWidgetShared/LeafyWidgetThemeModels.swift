@@ -221,7 +221,6 @@ nonisolated enum LeafyWidgetThemePalette: Hashable, Sendable {
             blue: base.blue + (target.blue - base.blue) * amount
         )
     }
-
 }
 
 nonisolated enum LeafyWidgetThemeStore {
@@ -232,8 +231,12 @@ nonisolated enum LeafyWidgetThemeStore {
         }
 
         return LeafyWidgetThemeSnapshot(
-            preferenceRaw: appGroupDefaults.string(forKey: LeafyWidgetConstants.themePreferenceKey) ?? LeafyWidgetThemeSnapshot.fallback.preferenceRaw,
-            customColorHex: appGroupDefaults.string(forKey: LeafyWidgetConstants.themeCustomColorHexKey) ?? LeafyWidgetThemeSnapshot.fallback.customColorHex
+            preferenceRaw: appGroupDefaults
+                .string(forKey: LeafyWidgetConstants.themePreferenceKey) ?? LeafyWidgetThemeSnapshot.fallback
+                .preferenceRaw,
+            customColorHex: appGroupDefaults
+                .string(forKey: LeafyWidgetConstants.themeCustomColorHexKey) ?? LeafyWidgetThemeSnapshot.fallback
+                .customColorHex
         )
     }
 

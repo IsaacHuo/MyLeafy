@@ -32,5 +32,4 @@ enum CampusStoreScope {
             .appendingPathComponent(identity.scopeKey, isDirectory: true)
             .appendingPathComponent("Leafy.store")
     }
-
 }

@@ -42,7 +42,7 @@ struct TeacherDetailSheet: View {
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
 
-                        ForEach((1...5).reversed(), id: \.self) { stars in
+                        ForEach((1 ... 5).reversed(), id: \.self) { stars in
                             TeacherRatingDistributionRow(
                                 stars: stars,
                                 count: teacher.ratingCountsByStars[stars] ?? 0,
@@ -190,7 +190,7 @@ struct CourseRatingDetailSheet: View {
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
 
-                        ForEach((1...5).reversed(), id: \.self) { stars in
+                        ForEach((1 ... 5).reversed(), id: \.self) { stars in
                             CourseRatingDistributionRow(
                                 stars: stars,
                                 count: course.ratingCountsByStars[stars] ?? 0,
@@ -338,7 +338,7 @@ struct DishDetailSheet: View {
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
 
-                        ForEach((1...5).reversed(), id: \.self) { stars in
+                        ForEach((1 ... 5).reversed(), id: \.self) { stars in
                             DishRatingDistributionRow(
                                 stars: stars,
                                 count: dish.ratingCountsByStars[stars] ?? 0,
@@ -517,7 +517,7 @@ struct TeacherStarPicker: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ForEach(1...5, id: \.self) { stars in
+            ForEach(1 ... 5, id: \.self) { stars in
                 Button {
                     selection = stars
                 } label: {

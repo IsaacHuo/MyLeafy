@@ -21,7 +21,10 @@ final class CampusNavigationTests: XCTestCase {
         let items = CampusSidebarDestination.visibleCases(
             isCustomCampus: false, isCommunityEnabled: true, isMedicalEnabled: true, campusID: .bjfu
         )
-        XCTAssertEqual(items, [.community, .schedule] + AcademicPrimaryTab.allCases.map(CampusSidebarDestination.academic))
+        XCTAssertEqual(
+            items,
+            [.community, .schedule] + AcademicPrimaryTab.allCases.map(CampusSidebarDestination.academic)
+        )
         XCTAssertEqual(items[0].title(language: .zhHans), "校园社区")
         XCTAssertEqual(items[1].title(language: .zhHans), "日迹记录")
 
@@ -70,7 +73,7 @@ final class CampusNavigationTests: XCTestCase {
         XCTAssertEqual(coordinator.selectedCampusSection, .academics)
         XCTAssertEqual(coordinator.selectedRootTab, .academics)
         XCTAssertEqual(coordinator.selectedAcademicTab, .cultivation)
-        for _ in 0..<10 { await Task.yield() }
+        for _ in 0 ..< 10 { await Task.yield() }
         XCTAssertEqual(coordinator.requestedAcademicDetailRoute, .grades)
     }
 

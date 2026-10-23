@@ -257,28 +257,28 @@ final class AcademicOperationProgressController {
         detail: String?,
         progress: inout AcademicOperationProgress
     ) {
-            if let runningIndex = progress.steps.lastIndex(where: { $0.status == .running }) {
-                progress.steps[runningIndex].status = .completed
-            }
-            if let existingIndex = progress.steps.firstIndex(where: { $0.id == id }) {
-                var step = progress.steps.remove(at: existingIndex)
-                step = AcademicOperationStep(
+        if let runningIndex = progress.steps.lastIndex(where: { $0.status == .running }) {
+            progress.steps[runningIndex].status = .completed
+        }
+        if let existingIndex = progress.steps.firstIndex(where: { $0.id == id }) {
+            var step = progress.steps.remove(at: existingIndex)
+            step = AcademicOperationStep(
+                id: id,
+                stage: stage,
+                detail: detail,
+                status: .running
+            )
+            progress.steps.append(step)
+        } else {
+            progress.steps.append(
+                AcademicOperationStep(
                     id: id,
                     stage: stage,
                     detail: detail,
                     status: .running
                 )
-                progress.steps.append(step)
-            } else {
-                progress.steps.append(
-                    AcademicOperationStep(
-                        id: id,
-                        stage: stage,
-                        detail: detail,
-                        status: .running
-                    )
-                )
-            }
+            )
+        }
     }
 
     func completeCurrentStep() {

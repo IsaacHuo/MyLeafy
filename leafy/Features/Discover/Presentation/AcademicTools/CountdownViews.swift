@@ -80,7 +80,10 @@ struct CustomScheduleListView: View {
     private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let presentation: SchedulePrimaryContentPresentation
 
-    init(presentation: SchedulePrimaryContentPresentation = .standalone, onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil) {
+    init(
+        presentation: SchedulePrimaryContentPresentation = .standalone,
+        onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
+    ) {
         self.onVerticalScroll = onVerticalScroll
         self.presentation = presentation
     }
@@ -106,31 +109,31 @@ struct CustomScheduleListView: View {
 
     var body: some View {
         configuredContent
-        .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
-            CustomScheduleEditorSheet(presentation: presentation)
-                .presentationDetents([.medium, .large])
-        }
-        .onAppear(perform: reloadImportantDates)
-        .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
-            reloadImportantDates()
-        }
-        .leafyOperationAlert($operationAlert)
-        .confirmationDialog("删除这条日程？", isPresented: Binding(
-            get: { pendingDeleteItem != nil },
-            set: { if !$0 { pendingDeleteItem = nil } }
-        ), titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
-                if let item = pendingDeleteItem {
-                    delete(item)
+            .leafySheet(item: $editorPresentation, onDismiss: reloadImportantDates) { presentation in
+                CustomScheduleEditorSheet(presentation: presentation)
+                    .presentationDetents([.medium, .large])
+            }
+            .onAppear(perform: reloadImportantDates)
+            .onReceive(NotificationCenter.default.publisher(for: .customScheduleEventsDidChange)) { _ in
+                reloadImportantDates()
+            }
+            .leafyOperationAlert($operationAlert)
+            .confirmationDialog("删除这条日程？", isPresented: Binding(
+                get: { pendingDeleteItem != nil },
+                set: { if !$0 { pendingDeleteItem = nil } }
+            ), titleVisibility: .visible) {
+                Button("删除", role: .destructive) {
+                    if let item = pendingDeleteItem {
+                        delete(item)
+                    }
+                    pendingDeleteItem = nil
                 }
-                pendingDeleteItem = nil
+                Button("取消", role: .cancel) {
+                    pendingDeleteItem = nil
+                }
+            } message: {
+                Text("删除后无法恢复。")
             }
-            Button("取消", role: .cancel) {
-                pendingDeleteItem = nil
-            }
-        } message: {
-            Text("删除后无法恢复。")
-        }
     }
 
     @ViewBuilder
@@ -232,7 +235,11 @@ struct CustomScheduleListView: View {
         case .timetable(let reminder):
             editorPresentation = .timetable(context(for: reminder), allowsModeSelection: false)
         case .importantDate(let event, _):
-            editorPresentation = .importantDate(event, defaultContext: defaultTimetableContext(for: event.startsAt), allowsModeSelection: false)
+            editorPresentation = .importantDate(
+                event,
+                defaultContext: defaultTimetableContext(for: event.startsAt),
+                allowsModeSelection: false
+            )
         }
     }
 
@@ -269,7 +276,11 @@ struct CustomScheduleListView: View {
             week: reminder.week,
             day: reminder.dayOfWeek,
             period: reminder.displayStartPeriod,
-            date: reminder.resolvedStartDate ?? defaultDate(week: reminder.week, day: reminder.dayOfWeek, period: reminder.displayStartPeriod),
+            date: reminder.resolvedStartDate ?? defaultDate(
+                week: reminder.week,
+                day: reminder.dayOfWeek,
+                period: reminder.displayStartPeriod
+            ),
             occupiedPeriods: [],
             totalPeriods: TimetablePeriodSchedule.slots.count,
             reminder: reminder,
@@ -297,7 +308,6 @@ struct CustomScheduleListView: View {
             of: date
         ) ?? date
     }
-
 }
 
 struct CustomCountdownListView: View {

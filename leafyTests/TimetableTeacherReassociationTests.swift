@@ -11,7 +11,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testTeacherSplitCopiesCourseDataAndMovesOccurrenceNotesByWeek() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let noteDate = Date(timeIntervalSince1970: 1_000)
         let reminderDate = Date(timeIntervalSince1970: 2_000)
         let occurrenceDate = Date(timeIntervalSince1970: 3_000)
@@ -43,8 +43,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         let courses = try context.fetch(FetchDescriptor<Course>())
         XCTAssertEqual(courses.count, 2)
         XCTAssertEqual(Set(courses.map(\.teacher)), Set(["教师甲", "教师乙"]))
-        XCTAssertEqual(courses.first { $0.teacher == "教师甲" }?.weeks, Array(1...8))
-        XCTAssertEqual(courses.first { $0.teacher == "教师乙" }?.weeks, Array(9...16))
+        XCTAssertEqual(courses.first { $0.teacher == "教师甲" }?.weeks, Array(1 ... 8))
+        XCTAssertEqual(courses.first { $0.teacher == "教师乙" }?.weeks, Array(9 ... 16))
 
         let currentKeys = Set(courses.map(\.stableCourseKey))
         let notes = try context.fetch(FetchDescriptor<CourseNote>())
@@ -79,7 +79,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testTeacherSplitReplacesHistoricalCoursesAndPreservesPersonalSchedule() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let currentCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let currentCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let historicalCourse = makeCourse(
             semesterID: historicalSemesterID, teacher: "历史教师", weeks: [2, 4], room: "202", dayOfWeek: 2
         )
@@ -99,7 +99,11 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         context.insert(cellReminder)
         try context.save()
 
-        _ = try persistSplit(records: splitRecords(), existingCourses: [currentCourse, historicalCourse], context: context)
+        _ = try persistSplit(
+            records: splitRecords(),
+            existingCourses: [currentCourse, historicalCourse],
+            context: context
+        )
 
         let courses = try context.fetch(FetchDescriptor<Course>())
         XCTAssertEqual(courses.count, 2)
@@ -126,7 +130,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testRepeatedRefreshIsIdempotentAndLaterTeacherSegmentsCanBeEditedIndependently() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let noteDate = Date(timeIntervalSince1970: 7_000)
         let settingDate = Date(timeIntervalSince1970: 8_000)
         context.insert(oldCourse)
@@ -167,13 +171,15 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         let refreshedCourses = try context.fetch(FetchDescriptor<Course>())
         let teacherB = try XCTUnwrap(refreshedCourses.first { $0.teacher == "教师乙" })
         let teacherANote = try XCTUnwrap(
-            (try context.fetch(FetchDescriptor<CourseNote>())).first { $0.courseKey == refreshedCourses.first { $0.teacher == "教师甲" }?.stableCourseKey }
+            (try context.fetch(FetchDescriptor<CourseNote>()))
+                .first { $0.courseKey == refreshedCourses.first { $0.teacher == "教师甲" }?.stableCourseKey }
         )
         let teacherBNote = try XCTUnwrap(
             (try context.fetch(FetchDescriptor<CourseNote>())).first { $0.courseKey == teacherB.stableCourseKey }
         )
         let teacherBSetting = try XCTUnwrap(
-            (try context.fetch(FetchDescriptor<CourseReminderSetting>())).first { $0.courseKey == teacherB.stableCourseKey }
+            (try context.fetch(FetchDescriptor<CourseReminderSetting>()))
+                .first { $0.courseKey == teacherB.stableCourseKey }
         )
         let editedDate = Date(timeIntervalSince1970: 9_000)
         teacherBNote.text = "乙教师段独立备注"
@@ -205,8 +211,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testExistingTargetRecordsWithSameValuesAreDeduplicated() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
-        let targetCourse = makeCourse(teacher: "教师乙", weeks: Array(9...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
+        let targetCourse = makeCourse(teacher: "教师乙", weeks: Array(9 ... 16))
         let sourceDate = Date(timeIntervalSince1970: 10_000)
         let oldNote = CourseNote(
             courseKey: oldCourse.stableCourseKey, text: "相同内容", updatedAt: sourceDate
@@ -257,8 +263,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testDifferentTargetCourseNoteIsPreservedPendingWithoutBlockingRefresh() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
-        let targetCourse = makeCourse(teacher: "教师乙", weeks: Array(9...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
+        let targetCourse = makeCourse(teacher: "教师乙", weeks: Array(9 ... 16))
         let sourceNote = CourseNote(courseKey: oldCourse.stableCourseKey, text: "甲段内容")
         let targetNote = CourseNote(courseKey: targetCourse.stableCourseKey, text: "乙段内容")
         context.insert(oldCourse)
@@ -280,8 +286,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testDifferentTargetReminderIsPreservedPendingWithoutBlockingRefresh() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
-        let targetCourse = makeCourse(teacher: "教师乙", weeks: Array(9...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
+        let targetCourse = makeCourse(teacher: "教师乙", weeks: Array(9 ... 16))
         let sourceSetting = CourseReminderSetting(
             courseKey: oldCourse.stableCourseKey, minutesBefore: 10, anchorPeriod: 3
         )
@@ -307,11 +313,11 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         let container = try makeContainer()
         let context = container.mainContext
         let oldCourse = makeCourse(
-            teacher: "教师甲", weeks: Array(1...16), room: "101", classInfo: "林业 1 班"
+            teacher: "教师甲", weeks: Array(1 ... 16), room: "101", classInfo: "林业 1 班"
         )
         let oldCourseKey = oldCourse.stableCourseKey
         let unrelatedIncoming = makeRecord(
-            teacher: "教师乙", weeks: Array(9...16), classInfo: "林业 2 班", room: "202"
+            teacher: "教师乙", weeks: Array(9 ... 16), classInfo: "林业 2 班", room: "202"
         )
         let note = CourseNote(courseKey: oldCourse.stableCourseKey, text: "原班级备注")
         context.insert(oldCourse)
@@ -379,7 +385,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testSameWeekMultipleTeacherCandidatesLeaveOccurrencePending() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let occurrence = CourseOccurrenceNote(
             courseKey: oldCourse.stableCourseKey, occurrenceKey: oldCourse.occurrenceKey(week: 1),
             week: 1, dayOfWeek: 1, text: "待确认的第 1 周备注"
@@ -388,8 +394,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         context.insert(occurrence)
         try context.save()
         let ambiguousRecords = [
-            makeRecord(teacher: "教师甲", weeks: Array(1...8)),
-            makeRecord(teacher: "教师乙", weeks: Array(1...8))
+            makeRecord(teacher: "教师甲", weeks: Array(1 ... 8)),
+            makeRecord(teacher: "教师乙", weeks: Array(1 ... 8))
         ]
 
         _ = try persistSplit(records: ambiguousRecords, existingCourses: [oldCourse], context: context)
@@ -406,7 +412,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testInjectedSaveFailureRollsBackCoursesAndAllCourseLocalData() throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let noteDate = Date(timeIntervalSince1970: 11_000)
         let reminderDate = Date(timeIntervalSince1970: 12_000)
         let occurrenceDate = Date(timeIntervalSince1970: 13_000)
@@ -439,7 +445,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         XCTAssertEqual(courses.count, 1)
         XCTAssertEqual(courses.first?.id, oldCourse.id)
         XCTAssertEqual(courses.first?.teacher, "教师甲")
-        XCTAssertEqual(courses.first?.weeks, Array(1...16))
+        XCTAssertEqual(courses.first?.weeks, Array(1 ... 16))
         let savedNote = try XCTUnwrap(try context.fetch(FetchDescriptor<CourseNote>()).first)
         XCTAssertEqual(savedNote.id, note.id)
         XCTAssertEqual(savedNote.courseKey, oldCourse.stableCourseKey)
@@ -462,7 +468,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testReminderRefreshCancelsObsoleteIDsAndSchedulesPersistedTeacherSegments() async throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let expectedOldIdentifiers = Set(TimetableNotificationManager.courseReminderIdentifiers(for: oldCourse))
         context.insert(oldCourse)
         context.insert(CourseReminderSetting(
@@ -490,7 +496,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
     func testReminderSchedulingFailureLeavesSavedDataAndNextRefreshRetries() async throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1...16))
+        let oldCourse = makeCourse(teacher: "教师甲", weeks: Array(1 ... 16))
         let note = CourseNote(courseKey: oldCourse.stableCourseKey, text: "保留备注")
         context.insert(oldCourse)
         context.insert(note)
@@ -546,7 +552,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         context.insert(CourseNote(courseKey: oldKey, text: "保留课程备注"))
         context.insert(CourseReminderSetting(courseKey: oldKey, minutesBefore: 10))
         try context.save()
-        let first = makeRecord(teacher: "教师乙", weeks: Array(1...16))
+        let first = makeRecord(teacher: "教师乙", weeks: Array(1 ... 16))
         var second = first
         second.room = "102" // Existing stable keys include the building, but not the room.
 
@@ -579,9 +585,9 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         context.insert(old)
         context.insert(CourseReminderSetting(courseKey: old.stableCourseKey, minutesBefore: 15, anchorPeriod: 4))
         try context.save()
-        var first = makeRecord(teacher: "教师甲", weeks: Array(1...16))
+        var first = makeRecord(teacher: "教师甲", weeks: Array(1 ... 16))
         first.duration = [3]
-        var second = makeRecord(teacher: "教师乙", weeks: Array(1...16))
+        var second = makeRecord(teacher: "教师乙", weeks: Array(1 ... 16))
         second.duration = [4]
         let result = try persistSplit(records: [first, second], existingCourses: [old], context: context)
 
@@ -589,8 +595,10 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         for schedule in result.reminders.schedules {
             XCTAssertEqual(schedule.minutesBefore, 15)
             XCTAssertEqual(schedule.anchorPeriod, 4)
-            XCTAssertEqual(TimetableNotificationManager.resolvedAnchorPeriod(schedule.anchorPeriod, for: schedule.course),
-                           schedule.course.duration.first)
+            XCTAssertEqual(
+                TimetableNotificationManager.resolvedAnchorPeriod(schedule.anchorPeriod, for: schedule.course),
+                schedule.course.duration.first
+            )
         }
     }
 
@@ -600,15 +608,15 @@ final class TimetableTeacherReassociationTests: XCTestCase {
             let context = container.mainContext
             let old = makeCourse(teacher: "教师甲")
             let oldKey = old.stableCourseKey
-            let target = makeCourse(teacher: "教师乙", weeks: Array(9...16))
+            let target = makeCourse(teacher: "教师乙", weeks: Array(9 ... 16))
             let sourceID = UUID()
             context.insert(old)
             context.insert(CourseOccurrenceNote(id: sourceID, courseKey: oldKey,
-                occurrenceKey: old.occurrenceKey(week: 11), week: 11, dayOfWeek: 1,
-                text: "相同备注", updatedAt: Date(timeIntervalSince1970: 2_000)))
+                                                occurrenceKey: old.occurrenceKey(week: 11), week: 11, dayOfWeek: 1,
+                                                text: "相同备注", updatedAt: Date(timeIntervalSince1970: 2_000)))
             context.insert(CourseOccurrenceNote(courseKey: target.stableCourseKey,
-                occurrenceKey: target.occurrenceKey(week: 11), week: 11, dayOfWeek: 1,
-                text: targetText, updatedAt: Date(timeIntervalSince1970: 1_000)))
+                                                occurrenceKey: target.occurrenceKey(week: 11), week: 11, dayOfWeek: 1,
+                                                text: targetText, updatedAt: Date(timeIntervalSince1970: 1_000)))
             try context.save()
             if targetText == "相同备注" {
                 _ = try persistSplit(records: splitRecords(), existingCourses: [old], context: context)
@@ -662,7 +670,7 @@ final class TimetableTeacherReassociationTests: XCTestCase {
         courseName: String = "分段课程",
         semesterID: String? = nil,
         teacher: String,
-        weeks: [Int] = Array(1...16),
+        weeks: [Int] = Array(1 ... 16),
         room: String = "101",
         dayOfWeek: Int = 1,
         classInfo: String = "林业 1 班",
@@ -704,8 +712,8 @@ final class TimetableTeacherReassociationTests: XCTestCase {
 
     private func splitRecords() -> [ParsedCourseRecord] {
         [
-            makeRecord(teacher: "教师甲", weeks: Array(1...8)),
-            makeRecord(teacher: "教师乙", weeks: Array(9...16))
+            makeRecord(teacher: "教师甲", weeks: Array(1 ... 8)),
+            makeRecord(teacher: "教师乙", weeks: Array(9 ... 16))
         ]
     }
 
@@ -777,7 +785,10 @@ extension TimetableTeacherReassociationTests {
     func testReminderPlanFromAnObsoleteSessionCannotCancelOrScheduleNotifications() async throws {
         let course = makeCourse(teacher: "教师甲")
         let plan = try TimetableReminderRefreshPlan(oldIdentifiers: ["old"], courses: [course],
-            settings: [CourseReminderSetting(courseKey: course.stableCourseKey, minutesBefore: 10)])
+                                                    settings: [CourseReminderSetting(
+                                                        courseKey: course.stableCourseKey,
+                                                        minutesBefore: 10
+                                                    )])
         ActiveCampusContext.networkManager.cancelInFlightRequests()
         let scheduler = RecordingTimetableCourseReminderScheduler()
         _ = await plan.restore(using: scheduler)

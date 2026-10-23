@@ -234,7 +234,7 @@ struct ScheduleMemoStatisticsView: View {
                     )
                     .foregroundStyle(
                         month.month == Calendar.current.component(.month, from: Date()) &&
-                        selectedYear == Calendar.current.component(.year, from: Date())
+                            selectedYear == Calendar.current.component(.year, from: Date())
                             ? AppTheme.accent(for: themeColorPreference)
                             : AppTheme.accent(for: themeColorPreference).opacity(0.58)
                     )
@@ -346,7 +346,10 @@ struct ScheduleMemoStatisticsView: View {
                     Chart(statistics.timePeriodDistribution) { item in
                         BarMark(
                             x: .value(L10n.text("随记", language: leafyLanguage), item.count),
-                            y: .value(L10n.text("时间段", language: leafyLanguage), item.period.title(language: leafyLanguage))
+                            y: .value(
+                                L10n.text("时间段", language: leafyLanguage),
+                                item.period.title(language: leafyLanguage)
+                            )
                         )
                         .foregroundStyle(AppTheme.accent(for: themeColorPreference).opacity(0.72))
                         .cornerRadius(3)
@@ -473,10 +476,10 @@ struct ScheduleMemoStatisticsView: View {
             L10n.text("统计在本机完成，导出图片只包含汇总数字。", language: leafyLanguage),
             systemImage: "lock.shield"
         )
-            .microCaption()
-            .foregroundStyle(AppTheme.secondaryText)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4)
+        .microCaption()
+        .foregroundStyle(AppTheme.secondaryText)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
     }
 
     private func recentSummary(_ statistics: ScheduleMemoStatistics) -> String {
@@ -510,7 +513,8 @@ struct ScheduleMemoStatisticsView: View {
             return L10n.text("记录多一些后，这里会显示你的常用时间。", language: leafyLanguage)
         }
         let weekday = leafyLanguage.weekdayTitle(for: weekdayIndex + 1)
-        let period = statistics.timePeriodDistribution.max(by: { $0.count < $1.count })?.period.title(language: leafyLanguage) ?? ""
+        let period = statistics.timePeriodDistribution.max(by: { $0.count < $1.count })?.period
+            .title(language: leafyLanguage) ?? ""
         return L10n.text("你最常在%@的%@记录。", language: leafyLanguage, weekday, period)
     }
 
@@ -578,7 +582,7 @@ private struct ScheduleMemoNamedCount: Identifiable {
 
 private enum ScheduleMemoWeekday {
     static func shortNames(language: AppLanguagePreference) -> [String] {
-        (1...7).map { day in
+        (1 ... 7).map { day in
             let title = language.weekdayTitle(for: day)
             return language.resolvedLocalization == .zhHans
                 ? String(title.dropFirst())
@@ -705,7 +709,8 @@ private struct ScheduleMemoRecentHeatmap: View {
     var body: some View {
         VStack(spacing: 7) {
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(Array(ScheduleMemoWeekday.shortNames(language: language).enumerated()), id: \.offset) { _, weekday in
+                ForEach(Array(ScheduleMemoWeekday.shortNames(language: language).enumerated()),
+                        id: \.offset) { _, weekday in
                     Text(weekday)
                         .font(.caption2)
                         .foregroundStyle(AppTheme.tertiaryText)
@@ -823,9 +828,14 @@ private struct ScheduleMemoStatisticsShareCard: View {
                     Text(L10n.text("记录日迹", language: language))
                         .font(.title2.weight(.bold))
                         .foregroundStyle(AppTheme.primaryText)
-                    Text(L10n.text("%@ 年 · %@", language: language, String(statistics.selectedYear), AppBrand.displayName))
-                        .font(.subheadline)
-                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(L10n.text(
+                        "%@ 年 · %@",
+                        language: language,
+                        String(statistics.selectedYear),
+                        AppBrand.displayName
+                    ))
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
                 }
                 Spacer()
                 Image(systemName: "chart.bar.xaxis")
@@ -872,7 +882,10 @@ private struct ScheduleMemoStatisticsShareCard: View {
                 .frame(height: 130)
             }
             .padding(14)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+            )
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -887,8 +900,8 @@ private struct ScheduleMemoStatisticsShareCard: View {
                             statistics.recent30DayRecordingDayCount
                         )
                     )
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.secondaryText)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
                 }
                 LazyVGrid(columns: heatmapColumns, spacing: 4) {
                     ForEach(statistics.recent30Days) { day in
@@ -899,7 +912,10 @@ private struct ScheduleMemoStatisticsShareCard: View {
                 }
             }
             .padding(14)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+            )
 
             HStack(spacing: 10) {
                 Image(systemName: "lock.shield")
@@ -923,8 +939,8 @@ private struct ScheduleMemoStatisticsShareCard: View {
                     )
                 )
             )
-                .font(.caption2)
-                .foregroundStyle(AppTheme.tertiaryText)
+            .font(.caption2)
+            .foregroundStyle(AppTheme.tertiaryText)
         }
         .padding(22)
         .background(Color(uiColor: .systemBackground))

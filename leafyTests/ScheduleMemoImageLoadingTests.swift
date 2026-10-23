@@ -7,17 +7,29 @@ final class ScheduleMemoImageLoadingTests: XCTestCase {
     func testSameRequestDoesNotReadAgainButRevisionAndDirectoryInvalidateIt() async {
         let record = ScheduleMemoImage(memoID: UUID(), sortOrder: 0, localFilename: "photo.jpg")
         let date = Date()
-        let first = ScheduleMemoImageRequest(images: [record], revision: date, directory: URL(fileURLWithPath: "/identity-a"))
+        let first = ScheduleMemoImageRequest(
+            images: [record],
+            revision: date,
+            directory: URL(fileURLWithPath: "/identity-a")
+        )
         let loader = ScheduleMemoImageLoader()
         let reads = MemoImageReads()
         await loader.load(first, read: { await reads.read($0) })
         await loader.load(first, read: { await reads.read($0) })
         let count = await reads.count
         XCTAssertEqual(count, 1)
-        let revised = ScheduleMemoImageRequest(images: [record], revision: date.addingTimeInterval(1), directory: URL(fileURLWithPath: "/identity-a"))
+        let revised = ScheduleMemoImageRequest(
+            images: [record],
+            revision: date.addingTimeInterval(1),
+            directory: URL(fileURLWithPath: "/identity-a")
+        )
         XCTAssertTrue(loader.images(for: revised).isEmpty)
         await loader.load(revised, read: { await reads.read($0) })
-        let otherIdentity = ScheduleMemoImageRequest(images: [record], revision: date, directory: URL(fileURLWithPath: "/identity-b"))
+        let otherIdentity = ScheduleMemoImageRequest(
+            images: [record],
+            revision: date,
+            directory: URL(fileURLWithPath: "/identity-b")
+        )
         XCTAssertTrue(loader.images(for: otherIdentity).isEmpty)
         await loader.load(otherIdentity, read: { await reads.read($0) })
         let paths = await reads.paths
@@ -42,8 +54,16 @@ final class ScheduleMemoImageLoadingTests: XCTestCase {
 
     func testOldLoadCannotReplaceNewRequest() async {
         let record = ScheduleMemoImage(memoID: UUID(), sortOrder: 0, localFilename: "photo.jpg")
-        let first = ScheduleMemoImageRequest(images: [record], revision: Date(), directory: URL(fileURLWithPath: "/old"))
-        let second = ScheduleMemoImageRequest(images: [record], revision: first.revision, directory: URL(fileURLWithPath: "/new"))
+        let first = ScheduleMemoImageRequest(
+            images: [record],
+            revision: Date(),
+            directory: URL(fileURLWithPath: "/old")
+        )
+        let second = ScheduleMemoImageRequest(
+            images: [record],
+            revision: first.revision,
+            directory: URL(fileURLWithPath: "/new")
+        )
         let loader = ScheduleMemoImageLoader()
         let started = expectation(description: "Old image read suspended")
         let gate = MemoImageReadGate(started: started)

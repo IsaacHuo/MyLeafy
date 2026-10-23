@@ -51,8 +51,6 @@ final class WeatherServicingTests: XCTestCase {
         XCTAssertEqual(weather.condition, L10n.text("多云"))
     }
 
-
-
     func testWeatherKitWeatherServiceThrowsWhenCacheExpired() async {
         let cache = InMemoryCampusWeatherCache(
             weather: CampusWeather(temperature: 18, condition: "晴"),
@@ -78,7 +76,10 @@ final class WeatherServicingTests: XCTestCase {
         let cache = UserDefaultsCampusWeatherCache(userDefaults: defaults)
         cache.save(.init(temperature: 18, condition: "晴"))
         let initial = try XCTUnwrap(cache.currentTemperatureSnapshot(maxAge: 60))
-        let later = try XCTUnwrap(cache.currentTemperatureSnapshot(maxAge: 60, now: initial.observedAt.addingTimeInterval(30)))
+        let later = try XCTUnwrap(cache.currentTemperatureSnapshot(
+            maxAge: 60,
+            now: initial.observedAt.addingTimeInterval(30)
+        ))
         XCTAssertEqual(later.observedAt, initial.observedAt)
         XCTAssertEqual(later.temperature, 18)
         XCTAssertNil(cache.currentTemperatureSnapshot(maxAge: 60, now: initial.observedAt.addingTimeInterval(61)))
@@ -110,15 +111,16 @@ final class WeatherServicingTests: XCTestCase {
         let oldKey = CampusScopedDefaults.key("campusWeather.cache.v1")
         defer { UserDefaults.standard.removeObject(forKey: oldKey); manager.clearSession() }
         let service = WeatherKitWeatherService(fetchLiveWeather: { _ in
-            await MainActor.run { ActiveCampusContext.networkManager.persistAuthenticatedIdentity(eduID: "weather-new", displayName: "New") }
+            await MainActor.run { ActiveCampusContext.networkManager.persistAuthenticatedIdentity(
+                eduID: "weather-new",
+                displayName: "New"
+            ) }
             return .init(temperature: 21, condition: "晴")
         })
         do { _ = try await service.fetchCurrentWeather(); XCTFail("Old response must cancel") }
         catch { XCTAssertTrue(error is CancellationError) }
         XCTAssertNil(UserDefaults.standard.data(forKey: oldKey))
     }
-
-
 }
 
 private nonisolated final class InMemoryCampusWeatherCache: CampusWeatherCaching, @unchecked Sendable {

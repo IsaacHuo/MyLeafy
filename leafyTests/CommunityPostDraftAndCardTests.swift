@@ -140,7 +140,13 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
         let url = directory.appendingPathComponent("manifest.json")
         let original = Data("damaged but recoverable".utf8)
         try original.write(to: url)
-        XCTAssertThrowsError(try fixture.repository.saveDraft(id: id, ownerProfileID: ownerID, input: makeInput(), images: [], attachments: []))
+        XCTAssertThrowsError(try fixture.repository.saveDraft(
+            id: id,
+            ownerProfileID: ownerID,
+            input: makeInput(),
+            images: [],
+            attachments: []
+        ))
         XCTAssertEqual(try Data(contentsOf: url), original)
     }
 
@@ -150,7 +156,8 @@ final class CommunityPostDraftAndCardTests: XCTestCase {
         let draftURL = root.deletingLastPathComponent()
             .appendingPathComponent("CommunityPostDrafts/v1/owner/draft/attachment.pdf")
         XCTAssertFalse(CommunityComposerAttachmentTypes.isStagedAttachment(draftURL))
-        XCTAssertFalse(CommunityComposerAttachmentTypes.isStagedAttachment(root.appendingPathComponent("nested/file.pdf")))
+        XCTAssertFalse(CommunityComposerAttachmentTypes
+            .isStagedAttachment(root.appendingPathComponent("nested/file.pdf")))
     }
 
     func testBlankDraftContentDoesNotQualifyForAutosave() {

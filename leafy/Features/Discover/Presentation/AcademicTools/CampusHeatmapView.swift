@@ -27,7 +27,7 @@ struct CampusHeatmapView: View {
     }
 
     private var safeEndPeriodRange: ClosedRange<Int> {
-        safeStartPeriod...12
+        safeStartPeriod ... 12
     }
 
     private var heatmapRequest: CampusHeatmapRequest {
@@ -141,7 +141,7 @@ struct CampusHeatmapView: View {
                 DatePicker("日期", selection: $selectedDate, displayedComponents: .date)
 
                 Picker("开始节次", selection: $startPeriod) {
-                    ForEach(1...12, id: \.self) { period in
+                    ForEach(1 ... 12, id: \.self) { period in
                         Text(periodDisplayText(period)).tag(period)
                     }
                 }
@@ -498,9 +498,11 @@ private struct CampusFloorCongestionSheet: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(AppTheme.primaryText)
 
-                        Text("\(building.occupiedRooms) 间占用 / \(building.totalRooms) 间教室，\(building.availableRooms) 间空闲")
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(
+                            "\(building.occupiedRooms) 间占用 / \(building.totalRooms) 间教室，\(building.availableRooms) 间空闲"
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.secondaryText)
                     }
                 }
 

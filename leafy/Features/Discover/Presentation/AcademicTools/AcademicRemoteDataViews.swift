@@ -622,13 +622,13 @@ struct TeachingAndCultivationView: View {
                 TrainingProgramView(showsStandaloneNavigation: false, onVerticalScroll: {
                     if mode == .trainingProgram { scrollHeader.update($0) }
                 })
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
             if mode == .teachingPlan {
                 TeachingPlanView(showsStandaloneNavigation: false, onVerticalScroll: {
                     if mode == .teachingPlan { scrollHeader.update($0) }
                 })
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
         .animation(.easeInOut(duration: 0.4), value: mode)
@@ -1036,7 +1036,8 @@ private struct GraduationProgressSummaryView: View {
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(progress.hasRequirements ? "\(creditFormat(progress.totalRemainingCredits)) 学分待修" : "待同步")
                         .microCaption()
-                        .foregroundStyle(progress.hasRequirements && progress.totalRemainingCredits > 0 ? AppTheme.warning : AppTheme.secondaryText)
+                        .foregroundStyle(progress.hasRequirements && progress.totalRemainingCredits > 0 ? AppTheme
+                            .warning : AppTheme.secondaryText)
                     Text(creditSummary?.hasCreditTotals == true ? "官方所得学分" : "成绩估算")
                         .microCaption()
                         .foregroundStyle(AppTheme.tertiaryText)
@@ -1049,8 +1050,10 @@ private struct GraduationProgressSummaryView: View {
                         Text("总学分")
                             .foregroundStyle(AppTheme.secondaryText)
                         Spacer()
-                        Text("\(creditFormat(progress.totalCompletedCredits)) / \(creditFormat(progress.totalRequiredCredits))")
-                            .foregroundStyle(AppTheme.primaryText)
+                        Text(
+                            "\(creditFormat(progress.totalCompletedCredits)) / \(creditFormat(progress.totalRequiredCredits))"
+                        )
+                        .foregroundStyle(AppTheme.primaryText)
                     }
                     .leafySubheadline()
 
@@ -1096,7 +1099,10 @@ private struct GraduationProgressSummaryView: View {
 
             Spacer()
 
-            Text(category.hasCompletedCredits ? "\(creditFormat(category.completedCredits)) / \(creditFormat(category.requiredCredits))" : "未确认 / \(creditFormat(category.requiredCredits))")
+            Text(category
+                .hasCompletedCredits ?
+                "\(creditFormat(category.completedCredits)) / \(creditFormat(category.requiredCredits))" :
+                "未确认 / \(creditFormat(category.requiredCredits))")
                 .microCaption()
                 .foregroundStyle(AppTheme.secondaryText)
         }
@@ -1202,8 +1208,8 @@ struct TrainingProgramView: View {
                         Text("正在拉取培养方案")
                             .leafySubheadline()
                     }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8 * leafyControlScale)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8 * leafyControlScale)
                 }
             }
 
@@ -1262,7 +1268,8 @@ struct TrainingProgramView: View {
                     ContentUnavailableView(
                         "暂无培养方案",
                         systemImage: "graduationcap",
-                        description: Text(isCustomCampus ? "通用入口暂需手动维护，第一版暂无培养方案导入入口。" : "连接校园网并保持教务登录态后，可从强智专业培养方案页面同步。")
+                        description: Text(isCustomCampus ? "通用入口暂需手动维护，第一版暂无培养方案导入入口。" :
+                            "连接校园网并保持教务登录态后，可从强智专业培养方案页面同步。")
                     )
                 }
             }
@@ -1289,7 +1296,8 @@ struct TrainingProgramView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh)) { notification in
             let event = notification.object as? SchoolDataRefreshEvent
-            guard event?.contains(.trainingProgram) == true || event?.contains(.gradeSupplemental) == true else { return }
+            guard event?.contains(.trainingProgram) == true || event?.contains(.gradeSupplemental) == true
+            else { return }
             document = SchoolDataCache.loadTrainingProgram()
             requirements = document?.creditRequirements ?? SchoolDataCache.loadGraduationRequirements()
             creditSummary = SchoolDataCache.loadGradeCreditSummary()
@@ -1329,7 +1337,6 @@ struct TrainingProgramView: View {
                 PlanBadge(text: "\(requirements.count) 类学分要求")
                 PlanBadge(text: "\(document.sections.count) 个正文部分")
             }
-
         }
         .padding(.vertical, 5 * leafyControlScale)
     }
@@ -1656,7 +1663,6 @@ private struct TrainingProgramSafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
-
 struct EmptyClassroomView: View {
     enum QueryMode: String, CaseIterable, Identifiable {
         case byRoom = "按教室查询"
@@ -1695,7 +1701,7 @@ struct EmptyClassroomView: View {
 
     private let autoSubmitInitialQuery: Bool
     private var safeStartPeriod: Int { min(max(startPeriod, 1), 12) }
-    private var safeEndPeriodRange: ClosedRange<Int> { safeStartPeriod...12 }
+    private var safeEndPeriodRange: ClosedRange<Int> { safeStartPeriod ... 12 }
     private var isCustomCampus: Bool { ActiveCampusContext.identity?.isCustom == true }
 
     init(
@@ -1756,7 +1762,7 @@ struct EmptyClassroomView: View {
 
                         if mode == .byPeriod {
                             Picker("开始节次", selection: $startPeriod) {
-                                ForEach(1...12, id: \.self) { period in
+                                ForEach(1 ... 12, id: \.self) { period in
                                     Text(periodDisplayText(period)).tag(period)
                                 }
                             }
@@ -1794,7 +1800,8 @@ struct EmptyClassroomView: View {
                     AcademicDetailSectionHeader(title: "常用教室")
                     AcademicDetailCard {
                         VStack(spacing: 0) {
-                            ForEach(Array(visibleFavoriteClassrooms.enumerated()), id: \.element.id) { index, favorite in
+                            ForEach(Array(visibleFavoriteClassrooms.enumerated()),
+                                    id: \.element.id) { index, favorite in
                                 if index > 0 {
                                     AcademicDetailDivider()
                                 }
@@ -1837,7 +1844,8 @@ struct EmptyClassroomView: View {
                             isFavorite(building: selectedRoom.building, room: selectedRoom.room)
                                 ? "取消收藏 \(selectedRoomDisplayName)"
                                 : "收藏 \(selectedRoomDisplayName)",
-                            systemImage: isFavorite(building: selectedRoom.building, room: selectedRoom.room) ? "star.fill" : "star"
+                            systemImage: isFavorite(building: selectedRoom.building, room: selectedRoom.room) ?
+                                "star.fill" : "star"
                         )
                     }
                 }
@@ -2291,5 +2299,4 @@ struct EmptyClassroomView: View {
             }
         } catch { operationAlert = .failure(error.localizedDescription) }
     }
-
 }

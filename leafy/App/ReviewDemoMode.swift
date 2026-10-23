@@ -37,7 +37,8 @@ enum ReviewDemoDataSeeder {
         ActiveCampusContext.networkManager.persistDemoIdentity(eduID: demoEduID, displayName: displayName)
         do {
             // The login context predates identity activation and may be an in-memory store.
-            let context = AppRuntimeEnvironment.isRunningUnitTests ? modelContext : try AppModelContainerFactory.make().container.mainContext
+            let context = AppRuntimeEnvironment.isRunningUnitTests ? modelContext : try AppModelContainerFactory.make()
+                .container.mainContext
             try seedIfNeeded(using: context)
         } catch {
             ReviewDemoMode.disable()
@@ -160,7 +161,7 @@ enum ReviewDemoDataSeeder {
     }
 
     static func classroomUsage(for date: Date, building: String, room: String) -> [ClassroomUsageSlot] {
-        let usage = (1...12).map { period in
+        let usage = (1 ... 12).map { period in
             ClassroomUsageSlot(period: period, status: ![3, 4, 9].contains(period) ? .available : .occupied)
         }
         SchoolDataCache.saveClassroomUsage(usage, date: date, building: building, room: room)
@@ -170,9 +171,48 @@ enum ReviewDemoDataSeeder {
     static func teacherSummaries(search: String = "") -> [TeacherRatingSummary] {
         let now = ISO8601DateFormatter().string(from: Date())
         let teacherProfiles = [
-            TeacherProfile(id: 1, name: "林青", unit: "信息学院", ratingAverage: 4.8, ratingCount: 26, rating1Count: 0, rating2Count: 1, rating3Count: 2, rating4Count: 5, rating5Count: 18, createdAt: now, updatedAt: now),
-            TeacherProfile(id: 2, name: "周木", unit: "理学院", ratingAverage: 4.5, ratingCount: 19, rating1Count: 0, rating2Count: 1, rating3Count: 3, rating4Count: 6, rating5Count: 9, createdAt: now, updatedAt: now),
-            TeacherProfile(id: 3, name: "叶岚", unit: "经济管理学院", ratingAverage: 4.2, ratingCount: 11, rating1Count: 1, rating2Count: 0, rating3Count: 2, rating4Count: 4, rating5Count: 4, createdAt: now, updatedAt: now)
+            TeacherProfile(
+                id: 1,
+                name: "林青",
+                unit: "信息学院",
+                ratingAverage: 4.8,
+                ratingCount: 26,
+                rating1Count: 0,
+                rating2Count: 1,
+                rating3Count: 2,
+                rating4Count: 5,
+                rating5Count: 18,
+                createdAt: now,
+                updatedAt: now
+            ),
+            TeacherProfile(
+                id: 2,
+                name: "周木",
+                unit: "理学院",
+                ratingAverage: 4.5,
+                ratingCount: 19,
+                rating1Count: 0,
+                rating2Count: 1,
+                rating3Count: 3,
+                rating4Count: 6,
+                rating5Count: 9,
+                createdAt: now,
+                updatedAt: now
+            ),
+            TeacherProfile(
+                id: 3,
+                name: "叶岚",
+                unit: "经济管理学院",
+                ratingAverage: 4.2,
+                ratingCount: 11,
+                rating1Count: 1,
+                rating2Count: 0,
+                rating3Count: 2,
+                rating4Count: 4,
+                rating5Count: 4,
+                createdAt: now,
+                updatedAt: now
+            )
         ]
         let normalizedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return teacherProfiles
@@ -184,7 +224,13 @@ enum ReviewDemoDataSeeder {
             .map { teacher in
                 TeacherRatingSummary(
                     teacher: teacher,
-                    myRating: TeacherRating(teacherID: teacher.id, userID: demoCommunityUserID, stars: 5, createdAt: now, updatedAt: now)
+                    myRating: TeacherRating(
+                        teacherID: teacher.id,
+                        userID: demoCommunityUserID,
+                        stars: 5,
+                        createdAt: now,
+                        updatedAt: now
+                    )
                 )
             }
     }
@@ -192,7 +238,20 @@ enum ReviewDemoDataSeeder {
     static func updatedTeacherSummary(teacherID: Int64, stars: Int) -> TeacherRatingSummary {
         let now = ISO8601DateFormatter().string(from: Date())
         let fallback = teacherSummaries().first(where: { $0.teacher.id == teacherID })?.teacher
-            ?? TeacherProfile(id: teacherID, name: "演示教师", unit: "信息学院", ratingAverage: Double(stars), ratingCount: 1, rating1Count: 0, rating2Count: 0, rating3Count: 0, rating4Count: 0, rating5Count: 1, createdAt: now, updatedAt: now)
+            ?? TeacherProfile(
+                id: teacherID,
+                name: "演示教师",
+                unit: "信息学院",
+                ratingAverage: Double(stars),
+                ratingCount: 1,
+                rating1Count: 0,
+                rating2Count: 0,
+                rating3Count: 0,
+                rating4Count: 0,
+                rating5Count: 1,
+                createdAt: now,
+                updatedAt: now
+            )
 
         return TeacherRatingSummary(
             teacher: TeacherProfile(
@@ -209,7 +268,13 @@ enum ReviewDemoDataSeeder {
                 createdAt: fallback.createdAt,
                 updatedAt: now
             ),
-            myRating: TeacherRating(teacherID: teacherID, userID: demoCommunityUserID, stars: stars, createdAt: now, updatedAt: now)
+            myRating: TeacherRating(
+                teacherID: teacherID,
+                userID: demoCommunityUserID,
+                stars: stars,
+                createdAt: now,
+                updatedAt: now
+            )
         )
     }
 
@@ -221,9 +286,54 @@ enum ReviewDemoDataSeeder {
     ) -> [CourseRatingSummary] {
         let now = ISO8601DateFormatter().string(from: Date())
         let courseProfiles = [
-            CourseProfile(id: 1, name: "森林生态学导论", unit: "林学院", category: "公选课", credit: 2, ratingAverage: 4.7, ratingCount: 31, rating1Count: 0, rating2Count: 1, rating3Count: 2, rating4Count: 6, rating5Count: 22, createdAt: now, updatedAt: now),
-            CourseProfile(id: 2, name: "审美艺术导论", unit: "艺术设计学院", category: "公选课", credit: 2, ratingAverage: 4.4, ratingCount: 18, rating1Count: 0, rating2Count: 1, rating3Count: 3, rating4Count: 5, rating5Count: 9, createdAt: now, updatedAt: now),
-            CourseProfile(id: 3, name: "写作与沟通", unit: "人文社会科学学院", category: "公选课", credit: 1.5, ratingAverage: 4.1, ratingCount: 12, rating1Count: 1, rating2Count: 0, rating3Count: 2, rating4Count: 5, rating5Count: 4, createdAt: now, updatedAt: now)
+            CourseProfile(
+                id: 1,
+                name: "森林生态学导论",
+                unit: "林学院",
+                category: "公选课",
+                credit: 2,
+                ratingAverage: 4.7,
+                ratingCount: 31,
+                rating1Count: 0,
+                rating2Count: 1,
+                rating3Count: 2,
+                rating4Count: 6,
+                rating5Count: 22,
+                createdAt: now,
+                updatedAt: now
+            ),
+            CourseProfile(
+                id: 2,
+                name: "审美艺术导论",
+                unit: "艺术设计学院",
+                category: "公选课",
+                credit: 2,
+                ratingAverage: 4.4,
+                ratingCount: 18,
+                rating1Count: 0,
+                rating2Count: 1,
+                rating3Count: 3,
+                rating4Count: 5,
+                rating5Count: 9,
+                createdAt: now,
+                updatedAt: now
+            ),
+            CourseProfile(
+                id: 3,
+                name: "写作与沟通",
+                unit: "人文社会科学学院",
+                category: "公选课",
+                credit: 1.5,
+                ratingAverage: 4.1,
+                ratingCount: 12,
+                rating1Count: 1,
+                rating2Count: 0,
+                rating3Count: 2,
+                rating4Count: 5,
+                rating5Count: 4,
+                createdAt: now,
+                updatedAt: now
+            )
         ]
         let normalizedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedCategory = category?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -242,7 +352,13 @@ enum ReviewDemoDataSeeder {
         return Array(filtered.dropFirst(max(offset, 0)).prefix(max(limit, 1))).map { course in
             CourseRatingSummary(
                 course: course,
-                myRating: CourseRating(courseID: course.id, userID: demoCommunityUserID, stars: 5, createdAt: now, updatedAt: now)
+                myRating: CourseRating(
+                    courseID: course.id,
+                    userID: demoCommunityUserID,
+                    stars: 5,
+                    createdAt: now,
+                    updatedAt: now
+                )
             )
         }
     }
@@ -250,7 +366,22 @@ enum ReviewDemoDataSeeder {
     static func updatedCourseSummary(courseID: Int64, stars: Int) -> CourseRatingSummary {
         let now = ISO8601DateFormatter().string(from: Date())
         let fallback = courseRatingSummaries().first(where: { $0.course.id == courseID })?.course
-            ?? CourseProfile(id: courseID, name: "演示课程", unit: "开课单位", category: "公选课", credit: 2, ratingAverage: Double(stars), ratingCount: 1, rating1Count: 0, rating2Count: 0, rating3Count: 0, rating4Count: 0, rating5Count: 1, createdAt: now, updatedAt: now)
+            ?? CourseProfile(
+                id: courseID,
+                name: "演示课程",
+                unit: "开课单位",
+                category: "公选课",
+                credit: 2,
+                ratingAverage: Double(stars),
+                ratingCount: 1,
+                rating1Count: 0,
+                rating2Count: 0,
+                rating3Count: 0,
+                rating4Count: 0,
+                rating5Count: 1,
+                createdAt: now,
+                updatedAt: now
+            )
 
         return CourseRatingSummary(
             course: CourseProfile(
@@ -269,7 +400,13 @@ enum ReviewDemoDataSeeder {
                 createdAt: fallback.createdAt,
                 updatedAt: now
             ),
-            myRating: CourseRating(courseID: courseID, userID: demoCommunityUserID, stars: stars, createdAt: now, updatedAt: now)
+            myRating: CourseRating(
+                courseID: courseID,
+                userID: demoCommunityUserID,
+                stars: stars,
+                createdAt: now,
+                updatedAt: now
+            )
         )
     }
 
@@ -282,10 +419,62 @@ enum ReviewDemoDataSeeder {
     ) -> [DishRatingSummary] {
         let now = ISO8601DateFormatter().string(from: Date())
         let dishProfiles = [
-            DishProfile(id: 1, name: "番茄牛腩饭", location: "东区食堂 · 一层 · 学一食堂", ratingAverage: 4.6, ratingCount: 24, rating1Count: 0, rating2Count: 1, rating3Count: 2, rating4Count: 5, rating5Count: 16, createdAt: now, updatedAt: now),
-            DishProfile(id: 2, name: "鸡腿盖饭", location: "东区食堂 · 二层 · 学四食堂", ratingAverage: 4.3, ratingCount: 18, rating1Count: 1, rating2Count: 1, rating3Count: 2, rating4Count: 6, rating5Count: 8, createdAt: now, updatedAt: now),
-            DishProfile(id: 3, name: "麻辣香锅", location: "西区食堂 · 二层 · 齐芳阁餐厅", ratingAverage: 4.8, ratingCount: 36, rating1Count: 0, rating2Count: 0, rating3Count: 2, rating4Count: 4, rating5Count: 30, createdAt: now, updatedAt: now),
-            DishProfile(id: 4, name: "热干面", location: "西区食堂 · B1层 · 小食光餐厅", ratingAverage: 4.2, ratingCount: 13, rating1Count: 1, rating2Count: 0, rating3Count: 2, rating4Count: 4, rating5Count: 6, createdAt: now, updatedAt: now)
+            DishProfile(
+                id: 1,
+                name: "番茄牛腩饭",
+                location: "东区食堂 · 一层 · 学一食堂",
+                ratingAverage: 4.6,
+                ratingCount: 24,
+                rating1Count: 0,
+                rating2Count: 1,
+                rating3Count: 2,
+                rating4Count: 5,
+                rating5Count: 16,
+                createdAt: now,
+                updatedAt: now
+            ),
+            DishProfile(
+                id: 2,
+                name: "鸡腿盖饭",
+                location: "东区食堂 · 二层 · 学四食堂",
+                ratingAverage: 4.3,
+                ratingCount: 18,
+                rating1Count: 1,
+                rating2Count: 1,
+                rating3Count: 2,
+                rating4Count: 6,
+                rating5Count: 8,
+                createdAt: now,
+                updatedAt: now
+            ),
+            DishProfile(
+                id: 3,
+                name: "麻辣香锅",
+                location: "西区食堂 · 二层 · 齐芳阁餐厅",
+                ratingAverage: 4.8,
+                ratingCount: 36,
+                rating1Count: 0,
+                rating2Count: 0,
+                rating3Count: 2,
+                rating4Count: 4,
+                rating5Count: 30,
+                createdAt: now,
+                updatedAt: now
+            ),
+            DishProfile(
+                id: 4,
+                name: "热干面",
+                location: "西区食堂 · B1层 · 小食光餐厅",
+                ratingAverage: 4.2,
+                ratingCount: 13,
+                rating1Count: 1,
+                rating2Count: 0,
+                rating3Count: 2,
+                rating4Count: 4,
+                rating5Count: 6,
+                createdAt: now,
+                updatedAt: now
+            )
         ]
         let normalizedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedCanteen = canteen?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -308,7 +497,13 @@ enum ReviewDemoDataSeeder {
         return Array(filtered.dropFirst(max(offset, 0)).prefix(max(limit, 1))).map { dish in
             DishRatingSummary(
                 dish: dish,
-                myRating: DishRating(dishID: dish.id, userID: demoCommunityUserID, stars: 5, createdAt: now, updatedAt: now)
+                myRating: DishRating(
+                    dishID: dish.id,
+                    userID: demoCommunityUserID,
+                    stars: 5,
+                    createdAt: now,
+                    updatedAt: now
+                )
             )
         }
     }
@@ -316,7 +511,20 @@ enum ReviewDemoDataSeeder {
     static func updatedDishSummary(dishID: Int64, stars: Int) -> DishRatingSummary {
         let now = ISO8601DateFormatter().string(from: Date())
         let fallback = dishRatingSummaries().first(where: { $0.dish.id == dishID })?.dish
-            ?? DishProfile(id: dishID, name: "演示菜品", location: "东区食堂 · 一层 · 学一食堂", ratingAverage: Double(stars), ratingCount: 1, rating1Count: 0, rating2Count: 0, rating3Count: 0, rating4Count: 0, rating5Count: 1, createdAt: now, updatedAt: now)
+            ?? DishProfile(
+                id: dishID,
+                name: "演示菜品",
+                location: "东区食堂 · 一层 · 学一食堂",
+                ratingAverage: Double(stars),
+                ratingCount: 1,
+                rating1Count: 0,
+                rating2Count: 0,
+                rating3Count: 0,
+                rating4Count: 0,
+                rating5Count: 1,
+                createdAt: now,
+                updatedAt: now
+            )
 
         return DishRatingSummary(
             dish: DishProfile(
@@ -333,7 +541,13 @@ enum ReviewDemoDataSeeder {
                 createdAt: fallback.createdAt,
                 updatedAt: now
             ),
-            myRating: DishRating(dishID: dishID, userID: demoCommunityUserID, stars: stars, createdAt: now, updatedAt: now)
+            myRating: DishRating(
+                dishID: dishID,
+                userID: demoCommunityUserID,
+                stars: stars,
+                createdAt: now,
+                updatedAt: now
+            )
         )
     }
 
@@ -341,11 +555,56 @@ enum ReviewDemoDataSeeder {
 
     private static var sampleCourses: [Course] {
         [
-            Course(courseName: "数据结构", teacher: "林青", classInfo: "演示班", room: "二教 205", location: "二教 205", dayOfWeek: 1, weeks: Array(1...16), duration: [1, 2]),
-            Course(courseName: "高等数学 A", teacher: "周木", classInfo: "演示班", room: "主楼 112", location: "主楼 112", dayOfWeek: 2, weeks: Array(1...18), duration: [3, 4]),
-            Course(courseName: "大学英语", teacher: "叶岚", classInfo: "演示班", room: "学研中心 B203", location: "学研中心 B203", dayOfWeek: 3, weeks: Array(1...16), duration: [5, 6]),
-            Course(courseName: "森林生态学导论", teacher: "陈森", classInfo: "演示班", room: "二教 306", location: "二教 306", dayOfWeek: 4, weeks: Array(3...14), duration: [7, 8]),
-            Course(courseName: "体育", teacher: "王青", classInfo: "演示班", room: "操场", location: "操场", dayOfWeek: 5, weeks: Array(1...16), duration: [3, 4])
+            Course(
+                courseName: "数据结构",
+                teacher: "林青",
+                classInfo: "演示班",
+                room: "二教 205",
+                location: "二教 205",
+                dayOfWeek: 1,
+                weeks: Array(1 ... 16),
+                duration: [1, 2]
+            ),
+            Course(
+                courseName: "高等数学 A",
+                teacher: "周木",
+                classInfo: "演示班",
+                room: "主楼 112",
+                location: "主楼 112",
+                dayOfWeek: 2,
+                weeks: Array(1 ... 18),
+                duration: [3, 4]
+            ),
+            Course(
+                courseName: "大学英语",
+                teacher: "叶岚",
+                classInfo: "演示班",
+                room: "学研中心 B203",
+                location: "学研中心 B203",
+                dayOfWeek: 3,
+                weeks: Array(1 ... 16),
+                duration: [5, 6]
+            ),
+            Course(
+                courseName: "森林生态学导论",
+                teacher: "陈森",
+                classInfo: "演示班",
+                room: "二教 306",
+                location: "二教 306",
+                dayOfWeek: 4,
+                weeks: Array(3 ... 14),
+                duration: [7, 8]
+            ),
+            Course(
+                courseName: "体育",
+                teacher: "王青",
+                classInfo: "演示班",
+                room: "操场",
+                location: "操场",
+                dayOfWeek: 5,
+                weeks: Array(1 ... 16),
+                duration: [3, 4]
+            )
         ]
     }
 
@@ -361,22 +620,90 @@ enum ReviewDemoDataSeeder {
     private static func seedSchoolCaches() throws {
         let today = Date()
         try SchoolDataCache.saveExamSchedule([
-            ExamArrangement(id: 1, courseID: "DS-001", name: "数据结构", date: futureDateString(days: 9), start: "09:00", end: "11:00", location: "二教 205"),
-            ExamArrangement(id: 2, courseID: "MATH-001", name: "高等数学 A", date: futureDateString(days: 16), start: "14:00", end: "16:00", location: "主楼 112")
+            ExamArrangement(
+                id: 1,
+                courseID: "DS-001",
+                name: "数据结构",
+                date: futureDateString(days: 9),
+                start: "09:00",
+                end: "11:00",
+                location: "二教 205"
+            ),
+            ExamArrangement(
+                id: 2,
+                courseID: "MATH-001",
+                name: "高等数学 A",
+                date: futureDateString(days: 16),
+                start: "14:00",
+                end: "16:00",
+                location: "主楼 112"
+            )
         ])
         SchoolDataCache.saveTeachingPlan([
             TeachingPlanSection(term: "2025-2026-1", courses: [
-                TeachingPlanCourse(id: 1, period: "2025-2026-1", name: "高等数学 A", unit: "理学院", credit: 5, duration: "80", type: "必修", exam: "考试"),
-                TeachingPlanCourse(id: 2, period: "2025-2026-1", name: "程序设计基础", unit: "信息学院", credit: 3, duration: "48", type: "必修", exam: "考试")
+                TeachingPlanCourse(
+                    id: 1,
+                    period: "2025-2026-1",
+                    name: "高等数学 A",
+                    unit: "理学院",
+                    credit: 5,
+                    duration: "80",
+                    type: "必修",
+                    exam: "考试"
+                ),
+                TeachingPlanCourse(
+                    id: 2,
+                    period: "2025-2026-1",
+                    name: "程序设计基础",
+                    unit: "信息学院",
+                    credit: 3,
+                    duration: "48",
+                    type: "必修",
+                    exam: "考试"
+                )
             ]),
             TeachingPlanSection(term: "2025-2026-2", courses: [
-                TeachingPlanCourse(id: 3, period: "2025-2026-2", name: "数据结构", unit: "信息学院", credit: 3, duration: "48", type: "必修", exam: "考试"),
-                TeachingPlanCourse(id: 4, period: "2025-2026-2", name: "森林生态学导论", unit: "林学院", credit: 2, duration: "32", type: "公选", exam: "考查")
+                TeachingPlanCourse(
+                    id: 3,
+                    period: "2025-2026-2",
+                    name: "数据结构",
+                    unit: "信息学院",
+                    credit: 3,
+                    duration: "48",
+                    type: "必修",
+                    exam: "考试"
+                ),
+                TeachingPlanCourse(
+                    id: 4,
+                    period: "2025-2026-2",
+                    name: "森林生态学导论",
+                    unit: "林学院",
+                    credit: 2,
+                    duration: "32",
+                    type: "公选",
+                    exam: "考查"
+                )
             ])
         ])
         SchoolDataCache.saveGradeRankings([
-            GradeRankingRecord(term: "全部学期", rankingRange: "专业", rank: 12, totalCount: 186, percentile: 0.064, metricText: "综合排名", rawFields: ["范围": "全部学期"]),
-            GradeRankingRecord(term: "2025-2026-1", rankingRange: "专业", rank: 15, totalCount: 186, percentile: 0.081, metricText: "学期排名", rawFields: [:])
+            GradeRankingRecord(
+                term: "全部学期",
+                rankingRange: "专业",
+                rank: 12,
+                totalCount: 186,
+                percentile: 0.064,
+                metricText: "综合排名",
+                rawFields: ["范围": "全部学期"]
+            ),
+            GradeRankingRecord(
+                term: "2025-2026-1",
+                rankingRange: "专业",
+                rank: 15,
+                totalCount: 186,
+                percentile: 0.081,
+                metricText: "学期排名",
+                rawFields: [:]
+            )
         ])
         SchoolDataCache.saveGradeCreditSummary(
             GradeCreditSummary(
@@ -404,9 +731,30 @@ enum ReviewDemoDataSeeder {
                     TrainingProgramSection(id: "courses", title: "课程体系", body: "课程包含数学基础、程序设计、数据结构、数据库、软件工程和实践训练。")
                 ],
                 creditRequirements: [
-                    GraduationCreditRequirement(id: "total", category: "总学分", courseName: "毕业要求", requiredCredits: 170, plannedCredits: 170, isAggregate: true),
-                    GraduationCreditRequirement(id: "public", category: "公共选修", courseName: "通识课程", requiredCredits: 8, plannedCredits: 8, isAggregate: true),
-                    GraduationCreditRequirement(id: "major", category: "专业选修", courseName: "专业方向课程", requiredCredits: 24, plannedCredits: 24, isAggregate: true)
+                    GraduationCreditRequirement(
+                        id: "total",
+                        category: "总学分",
+                        courseName: "毕业要求",
+                        requiredCredits: 170,
+                        plannedCredits: 170,
+                        isAggregate: true
+                    ),
+                    GraduationCreditRequirement(
+                        id: "public",
+                        category: "公共选修",
+                        courseName: "通识课程",
+                        requiredCredits: 8,
+                        plannedCredits: 8,
+                        isAggregate: true
+                    ),
+                    GraduationCreditRequirement(
+                        id: "major",
+                        category: "专业选修",
+                        courseName: "专业方向课程",
+                        requiredCredits: 24,
+                        plannedCredits: 24,
+                        isAggregate: true
+                    )
                 ]
             )
         )
@@ -417,7 +765,11 @@ enum ReviewDemoDataSeeder {
     }
 
     @MainActor
-    private static func preserveCurrentSchoolDataIfNeeded(courses: [Course], grades: [Grade], defaults: UserDefaults) throws {
+    private static func preserveCurrentSchoolDataIfNeeded(
+        courses: [Course],
+        grades: [Grade],
+        defaults: UserDefaults
+    ) throws {
         let keys = [courseBackupKey, gradeBackupKey, defaultsBackupKey]
         if keys.contains(where: { defaults.object(forKey: $0) != nil }) {
             _ = try preservedValues(defaults: defaults)
@@ -425,17 +777,24 @@ enum ReviewDemoDataSeeder {
         }
         let courseData = try JSONEncoder().encode(courses.map(CourseBackup.init))
         let gradeData = try JSONEncoder().encode(grades.map(GradeBackup.init))
-        let prefixes = ["schoolCache.", "timetable.", CampusScopedDefaults.key("schoolCache."), CampusScopedDefaults.key("timetable.")]
+        let prefixes = [
+            "schoolCache.",
+            "timetable.",
+            CampusScopedDefaults.key("schoolCache."),
+            CampusScopedDefaults.key("timetable.")
+        ]
         let snapshot = defaults.dictionaryRepresentation().filter { key, _ in prefixes.contains(where: key.hasPrefix) }
         defaults.set(courseData, forKey: courseBackupKey)
         defaults.set(gradeData, forKey: gradeBackupKey)
         defaults.set(snapshot, forKey: defaultsBackupKey)
     }
 
-    private static func preservedValues(defaults: UserDefaults) throws -> ([CourseBackup], [GradeBackup], [String: Any]) {
+    private static func preservedValues(defaults: UserDefaults) throws
+        -> ([CourseBackup], [GradeBackup], [String: Any]) {
         guard let courseData = defaults.data(forKey: courseBackupKey),
               let gradeData = defaults.data(forKey: gradeBackupKey),
-              let snapshot = defaults.dictionary(forKey: defaultsBackupKey) else { throw CocoaError(.fileReadCorruptFile) }
+              let snapshot = defaults.dictionary(forKey: defaultsBackupKey)
+        else { throw CocoaError(.fileReadCorruptFile) }
         let courses = try JSONDecoder().decode([CourseBackup].self, from: courseData)
         let grades = try JSONDecoder().decode([GradeBackup].self, from: gradeData)
         guard courses.allSatisfy({ $0.id != nil && $0.sourceSemesterID != nil }),
@@ -453,8 +812,10 @@ enum ReviewDemoDataSeeder {
         let keys = [courseBackupKey, gradeBackupKey, defaultsBackupKey]
         guard keys.contains(where: { defaults.object(forKey: $0) != nil }) else { return }
         let (courses, grades, snapshot) = try preservedValues(defaults: defaults)
-        let removed: [any PersistentModel] = try modelContext.fetch(FetchDescriptor<Course>()) + modelContext.fetch(FetchDescriptor<Grade>())
-        let restored: [any PersistentModel] = try courses.map { try $0.makeCourse() } + grades.map { try $0.makeGrade() }
+        let removed: [any PersistentModel] = try modelContext.fetch(FetchDescriptor<Course>()) + modelContext
+            .fetch(FetchDescriptor<Grade>())
+        let restored: [any PersistentModel] = try courses.map { try $0.makeCourse() } + grades
+            .map { try $0.makeGrade() }
         removed.forEach { modelContext.delete($0) }
         restored.forEach { modelContext.insert($0) }
         try LocalModelSave.save(modelContext, undo: {
@@ -543,7 +904,18 @@ enum ReviewDemoDataSeeder {
 
         func makeGrade() throws -> Grade {
             guard let id else { throw CocoaError(.fileReadCorruptFile) }
-            let model = Grade(id: id, term: term, courseName: courseName, credit: credit, score: score, type: type, courseCode: courseCode, courseAttribute: courseAttribute, courseCategory: courseCategory, examNature: examNature)
+            let model = Grade(
+                id: id,
+                term: term,
+                courseName: courseName,
+                credit: credit,
+                score: score,
+                type: type,
+                courseCode: courseCode,
+                courseAttribute: courseAttribute,
+                courseCategory: courseCategory,
+                examNature: examNature
+            )
             model.updatedAt = updatedAt
             return model
         }

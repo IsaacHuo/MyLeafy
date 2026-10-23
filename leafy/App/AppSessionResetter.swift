@@ -54,7 +54,8 @@ enum AppSessionResetter {
 
         try ICloudSyncCoordinator.shared.pauseForLocalCacheClear()
         let courses = try modelContext.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot)
-        let cellReminders = try modelContext.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() }
+        let cellReminders = try modelContext.fetch(FetchDescriptor<TimetableCellReminder>())
+            .map { SyncedTimetableCellReminder($0).make() }
         if let warning = try deleteLocalRecords(in: modelContext) { cleanupFailures.append(warning) }
         TimetableNotificationManager.cancelAllCourseReminders(courses: courses)
         TimetableNotificationManager.cancelAllCellReminders(cellReminders)
@@ -106,7 +107,10 @@ enum AppSessionResetter {
         let files = records.compactMap { record -> LocalFileCleanup.File? in
             switch record {
             case let value as ScheduleMemoImage:
-                return .init(value, url: ScheduleMemoImageStore.directoryURL().appendingPathComponent(value.localFilename))
+                return .init(
+                    value,
+                    url: ScheduleMemoImageStore.directoryURL().appendingPathComponent(value.localFilename)
+                )
             case let value as ScheduleMemoAttachment:
                 return ScheduleMemoAttachmentStore.fileURL(for: value).map { .init(value, url: $0) }
             case let value as ScheduleMemoAudio:
@@ -169,7 +173,6 @@ enum AppSessionResetter {
         try append(ScheduleMemoAudio.self)
         return records
     }
-
 }
 
 private struct AppLocalDataDeletionError: LocalizedError {

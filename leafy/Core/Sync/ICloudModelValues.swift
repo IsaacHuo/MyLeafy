@@ -43,7 +43,18 @@ extension SyncedCourse: ICloudModelValue {
         duration = model.duration
     }
     @MainActor func make() -> Course {
-        let model = Course(id: id, courseName: courseName, teacher: teacher, classInfo: classInfo, room: room, location: location, dayOfWeek: dayOfWeek, weeks: weeks, duration: duration, sourceSemesterID: sourceSemesterID)
+        let model = Course(
+            id: id,
+            courseName: courseName,
+            teacher: teacher,
+            classInfo: classInfo,
+            room: room,
+            location: location,
+            dayOfWeek: dayOfWeek,
+            weeks: weeks,
+            duration: duration,
+            sourceSemesterID: sourceSemesterID
+        )
         apply(to: model)
         return model
     }
@@ -93,7 +104,18 @@ extension SyncedGrade: ICloudModelValue {
         updatedAt = model.updatedAt
     }
     @MainActor func make() -> Grade {
-        let model = Grade(id: id, term: term, courseName: courseName, credit: credit, score: score, type: type, courseCode: courseCode, courseAttribute: courseAttribute, courseCategory: courseCategory, examNature: examNature)
+        let model = Grade(
+            id: id,
+            term: term,
+            courseName: courseName,
+            credit: credit,
+            score: score,
+            type: type,
+            courseCode: courseCode,
+            courseAttribute: courseAttribute,
+            courseCategory: courseCategory,
+            examNature: examNature
+        )
         apply(to: model)
         return model
     }
@@ -176,7 +198,15 @@ extension SyncedCourseOccurrenceNote: ICloudModelValue {
         updatedAt = model.updatedAt
     }
     @MainActor func make() -> CourseOccurrenceNote {
-        let model = CourseOccurrenceNote(id: id, courseKey: courseKey, occurrenceKey: occurrenceKey, week: week, dayOfWeek: dayOfWeek, text: text, updatedAt: updatedAt)
+        let model = CourseOccurrenceNote(
+            id: id,
+            courseKey: courseKey,
+            occurrenceKey: occurrenceKey,
+            week: week,
+            dayOfWeek: dayOfWeek,
+            text: text,
+            updatedAt: updatedAt
+        )
         apply(to: model)
         return model
     }
@@ -217,7 +247,13 @@ extension SyncedCourseReminderSetting: ICloudModelValue {
         updatedAt = model.updatedAt
     }
     @MainActor func make() -> CourseReminderSetting {
-        let model = CourseReminderSetting(id: id, courseKey: courseKey, minutesBefore: minutesBefore, anchorPeriod: anchorPeriod, updatedAt: updatedAt)
+        let model = CourseReminderSetting(
+            id: id,
+            courseKey: courseKey,
+            minutesBefore: minutesBefore,
+            anchorPeriod: anchorPeriod,
+            updatedAt: updatedAt
+        )
         apply(to: model)
         return model
     }
@@ -270,7 +306,21 @@ extension SyncedTimetableCellReminder: ICloudModelValue {
         updatedAt = model.updatedAt
     }
     @MainActor func make() -> TimetableCellReminder {
-        let model = TimetableCellReminder(id: id, week: week, dayOfWeek: dayOfWeek, period: period, endPeriod: endPeriod, title: title, location: location ?? "", note: note ?? "", startsAt: startsAt, endsAt: endsAt, minutesBefore: minutesBefore, createdAt: createdAt, updatedAt: updatedAt)
+        let model = TimetableCellReminder(
+            id: id,
+            week: week,
+            dayOfWeek: dayOfWeek,
+            period: period,
+            endPeriod: endPeriod,
+            title: title,
+            location: location ?? "",
+            note: note ?? "",
+            startsAt: startsAt,
+            endsAt: endsAt,
+            minutesBefore: minutesBefore,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
         apply(to: model)
         return model
     }
@@ -324,7 +374,18 @@ extension SyncedScheduleMemo: ICloudModelValue {
         linkedScheduleID = model.linkedScheduleID
     }
     @MainActor func make() -> ScheduleMemo {
-        let model = ScheduleMemo(id: id, body: body, createdAt: createdAt, updatedAt: updatedAt, pinnedAt: pinnedAt, trashedAt: trashedAt, linkedScheduleKindRawValue: linkedScheduleKindRawValue, linkedScheduleID: linkedScheduleID, kindRawValue: kindRawValue, title: title)
+        let model = ScheduleMemo(
+            id: id,
+            body: body,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            pinnedAt: pinnedAt,
+            trashedAt: trashedAt,
+            linkedScheduleKindRawValue: linkedScheduleKindRawValue,
+            linkedScheduleID: linkedScheduleID,
+            kindRawValue: kindRawValue,
+            title: title
+        )
         apply(to: model)
         return model
     }
@@ -363,7 +424,13 @@ extension SyncedScheduleMemoImage: ICloudModelValue {
         importedAt = model.importedAt
     }
     @MainActor func make() -> ScheduleMemoImage {
-        let model = ScheduleMemoImage(id: id, memoID: memoID, sortOrder: sortOrder, localFilename: localFilename, importedAt: importedAt)
+        let model = ScheduleMemoImage(
+            id: id,
+            memoID: memoID,
+            sortOrder: sortOrder,
+            localFilename: localFilename,
+            importedAt: importedAt
+        )
         apply(to: model)
         return model
     }
@@ -400,7 +467,15 @@ extension SyncedScheduleMemoAttachment: ICloudModelValue {
         importedAt = model.importedAt
     }
     @MainActor func make() -> ScheduleMemoAttachment {
-        let model = ScheduleMemoAttachment(id: id, memoID: memoID, sortOrder: sortOrder, originalFilename: originalFilename, localFilename: localFilename, contentTypeIdentifier: contentTypeIdentifier, importedAt: importedAt)
+        let model = ScheduleMemoAttachment(
+            id: id,
+            memoID: memoID,
+            sortOrder: sortOrder,
+            originalFilename: originalFilename,
+            localFilename: localFilename,
+            contentTypeIdentifier: contentTypeIdentifier,
+            importedAt: importedAt
+        )
         apply(to: model)
         return model
     }
@@ -435,7 +510,13 @@ extension SyncedScheduleMemoAudio: ICloudModelValue {
         recordedAt = model.recordedAt
     }
     @MainActor func make() -> ScheduleMemoAudio {
-        let model = ScheduleMemoAudio(id: id, memoID: memoID, localFilename: localFilename, duration: duration, recordedAt: recordedAt)
+        let model = ScheduleMemoAudio(
+            id: id,
+            memoID: memoID,
+            localFilename: localFilename,
+            duration: duration,
+            recordedAt: recordedAt
+        )
         apply(to: model)
         return model
     }

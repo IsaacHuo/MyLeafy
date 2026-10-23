@@ -46,7 +46,8 @@ struct LocalFileCleanup {
         queueURL: URL? = nil,
         removeFile: @escaping (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }
     ) {
-        let root = CampusIdentityStore.currentIdentity().flatMap(CampusStoreScope.scopedStoreURL)?.deletingLastPathComponent()
+        let root = CampusIdentityStore.currentIdentity().flatMap(CampusStoreScope.scopedStoreURL)?
+            .deletingLastPathComponent()
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.queueURL = queueURL ?? root.appendingPathComponent("PendingLocalFileCleanup.json")
         self.removeFile = removeFile
@@ -82,9 +83,15 @@ struct LocalFileCleanup {
             case "ScheduleMemoImage": liveFiles[name] = try references(ScheduleMemoImage.self, in: context)
             case "ScheduleMemoAttachment": liveFiles[name] = try references(ScheduleMemoAttachment.self, in: context)
             case "ScheduleMemoAudio": liveFiles[name] = try references(ScheduleMemoAudio.self, in: context)
-            case "LearningMaterialDocument": liveFiles[name] = try references(LearningMaterialDocument.self, in: context)
+            case "LearningMaterialDocument": liveFiles[name] = try references(
+                    LearningMaterialDocument.self,
+                    in: context
+                )
             case "HonorRecord": liveFiles[name] = try references(HonorRecord.self, in: context)
-            case "ComprehensiveQualityEvidenceDocument": liveFiles[name] = try references(ComprehensiveQualityEvidenceDocument.self, in: context)
+            case "ComprehensiveQualityEvidenceDocument": liveFiles[name] = try references(
+                    ComprehensiveQualityEvidenceDocument.self,
+                    in: context
+                )
             case "MedicalLedgerPhoto": liveFiles[name] = try references(MedicalLedgerPhoto.self, in: context)
             case "CareerResumeDocument": liveFiles[name] = try references(CareerResumeDocument.self, in: context)
             default: throw CocoaError(.fileReadCorruptFile)
@@ -113,7 +120,10 @@ struct LocalFileCleanup {
     }
 
     private func write(_ files: [File]) throws {
-        try FileManager.default.createDirectory(at: queueURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: queueURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try JSONEncoder().encode(files).write(to: queueURL, options: .atomic)
     }
 

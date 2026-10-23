@@ -53,7 +53,6 @@ enum ScheduleMemoImageStore {
         }
     }
 
-
     static func directoryURL(identity: CampusIdentity? = CampusIdentityStore.currentIdentity()) -> URL {
         if let identity,
            let scopedStore = CampusStoreScope.scopedStoreURL(for: identity) {
@@ -97,7 +96,7 @@ enum ScheduleMemoImageStore {
     private static func jpegData(for image: UIImage, maximumBytes: Int) -> Data? {
         var candidate = image
         var smallest: Data?
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             for quality in stride(from: CGFloat(0.84), through: 0.32, by: -0.08) {
                 guard let data = candidate.jpegData(compressionQuality: quality) else { continue }
                 if smallest == nil || data.count < (smallest?.count ?? .max) {

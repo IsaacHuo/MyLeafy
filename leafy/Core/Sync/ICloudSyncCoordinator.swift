@@ -42,12 +42,14 @@ final class ICloudSyncCoordinator: ObservableObject {
         guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
         for name in [ModelContext.didSave, .customScheduleEventsDidChange,
                      .schoolDataDidRefresh, .semesterRuntimeConfigDidChange] {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.localDataChanged() }
-            })
+            observers
+                .append(NotificationCenter.default
+                    .addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                        MainActor.assumeIsolated { self?.localDataChanged() }
+                    })
         }
         observers.append(NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
-            object: nil, queue: .main) { [weak self] _ in
+                                                                object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.preferencesDidChange() }
             })
     }
@@ -163,8 +165,15 @@ final class ICloudSyncCoordinator: ObservableObject {
                 phase = .merge
                 try applyInbox()
                 if engine == nil {
-                    let serialization = try journal.engineState.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
-                    var config = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: serialization, delegate: self)
+                    let serialization = try journal.engineState.map { try JSONDecoder().decode(
+                        CKSyncEngine.State.Serialization.self,
+                        from: $0
+                    ) }
+                    var config = CKSyncEngine.Configuration(
+                        database: container.privateCloudDatabase,
+                        stateSerialization: serialization,
+                        delegate: self
+                    )
                     // No send is permitted until the initial remote fetch and merge finishes.
                     config.automaticallySync = false
                     engine = CKSyncEngine(config)
@@ -197,12 +206,20 @@ final class ICloudSyncCoordinator: ObservableObject {
                 try await engine.sendChanges(.init(scope: .zoneIDs([zoneID])))
                 try check(token)
                 if let reportedError { throw reportedError }
-                if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch.isEmpty && failure == nil { journal.lastSuccess = Date() }
+                if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch
+                    .isEmpty && failure == nil { journal.lastSuccess = Date() }
                 try persist()
                 try check(token)
                 if needsAutomaticEngine {
-                    let state = try journal.engineState.map { try JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
-                    var automatic = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: self)
+                    let state = try journal.engineState.map { try JSONDecoder().decode(
+                        CKSyncEngine.State.Serialization.self,
+                        from: $0
+                    ) }
+                    var automatic = CKSyncEngine.Configuration(
+                        database: container.privateCloudDatabase,
+                        stateSerialization: state,
+                        delegate: self
+                    )
                     automatic.automaticallySync = true
                     self.engine = CKSyncEngine(automatic)
                     usesAutomaticEngine = true
@@ -221,7 +238,8 @@ final class ICloudSyncCoordinator: ObservableObject {
         }
     }
     private func check(_ token: UUID) throws {
-        guard generation == token, identity == ActiveCampusContext.identity, !Task.isCancelled else { throw CancellationError() }
+        guard generation == token, identity == ActiveCampusContext.identity,
+              !Task.isCancelled else { throw CancellationError() }
     }
     private func localDataChanged() {
         guard loaded, journal.enabled, !applying, identity == ActiveCampusContext.identity else { return }
@@ -293,9 +311,16 @@ final class ICloudSyncCoordinator: ObservableObject {
     private func report(_ error: Error) {
         reportedError = error
         let diagnostic = ICloudSyncDiagnostic(error: error, phase: phase, container: Self.containerIdentifier,
-            environment: Bundle.main.object(forInfoDictionaryKey: "LeafyCloudKitEnvironment") as? String ?? "未指定")
+                                              environment: Bundle.main
+                                                  .object(
+                                                      forInfoDictionaryKey: "LeafyCloudKitEnvironment"
+                                                  ) as? String ??
+                                                  "未指定")
         failure = diagnostic.message; failureDetails = diagnostic.details
-        log.error("Sync failed phase=\(self.phase.rawValue, privacy: .public) domain=\((error as NSError).domain, privacy: .public) code=\((error as NSError).code) details=\(diagnostic.details, privacy: .private)")
+        log
+            .error(
+                "Sync failed phase=\(self.phase.rawValue, privacy: .public) domain=\((error as NSError).domain, privacy: .public) code=\((error as NSError).code) details=\(diagnostic.details, privacy: .private)"
+            )
         publish()
     }
     private func queuePending(on engine: CKSyncEngine) {
@@ -315,11 +340,18 @@ final class ICloudSyncCoordinator: ObservableObject {
             coder.requiresSecureCoding = true
             guard let restored = CKRecord(coder: coder) else { throw CocoaError(.fileReadCorruptFile) }
             coder.finishDecoding(); record = restored
-        } else { record = CKRecord(recordType: "PersonalValue", recordID: CKRecord.ID(recordName: value.recordName, zoneID: zoneID)) }
+        } else { record = CKRecord(
+            recordType: "PersonalValue",
+            recordID: CKRecord.ID(recordName: value.recordName, zoneID: zoneID)
+        ) }
         var header = value
         if value.payload.count > 600_000 {
-            let payloadURL = journalURL!.deletingLastPathComponent().appendingPathComponent(value.recordName + ".payload")
-            try value.payload.write(to: payloadURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            let payloadURL = journalURL!.deletingLastPathComponent()
+                .appendingPathComponent(value.recordName + ".payload")
+            try value.payload.write(
+                to: payloadURL,
+                options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+            )
             record["payloadAsset"] = CKAsset(fileURL: payloadURL)
             record["payloadDigest"] = ICloudSyncValue.digest(value.payload) as NSString
             header.payload = Data()
@@ -327,7 +359,8 @@ final class ICloudSyncCoordinator: ObservableObject {
         record["value"] = try ICloudLocalData.encode(header) as NSData
         if let path = value.filePath, !value.deleted {
             let url = try ICloudLocalData.fileURL(path)
-            guard try ICloudLocalData.fileDigest(url) == value.fileDigest else { throw ICloudSyncFailure.message("附件在同步期间发生变化，请重试。") }
+            guard try ICloudLocalData.fileDigest(url) == value.fileDigest
+            else { throw ICloudSyncFailure.message("附件在同步期间发生变化，请重试。") }
             record["asset"] = CKAsset(fileURL: url)
         } else { record["asset"] = nil }
         return record
@@ -343,24 +376,33 @@ final class ICloudSyncCoordinator: ObservableObject {
                 throw ICloudSyncFailure.message("iCloud 文本附件尚未下载完成，请重试。")
             }
             value.payload = try Data(contentsOf: payload)
-            guard ICloudSyncValue.digest(value.payload) == record["payloadDigest"] as? String else { throw CocoaError(.fileReadCorruptFile) }
+            guard ICloudSyncValue.digest(value.payload) == record["payloadDigest"] as? String
+            else { throw CocoaError(.fileReadCorruptFile) }
         }
         guard value.deleted || value.key.hasPrefix("file/") || !value.payload.isEmpty else {
             throw ICloudSyncFailure.message("iCloud 数据尚未下载完整，请重试。")
         }
         guard value.recordName == record.recordID.recordName,
-              value.filePath == nil || value.key == "file/" + value.filePath! else { throw CocoaError(.fileReadCorruptFile) }
+              value.filePath == nil || value.key == "file/" + value.filePath!
+        else { throw CocoaError(.fileReadCorruptFile) }
         journal.systemFields[value.key] = fields(of: record)
         journal.inbox[value.key] = value
         try persist()
         if let path = value.filePath, !value.deleted {
             guard let url = (record["asset"] as? CKAsset)?.fileURL,
-                  try ICloudLocalData.fileDigest(url) == value.fileDigest else { throw ICloudSyncFailure.message("iCloud 附件下载校验失败，请重试。") }
+                  try ICloudLocalData.fileDigest(url) == value.fileDigest
+            else { throw ICloudSyncFailure.message("iCloud 附件下载校验失败，请重试。") }
             let target = try ICloudLocalData.fileURL(path)
-            try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: target.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             // Stage before advancing the engine's fetch token. Local files remain untouched until merge.
             let staged = journalURL!.deletingLastPathComponent().appendingPathComponent(value.recordName + ".asset")
-            try Data(contentsOf: url, options: .mappedIfSafe).write(to: staged, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try Data(contentsOf: url, options: .mappedIfSafe).write(
+                to: staged,
+                options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+            )
         }
         journal.systemFields[value.key] = fields(of: record)
         journal.inbox[value.key] = value
@@ -369,19 +411,29 @@ final class ICloudSyncCoordinator: ObservableObject {
     }
     private func recoverInboxAssets(token: UUID) async throws {
         for name in journal.refetch {
-            let record = try await container.privateCloudDatabase.record(for: CKRecord.ID(recordName: name, zoneID: zoneID))
+            let record = try await container.privateCloudDatabase.record(for: CKRecord.ID(
+                recordName: name,
+                zoneID: zoneID
+            ))
             try check(token); try receive(record)
         }
         let needed = try Set(journal.inbox.values.flatMap { try ICloudLocalData.requiredFiles(for: $0) })
         for path in needed where !FileManager.default.fileExists(atPath: try ICloudLocalData.fileURL(path).path) {
             let name = ICloudSyncValue.digest(Data(("file/" + path).utf8))
-            let record = try await container.privateCloudDatabase.record(for: CKRecord.ID(recordName: name, zoneID: zoneID))
+            let record = try await container.privateCloudDatabase.record(for: CKRecord.ID(
+                recordName: name,
+                zoneID: zoneID
+            ))
             try check(token); try receive(record)
         }
         for value in journal.inbox.values where value.filePath != nil && !value.deleted {
             let staged = journalURL!.deletingLastPathComponent().appendingPathComponent(value.recordName + ".asset")
-            if FileManager.default.fileExists(atPath: staged.path), try ICloudLocalData.fileDigest(staged) == value.fileDigest { continue }
-            let record = try await container.privateCloudDatabase.record(for: CKRecord.ID(recordName: value.recordName, zoneID: zoneID))
+            if FileManager.default.fileExists(atPath: staged.path),
+               try ICloudLocalData.fileDigest(staged) == value.fileDigest { continue }
+            let record = try await container.privateCloudDatabase.record(for: CKRecord.ID(
+                recordName: value.recordName,
+                zoneID: zoneID
+            ))
             try check(token)
             try receive(record)
         }
@@ -393,13 +445,22 @@ final class ICloudSyncCoordinator: ObservableObject {
         applying = true
         defer { applying = false; observedPreferences = preferenceSnapshot() }
         // Files precede metadata so existing readers never observe a missing received attachment.
-        let values = journal.inbox.values.sorted { ($0.filePath == nil ? 1 : 0, $0.key) < ($1.filePath == nil ? 1 : 0, $1.key) }
+        let values = journal.inbox.values.sorted { ($0.filePath == nil ? 1 : 0, $0.key) < (
+            $1.filePath == nil ? 1 : 0,
+            $1.key
+        ) }
         let latest = try ICloudLocalData.capture(context: context, journal: journal, onlyKeys: Set(journal.inbox.keys))
         let latestByKey = Dictionary(uniqueKeysWithValues: latest.map { ($0.key, $0) })
         if journal.captureBeforeMerge(latest, incoming: values) { try persist() }
-        let notificationChange = values.contains { $0.key == "school/courses" || $0.key.hasPrefix("settings/timetable/") || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
-        let oldCourses = notificationChange ? try context.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot) : []
-        let oldCells = notificationChange ? try context.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() } : []
+        let notificationChange = values
+            .contains {
+                $0.key == "school/courses" || $0.key.hasPrefix("settings/timetable/") || $0.key
+                    .hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key
+                    .hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
+        let oldCourses = notificationChange ? try context.fetch(FetchDescriptor<Course>())
+            .map(TimetableReminderRefreshPlan.courseSnapshot) : []
+        let oldCells = notificationChange ? try context.fetch(FetchDescriptor<TimetableCellReminder>())
+            .map { SyncedTimetableCellReminder($0).make() } : []
         let oldEvents = notificationChange ? try CustomScheduleStore.loadForSync() : []
         var notificationsInvalidated = false
         for remote in values {
@@ -417,7 +478,10 @@ final class ICloudSyncCoordinator: ObservableObject {
                         chosen = ICloudSyncValue.winner(local: local, remote: remote)
                         if journal.pending.contains(local.key), local.payload != remote.payload,
                            !local.deleted, !remote.deleted, local.isPersonalText,
-                           let copy = try ICloudLocalData.conflictCopy(chosen == local ? remote : local, context: context) {
+                           let copy = try ICloudLocalData.conflictCopy(
+                               chosen == local ? remote : local,
+                               context: context
+                           ) {
                             journal.records[copy.key] = copy; journal.pending.insert(copy.key)
                         }
                     }
@@ -427,17 +491,23 @@ final class ICloudSyncCoordinator: ObservableObject {
                     if try files.contains(where: { path in
                         let url = try ICloudLocalData.fileURL(path)
                         guard FileManager.default.fileExists(atPath: url.path) else { return true }
-                        if let expected = (journal.inbox["file/" + path] ?? journal.records["file/" + path])?.fileDigest {
+                        if let expected = (journal.inbox["file/" + path] ?? journal.records["file/" + path])?
+                            .fileDigest {
                             return try ICloudLocalData.fileDigest(url) != expected
                         }
                         return false
                     }) { continue }
 
                     if let path = remote.filePath, !remote.deleted {
-                        let staged = journalURL!.deletingLastPathComponent().appendingPathComponent(remote.recordName + ".asset")
-                        guard try ICloudLocalData.fileDigest(staged) == remote.fileDigest else { throw CocoaError(.fileReadCorruptFile) }
+                        let staged = journalURL!.deletingLastPathComponent()
+                            .appendingPathComponent(remote.recordName + ".asset")
+                        guard try ICloudLocalData.fileDigest(staged) == remote.fileDigest
+                        else { throw CocoaError(.fileReadCorruptFile) }
                         let target = try ICloudLocalData.fileURL(path)
-                        try Data(contentsOf: staged, options: .mappedIfSafe).write(to: target, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                        try Data(contentsOf: staged, options: .mappedIfSafe).write(
+                            to: target,
+                            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+                        )
                     }
                     try ICloudLocalData.apply(remote, context: context)
                     journal.records[remote.key] = remote; journal.pending.remove(remote.key)
@@ -453,7 +523,11 @@ final class ICloudSyncCoordinator: ObservableObject {
                 }
                 try LocalFileCleanup().retry(in: context)
                 if chosen == remote {
-                    if remote.key == "school/courses" { TimetableCacheMetadata.lastSyncAt = remote.modifiedAt; TimetableCacheMetadata.lastFailureMessage = nil }
+                    if remote
+                        .key ==
+                        "school/courses" {
+                        TimetableCacheMetadata.lastSyncAt = remote.modifiedAt; TimetableCacheMetadata
+                            .lastFailureMessage = nil }
                     if remote.key == "school/grades" { SchoolDataCache.markGradeDetailsSynced(at: remote.modifiedAt) }
                 }
                 journal.inbox.removeValue(forKey: remote.key)
@@ -489,7 +563,8 @@ final class ICloudSyncCoordinator: ObservableObject {
             do { _ = try await container.privateCloudDatabase.deleteRecordZone(withID: zone) }
             catch let error as CKError where error.code == .zoneNotFound { /* Already deleted. */ }
             try check(token)
-            journal.engineState = nil; journal.systemFields = [:]; journal.inbox = [:]; journal.refetch = []; journal.lastSuccess = nil
+            journal.engineState = nil; journal.systemFields = [:]; journal.inbox = [:]; journal.refetch = []; journal
+                .lastSuccess = nil
             journal.pending = Set(journal.records.keys)
             failure = nil; failureDetails = nil; try persist()
         } catch {
@@ -507,7 +582,8 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
         guard source === engine, loaded, journal.enabled, identity == ActiveCampusContext.identity else { return }
         do {
             switch event {
-            case .stateUpdate(let update): journal.engineState = try JSONEncoder().encode(update.stateSerialization); try persist()
+            case .stateUpdate(let update): journal.engineState = try JSONEncoder()
+                .encode(update.stateSerialization); try persist()
             case .accountChange(let change):
                 switch change.changeType {
                 case .signIn(let current) where current.recordName == journal.accountID: break
@@ -525,14 +601,18 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
                 }
                 // Persist record IDs before staging any attachment. Even a decoding or
                 // download failure can be fetched again after the engine advances its cursor.
-                journal.refetch.formUnion(changes.modifications.filter { $0.record.recordID.zoneID == zoneID }.map { $0.record.recordID.recordName })
+                journal.refetch
+                    .formUnion(changes.modifications.filter { $0.record.recordID.zoneID == zoneID }
+                        .map { $0.record.recordID.recordName })
                 try persist()
                 for item in changes.modifications {
                     do { try receive(item.record) } catch { report(error) }
                 }
                 for deletion in changes.deletions where deletion.recordID.zoneID == zoneID {
-                    if let local = journal.records.values.first(where: { $0.recordName == deletion.recordID.recordName }) {
-                        var tombstone = local; tombstone.deleted = true; tombstone.modifiedAt = Date(); tombstone.revision = UUID().uuidString
+                    if let local = journal.records.values
+                        .first(where: { $0.recordName == deletion.recordID.recordName }) {
+                        var tombstone = local; tombstone.deleted = true; tombstone.modifiedAt = Date(); tombstone
+                            .revision = UUID().uuidString
                         journal.inbox[local.key] = tombstone
                     }
                 }
@@ -559,27 +639,33 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
                     } else { report(failed.error) }
                 }
                 try applyInbox(); try persist()
-                if changes.failedRecordSaves.allSatisfy({ $0.error.code == .serverRecordChanged }) { queuePending(on: source) }
+                if changes.failedRecordSaves
+                    .allSatisfy({ $0.error.code == .serverRecordChanged }) { queuePending(on: source) }
             case .sentDatabaseChanges(let changes):
                 for failed in changes.failedZoneSaves { report(failed.error) }
             case .didFetchChanges:
-                if readyToSend, journal.inbox["school/courses"] == nil, journal.records["school/courses"] != nil, let context {
+                if readyToSend, journal.inbox["school/courses"] == nil, journal.records["school/courses"] != nil,
+                   let context {
                     let committed = ModelContext(context.container)
                     if try ICloudLocalData.markUnlinkedEdits(in: committed) { localDataChanged() }
                 }
             case .didSendChanges:
-                if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch.isEmpty && failure == nil { journal.lastSuccess = Date(); try persist() }
+                if journal.pending.isEmpty && journal.inbox.isEmpty && journal.refetch
+                    .isEmpty && failure == nil { journal.lastSuccess = Date(); try persist() }
             case .didFetchRecordZoneChanges(let result):
                 if let error = result.error, error.code != .zoneNotFound { report(error) }
             default: break
             }
         } catch { report(error) }
     }
-    nonisolated func nextRecordZoneChangeBatch(_ context: CKSyncEngine.SendChangesContext, syncEngine: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {
+    nonisolated func nextRecordZoneChangeBatch(_ context: CKSyncEngine.SendChangesContext,
+                                               syncEngine: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {
         await batch(context, engine: syncEngine)
     }
-    private func batch(_ context: CKSyncEngine.SendChangesContext, engine source: CKSyncEngine) -> CKSyncEngine.RecordZoneChangeBatch? {
-        guard source === engine, readyToSend, journal.enabled, identity == ActiveCampusContext.identity else { return nil }
+    private func batch(_ context: CKSyncEngine.SendChangesContext, engine source: CKSyncEngine) -> CKSyncEngine
+        .RecordZoneChangeBatch? {
+        guard source === engine, readyToSend, journal.enabled,
+              identity == ActiveCampusContext.identity else { return nil }
         do {
             let pendingIDs = Set(source.state.pendingRecordZoneChanges.compactMap { change -> CKRecord.ID? in
                 if case .saveRecord(let id) = change { return id }; return nil
@@ -592,7 +678,8 @@ extension ICloudSyncCoordinator: CKSyncEngineDelegate {
             return CKSyncEngine.RecordZoneChangeBatch(recordsToSave: try values.map(cloudRecord))
         } catch { report(error); return nil }
     }
-    nonisolated func nextFetchChangesOptions(_ context: CKSyncEngine.FetchChangesContext, syncEngine: CKSyncEngine) async -> CKSyncEngine.FetchChangesOptions {
+    nonisolated func nextFetchChangesOptions(_ context: CKSyncEngine.FetchChangesContext,
+                                             syncEngine: CKSyncEngine) async -> CKSyncEngine.FetchChangesOptions {
         await fetchOptions()
     }
     private func fetchOptions() -> CKSyncEngine.FetchChangesOptions { .init(scope: .zoneIDs([zoneID])) }

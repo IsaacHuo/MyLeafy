@@ -202,7 +202,10 @@ struct TeacherSectionView: View {
                     .foregroundStyle(AppTheme.danger)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    .background(
+                        AppTheme.cardBackground,
+                        in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    )
             }
 
             ForEach(filteredTeachers) { summary in
@@ -284,7 +287,7 @@ struct TeacherSectionView: View {
                         limit: pageSize,
                         offset: sourceOffset
                     )
-                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch else { return }
+                    guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch else { return }
                     sourceOffset += fetchedTeachers.count
 
                     let existingIDs = Set(teachers.map(\.id))

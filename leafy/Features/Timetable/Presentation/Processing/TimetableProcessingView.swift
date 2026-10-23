@@ -9,7 +9,7 @@ struct ManualCourseEditorItem: Identifiable, Hashable {
 
 nonisolated enum ManualCourseWeekSelection {
     static func normalized(_ weeks: some Sequence<Int>) -> [Int] {
-        Array(Set(weeks.filter { (1...SemesterConfig.supportedWeeks).contains($0) })).sorted()
+        Array(Set(weeks.filter { (1 ... SemesterConfig.supportedWeeks).contains($0) })).sorted()
     }
 
     static func summary(_ weeks: some Sequence<Int>) -> String {
@@ -27,11 +27,11 @@ nonisolated enum ManualCourseWeekSelection {
                 previousWeek = week
                 continue
             }
-            ranges.append(rangeStart...previousWeek)
+            ranges.append(rangeStart ... previousWeek)
             rangeStart = week
             previousWeek = week
         }
-        ranges.append(rangeStart...previousWeek)
+        ranges.append(rangeStart ... previousWeek)
 
         let text = ranges.map { range in
             range.lowerBound == range.upperBound
@@ -82,7 +82,7 @@ struct ManualCourseEditorSheet: View {
 
                 Section {
                     Picker("星期", selection: $dayOfWeek) {
-                        ForEach(1...7, id: \.self) { day in
+                        ForEach(1 ... 7, id: \.self) { day in
                             Text(dayTitle(day)).tag(day)
                         }
                     }
@@ -95,7 +95,7 @@ struct ManualCourseEditorSheet: View {
                     }
 
                     LazyVGrid(columns: weekColumns, spacing: 8) {
-                        ForEach(1...SemesterConfig.supportedWeeks, id: \.self) { week in
+                        ForEach(1 ... SemesterConfig.supportedWeeks, id: \.self) { week in
                             Button {
                                 if selectedWeeks.contains(week) {
                                     selectedWeeks.remove(week)
@@ -120,7 +120,7 @@ struct ManualCourseEditorSheet: View {
 
                     HStack {
                         Button("选择全部") {
-                            selectedWeeks = Set(1...SemesterConfig.supportedWeeks)
+                            selectedWeeks = Set(1 ... SemesterConfig.supportedWeeks)
                         }
                         Spacer()
                         Button("清空") {
@@ -136,13 +136,13 @@ struct ManualCourseEditorSheet: View {
 
                 Section("上课节次") {
                     Picker("开始节次", selection: $startPeriod) {
-                        ForEach(1...TimetablePeriodSchedule.slots.count, id: \.self) { period in
+                        ForEach(1 ... TimetablePeriodSchedule.slots.count, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
                         }
                     }
 
                     Picker("结束节次", selection: $endPeriod) {
-                        ForEach(1...TimetablePeriodSchedule.slots.count, id: \.self) { period in
+                        ForEach(1 ... TimetablePeriodSchedule.slots.count, id: \.self) { period in
                             Text(periodTitle(period)).tag(period)
                         }
                     }
@@ -175,17 +175,17 @@ struct ManualCourseEditorSheet: View {
         let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             try onSave(
-            Course(
-                courseName: trimmedName,
-                teacher: teacher.trimmingCharacters(in: .whitespacesAndNewlines),
-                classInfo: classInfo.trimmingCharacters(in: .whitespacesAndNewlines),
-                room: trimmedLocation,
-                location: trimmedLocation,
-                dayOfWeek: dayOfWeek,
-                weeks: ManualCourseWeekSelection.normalized(selectedWeeks),
-                duration: Array(startPeriod...endPeriod)
+                Course(
+                    courseName: trimmedName,
+                    teacher: teacher.trimmingCharacters(in: .whitespacesAndNewlines),
+                    classInfo: classInfo.trimmingCharacters(in: .whitespacesAndNewlines),
+                    room: trimmedLocation,
+                    location: trimmedLocation,
+                    dayOfWeek: dayOfWeek,
+                    weeks: ManualCourseWeekSelection.normalized(selectedWeeks),
+                    duration: Array(startPeriod ... endPeriod)
+                )
             )
-        )
             dismiss()
         } catch { operationAlert = .failure(error.localizedDescription) }
     }
@@ -231,7 +231,8 @@ struct TimetableProcessingView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("课表处理", systemImage: "slider.horizontal.3")
                             .leafyHeadline()
-                        Text(isCustomCampus ? "在这里集中完成手动添加课程、CSV 导入，以及清空当前通用入口本机课表数据。" : "此页面只处理通用入口的本机课表。北京林业大学入口请继续使用课表页右上角刷新教务课表。")
+                        Text(isCustomCampus ? "在这里集中完成手动添加课程、CSV 导入，以及清空当前通用入口本机课表数据。" :
+                            "此页面只处理通用入口的本机课表。北京林业大学入口请继续使用课表页右上角刷新教务课表。")
                             .leafyBody()
                             .foregroundStyle(AppTheme.secondaryText)
                     }
@@ -368,7 +369,11 @@ struct TimetableProcessingView: View {
             try scope.check()
             SchoolDataRefreshNotifier.post(.timetable)
             publishWidgetSnapshot()
-            operationAlert = .success(imported.reminderWarning ?? L10n.text("已导入 %d 门课程。", language: leafyLanguage, imported.count))
+            operationAlert = .success(imported.reminderWarning ?? L10n.text(
+                "已导入 %d 门课程。",
+                language: leafyLanguage,
+                imported.count
+            ))
         } catch {
             guard !scope.wasCancelled(error) else { return }
             operationAlert = .failure(error.localizedDescription)
@@ -384,7 +389,8 @@ struct TimetableProcessingView: View {
 
         let removedCourses = courses
         let removedCells = cellReminders
-        let courseNotificationIDs = removedCourses.flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) }
+        let courseNotificationIDs = removedCourses
+            .flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) }
         let cellKeys = removedCells.map(\.cellKey)
         let undoPersonalData: () -> Void
         do { undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: modelContext) }
@@ -416,7 +422,11 @@ struct TimetableProcessingView: View {
             var notificationWarning: String?
             do { try ScheduleReportNotificationManager.clearScheduledNotifications() }
             catch {
-                notificationWarning = L10n.text("课表数据已清空，但部分日程通知未清理：%@", language: leafyLanguage, error.localizedDescription)
+                notificationWarning = L10n.text(
+                    "课表数据已清空，但部分日程通知未清理：%@",
+                    language: leafyLanguage,
+                    error.localizedDescription
+                )
             }
             TimetableCacheMetadata.clear()
             CustomScheduleStore.clear()
@@ -464,7 +474,10 @@ struct TimetableCSVImportGuideSheet: View {
                                 .textSelection(.enabled)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.fill,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                             Text("dayOfWeek 使用 1-7 表示周一到周日；weeks 和 duration 支持 1-16、1,3,5 这类写法。")
                                 .microCaption()
                                 .foregroundStyle(AppTheme.secondaryText)
@@ -480,7 +493,10 @@ struct TimetableCSVImportGuideSheet: View {
                                 .textSelection(.enabled)
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.fill,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                         }
                     }
                 }
@@ -504,7 +520,7 @@ struct TimetableCSVImportGuideSheet: View {
     }
 
     private static let sampleCSV = """
-courseName,teacher,classInfo,room,location,dayOfWeek,weeks,duration
-高等数学,王老师,1班,A101,A101,1,1-16,1-2
-"""
+    courseName,teacher,classInfo,room,location,dayOfWeek,weeks,duration
+    高等数学,王老师,1班,A101,A101,1,1-16,1-2
+    """
 }

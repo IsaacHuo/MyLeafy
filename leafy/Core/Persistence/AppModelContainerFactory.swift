@@ -16,11 +16,13 @@ enum AppModelContainerFactory {
         let schema = Schema([
             Course.self, Grade.self,
             CourseNote.self, CourseOccurrenceNote.self, CourseReminderSetting.self, TimetableCellReminder.self,
-            FavoriteClassroom.self, FavoriteCampusLink.self, PostgraduateTarget.self, StudyTimeRecord.self, HonorRecord.self,
+            FavoriteClassroom.self, FavoriteCampusLink.self, PostgraduateTarget.self, StudyTimeRecord.self,
+            HonorRecord.self,
             LearningMaterialDocument.self, LearningProject.self, LearningProjectTask.self,
             CareerResumeDocument.self, CareerTask.self, CareerOpportunity.self,
             FitnessTestRecord.self,
-            ComprehensiveQualityRecord.self, ComprehensiveQualityComponentEntry.self, ComprehensiveQualityEvidenceDocument.self,
+            ComprehensiveQualityRecord.self, ComprehensiveQualityComponentEntry.self,
+            ComprehensiveQualityEvidenceDocument.self,
             MedicalLedgerEntry.self, MedicalLedgerPhoto.self,
             ScheduleMemo.self, ScheduleMemoImage.self, ScheduleMemoAttachment.self, ScheduleMemoAudio.self,
         ])
@@ -40,7 +42,10 @@ enum AppModelContainerFactory {
 
     static func open(schema: Schema, configuration: ModelConfiguration) throws -> ModelContainer {
         if !configuration.isStoredInMemoryOnly {
-            try FileManager.default.createDirectory(at: configuration.url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: configuration.url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
         }
         return try ModelContainer(for: schema, configurations: [configuration])
     }

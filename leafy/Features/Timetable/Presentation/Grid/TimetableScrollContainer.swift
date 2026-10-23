@@ -299,7 +299,10 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 cornerWidthConstraint!,
                 cornerHeightConstraint!,
 
-                headerScrollView.leadingAnchor.constraint(equalTo: cornerContainer.trailingAnchor, constant: AppSpacing.micro),
+                headerScrollView.leadingAnchor.constraint(
+                    equalTo: cornerContainer.trailingAnchor,
+                    constant: AppSpacing.micro
+                ),
                 headerScrollView.topAnchor.constraint(equalTo: rootView.topAnchor),
                 headerScrollView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
                 headerHeightConstraint!,
@@ -309,7 +312,10 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 axisScrollView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor),
                 axisWidthConstraint!,
 
-                bodyScrollView.leadingAnchor.constraint(equalTo: axisScrollView.trailingAnchor, constant: AppSpacing.micro),
+                bodyScrollView.leadingAnchor.constraint(
+                    equalTo: axisScrollView.trailingAnchor,
+                    constant: AppSpacing.micro
+                ),
                 bodyScrollView.topAnchor.constraint(equalTo: headerScrollView.bottomAnchor, constant: AppSpacing.micro),
                 bodyScrollView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
                 bodyScrollView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor)
@@ -320,7 +326,8 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             embed(host: axisHost, in: axisScrollView, pinToContentGuide: true)
             embed(host: bodyHost, in: bodyScrollView, pinToContentGuide: true)
 
-            headerHost.view.heightAnchor.constraint(equalTo: headerScrollView.frameLayoutGuide.heightAnchor).isActive = true
+            headerHost.view.heightAnchor.constraint(equalTo: headerScrollView.frameLayoutGuide.heightAnchor)
+                .isActive = true
             axisHost.view.widthAnchor.constraint(equalTo: axisScrollView.frameLayoutGuide.widthAnchor).isActive = true
 
             rootView.bringSubviewToFront(bodyScrollView)
@@ -686,7 +693,8 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
             return min(max(rawIndex + 1, 1), parent.totalWeeks)
         }
 
-        private func embed(host: UIHostingController<some View>, in container: UIView, pinToContentGuide: Bool = false) {
+        private func embed(host: UIHostingController<some View>, in container: UIView,
+                           pinToContentGuide: Bool = false) {
             host.view.translatesAutoresizingMaskIntoConstraints = false
             host.view.backgroundColor = .clear
             container.addSubview(host.view)

@@ -1297,7 +1297,8 @@ struct RealCommunitySectionView: View {
 }
 
 struct CommunityPollFeedCard: View {
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
 
     let poll: CommunityPoll
     let onOpen: () -> Void
@@ -1537,7 +1538,7 @@ struct CommunitySearchSheet: View {
                     selectedPost = nil
                     searchRefreshID = UUID()
                 }
-                    .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large])
             }
         }
     }
@@ -1665,7 +1666,7 @@ struct CommunityPollsSheet: View {
                 CommunityPollComposerSheet(viewModel: viewModel) {
                     operationAlert = .success(L10n.text("投票已提交审核。", language: leafyLanguage))
                 }
-                    .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large])
             }
             .leafySheet(isPresented: $showingProfileEditor) {
                 CommunityProfileEditorSheet()
@@ -1675,7 +1676,7 @@ struct CommunityPollsSheet: View {
                 CommunityTermsAgreementSheet {
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
-                    .presentationDetents([.large])
+                .presentationDetents([.large])
             }
             .confirmationDialog("申请删除这个投票？", isPresented: Binding(
                 get: { deletionTarget != nil },
@@ -2012,7 +2013,10 @@ struct CommunityPollComposerSheet: View {
                     }
                 }
                 ToolbarItem(placement: .leafyTrailing) {
-                    Button(isSubmitting ? L10n.text("发布中", language: leafyLanguage) : L10n.text("发布", language: leafyLanguage)) {
+                    Button(isSubmitting ? L10n.text("发布中", language: leafyLanguage) : L10n.text(
+                        "发布",
+                        language: leafyLanguage
+                    )) {
                         Task { await submit() }
                     }
                     .disabled(isSubmitting || input.validationError != nil)
@@ -2103,7 +2107,10 @@ struct CommunityPollDraftFields: View {
                         .leafyDisableAutocapitalization()
                         .autocorrectionDisabled()
                         .padding(14)
-                        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                        .background(
+                            AppTheme.fill,
+                            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        )
 
                     if options.count > CommunityPollRules.minOptions {
                         Button {
@@ -2527,7 +2534,8 @@ struct CommunityPublishTaskRow: View {
 
             ForEach(task.media) { media in
                 HStack(spacing: 8) {
-                    Image(systemName: media.kind == .image ? "photo" : CommunityComposerAttachmentTypes.systemImage(for: media.fileExtension))
+                    Image(systemName: media.kind == .image ? "photo" : CommunityComposerAttachmentTypes
+                        .systemImage(for: media.fileExtension))
                         .foregroundStyle(AppTheme.secondaryText)
                     Text(media.displayName)
                         .microCaption()

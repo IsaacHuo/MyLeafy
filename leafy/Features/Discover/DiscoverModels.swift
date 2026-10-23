@@ -396,18 +396,19 @@ enum GraduationCreditProgressCalculator {
         grades: [Grade],
         creditSummary: GradeCreditSummary? = nil
     ) -> GraduationCreditProgress {
-        let passedGrades = EffectiveGradeCourseResolver.resolve(from: grades).compactMap { course -> PassedGradeCredit? in
-            guard course.isPassed else {
-                return nil
-            }
+        let passedGrades = EffectiveGradeCourseResolver.resolve(from: grades)
+            .compactMap { course -> PassedGradeCredit? in
+                guard course.isPassed else {
+                    return nil
+                }
 
-            return PassedGradeCredit(
-                name: course.name,
-                credit: course.credit,
-                kind: GraduationCreditKind.classify(course.type + course.name),
-                category: fallbackCompletedCategory(type: course.type, courseName: course.name)
-            )
-        }
+                return PassedGradeCredit(
+                    name: course.name,
+                    credit: course.credit,
+                    kind: GraduationCreditKind.classify(course.type + course.name),
+                    category: fallbackCompletedCategory(type: course.type, courseName: course.name)
+                )
+            }
 
         let totalCompleted = creditSummary?.hasCreditTotals == true
             ? creditSummary?.totalCredits ?? 0
@@ -440,7 +441,10 @@ enum GraduationCreditProgressCalculator {
         }
 
         if let creditSummary, creditSummary.hasCreditTotals {
-            let publicKey = categoryKey(kind: .publicElective, category: GraduationCreditKind.publicElective.displayName)
+            let publicKey = categoryKey(
+                kind: .publicElective,
+                category: GraduationCreditKind.publicElective.displayName
+            )
             completedByCategory[publicKey] = (
                 creditSummary.publicElectiveCredits,
                 estimatedCourseCount(
@@ -449,7 +453,10 @@ enum GraduationCreditProgressCalculator {
                 )
             )
 
-            let professionalKey = categoryKey(kind: .professionalElective, category: GraduationCreditKind.professionalElective.displayName)
+            let professionalKey = categoryKey(
+                kind: .professionalElective,
+                category: GraduationCreditKind.professionalElective.displayName
+            )
             completedByCategory[professionalKey] = (
                 creditSummary.professionalMajorElectiveCredits,
                 estimatedCourseCount(
@@ -478,8 +485,10 @@ enum GraduationCreditProgressCalculator {
                 completedCredits: completed.credits,
                 completedCourseCount: completed.courses,
                 hasCompletedCredits: isKnown,
-                completedBuckets: requirement.kind == .publicElective ? (creditSummary?.publicCoveredBuckets ?? []) : [],
-                missingBucketNames: requirement.kind == .publicElective ? (creditSummary?.publicMissingBucketNames ?? []) : []
+                completedBuckets: requirement
+                    .kind == .publicElective ? (creditSummary?.publicCoveredBuckets ?? []) : [],
+                missingBucketNames: requirement
+                    .kind == .publicElective ? (creditSummary?.publicMissingBucketNames ?? []) : []
             )
         }
         .sorted { lhs, rhs in
@@ -510,7 +519,8 @@ enum GraduationCreditProgressCalculator {
         let requiredCredits: Double
     }
 
-    private static func groupedCategoryRequirements(from requirements: [GraduationCreditRequirement]) -> [CategoryRequirement] {
+    private static func groupedCategoryRequirements(from requirements: [GraduationCreditRequirement])
+        -> [CategoryRequirement] {
         let nonTotal = requirements.filter { $0.kind != .total }
         let aggregate = nonTotal.filter(\.isAggregate)
         let source = aggregate.isEmpty ? nonTotal : aggregate
@@ -526,7 +536,8 @@ enum GraduationCreditProgressCalculator {
                 grouped[key] = CategoryRequirement(
                     category: current.category,
                     kind: current.kind,
-                    requiredCredits: requirement.isAggregate ? max(current.requiredCredits, credits) : current.requiredCredits + credits
+                    requiredCredits: requirement.isAggregate ? max(current.requiredCredits, credits) : current
+                        .requiredCredits + credits
                 )
             } else {
                 grouped[key] = CategoryRequirement(
@@ -585,7 +596,6 @@ enum GraduationCreditProgressCalculator {
             return 3
         }
     }
-
 }
 
 private extension Double {
@@ -827,7 +837,10 @@ enum CustomScheduleStore {
     }
     static func loadForSync(defaults: UserDefaults = .standard) throws -> [CustomScheduleEvent] {
         let key = CampusScopedDefaults.key(storageKey, defaults: defaults)
-        if let data = defaults.data(forKey: key) { return try JSONDecoder().decode([CustomScheduleEvent].self, from: data) }
+        if let data = defaults.data(forKey: key) { return try JSONDecoder().decode(
+            [CustomScheduleEvent].self,
+            from: data
+        ) }
         guard let legacy = defaults.data(forKey: storageKey) else { return [] }
         let events = try JSONDecoder().decode([CustomScheduleEvent].self, from: legacy)
         // Adopt legacy unscoped data once, before any identity can sync it.
@@ -1115,7 +1128,7 @@ enum SchoolDataCache {
         let scopedEmptyClassroomPrefix = scoped(emptyClassroomPrefix)
         let scopedClassroomUsagePrefix = scoped(classroomUsagePrefix)
         for key in defaults.dictionaryRepresentation().keys
-        where key.hasPrefix(scopedEmptyClassroomPrefix) || key.hasPrefix(scopedClassroomUsagePrefix) {
+            where key.hasPrefix(scopedEmptyClassroomPrefix) || key.hasPrefix(scopedClassroomUsagePrefix) {
             defaults.removeObject(forKey: key)
         }
     }
@@ -1159,7 +1172,6 @@ enum SchoolDataCache {
     private static func scoped(_ key: String) -> String {
         CampusScopedDefaults.key(key)
     }
-
 }
 
 enum SchoolCacheKind {

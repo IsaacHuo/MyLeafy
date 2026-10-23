@@ -115,7 +115,7 @@ struct TeacherFilterToolbar: View {
                 Button("全部星级") {
                     selectedStars = nil
                 }
-                ForEach((1...5).reversed(), id: \.self) { stars in
+                ForEach((1 ... 5).reversed(), id: \.self) { stars in
                     Button {
                         selectedStars = stars
                     } label: {
@@ -268,7 +268,7 @@ struct CourseFilterToolbar: View {
                 Button("全部星级") {
                     selectedStars = nil
                 }
-                ForEach((1...5).reversed(), id: \.self) { stars in
+                ForEach((1 ... 5).reversed(), id: \.self) { stars in
                     Button {
                         selectedStars = stars
                     } label: {
@@ -414,7 +414,8 @@ struct DishFilterToolbar: View {
                     Button {
                         selectedCanteen = canteen
                         if let currentLocation = selectedLocation,
-                           !CampusDiningLocation.locations(for: canteen).contains(where: { $0.fullName == currentLocation }) {
+                           !CampusDiningLocation.locations(for: canteen)
+                               .contains(where: { $0.fullName == currentLocation }) {
                             selectedLocation = nil
                         }
                     } label: {
@@ -438,7 +439,10 @@ struct DishFilterToolbar: View {
                         selectedCanteen = location.canteen
                         selectedLocation = location.fullName
                     } label: {
-                        Label(location.displayName, systemImage: selectedLocation == location.fullName ? "checkmark.circle.fill" : "circle")
+                        Label(
+                            location.displayName,
+                            systemImage: selectedLocation == location.fullName ? "checkmark.circle.fill" : "circle"
+                        )
                     }
                 }
             } label: {
@@ -453,7 +457,7 @@ struct DishFilterToolbar: View {
                 Button("全部星级") {
                     selectedStars = nil
                 }
-                ForEach((1...5).reversed(), id: \.self) { stars in
+                ForEach((1 ... 5).reversed(), id: \.self) { stars in
                     Button {
                         selectedStars = stars
                     } label: {
@@ -579,16 +583,17 @@ struct CatalogSuggestionSheet: View {
 
     private var canSubmit: Bool {
         !trimmedName.isEmpty &&
-        !trimmedUnit.isEmpty &&
-        (context.type != .course || !trimmedTeacherName.isEmpty) &&
-        isCreditValid &&
-        !isSubmitting
+            !trimmedUnit.isEmpty &&
+            (context.type != .course || !trimmedTeacherName.isEmpty) &&
+            isCreditValid &&
+            !isSubmitting
     }
 
     init(context: CatalogSuggestionSheetContext) {
         self.context = context
         _name = State(initialValue: context.initialName)
-        _category = State(initialValue: context.initialCategory?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "公选课")
+        _category = State(initialValue: context.initialCategory?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty ?? "公选课")
         let initialLocation = context.initialLocation.flatMap(CampusDiningLocation.location(for:))
         _selectedCanteen = State(initialValue: initialLocation?.canteen)
         _selectedDishLocation = State(initialValue: initialLocation?.fullName)
@@ -613,7 +618,10 @@ struct CatalogSuggestionSheet: View {
                             .foregroundStyle(AppTheme.secondaryText)
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.cardBackground,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
@@ -685,7 +693,10 @@ struct CatalogSuggestionSheet: View {
                                 .scrollContentBackground(.hidden)
                                 .frame(minHeight: 92)
                                 .padding(10)
-                                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.cardBackground,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -763,7 +774,8 @@ struct CatalogSuggestionSheet: View {
             name: trimmedName,
             unit: trimmedUnit,
             teacherName: context.type == .course ? trimmedTeacherName : nil,
-            category: context.type == .course ? category.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "公选课" : nil,
+            category: context.type == .course ? category.trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty ?? "公选课" : nil,
             credit: context.type == .course ? parsedCredit : nil,
             initialStars: initialStars == 0 ? nil : initialStars,
             note: note.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
@@ -822,7 +834,10 @@ struct CatalogSuggestionOptionMenu: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 44)
-                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -856,7 +871,8 @@ struct CatalogSuggestionDiningLocationPicker: View {
                     set: { canteen in
                         selectedCanteen = canteen.isEmpty ? nil : canteen
                         if let selectedLocation,
-                           !CampusDiningLocation.locations(for: canteen).contains(where: { $0.fullName == selectedLocation }) {
+                           !CampusDiningLocation.locations(for: canteen)
+                               .contains(where: { $0.fullName == selectedLocation }) {
                             self.selectedLocation = nil
                         }
                     }
@@ -922,7 +938,10 @@ struct CatalogSuggestionPickerMenu: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 44)
-                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)
@@ -952,7 +971,10 @@ struct CatalogSuggestionTextField: View {
                 .leafyBody()
                 .padding(.horizontal, 12)
                 .frame(height: 44)
-                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .background(
+                    AppTheme.cardBackground,
+                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .stroke(AppTheme.separator.opacity(0.7), lineWidth: 1)

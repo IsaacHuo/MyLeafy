@@ -70,7 +70,8 @@ struct CustomCampusAuthSession: Equatable, Sendable {
 
 struct CustomCampusAuthService: Sendable {
     private let clientProvider: @Sendable () throws -> MyLeafyBackendClient
-    init(clientProvider: @escaping @Sendable () throws -> MyLeafyBackendClient = { try MyLeafyBackendEnvironment.client() }) {
+    init(clientProvider: @escaping @Sendable () throws
+        -> MyLeafyBackendClient = { try MyLeafyBackendEnvironment.client() }) {
         self.clientProvider = clientProvider
     }
     func signIn(email: String, password: String) async throws -> CustomCampusAuthSession {
@@ -154,7 +155,8 @@ struct CustomCampusAuthService: Sendable {
         case "OTP_EXPIRED": return CustomCampusAuthError.expiredCode
         case "INVALID_OTP": return CustomCampusAuthError.invalidCode
         case "TOO_MANY_REQUESTS", "TOO_MANY_ATTEMPTS": return CustomCampusAuthError.emailRateLimited
-        case "USER_ALREADY_EXISTS", "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL": return CustomCampusAuthError.userAlreadyExists
+        case "USER_ALREADY_EXISTS",
+             "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL": return CustomCampusAuthError.userAlreadyExists
         case "EMAIL_DELIVERY_FAILED", "EMAIL_UNAVAILABLE": return CustomCampusAuthError.codeSendFailed
         default: return error.status == 429 ? CustomCampusAuthError.emailRateLimited : error
         }

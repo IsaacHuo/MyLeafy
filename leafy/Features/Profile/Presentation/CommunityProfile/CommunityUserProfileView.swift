@@ -96,7 +96,7 @@ struct CommunityUserProfileView: View {
                 posts.removeAll { $0.id == post.id }
                 selectedPost = nil
             }
-                .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -452,7 +452,10 @@ struct CommunityUserProfileView: View {
         var badges: [ProfileBadge] = []
 
         if profile.showsEduVerificationBadge {
-            badges.append(ProfileBadge(title: L10n.text("已完成教务实名", language: leafyLanguage), tint: AppTheme.accentEmphasis))
+            badges.append(ProfileBadge(
+                title: L10n.text("已完成教务实名", language: leafyLanguage),
+                tint: AppTheme.accentEmphasis
+            ))
         }
 
         return badges
@@ -475,7 +478,8 @@ struct CommunityUserProfileView: View {
 
         guard scope.isCurrent, !Task.isCancelled else { return }
         guard let targetID = profile?.id ?? profileID else {
-            errorMessage = sessionManager.bootstrapError ?? CommunityServiceError.missingAuthenticatedUser.localizedDescription
+            errorMessage = sessionManager.bootstrapError ?? CommunityServiceError.missingAuthenticatedUser
+                .localizedDescription
             posts = []
             return
         }
@@ -490,7 +494,7 @@ struct CommunityUserProfileView: View {
                 : dependencies.communityActivityRepository.fetchPublicPosts(authoredBy: targetID, limit: 30)
             async let statsRequest = fetchProfileStats(targetID)
 
-            let (loadedProfile, loadedPosts, loadedStats) = try await (profileRequest, postsRequest, statsRequest)
+            let (loadedProfile, loadedPosts, loadedStats) = try await(profileRequest, postsRequest, statsRequest)
             try scope.check()
             if let loadedProfile {
                 profile = loadedProfile

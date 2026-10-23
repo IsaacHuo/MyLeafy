@@ -246,7 +246,10 @@ struct ExternalLearningMaterialImportStore {
             try removeBatch(id)
             return original
         } catch {
-            return ExternalLearningMaterialImportError.cleanupFailed(original.localizedDescription, error.localizedDescription)
+            return ExternalLearningMaterialImportError.cleanupFailed(
+                original.localizedDescription,
+                error.localizedDescription
+            )
         }
     }
 
@@ -382,12 +385,16 @@ struct ExternalLearningMaterialImportStore {
         .sorted { $0.createdAt > $1.createdAt }
     }
 
-    func stagedFileURL(for item: ExternalLearningMaterialImportItem, in manifest: ExternalLearningMaterialImportManifest) throws -> URL {
+    func stagedFileURL(
+        for item: ExternalLearningMaterialImportItem,
+        in manifest: ExternalLearningMaterialImportManifest
+    ) throws -> URL {
         try validateBatch(manifest.items)
         guard manifest.items.contains(item) else { throw ExternalLearningMaterialImportError.invalidManifest }
         let directory = batchDirectoryURL(for: manifest.id).resolvingSymlinksInPath().standardizedFileURL
         let url = directory.appendingPathComponent(item.stagedFilename).resolvingSymlinksInPath().standardizedFileURL
-        guard url.deletingLastPathComponent() == directory else { throw ExternalLearningMaterialImportError.invalidManifest }
+        guard url.deletingLastPathComponent() == directory
+        else { throw ExternalLearningMaterialImportError.invalidManifest }
         guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else {
             throw ExternalLearningMaterialImportError.missingStagedFile(item.originalFilename)
         }
@@ -419,7 +426,9 @@ struct ExternalLearningMaterialImportStore {
             let referenceDate = manifestDate ?? creationDate ?? .distantPast
             if now.timeIntervalSince(referenceDate) > ExternalLearningMaterialImport.stagingLifetime {
                 do { try fileManager.removeItem(at: directory) }
-                catch { Self.logger.error("Expired import cleanup failed: \(error.localizedDescription, privacy: .private)") }
+                catch {
+                    Self.logger
+                        .error("Expired import cleanup failed: \(error.localizedDescription, privacy: .private)") }
             }
         }
     }
@@ -459,7 +468,10 @@ struct ExternalLearningMaterialImportStore {
                   item.byteCount > 0, item.byteCount <= ExternalLearningMaterialImport.maximumFileBytes,
                   !item.stagedFilename.isEmpty, item.stagedFilename != ".", item.stagedFilename != "..",
                   !item.stagedFilename.contains("/"), !item.stagedFilename.contains("\\"),
-                  ExternalLearningMaterialImport.isSupported(filename: item.originalFilename, contentTypeIdentifier: item.contentTypeIdentifier) else {
+                  ExternalLearningMaterialImport.isSupported(
+                      filename: item.originalFilename,
+                      contentTypeIdentifier: item.contentTypeIdentifier
+                  ) else {
                 throw ExternalLearningMaterialImportError.invalidManifest
             }
         }

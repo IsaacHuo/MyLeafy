@@ -4,9 +4,9 @@ import SwiftSoup
 extension SchoolNetworkManager {
     var allowsDebugSnapshots: Bool {
         #if DEBUG
-        return UserDefaults.standard.bool(forKey: "leafy.debug.allowSchoolSnapshots")
+            return UserDefaults.standard.bool(forKey: "leafy.debug.allowSchoolSnapshots")
         #else
-        return false
+            return false
         #endif
     }
 
@@ -56,7 +56,7 @@ extension SchoolNetworkManager {
 
         updatePersistedCookies(from: httpResponse, requestURL: preparedRequest.url)
 
-        guard (200...299).contains(httpResponse.statusCode) else {
+        guard (200 ... 299).contains(httpResponse.statusCode) else {
             throw URLError(.badServerResponse)
         }
 
@@ -173,10 +173,11 @@ extension SchoolNetworkManager {
     func updatePersistedCookies(from response: HTTPURLResponse, requestURL: URL?) {
         guard let url = response.url ?? requestURL, isSchoolURL(url) else { return }
 
-        let responseHeaders: [String: String] = Dictionary(uniqueKeysWithValues: response.allHeaderFields.compactMap { key, value in
-            guard let keyString = key as? String else { return nil }
-            return (keyString, String(describing: value))
-        })
+        let responseHeaders: [String: String] = Dictionary(uniqueKeysWithValues: response.allHeaderFields
+            .compactMap { key, value in
+                guard let keyString = key as? String else { return nil }
+                return (keyString, String(describing: value))
+            })
         let responseCookies = HTTPCookie.cookies(withResponseHeaderFields: responseHeaders, for: url)
         var mergedCookies = persistedCookieValues
 
@@ -288,13 +289,13 @@ extension SchoolNetworkManager {
 
     func cookieDebugSummary(for url: URL?) -> String {
         #if DEBUG
-        guard let url else { return "cookies: unavailable" }
-        let names = Set(persistedCookieValues.keys)
-            .union(session.configuration.httpCookieStorage?.cookies(for: url)?.map(\.name) ?? [])
-            .sorted()
-        return names.isEmpty ? "cookies: none" : "cookie names: \(names.joined(separator: ", "))"
+            guard let url else { return "cookies: unavailable" }
+            let names = Set(persistedCookieValues.keys)
+                .union(session.configuration.httpCookieStorage?.cookies(for: url)?.map(\.name) ?? [])
+                .sorted()
+            return names.isEmpty ? "cookies: none" : "cookie names: \(names.joined(separator: ", "))"
         #else
-        return "cookies: redacted"
+            return "cookies: redacted"
         #endif
     }
 
@@ -365,7 +366,8 @@ extension SchoolNetworkManager {
     func pageDebugSummary(html: String, responseURL: URL?, snapshotName: String) -> String {
         let title: String = {
             guard let document = try? SwiftSoup.parse(html) else { return L10n.text("无标题") }
-            return ((try? document.title())?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.text("无标题")
+            return ((try? document.title())?.trimmingCharacters(in: .whitespacesAndNewlines))
+                .flatMap { $0.isEmpty ? nil : $0 } ?? L10n.text("无标题")
         }()
 
         let bodyText: String = {
@@ -380,11 +382,11 @@ extension SchoolNetworkManager {
         let urlPart = responseURL?.absoluteString ?? "unknown"
 
         #if DEBUG
-        let textPart = bodyText.isEmpty ? "" : L10n.text("，正文前缀：%@", bodyText)
-        let cookiePart = responseURL.map { L10n.text("，%@", cookieDebugSummary(for: $0)) } ?? ""
-        return L10n.text("URL: %@，标题: %@%@%@", urlPart, title, textPart, cookiePart)
+            let textPart = bodyText.isEmpty ? "" : L10n.text("，正文前缀：%@", bodyText)
+            let cookiePart = responseURL.map { L10n.text("，%@", cookieDebugSummary(for: $0)) } ?? ""
+            return L10n.text("URL: %@，标题: %@%@%@", urlPart, title, textPart, cookiePart)
         #else
-        return L10n.text("页面返回异常，URL: %@，标题: %@。请确认校园网连接，或重新登录后重试。", urlPart, title)
+            return L10n.text("页面返回异常，URL: %@，标题: %@。请确认校园网连接，或重新登录后重试。", urlPart, title)
         #endif
     }
 
@@ -478,7 +480,7 @@ extension SchoolNetworkManager {
         }
 
         let scope = CampusOperationScope()
-        for attempt in 0...max(0, retryCount) {
+        for attempt in 0 ... max(0, retryCount) {
             guard scope.isCurrent, !Task.isCancelled else { return false }
             do {
                 let (html, response) = try await html(from: url)

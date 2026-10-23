@@ -18,15 +18,22 @@ enum TimetableSingleContainerMigration {
         do {
             for note in try context.fetch(FetchDescriptor<CourseNote>()) where keys.contains(note.courseKey) {
                 note.isUnassociated = true
-                note.sourceCourseTitle = removed.first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?.courseName ?? ""
+                note.sourceCourseTitle = removed
+                    .first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?
+                    .courseName ?? ""
             }
             for note in try context.fetch(FetchDescriptor<CourseOccurrenceNote>()) where keys.contains(note.courseKey) {
                 note.isUnassociated = true
-                note.sourceCourseTitle = removed.first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?.courseName ?? ""
+                note.sourceCourseTitle = removed
+                    .first { $0.stableCourseKey == note.courseKey || $0.legacyStableCourseKey == note.courseKey }?
+                    .courseName ?? ""
             }
-            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>()) where keys.contains(setting.courseKey) {
+            for setting in try context.fetch(FetchDescriptor<CourseReminderSetting>())
+                where keys.contains(setting.courseKey) {
                 setting.isUnassociated = true
-                setting.sourceCourseTitle = removed.first { $0.stableCourseKey == setting.courseKey || $0.legacyStableCourseKey == setting.courseKey }?.courseName ?? ""
+                setting.sourceCourseTitle = removed
+                    .first { $0.stableCourseKey == setting.courseKey || $0.legacyStableCourseKey == setting.courseKey }?
+                    .courseName ?? ""
             }
             for course in removed { context.delete(course) }
             try context.save()

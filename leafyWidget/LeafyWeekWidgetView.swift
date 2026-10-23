@@ -120,20 +120,25 @@ private struct LeafyWeekDayColumn: View {
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(palette.brand.opacity(isToday ? 0.08 : 0.025))
-                ForEach(Array(stride(from: ceil(startMinute / 120) * 120, to: endMinute, by: 120)), id: \.self) { minute in
+                ForEach(Array(stride(from: ceil(startMinute / 120) * 120, to: endMinute, by: 120)),
+                        id: \.self) { minute in
                     Rectangle().fill(palette.tertiary.opacity(0.12)).frame(height: 0.5)
                         .offset(y: (minute - startMinute) * scale)
                 }
                 ForEach(blocks) { block in
-                    let width = max((geometry.size.width - CGFloat(block.laneCount - 1) * 1.5) / CGFloat(block.laneCount), 1)
+                    let width = max(
+                        (geometry.size.width - CGFloat(block.laneCount - 1) * 1.5) / CGFloat(block.laneCount),
+                        1
+                    )
                     let y = max((block.startMinute - startMinute) * scale, 0)
                     let height = max(min((block.endMinute - block.startMinute) * scale - 1,
                                          geometry.size.height - y), 1)
-                    Link(destination: block.hiddenCount > 0 ? LeafyWidgetRoute.schedules.url : block.segment.item.destination) {
-                        LeafyWeekBlockLabel(block: block, now: now, height: height, palette: palette)
-                    }
-                    .frame(width: width, height: height)
-                    .offset(x: CGFloat(block.lane) * (width + 1.5), y: y)
+                    Link(destination: block.hiddenCount > 0 ? LeafyWidgetRoute.schedules.url : block.segment.item
+                        .destination) {
+                            LeafyWeekBlockLabel(block: block, now: now, height: height, palette: palette)
+                        }
+                        .frame(width: width, height: height)
+                        .offset(x: CGFloat(block.lane) * (width + 1.5), y: y)
                 }
             }
             .clipped()

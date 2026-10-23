@@ -15,7 +15,10 @@ struct ScheduleReportsView: View {
     private let onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)?
     private let presentation: SchedulePrimaryContentPresentation
 
-    init(presentation: SchedulePrimaryContentPresentation = .standalone, onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil) {
+    init(
+        presentation: SchedulePrimaryContentPresentation = .standalone,
+        onVerticalScroll: ((LeafyVerticalScrollSample) -> Void)? = nil
+    ) {
         self.onVerticalScroll = onVerticalScroll
         self.presentation = presentation
     }
@@ -26,26 +29,26 @@ struct ScheduleReportsView: View {
 
     var body: some View {
         configuredReports
-        .onAppear {
-            do {
-                let loaded = try ScheduleReportSettingsStore.loadForEditing()
-                let checkedInput = try ScheduleReportDataSource.inputForScheduling(modelContext: modelContext)
-                settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: checkedInput)
-                settings.deriveEnabledState()
-                lastAppliedSettings = settings
-                try ScheduleReportSettingsStore.save(settings)
-            } catch { operationAlert = .failure(error.localizedDescription) }
-        }
-        .onDisappear { applyTask?.cancel() }
-        .leafySheet(isPresented: $isEditorPresented) {
-            ScheduleReminderEditor(input: input) { savedReminder in
-                var updated = settings
-                updated.reminders.append(savedReminder)
-                updated.deriveEnabledState()
-                apply(updated, debounce: false)
+            .onAppear {
+                do {
+                    let loaded = try ScheduleReportSettingsStore.loadForEditing()
+                    let checkedInput = try ScheduleReportDataSource.inputForScheduling(modelContext: modelContext)
+                    settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: checkedInput)
+                    settings.deriveEnabledState()
+                    lastAppliedSettings = settings
+                    try ScheduleReportSettingsStore.save(settings)
+                } catch { operationAlert = .failure(error.localizedDescription) }
             }
-        }
-        .leafyOperationAlert($operationAlert)
+            .onDisappear { applyTask?.cancel() }
+            .leafySheet(isPresented: $isEditorPresented) {
+                ScheduleReminderEditor(input: input) { savedReminder in
+                    var updated = settings
+                    updated.reminders.append(savedReminder)
+                    updated.deriveEnabledState()
+                    apply(updated, debounce: false)
+                }
+            }
+            .leafyOperationAlert($operationAlert)
     }
 
     @ViewBuilder
@@ -305,10 +308,9 @@ private struct ScheduleReminderCard: View {
                             .map { ScheduleReminderPresentation.leadText($0) }
                             .joined(separator: " · ")
                     )
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.tertiaryText)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.tertiaryText)
                 }
-
             }
         }
     }
@@ -492,7 +494,7 @@ private struct ScheduleReminderEditor: View {
         case .freeform:
             TextField("标题", text: $title)
             TextField("正文（可选）", text: $bodyText, axis: .vertical)
-                .lineLimit(2...5)
+                .lineLimit(2 ... 5)
             DatePicker(
                 "发生时间",
                 selection: $fireDate,
@@ -653,7 +655,8 @@ private enum ScheduleReminderPresentation {
             guard let exam = input.exams.first(where: { $0.id == examID }) else { return "原日程已不可用" }
             return "\(exam.date) \(exam.start) · \(exam.location)"
         case .calendar(let eventID):
-            guard let event = AcademicCalendarEvents.displayEvents().first(where: { $0.id == eventID }) else { return "原日程已不可用" }
+            guard let event = AcademicCalendarEvents.displayEvents().first(where: { $0.id == eventID })
+            else { return "原日程已不可用" }
             return event.startDate?.formatted(date: .abbreviated, time: .omitted) ?? event.startDateString
         case .course(_, let scope, let occurrenceDate):
             if scope == .remainingSemester {
@@ -666,9 +669,9 @@ private enum ScheduleReminderPresentation {
     static func leadText(_ minutes: Int) -> String {
         switch minutes {
         case 0: return "准时"
-        case 1..<60: return "提前 \(minutes) 分钟"
+        case 1 ..< 60: return "提前 \(minutes) 分钟"
         case 60 where minutes % 60 == 0: return "提前 1 小时"
-        case 60..<1_440 where minutes % 60 == 0: return "提前 \(minutes / 60) 小时"
+        case 60 ..< 1_440 where minutes % 60 == 0: return "提前 \(minutes / 60) 小时"
         case 1_440: return "提前 1 天"
         case 1_440... where minutes % 1_440 == 0: return "提前 \(minutes / 1_440) 天"
         default: return "提前 \(minutes) 分钟"

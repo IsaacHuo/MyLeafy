@@ -65,9 +65,9 @@ struct DishSectionView: View {
 
     private var hasActiveFilters: Bool {
         selectedCanteen != nil ||
-        selectedLocation != nil ||
-        selectedStars != nil ||
-        !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            selectedLocation != nil ||
+            selectedStars != nil ||
+            !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -178,7 +178,10 @@ struct DishSectionView: View {
                     .foregroundStyle(AppTheme.danger)
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    .background(
+                        AppTheme.cardBackground,
+                        in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    )
             }
 
             ForEach(filteredDishes) { summary in
@@ -200,16 +203,16 @@ struct DishSectionView: View {
 
     private var emptyDishTitle: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        selectedCanteen == nil &&
-        selectedLocation == nil
+            selectedCanteen == nil &&
+            selectedLocation == nil
             ? "暂无菜品库"
             : "没有找到菜品"
     }
 
     private var emptyDishMessage: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        selectedCanteen == nil &&
-        selectedLocation == nil
+            selectedCanteen == nil &&
+            selectedLocation == nil
             ? "先提交常吃菜品，审核通过后这里会显示可评分的菜品列表。"
             : "提交新菜名前，建议先换个关键词或地点确认是否已经有人提交过。"
     }
@@ -256,7 +259,8 @@ struct DishSectionView: View {
 
         do {
             try await dependencies.communityRepository.ensureAnonymousSession()
-            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch,
+                  selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
             let fetchedDishes = try await dependencies.communityRepository.fetchDishRatingSummaries(
                 search: search,
                 canteen: selectedCanteen,
@@ -264,7 +268,8 @@ struct DishSectionView: View {
                 limit: pageSize,
                 offset: reset ? 0 : dishes.count
             )
-                guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch,
+                  selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
             if reset {
                 dishes = fetchedDishes
             } else {
@@ -275,7 +280,8 @@ struct DishSectionView: View {
             store.load.complete(loadID)
             errorMessage = nil
         } catch {
-            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch, selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
+            guard !Task.isCancelled, store.load.isCurrent(loadID), search == requestSearch,
+                  selectedCanteen == requestSelectedCanteen, selectedLocation == requestSelectedLocation else { return }
             errorMessage = error.localizedDescription
         }
         updateDerivedDishState()

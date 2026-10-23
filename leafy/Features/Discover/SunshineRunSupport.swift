@@ -85,7 +85,14 @@ struct SunshineRunRecord: Identifiable, Codable, Hashable {
             self.periodStartWeek = period.startWeek
             self.periodEndWeek = period.endWeek
         } else {
-            let schedule = SunshineRunPlanner.clampedPeriodWeeks(for: normalizedDate, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, calendar: calendar)
+            let schedule = SunshineRunPlanner.clampedPeriodWeeks(
+                for: normalizedDate,
+                semesterStart: semesterStart,
+                semesterEnd: semesterEnd,
+                totalWeeks: totalWeeks,
+                excludedWeeks: excludedWeeks,
+                calendar: calendar
+            )
             self.periodStartWeek = schedule.startWeek
             self.periodEndWeek = schedule.endWeek
         }
@@ -114,7 +121,7 @@ struct SunshineRunReminderSettings: Codable, Hashable {
     }
 
     static func normalizedWeekdays(_ weekdays: [Int]) -> [Int] {
-        Array(Set(weekdays.filter { (1...7).contains($0) })).sorted()
+        Array(Set(weekdays.filter { (1 ... 7).contains($0) })).sorted()
     }
 
     var normalizedSelectedWeekdays: [Int] {
@@ -138,7 +145,7 @@ struct SunshineRunPeriod: Identifiable, Hashable {
         if activeWeeks.count == 1 {
             return L10n.text("第 %d 周", firstWeek)
         }
-        if activeWeeks == Array(firstWeek...lastWeek) {
+        if activeWeeks == Array(firstWeek ... lastWeek) {
             return L10n.text("第 %d-%d 周", firstWeek, lastWeek)
         }
         return L10n.text("第 %@ 周", activeWeeks.map(String.init).joined(separator: L10n.text("、")))
@@ -161,7 +168,7 @@ struct SunshineRunPeriod: Identifiable, Hashable {
         self.endWeek = endWeek
         self.startDate = startDate
         self.endDate = endDate
-        self.activeWeeks = activeWeeks ?? Array(startWeek...endWeek)
+        self.activeWeeks = activeWeeks ?? Array(startWeek ... endWeek)
     }
 
     func containsWeek(_ week: Int) -> Bool {
@@ -246,7 +253,10 @@ enum SunshineRunPlanner {
         let eligibleWeeks = activeWeeks(totalWeeks: totalWeeks, excludedWeeks: excludedWeeks)
         let safeWeeksPerPeriod = max(weeksPerPeriod, 1)
         return stride(from: 0, to: eligibleWeeks.count, by: safeWeeksPerPeriod).enumerated().map { offset, startIndex in
-            let periodWeeks = Array(eligibleWeeks[startIndex..<min(startIndex + safeWeeksPerPeriod, eligibleWeeks.count)])
+            let periodWeeks = Array(eligibleWeeks[startIndex ..< min(
+                startIndex + safeWeeksPerPeriod,
+                eligibleWeeks.count
+            )])
             let startWeek = periodWeeks[0]
             let endWeek = periodWeeks[periodWeeks.count - 1]
             let periodStart = calendar.date(byAdding: .day, value: (startWeek - 1) * 7, to: startDate) ?? startDate
@@ -281,7 +291,15 @@ enum SunshineRunPlanner {
         ) else {
             return nil
         }
-        return period(containingWeek: week, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
+        return period(
+            containingWeek: week,
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks,
+            weeksPerPeriod: weeksPerPeriod,
+            calendar: calendar
+        )
     }
 
     static func period(
@@ -298,8 +316,15 @@ enum SunshineRunPlanner {
         guard !normalizedExcludedWeeks(excludedWeeks, totalWeeks: totalWeeks).contains(clampedWeek) else {
             return nil
         }
-        return periods(semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
-            .first { $0.containsWeek(clampedWeek) }
+        return periods(
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks,
+            weeksPerPeriod: weeksPerPeriod,
+            calendar: calendar
+        )
+        .first { $0.containsWeek(clampedWeek) }
     }
 
     static func currentPeriod(
@@ -311,18 +336,34 @@ enum SunshineRunPlanner {
         weeksPerPeriod: Int = 2,
         calendar: Calendar = .current
     ) -> SunshineRunPeriod? {
-        if let period = period(for: now, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) {
+        if let period = period(
+            for: now,
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks,
+            weeksPerPeriod: weeksPerPeriod,
+            calendar: calendar
+        ) {
             return period
         }
 
         let week = clampedWeek(for: now, semesterStart: semesterStart, totalWeeks: totalWeeks, calendar: calendar)
-        let allPeriods = periods(semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar)
+        let allPeriods = periods(
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks,
+            weeksPerPeriod: weeksPerPeriod,
+            calendar: calendar
+        )
         return allPeriods.first { $0.startWeek <= week && week <= $0.endWeek }
             ?? allPeriods.first { $0.startWeek > week }
             ?? allPeriods.last
     }
 
-    static func normalizedRecords(_ records: [SunshineRunRecord], calendar: Calendar = .current) -> [SunshineRunRecord] {
+    static func normalizedRecords(_ records: [SunshineRunRecord],
+                                  calendar: Calendar = .current) -> [SunshineRunRecord] {
         let recordsByDay = records.reduce(into: [Date: SunshineRunRecord]()) { partialResult, record in
             let day = calendar.startOfDay(for: record.date)
             if partialResult[day] == nil {
@@ -350,9 +391,24 @@ enum SunshineRunPlanner {
         calendar: Calendar = .current
     ) -> [SunshineRunPeriodProgress] {
         let normalizedRecords = normalizedRecords(records, calendar: calendar)
-        return periods(semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar).map { runPeriod in
+        return periods(
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks,
+            weeksPerPeriod: weeksPerPeriod,
+            calendar: calendar
+        ).map { runPeriod in
             let periodRecords = normalizedRecords.filter { record in
-                guard let recordPeriod = period(for: record.date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) else {
+                guard let recordPeriod = period(
+                    for: record.date,
+                    semesterStart: semesterStart,
+                    semesterEnd: semesterEnd,
+                    totalWeeks: totalWeeks,
+                    excludedWeeks: excludedWeeks,
+                    weeksPerPeriod: weeksPerPeriod,
+                    calendar: calendar
+                ) else {
                     return false
                 }
                 return recordPeriod.startWeek == runPeriod.startWeek
@@ -372,7 +428,15 @@ enum SunshineRunPlanner {
         calendar: Calendar = .current
     ) -> SunshineRunProgressSummary {
         let totalCount = normalizedRecords(records, calendar: calendar)
-            .filter { period(for: $0.date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) != nil }
+            .filter { period(
+                for: $0.date,
+                semesterStart: semesterStart,
+                semesterEnd: semesterEnd,
+                totalWeeks: totalWeeks,
+                excludedWeeks: excludedWeeks,
+                weeksPerPeriod: weeksPerPeriod,
+                calendar: calendar
+            ) != nil }
             .count
         let safeTotalTarget = max(totalTarget, 1)
         let cappedTotalCount = min(totalCount, safeTotalTarget)
@@ -401,13 +465,31 @@ enum SunshineRunPlanner {
         guard settings.isEnabled,
               !settings.normalizedSelectedWeekdays.isEmpty,
               limit > 0,
-              !progressSummary(records: records, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, totalTarget: totalTarget, calendar: calendar).isFullScoreReached
+              !progressSummary(
+                  records: records,
+                  semesterStart: semesterStart,
+                  semesterEnd: semesterEnd,
+                  totalWeeks: totalWeeks,
+                  excludedWeeks: excludedWeeks,
+                  weeksPerPeriod: weeksPerPeriod,
+                  totalTarget: totalTarget,
+                  calendar: calendar
+              ).isFullScoreReached
         else { return [] }
 
         let normalizedWeekdays = Set(settings.normalizedSelectedWeekdays)
         let progressByStartWeek = Dictionary(
-            uniqueKeysWithValues: periodProgresses(records: records, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, periodTarget: periodTarget, calendar: calendar)
-                .map { ($0.period.startWeek, $0) }
+            uniqueKeysWithValues: periodProgresses(
+                records: records,
+                semesterStart: semesterStart,
+                semesterEnd: semesterEnd,
+                totalWeeks: totalWeeks,
+                excludedWeeks: excludedWeeks,
+                weeksPerPeriod: weeksPerPeriod,
+                periodTarget: periodTarget,
+                calendar: calendar
+            )
+            .map { ($0.period.startWeek, $0) }
         )
         let startDate = calendar.startOfDay(for: max(now, semesterStart))
         let resolvedSemesterEnd = semesterEnd.map { calendar.startOfDay(for: $0) }
@@ -421,7 +503,15 @@ enum SunshineRunPlanner {
             if normalizedWeekdays.contains(leafyWeekday),
                let fireDate = date(on: currentDay, hour: settings.hour, minute: settings.minute, calendar: calendar),
                fireDate > now,
-               let period = period(for: currentDay, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar),
+               let period = period(
+                   for: currentDay,
+                   semesterStart: semesterStart,
+                   semesterEnd: semesterEnd,
+                   totalWeeks: totalWeeks,
+                   excludedWeeks: excludedWeeks,
+                   weeksPerPeriod: weeksPerPeriod,
+                   calendar: calendar
+               ),
                let progress = progressByStartWeek[period.startWeek],
                progress.remainingCount > 0 {
                 items.append(
@@ -449,7 +539,15 @@ enum SunshineRunPlanner {
         weeksPerPeriod: Int = 2,
         calendar: Calendar = .current
     ) -> (startWeek: Int, endWeek: Int) {
-        if let period = currentPeriod(now: date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, excludedWeeks: excludedWeeks, weeksPerPeriod: weeksPerPeriod, calendar: calendar) {
+        if let period = currentPeriod(
+            now: date,
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            excludedWeeks: excludedWeeks,
+            weeksPerPeriod: weeksPerPeriod,
+            calendar: calendar
+        ) {
             return (period.startWeek, period.endWeek)
         }
 
@@ -467,7 +565,13 @@ enum SunshineRunPlanner {
         excludedWeeks: Set<Int> = SemesterConfig.sunshineRunExcludedWeeks,
         calendar: Calendar = .current
     ) -> Bool {
-        guard let week = weekNumber(for: date, semesterStart: semesterStart, semesterEnd: semesterEnd, totalWeeks: totalWeeks, calendar: calendar) else {
+        guard let week = weekNumber(
+            for: date,
+            semesterStart: semesterStart,
+            semesterEnd: semesterEnd,
+            totalWeeks: totalWeeks,
+            calendar: calendar
+        ) else {
             return false
         }
         return normalizedExcludedWeeks(excludedWeeks, totalWeeks: totalWeeks).contains(week)
@@ -476,12 +580,12 @@ enum SunshineRunPlanner {
     private static func activeWeeks(totalWeeks: Int, excludedWeeks: Set<Int>) -> [Int] {
         guard totalWeeks > 0 else { return [] }
         let excludedWeeks = normalizedExcludedWeeks(excludedWeeks, totalWeeks: totalWeeks)
-        return (1...totalWeeks).filter { !excludedWeeks.contains($0) }
+        return (1 ... totalWeeks).filter { !excludedWeeks.contains($0) }
     }
 
     private static func normalizedExcludedWeeks(_ excludedWeeks: Set<Int>, totalWeeks: Int) -> Set<Int> {
         guard totalWeeks > 0 else { return [] }
-        return Set(excludedWeeks.filter { (1...totalWeeks).contains($0) })
+        return Set(excludedWeeks.filter { (1 ... totalWeeks).contains($0) })
     }
 
     private static func weekNumber(
@@ -536,8 +640,8 @@ enum SunshineRunPlanner {
             components.hour ?? 0,
             components.minute ?? 0
         ]
-            .map { String(format: "%02d", $0) }
-            .joined()
+        .map { String(format: "%02d", $0) }
+        .joined()
         return "leafy.sunshineRun.\(period.startWeek)-\(period.endWeek).\(stamp)"
     }
 }
@@ -606,7 +710,6 @@ enum SunshineRunStore {
     private static func scoped(_ key: String) -> String {
         CampusScopedDefaults.key(key)
     }
-
 }
 
 @MainActor
@@ -676,17 +779,31 @@ enum SunshineRunNotificationManager {
 
             let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: item.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-            return UNNotificationRequest(identifier: item.id + "." + currentRun.uuidString, content: content, trigger: trigger)
+            return UNNotificationRequest(
+                identifier: item.id + "." + currentRun.uuidString,
+                content: content,
+                trigger: trigger
+            )
         }
         updatedSettings.scheduledNotificationIDs = try await LocalNotificationBatch.install(requests, scope: scope,
-            isCurrent: { runID == currentRun }, add: { try await center.add($0) },
-            remove: { center.removePendingNotificationRequests(withIdentifiers: $0) })
+                                                                                            isCurrent: {
+                                                                                                runID == currentRun },
+                                                                                            add: {
+                                                                                                try await center
+                                                                                                    .add($0) },
+                                                                                            remove: {
+                                                                                                center
+                                                                                                    .removePendingNotificationRequests(
+                                                                                                        withIdentifiers: $0
+                                                                                                    )
+                                                                                            })
         return updatedSettings
     }
 
     static func cancelScheduledNotifications(settings: SunshineRunReminderSettings) {
         guard !settings.scheduledNotificationIDs.isEmpty else { return }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: settings.scheduledNotificationIDs)
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: settings.scheduledNotificationIDs)
     }
 
     private static func authorizedNotificationCenter() async throws -> UNUserNotificationCenter {
@@ -725,7 +842,6 @@ enum LocalNotificationBatch {
             throw error
         }
     }
-
 }
 
 private struct SunshineRunNotificationCapacityError: LocalizedError {

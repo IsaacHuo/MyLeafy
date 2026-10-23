@@ -28,7 +28,8 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
         }
         guard self.profileID != profileID else { return }
 
-        CommunityDiagnostics.log.info("Community notification badge start for profile \(profileID.uuidString, privacy: .public)")
+        CommunityDiagnostics.log
+            .info("Community notification badge start for profile \(profileID.uuidString, privacy: .public)")
         stop(reset: false)
         self.profileID = profileID
         let subscriptionID = UUID()
@@ -85,7 +86,8 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
             guard self.profileID == profileID,
                   self.subscriptionID == subscriptionID
             else { return }
-            CommunityDiagnostics.log.error("Community notification badge refresh failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community notification badge refresh failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -109,7 +111,10 @@ final class CommunityNotificationBadgeViewModel: ObservableObject {
             }
         } catch {
             guard !Task.isCancelled else { return }
-            CommunityDiagnostics.log.error("Community notification realtime subscription failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error(
+                    "Community notification realtime subscription failed: \(error.localizedDescription, privacy: .public)"
+                )
             await refresh()
         }
     }
@@ -213,7 +218,7 @@ struct CommunityRootView: View {
                     communityRefreshID = UUID()
                     operationAlert = .success(message)
                 }
-                    .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large])
             }
             .leafySheet(isPresented: $showingCommunityProfileEditor) {
                 CommunityProfileEditorSheet()
@@ -224,7 +229,7 @@ struct CommunityRootView: View {
                     hasAcceptedCommunityTerms = true
                     operationAlert = .success(L10n.text("设置已保存。", language: leafyLanguage))
                 }
-                    .presentationDetents([.large])
+                .presentationDetents([.large])
             }
             .leafySheet(isPresented: $showingCommunitySearch) {
                 CommunitySearchSheet()
@@ -256,7 +261,7 @@ struct CommunityRootView: View {
                     selectedPost = nil
                     communityRefreshID = UUID()
                 }
-                    .presentationDetents([.medium, .large])
+                .presentationDetents([.medium, .large])
             }
             .alert(L10n.text("社区操作失败", language: leafyLanguage), isPresented: Binding(
                 get: { communityActionError != nil },
@@ -268,7 +273,10 @@ struct CommunityRootView: View {
             }
             .leafyOperationAlert($operationAlert)
             .task {
-                CommunityDiagnostics.log.info("CommunityRootView startup task began; options=\(CommunityDiagnosticsOptions.summary, privacy: .public)")
+                CommunityDiagnostics.log
+                    .info(
+                        "CommunityRootView startup task began; options=\(CommunityDiagnosticsOptions.summary, privacy: .public)"
+                    )
                 guard !CommunityDiagnosticsOptions.disablesRootStartup else {
                     CommunityDiagnostics.log.info("CommunityRootView startup task skipped by diagnostics")
                     return
@@ -369,7 +377,8 @@ struct CommunityRootView: View {
                     CommunityNativeGlassGroup(spacing: 9 * leafyControlScale) {
                         HStack(spacing: 9) {
                             DiscoverLiquidGlassIconButton(
-                                systemName: isTopicFilterPresented ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
+                                systemName: isTopicFilterPresented ? "line.3.horizontal.decrease.circle.fill" :
+                                    "line.3.horizontal.decrease.circle",
                                 accessibilityLabel: L10n.text("筛选话题", language: leafyLanguage),
                                 action: {
                                     withAnimation(.easeOut(duration: 0.18)) {
@@ -766,10 +775,14 @@ struct CommunityCampusSelectionPanel: View {
                                 }
                                 Spacer()
                                 Image(systemName: selectedCampus?.id == campus.id ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selectedCampus?.id == campus.id ? AppTheme.accent(for: themeColorPreference) : AppTheme.tertiaryText)
+                                    .foregroundStyle(selectedCampus?.id == campus.id ? AppTheme
+                                        .accent(for: themeColorPreference) : AppTheme.tertiaryText)
                             }
                             .padding(12)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
                             .contentShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                         }
                         .buttonStyle(.plain)
@@ -798,8 +811,11 @@ struct CommunityCampusSelectionPanel: View {
                 Button {
                     isNewSchoolRequestPresented = true
                 } label: {
-                    Label(L10n.text("申请新增学校", language: leafyLanguage), systemImage: "building.2.crop.circle.badge.plus")
-                        .frame(maxWidth: .infinity)
+                    Label(
+                        L10n.text("申请新增学校", language: leafyLanguage),
+                        systemImage: "building.2.crop.circle.badge.plus"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(isSubmitting)

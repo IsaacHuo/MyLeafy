@@ -344,7 +344,7 @@ struct SchoolAuthenticationService {
         }
 
         let maximumAttempts = max(policy.maximumAttempts, 1)
-        for attempt in 1...maximumAttempts {
+        for attempt in 1 ... maximumAttempts {
             try Task.checkCancellation()
             if attempt > 1 {
                 try await Task.sleep(for: policy.retryDelay)

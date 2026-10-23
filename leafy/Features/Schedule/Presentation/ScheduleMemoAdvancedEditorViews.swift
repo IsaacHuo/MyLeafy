@@ -302,7 +302,10 @@ private struct ScheduleMemoSourceTextView: UIViewRepresentable {
         }
         let safe = NSRange(
             location: min(selection.location, view.text.utf16.count),
-            length: min(selection.length, max(view.text.utf16.count - min(selection.location, view.text.utf16.count), 0))
+            length: min(
+                selection.length,
+                max(view.text.utf16.count - min(selection.location, view.text.utf16.count), 0)
+            )
         )
         if view.selectedRange != safe {
             view.selectedRange = safe
@@ -457,7 +460,10 @@ struct ScheduleMemoAdvancedEditorView: View {
         .photosPicker(
             isPresented: $showsPhotoPicker,
             selection: $photoItems,
-            maxSelectionCount: max(ScheduleMemoImageStore.maximumImageCount - existingImages.count - draftImages.count, 1),
+            maxSelectionCount: max(
+                ScheduleMemoImageStore.maximumImageCount - existingImages.count - draftImages.count,
+                1
+            ),
             matching: .images
         )
         .onChange(of: photoItems) { _, items in
@@ -548,8 +554,8 @@ struct ScheduleMemoAdvancedEditorView: View {
                             ? L10n.text("未命名文章", language: leafyLanguage)
                             : title
                     )
-                        .font(.largeTitle.bold())
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.largeTitle.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 ScheduleMemoRichMarkdownView(source: source, resources: resources)
             }
@@ -572,17 +578,26 @@ struct ScheduleMemoAdvancedEditorView: View {
                 tool("strikethrough", label: L10n.text("删除线", language: leafyLanguage), command: .strikethrough)
                 tool("text.quote", label: L10n.text("引用", language: leafyLanguage), command: .quote)
                 Menu {
-                    Button(L10n.text("项目列表", language: leafyLanguage), systemImage: "list.bullet") { apply(.unorderedList) }
-                    Button(L10n.text("编号列表", language: leafyLanguage), systemImage: "list.number") { apply(.orderedList) }
+                    Button(L10n.text("项目列表", language: leafyLanguage), systemImage: "list.bullet") {
+                        apply(.unorderedList) }
+                    Button(L10n.text("编号列表", language: leafyLanguage), systemImage: "list.number") {
+                        apply(.orderedList) }
                     Button(L10n.text("待办事项", language: leafyLanguage), systemImage: "checklist") { apply(.task) }
                 } label: {
                     editorTool("list.bullet", label: L10n.text("列表", language: leafyLanguage))
                 }
                 Menu {
-                    Button(L10n.text("行内代码", language: leafyLanguage), systemImage: "chevron.left.forwardslash.chevron.right") { apply(.inlineCode) }
-                    Button(L10n.text("代码块", language: leafyLanguage), systemImage: "curlybraces.square") { apply(.codeBlock) }
+                    Button(
+                        L10n.text("行内代码", language: leafyLanguage),
+                        systemImage: "chevron.left.forwardslash.chevron.right"
+                    ) { apply(.inlineCode) }
+                    Button(L10n.text("代码块", language: leafyLanguage), systemImage: "curlybraces.square") {
+                        apply(.codeBlock) }
                 } label: {
-                    editorTool("chevron.left.forwardslash.chevron.right", label: L10n.text("代码", language: leafyLanguage))
+                    editorTool(
+                        "chevron.left.forwardslash.chevron.right",
+                        label: L10n.text("代码", language: leafyLanguage)
+                    )
                 }
                 tool("link", label: L10n.text("链接", language: leafyLanguage), command: .link)
                 tool("minus", label: L10n.text("分隔线", language: leafyLanguage), command: .divider)
@@ -624,7 +639,8 @@ struct ScheduleMemoAdvancedEditorView: View {
                 showsCamera = true
             }
             Button(L10n.text("文件", language: leafyLanguage), systemImage: "doc.badge.plus") {
-                guard existingAttachments.count + draftAttachments.count < ScheduleMemoAttachmentStore.maximumAttachmentCount else {
+                guard existingAttachments.count + draftAttachments.count < ScheduleMemoAttachmentStore
+                    .maximumAttachmentCount else {
                     errorMessage = L10n.text(
                         "一条随记最多添加 %d 个附件。",
                         language: leafyLanguage,
@@ -634,9 +650,11 @@ struct ScheduleMemoAdvancedEditorView: View {
                 }
                 showsFileImporter = true
             }
-            if !existingImages.isEmpty || !existingAttachments.isEmpty || !draftImages.isEmpty || !draftAttachments.isEmpty {
+            if !existingImages.isEmpty || !existingAttachments.isEmpty || !draftImages.isEmpty || !draftAttachments
+                .isEmpty {
                 Divider()
-                Button(L10n.text("插入已有内容", language: leafyLanguage), systemImage: "square.grid.2x2") { showsResources = true }
+                Button(L10n.text("插入已有内容", language: leafyLanguage), systemImage: "square.grid.2x2") {
+                    showsResources = true }
             }
         } label: {
             editorTool("plus", label: L10n.text("插入", language: leafyLanguage))
@@ -766,7 +784,9 @@ struct ScheduleMemoAdvancedEditorView: View {
                     throw ScheduleMemoImageStoreError.invalidImage
                 }
                 try scope.check()
-                guard photoLoadID == loadID, existingImages.count + draftImages.count < ScheduleMemoImageStore.maximumImageCount else { return }
+                guard photoLoadID == loadID,
+                      existingImages.count + draftImages.count < ScheduleMemoImageStore.maximumImageCount
+                else { return }
                 let draft = ScheduleMemoEditorDraftImage(id: UUID(), data: data, image: image)
                 draftImages.append(draft)
                 insert(.init(kind: .image, id: draft.id))
@@ -781,9 +801,13 @@ struct ScheduleMemoAdvancedEditorView: View {
     private func importAttachments(_ result: Result<[URL], Error>) {
         do {
             let urls = try result.get()
-            let remaining = max(ScheduleMemoAttachmentStore.maximumAttachmentCount - existingAttachments.count - draftAttachments.count, 0)
+            let remaining = max(
+                ScheduleMemoAttachmentStore.maximumAttachmentCount - existingAttachments.count - draftAttachments.count,
+                0
+            )
             guard urls.count <= remaining else {
-                throw ScheduleMemoAttachmentStoreError.tooManyAttachments(maximum: ScheduleMemoAttachmentStore.maximumAttachmentCount)
+                throw ScheduleMemoAttachmentStoreError
+                    .tooManyAttachments(maximum: ScheduleMemoAttachmentStore.maximumAttachmentCount)
             }
             for url in urls {
                 let accessed = url.startAccessingSecurityScopedResource()
@@ -864,7 +888,10 @@ struct ScheduleMemoAdvancedEditorView: View {
             let removedImages = allImages.filter { deletedImageIDs.contains($0.id) }
             let removedAttachments = allAttachments.filter { deletedAttachmentIDs.contains($0.id) }
             let files = removedImages.map {
-                LocalFileCleanup.File($0, url: ScheduleMemoImageStore.directoryURL().appendingPathComponent($0.localFilename))
+                LocalFileCleanup.File(
+                    $0,
+                    url: ScheduleMemoImageStore.directoryURL().appendingPathComponent($0.localFilename)
+                )
             } + removedAttachments.compactMap { record in
                 ScheduleMemoAttachmentStore.fileURL(named: record.localFilename).map {
                     LocalFileCleanup.File(record, url: $0)

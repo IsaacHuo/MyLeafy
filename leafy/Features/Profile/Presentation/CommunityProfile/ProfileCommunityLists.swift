@@ -114,7 +114,12 @@ struct ProfileCommunityPostListView: View {
                                 selectedPost = post
                             }
                         )
-                        .listRowInsets(EdgeInsets(top: 6, leading: AppSpacing.page, bottom: 6, trailing: AppSpacing.page))
+                        .listRowInsets(EdgeInsets(
+                            top: 6,
+                            leading: AppSpacing.page,
+                            bottom: 6,
+                            trailing: AppSpacing.page
+                        ))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -149,7 +154,7 @@ struct ProfileCommunityPostListView: View {
                 posts.removeAll { $0.id == post.id }
                 selectedPost = nil
             }
-                .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .large])
         }
         .leafyOperationAlert($operationAlert)
     }
@@ -227,9 +232,15 @@ struct ProfileCommunityPostListView: View {
             case .authored:
                 operationAlert = .success(L10n.text("帖子已删除。", language: leafyLanguage))
             case .liked:
-                operationAlert = .success(L10n.text(updated?.viewerHasLiked == true ? "已点赞。" : "已取消点赞。", language: leafyLanguage))
+                operationAlert = .success(L10n.text(
+                    updated?.viewerHasLiked == true ? "已点赞。" : "已取消点赞。",
+                    language: leafyLanguage
+                ))
             case .favorited:
-                operationAlert = .success(L10n.text(updated?.viewerHasFavorited == true ? "已收藏。" : "已取消收藏。", language: leafyLanguage))
+                operationAlert = .success(L10n.text(
+                    updated?.viewerHasFavorited == true ? "已收藏。" : "已取消收藏。",
+                    language: leafyLanguage
+                ))
             }
         } catch {
             if scope.wasCancelled(error) { return }
@@ -471,7 +482,12 @@ struct ProfileCommunityPollListView: View {
                             isBusy: activePollIDs.contains(poll.id),
                             onOpen: { selectedPoll = poll }
                         )
-                        .listRowInsets(EdgeInsets(top: 6, leading: AppSpacing.page, bottom: 6, trailing: AppSpacing.page))
+                        .listRowInsets(EdgeInsets(
+                            top: 6,
+                            leading: AppSpacing.page,
+                            bottom: 6,
+                            trailing: AppSpacing.page
+                        ))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -559,7 +575,7 @@ struct ProfileCommunityPollListView: View {
         do {
             async let authored = dependencies.communityActivityRepository.fetchMyAuthoredPolls()
             async let voted = dependencies.communityActivityRepository.fetchMyVotedPolls()
-            let (loadedAuthored, loadedVoted) = try await (authored, voted)
+            let (loadedAuthored, loadedVoted) = try await(authored, voted)
             try scope.check()
             authoredPolls = loadedAuthored
             votedPolls = loadedVoted
@@ -602,7 +618,10 @@ struct ProfileCommunityPollListView: View {
         defer { activePollIDs.remove(poll.id) }
 
         do {
-            let updatedPoll = try await dependencies.communityActivityRepository.requestPollDeletion(pollID: poll.id, reason: nil)
+            let updatedPoll = try await dependencies.communityActivityRepository.requestPollDeletion(
+                pollID: poll.id,
+                reason: nil
+            )
             try scope.check()
             replacePoll(updatedPoll)
             selectedPoll = selectedPoll?.id == updatedPoll.id ? updatedPoll : selectedPoll
@@ -696,7 +715,10 @@ struct ProfileCommunityPollCompactCard: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+            .background(
+                AppTheme.cardBackground,
+                in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .stroke(AppTheme.separator, lineWidth: 1)
@@ -728,10 +750,15 @@ struct ProfileCommunityPostCompactCard: View {
                     HStack(spacing: 8) {
                         Text(post.moderationStatusLabel ?? post.categoryLabel)
                             .microCaption()
-                            .foregroundStyle(post.moderationStatusLabel == nil ? AppTheme.accentEmphasis : AppTheme.warning)
+                            .foregroundStyle(post.moderationStatusLabel == nil ? AppTheme.accentEmphasis : AppTheme
+                                .warning)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background((post.moderationStatusLabel == nil ? AppTheme.softFill : AppTheme.warning.opacity(0.12)), in: Capsule())
+                            .background(
+                                (post.moderationStatusLabel == nil ? AppTheme.softFill : AppTheme.warning
+                                    .opacity(0.12)),
+                                in: Capsule()
+                            )
 
                         Text(post.relativeTimestamp)
                             .microCaption()

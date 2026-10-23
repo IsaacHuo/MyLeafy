@@ -14,8 +14,10 @@ extension PerformanceRefactorTests {
         XCTAssertFalse(SchoolReauthentication.requiresReauthentication(SchoolNetworkError.featureUnavailable("未开放")))
 
         XCTAssertTrue(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.sessionExpired))
-        XCTAssertFalse(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.campusNetworkRequired))
-        XCTAssertFalse(SchoolReauthentication.shouldPromptForUserInitiatedAccess(SchoolNetworkError.featureUnavailable("未开放")))
+        XCTAssertFalse(SchoolReauthentication
+            .shouldPromptForUserInitiatedAccess(SchoolNetworkError.campusNetworkRequired))
+        XCTAssertFalse(SchoolReauthentication
+            .shouldPromptForUserInitiatedAccess(SchoolNetworkError.featureUnavailable("未开放")))
     }
 
     @MainActor
@@ -236,8 +238,10 @@ extension PerformanceRefactorTests {
 
     func testCustomCampusAuthCallbackOnlyAcceptsAuthCallbackURL() {
         XCTAssertTrue(CustomCampusAuthCallback.isCallback(URL(string: "leafy://auth/callback?code=abc")!))
-        XCTAssertFalse(CustomCampusAuthCallback.isCallback(URL(string: "leafy://community-post?id=00000000-0000-0000-0000-000000000001")!))
-        XCTAssertFalse(CustomCampusAuthCallback.isCallback(URL(string: "https://myleafy.space/auth/callback?code=abc")!))
+        XCTAssertFalse(CustomCampusAuthCallback
+            .isCallback(URL(string: "leafy://community-post?id=00000000-0000-0000-0000-000000000001")!))
+        XCTAssertFalse(CustomCampusAuthCallback
+            .isCallback(URL(string: "https://myleafy.space/auth/callback?code=abc")!))
     }
 
     func testCustomCampusAuthSessionBuildsCustomCampusIdentity() {
@@ -268,13 +272,17 @@ extension PerformanceRefactorTests {
         ]
         for (code, expected) in cases {
             let error = MyLeafyBackendError(status: 400, code: code, message: "Server message", requestID: "test")
-            XCTAssertEqual(CustomCampusAuthService.mapAuthErrorForTesting(error).localizedDescription, expected.localizedDescription)
+            XCTAssertEqual(
+                CustomCampusAuthService.mapAuthErrorForTesting(error).localizedDescription,
+                expected.localizedDescription
+            )
         }
     }
 
     func testOldEmailCallbackRequiresFreshLogin() async {
         do {
-            _ = try await CustomCampusAuthService().restoreSession(from: URL(string: "leafy://auth/callback?code=expired")!)
+            _ = try await CustomCampusAuthService()
+                .restoreSession(from: URL(string: "leafy://auth/callback?code=expired")!)
             XCTFail("Old sessions must not be exchanged")
         } catch {
             XCTAssertEqual(error.localizedDescription, CustomCampusAuthError.callbackLinkInvalid.localizedDescription)

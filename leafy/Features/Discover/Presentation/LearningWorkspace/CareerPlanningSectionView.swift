@@ -240,7 +240,11 @@ struct CareerPlanningSectionView: View {
                 VStack(alignment: .leading, spacing: 9) {
                     CareerSuggestionRow(icon: "target", title: "岗位关键词匹配", detail: "用岗位描述检查简历关键词覆盖。")
                     CareerSuggestionRow(icon: "rectangle.grid.1x2", title: "投递进度看板", detail: "按关注、已投递、面试中和结束汇总进度。")
-                    CareerSuggestionRow(icon: "person.crop.rectangle.stack", title: "面试准备清单", detail: "记录项目经历、常见问题和复盘内容。")
+                    CareerSuggestionRow(
+                        icon: "person.crop.rectangle.stack",
+                        title: "面试准备清单",
+                        detail: "记录项目经历、常见问题和复盘内容。"
+                    )
                     CareerSuggestionRow(icon: "calendar.badge.clock", title: "宣讲会日历", detail: "把宣讲会、网申截止和面试时间放进日程。")
                     CareerSuggestionRow(icon: "building.2", title: "目标行业收藏", detail: "按城市、行业和单位类型整理长期目标。")
                 }
@@ -254,7 +258,11 @@ struct CareerPlanningSectionView: View {
                 resumeBeingReplaced = nil
                 return
             }
-            let result = try CareerResumePersistence.importFile(from: url, replacing: resumeBeingReplaced, in: modelContext)
+            let result = try CareerResumePersistence.importFile(
+                from: url,
+                replacing: resumeBeingReplaced,
+                in: modelContext
+            )
             if let warning = result.cleanupWarning { alertMessage = warning }
             else if resumeBeingReplaced != nil {
                 operationAlert = .success(L10n.text("简历文件已替换。", language: leafyLanguage))
@@ -290,7 +298,8 @@ struct CareerPlanningSectionView: View {
 
     private func deleteResume(_ resume: CareerResumeDocument) {
         do {
-            let files = CareerDocumentFileStore.fileURL(for: resume).map { [LocalFileCleanup.File(resume, url: $0)] } ?? []
+            let files = CareerDocumentFileStore.fileURL(for: resume)
+                .map { [LocalFileCleanup.File(resume, url: $0)] } ?? []
             try LocalFileCleanup().delete([resume], files: files, in: modelContext)
             operationAlert = .success(L10n.text("简历已删除。", language: leafyLanguage))
         } catch {
@@ -404,10 +413,12 @@ private struct CareerResumeRow: View {
                             .foregroundStyle(AppTheme.primaryText)
                             .lineLimit(1)
 
-                        Text("\(resume.displayType) · \(resume.updatedAt.formatted(date: .abbreviated, time: .shortened))")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
-                            .lineLimit(1)
+                        Text(
+                            "\(resume.displayType) · \(resume.updatedAt.formatted(date: .abbreviated, time: .shortened))"
+                        )
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .lineLimit(1)
 
                         if !resume.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text(resume.note)
@@ -460,7 +471,10 @@ private struct CareerEmptyResumeRow: View {
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(AppTheme.secondaryText)
                     .frame(width: 38, height: 44)
-                    .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                    .background(
+                        AppTheme.softFill,
+                        in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                    )
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("尚未导入简历")
@@ -700,7 +714,7 @@ private struct CareerResumeEditorSheet: View {
                 Section {
                     TextField("标题", text: $title)
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
 
                 Section {
@@ -772,7 +786,7 @@ private struct CareerTaskEditorSheet: View {
                         DatePicker("截止日期", selection: $dueAt, displayedComponents: .date)
                     }
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(task == nil ? "添加任务" : "编辑任务")
@@ -859,7 +873,7 @@ private struct CareerOpportunityEditorSheet: View {
                         }
                     }
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(opportunity == nil ? "添加岗位" : "编辑岗位")
@@ -887,7 +901,14 @@ private struct CareerOpportunityEditorSheet: View {
         let trimmedURL = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         if let opportunity {
-            let previous = (opportunity.title, opportunity.organization, opportunity.urlString, opportunity.statusRawValue, opportunity.note, opportunity.updatedAt)
+            let previous = (
+                opportunity.title,
+                opportunity.organization,
+                opportunity.urlString,
+                opportunity.statusRawValue,
+                opportunity.note,
+                opportunity.updatedAt
+            )
             opportunity.title = trimmedTitle
             opportunity.organization = trimmedOrganization
             opportunity.urlString = trimmedURL
@@ -895,8 +916,10 @@ private struct CareerOpportunityEditorSheet: View {
             opportunity.note = trimmedNote
             opportunity.updatedAt = Date()
             guard onSave(opportunity) else {
-                opportunity.title = previous.0; opportunity.organization = previous.1; opportunity.urlString = previous.2
-                opportunity.statusRawValue = previous.3; opportunity.note = previous.4; opportunity.updatedAt = previous.5
+                opportunity.title = previous.0; opportunity.organization = previous.1; opportunity.urlString = previous
+                    .2
+                opportunity.statusRawValue = previous.3; opportunity.note = previous.4; opportunity.updatedAt = previous
+                    .5
                 return
             }
         } else {
@@ -996,7 +1019,6 @@ private struct CareerDocumentPreview: UIViewControllerRepresentable {
     }
 }
 
-
 enum CareerDocumentFileStore {
     struct StoredFile {
         let localFilename: String
@@ -1089,7 +1111,8 @@ private extension CareerResumeDocument {
         if contentType.conforms(to: .pdf) { return "PDF" }
         if contentType.conforms(to: .image) { return "图片" }
         if contentType.conforms(to: .plainText) { return "文本" }
-        if contentType.identifier.contains("word") || originalFilename.lowercased().hasSuffix(".docx") || originalFilename.lowercased().hasSuffix(".doc") {
+        if contentType.identifier.contains("word") || originalFilename.lowercased()
+            .hasSuffix(".docx") || originalFilename.lowercased().hasSuffix(".doc") {
             return "Word"
         }
         return "文件"
@@ -1140,10 +1163,21 @@ enum CareerResumePersistence {
         let cleanup = cleanup ?? LocalFileCleanup()
         let filename = UUID().uuidString + (url.pathExtension.isEmpty ? "" : "." + url.pathExtension)
         let document = existing ?? CareerResumeDocument(
-            title: url.deletingPathExtension().lastPathComponent.isEmpty ? "个人简历" : url.deletingPathExtension().lastPathComponent,
-            originalFilename: url.lastPathComponent, localFilename: filename, contentTypeIdentifier: UTType.data.identifier)
-        let previous = (document.originalFilename, document.localFilename, document.contentTypeIdentifier, document.updatedAt)
-        var files = [LocalFileCleanup.File(document, url: CareerDocumentFileStore.directoryURL.appendingPathComponent(filename))]
+            title: url.deletingPathExtension().lastPathComponent.isEmpty ? "个人简历" : url.deletingPathExtension()
+                .lastPathComponent,
+            originalFilename: url.lastPathComponent, localFilename: filename,
+            contentTypeIdentifier: UTType.data.identifier
+        )
+        let previous = (
+            document.originalFilename,
+            document.localFilename,
+            document.contentTypeIdentifier,
+            document.updatedAt
+        )
+        var files = [LocalFileCleanup.File(
+            document,
+            url: CareerDocumentFileStore.directoryURL.appendingPathComponent(filename)
+        )]
         if let existing, let oldURL = CareerDocumentFileStore.fileURL(for: existing) {
             files.append(LocalFileCleanup.File(existing, url: oldURL))
         }
@@ -1165,7 +1199,10 @@ enum CareerResumePersistence {
         } catch {
             let original = error
             do { try cleanup.retry(in: context) }
-            catch { throw CareerResumeCleanupError(original: original.localizedDescription, cleanup: error.localizedDescription) }
+            catch { throw CareerResumeCleanupError(
+                original: original.localizedDescription,
+                cleanup: error.localizedDescription
+            ) }
             throw original
         }
         var warning: String?

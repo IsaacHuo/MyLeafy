@@ -53,15 +53,22 @@ private actor SuspendedIdentityRepository: CommunityIdentitySessionRepository {
     }
     func ensureAnonymousSession() async throws {}
     func fetchCurrentProfile() async throws -> CommunityProfile? { await wait() }
-    func bootstrapCommunityUser(eduID: String, displayName: String, campusID: String) async throws -> CommunityProfile { await wait() }
+    func bootstrapCommunityUser(eduID: String, displayName: String,
+                                campusID: String) async throws -> CommunityProfile { await wait() }
     func signOut(localOnly: Bool) async {}
     func deleteCurrentAccount() async throws {}
-    func updateProfile(input: CommunityProfileUpdateInput, avatar: CommunityImageUpload?, cover: CommunityImageUpload?, resetCoverToDefault: Bool) async throws -> CommunityProfile { await wait() }
+    func updateProfile(
+        input: CommunityProfileUpdateInput,
+        avatar: CommunityImageUpload?,
+        cover: CommunityImageUpload?,
+        resetCoverToDefault: Bool
+    ) async throws -> CommunityProfile { await wait() }
     func requestEmailVerification(input: CommunityEmailBindingInput) async throws -> CommunityProfile { await wait() }
     func verifyEmailBinding(input: CommunityEmailVerificationInput) async throws -> CommunityProfile { await wait() }
     func submitCampusMembershipRequest(schoolName: String) async throws -> CommunityProfile { await wait() }
     func searchCommunityCampuses(query: String, limit: Int) async throws -> [CommunityCampusOption] { [] }
     func selectCommunityCampus(campusID: String) async throws -> CommunityProfile { await wait() }
     func fetchCurrentCampusMembershipRequest() async throws -> CommunityCampusMembershipRequest? { nil }
-    func submitCommunitySchoolChangeRequest(campusID: String) async throws -> CommunityCampusMembershipRequest { throw CancellationError() }
+    func submitCommunitySchoolChangeRequest(campusID: String) async throws
+        -> CommunityCampusMembershipRequest { throw CancellationError() }
 }

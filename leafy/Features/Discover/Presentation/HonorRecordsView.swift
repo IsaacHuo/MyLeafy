@@ -212,8 +212,11 @@ private struct HonorRecordThumbnail: View {
     @State private var imageLoader = ScheduleMemoImageLoader()
 
     private var imageRequest: ScheduleMemoImageRequest {
-        ScheduleMemoImageRequest(sources: record.isImage ? [.init(id: record.id,
-            url: HonorRecordFileStore.directoryURL.appendingPathComponent(record.localFilename), importedAt: record.importedAt)] : [], revision: record.updatedAt)
+        ScheduleMemoImageRequest(sources: record.isImage ? [.init(
+            id: record.id,
+            url: HonorRecordFileStore.directoryURL.appendingPathComponent(record.localFilename),
+            importedAt: record.importedAt
+        )] : [], revision: record.updatedAt)
     }
 
     var body: some View {
@@ -268,7 +271,7 @@ private struct HonorRecordEditorSheet: View {
                     TextField("标题", text: $title)
                     DatePicker("日期", selection: $awardedAt, displayedComponents: .date)
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
 
                 Section {
@@ -315,8 +318,11 @@ private struct HonorRecordPreviewSheet: View {
     let record: HonorRecord
     @State private var imageLoader = ScheduleMemoImageLoader()
     private var imageRequest: ScheduleMemoImageRequest {
-        ScheduleMemoImageRequest(sources: record.isImage ? [.init(id: record.id,
-            url: HonorRecordFileStore.directoryURL.appendingPathComponent(record.localFilename), importedAt: record.importedAt)] : [], revision: record.updatedAt)
+        ScheduleMemoImageRequest(sources: record.isImage ? [.init(
+            id: record.id,
+            url: HonorRecordFileStore.directoryURL.appendingPathComponent(record.localFilename),
+            importedAt: record.importedAt
+        )] : [], revision: record.updatedAt)
     }
 
     @State private var shareItem: HonorRecordShareItem?
@@ -469,7 +475,10 @@ enum HonorRecordFileStore {
 
     static var directoryURL: URL {
         if AppRuntimeEnvironment.isRunningUnitTests {
-            return FileManager.default.temporaryDirectory.appendingPathComponent("LeafyHonorRecordsTests", isDirectory: true)
+            return FileManager.default.temporaryDirectory.appendingPathComponent(
+                "LeafyHonorRecordsTests",
+                isDirectory: true
+            )
         }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -521,7 +530,10 @@ enum HonorRecordPersistence {
                 let record = HonorRecord(title: title.isEmpty ? L10n.text("新的荣誉记录") : title,
                                          originalFilename: url.lastPathComponent, localFilename: filename,
                                          contentTypeIdentifier: UTType.data.identifier)
-                try cleanup.enqueue([LocalFileCleanup.File(record, url: HonorRecordFileStore.directoryURL.appendingPathComponent(filename))])
+                try cleanup.enqueue([LocalFileCleanup.File(
+                    record,
+                    url: HonorRecordFileStore.directoryURL.appendingPathComponent(filename)
+                )])
                 let stored = try HonorRecordFileStore.importFile(from: url, filename: filename)
                 record.contentTypeIdentifier = stored.contentTypeIdentifier
                 records.append(record)
@@ -531,7 +543,10 @@ enum HonorRecordPersistence {
         } catch {
             let original = error
             do { try cleanup.retry(in: context) }
-            catch { throw HonorImportCleanupError(original: original.localizedDescription, cleanup: error.localizedDescription) }
+            catch { throw HonorImportCleanupError(
+                original: original.localizedDescription,
+                cleanup: error.localizedDescription
+            ) }
             throw original
         }
         var warning: String?

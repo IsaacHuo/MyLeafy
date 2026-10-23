@@ -15,7 +15,8 @@ struct CourseBlockView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
 
     private let content: CourseBlockContent
@@ -346,7 +347,8 @@ struct TimetableCellReminderBlockView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
 
     private let reminder: TimetableCellReminderRenderValue
     let height: CGFloat
@@ -444,7 +446,8 @@ struct TimetableCountdownBlockView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
 
     let projection: TimetableCountdownProjection
     let height: CGFloat
@@ -836,13 +839,13 @@ struct CustomScheduleEditorSheet: View {
         let startDate = initialMode == .importantDate
             ? event?.startsAt ?? Date()
             : context.reminder?.resolvedStartDate
-                ?? tappedCellStartDate
-                ?? context.date
+            ?? tappedCellStartDate
+            ?? context.date
         let endDate = initialMode == .importantDate
             ? event?.endsAt ?? startDate.addingTimeInterval(45 * 60)
             : context.reminder?.resolvedEndDate
-                ?? tappedCellEndDate
-                ?? startDate.addingTimeInterval(45 * 60)
+            ?? tappedCellEndDate
+            ?? startDate.addingTimeInterval(45 * 60)
         _title = State(initialValue: initialTitle)
         _location = State(initialValue: initialLocation)
         _noteText = State(initialValue: initialNote)
@@ -868,7 +871,10 @@ struct CustomScheduleEditorSheet: View {
                             .focused($focusedField, equals: .title)
                             .onSubmit { focusedField = .location }
                             .padding(14)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
 
                         TextField("地点（可选）", text: $location)
                             .leafyDisableAutocapitalization()
@@ -876,13 +882,19 @@ struct CustomScheduleEditorSheet: View {
                             .focused($focusedField, equals: .location)
                             .onSubmit { focusedField = .note }
                             .padding(14)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
 
                         TextField("备注（可选）", text: $noteText, axis: .vertical)
                             .lineLimit(3, reservesSpace: true)
                             .focused($focusedField, equals: .note)
                             .padding(14)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
 
                         TimetableReminderOptionPicker(
                             selectedOption: $selectedReminderOption,
@@ -907,7 +919,11 @@ struct CustomScheduleEditorSheet: View {
                             scheduleInfoRow(title: "周次", value: weekText, icon: "calendar")
                         }
 
-                        scheduleInfoRow(title: "日期", value: TimetableClock.formatter(DateFormatters.header).string(from: scheduleDate), icon: "calendar.badge.clock")
+                        scheduleInfoRow(
+                            title: "日期",
+                            value: TimetableClock.formatter(DateFormatters.header).string(from: scheduleDate),
+                            icon: "calendar.badge.clock"
+                        )
 
                         DatePicker("开始时间", selection: $startTime, displayedComponents: .hourAndMinute)
                             .datePickerStyle(.compact)
@@ -1018,13 +1034,17 @@ struct CustomScheduleEditorSheet: View {
         if selectedPeriodRange.lowerBound == selectedPeriodRange.upperBound {
             return L10n.text("第 %d 节", language: leafyLanguage, selectedPeriodRange.lowerBound)
         }
-        return L10n.text("第 %d-%d 节", language: leafyLanguage, selectedPeriodRange.lowerBound, selectedPeriodRange.upperBound)
+        return L10n.text(
+            "第 %d-%d 节",
+            language: leafyLanguage,
+            selectedPeriodRange.lowerBound,
+            selectedPeriodRange.upperBound
+        )
     }
 
     private var canSelectScheduleDate: Bool {
         true
     }
-
 
     private var canDelete: Bool {
         reminderRecord != nil || presentation.importantDateEvent != nil
@@ -1156,7 +1176,11 @@ struct CustomScheduleEditorSheet: View {
             TimetableNotificationManager.cancelCellReminders(cellKeys: duplicateKeys + (oldCellKey.map { [$0] } ?? []))
             var sourceCleanupWarning: String?
             do { try removeSourceImportantDateIfNeeded() }
-            catch { sourceCleanupWarning = L10n.text("日程已保存，但原记录未移除：%@", language: leafyLanguage, error.localizedDescription) }
+            catch { sourceCleanupWarning = L10n.text(
+                "日程已保存，但原记录未移除：%@",
+                language: leafyLanguage,
+                error.localizedDescription
+            ) }
             publishWidgetSnapshot()
             onSaved?(.init(kind: .timetableReminder, stableID: record.id.uuidString))
             let scheduledCount: Int
@@ -1218,7 +1242,11 @@ struct CustomScheduleEditorSheet: View {
                 TimetableNotificationManager.cancelCellReminders(cellKeys: [oldCellKey])
             } catch {
                 do { try CustomScheduleStore.save(previousEvents) }
-                catch { return .savedWithWarning(L10n.text("日程已保存，但原记录未移除：%@", language: leafyLanguage, error.localizedDescription)) }
+                catch { return .savedWithWarning(L10n.text(
+                    "日程已保存，但原记录未移除：%@",
+                    language: leafyLanguage,
+                    error.localizedDescription
+                )) }
                 return .failed(error.localizedDescription)
             }
         }
@@ -1412,7 +1440,10 @@ struct CourseDetailSheet: View {
                         TextField("作业、考试、分组或老师要求", text: $noteText, axis: .vertical)
                             .lineLimit(4, reservesSpace: true)
                             .padding(14)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
 
                         HStack(spacing: 12) {
                             Button {
@@ -1624,7 +1655,7 @@ struct CourseDetailSheet: View {
     private func requireCurrentCourse() throws {
         guard allCourses.contains(where: { $0.id == course.id }) else {
             throw NSError(domain: "leafy.timetable", code: 2,
-                userInfo: [NSLocalizedDescriptionKey: L10n.text("课表已更新，请重试。", language: leafyLanguage)])
+                          userInfo: [NSLocalizedDescriptionKey: L10n.text("课表已更新，请重试。", language: leafyLanguage)])
         }
     }
 
@@ -1645,7 +1676,10 @@ struct CourseDetailSheet: View {
         let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             try persistSelectedNote(trimmed)
-            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
+            LeafyWidgetSnapshotBuilder.publish(
+                from: modelContext,
+                isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
+            )
             operationAlert = .success(trimmed.isEmpty
                 ? L10n.text("备注已清空。", language: leafyLanguage)
                 : L10n.text("备注已保存。", language: leafyLanguage))
@@ -1658,7 +1692,10 @@ struct CourseDetailSheet: View {
         do {
             try persistSelectedNote("")
             noteText = ""
-            LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
+            LeafyWidgetSnapshotBuilder.publish(
+                from: modelContext,
+                isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
+            )
             operationAlert = .success(L10n.text("备注已删除。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
@@ -1680,7 +1717,10 @@ struct CourseDetailSheet: View {
             operationAlert = .failure(error.localizedDescription)
             return
         }
-        LeafyWidgetSnapshotBuilder.publish(from: modelContext, isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled)
+        LeafyWidgetSnapshotBuilder.publish(
+            from: modelContext,
+            isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
+        )
         do {
             try scope.check()
             try await TimetableNotificationManager.applyReminder(
@@ -1692,10 +1732,13 @@ struct CourseDetailSheet: View {
                 : L10n.text("提醒已设置。", language: leafyLanguage))
         } catch {
             guard !scope.wasCancelled(error) else { return }
-            operationAlert = .failure(L10n.text("提醒设置已保存，但系统提醒排期失败：%@", language: leafyLanguage, error.localizedDescription))
+            operationAlert = .failure(L10n.text(
+                "提醒设置已保存，但系统提醒排期失败：%@",
+                language: leafyLanguage,
+                error.localizedDescription
+            ))
         }
     }
-
 }
 
 struct CourseOccurrenceProgressView: View {

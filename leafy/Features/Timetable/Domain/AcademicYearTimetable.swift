@@ -84,9 +84,13 @@ nonisolated struct AcademicYearTimetable: Sendable {
         academicYearID = Self.academicYearID(semesterID: config.semesterID) ?? config.semesterID
         startDate = calendar.startOfDay(for: config.semesterStartDate)
         endDate = calendar.date(byAdding: .day, value: 140, to: startDate)!
-        weeks = (1...20).map { week in
+        weeks = (1 ... 20).map { week in
             let date = calendar.date(byAdding: .day, value: (week - 1) * 7, to: config.semesterStartDate)!
-            return AcademicYearWeek(id: date, phase: .teaching(semesterID: config.semesterID, weekNumber: week), referenceDate: date)
+            return AcademicYearWeek(
+                id: date,
+                phase: .teaching(semesterID: config.semesterID, weekNumber: week),
+                referenceDate: date
+            )
         }
     }
 
@@ -213,8 +217,8 @@ nonisolated struct AcademicYearTimetable: Sendable {
         }
 
         if let configuration = configurations.last(where: {
-            Self.semesterStartDate(for: $0, calendar: calendar) <= referenceDay
-        }),
+               Self.semesterStartDate(for: $0, calendar: calendar) <= referenceDay
+           }),
            let academicYear = academicYear(from: configuration.semesterID) {
             return academicYear
         }

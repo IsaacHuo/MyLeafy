@@ -50,7 +50,8 @@ extension SchoolNetworkManager {
         if let httpResponse = keyResponse as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: codeUrl)
         }
-        guard let keyString = String(data: keyData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+        guard let keyString = String(data: keyData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        else {
             throw URLError(.badServerResponse)
         }
 
@@ -127,7 +128,8 @@ extension SchoolNetworkManager {
         try await performLogin(account: account, password: password, captcha: captcha, key: key, portal: currentPortal)
     }
 
-    func performLogin(account: String, password: String, captcha: String, key: String, portal: SchoolPortal) async throws -> Bool {
+    func performLogin(account: String, password: String, captcha: String, key: String,
+                      portal: SchoolPortal) async throws -> Bool {
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("请先退出演示模式，再连接校园网登录教务系统。")
         }
@@ -137,7 +139,12 @@ extension SchoolNetworkManager {
         case .undergraduate:
             didLogin = try await performUndergraduateLogin(account: account, password: password, captcha: captcha)
         case .graduate:
-            didLogin = try await performGraduateLogin(account: account, password: password, captcha: captcha, publicKey: key)
+            didLogin = try await performGraduateLogin(
+                account: account,
+                password: password,
+                captcha: captcha,
+                publicKey: key
+            )
         }
 
         if didLogin {
@@ -212,14 +219,19 @@ extension SchoolNetworkManager {
         if isLoginPage(html) {
             throw SchoolNetworkError.loginFailed(
                 "登录未成功，服务端仍返回登录页。" +
-                pageDebugSummary(html: html, responseURL: httpResponse.url, snapshotName: "last_login_failed_page.html")
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: httpResponse.url,
+                        snapshotName: "last_login_failed_page.html"
+                    )
             )
         }
 
         return false
     }
 
-    private func performGraduateLogin(account: String, password: String, captcha: String, publicKey: String) async throws -> Bool {
+    private func performGraduateLogin(account: String, password: String, captcha: String,
+                                      publicKey: String) async throws -> Bool {
         let scope = CampusOperationScope()
         let trimmedAccount = account.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let loginUrl = graduateURL(path: "/home/stulogin_do"),
@@ -286,7 +298,7 @@ extension SchoolNetworkManager {
 
         var encoded = ""
 
-        for i in 0..<codeChars.count {
+        for i in 0 ..< codeChars.count {
             if i < 20 && i < secretKey.count {
                 encoded.append(codeChars[i])
                 let shift = Int(String(secretKey[i])) ?? 0
@@ -323,7 +335,8 @@ extension SchoolNetworkManager {
 
     func extractGraduatePublicKey(from html: String) throws -> String {
         let document = try SwiftSoup.parse(html)
-        let value = try document.select("#pubkey").first()?.attr("value").trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let value = try document.select("#pubkey").first()?.attr("value")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !value.isEmpty else {
             throw SchoolNetworkError.loginFailed("研究生系统未返回登录公钥，请刷新验证码后重试。")
         }
@@ -379,7 +392,24 @@ extension SchoolNetworkManager {
 
     func stripSubjectPublicKeyInfoHeader(from data: Data) -> Data {
         let bytes = [UInt8](data)
-        let rsaEncryptionOID: [UInt8] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03]
+        let rsaEncryptionOID: [UInt8] = [
+            0x30,
+            0x0d,
+            0x06,
+            0x09,
+            0x2a,
+            0x86,
+            0x48,
+            0x86,
+            0xf7,
+            0x0d,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x00,
+            0x03
+        ]
         guard let oidRange = bytes.firstRange(of: rsaEncryptionOID) else { return data }
         var index = oidRange.upperBound
         guard index < bytes.count else { return data }
@@ -394,7 +424,7 @@ extension SchoolNetworkManager {
 
         guard index < bytes.count, bytes[index] == 0x00 else { return data }
         index += 1
-        return Data(bytes[index..<bytes.count])
+        return Data(bytes[index ..< bytes.count])
     }
 
     func decryptGraduateAES(_ cipherText: String) -> String {
@@ -439,7 +469,7 @@ extension SchoolNetworkManager {
         }
 
         guard result == kCCSuccess else { return "" }
-        output.removeSubrange(decryptedLength..<output.count)
+        output.removeSubrange(decryptedLength ..< output.count)
         return String(data: output, encoding: .utf8) ?? ""
     }
 
@@ -453,7 +483,7 @@ extension SchoolNetworkManager {
         guard !trimmed.isEmpty else {
             throw SchoolNetworkError.loginFailed(
                 "研究生系统登录响应无法解密。" +
-                graduateLoginDebugSummary(rawBody: rawBody, responseURL: responseURL, statusCode: statusCode)
+                    graduateLoginDebugSummary(rawBody: rawBody, responseURL: responseURL, statusCode: statusCode)
             )
         }
 
@@ -461,7 +491,11 @@ extension SchoolNetworkManager {
               let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
             throw SchoolNetworkError.loginFailed(
                 "研究生系统登录响应格式异常。" +
-                graduateLoginDebugSummary(rawBody: rawBody ?? trimmed, responseURL: responseURL, statusCode: statusCode)
+                    graduateLoginDebugSummary(
+                        rawBody: rawBody ?? trimmed,
+                        responseURL: responseURL,
+                        statusCode: statusCode
+                    )
             )
         }
 
@@ -479,7 +513,7 @@ extension SchoolNetworkManager {
 
         throw SchoolNetworkError.loginFailed(
             "研究生系统未确认登录成功，请刷新验证码后重试。" +
-            graduateLoginDebugSummary(rawBody: rawBody ?? trimmed, responseURL: responseURL, statusCode: statusCode)
+                graduateLoginDebugSummary(rawBody: rawBody ?? trimmed, responseURL: responseURL, statusCode: statusCode)
         )
     }
 
@@ -499,12 +533,12 @@ extension SchoolNetworkManager {
         let statusPart = statusCode.map(String.init) ?? "unknown"
 
         #if DEBUG
-        let snapshotName = "last_graduate_login_response.txt"
-        let savedURL = rawBody.flatMap { persistDebugHTML($0, filename: snapshotName) }
-        let filePart = savedURL?.lastPathComponent ?? snapshotName
-        return L10n.text("HTTP: %@，URL: %@，调试文件: %@", statusPart, urlPart, filePart)
+            let snapshotName = "last_graduate_login_response.txt"
+            let savedURL = rawBody.flatMap { persistDebugHTML($0, filename: snapshotName) }
+            let filePart = savedURL?.lastPathComponent ?? snapshotName
+            return L10n.text("HTTP: %@，URL: %@，调试文件: %@", statusPart, urlPart, filePart)
         #else
-        return L10n.text("HTTP: %@，URL: %@。请确认校园网连接，或刷新验证码后重试。", statusPart, urlPart)
+            return L10n.text("HTTP: %@，URL: %@。请确认校园网连接，或刷新验证码后重试。", statusPart, urlPart)
         #endif
     }
 
@@ -546,7 +580,7 @@ extension SchoolNetworkManager {
         }
 
         let scope = CampusOperationScope()
-        for attempt in 0...max(0, retryCount) {
+        for attempt in 0 ... max(0, retryCount) {
             guard scope.isCurrent, !Task.isCancelled else { return false }
             do {
                 _ = try await fetchGraduateDisplayName(from: url)

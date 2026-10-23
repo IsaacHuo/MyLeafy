@@ -303,7 +303,12 @@ struct LearningWorkspaceView: View {
         project.goal = draft.goal
         project.isArchived = draft.isArchived
         project.updatedAt = Date()
-        return save(successMessage: "学习空间已保存。", undo: { project.title = previous.0; project.kindRawValue = previous.1; project.goal = previous.2; project.isArchived = previous.3; project.updatedAt = previous.4 })
+        return save(
+            successMessage: "学习空间已保存。",
+            undo: {
+                project.title = previous.0; project.kindRawValue = previous.1; project.goal = previous.2; project
+                    .isArchived = previous.3; project.updatedAt = previous.4 }
+        )
     }
 
     private func deleteProjectKeepingContents(_ project: LearningProject) {
@@ -508,7 +513,10 @@ private struct LearningMaterialEditorSheet: View {
                 Section {
                     TextField(L10n.text("资料标题", language: leafyLanguage), text: $title)
                     if let lockedCategory {
-                        LabeledContent(L10n.text("分类", language: leafyLanguage), value: L10n.text(lockedCategory.rawValue, language: leafyLanguage))
+                        LabeledContent(
+                            L10n.text("分类", language: leafyLanguage),
+                            value: L10n.text(lockedCategory.rawValue, language: leafyLanguage)
+                        )
                     } else {
                         Picker(L10n.text("分类", language: leafyLanguage), selection: $category) {
                             ForEach(LearningMaterialCategory.allCases) { category in
@@ -518,12 +526,15 @@ private struct LearningMaterialEditorSheet: View {
                     }
                     TextField(L10n.text("课程/考试", language: leafyLanguage), text: $courseName)
                     TextField(L10n.text("备注", language: leafyLanguage), text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
 
                 Section {
                     LabeledContent(L10n.text("文件", language: leafyLanguage), value: material.originalFilename)
-                    LabeledContent(L10n.text("类型", language: leafyLanguage), value: L10n.text(material.displayType, language: leafyLanguage))
+                    LabeledContent(
+                        L10n.text("类型", language: leafyLanguage),
+                        value: L10n.text(material.displayType, language: leafyLanguage)
+                    )
                 } footer: {
                     Text(L10n.text("文件本体保存在本机私有目录，仅当前 App 可访问。", language: leafyLanguage))
                 }
@@ -545,7 +556,13 @@ private struct LearningMaterialEditorSheet: View {
     }
 
     private func save() {
-        let previous = (material.title, material.categoryRawValue, material.courseName, material.note, material.updatedAt)
+        let previous = (
+            material.title,
+            material.categoryRawValue,
+            material.courseName,
+            material.note,
+            material.updatedAt
+        )
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         material.title = trimmedTitle.isEmpty ? material.originalFilename : trimmedTitle
         material.category = lockedCategory ?? category
@@ -658,7 +675,6 @@ private struct LearningMaterialQuickLookPreview: UIViewControllerRepresentable {
         }
     }
 }
-
 
 private struct LearningSummaryTableRow: View {
     let title: String
@@ -820,7 +836,10 @@ private struct LearningWorkspaceRow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.secondaryText)
                         .frame(width: 30, height: 30)
-                        .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                        .background(
+                            AppTheme.softFill,
+                            in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("更多学习空间操作")
@@ -1018,12 +1037,22 @@ struct LearningWorkspaceDetailView: View {
             }
         }
         .leafySheet(isPresented: $showingRecordEditor) {
-            StudyTimeRecordEditorView(record: nil, topicOptions: topicOptions, initialTopic: focusTopic, lockedTopic: focusTopic) { draft in
+            StudyTimeRecordEditorView(
+                record: nil,
+                topicOptions: topicOptions,
+                initialTopic: focusTopic,
+                lockedTopic: focusTopic
+            ) { draft in
                 insertRecord(draft)
             }
         }
         .leafySheet(item: $editingRecord) { record in
-            StudyTimeRecordEditorView(record: record, topicOptions: topicOptions, initialTopic: focusTopic, lockedTopic: focusTopic) { draft in
+            StudyTimeRecordEditorView(
+                record: record,
+                topicOptions: topicOptions,
+                initialTopic: focusTopic,
+                lockedTopic: focusTopic
+            ) { draft in
                 update(record, with: draft)
             }
         }
@@ -1188,9 +1217,13 @@ struct LearningWorkspaceDetailView: View {
 
             if scopedMaterials.isEmpty {
                 AcademicDetailCard {
-                    ContentUnavailableView("暂无学习资料", systemImage: "folder", description: Text("导入 PDF、图片、Word、PPT 或表格后，可预览、编辑和导出。"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.compact)
+                    ContentUnavailableView(
+                        "暂无学习资料",
+                        systemImage: "folder",
+                        description: Text("导入 PDF、图片、Word、PPT 或表格后，可预览、编辑和导出。")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.compact)
                 }
             } else {
                 AcademicDetailCard {
@@ -1227,9 +1260,13 @@ struct LearningWorkspaceDetailView: View {
 
             if scopedTasks.isEmpty {
                 AcademicDetailCard {
-                    ContentUnavailableView("暂无任务", systemImage: "checklist", description: Text("可以记录复习章节、资料整理、刷题或考试准备。"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.compact)
+                    ContentUnavailableView(
+                        "暂无任务",
+                        systemImage: "checklist",
+                        description: Text("可以记录复习章节、资料整理、刷题或考试准备。")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.compact)
                 }
             } else {
                 AcademicDetailCard {
@@ -1274,9 +1311,13 @@ struct LearningWorkspaceDetailView: View {
 
             if scopedRecords.isEmpty {
                 AcademicDetailCard {
-                    ContentUnavailableView("暂无专注记录", systemImage: "clock.badge.checkmark", description: Text("记录一段学习时间后，会在这里看到当前空间的累计时长。"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, AppSpacing.compact)
+                    ContentUnavailableView(
+                        "暂无专注记录",
+                        systemImage: "clock.badge.checkmark",
+                        description: Text("记录一段学习时间后，会在这里看到当前空间的累计时长。")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.compact)
                 }
             } else {
                 AcademicDetailCard {
@@ -1373,7 +1414,8 @@ struct LearningWorkspaceDetailView: View {
 
     private func delete(_ material: LearningMaterialDocument) {
         do {
-            let files = LearningMaterialFileStore.fileURL(for: material).map { [LocalFileCleanup.File(material, url: $0)] } ?? []
+            let files = LearningMaterialFileStore.fileURL(for: material)
+                .map { [LocalFileCleanup.File(material, url: $0)] } ?? []
             try LocalFileCleanup().delete([material], files: files, in: modelContext)
             operationAlert = .success(L10n.text("资料已删除。", language: leafyLanguage))
         } catch {
@@ -1399,14 +1441,21 @@ struct LearningWorkspaceDetailView: View {
         task.note = draft.note
         task.dueAt = draft.dueAt
         task.updatedAt = Date()
-        return save(successMessage: "任务已保存。", undo: { task.title = previous.0; task.note = previous.1; task.dueAt = previous.2; task.updatedAt = previous.3 })
+        return save(
+            successMessage: "任务已保存。",
+            undo: {
+                task.title = previous.0; task.note = previous.1; task.dueAt = previous.2; task.updatedAt = previous.3 }
+        )
     }
 
     private func toggle(_ task: LearningProjectTask) {
         let previous = (task.isCompleted, task.updatedAt)
         task.isCompleted.toggle()
         task.updatedAt = Date()
-        save(successMessage: task.isCompleted ? "任务已完成。" : "任务已恢复。", undo: { task.isCompleted = previous.0; task.updatedAt = previous.1 })
+        save(
+            successMessage: task.isCompleted ? "任务已完成。" : "任务已恢复。",
+            undo: { task.isCompleted = previous.0; task.updatedAt = previous.1 }
+        )
     }
 
     private func deleteTask(_ task: LearningProjectTask) {
@@ -1432,7 +1481,16 @@ struct LearningWorkspaceDetailView: View {
     }
 
     private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) -> Bool {
-        let previous = (record.startedAt, record.endedAt, record.projectID, record.categoryRawValue, record.content, record.location, record.note, record.updatedAt)
+        let previous = (
+            record.startedAt,
+            record.endedAt,
+            record.projectID,
+            record.categoryRawValue,
+            record.content,
+            record.location,
+            record.note,
+            record.updatedAt
+        )
         record.startedAt = draft.startedAt
         record.endedAt = draft.endedAt
         record.projectID = draft.projectID
@@ -1441,7 +1499,13 @@ struct LearningWorkspaceDetailView: View {
         record.location = draft.location
         record.note = draft.note
         record.updatedAt = Date()
-        return save(successMessage: "记录已保存。", undo: { record.startedAt = previous.0; record.endedAt = previous.1; record.projectID = previous.2; record.categoryRawValue = previous.3; record.content = previous.4; record.location = previous.5; record.note = previous.6; record.updatedAt = previous.7 })
+        return save(
+            successMessage: "记录已保存。",
+            undo: {
+                record.startedAt = previous.0; record.endedAt = previous.1; record.projectID = previous.2; record
+                    .categoryRawValue = previous.3; record.content = previous.4; record.location = previous.5; record
+                    .note = previous.6; record.updatedAt = previous.7 }
+        )
     }
 
     private func deleteRecord(_ record: StudyTimeRecord) {
@@ -1497,7 +1561,12 @@ struct LearningWorkspaceDetailView: View {
         project.goal = draft.goal
         project.isArchived = draft.isArchived
         project.updatedAt = Date()
-        return save(successMessage: "学习空间已保存。", undo: { project.title = previous.0; project.kindRawValue = previous.1; project.goal = previous.2; project.isArchived = previous.3; project.updatedAt = previous.4 })
+        return save(
+            successMessage: "学习空间已保存。",
+            undo: {
+                project.title = previous.0; project.kindRawValue = previous.1; project.goal = previous.2; project
+                    .isArchived = previous.3; project.updatedAt = previous.4 }
+        )
     }
 
     private func deleteProjectKeepingContents(_ project: LearningProject) {
@@ -1610,7 +1679,10 @@ private struct LearningTaskRow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.accentEmphasis)
                         .frame(width: 30, height: 30)
-                        .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                        .background(
+                            AppTheme.softFill,
+                            in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("编辑任务")
@@ -1620,7 +1692,10 @@ private struct LearningTaskRow: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppTheme.danger)
                         .frame(width: 30, height: 30)
-                        .background(AppTheme.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                        .background(
+                            AppTheme.danger.opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("删除任务")
@@ -1672,7 +1747,7 @@ private struct LearningProjectEditorSheet: View {
                         }
                     }
                     TextField("目标/备注", text: $goal, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                     if project != nil {
                         Toggle("归档学习空间", isOn: $isArchived)
                     }
@@ -1743,7 +1818,7 @@ private struct LearningProjectTaskEditorSheet: View {
                         DatePicker("截止日期", selection: $dueAt, displayedComponents: .date)
                     }
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(task == nil ? "添加任务" : "编辑任务")
@@ -1857,7 +1932,8 @@ struct StudyFocusTopicOption: Identifiable, Hashable {
         return [.none] + fixed + projectOptions
     }
 
-    static func option(for destination: LearningWorkspaceDestination, projects: [LearningProject]) -> StudyFocusTopicOption {
+    static func option(for destination: LearningWorkspaceDestination,
+                       projects: [LearningProject]) -> StudyFocusTopicOption {
         switch destination {
         case .fixed(let category):
             return fixed(category)
@@ -1961,7 +2037,8 @@ private struct StudyFocusTimerPanel: View {
 
                 if let activeSession {
                     TimelineView(.periodic(from: activeSession.startedAt, by: 1)) { context in
-                        Text(StudyTimeDurationFormatter.timerText(for: context.date.timeIntervalSince(activeSession.startedAt)))
+                        Text(StudyTimeDurationFormatter
+                            .timerText(for: context.date.timeIntervalSince(activeSession.startedAt)))
                             .font(.title2.weight(.bold))
                             .foregroundStyle(AppTheme.primaryText)
                             .monospacedDigit()
@@ -2049,9 +2126,11 @@ private struct StudyTimeShareCard: View {
                                 Text(record.content)
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(AppTheme.primaryText)
-                                Text("\(DateFormatters.headerWithTime.string(from: record.startedAt)) · \(StudyTimeDurationFormatter.text(for: record.endedAt.timeIntervalSince(record.startedAt), language: leafyLanguage))")
-                                    .font(.caption)
-                                    .foregroundStyle(AppTheme.secondaryText)
+                                Text(
+                                    "\(DateFormatters.headerWithTime.string(from: record.startedAt)) · \(StudyTimeDurationFormatter.text(for: record.endedAt.timeIntervalSince(record.startedAt), language: leafyLanguage))"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.secondaryText)
                             }
                         }
                     }
@@ -2146,7 +2225,10 @@ struct StudyTimeRecordsView: View {
             HStack {
                 AcademicDetailSectionHeader(title: L10n.text("学习记录", language: leafyLanguage))
                 Spacer()
-                CareerSectionAddButton(title: L10n.text("导出图片", language: leafyLanguage), systemName: "square.and.arrow.up") {
+                CareerSectionAddButton(
+                    title: L10n.text("导出图片", language: leafyLanguage),
+                    systemName: "square.and.arrow.up"
+                ) {
                     exportImage()
                 }
                 CareerSectionAddButton(title: L10n.text("添加记录", language: leafyLanguage), systemName: "plus") {
@@ -2201,7 +2283,11 @@ struct StudyTimeRecordsView: View {
             }
         }
         .leafySheet(item: $editingRecord) { record in
-            StudyTimeRecordEditorView(record: record, topicOptions: topicOptions, initialTopic: StudyFocusTopicOption.option(for: record, projects: projects)) { draft in
+            StudyTimeRecordEditorView(
+                record: record,
+                topicOptions: topicOptions,
+                initialTopic: StudyFocusTopicOption.option(for: record, projects: projects)
+            ) { draft in
                 update(record, with: draft)
             }
         }
@@ -2243,7 +2329,16 @@ struct StudyTimeRecordsView: View {
     }
 
     private func update(_ record: StudyTimeRecord, with draft: StudyTimeRecordDraft) -> Bool {
-        let previous = (record.startedAt, record.endedAt, record.projectID, record.categoryRawValue, record.content, record.location, record.note, record.updatedAt)
+        let previous = (
+            record.startedAt,
+            record.endedAt,
+            record.projectID,
+            record.categoryRawValue,
+            record.content,
+            record.location,
+            record.note,
+            record.updatedAt
+        )
         record.startedAt = draft.startedAt
         record.endedAt = draft.endedAt
         record.projectID = draft.projectID
@@ -2252,7 +2347,13 @@ struct StudyTimeRecordsView: View {
         record.location = draft.location
         record.note = draft.note
         record.updatedAt = Date()
-        return save(successMessage: "记录已保存。", undo: { record.startedAt = previous.0; record.endedAt = previous.1; record.projectID = previous.2; record.categoryRawValue = previous.3; record.content = previous.4; record.location = previous.5; record.note = previous.6; record.updatedAt = previous.7 })
+        return save(
+            successMessage: "记录已保存。",
+            undo: {
+                record.startedAt = previous.0; record.endedAt = previous.1; record.projectID = previous.2; record
+                    .categoryRawValue = previous.3; record.content = previous.4; record.location = previous.5; record
+                    .note = previous.6; record.updatedAt = previous.7 }
+        )
     }
 
     private func delete(_ record: StudyTimeRecord) {
@@ -2365,7 +2466,10 @@ private struct StudyTimeRecordRow: View {
     let deleteAction: () -> Void
 
     private var durationText: String {
-        StudyTimeDurationFormatter.text(for: record.endedAt.timeIntervalSince(record.startedAt), language: leafyLanguage)
+        StudyTimeDurationFormatter.text(
+            for: record.endedAt.timeIntervalSince(record.startedAt),
+            language: leafyLanguage
+        )
     }
 
     var body: some View {
@@ -2541,7 +2645,7 @@ private struct StudyTimeRecordEditorView: View {
                         }
                     }
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(record == nil ? "添加记录" : "编辑记录")

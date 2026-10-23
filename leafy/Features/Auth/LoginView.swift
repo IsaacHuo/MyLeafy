@@ -213,7 +213,8 @@ struct LoginView: View {
 
                         Image(systemName: campus.id == selectedCampusID ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 18 * leafyControlScale, weight: .semibold))
-                            .foregroundStyle(campus.id == selectedCampusID ? AppTheme.accent : AppTheme.secondaryText.opacity(0.7))
+                            .foregroundStyle(campus.id == selectedCampusID ? AppTheme.accent : AppTheme.secondaryText
+                                .opacity(0.7))
                     }
                     .padding(.horizontal, 16 * leafyControlScale)
                     .padding(.vertical, 12 * leafyControlScale)
@@ -287,9 +288,9 @@ struct LoginView: View {
                     ),
                     systemImage: "envelope.badge"
                 )
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Text(L10n.text("通用学校入口不会连接教务系统；课表、成绩和考试安排进入 App 后手动导入，学校社区在社区页申请。", language: leafyLanguage))
@@ -349,7 +350,10 @@ struct LoginView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.secondaryText)
-                    .accessibilityLabel(isPasswordVisible ? L10n.text("隐藏密码", language: leafyLanguage) : L10n.text("显示密码", language: leafyLanguage))
+                    .accessibilityLabel(isPasswordVisible ? L10n.text("隐藏密码", language: leafyLanguage) : L10n.text(
+                        "显示密码",
+                        language: leafyLanguage
+                    ))
                 }
                 .padding(.horizontal, 16 * leafyControlScale)
                 .frame(height: scaledFieldHeight)
@@ -360,13 +364,13 @@ struct LoginView: View {
 
                     HStack(spacing: 12) {
                         TextField(L10n.text("邮箱验证码", language: leafyLanguage), text: $customSignUpCode)
-                        .leafyOneTimeCodeInput(isNumeric: true)
-                        .onChange(of: customSignUpCode) { _, newValue in
-                            let normalized = newValue.filter(\.isNumber)
-                            if normalized != newValue {
-                                customSignUpCode = normalized
+                            .leafyOneTimeCodeInput(isNumeric: true)
+                            .onChange(of: customSignUpCode) { _, newValue in
+                                let normalized = newValue.filter(\.isNumber)
+                                if normalized != newValue {
+                                    customSignUpCode = normalized
+                                }
                             }
-                        }
 
                         Button {
                             Task { await sendCustomSignUpCode() }
@@ -381,7 +385,8 @@ struct LoginView: View {
                         .foregroundStyle(AppTheme.accent)
                         .font(.system(size: 13 * leafyFontScale, weight: .semibold))
                         .frame(width: 118 * leafyControlScale, height: 34 * leafyControlScale)
-                        .disabled(isSendingCustomSignUpCode || customSignUpCodeCooldownRemaining > 0 || username.isEmpty || password.isEmpty)
+                        .disabled(isSendingCustomSignUpCode || customSignUpCodeCooldownRemaining > 0 || username
+                            .isEmpty || password.isEmpty)
                         .accessibilityLabel(customSignUpCodeButtonTitle)
                     }
                     .padding(.horizontal, 16 * leafyControlScale)
@@ -406,7 +411,10 @@ struct LoginView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.secondaryText)
-                    .accessibilityLabel(isPasswordVisible ? L10n.text("隐藏密码", language: leafyLanguage) : L10n.text("显示密码", language: leafyLanguage))
+                    .accessibilityLabel(isPasswordVisible ? L10n.text("隐藏密码", language: leafyLanguage) : L10n.text(
+                        "显示密码",
+                        language: leafyLanguage
+                    ))
                 }
                 .padding(.horizontal, 16 * leafyControlScale)
                 .frame(height: scaledFieldHeight)
@@ -436,10 +444,13 @@ struct LoginView: View {
                     .font(.system(size: 15 * leafyFontScale, weight: .semibold))
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text(L10n.text("无需账号和密码。课表、成绩、考试安排、随记与日程默认保存在本机，可自行开启 iCloud 同步；此模式不连接 MyLeafy 账号或后台，不包含社区。", language: leafyLanguage))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(L10n.text(
+                    "无需账号和密码。课表、成绩、考试安排、随记与日程默认保存在本机，可自行开启 iCloud 同步；此模式不连接 MyLeafy 账号或后台，不包含社区。",
+                    language: leafyLanguage
+                ))
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16 * leafyControlScale)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -606,7 +617,10 @@ struct LoginView: View {
 
     private var loginButtonTitle: String {
         if isLoggingIn {
-            return L10n.text(customAuthMode == .signUp && isCustomCampusSelected ? "注册中" : "登录中", language: leafyLanguage)
+            return L10n.text(
+                customAuthMode == .signUp && isCustomCampusSelected ? "注册中" : "登录中",
+                language: leafyLanguage
+            )
         }
         if isCustomCampusSelected {
             return L10n.text(customAuthMode.primaryActionTitle, language: leafyLanguage)
@@ -736,7 +750,8 @@ struct LoginView: View {
 
         do {
             let result = try await schoolNetworkManager.fetchCaptcha(for: portal)
-            guard !Task.isCancelled, captchaRequestID == requestID, selectedPortal == portal, selectedCampusID == campus else {
+            guard !Task.isCancelled, captchaRequestID == requestID, selectedPortal == portal,
+                  selectedCampusID == campus else {
                 return
             }
 

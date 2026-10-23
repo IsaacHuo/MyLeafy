@@ -164,11 +164,14 @@ final class TimetableCellReminder {
     }
 
     var displayEndPeriod: Int {
-        max(displayStartPeriod, min(endPeriod ?? displayStartPeriod, TimetablePeriodSchedule.slots.last?.period ?? displayStartPeriod))
+        max(
+            displayStartPeriod,
+            min(endPeriod ?? displayStartPeriod, TimetablePeriodSchedule.slots.last?.period ?? displayStartPeriod)
+        )
     }
 
     var displayPeriodRange: ClosedRange<Int> {
-        displayStartPeriod...displayEndPeriod
+        displayStartPeriod ... displayEndPeriod
     }
 
     var resolvedStartDate: Date? {
@@ -598,7 +601,8 @@ enum LearningMaterialFileStore {
         UTType(filenameExtension: "csv") ?? .data
     ]
 
-    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil, filename: String? = nil) throws -> StoredFile {
+    static func importFile(from sourceURL: URL, contentTypeIdentifier: String? = nil,
+                           filename: String? = nil) throws -> StoredFile {
         let didAccess = sourceURL.startAccessingSecurityScopedResource()
         defer {
             if didAccess {
@@ -609,7 +613,8 @@ enum LearningMaterialFileStore {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
-        let localFilename = filename ?? LearningMaterialLocalFile.localFilename(originalExtension: sourceURL.pathExtension)
+        let localFilename = filename ?? LearningMaterialLocalFile
+            .localFilename(originalExtension: sourceURL.pathExtension)
         let destinationURL = directoryURL.appendingPathComponent(localFilename)
 
         if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
@@ -671,13 +676,17 @@ extension LearningMaterialDocument {
         if contentType?.conforms(to: .image) == true { return "图片" }
         if contentType?.conforms(to: .plainText) == true { return "文本" }
         if contentType?.conforms(to: .rtf) == true || lowercasedName.hasSuffix(".rtf") { return "RTF" }
-        if lowercasedName.hasSuffix(".doc") || lowercasedName.hasSuffix(".docx") || lowercasedIdentifier.contains("word") {
+        if lowercasedName.hasSuffix(".doc") || lowercasedName.hasSuffix(".docx") || lowercasedIdentifier
+            .contains("word") {
             return "Word"
         }
-        if lowercasedName.hasSuffix(".ppt") || lowercasedName.hasSuffix(".pptx") || lowercasedIdentifier.contains("powerpoint") || lowercasedIdentifier.contains("presentation") {
+        if lowercasedName.hasSuffix(".ppt") || lowercasedName.hasSuffix(".pptx") || lowercasedIdentifier
+            .contains("powerpoint") || lowercasedIdentifier.contains("presentation") {
             return "PPT"
         }
-        if lowercasedName.hasSuffix(".xls") || lowercasedName.hasSuffix(".xlsx") || lowercasedName.hasSuffix(".csv") || lowercasedIdentifier.contains("excel") || lowercasedIdentifier.contains("spreadsheet") {
+        if lowercasedName.hasSuffix(".xls") || lowercasedName.hasSuffix(".xlsx") || lowercasedName
+            .hasSuffix(".csv") || lowercasedIdentifier.contains("excel") || lowercasedIdentifier
+            .contains("spreadsheet") {
             return "表格"
         }
         return "文件"
@@ -1018,7 +1027,6 @@ final class ComprehensiveQualityEvidenceDocument {
         self.updatedAt = updatedAt
     }
 }
-
 
 @Model
 final class MedicalLedgerEntry {

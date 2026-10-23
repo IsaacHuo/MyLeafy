@@ -328,8 +328,10 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     @MainActor
     func testSessionReplacementDuringRecognitionNeverSubmitsOldCredentials() async {
         let client = FakeSchoolAuthenticationClient()
-        let recognizer = FakeCaptchaRecognizer(result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3),
-            onRecognition: { await MainActor.run { ActiveCampusContext.networkManager.cancelInFlightRequests() } })
+        let recognizer = FakeCaptchaRecognizer(
+            result: CaptchaResult(text: "a7k3", confidence: 0.99, supportingVariantCount: 3),
+            onRecognition: { await MainActor.run { ActiveCampusContext.networkManager.cancelInFlightRequests() } }
+        )
         let service = makeService(client: client, recognizer: recognizer, credential: credential())
         do {
             _ = try await service.recover(portal: .undergraduate, allowsAutomaticAttempt: true, policy: testPolicy)
@@ -342,7 +344,12 @@ final class SchoolAuthenticationRecoveryTests: XCTestCase {
     func testSchoolCookieBoundaryRejectsExternalOriginsAndUserInfo() {
         let manager = SchoolNetworkManager()
         XCTAssertTrue(manager.isSchoolURL(URL(string: manager.baseURL + "/jsxsd/xskb/xskb_list.do")!))
-        for raw in ["https://example.com/kscj/kb", "http://newjwxt.bjfu.edu.cn.evil.example/kb", "http://user@newjwxt.bjfu.edu.cn/kb", "http://newjwxt.bjfu.edu.cn:9999/kb"] {
+        for raw in [
+            "https://example.com/kscj/kb",
+            "http://newjwxt.bjfu.edu.cn.evil.example/kb",
+            "http://user@newjwxt.bjfu.edu.cn/kb",
+            "http://newjwxt.bjfu.edu.cn:9999/kb"
+        ] {
             let url = URL(string: raw)!
             XCTAssertFalse(manager.isSchoolURL(url))
             var request = URLRequest(url: url)

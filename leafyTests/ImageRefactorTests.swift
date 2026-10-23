@@ -80,8 +80,9 @@ extension PerformanceRefactorTests {
             var bytes = [UInt8](repeating: 0, count: 10 * 6 * 4)
             try bytes.withUnsafeMutableBytes { buffer in
                 let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: 10, height: 6,
-                    bitsPerComponent: 8, bytesPerRow: 40, space: CGColorSpaceCreateDeviceRGB(),
-                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                                                      bitsPerComponent: 8, bytesPerRow: 40,
+                                                      space: CGColorSpaceCreateDeviceRGB(),
+                                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
                 context.draw(raster, in: CGRect(x: 0, y: 0, width: 10, height: 6))
             }
             return bytes
@@ -95,7 +96,6 @@ extension PerformanceRefactorTests {
     }
 }
 
-
 extension PerformanceRefactorTests {
     @MainActor
     func testRepeatedCompressionReportsActualEncodedPixelDimensions() async throws {
@@ -106,7 +106,11 @@ extension PerformanceRefactorTests {
             context.fill(CGRect(x: 0, y: 0, width: 96, height: 64))
         }
         let source = try XCTUnwrap(image.pngData())
-        let actorResult = try await CommunityImageProcessor.shared.compressedJPEG(from: source, maxPixelDimension: 96, maxBytes: 1)
+        let actorResult = try await CommunityImageProcessor.shared.compressedJPEG(
+            from: source,
+            maxPixelDimension: 96,
+            maxBytes: 1
+        )
         let uiResult = try CommunityImageUpload.compressedJPEG(from: image, maxPixelDimension: 96, maxBytes: 1)
         for upload in [actorResult.upload, uiResult] {
             let source = try XCTUnwrap(CGImageSourceCreateWithData(upload.data as CFData, nil))

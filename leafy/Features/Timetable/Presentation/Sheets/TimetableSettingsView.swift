@@ -16,7 +16,11 @@ struct TimetableSettingsView: View {
     var body: some View {
         Form {
             Section("学期与开学日期") {
-                Stepper("\(draft.academicYear)–\(draft.academicYear + 1) 学年", value: $draft.academicYear, in: 1900...2200)
+                Stepper(
+                    "\(draft.academicYear)–\(draft.academicYear + 1) 学年",
+                    value: $draft.academicYear,
+                    in: 1900 ... 2200
+                )
                 Picker("学期", selection: $draft.term) {
                     Text("第一学期").tag(1)
                     Text("第二学期").tag(2)
@@ -30,7 +34,7 @@ struct TimetableSettingsView: View {
                     Text("已暂存最新课表，请补全到第 \(pendingImport.requiredPeriods) 节的作息，保存后导入。")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Stepper("每天 \(periodCount) 节", value: $periodCount, in: 1...24)
+                Stepper("每天 \(periodCount) 节", value: $periodCount, in: 1 ... 24)
                 ForEach(draft.periods.indices, id: \.self) { index in
                     VStack(alignment: .leading, spacing: 10) {
                         Text("第 \(index + 1) 节")
@@ -75,12 +79,19 @@ struct TimetableSettingsView: View {
                     let previous = draft.periods.last!
                     let start = min(previous.endHour * 60 + previous.endMinute + 5, 23 * 60)
                     let end = min(start + 45, 1439)
-                    draft.periods.append(.init(period: index + 1, startHour: start / 60, startMinute: start % 60, endHour: end / 60, endMinute: end % 60))
+                    draft.periods.append(.init(
+                        period: index + 1,
+                        startHour: start / 60,
+                        startMinute: start % 60,
+                        endHour: end / 60,
+                        endMinute: end % 60
+                    ))
                 }
             }
         }
         .confirmationDialog("将以下日期作为第一周的星期一？", isPresented: $confirmsMonday, titleVisibility: .visible) {
-            Button(UserTimetableSettings.monday(containing: chosenDate).formatted(date: .abbreviated, time: .omitted)) { save() }
+            Button(UserTimetableSettings.monday(containing: chosenDate).formatted(date: .abbreviated, time: .omitted)) {
+                save() }
             Button("取消", role: .cancel) {}
         }
         .alert("课表设置", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
@@ -103,21 +114,24 @@ struct TimetableSettingsView: View {
 
     private func timeBinding(_ index: Int, end: Bool) -> Binding<Date> {
         Binding(get: {
-            let slot = draft.periods.indices.contains(index) ? draft.periods[index] : TimetablePeriodSchedule.defaultSlots[0]
+            let slot = draft.periods.indices.contains(index) ? draft.periods[index] : TimetablePeriodSchedule
+                .defaultSlots[0]
             return UserTimetableSettings.calendar.date(bySettingHour: end ? slot.endHour : slot.startHour,
-                minute: end ? slot.endMinute : slot.startMinute, second: 0, of: draft.firstMonday)!
+                                                       minute: end ? slot.endMinute : slot.startMinute, second: 0,
+                                                       of: draft.firstMonday)!
         }, set: { date in
             guard draft.periods.indices.contains(index) else { return }
             let hour = UserTimetableSettings.calendar.component(.hour, from: date)
             let minute = UserTimetableSettings.calendar.component(.minute, from: date)
             let old = draft.periods[index]
             draft.periods[index] = .init(period: index + 1, startHour: end ? old.startHour : hour,
-                startMinute: end ? old.startMinute : minute, endHour: end ? hour : old.endHour,
-                endMinute: end ? minute : old.endMinute)
+                                         startMinute: end ? old.startMinute : minute, endHour: end ? hour : old.endHour,
+                                         endMinute: end ? minute : old.endMinute)
         })
     }
     private func prepareSave() {
-        if UserTimetableSettings.calendar.startOfDay(for: chosenDate) != UserTimetableSettings.monday(containing: chosenDate) {
+        if UserTimetableSettings.calendar.startOfDay(for: chosenDate) != UserTimetableSettings
+            .monday(containing: chosenDate) {
             confirmsMonday = true
         } else { save() }
     }
@@ -135,7 +149,8 @@ struct TimetableSettingsView: View {
             try UserTimetableSettingsStore.save(draft)
             if let pendingImport {
                 let saved = try TimetableRefreshUseCase().persist(records: pendingImport.records,
-                    existingCourses: courses, modelContext: context, semesterID: pendingImport.sourceSemesterID)
+                                                                  existingCourses: courses, modelContext: context,
+                                                                  semesterID: pendingImport.sourceSemesterID)
                 TimetableCacheMetadata.lastSyncAt = Date()
                 TimetableCacheMetadata.lastSyncedSemesterID = pendingImport.sourceSemesterID
                 try TimetablePendingImportStore.clear()
@@ -146,13 +161,13 @@ struct TimetableSettingsView: View {
                     guard scope.isCurrent else { return }
                     if let warning { TimetableCacheMetadata.lastFailureMessage = warning }
                     if ActiveCampusContext.descriptor.supports(.community), !ReviewDemoMode.isEnabled {
-                        _ = await TimetableSharingService.shared.publishExistingSnapshotIfNeeded(courses: saved.sharedCourses)
+                        _ = await TimetableSharingService.shared
+                            .publishExistingSnapshotIfNeeded(courses: saved.sharedCourses)
                     }
                 }
             }
             dismiss()
         } catch { message = error.localizedDescription }
-
     }
 }
 

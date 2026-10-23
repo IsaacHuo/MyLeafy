@@ -31,7 +31,7 @@ struct ScheduleMemoAudioRecorderSheet: View {
 
                 if recorder.state == .ready {
                     TextField("添加一句备注（可选）", text: $note, axis: .vertical)
-                        .lineLimit(2...4)
+                        .lineLimit(2 ... 4)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 52)
                         .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

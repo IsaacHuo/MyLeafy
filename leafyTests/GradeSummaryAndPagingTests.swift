@@ -63,7 +63,12 @@ final class GradeSummaryAndPagingTests: XCTestCase {
         controller.updatePaging(translation: -40)
         XCTAssertEqual(controller.horizontalOffset, -110, accuracy: 0.001)
         controller.advanceAnimation(by: 1.0 / 60)
-        XCTAssertEqual(controller.horizontalOffset, -110, accuracy: 0.001, "The interrupted display link cannot move the new drag")
+        XCTAssertEqual(
+            controller.horizontalOffset,
+            -110,
+            accuracy: 0.001,
+            "The interrupted display link cannot move the new drag"
+        )
         XCTAssertEqual(controller.windowRevision, revision)
         controller.endPaging(predictedTranslation: -320, velocity: 0, viewportWidth: 390, reducesMotion: true)
         XCTAssertEqual(controller.weekStartDate, date(14))
@@ -78,7 +83,12 @@ final class GradeSummaryAndPagingTests: XCTestCase {
         controller.endPaging(predictedTranslation: -390, velocity: 0, viewportWidth: 390, reducesMotion: false)
         XCTAssertTrue(controller.beginPaging(viewportWidth: 390))
         XCTAssertEqual(controller.weekStartDate, date(14))
-        XCTAssertEqual(controller.horizontalOffset, 140, accuracy: 0.001, "Rebasing preserves the visible content position")
+        XCTAssertEqual(
+            controller.horizontalOffset,
+            140,
+            accuracy: 0.001,
+            "Rebasing preserves the visible content position"
+        )
         controller.updatePaging(translation: -350)
         controller.endPaging(predictedTranslation: -550, velocity: 0, viewportWidth: 390, reducesMotion: true)
         XCTAssertEqual(controller.weekStartDate, date(21))
@@ -198,12 +208,18 @@ final class GradeSummaryAndPagingTests: XCTestCase {
     }
 
     @MainActor private func settle(_ controller: TimetableContinuousViewportController) {
-        for _ in 0..<120 where controller.phase == .pageSettling { controller.advanceAnimation(by: 1.0 / 60) }
+        for _ in 0 ..< 120 where controller.phase == .pageSettling { controller.advanceAnimation(by: 1.0 / 60) }
         XCTAssertEqual(controller.phase, .idle)
     }
 
     @MainActor private func makeController() -> TimetableContinuousViewportController {
-        TimetableContinuousViewportController(weekStartDate: date(7), centerDate: date(8), rangeStart: date(1), rangeEnd: date(30), calendar: calendar)
+        TimetableContinuousViewportController(
+            weekStartDate: date(7),
+            centerDate: date(8),
+            rangeStart: date(1),
+            rangeEnd: date(30),
+            calendar: calendar
+        )
     }
 
     private var calendar: Calendar {

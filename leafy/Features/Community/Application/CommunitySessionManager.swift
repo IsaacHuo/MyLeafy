@@ -66,11 +66,13 @@ final class CommunitySessionManager: ObservableObject {
             guard profile == nil else { return }
             profile = restored
             bootstrapError = nil
-            CommunityDiagnostics.log.info("Community session restore finished; hasProfile=\((self.profile != nil), privacy: .public)")
+            CommunityDiagnostics.log
+                .info("Community session restore finished; hasProfile=\((self.profile != nil), privacy: .public)")
         } catch {
             guard !scope.wasCancelled(error), generation == operationGeneration, profile == nil else { return }
             bootstrapError = error.localizedDescription
-            CommunityDiagnostics.log.error("Community session restore failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community session restore failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -94,7 +96,8 @@ final class CommunitySessionManager: ObservableObject {
         CommunityDiagnostics.log.info("Community bootstrap startIfNeeded requested force=\(force, privacy: .public)")
         guard activeBootstrapTask == nil else { return }
 
-        let eduID = ActiveCampusContext.networkManager.authenticatedEduID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let eduID = ActiveCampusContext.networkManager.authenticatedEduID?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let campusID = bootstrapCampusID
         if !force,
            let profile,
@@ -132,7 +135,8 @@ final class CommunitySessionManager: ObservableObject {
             activeBootstrapTask = nil
             isBootstrapping = false
             bootstrapError = error.localizedDescription
-            CommunityDiagnostics.log.error("Community bootstrap wait failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community bootstrap wait failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -199,11 +203,13 @@ final class CommunitySessionManager: ObservableObject {
 
             self.profile = profile
             self.bootstrapError = nil
-            CommunityDiagnostics.log.info("Community bootstrap finished for profile \(profile.id.uuidString, privacy: .public)")
+            CommunityDiagnostics.log
+                .info("Community bootstrap finished for profile \(profile.id.uuidString, privacy: .public)")
         } catch {
             guard !scope.wasCancelled(error), generation == operationGeneration else { return }
             self.bootstrapError = error.localizedDescription
-            CommunityDiagnostics.log.error("Community bootstrap failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community bootstrap failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -218,7 +224,8 @@ final class CommunitySessionManager: ObservableObject {
 
     private func matchesCurrentBootstrap(profile: CommunityProfile, eduID: String, campusID: String) -> Bool {
         if ActiveCampusContext.identity?.isCustom == true {
-            guard let storedID = UUID(uuidString: profile.eduID), let activeID = UUID(uuidString: eduID), storedID == activeID else { return false }
+            guard let storedID = UUID(uuidString: profile.eduID), let activeID = UUID(uuidString: eduID),
+                  storedID == activeID else { return false }
         } else if profile.eduID != eduID { return false }
         if profile.campusID == campusID { return true }
         return ActiveCampusContext.identity?.isCustom == true && profile.hasApprovedCommunityAccess

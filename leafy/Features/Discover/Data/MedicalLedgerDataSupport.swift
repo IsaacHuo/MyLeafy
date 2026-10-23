@@ -15,7 +15,8 @@ enum MedicalLedgerPhotoStore {
         return jpegData
     }
 
-    static func importImageData(_ imageData: Data, originalFilename: String, filename: String? = nil) throws -> StoredPhoto {
+    static func importImageData(_ imageData: Data, originalFilename: String,
+                                filename: String? = nil) throws -> StoredPhoto {
         let jpegData = try normalizedJPEGData(from: imageData)
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
@@ -37,7 +38,10 @@ enum MedicalLedgerPhotoStore {
 
     static var directoryURL: URL {
         if AppRuntimeEnvironment.isRunningUnitTests {
-            return FileManager.default.temporaryDirectory.appendingPathComponent("LeafyMedicalPhotosTests", isDirectory: true)
+            return FileManager.default.temporaryDirectory.appendingPathComponent(
+                "LeafyMedicalPhotosTests",
+                isDirectory: true
+            )
         }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -214,7 +218,6 @@ enum MedicalLedgerExporter {
         guard let value else { return "" }
         return amountText(value)
     }
-
 }
 
 enum ZipArchiveWriter {
@@ -314,9 +317,9 @@ enum ZipArchiveWriter {
 }
 
 enum CRC32 {
-    private static let table: [UInt32] = (0..<256).map { value in
+    private static let table: [UInt32] = (0 ..< 256).map { value in
         var crc = UInt32(value)
-        for _ in 0..<8 {
+        for _ in 0 ..< 8 {
             if crc & 1 == 1 {
                 crc = (crc >> 1) ^ 0xedb88320
             } else {

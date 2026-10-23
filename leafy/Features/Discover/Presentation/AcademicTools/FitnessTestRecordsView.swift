@@ -163,7 +163,8 @@ struct FitnessTestRecordsView: View {
                     } label: {
                         Text(filterTitle(for: item))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(selectedItem == item ? AppTheme.accentEmphasis(for: themeColorPreference) : AppTheme.secondaryText)
+                            .foregroundStyle(selectedItem == item ? AppTheme
+                                .accentEmphasis(for: themeColorPreference) : AppTheme.secondaryText)
                             .lineLimit(1)
                             .padding(.horizontal, 12)
                             .frame(height: 34)
@@ -224,14 +225,26 @@ struct FitnessTestRecordsView: View {
     }
 
     private func update(_ record: FitnessTestRecord, with draft: FitnessTestRecordDraft) -> Bool {
-        let previous = (record.testedAt, record.itemRawValue, record.value, record.unitRawValue, record.note, record.updatedAt)
+        let previous = (
+            record.testedAt,
+            record.itemRawValue,
+            record.value,
+            record.unitRawValue,
+            record.note,
+            record.updatedAt
+        )
         record.testedAt = draft.testedAt
         record.itemRawValue = draft.item.rawValue
         record.value = draft.value
         record.unitRawValue = draft.unit.rawValue
         record.note = draft.note
         record.updatedAt = Date()
-        return save(successMessage: "体测记录已保存。", undo: { record.testedAt = previous.0; record.itemRawValue = previous.1; record.value = previous.2; record.unitRawValue = previous.3; record.note = previous.4; record.updatedAt = previous.5 })
+        return save(
+            successMessage: "体测记录已保存。",
+            undo: {
+                record.testedAt = previous.0; record.itemRawValue = previous.1; record.value = previous.2; record
+                    .unitRawValue = previous.3; record.note = previous.4; record.updatedAt = previous.5 }
+        )
     }
 
     private func delete(_ record: FitnessTestRecord) {
@@ -569,7 +582,8 @@ private struct FitnessTestRecordEditorView: View {
         if unit == .minuteSecond {
             return Double(minutes * 60 + seconds)
         }
-        guard let value = Double(valueText.trimmingCharacters(in: .whitespacesAndNewlines)), value.isFinite, value < Double(Int.max) else { return nil }
+        guard let value = Double(valueText.trimmingCharacters(in: .whitespacesAndNewlines)), value.isFinite,
+              value < Double(Int.max) else { return nil }
         return value
     }
 
@@ -588,7 +602,10 @@ private struct FitnessTestRecordEditorView: View {
         self.onSave = onSave
         _testedAt = State(initialValue: record?.testedAt ?? Date())
         _item = State(initialValue: normalizedItem)
-        _valueText = State(initialValue: normalizedUnit == .minuteSecond || value <= 0 ? "" : Self.inputText(for: value, unit: normalizedUnit))
+        _valueText = State(initialValue: normalizedUnit == .minuteSecond || value <= 0 ? "" : Self.inputText(
+            for: value,
+            unit: normalizedUnit
+        ))
         _minutes = State(initialValue: normalizedUnit == .minuteSecond ? max(Int(value.rounded()), 0) / 60 : 3)
         _seconds = State(initialValue: normalizedUnit == .minuteSecond ? max(Int(value.rounded()), 0) % 60 : 0)
         _note = State(initialValue: record?.note ?? "")
@@ -615,8 +632,8 @@ private struct FitnessTestRecordEditorView: View {
 
                 Section("成绩") {
                     if unit == .minuteSecond {
-                        Stepper("分钟：\(minutes)", value: $minutes, in: 0...20)
-                        Stepper("秒：\(seconds)", value: $seconds, in: 0...59)
+                        Stepper("分钟：\(minutes)", value: $minutes, in: 0 ... 20)
+                        Stepper("秒：\(seconds)", value: $seconds, in: 0 ... 59)
                     } else {
                         TextField(valuePlaceholder, text: $valueText)
                             .keyboardType(.decimalPad)
@@ -629,7 +646,7 @@ private struct FitnessTestRecordEditorView: View {
 
                 Section {
                     TextField("备注", text: $note, axis: .vertical)
-                        .lineLimit(3...6)
+                        .lineLimit(3 ... 6)
                 }
             }
             .navigationTitle(record == nil ? "添加体测记录" : "编辑体测记录")

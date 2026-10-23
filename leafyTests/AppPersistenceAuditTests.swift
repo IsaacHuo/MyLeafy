@@ -13,7 +13,11 @@ final class AppPersistenceAuditTests: XCTestCase {
         note.text = "pending"
         let queue = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         defer { try? FileManager.default.removeItem(at: queue) }
-        XCTAssertThrowsError(try AppSessionResetter.deleteLocalRecords(in: context, cleanup: .init(queueURL: queue), save: failSave))
+        XCTAssertThrowsError(try AppSessionResetter.deleteLocalRecords(
+            in: context,
+            cleanup: .init(queueURL: queue),
+            save: failSave
+        ))
         XCTAssertEqual(note.text, "pending")
         try context.save()
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<CourseNote>()), 1)
@@ -23,7 +27,12 @@ final class AppPersistenceAuditTests: XCTestCase {
     func testLocalRecordDeletionFailureKeepsFileAndSuccessfulRetryCleansIt() throws {
         let context = try makeContext([CareerResumeDocument.self])
         let filename = UUID().uuidString + ".pdf"
-        let resume = CareerResumeDocument(title: "Resume", originalFilename: "resume.pdf", localFilename: filename, contentTypeIdentifier: "com.adobe.pdf")
+        let resume = CareerResumeDocument(
+            title: "Resume",
+            originalFilename: "resume.pdf",
+            localFilename: filename,
+            contentTypeIdentifier: "com.adobe.pdf"
+        )
         context.insert(resume); try context.save()
         let directory = CareerDocumentFileStore.directoryURL
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -46,7 +55,12 @@ final class AppPersistenceAuditTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let resume = CareerResumeDocument(title: "Resume", originalFilename: "resume.pdf", localFilename: "old.pdf", contentTypeIdentifier: "com.adobe.pdf")
+        let resume = CareerResumeDocument(
+            title: "Resume",
+            originalFilename: "resume.pdf",
+            localFilename: "old.pdf",
+            contentTypeIdentifier: "com.adobe.pdf"
+        )
         context.insert(resume); try context.save()
         let old = directory.appendingPathComponent("old.pdf")
         let new = directory.appendingPathComponent("new.pdf")
@@ -62,7 +76,15 @@ final class AppPersistenceAuditTests: XCTestCase {
 
     func testDemoSeedFailurePreservesDataOtherEditsAndBackup() throws {
         let context = try makeContext([Course.self, Grade.self, FavoriteClassroom.self, CourseNote.self])
-        let course = Course(courseName: "Original", teacher: "T", room: "R", location: "L", dayOfWeek: 1, weeks: [1], duration: [1])
+        let course = Course(
+            courseName: "Original",
+            teacher: "T",
+            room: "R",
+            location: "L",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1]
+        )
         let note = CourseNote(courseKey: "other", text: "original")
         context.insert(course); context.insert(note); try context.save()
         note.text = "pending"
@@ -77,7 +99,15 @@ final class AppPersistenceAuditTests: XCTestCase {
 
     func testDemoRestoreRejectsCorruptOrPartialBackupBeforeDeletingData() throws {
         let context = try makeContext([Course.self, Grade.self])
-        let course = Course(courseName: "Keep", teacher: "T", room: "R", location: "L", dayOfWeek: 1, weeks: [1], duration: [1])
+        let course = Course(
+            courseName: "Keep",
+            teacher: "T",
+            room: "R",
+            location: "L",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1]
+        )
         context.insert(course); try context.save()
         let defaults = try isolatedDefaults()
         let invalid = Data("invalid".utf8)
@@ -93,7 +123,15 @@ final class AppPersistenceAuditTests: XCTestCase {
 
     func testDemoRestoreSaveFailureKeepsBackupAndCurrentDataForRetry() throws {
         let context = try makeContext([Course.self, Grade.self, FavoriteClassroom.self])
-        let course = Course(courseName: "Keep", teacher: "T", room: "R", location: "L", dayOfWeek: 1, weeks: [1], duration: [1])
+        let course = Course(
+            courseName: "Keep",
+            teacher: "T",
+            room: "R",
+            location: "L",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1]
+        )
         context.insert(course); try context.save()
         let defaults = try isolatedDefaults()
         XCTAssertThrowsError(try ReviewDemoDataSeeder.seed(using: context, defaults: defaults, save: failSave))
@@ -146,7 +184,17 @@ final class AppPersistenceAuditTests: XCTestCase {
         let courseID = UUID(), gradeID = UUID()
         let semester = "2024-2025-2"
         let updatedAt = Date(timeIntervalSince1970: 1234)
-        let course = Course(id: courseID, courseName: "Original", teacher: "T", room: "R", location: "L", dayOfWeek: 1, weeks: [1], duration: [1], sourceSemesterID: semester)
+        let course = Course(
+            id: courseID,
+            courseName: "Original",
+            teacher: "T",
+            room: "R",
+            location: "L",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1],
+            sourceSemesterID: semester
+        )
         let grade = Grade(id: gradeID, term: semester, courseName: "Original", credit: "2", score: "90", type: "必修")
         grade.updatedAt = updatedAt
         let stableKey = course.stableCourseKey
@@ -172,14 +220,20 @@ final class AppPersistenceAuditTests: XCTestCase {
 
     func testWidgetLogoutArchiveClearsCachedWeather() {
         let archive = LeafyWidgetSnapshotBuilder.makeArchiveForTesting(courses: [], isAuthenticated: false,
-            date: Date(), weather: .init(celsius: 25, observedAt: Date()))
+                                                                       date: Date(), weather: .init(
+                                                                           celsius: 25,
+                                                                           observedAt: Date()
+                                                                       ))
         XCTAssertNil(archive.weather)
     }
 
     private func failSave(_ context: ModelContext) throws { throw CocoaError(.fileWriteOutOfSpace) }
     private func makeContext(_ types: [any PersistentModel.Type]) throws -> ModelContext {
         let schema = Schema(types)
-        let container = try ModelContainer(for: schema, configurations: [.init(schema: schema, isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [.init(schema: schema, isStoredInMemoryOnly: true)]
+        )
         let context = ModelContext(container)
         context.autosaveEnabled = false
         return context

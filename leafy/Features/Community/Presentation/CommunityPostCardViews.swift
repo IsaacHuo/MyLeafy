@@ -203,9 +203,9 @@ enum CommunityPostCardLayout {
         let measurementSafetyMargin: CGFloat = 24
         let measuredHeight = ceil(
             sectionHeights.reduce(0, +) +
-            sectionSpacing +
-            outerAndCardPadding +
-            measurementSafetyMargin
+                sectionSpacing +
+                outerAndCardPadding +
+                measurementSafetyMargin
         )
         return max(measuredHeight, minimumCanvasHeight(hasPhotos: !photos.isEmpty))
     }
@@ -425,7 +425,7 @@ enum CommunityPostCardGenerator {
     private static func downloadData(from url: URL) async throws -> Data {
         let (data, response) = try await URLSession.shared.data(from: url)
         guard let response = response as? HTTPURLResponse,
-              (200..<300).contains(response.statusCode),
+              (200 ..< 300).contains(response.statusCode),
               UIImage(data: data) != nil else {
             throw URLError(.badServerResponse)
         }

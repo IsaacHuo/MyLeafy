@@ -90,7 +90,7 @@ private extension UIImage {
         var candidateMaxDimension = max(size.width, size.height)
         var smallestData: Data?
 
-        for _ in 0..<4 {
+        for _ in 0 ..< 4 {
             for quality in qualities {
                 guard let data = candidateImage.jpegData(compressionQuality: quality) else {
                     continue

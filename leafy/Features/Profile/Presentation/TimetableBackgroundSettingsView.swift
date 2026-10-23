@@ -9,14 +9,20 @@ struct TimetableBackgroundSettingsView: View {
     @AppStorage(TimetableBackgroundStore.isEnabledKey) private var backgroundIsEnabled = false
     @AppStorage(TimetableBackgroundStore.kindKey) private var kindRaw = TimetableBackgroundKind.photo.rawValue
     @AppStorage(TimetableBackgroundStore.filenameKey) private var backgroundFilename = ""
-    @AppStorage(TimetableBackgroundStore.displayModeKey) private var displayModeRaw = TimetableBackgroundStore.defaultDisplayMode.rawValue
-    @AppStorage(TimetableBackgroundStore.imageOpacityKey) private var imageOpacity = TimetableBackgroundStore.defaultImageOpacity
-    @AppStorage(TimetableBackgroundStore.blurRadiusKey) private var blurRadius = TimetableBackgroundStore.defaultBlurRadius
-    @AppStorage(TimetableBackgroundStore.overlayOpacityKey) private var overlayOpacity = TimetableBackgroundStore.defaultOverlayOpacity
-    @AppStorage(TimetableBackgroundStore.courseCardOpacityKey) private var courseCardOpacity = TimetableBackgroundStore.defaultCourseCardOpacity
+    @AppStorage(TimetableBackgroundStore.displayModeKey) private var displayModeRaw = TimetableBackgroundStore
+        .defaultDisplayMode.rawValue
+    @AppStorage(TimetableBackgroundStore.imageOpacityKey) private var imageOpacity = TimetableBackgroundStore
+        .defaultImageOpacity
+    @AppStorage(TimetableBackgroundStore.blurRadiusKey) private var blurRadius = TimetableBackgroundStore
+        .defaultBlurRadius
+    @AppStorage(TimetableBackgroundStore.overlayOpacityKey) private var overlayOpacity = TimetableBackgroundStore
+        .defaultOverlayOpacity
+    @AppStorage(TimetableBackgroundStore.courseCardOpacityKey) private var courseCardOpacity = TimetableBackgroundStore
+        .defaultCourseCardOpacity
     @AppStorage(TimetableBackgroundStore.lightPaletteKey) private var lightPaletteHexes = ""
     @AppStorage(TimetableBackgroundStore.darkPaletteKey) private var darkPaletteHexes = ""
-    @AppStorage(TimetableBackgroundStore.solidColorHexKey) private var solidColorHex = TimetableBackgroundStore.defaultSolidColorHex
+    @AppStorage(TimetableBackgroundStore.solidColorHexKey) private var solidColorHex = TimetableBackgroundStore
+        .defaultSolidColorHex
 
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var previewImage: UIImage?
@@ -263,7 +269,8 @@ struct TimetableBackgroundSettingsView: View {
                     displayModeRaw = mode.rawValue
                 } label: {
                     HStack(spacing: 12) {
-                        LeafyIconBadge(systemName: mode == .fill ? "rectangle.inset.filled" : "rectangle.center.inset.filled")
+                        LeafyIconBadge(systemName: mode == .fill ? "rectangle.inset.filled" :
+                            "rectangle.center.inset.filled")
                         Text(mode.title(language: leafyLanguage))
                             .leafyBody()
                             .foregroundStyle(AppTheme.primaryText)
@@ -284,27 +291,27 @@ struct TimetableBackgroundSettingsView: View {
                 title: "背景可见度",
                 valueText: percentageText(imageOpacity),
                 value: $imageOpacity,
-                range: 0.12...0.55
+                range: 0.12 ... 0.55
             )
             if selectedKind == .photo {
                 sliderRow(
                     title: "模糊强度",
                     valueText: String(format: "%.0f", blurRadius),
                     value: $blurRadius,
-                    range: 0...24
+                    range: 0 ... 24
                 )
             }
             sliderRow(
                 title: "遮罩强度",
                 valueText: percentageText(overlayOpacity),
                 value: $overlayOpacity,
-                range: 0...0.70
+                range: 0 ... 0.70
             )
             sliderRow(
                 title: "课程卡片浓度",
                 valueText: percentageText(courseCardOpacity),
                 value: $courseCardOpacity,
-                range: 0.50...0.96
+                range: 0.50 ... 0.96
             )
         }
         .listRowBackground(AppTheme.cardBackground)
@@ -537,15 +544,18 @@ private struct TimetableBackgroundPreview: View {
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(AppTheme.accentEmphasis)
             }
-            Text(isImporting ? L10n.text("正在读取照片", language: leafyLanguage) : L10n.text("尚未选择照片", language: leafyLanguage))
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
+            Text(isImporting ? L10n.text("正在读取照片", language: leafyLanguage) : L10n.text(
+                "尚未选择照片",
+                language: leafyLanguage
+            ))
+            .leafyBody()
+            .foregroundStyle(AppTheme.secondaryText)
         }
     }
 
     private var sampleCards: some View {
         HStack(spacing: 8) {
-            ForEach(0..<3, id: \.self) { index in
+            ForEach(0 ..< 3, id: \.self) { index in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(["森林生态", "数据结构", "英语"][index])
                         .font(.system(size: 12, weight: .semibold))

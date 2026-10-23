@@ -3,8 +3,6 @@ import OSLog
 import SwiftSoup
 
 extension SchoolNetworkManager {
-
-
     func fetchExamSchedule() async throws -> String {
         let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
@@ -20,7 +18,11 @@ extension SchoolNetworkManager {
             throw URLError(.badURL)
         }
 
-        var request = makeRequest(url: url, method: "POST", referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
+        var request = makeRequest(
+            url: url,
+            method: "POST",
+            referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp")
+        )
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         var components = URLComponents()
@@ -34,7 +36,7 @@ extension SchoolNetworkManager {
         let referer = URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp")
         let requests = mergeCandidateRequests(
             [request] +
-            examScheduleDirectCandidateRequests(referer: referer)
+                examScheduleDirectCandidateRequests(referer: referer)
         )
 
         var lastHTML = ""
@@ -62,13 +64,21 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("考试安排页面返回了登录页。") +
-                pageDebugSummary(html: lastHTML, responseURL: lastResponse?.url, snapshotName: "last_exam_login_page.html")
+                    pageDebugSummary(
+                        html: lastHTML,
+                        responseURL: lastResponse?.url,
+                        snapshotName: "last_exam_login_page.html"
+                    )
             )
         }
 
         throw SchoolNetworkError.featureUnavailable(
             L10n.text("考试安排页面未返回可解析的数据。") +
-            pageDebugSummary(html: lastHTML, responseURL: lastResponse?.url, snapshotName: "last_exam_unexpected_page.html")
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_exam_unexpected_page.html"
+                )
         )
     }
 
@@ -94,7 +104,7 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("教学计划页面返回了登录页。") +
-                pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_plan_login_page.html")
+                    pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_plan_login_page.html")
             )
         }
         return html
@@ -122,7 +132,11 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("培养方案明细页面返回了登录页。") +
-                pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_graduation_requirements_login_page.html")
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: response.url,
+                        snapshotName: "last_graduation_requirements_login_page.html"
+                    )
             )
         }
         return html
@@ -186,11 +200,11 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("成绩排名页面返回了登录页。") +
-                pageDebugSummary(
-                    html: lastHTML,
-                    responseURL: lastResponse?.url,
-                    snapshotName: "last_grade_rankings_login_page.html"
-                )
+                    pageDebugSummary(
+                        html: lastHTML,
+                        responseURL: lastResponse?.url,
+                        snapshotName: "last_grade_rankings_login_page.html"
+                    )
             )
         }
 
@@ -200,11 +214,11 @@ extension SchoolNetworkManager {
 
         throw SchoolNetworkError.featureUnavailable(
             L10n.text("教务暂未开放成绩排名。") +
-            pageDebugSummary(
-                html: lastHTML,
-                responseURL: lastResponse?.url,
-                snapshotName: "last_grade_rankings_unavailable.html"
-            )
+                pageDebugSummary(
+                    html: lastHTML,
+                    responseURL: lastResponse?.url,
+                    snapshotName: "last_grade_rankings_unavailable.html"
+                )
         )
     }
 
@@ -252,21 +266,21 @@ extension SchoolNetworkManager {
 
     private func isExamSchedulePage(_ html: String) -> Bool {
         (html.contains("id=\"dataList\"") || html.contains("id='dataList'")) &&
-        (
-            html.contains("考试") ||
-            html.contains("ksap") ||
-            html.contains("xsks")
-        )
+            (
+                html.contains("考试") ||
+                    html.contains("ksap") ||
+                    html.contains("xsks")
+            )
     }
 
     private func isEmptyClassroomPage(_ html: String) -> Bool {
         (html.contains("id=\"dataList\"") || html.contains("id='dataList'")) &&
-        (
-            html.contains("tdvalue=") ||
-            html.contains("项目列表") ||
-            html.contains("jsjy_query2") ||
-            html.contains("教室")
-        )
+            (
+                html.contains("tdvalue=") ||
+                    html.contains("项目列表") ||
+                    html.contains("jsjy_query2") ||
+                    html.contains("教室")
+            )
     }
 
     private func extractGradeRankingCandidateRequests(from html: String, baseURL: URL) throws -> [URLRequest] {
@@ -345,14 +359,23 @@ extension SchoolNetworkManager {
         var schoolCalendar = Calendar(identifier: .gregorian)
         schoolCalendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         let selectedDay = schoolCalendar.startOfDay(for: date)
-        let configurations = [activeConfig] + SemesterConfig.timelineConfigurations.filter { $0.semesterID != activeConfig.semesterID }
+        let configurations = [activeConfig] + SemesterConfig.timelineConfigurations
+            .filter { $0.semesterID != activeConfig.semesterID }
         guard let semesterConfig = configurations.first(where: { config in
-            let days = schoolCalendar.dateComponents([.day], from: schoolCalendar.startOfDay(for: config.semesterStartDate), to: selectedDay).day ?? -1
-            return (0..<(SemesterConfig.timetableWeekCapacity * 7)).contains(days)
+            let days = schoolCalendar.dateComponents(
+                [.day],
+                from: schoolCalendar.startOfDay(for: config.semesterStartDate),
+                to: selectedDay
+            ).day ?? -1
+            return (0 ..< (SemesterConfig.timetableWeekCapacity * 7)).contains(days)
         }) else {
             throw SchoolNetworkError.classroomDataUnavailable("所选日期不在已配置的学期内，请选择学期内的日期。")
         }
-        let days = schoolCalendar.dateComponents([.day], from: schoolCalendar.startOfDay(for: semesterConfig.semesterStartDate), to: selectedDay).day ?? 0
+        let days = schoolCalendar.dateComponents(
+            [.day],
+            from: schoolCalendar.startOfDay(for: semesterConfig.semesterStartDate),
+            to: selectedDay
+        ).day ?? 0
         let schedule = (week: days / 7 + 1, day: ((schoolCalendar.component(.weekday, from: selectedDay) + 5) % 7) + 1)
         let dateString = DateFormatters.queryDate.string(from: date)
 
@@ -393,17 +416,21 @@ extension SchoolNetworkManager {
             }
             throw SchoolNetworkError.loginFailed(
                 L10n.text("空教室页面返回了登录页（%@ %d-%d节）。", dateString, start, end) +
-                pageDebugSummary(html: html, responseURL: response.url, snapshotName: "last_classroom_login_page.html")
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: response.url,
+                        snapshotName: "last_classroom_login_page.html"
+                    )
             )
         }
         guard isEmptyClassroomPage(html) else {
             throw SchoolNetworkError.classroomDataUnavailable(
                 L10n.text("（%@ %d-%d节）。", dateString, start, end) +
-                pageDebugSummary(
-                    html: html,
-                    responseURL: response.url,
-                    snapshotName: "last_classroom_unexpected_\(dateString)_\(start)_\(end).html"
-                )
+                    pageDebugSummary(
+                        html: html,
+                        responseURL: response.url,
+                        snapshotName: "last_classroom_unexpected_\(dateString)_\(start)_\(end).html"
+                    )
             )
         }
         return html

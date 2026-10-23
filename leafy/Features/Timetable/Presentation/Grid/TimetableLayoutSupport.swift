@@ -10,9 +10,9 @@ nonisolated enum TimetableCurrentTimeIndicatorPreference {
     static let defaultIsEnabled = true
     static let defaultThickness = 2.0
     static let defaultTransparency = 0.5
-    static let thicknessRange = 1.0...6.0
+    static let thicknessRange = 1.0 ... 6.0
     static let thicknessStep = 0.5
-    static let transparencyRange = 0.0...1.0
+    static let transparencyRange = 0.0 ... 1.0
     static let transparencyStep = 0.05
 
     static func sanitizedThickness(_ value: Double) -> Double {
@@ -197,7 +197,7 @@ nonisolated enum TimetableRenderedWeekWindow {
 
     private static func appendNeighbors(of page: Int, totalWeeks: Int, to pages: inout Set<Int>) {
         let clampedPage = min(max(page, 1), totalWeeks)
-        for candidate in (clampedPage - 1)...(clampedPage + 1) where (1...totalWeeks).contains(candidate) {
+        for candidate in (clampedPage - 1) ... (clampedPage + 1) where (1 ... totalWeeks).contains(candidate) {
             pages.insert(candidate)
         }
     }
@@ -262,7 +262,7 @@ nonisolated struct TimetableScheduleBlockGeometry: Equatable {
         let resolvedStart = start ?? edgePosition(for: startDate, metrics: metrics, calendar: calendar)
         let resolvedEnd = end ?? edgePosition(for: endDate, metrics: metrics, calendar: calendar)
         guard resolvedEnd > resolvedStart else { return nil }
-        return resolvedStart...resolvedEnd
+        return resolvedStart ... resolvedEnd
     }
 
     private static func edgePosition(
@@ -414,7 +414,12 @@ final class TimetableAgendaItemCache {
             itemsByDay.removeAll(keepingCapacity: true)
         }
 
-        let key = TimetableAgendaCacheDayKey(week: metadata.week, day: metadata.day, date: metadata.date, language: AppLanguagePreference.current.resolvedLocalization)
+        let key = TimetableAgendaCacheDayKey(
+            week: metadata.week,
+            day: metadata.day,
+            date: metadata.date,
+            language: AppLanguagePreference.current.resolvedLocalization
+        )
         if let items = itemsByDay[key] {
             return items
         }
@@ -446,8 +451,9 @@ final class TimetableAgendaItemCache {
             )
         })
 
-        for period in 1...totalClasses {
-            guard let reminder = gridSnapshot.cellReminder(week: metadata.week, day: metadata.day, period: period) else { continue }
+        for period in 1 ... totalClasses {
+            guard let reminder = gridSnapshot.cellReminder(week: metadata.week, day: metadata.day, period: period)
+            else { continue }
             items.append(
                 .cellReminder(
                     reminder,
@@ -650,7 +656,8 @@ struct TimetableAgendaItem: Identifiable {
         )
     }
 
-    static func countdown(_ projection: TimetableCountdownProjection, week: Int, day: Int, date: Date) -> TimetableAgendaItem {
+    static func countdown(_ projection: TimetableCountdownProjection, week: Int, day: Int,
+                          date: Date) -> TimetableAgendaItem {
         TimetableAgendaItem(
             id: "countdown-\(projection.id)",
             week: week,

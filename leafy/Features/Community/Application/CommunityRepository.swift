@@ -20,8 +20,6 @@ nonisolated protocol CommunityFeedChangeStreaming: Sendable {
     func feedEvents(campusID: String) async -> AsyncThrowingStream<Void, Error>
 }
 
-
-
 nonisolated protocol CommunityPostDetailRepository: CommunitySessionRepository {
     func fetchPost(postID: UUID) async throws -> CommunityPost?
     func fetchComments(postID: UUID) async throws -> [CommunityComment]
@@ -81,8 +79,10 @@ nonisolated protocol CommunityPollRepository: CommunitySessionRepository {
 
 nonisolated protocol CommunityCatalogRatingRepository: CommunitySessionRepository {
     func fetchTeacherRatingSummaries(search: String, limit: Int, offset: Int) async throws -> [TeacherRatingSummary]
-    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int, offset: Int) async throws -> [CourseRatingSummary]
-    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int, offset: Int) async throws -> [DishRatingSummary]
+    func fetchCourseRatingSummaries(search: String, category: String?, limit: Int, offset: Int) async throws
+        -> [CourseRatingSummary]
+    func fetchDishRatingSummaries(search: String, canteen: String?, location: String?, limit: Int,
+                                  offset: Int) async throws -> [DishRatingSummary]
     func submitCatalogSuggestion(input: CatalogSuggestionInput) async throws
 }
 

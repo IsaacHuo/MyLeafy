@@ -51,7 +51,10 @@ struct CommunityAccessGate {
         forceBootstrap: Bool = false
     ) async -> CommunityAccessResult {
         let scope = CampusOperationScope()
-        CommunityDiagnostics.log.info("Community access gate evaluating \(String(describing: requirement), privacy: .public) forceBootstrap=\(forceBootstrap, privacy: .public)")
+        CommunityDiagnostics.log
+            .info(
+                "Community access gate evaluating \(String(describing: requirement), privacy: .public) forceBootstrap=\(forceBootstrap, privacy: .public)"
+            )
         await sessionManager.restoreProfileIfPossible()
         guard scope.isCurrent, !Task.isCancelled else { return .failed(CancellationError().localizedDescription) }
         await sessionManager.bootstrapCommunityUser(force: forceBootstrap)
@@ -61,7 +64,8 @@ struct CommunityAccessGate {
             && ActiveCampusContext.identity?.isCustom != true
         if let bootstrapError = sessionManager.bootstrapError,
            !(isBuiltInBJFUCommunity && sessionManager.currentUserID != nil) {
-            CommunityDiagnostics.log.error("Community access gate failed after bootstrap: \(bootstrapError, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community access gate failed after bootstrap: \(bootstrapError, privacy: .public)")
             return .failed(bootstrapError)
         }
 
@@ -98,7 +102,8 @@ struct CommunityAccessGate {
             CommunityDiagnostics.log.info("Community access gate terms result accepted=\(accepted, privacy: .public)")
             return accepted ? .allowed : .requiresTermsAcceptance
         } catch {
-            CommunityDiagnostics.log.error("Community access gate terms check failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community access gate terms check failed: \(error.localizedDescription, privacy: .public)")
             return .failed(error.localizedDescription)
         }
     }

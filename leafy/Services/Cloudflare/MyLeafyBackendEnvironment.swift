@@ -5,10 +5,20 @@ import Foundation
 nonisolated enum MyLeafyBackendEnvironment {
     static let clientResult: Result<MyLeafyBackendClient, Error> = Result {
         guard !AppRuntimeEnvironment.isRunningUnitTests else {
-            throw MyLeafyBackendError(status: 0, code: "test_network_prohibited", message: "单测必须注入隔离的后台客户端。", requestID: nil)
+            throw MyLeafyBackendError(
+                status: 0,
+                code: "test_network_prohibited",
+                message: "单测必须注入隔离的后台客户端。",
+                requestID: nil
+            )
         }
         guard let origin = configuredString("MYLEAFY_API_ORIGIN"), let url = URL(string: origin) else {
-            throw MyLeafyBackendError(status: 0, code: "invalid_backend_configuration", message: "后台配置无效，请联系开发者。", requestID: nil)
+            throw MyLeafyBackendError(
+                status: 0,
+                code: "invalid_backend_configuration",
+                message: "后台配置无效，请联系开发者。",
+                requestID: nil
+            )
         }
         return try MyLeafyBackendClient(baseURL: url)
     }

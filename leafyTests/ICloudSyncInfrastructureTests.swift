@@ -9,7 +9,7 @@ final class ICloudSyncInfrastructureTests: XCTestCase {
     func testBurstOfLocalNotificationsCollectsOnceAndBackgroundFlushDoesNotRepeatIt() {
         let work = ICloudSyncWorkScheduler()
         var collections = 0
-        for _ in 0..<25 {
+        for _ in 0 ..< 25 {
             work.schedule(after: .seconds(3_600)) { collections += 1 }
         }
         XCTAssertEqual(collections, 0)
@@ -29,7 +29,7 @@ final class ICloudSyncInfrastructureTests: XCTestCase {
     }
 
     func testInitializationRecoveryBacksOffAndHonorsServerRetryAfter() {
-        let delays = (1...5).map { ICloudSyncScheduling.recoveryDelay(failures: $0) }
+        let delays = (1 ... 5).map { ICloudSyncScheduling.recoveryDelay(failures: $0) }
         XCTAssertEqual(delays, [300, 600, 1_200, 1_800, 1_800])
         XCTAssertEqual(ICloudSyncScheduling.recoveryDelay(failures: 1, retryAfter: 3_600), 3_600)
     }
@@ -58,7 +58,10 @@ final class ICloudSyncInfrastructureTests: XCTestCase {
         journal.capture([value])
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(journal)) as? [String: Any])
         json.removeValue(forKey: "automaticRetryAt")
-        let reloaded = try JSONDecoder().decode(ICloudSyncJournal.self, from: JSONSerialization.data(withJSONObject: json))
+        let reloaded = try JSONDecoder().decode(
+            ICloudSyncJournal.self,
+            from: JSONSerialization.data(withJSONObject: json)
+        )
         XCTAssertNil(reloaded.automaticRetryAt)
         XCTAssertEqual(reloaded.pending, journal.pending)
         XCTAssertEqual(reloaded.records, journal.records)
@@ -86,24 +89,34 @@ final class ICloudSyncInfrastructureTests: XCTestCase {
     func testServerRejectionIsPropagatedWithoutCreatingOrReplacingZone() async {
         var writes = 0
         do {
-            try await ICloudZonePreparation.ensure(fetch: { throw CKError(.serverRejectedRequest) }, create: { writes += 1 })
+            try await ICloudZonePreparation.ensure(
+                fetch: { throw CKError(.serverRejectedRequest) },
+                create: { writes += 1 }
+            )
             XCTFail("Server rejection must remain visible")
         } catch { XCTAssertEqual((error as? CKError)?.code, .serverRejectedRequest) }
         XCTAssertEqual(writes, 0)
     }
     func testZoneCreationFailureIsNotHidden() async {
         do {
-            try await ICloudZonePreparation.ensure(fetch: { throw CKError(.zoneNotFound) }, create: { throw CKError(.permissionFailure) })
+            try await ICloudZonePreparation.ensure(
+                fetch: { throw CKError(.zoneNotFound) },
+                create: { throw CKError(.permissionFailure) }
+            )
             XCTFail("Creation failure must remain visible")
         } catch { XCTAssertEqual((error as? CKError)?.code, .permissionFailure) }
     }
     func testHTTP500DiagnosticContainsStageAndRequestWithoutPayloadOrHeaders() {
         let underlying = NSError(domain: "CKInternalErrorDomain", code: 2000,
-            userInfo: ["CKHTTPStatus": 500, "RequestUUID": "request-123", "CKDHTTPHeaders": ["Authorization": "secret-header"]])
+                                 userInfo: [
+                                     "CKHTTPStatus": 500,
+                                     "RequestUUID": "request-123",
+                                     "CKDHTTPHeaders": ["Authorization": "secret-header"]
+                                 ])
         let error = NSError(domain: CKErrorDomain, code: CKError.serverRejectedRequest.rawValue,
-            userInfo: [NSUnderlyingErrorKey: underlying, "recordPayload": "private-course-note"])
+                            userInfo: [NSUnderlyingErrorKey: underlying, "recordPayload": "private-course-note"])
         let diagnostic = ICloudSyncDiagnostic(error: error, phase: .cloudSpace,
-            container: "iCloud.com.isaachuo.leafy", environment: "Development")
+                                              container: "iCloud.com.isaachuo.leafy", environment: "Development")
         XCTAssertTrue(diagnostic.message.contains("准备云端空间"))
         XCTAssertTrue(diagnostic.message.contains("HTTP 500"))
         XCTAssertTrue(diagnostic.details.contains("RequestUUID：request-123"))
@@ -113,9 +126,17 @@ final class ICloudSyncInfrastructureTests: XCTestCase {
     }
     func testPartialFailureExplainsRealCauseInsteadOfBatchCancellation() {
         let error = NSError(domain: CKErrorDomain, code: CKError.partialFailure.rawValue, userInfo: [
-            CKPartialErrorsByItemIDKey: ["cancelled": CKError(.batchRequestFailed), "cause": CKError(.missingEntitlement)]
+            CKPartialErrorsByItemIDKey: [
+                "cancelled": CKError(.batchRequestFailed),
+                "cause": CKError(.missingEntitlement)
+            ]
         ])
-        let diagnostic = ICloudSyncDiagnostic(error: error, phase: .upload, container: "container", environment: "Production")
+        let diagnostic = ICloudSyncDiagnostic(
+            error: error,
+            phase: .upload,
+            container: "container",
+            environment: "Production"
+        )
         XCTAssertTrue(diagnostic.message.contains("签名配置不可用"))
         XCTAssertTrue(diagnostic.details.contains("CKErrorDomain"))
     }
@@ -123,7 +144,13 @@ final class ICloudSyncInfrastructureTests: XCTestCase {
 
 extension ICloudSyncInfrastructureTests {
     func testDuplicateCaptureReferencesDeduplicateButConflictingIDsAreRejected() throws {
-        let file = ICloudSyncValue(key: "file/images/same.jpg", payload: Data(), modifiedAt: Date(), filePath: "images/same.jpg", fileDigest: "same")
+        let file = ICloudSyncValue(
+            key: "file/images/same.jpg",
+            payload: Data(),
+            modifiedAt: Date(),
+            filePath: "images/same.jpg",
+            fileDigest: "same"
+        )
         var repeated = file
         repeated.revision = "another-capture"
         XCTAssertEqual(try ICloudLocalData.uniqueCaptureValues([file, repeated]).count, 1)
@@ -141,7 +168,12 @@ extension ICloudSyncInfrastructureTests {
         let note = CourseNote(courseKey: "course", text: "offline edit")
         container.mainContext.insert(note); try container.mainContext.save()
         let key = "CourseNote/" + note.id.uuidString.lowercased()
-        let local = ICloudSyncValue(key: key, payload: try ICloudLocalData.encode(SyncedCourseNote(note)), modifiedAt: Date(timeIntervalSince1970: 1), revision: "local")
+        let local = ICloudSyncValue(
+            key: key,
+            payload: try ICloudLocalData.encode(SyncedCourseNote(note)),
+            modifiedAt: Date(timeIntervalSince1970: 1),
+            revision: "local"
+        )
         var journal = ICloudSyncJournal()
         journal.records[key] = local
         journal.pending = [key]
@@ -150,8 +182,16 @@ extension ICloudSyncInfrastructureTests {
         coordinator.configure(context: container.mainContext)
         var dto = SyncedCourseNote(note)
         dto.text = "remote edit"
-        let remote = ICloudSyncValue(key: key, payload: try ICloudLocalData.encode(dto), modifiedAt: Date(timeIntervalSince1970: 2), revision: "remote")
-        let record = CKRecord(recordType: "PersonalValue", recordID: .init(recordName: remote.recordName, zoneID: .init(zoneName: "personal-" + identity.scopeKey)))
+        let remote = ICloudSyncValue(
+            key: key,
+            payload: try ICloudLocalData.encode(dto),
+            modifiedAt: Date(timeIntervalSince1970: 2),
+            revision: "remote"
+        )
+        let record = CKRecord(
+            recordType: "PersonalValue",
+            recordID: .init(recordName: remote.recordName, zoneID: .init(zoneName: "personal-" + identity.scopeKey))
+        )
         record["value"] = try ICloudLocalData.encode(remote) as NSData
         try coordinator.receive(record)
         XCTAssertThrowsError(try coordinator.applyInbox(save: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
@@ -168,7 +208,6 @@ extension ICloudSyncInfrastructureTests {
     }
 }
 
-
 extension ICloudSyncInfrastructureTests {
     func testWaitingAssetDoesNotHideNewlyCommittedLocalNoteFromMerge() throws {
         let manager = ActiveCampusContext.networkManager
@@ -181,24 +220,41 @@ extension ICloudSyncInfrastructureTests {
         container.mainContext.insert(note); try container.mainContext.save()
         let key = "CourseNote/" + note.id.uuidString.lowercased()
         var journal = ICloudSyncJournal()
-        journal.records[key] = .init(key: key, payload: try ICloudLocalData.encode(SyncedCourseNote(note)), modifiedAt: Date(timeIntervalSince1970: 1), revision: "old")
+        journal.records[key] = .init(
+            key: key,
+            payload: try ICloudLocalData.encode(SyncedCourseNote(note)),
+            modifiedAt: Date(timeIntervalSince1970: 1),
+            revision: "old"
+        )
         try journal.save(to: directory.appendingPathComponent("ICloudSync/journal.json"))
         let coordinator = ICloudSyncCoordinator()
         coordinator.configure(context: container.mainContext)
         func receive(_ value: ICloudSyncValue) throws {
-            let record = CKRecord(recordType: "PersonalValue", recordID: .init(recordName: value.recordName, zoneID: .init(zoneName: "personal-" + identity.scopeKey)))
+            let record = CKRecord(
+                recordType: "PersonalValue",
+                recordID: .init(recordName: value.recordName, zoneID: .init(zoneName: "personal-" + identity.scopeKey))
+            )
             record["value"] = try ICloudLocalData.encode(value) as NSData
             try coordinator.receive(record)
         }
         let image = ScheduleMemoImage(memoID: UUID(), sortOrder: 0, localFilename: UUID().uuidString + ".jpg")
-        let waiting = ICloudSyncValue(key: "ScheduleMemoImage/" + image.id.uuidString.lowercased(), payload: try ICloudLocalData.encode(SyncedScheduleMemoImage(image)), modifiedAt: Date())
+        let waiting = ICloudSyncValue(
+            key: "ScheduleMemoImage/" + image.id.uuidString.lowercased(),
+            payload: try ICloudLocalData.encode(SyncedScheduleMemoImage(image)),
+            modifiedAt: Date()
+        )
         try receive(waiting)
         note.text = "new local edit while waiting"
         note.updatedAt = Date()
         try container.mainContext.save()
         var remote = SyncedCourseNote(note)
         remote.text = "new remote edit"
-        try receive(.init(key: key, payload: try ICloudLocalData.encode(remote), modifiedAt: Date().addingTimeInterval(10), revision: "remote"))
+        try receive(.init(
+            key: key,
+            payload: try ICloudLocalData.encode(remote),
+            modifiedAt: Date().addingTimeInterval(10),
+            revision: "remote"
+        ))
         try coordinator.applyInbox()
         let saved = try ModelContext(container).fetch(FetchDescriptor<CourseNote>())
         XCTAssertEqual(Set(saved.map(\.text)), ["new local edit while waiting", "new remote edit"])
@@ -208,29 +264,47 @@ extension ICloudSyncInfrastructureTests {
 
     func testMalformedRemoteCourseAndCellDoNotReplaceValidLocalData() throws {
         let schema = Schema([Course.self, TimetableCellReminder.self])
-        let container = try ModelContainer(for: schema, configurations: [.init(schema: schema, isStoredInMemoryOnly: true)])
-        let course = Course(courseName: "Keep", teacher: "T", room: "R", location: "L", dayOfWeek: 1, weeks: [1], duration: [1])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [.init(schema: schema, isStoredInMemoryOnly: true)]
+        )
+        let course = Course(
+            courseName: "Keep",
+            teacher: "T",
+            room: "R",
+            location: "L",
+            dayOfWeek: 1,
+            weeks: [1],
+            duration: [1]
+        )
         container.mainContext.insert(course); try container.mainContext.save()
         var invalid = SyncedCourse(course)
         invalid.weeks = [Int.max]
-        let value = ICloudSyncValue(key: "school/courses", payload: try ICloudLocalData.encode([invalid]), modifiedAt: Date())
+        let value = ICloudSyncValue(
+            key: "school/courses",
+            payload: try ICloudLocalData.encode([invalid]),
+            modifiedAt: Date()
+        )
         XCTAssertThrowsError(try ICloudLocalData.apply(value, context: container.mainContext))
         XCTAssertEqual(try container.mainContext.fetch(FetchDescriptor<Course>()).map(\.courseName), ["Keep"])
         let cell = TimetableCellReminder(week: Int.max, dayOfWeek: 1, period: 1, title: "Invalid")
-        let malformed = ICloudSyncValue(key: "TimetableCellReminder/" + cell.id.uuidString.lowercased(), payload: try ICloudLocalData.encode(SyncedTimetableCellReminder(cell)), modifiedAt: Date())
+        let malformed = ICloudSyncValue(
+            key: "TimetableCellReminder/" + cell.id.uuidString.lowercased(),
+            payload: try ICloudLocalData.encode(SyncedTimetableCellReminder(cell)),
+            modifiedAt: Date()
+        )
         XCTAssertThrowsError(try ICloudLocalData.apply(malformed, context: container.mainContext))
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TimetableCellReminder>()), 0)
     }
 }
 
-
 extension ICloudSyncInfrastructureTests {
     func testReplayedRemotePayloadDoesNotBecomeANewPendingLocalEdit() {
         let key = "CourseNote/replayed"
         let previous = ICloudSyncValue(key: key, payload: Data("previous".utf8),
-            modifiedAt: Date(timeIntervalSince1970: 1), revision: "previous")
+                                       modifiedAt: Date(timeIntervalSince1970: 1), revision: "previous")
         let remote = ICloudSyncValue(key: key, payload: Data("remote already applied".utf8),
-            modifiedAt: Date(timeIntervalSince1970: 2), revision: "remote")
+                                     modifiedAt: Date(timeIntervalSince1970: 2), revision: "remote")
         var current = remote
         current.modifiedAt = Date(timeIntervalSince1970: 90)
         current.revision = "fresh-capture"
@@ -248,9 +322,9 @@ extension ICloudSyncInfrastructureTests {
     func testMissingCommittedLocalRecordPreservesDeletionPriorityBeforeMerge() throws {
         let key = "CourseNote/deleted-locally"
         let previous = ICloudSyncValue(key: key, payload: Data("previous".utf8),
-            modifiedAt: Date(timeIntervalSince1970: 1), revision: "previous")
+                                       modifiedAt: Date(timeIntervalSince1970: 1), revision: "previous")
         let remote = ICloudSyncValue(key: key, payload: Data("newer remote edit".utf8),
-            modifiedAt: Date(timeIntervalSince1970: 20), revision: "remote")
+                                     modifiedAt: Date(timeIntervalSince1970: 20), revision: "remote")
         let deletionDate = Date(timeIntervalSince1970: 10)
         var journal = ICloudSyncJournal()
         journal.records[key] = previous
@@ -274,7 +348,7 @@ extension ICloudSyncInfrastructureTests {
         let previousIdentity = ActiveCampusContext.identity
         let wasDemoEnabled = ReviewDemoMode.isEnabled
         let identity = CampusIdentity(campusID: .bjfu, eduID: "json-conflict-" + UUID().uuidString,
-            displayName: nil, portal: .undergraduate)
+                                      displayName: nil, portal: .undergraduate)
         let directory = try XCTUnwrap(CampusStoreScope.scopedStoreURL(for: identity)).deletingLastPathComponent()
         let legacyKey = CustomScheduleStore.storageKeyForTesting()
         let scopedKey = CampusScopedDefaults.key(legacyKey, identity: identity)
@@ -283,7 +357,8 @@ extension ICloudSyncInfrastructureTests {
         defer {
             defaults.set(previousLegacy, forKey: legacyKey)
             defaults.set(previousScoped, forKey: scopedKey)
-            if let previousIdentity { CampusIdentityStore.activate(previousIdentity) } else { CampusIdentityStore.clear() }
+            if let previousIdentity { CampusIdentityStore.activate(previousIdentity) }
+            else { CampusIdentityStore.clear() }
             ReviewDemoMode.isEnabled = wasDemoEnabled
             try? FileManager.default.removeItem(at: directory)
         }
@@ -294,14 +369,15 @@ extension ICloudSyncInfrastructureTests {
         let container = try AppModelContainerFactory.make().container
         let startsAt = Date(timeIntervalSince1970: 2_000_000_000)
         let cell = TimetableCellReminder(week: 1, dayOfWeek: 1, period: 1, endPeriod: 2,
-            title: "offline schedule", startsAt: startsAt, endsAt: startsAt.addingTimeInterval(3_600),
-            updatedAt: Date(timeIntervalSince1970: 1))
+                                         title: "offline schedule", startsAt: startsAt,
+                                         endsAt: startsAt.addingTimeInterval(3_600),
+                                         updatedAt: Date(timeIntervalSince1970: 1))
         cell.cellKey = "audit-json-" + UUID().uuidString
         container.mainContext.insert(cell)
         try container.mainContext.save()
         let key = "TimetableCellReminder/" + cell.id.uuidString.lowercased()
         let local = ICloudSyncValue(key: key, payload: try ICloudLocalData.encode(SyncedTimetableCellReminder(cell)),
-            modifiedAt: Date(timeIntervalSince1970: 1), revision: "local-json-conflict")
+                                    modifiedAt: Date(timeIntervalSince1970: 1), revision: "local-json-conflict")
         var journal = ICloudSyncJournal()
         journal.records[key] = local
         journal.pending = [key]
@@ -313,14 +389,18 @@ extension ICloudSyncInfrastructureTests {
         remoteCell.title = "remote schedule"
         remoteCell.updatedAt = Date(timeIntervalSince1970: 2)
         let remote = ICloudSyncValue(key: key, payload: try ICloudLocalData.encode(remoteCell),
-            modifiedAt: Date(timeIntervalSince1970: 2), revision: "remote-json-conflict")
+                                     modifiedAt: Date(timeIntervalSince1970: 2), revision: "remote-json-conflict")
         let record = CKRecord(recordType: "PersonalValue", recordID: .init(recordName: remote.recordName,
-            zoneID: .init(zoneName: "personal-" + identity.scopeKey)))
+                                                                           zoneID: .init(zoneName: "personal-" +
+                                                                               identity.scopeKey)))
         record["value"] = try ICloudLocalData.encode(remote) as NSData
         try coordinator.receive(record)
 
         XCTAssertThrowsError(try coordinator.applyInbox(save: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
-        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<TimetableCellReminder>()).map(\.title), ["offline schedule"])
+        XCTAssertEqual(
+            try ModelContext(container).fetch(FetchDescriptor<TimetableCellReminder>()).map(\.title),
+            ["offline schedule"]
+        )
         let firstCopies = try CustomScheduleStore.loadForSync()
         let firstCopy = try XCTUnwrap(firstCopies.first)
         XCTAssertEqual(firstCopies.count, 1)
@@ -337,7 +417,10 @@ extension ICloudSyncInfrastructureTests {
         XCTAssertNil(failedJournal.records[copyKey])
 
         try coordinator.applyInbox()
-        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<TimetableCellReminder>()).map(\.title), ["remote schedule"])
+        XCTAssertEqual(
+            try ModelContext(container).fetch(FetchDescriptor<TimetableCellReminder>()).map(\.title),
+            ["remote schedule"]
+        )
         let retriedCopies = try CustomScheduleStore.loadForSync()
         XCTAssertEqual(retriedCopies.map(\.id), [firstCopy.id])
         XCTAssertEqual(retriedCopies.first?.title, firstCopy.title)
@@ -364,7 +447,7 @@ extension ICloudSyncInfrastructureTests {
         let previousIdentity = ActiveCampusContext.identity
         let wasDemoEnabled = ReviewDemoMode.isEnabled
         let identity = CampusIdentity(campusID: .bjfu, eduID: "committed-remote-" + UUID().uuidString,
-            displayName: nil, portal: .undergraduate)
+                                      displayName: nil, portal: .undergraduate)
         let directory = try XCTUnwrap(CampusStoreScope.scopedStoreURL(for: identity)).deletingLastPathComponent()
         let defaults = UserDefaults.standard
         let legacyKey = CustomScheduleStore.storageKeyForTesting()
@@ -374,7 +457,8 @@ extension ICloudSyncInfrastructureTests {
         defer {
             defaults.set(previousLegacy, forKey: legacyKey)
             defaults.set(previousScoped, forKey: scopedKey)
-            if let previousIdentity { CampusIdentityStore.activate(previousIdentity) } else { CampusIdentityStore.clear() }
+            if let previousIdentity { CampusIdentityStore.activate(previousIdentity) }
+            else { CampusIdentityStore.clear() }
             ReviewDemoMode.isEnabled = wasDemoEnabled
             try? FileManager.default.removeItem(at: directory)
         }
@@ -390,9 +474,9 @@ extension ICloudSyncInfrastructureTests {
         staleDTO.text = "stale pending A"
         staleDTO.updatedAt = Date(timeIntervalSince1970: 30)
         let stale = ICloudSyncValue(key: key, payload: try ICloudLocalData.encode(staleDTO),
-            modifiedAt: Date(timeIntervalSince1970: 30), revision: "stale-A")
+                                    modifiedAt: Date(timeIntervalSince1970: 30), revision: "stale-A")
         let remote = ICloudSyncValue(key: key, payload: try ICloudLocalData.encode(SyncedCourseNote(committed)),
-            modifiedAt: Date(timeIntervalSince1970: 20), revision: "incoming-B")
+                                     modifiedAt: Date(timeIntervalSince1970: 20), revision: "incoming-B")
         var journal = ICloudSyncJournal()
         journal.records[key] = stale
         journal.pending = [key]
@@ -401,7 +485,8 @@ extension ICloudSyncInfrastructureTests {
         let coordinator = ICloudSyncCoordinator()
         coordinator.configure(context: container.mainContext)
         let record = CKRecord(recordType: "PersonalValue", recordID: .init(recordName: remote.recordName,
-            zoneID: .init(zoneName: "personal-" + identity.scopeKey)))
+                                                                           zoneID: .init(zoneName: "personal-" +
+                                                                               identity.scopeKey)))
         record["value"] = try ICloudLocalData.encode(remote) as NSData
         try coordinator.receive(record)
 

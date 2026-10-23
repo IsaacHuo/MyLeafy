@@ -25,7 +25,11 @@ struct LiveTimetableCourseReminderScheduler: TimetableCourseReminderScheduling {
         guard status == .authorized || status == .provisional || status == .ephemeral else {
             throw TimetableNotificationError.permissionDenied
         }
-        try await TimetableNotificationManager.applyReminder(minutesBefore: minutesBefore, anchorPeriod: anchorPeriod, course: course)
+        try await TimetableNotificationManager.applyReminder(
+            minutesBefore: minutesBefore,
+            anchorPeriod: anchorPeriod,
+            course: course
+        )
     }
 }
 
@@ -47,7 +51,9 @@ struct TimetableReminderRefreshPlan {
         schedules = try courses.compactMap { course in
             guard let matches = byKey[course.stableCourseKey],
                   let setting = matches.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
-            guard matches.allSatisfy({ $0.minutesBefore == setting.minutesBefore && $0.anchorPeriod == setting.anchorPeriod }) else {
+            guard matches
+                .allSatisfy({ $0.minutesBefore == setting.minutesBefore && $0.anchorPeriod == setting.anchorPeriod })
+            else {
                 throw TimetableLocalDataConflict.conflictingRecords(course.courseName)
             }
             guard setting.minutesBefore > 0 else { return nil }
@@ -59,7 +65,10 @@ struct TimetableReminderRefreshPlan {
         var identifiers = Set<String>()
         for schedule in schedules {
             for week in Set(schedule.course.weeks) {
-                let identifier = TimetableNotificationManager.notificationID(courseKey: schedule.course.stableCourseKey, week: week)
+                let identifier = TimetableNotificationManager.notificationID(
+                    courseKey: schedule.course.stableCourseKey,
+                    week: week
+                )
                 guard identifiers.insert(identifier).inserted else {
                     throw TimetableLocalDataConflict.conflictingRecords(schedule.course.courseName)
                 }
@@ -77,7 +86,8 @@ struct TimetableReminderRefreshPlan {
 
     /// Called only after the database commit. Rebuilding from persisted settings on every
     /// successful refresh also retries any previously failed notification scheduling.
-    func restore(using scheduler: any TimetableCourseReminderScheduling = LiveTimetableCourseReminderScheduler()) async -> String? {
+    func restore(using scheduler: any TimetableCourseReminderScheduling = LiveTimetableCourseReminderScheduler()) async
+        -> String? {
         guard scope.isCurrent, !Task.isCancelled else { return nil }
         scheduler.cancel(identifiers: obsoleteIdentifiers)
         var failureCount = 0

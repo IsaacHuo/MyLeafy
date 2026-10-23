@@ -165,7 +165,8 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
         do {
             try Task.checkCancellation()
             let locationProvider = makeLocationProvider()
-            let location = try await locationProvider.currentLocation(requestsPermissionIfNeeded: requestsPermissionIfNeeded)
+            let location = try await locationProvider
+                .currentLocation(requestsPermissionIfNeeded: requestsPermissionIfNeeded)
             try Task.checkCancellation()
             guard identityKey == ActiveCampusContext.identity?.scopeKey else { throw CancellationError() }
             let snapshot = try await weatherFetcher(location)
@@ -174,7 +175,8 @@ nonisolated struct WeatherKitTimetableWeatherService: TimetableWeatherServicing 
             cache.save(snapshot)
             return snapshot
         } catch {
-            if identityKey != ActiveCampusContext.identity?.scopeKey || Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+            if identityKey != ActiveCampusContext.identity?.scopeKey || Task
+                .isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
                 throw CancellationError()
             }
             if let cached = cache.currentWeather(maxAge: Self.cacheMaxAge) {
@@ -298,7 +300,8 @@ private nonisolated struct CachedTimetableWeather: Codable {
 }
 
 @MainActor
-final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationProviding, CLLocationManagerDelegate, @unchecked Sendable {
+final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationProviding, CLLocationManagerDelegate,
+    @unchecked Sendable {
     private let manager = CLLocationManager()
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var locationContinuation: CheckedContinuation<CLLocation, Error>?
@@ -332,10 +335,10 @@ final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationPr
             throw TimetableWeatherServiceError.permissionDenied
         case .authorizedAlways:
             break
-#if !os(macOS)
-        case .authorizedWhenInUse:
-            break
-#endif
+        #if !os(macOS)
+            case .authorizedWhenInUse:
+                break
+        #endif
         @unknown default:
             throw TimetableWeatherServiceError.locationUnavailable
         }
@@ -396,10 +399,10 @@ final class CoreLocationTimetableLocationProvider: NSObject, TimetableLocationPr
             return .denied
         case .authorizedAlways:
             return .authorized
-#if !os(macOS)
-        case .authorizedWhenInUse:
-            return .authorized
-#endif
+        #if !os(macOS)
+            case .authorizedWhenInUse:
+                return .authorized
+        #endif
         @unknown default:
             return .unavailable
         }

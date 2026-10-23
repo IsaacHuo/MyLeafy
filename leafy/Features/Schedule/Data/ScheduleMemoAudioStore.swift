@@ -75,7 +75,6 @@ enum ScheduleMemoAudioStore {
         }
     }
 
-
     static func directoryURL(identity: CampusIdentity? = CampusIdentityStore.currentIdentity()) -> URL {
         if let identity,
            let scopedStore = CampusStoreScope.scopedStoreURL(for: identity) {

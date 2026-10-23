@@ -47,7 +47,8 @@ final class CommunityPollsViewModel: ObservableObject {
             CommunityDiagnostics.log.info("Community polls load finished with \(loadedPolls.count) polls")
         } catch {
             guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
-            CommunityDiagnostics.log.error("Community polls load failed: \(error.localizedDescription, privacy: .public)")
+            CommunityDiagnostics.log
+                .error("Community polls load failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }

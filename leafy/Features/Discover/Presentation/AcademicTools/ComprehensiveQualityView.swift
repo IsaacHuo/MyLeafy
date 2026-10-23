@@ -8,9 +8,12 @@ struct ComprehensiveQualityView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
 
-    @Query(sort: \ComprehensiveQualityRecord.updatedAt, order: .reverse) private var records: [ComprehensiveQualityRecord]
-    @Query(sort: \ComprehensiveQualityComponentEntry.updatedAt, order: .reverse) private var componentEntries: [ComprehensiveQualityComponentEntry]
-    @Query(sort: \ComprehensiveQualityEvidenceDocument.updatedAt, order: .reverse) private var evidenceDocuments: [ComprehensiveQualityEvidenceDocument]
+    @Query(sort: \ComprehensiveQualityRecord.updatedAt,
+           order: .reverse) private var records: [ComprehensiveQualityRecord]
+    @Query(sort: \ComprehensiveQualityComponentEntry.updatedAt,
+           order: .reverse) private var componentEntries: [ComprehensiveQualityComponentEntry]
+    @Query(sort: \ComprehensiveQualityEvidenceDocument.updatedAt,
+           order: .reverse) private var evidenceDocuments: [ComprehensiveQualityEvidenceDocument]
 
     @State private var selectedCollege = "园林学院"
     @State private var draft = ComprehensiveQualityDraft()
@@ -239,7 +242,11 @@ struct ComprehensiveQualityView: View {
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
                     metricTile("学业标准分", draft.academicStandardScoreValue.map(formatScore) ?? "--", "手动填写")
-                    metricTile("综素贡献", displayedCalculationResult?.qualityContribution.map(formatScore) ?? "--", "最多 5 分")
+                    metricTile(
+                        "综素贡献",
+                        displayedCalculationResult?.qualityContribution.map(formatScore) ?? "--",
+                        "最多 5 分"
+                    )
                     metricTile("综合成绩", displayedCalculationResult?.compositeScore.map(formatScore) ?? "--", "估算值")
                     metricTile("材料状态", materialReadyText, "本地记录")
                 }
@@ -333,7 +340,7 @@ struct ComprehensiveQualityView: View {
 
                 TextField("备注", text: componentBinding(for: kind, keyPath: \.note), axis: .vertical)
                     .textFieldStyle(.roundedBorder)
-                    .lineLimit(2...4)
+                    .lineLimit(2 ... 4)
                     .focused($focusedInput, equals: .componentNote(kind))
 
                 HStack {
@@ -391,7 +398,7 @@ struct ComprehensiveQualityView: View {
                 )
                 TextField("备注", text: draftBinding(for: \.note), axis: .vertical)
                     .textFieldStyle(.roundedBorder)
-                    .lineLimit(2...5)
+                    .lineLimit(2 ... 5)
                     .focused($focusedInput, equals: .officialNote)
 
                 Button {
@@ -566,10 +573,19 @@ struct ComprehensiveQualityView: View {
         let record: ComprehensiveQualityRecord
         if let existing = records.first(where: { $0.collegeName == selectedCollege && $0.cohort == cleanCohort }) {
             record = existing
-            let previous = (record.collegeName, record.cohort, record.academicStandardScore, record.officialQualityScore, record.officialCompositeScore, record.note, record.updatedAt)
+            let previous = (
+                record.collegeName,
+                record.cohort,
+                record.academicStandardScore,
+                record.officialQualityScore,
+                record.officialCompositeScore,
+                record.note,
+                record.updatedAt
+            )
             undoActions.append {
                 record.collegeName = previous.0; record.cohort = previous.1; record.academicStandardScore = previous.2
-                record.officialQualityScore = previous.3; record.officialCompositeScore = previous.4; record.note = previous.5; record.updatedAt = previous.6
+                record.officialQualityScore = previous.3; record.officialCompositeScore = previous.4; record
+                    .note = previous.5; record.updatedAt = previous.6
             }
         } else {
             record = ComprehensiveQualityRecord(collegeName: selectedCollege, cohort: cleanCohort)
@@ -594,10 +610,21 @@ struct ComprehensiveQualityView: View {
                     && $0.componentRawValue == kind.rawValue
             }) {
                 entry = existing
-                let previous = (entry.collegeName, entry.cohort, entry.componentRawValue, entry.rawScore, entry.peerMaxScore, entry.officialStandardScore, entry.materialReady, entry.note, entry.updatedAt)
+                let previous = (
+                    entry.collegeName,
+                    entry.cohort,
+                    entry.componentRawValue,
+                    entry.rawScore,
+                    entry.peerMaxScore,
+                    entry.officialStandardScore,
+                    entry.materialReady,
+                    entry.note,
+                    entry.updatedAt
+                )
                 undoActions.append {
                     entry.collegeName = previous.0; entry.cohort = previous.1; entry.componentRawValue = previous.2
-                    entry.rawScore = previous.3; entry.peerMaxScore = previous.4; entry.officialStandardScore = previous.5
+                    entry.rawScore = previous.3; entry.peerMaxScore = previous.4; entry.officialStandardScore = previous
+                        .5
                     entry.materialReady = previous.6; entry.note = previous.7; entry.updatedAt = previous.8
                 }
             } else {
@@ -744,8 +771,13 @@ struct ComprehensiveQualityView: View {
 
         do {
             let urls = try result.get()
-            let warning = try ComprehensiveQualityEvidencePersistence.importFiles(urls, college: selectedCollege, cohort: normalizedCohort,
-                component: componentKind, in: modelContext)
+            let warning = try ComprehensiveQualityEvidencePersistence.importFiles(
+                urls,
+                college: selectedCollege,
+                cohort: normalizedCohort,
+                component: componentKind,
+                in: modelContext
+            )
             if let warning { alertMessage = warning; return }
             alertMessage = L10n.text("材料已保存到本机。", language: leafyLanguage)
         } catch {
@@ -755,7 +787,10 @@ struct ComprehensiveQualityView: View {
 
     private func delete(_ document: ComprehensiveQualityEvidenceDocument) {
         do {
-            let file = LocalFileCleanup.File(document, url: ComprehensiveQualityEvidenceFileStore.fileURL(named: document.localFilename))
+            let file = LocalFileCleanup.File(
+                document,
+                url: ComprehensiveQualityEvidenceFileStore.fileURL(named: document.localFilename)
+            )
             try LocalFileCleanup().delete([document], files: [file], in: modelContext)
         } catch { alertMessage = error.localizedDescription }
     }
@@ -812,7 +847,8 @@ struct ComprehensiveQualityView: View {
         }
     }
 
-    private func evidenceDocuments(for kind: ComprehensiveQualityComponentKind) -> [ComprehensiveQualityEvidenceDocument] {
+    private func evidenceDocuments(for kind: ComprehensiveQualityComponentKind)
+        -> [ComprehensiveQualityEvidenceDocument] {
         evidenceDocuments.filter {
             $0.collegeName == selectedCollege
                 && $0.cohort == normalizedCohort
@@ -883,7 +919,8 @@ private struct ComprehensiveQualityDraft {
         officialCompositeScore = Self.text(from: record?.officialCompositeScore)
         note = record?.note ?? ""
         for entry in entries {
-            components[ComprehensiveQualityComponentKind.normalized(entry.componentRawValue)] = ComprehensiveQualityComponentDraft(entry: entry)
+            components[ComprehensiveQualityComponentKind.normalized(entry.componentRawValue)] =
+                ComprehensiveQualityComponentDraft(entry: entry)
         }
     }
 
@@ -1164,19 +1201,34 @@ private extension ComprehensiveQualityEvidenceDocument {
 
 @MainActor
 enum ComprehensiveQualityEvidencePersistence {
-    static func importFiles(_ urls: [URL], college: String, cohort: String, component: ComprehensiveQualityComponentKind,
-                            in context: ModelContext, cleanup: LocalFileCleanup? = nil,
-                            save: (ModelContext) throws -> Void = { try $0.save() }) throws -> String? {
+    static func importFiles(
+        _ urls: [URL],
+        college: String,
+        cohort: String,
+        component: ComprehensiveQualityComponentKind,
+        in context: ModelContext,
+        cleanup: LocalFileCleanup? = nil,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> String? {
         let cleanup = cleanup ?? LocalFileCleanup()
         var records: [ComprehensiveQualityEvidenceDocument] = []
         do {
             for url in urls {
                 let filename = UUID().uuidString + (url.pathExtension.isEmpty ? "" : "." + url.pathExtension)
                 let title = url.deletingPathExtension().lastPathComponent
-                let record = ComprehensiveQualityEvidenceDocument(collegeName: college, cohort: cohort, componentRawValue: component.rawValue,
-                    title: title.isEmpty ? "综素材料" : title, originalFilename: url.lastPathComponent,
-                    localFilename: filename, contentTypeIdentifier: UTType.data.identifier)
-                try cleanup.enqueue([LocalFileCleanup.File(record, url: ComprehensiveQualityEvidenceFileStore.fileURL(named: filename))])
+                let record = ComprehensiveQualityEvidenceDocument(
+                    collegeName: college,
+                    cohort: cohort,
+                    componentRawValue: component.rawValue,
+                    title: title.isEmpty ? "综素材料" : title,
+                    originalFilename: url.lastPathComponent,
+                    localFilename: filename,
+                    contentTypeIdentifier: UTType.data.identifier
+                )
+                try cleanup.enqueue([LocalFileCleanup.File(
+                    record,
+                    url: ComprehensiveQualityEvidenceFileStore.fileURL(named: filename)
+                )])
                 let stored = try ComprehensiveQualityEvidenceFileStore.importFile(from: url, filename: filename)
                 record.contentTypeIdentifier = stored.contentTypeIdentifier
                 records.append(record)
@@ -1186,7 +1238,10 @@ enum ComprehensiveQualityEvidencePersistence {
         } catch {
             let original = error
             do { try cleanup.retry(in: context) }
-            catch { throw ComprehensiveQualityImportCleanupError(original: original.localizedDescription, cleanup: error.localizedDescription) }
+            catch { throw ComprehensiveQualityImportCleanupError(
+                original: original.localizedDescription,
+                cleanup: error.localizedDescription
+            ) }
             throw original
         }
         do { try cleanup.retry(in: context); return nil }

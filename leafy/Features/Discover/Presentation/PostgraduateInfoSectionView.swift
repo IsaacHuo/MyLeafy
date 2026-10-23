@@ -303,7 +303,17 @@ struct PostgraduateInfoSectionView: View {
 
     private func saveTarget(_ draft: PostgraduateTargetDraft, for target: PostgraduateTarget?) -> Bool {
         if let target {
-            let previous = (target.school, target.unit, target.major, target.direction, target.examYear, target.subjects, target.scoreAndPlanNote, target.personalNote, target.updatedAt)
+            let previous = (
+                target.school,
+                target.unit,
+                target.major,
+                target.direction,
+                target.examYear,
+                target.subjects,
+                target.scoreAndPlanNote,
+                target.personalNote,
+                target.updatedAt
+            )
             target.school = draft.school
             target.unit = draft.unit
             target.major = draft.major
@@ -314,21 +324,22 @@ struct PostgraduateInfoSectionView: View {
             target.personalNote = draft.personalNote
             target.updatedAt = Date()
             return save(successMessage: "考研目标已保存。", undo: {
-                target.school = previous.0; target.unit = previous.1; target.major = previous.2; target.direction = previous.3
+                target.school = previous.0; target.unit = previous.1; target.major = previous.2; target
+                    .direction = previous.3
                 target.examYear = previous.4; target.subjects = previous.5; target.scoreAndPlanNote = previous.6
                 target.personalNote = previous.7; target.updatedAt = previous.8
             })
         } else {
             let inserted = PostgraduateTarget(
-                    school: draft.school,
-                    unit: draft.unit,
-                    major: draft.major,
-                    direction: draft.direction,
-                    examYear: draft.examYear,
-                    subjects: draft.subjects,
-                    scoreAndPlanNote: draft.scoreAndPlanNote,
-                    personalNote: draft.personalNote
-                )
+                school: draft.school,
+                unit: draft.unit,
+                major: draft.major,
+                direction: draft.direction,
+                examYear: draft.examYear,
+                subjects: draft.subjects,
+                scoreAndPlanNote: draft.scoreAndPlanNote,
+                personalNote: draft.personalNote
+            )
             modelContext.insert(inserted)
             return save(successMessage: "考研目标已添加。", undo: { modelContext.delete(inserted) })
         }
@@ -732,7 +743,6 @@ private struct PostgraduateSafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
-
 private struct PostgraduateBrowserItem: Identifiable {
     let id = UUID()
     let url: URL
@@ -819,19 +829,19 @@ private struct PostgraduateTargetEditorSheet: View {
                     TextField("院系", text: $draft.unit)
                     TextField("专业", text: $draft.major)
                     TextField("方向", text: $draft.direction)
-                    Stepper("目标年份 \(draft.examYear)", value: $draft.examYear, in: 2000...2100)
+                    Stepper("目标年份 \(draft.examYear)", value: $draft.examYear, in: 2000 ... 2100)
                 }
 
                 Section("考试信息") {
                     TextField("考试科目", text: $draft.subjects, axis: .vertical)
-                        .lineLimit(2...4)
+                        .lineLimit(2 ... 4)
                     TextField("分数线、招生计划或判断依据", text: $draft.scoreAndPlanNote, axis: .vertical)
-                        .lineLimit(2...5)
+                        .lineLimit(2 ... 5)
                 }
 
                 Section("个人备注") {
                     TextField("备注", text: $draft.personalNote, axis: .vertical)
-                        .lineLimit(3...8)
+                        .lineLimit(3 ... 8)
                 }
             }
             .navigationTitle(item.target == nil ? "新建考研目标" : "编辑考研目标")
@@ -873,11 +883,36 @@ private struct PostgraduateOfficialLink: Identifiable {
 
 private extension PostgraduateInfoSectionView {
     static let officialLinks = [
-        PostgraduateOfficialLink(title: "中国研究生招生信息网", subtitle: "报名、调剂、招生目录、政策公告", icon: "magnifyingglass", urlString: "https://yz.chsi.com.cn/"),
-        PostgraduateOfficialLink(title: "硕士专业目录", subtitle: "查询招生单位、专业、研究方向和考试科目", icon: "list.bullet.rectangle", urlString: "https://yz.chsi.com.cn/zsml/"),
-        PostgraduateOfficialLink(title: "统考网报", subtitle: "网上报名、报名信息确认与流程入口", icon: "square.and.pencil", urlString: "https://yz.chsi.com.cn/wap/yzwb/"),
-        PostgraduateOfficialLink(title: "网上调剂", subtitle: "调剂意向采集和调剂服务系统入口", icon: "arrow.triangle.branch", urlString: "https://yz.chsi.com.cn/yztj/"),
-        PostgraduateOfficialLink(title: "北京林业大学研究生院", subtitle: "校内通知、招生简章与复试录取信息", icon: "building.columns", urlString: "https://graduate.bjfu.edu.cn/")
+        PostgraduateOfficialLink(
+            title: "中国研究生招生信息网",
+            subtitle: "报名、调剂、招生目录、政策公告",
+            icon: "magnifyingglass",
+            urlString: "https://yz.chsi.com.cn/"
+        ),
+        PostgraduateOfficialLink(
+            title: "硕士专业目录",
+            subtitle: "查询招生单位、专业、研究方向和考试科目",
+            icon: "list.bullet.rectangle",
+            urlString: "https://yz.chsi.com.cn/zsml/"
+        ),
+        PostgraduateOfficialLink(
+            title: "统考网报",
+            subtitle: "网上报名、报名信息确认与流程入口",
+            icon: "square.and.pencil",
+            urlString: "https://yz.chsi.com.cn/wap/yzwb/"
+        ),
+        PostgraduateOfficialLink(
+            title: "网上调剂",
+            subtitle: "调剂意向采集和调剂服务系统入口",
+            icon: "arrow.triangle.branch",
+            urlString: "https://yz.chsi.com.cn/yztj/"
+        ),
+        PostgraduateOfficialLink(
+            title: "北京林业大学研究生院",
+            subtitle: "校内通知、招生简章与复试录取信息",
+            icon: "building.columns",
+            urlString: "https://graduate.bjfu.edu.cn/"
+        )
     ]
 
     static let demoSources = [

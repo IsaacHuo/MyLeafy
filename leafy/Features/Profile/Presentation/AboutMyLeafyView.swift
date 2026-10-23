@@ -24,34 +24,35 @@ private enum MyLeafyStory: String, CaseIterable, Identifiable {
     var paragraphs: [String] {
         switch self {
         case .day: [
-            "打开课表，就能确认今天上什么课、在哪里，以及接下来有什么安排。课程和个人日程共享时间视图，发生重叠时也能各自看清。",
-            "一周适合看全局，三日视图适合看细节。Widget 则把近期安排放到主屏幕，让一次短暂的查看也有用。"
-        ]
+                "打开课表，就能确认今天上什么课、在哪里，以及接下来有什么安排。课程和个人日程共享时间视图，发生重叠时也能各自看清。",
+                "一周适合看全局，三日视图适合看细节。Widget 则把近期安排放到主屏幕，让一次短暂的查看也有用。"
+            ]
         case .journal: [
-            "日程用来安排将来，随记用来留下当下。它们放在同一个日迹空间里，各自保持清楚的用途。",
-            "从一条短记录开始，通过标签、搜索和回顾重新找到它。记录日迹展示累积的记录习惯，让平常的一天也有迹可循。"
-        ]
+                "日程用来安排将来，随记用来留下当下。它们放在同一个日迹空间里，各自保持清楚的用途。",
+                "从一条短记录开始，通过标签、搜索和回顾重新找到它。记录日迹展示累积的记录习惯，让平常的一天也有迹可循。"
+            ]
         case .campus: [
-            "成绩、考试、培养要求和空闲教室，属于不同的校园任务。按事情来组织入口，让需要的信息更容易找到。",
-            "社区为同学交流留出空间。具体工具和社区能力取决于当前校园支持；教务结果仍以学校系统为准。"
-        ]
+                "成绩、考试、培养要求和空闲教室，属于不同的校园任务。按事情来组织入口，让需要的信息更容易找到。",
+                "社区为同学交流留出空间。具体工具和社区能力取决于当前校园支持；教务结果仍以学校系统为准。"
+            ]
         case .design: [
-            "设计先服务于阅读。标题、辅助信息和操作有各自的层级，颜色帮助辨认，留白帮助集中注意。",
-            "沿用 iPhone 熟悉的导航、列表和弹窗，让操作自然发生。主题、深浅色和显示密度，让同一套界面适合不同的使用习惯。",
-            "字号、间距和按钮大小可以在设置里调整，按你的习惯来。"
-        ]
+                "设计先服务于阅读。标题、辅助信息和操作有各自的层级，颜色帮助辨认，留白帮助集中注意。",
+                "沿用 iPhone 熟悉的导航、列表和弹窗，让操作自然发生。主题、深浅色和显示密度，让同一套界面适合不同的使用习惯。",
+                "字号、间距和按钮大小可以在设置里调整，按你的习惯来。"
+            ]
         case .data: [
-            "教务缓存、课程备注、随记和个人记录保存在当前设备。学校账号和密码用于学校登录，不作为社区内容上传。",
-            "主动发布的帖子、评论、反馈和共享课表进入 MyLeafy 服务。共享课表只发布允许分享的课程字段，不包含成绩、备注和提醒。",
-            "可在设置中主动开启 iCloud，同步支持的数据；未开启时请使用已有导出能力妥善保存重要内容。具体范围与数据说明可以在设置和帮助中心查看。"
-        ]
+                "教务缓存、课程备注、随记和个人记录保存在当前设备。学校账号和密码用于学校登录，不作为社区内容上传。",
+                "主动发布的帖子、评论、反馈和共享课表进入 MyLeafy 服务。共享课表只发布允许分享的课程字段，不包含成绩、备注和提醒。",
+                "可在设置中主动开启 iCloud，同步支持的数据；未开启时请使用已有导出能力妥善保存重要内容。具体范围与数据说明可以在设置和帮助中心查看。"
+            ]
         }
     }
 }
 
 struct AboutMyLeafyView: View {
     @Environment(\.leafyLanguage) private var language
-    private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—" }
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—" }
 
     var body: some View {
         ScrollView {
@@ -155,7 +156,7 @@ private struct MyLeafyStoryIllustration: View {
     }
     private var timetable: some View {
         HStack(alignment: .top, spacing: 8) {
-            ForEach(0..<3) { day in
+            ForEach(0 ..< 3) { day in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(text(["周一", "周二", "周三"][day])).font(.caption.weight(.semibold))
                     RoundedRectangle(cornerRadius: AppRadius.small)

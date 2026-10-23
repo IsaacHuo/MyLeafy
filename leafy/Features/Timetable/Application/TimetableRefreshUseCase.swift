@@ -138,11 +138,15 @@ struct TimetableRefreshUseCase {
             for (index, course) in group.enumerated() {
                 if group.dropFirst(index + 1).contains(where: {
                     !Set($0.weeks).isDisjoint(with: course.weeks)
-                    && ($0.room != course.room || $0.classInfo != course.classInfo)
+                        && ($0.room != course.room || $0.classInfo != course.classInfo)
                 }) { throw TimetableLocalDataConflict.ambiguousArrangement(course.courseName) }
             }
         }
-        let associations = try TimetableLocalDataReassociation(oldCourses: oldCourses, newCourses: newCourses, context: modelContext)
+        let associations = try TimetableLocalDataReassociation(
+            oldCourses: oldCourses,
+            newCourses: newCourses,
+            context: modelContext
+        )
         let undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: modelContext)
         do {
             try associations.apply(to: modelContext)

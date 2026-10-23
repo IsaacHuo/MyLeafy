@@ -12,9 +12,20 @@ final class ScheduleMemoPersistenceTests: XCTestCase {
         other.updateBody("pending #keep")
         let memo = ScheduleMemo(body: "draft")
         let image = ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "new.jpg")
-        let attachment = ScheduleMemoAttachment(memoID: memo.id, sortOrder: 0, originalFilename: "draft.pdf", localFilename: "new.pdf", contentTypeIdentifier: "com.adobe.pdf")
+        let attachment = ScheduleMemoAttachment(
+            memoID: memo.id,
+            sortOrder: 0,
+            originalFilename: "draft.pdf",
+            localFilename: "new.pdf",
+            contentTypeIdentifier: "com.adobe.pdf"
+        )
         let audio = ScheduleMemoAudio(memoID: memo.id, localFilename: "new.m4a", duration: 2)
-        XCTAssertThrowsError(try ScheduleMemoPersistence.insert(memo, resources: [image, attachment, audio], in: context, save: failSave))
+        XCTAssertThrowsError(try ScheduleMemoPersistence.insert(
+            memo,
+            resources: [image, attachment, audio],
+            in: context,
+            save: failSave
+        ))
         XCTAssertEqual(other.body, "pending #keep")
         try context.save()
         XCTAssertEqual(try context.fetch(FetchDescriptor<ScheduleMemo>()).map(\.id), [other.id])
@@ -33,7 +44,15 @@ final class ScheduleMemoPersistenceTests: XCTestCase {
         other.updateBody("pending")
         let newImage = ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "new.jpg")
         let draft = "replacement #new"
-        XCTAssertThrowsError(try ScheduleMemoPersistence.update(memo, title: "Replacement", body: draft, inserting: [newImage], removing: [oldImage], in: context, save: failSave))
+        XCTAssertThrowsError(try ScheduleMemoPersistence.update(
+            memo,
+            title: "Replacement",
+            body: draft,
+            inserting: [newImage],
+            removing: [oldImage],
+            in: context,
+            save: failSave
+        ))
         XCTAssertEqual(memo.title, "Title")
         XCTAssertEqual(memo.body, "original #old")
         XCTAssertEqual(memo.tags, ["old"])
@@ -74,7 +93,16 @@ final class ScheduleMemoPersistenceTests: XCTestCase {
         let url = directory.appendingPathComponent(image.localFilename)
         try Data("image".utf8).write(to: url)
         let cleanup = LocalFileCleanup(queueURL: directory.appendingPathComponent("cleanup.json"))
-        XCTAssertThrowsError(try ScheduleMemoPersistence.update(memo, title: nil, body: "draft", removing: [image], files: [.init(image, url: url)], in: context, cleanup: cleanup, save: failSave))
+        XCTAssertThrowsError(try ScheduleMemoPersistence.update(
+            memo,
+            title: nil,
+            body: "draft",
+            removing: [image],
+            files: [.init(image, url: url)],
+            in: context,
+            cleanup: cleanup,
+            save: failSave
+        ))
         try context.save()
         try cleanup.retry(in: context)
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
@@ -92,7 +120,16 @@ final class ScheduleMemoPersistenceTests: XCTestCase {
         let corrupt = Data("corrupt".utf8)
         try corrupt.write(to: queue)
         var saved = false
-        XCTAssertThrowsError(try ScheduleMemoPersistence.update(memo, title: nil, body: "draft", removing: [image], files: [.init(image, url: directory.appendingPathComponent(image.localFilename))], in: context, cleanup: LocalFileCleanup(queueURL: queue), save: { _ in saved = true }))
+        XCTAssertThrowsError(try ScheduleMemoPersistence.update(
+            memo,
+            title: nil,
+            body: "draft",
+            removing: [image],
+            files: [.init(image, url: directory.appendingPathComponent(image.localFilename))],
+            in: context,
+            cleanup: LocalFileCleanup(queueURL: queue),
+            save: { _ in saved = true }
+        ))
         XCTAssertFalse(saved)
         XCTAssertEqual(memo.body, "original")
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoImage>()), 1)
@@ -102,8 +139,16 @@ final class ScheduleMemoPersistenceTests: XCTestCase {
     private func failSave(_ context: ModelContext) throws { throw CocoaError(.fileWriteOutOfSpace) }
 
     private func makeContext() throws -> ModelContext {
-        let schema = Schema([ScheduleMemo.self, ScheduleMemoImage.self, ScheduleMemoAttachment.self, ScheduleMemoAudio.self])
-        let container = try ModelContainer(for: schema, configurations: [.init(schema: schema, isStoredInMemoryOnly: true)])
+        let schema = Schema([
+            ScheduleMemo.self,
+            ScheduleMemoImage.self,
+            ScheduleMemoAttachment.self,
+            ScheduleMemoAudio.self
+        ])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [.init(schema: schema, isStoredInMemoryOnly: true)]
+        )
         let context = ModelContext(container)
         context.autosaveEnabled = false
         return context

@@ -14,12 +14,16 @@ struct ProfileView: View {
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @EnvironmentObject private var appNavigation: AppNavigationCoordinator
-    @AppStorage(AppThemeColorPreference.storageKey) private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
-    @AppStorage(AppThemeColorPreference.customColorHexKey) private var appThemeCustomColorHex = AppThemeColorPreference.defaultCustomColorHex
-    @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
+    @AppStorage(AppThemeColorPreference.storageKey) private var appThemeColorPreferenceRaw = AppThemeColorPreference
+        .green.rawValue
+    @AppStorage(AppThemeColorPreference.customColorHexKey) private var appThemeCustomColorHex = AppThemeColorPreference
+        .defaultCustomColorHex
+    @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference
+        .light.rawValue
     @AppStorage("timetableHidesWeekends") private var timetableHidesWeekends = false
     @AppStorage(TimetableBackgroundStore.isEnabledKey) private var timetableBackgroundIsEnabled = false
-    @AppStorage(TimetableBackgroundStore.kindKey) private var timetableBackgroundKindRaw = TimetableBackgroundKind.photo.rawValue
+    @AppStorage(TimetableBackgroundStore.kindKey) private var timetableBackgroundKindRaw = TimetableBackgroundKind.photo
+        .rawValue
     @AppStorage(TimetableBackgroundStore.filenameKey) private var timetableBackgroundFilename = ""
 
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
@@ -84,118 +88,125 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             profileSettingsList
-            .background(LeafyPageBackground())
-            .tint(themeColorPreference.swatchColor)
-            .navigationDestination(for: ProfileRoute.self) { route in
-                switch route {
-                case .timetableSharing:
-                    if isCommunityEnabled {
-                        TimetableSharingView(initialInviteCode: pendingTimetableInviteCode)
-                    } else {
-                        ContentUnavailableView(
-                            L10n.text("当前入口暂不支持共享课表", language: leafyLanguage),
-                            systemImage: "person.2.slash"
-                        )
+                .background(LeafyPageBackground())
+                .tint(themeColorPreference.swatchColor)
+                .navigationDestination(for: ProfileRoute.self) { route in
+                    switch route {
+                    case .timetableSharing:
+                        if isCommunityEnabled {
+                            TimetableSharingView(initialInviteCode: pendingTimetableInviteCode)
+                        } else {
+                            ContentUnavailableView(
+                                L10n.text("当前入口暂不支持共享课表", language: leafyLanguage),
+                                systemImage: "person.2.slash"
+                            )
+                        }
+                    case .cacheSync:
+                        CacheAndSyncView()
+                    case .timetableBackground:
+                        TimetableBackgroundSettingsView()
+                    case .personalization:
+                        PersonalizationSettingsView()
+                    case .timetableSettings:
+                        TimetableSettingsView()
+                    case .iCloudSync:
+                        ICloudSyncSettingsView()
                     }
-                case .cacheSync:
-                    CacheAndSyncView()
-                case .timetableBackground:
-                    TimetableBackgroundSettingsView()
-                case .personalization:
-                    PersonalizationSettingsView()
-                case .timetableSettings:
-                    TimetableSettingsView()
-                case .iCloudSync:
-                    ICloudSyncSettingsView()
                 }
-            }
-            .onChange(of: appNavigation.requestedProfileRoute) { _, route in
-                handleProfileRouteRequest(route)
-            }
-            .leafySheet(isPresented: $showingFeedbackSheet) {
-                FeedbackSheetView(
-                    initialIssueType: feedbackInitialIssueType,
-                    initialBody: feedbackInitialBody
-                )
+                .onChange(of: appNavigation.requestedProfileRoute) { _, route in
+                    handleProfileRouteRequest(route)
+                }
+                .leafySheet(isPresented: $showingFeedbackSheet) {
+                    FeedbackSheetView(
+                        initialIssueType: feedbackInitialIssueType,
+                        initialBody: feedbackInitialBody
+                    )
                     .presentationDetents([.medium, .large])
-            }
-            .appStoreOverlay(isPresented: $showingPoemeryOverlay) {
-                SKOverlay.AppConfiguration(
-                    appIdentifier: "6773236818",
-                    position: .bottom
-                )
-            }
-            .leafyOperationAlert($sessionOperationAlert)
-            .alert(logoutConfirmationTitle, isPresented: $showingLogoutAlert) {
-                Button(logoutButtonTitle, role: .destructive) {
-                    do { try AppSessionResetter.returnToLogin(modelContext: modelContext) }
-                    catch { sessionOperationAlert = .failure(error.localizedDescription) }
                 }
-                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
-            } message: {
-                Text(logoutConfirmationMessage)
-            }
-            .confirmationDialog(
-                L10n.text("删除 MyLeafy 账户？", language: leafyLanguage),
-                isPresented: $showingDeleteAccountConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button(L10n.text("继续删除", language: leafyLanguage), role: .destructive) {
-                    showingFinalDeleteAccountConfirmation = true
+                .appStoreOverlay(isPresented: $showingPoemeryOverlay) {
+                    SKOverlay.AppConfiguration(
+                        appIdentifier: "6773236818",
+                        position: .bottom
+                    )
                 }
-                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
-            } message: {
-                Text(L10n.text("这会永久删除社区资料、帖子、评论、互动和私有媒体，并清除当前设备上的课表、成绩、草稿、学习资料和其他 MyLeafy 数据。此操作不会删除或修改北京林业大学官方教务账户。", language: leafyLanguage))
-            }
-            .alert(L10n.text("最终确认删除？", language: leafyLanguage), isPresented: $showingFinalDeleteAccountConfirmation) {
-                Button(L10n.text("永久删除账户", language: leafyLanguage), role: .destructive) {
-                    Task { await deleteAccount() }
+                .leafyOperationAlert($sessionOperationAlert)
+                .alert(logoutConfirmationTitle, isPresented: $showingLogoutAlert) {
+                    Button(logoutButtonTitle, role: .destructive) {
+                        do { try AppSessionResetter.returnToLogin(modelContext: modelContext) }
+                        catch { sessionOperationAlert = .failure(error.localizedDescription) }
+                    }
+                    Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
+                } message: {
+                    Text(logoutConfirmationMessage)
                 }
-                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
-            } message: {
-                Text(L10n.text("删除后无法恢复。完成后 App 会清除本机数据并返回登录页。", language: leafyLanguage))
-            }
-            .alert(L10n.text("账户删除失败", language: leafyLanguage), isPresented: Binding(
-                get: { accountDeletionError != nil },
-                set: { if !$0 { accountDeletionError = nil } }
-            )) {
-                Button(L10n.text("重试", language: leafyLanguage), role: .destructive) {
-                    Task { await deleteAccount() }
+                .confirmationDialog(
+                    L10n.text("删除 MyLeafy 账户？", language: leafyLanguage),
+                    isPresented: $showingDeleteAccountConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button(L10n.text("继续删除", language: leafyLanguage), role: .destructive) {
+                        showingFinalDeleteAccountConfirmation = true
+                    }
+                    Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
+                } message: {
+                    Text(L10n.text(
+                        "这会永久删除社区资料、帖子、评论、互动和私有媒体，并清除当前设备上的课表、成绩、草稿、学习资料和其他 MyLeafy 数据。此操作不会删除或修改北京林业大学官方教务账户。",
+                        language: leafyLanguage
+                    ))
                 }
-                Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
-            } message: {
-                Text(accountDeletionError ?? "")
-            }
-            .alert(L10n.text("检查更新", language: leafyLanguage), isPresented: Binding(
-                get: { updateCheckMessage != nil },
-                set: { if !$0 { updateCheckMessage = nil } }
-            )) {
-                Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
-            } message: {
-                Text(updateCheckMessage ?? "")
-            }
-            .alert(L10n.text("给 %@ 评分", language: leafyLanguage, AppBrand.displayName), isPresented: Binding(
-                get: { reviewPageMessage != nil },
-                set: { if !$0 { reviewPageMessage = nil } }
-            )) {
-                Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
-            } message: {
-                Text(reviewPageMessage ?? "")
-            }
-            .task {
-                if isCommunityEnabled {
-                    sessionManager.startBootstrapIfNeeded()
-                } else {
-                    sessionManager.cancelInFlightWork()
+                .alert(
+                    L10n.text("最终确认删除？", language: leafyLanguage),
+                    isPresented: $showingFinalDeleteAccountConfirmation
+                ) {
+                    Button(L10n.text("永久删除账户", language: leafyLanguage), role: .destructive) {
+                        Task { await deleteAccount() }
+                    }
+                    Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
+                } message: {
+                    Text(L10n.text("删除后无法恢复。完成后 App 会清除本机数据并返回登录页。", language: leafyLanguage))
                 }
-            }
-            .onAppear {
-                Self.navigationLog.info("Profile root appeared; communityEnabled=\(isCommunityEnabled, privacy: .public)")
-                handleProfileRouteRequest(appNavigation.requestedProfileRoute)
-            }
-            .onChange(of: navigationPath.count) { _, count in
-                if count == 0 { pendingTimetableInviteCode = nil }
-            }
+                .alert(L10n.text("账户删除失败", language: leafyLanguage), isPresented: Binding(
+                    get: { accountDeletionError != nil },
+                    set: { if !$0 { accountDeletionError = nil } }
+                )) {
+                    Button(L10n.text("重试", language: leafyLanguage), role: .destructive) {
+                        Task { await deleteAccount() }
+                    }
+                    Button(L10n.text("取消", language: leafyLanguage), role: .cancel) {}
+                } message: {
+                    Text(accountDeletionError ?? "")
+                }
+                .alert(L10n.text("检查更新", language: leafyLanguage), isPresented: Binding(
+                    get: { updateCheckMessage != nil },
+                    set: { if !$0 { updateCheckMessage = nil } }
+                )) {
+                    Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
+                } message: {
+                    Text(updateCheckMessage ?? "")
+                }
+                .alert(L10n.text("给 %@ 评分", language: leafyLanguage, AppBrand.displayName), isPresented: Binding(
+                    get: { reviewPageMessage != nil },
+                    set: { if !$0 { reviewPageMessage = nil } }
+                )) {
+                    Button(L10n.text("好", language: leafyLanguage), role: .cancel) {}
+                } message: {
+                    Text(reviewPageMessage ?? "")
+                }
+                .task {
+                    if isCommunityEnabled {
+                        sessionManager.startBootstrapIfNeeded()
+                    } else {
+                        sessionManager.cancelInFlightWork()
+                    }
+                }
+                .onAppear {
+                    Self.navigationLog
+                        .info("Profile root appeared; communityEnabled=\(isCommunityEnabled, privacy: .public)")
+                    handleProfileRouteRequest(appNavigation.requestedProfileRoute)
+                }
+                .onChange(of: navigationPath.count) { _, count in
+                    if count == 0 { pendingTimetableInviteCode = nil }
+                }
         }
     }
 
@@ -252,7 +263,10 @@ struct ProfileView: View {
     }
 
     private var settingsRows: ProfileSettingsRows {
-        Self.navigationLog.debug("Preparing profile settings routes; communityEnabled=\(isCommunityEnabled, privacy: .public) customCampus=\(isCustomCampus, privacy: .public)")
+        Self.navigationLog
+            .debug(
+                "Preparing profile settings routes; communityEnabled=\(isCommunityEnabled, privacy: .public) customCampus=\(isCustomCampus, privacy: .public)"
+            )
         return ProfileSettingsRows(
             isCustomCampus: isCustomCampus,
             isCommunityEnabled: isCommunityEnabled,
@@ -460,7 +474,8 @@ struct ProfileView: View {
 
     private var personalizationDetail: String {
         let themeTitle = themeColorPreference.title(language: leafyLanguage)
-        let appearanceTitle = AppAppearancePreference.storedValue(appAppearancePreferenceRaw).title(language: leafyLanguage)
+        let appearanceTitle = AppAppearancePreference.storedValue(appAppearancePreferenceRaw)
+            .title(language: leafyLanguage)
         return "\(themeTitle) · \(appearanceTitle)"
     }
 
@@ -626,7 +641,8 @@ struct ProfileView: View {
         defer { isCheckingForUpdate = false }
 
         do {
-            guard let appStoreURL = try await AppStoreUpdateLookup.appStoreURL(bundleIdentifier: bundleIdentifier) else {
+            guard let appStoreURL = try await AppStoreUpdateLookup.appStoreURL(bundleIdentifier: bundleIdentifier)
+            else {
                 updateCheckMessage = L10n.text("暂未找到 App Store 页面，请稍后再试。", language: leafyLanguage)
                 return
             }
@@ -649,7 +665,8 @@ struct ProfileView: View {
         defer { isOpeningReviewPage = false }
 
         do {
-            guard let appStoreURL = try await AppStoreUpdateLookup.appStoreURL(bundleIdentifier: bundleIdentifier) else {
+            guard let appStoreURL = try await AppStoreUpdateLookup.appStoreURL(bundleIdentifier: bundleIdentifier)
+            else {
                 reviewPageMessage = L10n.text("暂未找到 App Store 评分页面，请稍后再试。", language: leafyLanguage)
                 return
             }
@@ -757,15 +774,24 @@ private struct IconAppearanceSwatch: View {
 
 private struct PersonalizationSettingsView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
-    @AppStorage(AppThemeColorPreference.storageKey) private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
-    @AppStorage(AppThemeColorPreference.customColorHexKey) private var appThemeCustomColorHex = AppThemeColorPreference.defaultCustomColorHex
-    @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw = LeafyAppIconAppearancePreference.green.rawValue
-    @AppStorage("appFontSizePreference") private var appDisplaySizePreferenceRaw = AppDisplaySizePreference.standard.rawValue
-    @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference.light.rawValue
-    @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system.rawValue
-    @AppStorage(TimetableCurrentTimeIndicatorPreference.isEnabledKey) private var currentTimeIndicatorIsEnabled = TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
-    @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey) private var currentTimeIndicatorThickness = TimetableCurrentTimeIndicatorPreference.defaultThickness
-    @AppStorage(TimetableCurrentTimeIndicatorPreference.transparencyKey) private var currentTimeIndicatorTransparency = TimetableCurrentTimeIndicatorPreference.defaultTransparency
+    @AppStorage(AppThemeColorPreference.storageKey) private var appThemeColorPreferenceRaw = AppThemeColorPreference
+        .green.rawValue
+    @AppStorage(AppThemeColorPreference.customColorHexKey) private var appThemeCustomColorHex = AppThemeColorPreference
+        .defaultCustomColorHex
+    @AppStorage(LeafyAppIconAppearancePreference.storageKey) private var appIconAppearancePreferenceRaw =
+        LeafyAppIconAppearancePreference.green.rawValue
+    @AppStorage("appFontSizePreference") private var appDisplaySizePreferenceRaw = AppDisplaySizePreference.standard
+        .rawValue
+    @AppStorage(AppAppearancePreference.storageKey) private var appAppearancePreferenceRaw = AppAppearancePreference
+        .light.rawValue
+    @AppStorage(AppLanguagePreference.storageKey) private var appLanguagePreferenceRaw = AppLanguagePreference.system
+        .rawValue
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.isEnabledKey) private var currentTimeIndicatorIsEnabled =
+        TimetableCurrentTimeIndicatorPreference.defaultIsEnabled
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.thicknessKey) private var currentTimeIndicatorThickness =
+        TimetableCurrentTimeIndicatorPreference.defaultThickness
+    @AppStorage(TimetableCurrentTimeIndicatorPreference.transparencyKey) private var currentTimeIndicatorTransparency =
+        TimetableCurrentTimeIndicatorPreference.defaultTransparency
     @State private var showingCustomThemeColorPicker = false
 
     private var themeColorPreference: AppThemeColorPreference {
@@ -805,7 +831,8 @@ private struct PersonalizationSettingsView: View {
                 TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(currentTimeIndicatorTransparency)
             },
             set: { newValue in
-                currentTimeIndicatorTransparency = TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(newValue)
+                currentTimeIndicatorTransparency = TimetableCurrentTimeIndicatorPreference
+                    .sanitizedTransparency(newValue)
             }
         )
     }
@@ -925,8 +952,10 @@ private struct PersonalizationSettingsView: View {
                     HStack {
                         Text("粗细")
                         Spacer()
-                        Text("\(TimetableCurrentTimeIndicatorPreference.sanitizedThickness(currentTimeIndicatorThickness), specifier: "%.1f") pt")
-                            .foregroundStyle(.secondary)
+                        Text(
+                            "\(TimetableCurrentTimeIndicatorPreference.sanitizedThickness(currentTimeIndicatorThickness), specifier: "%.1f") pt"
+                        )
+                        .foregroundStyle(.secondary)
                     }
 
                     Slider(
@@ -941,8 +970,10 @@ private struct PersonalizationSettingsView: View {
                     HStack {
                         Text("透明度")
                         Spacer()
-                        Text("\(Int(TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(currentTimeIndicatorTransparency) * 100))%")
-                            .foregroundStyle(.secondary)
+                        Text(
+                            "\(Int(TimetableCurrentTimeIndicatorPreference.sanitizedTransparency(currentTimeIndicatorTransparency) * 100))%"
+                        )
+                        .foregroundStyle(.secondary)
                     }
 
                     Slider(
@@ -1137,12 +1168,18 @@ private struct FeedbackSheetView: View {
                         TextField("请描述你遇到的问题、建议或不当活动", text: $feedbackBody, axis: .vertical)
                             .lineLimit(5, reservesSpace: true)
                             .padding(14)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
 
                         TextField("联系方式（可选）", text: $contact)
                             .leafyDisableAutocapitalization()
                             .padding(14)
-                            .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.fill,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
 
                         Text(isCommunityEnabled
                             ? "社区安全或不当活动也可邮件联系：\(CommunityTerms.supportEmail)"
@@ -1152,8 +1189,6 @@ private struct FeedbackSheetView: View {
                     }
                     .padding(18)
                     .leafyCardStyle()
-
-
                 }
                 .padding(AppSpacing.page)
             }
@@ -1175,7 +1210,6 @@ private struct FeedbackSheetView: View {
                 }
             }
             .leafyOperationAlert($operationAlert)
-
         }
     }
 
@@ -1209,13 +1243,28 @@ private struct FeedbackSheetView: View {
     }
 
     private func feedbackDeviceInfo() -> [String: String] {
-        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? L10n.text("未知", language: leafyLanguage)
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? L10n.text("未知", language: leafyLanguage)
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? L10n.text(
+            "未知",
+            language: leafyLanguage
+        )
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? L10n.text(
+            "未知",
+            language: leafyLanguage
+        )
         let isCustomCampus = ActiveCampusContext.identity?.isCustom == true
         let loggedIn = isCustomCampus
             ? L10n.text("本地学校账号", language: leafyLanguage)
-            : (ActiveCampusContext.networkManager.isLoggedIn ? L10n.text("BJFU 教务已登录", language: leafyLanguage) : L10n.text("BJFU 教务未登录", language: leafyLanguage))
-        let lastSync = TimetableCacheMetadata.lastSyncAt.map { DateFormatters.headerWithTime.string(from: $0) } ?? L10n.text("无", language: leafyLanguage)
+            :
+            (ActiveCampusContext.networkManager.isLoggedIn ? L10n.text("BJFU 教务已登录", language: leafyLanguage) : L10n
+                .text(
+                    "BJFU 教务未登录",
+                    language: leafyLanguage
+                ))
+        let lastSync = TimetableCacheMetadata.lastSyncAt.map { DateFormatters.headerWithTime.string(from: $0) } ?? L10n
+            .text(
+                "无",
+                language: leafyLanguage
+            )
         return [
             "device": LeafyDeviceInfo.model,
             "system": LeafyDeviceInfo.systemDescription,
@@ -1296,7 +1345,10 @@ private struct CommunityTermsPreferenceSheet: View {
                             .foregroundStyle(AppTheme.danger)
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            .background(
+                                AppTheme.cardBackground,
+                                in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            )
                     }
                 }
                 .padding(AppSpacing.page)
@@ -1389,9 +1441,18 @@ private struct LeafyGuideAndDataSecurityView: View {
             detail: "产品定位与主要入口",
             intro: "\(AppBrand.displayName) 面向北京林业大学，根导航包含课表、社区、日迹、校园和我的。",
             rows: [
-                ManualInfo(title: "产品用途", body: "北林的教务和校园服务分布在多个系统。\(AppBrand.displayName) 集中提供常用入口，并保留最近一次成功同步的数据供离线查看。"),
-                ManualInfo(title: "与学校系统的关系", body: "\(AppBrand.displayName) 是第三方校园应用，不属于北京林业大学官方教务系统。登录、验证码、校园网、VPN 和访问权限均受学校系统限制。成绩、培养方案和考试安排等正式结果以学校系统为准。"),
-                ManualInfo(title: "主要入口", body: "“课表”显示当前学年的课程与个人日程；“社区”用于同学交流和通知；“日迹”包含随记、日程和推送；“校园”提供成绩、考试、教学培养、自习安排、学习空间、校历和评分；“我的”用于管理资料、同步、个性化和安全设置。"),
+                ManualInfo(
+                    title: "产品用途",
+                    body: "北林的教务和校园服务分布在多个系统。\(AppBrand.displayName) 集中提供常用入口，并保留最近一次成功同步的数据供离线查看。"
+                ),
+                ManualInfo(
+                    title: "与学校系统的关系",
+                    body: "\(AppBrand.displayName) 是第三方校园应用，不属于北京林业大学官方教务系统。登录、验证码、校园网、VPN 和访问权限均受学校系统限制。成绩、培养方案和考试安排等正式结果以学校系统为准。"
+                ),
+                ManualInfo(
+                    title: "主要入口",
+                    body: "“课表”显示当前学年的课程与个人日程；“社区”用于同学交流和通知；“日迹”包含随记、日程和推送；“校园”提供成绩、考试、教学培养、自习安排、学习空间、校历和评分；“我的”用于管理资料、同步、个性化和安全设置。"
+                ),
                 ManualInfo(title: "需要同步的情况", body: "选课、调课、成绩发布或考试安排更新后，可连接能够访问北林教务的网络重新同步。同步失败不会删除最近一次成功缓存。")
             ],
             steps: [
@@ -1409,7 +1470,10 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "学年范围", body: "当前学年包含秋季学期、寒假、春季学期和暑假。暑假最后一周停在学年边界，不会继续滑入下一学年第 1 周。"),
                 ManualInfo(title: "进入下一学年", body: "打开课表右上角的周次与日期选择，选择下一学年或对应日期。返回当前学年时使用同一入口。"),
-                ManualInfo(title: "学校课表数据", body: "学校每次返回一个学期的课表，数据范围为 20 周。App 按绝对日期把已获取的学期数据放入当前学年；尚未开放或尚未获取的未来学期保持为空。"),
+                ManualInfo(
+                    title: "学校课表数据",
+                    body: "学校每次返回一个学期的课表，数据范围为 20 周。App 按绝对日期把已获取的学期数据放入当前学年；尚未开放或尚未获取的未来学期保持为空。"
+                ),
                 ManualInfo(title: "周次与假期", body: "教学周显示第几周；寒假和暑假显示假期名称。学期结束日期和假期范围来自运行时校历配置。"),
                 ManualInfo(title: "刷新范围", body: "学校课表刷新只请求当前启用的学期。切换学年用于查看已配置或已缓存的数据，不会主动请求尚未开放的未来学期。")
             ],
@@ -1425,18 +1489,30 @@ private struct LeafyGuideAndDataSecurityView: View {
             detail: "随记、日程与推送",
             intro: "日迹顶部提供随记、日程和推送，内容按当前校园身份保存在本机。",
             rows: [
-                ManualInfo(title: "随记", body: "随记支持文字、图片、最多 3 个常用文档附件、录音、Tag、回顾和统计。已有的文字随记可使用 Markdown 编辑与预览，并把本地图片或附件插入正文位置。卡片可置顶、编辑、生成图文卡片、转为个人日程、创建投稿邮件或移到回收站。"),
+                ManualInfo(
+                    title: "随记",
+                    body: "随记支持文字、图片、最多 3 个常用文档附件、录音、Tag、回顾和统计。已有的文字随记可使用 Markdown 编辑与预览，并把本地图片或附件插入正文位置。卡片可置顶、编辑、生成图文卡片、转为个人日程、创建投稿邮件或移到回收站。"
+                ),
                 ManualInfo(title: "输入器", body: "点按输入区后会展开编辑；内容达到 4 个视觉行时，可使用右上角按钮放大或缩小编辑区。"),
                 ManualInfo(title: "Tag 筛选", body: "点击卡片上的 Tag 后，列表顶部会显示当前 Tag。点“全部随记”即可清除 Tag 筛选并回到完整列表。"),
-                ManualInfo(title: "记录日迹", body: "在日迹侧栏“记录”分组中打开“记录日迹”。页面按自然年查看每月随记数和记录天数，也会显示近 30 天热力、连续记录、星期与时段习惯、常用标签和里程碑。点按近 30 天的日期可查看当天随记。"),
+                ManualInfo(
+                    title: "记录日迹",
+                    body: "在日迹侧栏“记录”分组中打开“记录日迹”。页面按自然年查看每月随记数和记录天数，也会显示近 30 天热力、连续记录、星期与时段习惯、常用标签和里程碑。点按近 30 天的日期可查看当天随记。"
+                ),
                 ManualInfo(title: "统计分享", body: "点右上角分享按钮可在本机生成统计图片，再使用系统分享。图片只含聚合统计，不含随记正文或标签名；统计和图片都不会上传。"),
-                ManualInfo(title: "个人日程", body: "日程页浏览用户创建的计划和倒计时。当前学年内的日期会投射到课表；学年外日期保留在个人日程列表。学校课程、考试和校历不会写入随记或个人日程。"),
+                ManualInfo(
+                    title: "个人日程",
+                    body: "日程页浏览用户创建的计划和倒计时。当前学年内的日期会投射到课表；学年外日期保留在个人日程列表。学校课程、考试和校历不会写入随记或个人日程。"
+                ),
                 ManualInfo(title: "推送", body: "推送页管理考试提醒和重要日期报告。开关保存后立即生效，系统通知仍受设备通知权限控制。"),
                 ManualInfo(title: "本地文件", body: "随记图片、附件和录音保存在当前校园身份的 App 目录。删除随记或清除本地数据时，对应文件会一起删除。")
             ],
             steps: [
                 ManualStep(title: "创建随记", body: "在随记页底部输入文字，或使用加号添加图片、附件和录音。加号不再提供新建文章入口。"),
-                ManualStep(title: "编辑与投稿", body: "打开随记菜单后选择编辑，可在源文与预览之间切换，并插入格式、图片或附件。选择“投稿”会调起系统默认邮箱并生成邮件草稿；本地图片和附件需要在邮箱 App 中按需补充。"),
+                ManualStep(
+                    title: "编辑与投稿",
+                    body: "打开随记菜单后选择编辑，可在源文与预览之间切换，并插入格式、图片或附件。选择“投稿”会调起系统默认邮箱并生成邮件草稿；本地图片和附件需要在邮箱 App 中按需补充。"
+                ),
                 ManualStep(title: "查看某个 Tag", body: "点卡片上的 Tag 查看筛选结果；点“全部随记”返回完整列表。"),
                 ManualStep(title: "维护个人日程", body: "切换到“日程”创建或编辑计划，日期在当前学年内时可在课表中查看。")
             ]
@@ -1468,7 +1544,10 @@ private struct LeafyGuideAndDataSecurityView: View {
                 ManualInfo(title: "教务缓存", body: "课表、成绩、考试安排、教学计划、培养方案和空闲教室查询结果按功能保存在本机，供离线查看。"),
                 ManualInfo(title: "本地记录", body: "随记、个人日程、课程备注、课表提醒、收藏、学习资料、学习空间、任务、专注记录和体测记录由用户在当前设备创建或导入。"),
                 ManualInfo(title: "同步失败时", body: "同步或导入失败不会删除现有数据。成功更新后，新数据会替换对应缓存。"),
-                ManualInfo(title: "清除本地缓存", body: "此操作会删除本地身份、教务登录状态、教务缓存，以及随记、个人日程、图片、附件、录音、备注、提醒、收藏、学习资料、任务和体测记录等本机内容。"),
+                ManualInfo(
+                    title: "清除本地缓存",
+                    body: "此操作会删除本地身份、教务登录状态、教务缓存，以及随记、个人日程、图片、附件、录音、备注、提醒、收藏、学习资料、任务和体测记录等本机内容。"
+                ),
                 ManualInfo(title: "适用情况", body: "仅在切换账号、身份异常、缓存明显不一致或需要移除本机数据时清除缓存。普通同步失败应先重试或重新登录。")
             ],
             steps: [
@@ -1484,9 +1563,18 @@ private struct LeafyGuideAndDataSecurityView: View {
             detail: "社区数据与主动发布内容",
             intro: "\(AppBrand.displayName) 社区服务与北林教务系统相互独立。学校身份用于确认校园归属，社区资料用于展示、互动、通知和安全处理。",
             rows: [
-                ManualInfo(title: "社区服务保存的内容", body: "昵称、头像、学院、年级、帖子、评论、点赞、收藏、通知、举报、反馈、评教和主动发布的共享课表数据会保存到 \(AppBrand.displayName) 社区服务。正式账户可在“我的”底部直接发起永久删除。"),
-                ManualInfo(title: "草稿和图文卡片", body: "普通帖子草稿按社区账号保存在本机，仅在原账号登录后显示。图文卡片也保存在本机。帖子通过发布校验并进入发布队列后，内容才会提交到社区服务。"),
-                ManualInfo(title: "帖子图片和附件", body: "用户选择的帖子图片及 PDF、Excel、Word 或 Markdown 附件存入 Cloudflare R2 私有存储，并通过短期签名链接访问。附件会校验类型和文件结构，但不提供病毒扫描。删帖后媒体通常保留 30 天；存在未解决举报或后台隐藏时暂停清理。"),
+                ManualInfo(
+                    title: "社区服务保存的内容",
+                    body: "昵称、头像、学院、年级、帖子、评论、点赞、收藏、通知、举报、反馈、评教和主动发布的共享课表数据会保存到 \(AppBrand.displayName) 社区服务。正式账户可在“我的”底部直接发起永久删除。"
+                ),
+                ManualInfo(
+                    title: "草稿和图文卡片",
+                    body: "普通帖子草稿按社区账号保存在本机，仅在原账号登录后显示。图文卡片也保存在本机。帖子通过发布校验并进入发布队列后，内容才会提交到社区服务。"
+                ),
+                ManualInfo(
+                    title: "帖子图片和附件",
+                    body: "用户选择的帖子图片及 PDF、Excel、Word 或 Markdown 附件存入 Cloudflare R2 私有存储，并通过短期签名链接访问。附件会校验类型和文件结构，但不提供病毒扫描。删帖后媒体通常保留 30 天；存在未解决举报或后台隐藏时暂停清理。"
+                ),
                 ManualInfo(title: "保留在本机的内容", body: "成绩、考试安排、随记、个人日程、课程备注、提醒、收藏、学习资料文件、学习空间、任务、专注记录和体测记录不会因进入社区自动上传。"),
                 ManualInfo(title: "共享课表", body: "共享内容仅包含课程安排，不包含成绩、考试、课程备注、提醒、收藏或学习资料。查看权限可随时撤销。"),
                 ManualInfo(title: "反馈信息", body: "举报与反馈会提交文字说明。必要时还会提交设备型号、iOS 版本、App 版本、登录状态和最近同步时间，用于定位问题。"),
@@ -1506,9 +1594,18 @@ private struct LeafyGuideAndDataSecurityView: View {
             rows: [
                 ManualInfo(title: "教务账号和密码", body: "教务账号和密码仅用于向北林强智教务系统发起登录请求，不用于社区资料，也不会作为帖子、评论、反馈或共享课表内容保存。"),
                 ManualInfo(title: "学校教务数据", body: "课表、成绩、考试、教学计划和培养方案等个人教务数据优先保存在本机，供离线查看。学校教务系统仍是正式数据来源。"),
-                ManualInfo(title: "本机与 iCloud", body: "随记、个人日程、图片、附件、录音、学习资料、简历、社区帖子草稿、图文卡片、课程备注、提醒、学习空间、任务、专注记录、体测记录和收藏保存在 App 的本机空间。你可在我的页主动开启 iCloud，同步课表、成绩考试、备注提醒、个人日程、随记及附件、课表和个性化设置。其他资料模块仍保留本机；清除本机缓存会先暂停同步，删除云端数据需要单独确认。"),
-                ManualInfo(title: "社区服务数据", body: "主动参与社区、反馈、评教或共享课表时，相关内容会进入 \(AppBrand.displayName) 社区服务，用于展示、通知、审核、反馈处理和社区安全。"),
-                ManualInfo(title: "退出登录、清除缓存与删除账户", body: "退出登录只结束当前会话并保留本机缓存；清除本地缓存会删除当前设备保存的数据；删除 MyLeafy 账户还会永久删除社区账户与关联线上内容。以上操作都不会删除或修改北京林业大学官方教务账户。"),
+                ManualInfo(
+                    title: "本机与 iCloud",
+                    body: "随记、个人日程、图片、附件、录音、学习资料、简历、社区帖子草稿、图文卡片、课程备注、提醒、学习空间、任务、专注记录、体测记录和收藏保存在 App 的本机空间。你可在我的页主动开启 iCloud，同步课表、成绩考试、备注提醒、个人日程、随记及附件、课表和个性化设置。其他资料模块仍保留本机；清除本机缓存会先暂停同步，删除云端数据需要单独确认。"
+                ),
+                ManualInfo(
+                    title: "社区服务数据",
+                    body: "主动参与社区、反馈、评教或共享课表时，相关内容会进入 \(AppBrand.displayName) 社区服务，用于展示、通知、审核、反馈处理和社区安全。"
+                ),
+                ManualInfo(
+                    title: "退出登录、清除缓存与删除账户",
+                    body: "退出登录只结束当前会话并保留本机缓存；清除本地缓存会删除当前设备保存的数据；删除 MyLeafy 账户还会永久删除社区账户与关联线上内容。以上操作都不会删除或修改北京林业大学官方教务账户。"
+                ),
                 ManualInfo(title: "设备权限", body: "相册、文件和通知权限仅在对应功能中使用。导入资料保存在 App 私有目录，通知用于课程和本机提醒。拒绝权限只影响对应功能。")
             ],
             steps: [
@@ -1867,7 +1964,10 @@ private struct CacheAndSyncView: View {
                 Button(role: .destructive) {
                     showingClearConfirmation = true
                 } label: {
-                    Text(isClearing ? L10n.text("清理中", language: leafyLanguage) : L10n.text("清除本地缓存", language: leafyLanguage))
+                    Text(isClearing ? L10n.text("清理中", language: leafyLanguage) : L10n.text(
+                        "清除本地缓存",
+                        language: leafyLanguage
+                    ))
                 }
                 .disabled(isSyncing || isClearing)
 
@@ -1892,13 +1992,18 @@ private struct CacheAndSyncView: View {
             if let message {
                 Section {
                     Text(message)
-                        .foregroundStyle(message.contains(L10n.text("失败", language: leafyLanguage)) ? AppTheme.danger : AppTheme.secondaryText)
+                        .foregroundStyle(message.contains(L10n.text("失败", language: leafyLanguage)) ? AppTheme
+                            .danger : AppTheme.secondaryText)
                 }
             }
         }
         .navigationTitle(isCustomCampus ? "管理本地数据" : "缓存与同步")
         .leafyInlineNavigationTitle()
-        .confirmationDialog("确认清除教务缓存？", isPresented: $showingAcademicCacheClearConfirmation, titleVisibility: .visible) {
+        .confirmationDialog(
+            "确认清除教务缓存？",
+            isPresented: $showingAcademicCacheClearConfirmation,
+            titleVisibility: .visible
+        ) {
             Button("清除教务缓存", role: .destructive) {
                 clearAcademicCaches()
             }

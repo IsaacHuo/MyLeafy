@@ -51,8 +51,8 @@ nonisolated enum CommunityDiagnosticsOptions {
             disablesNotificationRealtime && !disablesNotifications ? "notification-realtime-off" : nil,
             disablesGlassEffects ? "glass-off" : nil
         ]
-            .compactMap { $0 }
-            .joined(separator: ",")
+        .compactMap { $0 }
+        .joined(separator: ",")
     }
 
     private static func hasArgument(_ argument: String) -> Bool {

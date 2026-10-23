@@ -143,8 +143,14 @@ struct TimetableSharingView: View {
             .presentationDetents([.medium])
         }
         .leafySheet(item: $generatedInvite) { invite in
-            TimetableInviteShareSheet(invite: invite, ownerName: sessionManager.profile?.limitedResolvedDisplayName ?? L10n.text(ActiveCampusContext.descriptor.defaultStudentDisplayName, language: leafyLanguage))
-                .presentationDetents([.medium])
+            TimetableInviteShareSheet(
+                invite: invite,
+                ownerName: sessionManager.profile?.limitedResolvedDisplayName ?? L10n.text(
+                    ActiveCampusContext.descriptor.defaultStudentDisplayName,
+                    language: leafyLanguage
+                )
+            )
+            .presentationDetents([.medium])
         }
         .leafyOperationAlert($operationAlert)
         .navigationDestination(item: $acceptedSnapshotToOpen) { snapshot in
@@ -448,7 +454,8 @@ struct TimetableSharingView: View {
             return "发布后才能生成邀请码。"
         }
 
-        let dateText = mySnapshot.publishedDate.map { DateFormatters.headerWithTime.string(from: $0) } ?? mySnapshot.publishedRelativeText
+        let dateText = mySnapshot.publishedDate.map { DateFormatters.headerWithTime.string(from: $0) } ?? mySnapshot
+            .publishedRelativeText
         return L10n.text("%d 门课程 · %@", language: leafyLanguage, mySnapshot.courseCount, dateText)
     }
 
@@ -581,7 +588,12 @@ struct TimetableSharingView: View {
             async let viewerMembers = service.fetchMyShareMembers()
             async let ownerInvites = service.fetchMyInvites()
 
-            let (loadedSnapshot, loadedShared, loadedMembers, loadedInvites) = try await (snapshot, shared, viewerMembers, ownerInvites)
+            let (loadedSnapshot, loadedShared, loadedMembers, loadedInvites) = try await(
+                snapshot,
+                shared,
+                viewerMembers,
+                ownerInvites
+            )
             try scope.check()
             mySnapshot = loadedSnapshot
             viewableSnapshots = loadedShared
@@ -744,9 +756,14 @@ private struct SharedTimetableSnapshotRow: View {
                 Text(snapshot.ownerDisplayName)
                     .leafyBody()
                     .foregroundStyle(AppTheme.primaryText)
-                Text(L10n.text("%d 门课程 · %@", language: leafyLanguage, snapshot.courseCount, snapshot.publishedRelativeText))
-                    .microCaption()
-                    .foregroundStyle(AppTheme.secondaryText)
+                Text(L10n.text(
+                    "%d 门课程 · %@",
+                    language: leafyLanguage,
+                    snapshot.courseCount,
+                    snapshot.publishedRelativeText
+                ))
+                .microCaption()
+                .foregroundStyle(AppTheme.secondaryText)
             }
 
             Spacer()
@@ -925,7 +942,10 @@ private struct AcceptTimetableInviteSheet: View {
                         .autocorrectionDisabled()
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .padding(14)
-                        .background(AppTheme.fill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                        .background(
+                            AppTheme.fill,
+                            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        )
                         .accessibilityLabel("12 位共享课表邀请码")
                         .onChange(of: code) { _, newValue in
                             let normalized = TimetableSharingService.normalizeInviteCode(newValue)
@@ -1042,7 +1062,10 @@ private struct SharedTimetableGridDetailView: View {
     @State private var isAwayFromCurrentWeek = false
     @State private var selectedCourseContext: SharedTimetableGridCourseContext?
 
-    private var totalClasses: Int { snapshot.calendarConfig?.periods.count ?? max(13, snapshot.courses.flatMap(\.duration).max() ?? 13) }
+    private var totalClasses: Int { snapshot.calendarConfig?.periods.count ?? max(
+        13,
+        snapshot.courses.flatMap(\.duration).max() ?? 13
+    ) }
     private var sharedCurrentWeek: Int { snapshot.calendarConfig?.currentWeek() ?? SemesterConfig.currentWeek() }
     private func sharedSlot(_ period: Int) -> TimetablePeriodSchedule.Slot? {
         (snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots).first { $0.period == period }
@@ -1060,7 +1083,7 @@ private struct SharedTimetableGridDetailView: View {
     private var allowsTimetableAgendaFallback: Bool {
         UIDevice.current.userInterfaceIdiom == .pad
     }
-    private var visibleDayRange: ClosedRange<Int> { 1...7 }
+    private var visibleDayRange: ClosedRange<Int> { 1 ... 7 }
 
     var body: some View {
         VStack(spacing: AppSpacing.compact) {
@@ -1118,7 +1141,7 @@ private struct SharedTimetableGridDetailView: View {
 
     private var toolbarWeekMenu: some View {
         Menu {
-            ForEach(1...totalWeeks, id: \.self) { week in
+            ForEach(1 ... totalWeeks, id: \.self) { week in
                 Button(weekMenuTitle(week)) {
                     currentWeek = week
                     scrollToWeek = week
@@ -1169,7 +1192,7 @@ private struct SharedTimetableGridDetailView: View {
                         },
                         header: {
                             HStack(alignment: .top, spacing: metrics.weekSpacing) {
-                                ForEach(1...totalWeeks, id: \.self) { week in
+                                ForEach(1 ... totalWeeks, id: \.self) { week in
                                     HStack(alignment: .top, spacing: metrics.daySpacing) {
                                         ForEach(Array(visibleDayRange), id: \.self) { day in
                                             dayHeader(day: day, week: week)
@@ -1184,10 +1207,15 @@ private struct SharedTimetableGridDetailView: View {
                         },
                         body: {
                             HStack(alignment: .top, spacing: metrics.weekSpacing) {
-                                ForEach(1...totalWeeks, id: \.self) { week in
+                                ForEach(1 ... totalWeeks, id: \.self) { week in
                                     HStack(alignment: .top, spacing: metrics.daySpacing) {
                                         ForEach(Array(visibleDayRange), id: \.self) { day in
-                                            dayColumnBody(day: day, week: week, width: metrics.dayColumnWidth, metrics: metrics)
+                                            dayColumnBody(
+                                                day: day,
+                                                week: week,
+                                                width: metrics.dayColumnWidth,
+                                                metrics: metrics
+                                            )
                                         }
                                     }
                                 }
@@ -1265,7 +1293,7 @@ private struct SharedTimetableGridDetailView: View {
 
     private func timeAxis(metrics: SharedTimetableGridLayoutMetrics) -> some View {
         ZStack(alignment: .topLeading) {
-            ForEach(1...totalClasses, id: \.self) { classIndex in
+            ForEach(1 ... totalClasses, id: \.self) { classIndex in
                 VStack(spacing: 0) {
                     Text("\(classIndex)")
                         .font(.system(size: 15 * leafyControlScale, weight: .semibold))
@@ -1287,7 +1315,8 @@ private struct SharedTimetableGridDetailView: View {
         .frame(width: axisWidth, height: metrics.gridHeight, alignment: .topLeading)
     }
 
-    private func dayColumnBody(day: Int, week: Int, width: CGFloat, metrics: SharedTimetableGridLayoutMetrics) -> some View {
+    private func dayColumnBody(day: Int, week: Int, width: CGFloat,
+                               metrics: SharedTimetableGridLayoutMetrics) -> some View {
         let layouts = layoutsForDay(day, week: week)
 
         return ZStack(alignment: .topLeading) {
@@ -1376,7 +1405,10 @@ private struct SharedTimetableGridDetailView: View {
         }
         .padding(.horizontal, AppSpacing.page)
         .padding(.vertical, 8 * leafyControlScale)
-        .background(AppTheme.cardBackground.opacity(0.82), in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+        .background(
+            AppTheme.cardBackground.opacity(0.82),
+            in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                 .stroke(AppTheme.separator, lineWidth: 1)
@@ -1402,7 +1434,8 @@ private struct SharedTimetableGridDetailView: View {
                 VStack(alignment: .leading, spacing: 2 * leafyControlScale) {
                     Text(dayTitle(day))
                         .font(.system(size: 15 * leafyControlScale, weight: .bold))
-                        .foregroundStyle(UserTimetableSettings.calendar.isDateInToday(date) ? AppTheme.accentEmphasis : AppTheme.primaryText)
+                        .foregroundStyle(UserTimetableSettings.calendar.isDateInToday(date) ? AppTheme
+                            .accentEmphasis : AppTheme.primaryText)
                     Text(DateFormatters.chineseDay.string(from: date))
                         .font(.system(size: 11 * leafyControlScale, weight: .medium))
                         .foregroundStyle(AppTheme.secondaryText)
@@ -1426,7 +1459,10 @@ private struct SharedTimetableGridDetailView: View {
             }
         }
         .padding(14 * leafyControlScale)
-        .background(AppTheme.cardBackground.opacity(0.92), in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .background(
+            AppTheme.cardBackground.opacity(0.92),
+            in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .stroke(AppTheme.separator, lineWidth: 1)
@@ -1445,11 +1481,14 @@ private struct SharedTimetableGridDetailView: View {
         } label: {
             HStack(alignment: .top, spacing: 10 * leafyControlScale) {
                 VStack(spacing: 2 * leafyControlScale) {
-                    Text(course.durationText(language: leafyLanguage, slots: snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots))
-                        .font(.system(size: 12 * leafyControlScale, weight: .bold))
-                        .foregroundStyle(AppTheme.accent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
+                    Text(course.durationText(
+                        language: leafyLanguage,
+                        slots: snapshot.calendarConfig?.periods ?? TimetablePeriodSchedule.slots
+                    ))
+                    .font(.system(size: 12 * leafyControlScale, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
                     Text(courseTimeText(course))
                         .font(.system(size: 9.5 * leafyControlScale, weight: .medium))
                         .foregroundStyle(AppTheme.tertiaryText)
@@ -1477,7 +1516,10 @@ private struct SharedTimetableGridDetailView: View {
                     .frame(width: 24 * leafyControlScale, height: 24 * leafyControlScale)
             }
             .padding(10 * leafyControlScale)
-            .background(AppTheme.accent.opacity(colorScheme == .dark ? 0.18 : 0.11), in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+            .background(
+                AppTheme.accent.opacity(colorScheme == .dark ? 0.18 : 0.11),
+                in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+            )
             .contentShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -1544,7 +1586,7 @@ private struct SharedTimetableGridDetailView: View {
 
     private func timetableGridBackground(width: CGFloat, metrics: SharedTimetableGridLayoutMetrics) -> some View {
         ZStack(alignment: .topLeading) {
-            ForEach(1...totalClasses, id: \.self) { classIndex in
+            ForEach(1 ... totalClasses, id: \.self) { classIndex in
                 let isBreakBoundary = classIndex == 5 || classIndex == 9
                 RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                     .fill(backgroundFillColor(for: classIndex))
@@ -1630,20 +1672,30 @@ private struct SharedTimetableGridDetailView: View {
         }
     }
 
-    private func widthForLayout(_ layout: SharedTimetableGridCourseLayout, availableWidth: CGFloat, metrics: SharedTimetableGridLayoutMetrics) -> CGFloat {
+    private func widthForLayout(
+        _ layout: SharedTimetableGridCourseLayout,
+        availableWidth: CGFloat,
+        metrics: SharedTimetableGridLayoutMetrics
+    ) -> CGFloat {
         let totalSpacing = CGFloat(max(layout.laneCount - 1, 0)) * metrics.laneSpacing
         let laneWidth = (availableWidth - totalSpacing - metrics.cardInset * 2) / CGFloat(layout.laneCount)
         return max(laneWidth, 1)
     }
 
-    private func xOffsetForLayout(_ layout: SharedTimetableGridCourseLayout, availableWidth: CGFloat, metrics: SharedTimetableGridLayoutMetrics) -> CGFloat {
+    private func xOffsetForLayout(
+        _ layout: SharedTimetableGridCourseLayout,
+        availableWidth: CGFloat,
+        metrics: SharedTimetableGridLayoutMetrics
+    ) -> CGFloat {
         let laneWidth = widthForLayout(layout, availableWidth: availableWidth, metrics: metrics)
         return metrics.cardInset + CGFloat(layout.laneIndex) * (laneWidth + metrics.laneSpacing)
     }
 
-    private func heightForCourse(_ course: SharedTimetableCourse, metrics: SharedTimetableGridLayoutMetrics) -> CGFloat {
+    private func heightForCourse(_ course: SharedTimetableCourse,
+                                 metrics: SharedTimetableGridLayoutMetrics) -> CGFloat {
         let count = max(course.duration.count, 1)
-        let rawHeight = CGFloat(count) * metrics.rowHeight + CGFloat(count - 1) * metrics.rowSpacing - metrics.cardInset * 2
+        let rawHeight = CGFloat(count) * metrics.rowHeight + CGFloat(count - 1) * metrics.rowSpacing - metrics
+            .cardInset * 2
         return max(rawHeight, metrics.rowHeight * 0.7)
     }
 
@@ -1836,7 +1888,8 @@ private struct SharedTimetableGridCourseBlockView: View {
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green.rawValue
+    @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
+        .rawValue
 
     let course: SharedTimetableCourse
     let height: CGFloat
@@ -1879,7 +1932,10 @@ private struct SharedTimetableGridCourseBlockView: View {
             y: isCompact ? 0 : 2
         )
         .contextMenu {
-            Label(course.teacher.isEmpty ? L10n.text("未填写教师", language: leafyLanguage) : course.teacher, systemImage: "person")
+            Label(
+                course.teacher.isEmpty ? L10n.text("未填写教师", language: leafyLanguage) : course.teacher,
+                systemImage: "person"
+            )
             Label(course.locationText, systemImage: "mappin.and.ellipse")
             Label(course.weeksText(language: leafyLanguage), systemImage: "calendar")
         }
@@ -1958,9 +2014,11 @@ private struct SharedTimetableGridCourseDetailSheet: View {
                         Text(context.course.displayCourseName)
                             .leafyHeadline()
                             .foregroundStyle(AppTheme.primaryText)
-                        Text("\(context.course.dayTitle(language: leafyLanguage)) · \(context.course.durationText(language: leafyLanguage, slots: context.periodSlots))")
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(
+                            "\(context.course.dayTitle(language: leafyLanguage)) · \(context.course.durationText(language: leafyLanguage, slots: context.periodSlots))"
+                        )
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
                     }
                     .padding(.vertical, 4)
                 }
@@ -1970,7 +2028,10 @@ private struct SharedTimetableGridCourseDetailSheet: View {
                     LabeledContent("教师", value: context.course.teacher.isEmpty ? "未填写" : context.course.teacher)
                     LabeledContent("地点", value: context.course.locationText)
                     LabeledContent("周次", value: context.course.weeksText(language: leafyLanguage))
-                    LabeledContent("节次", value: context.course.durationText(language: leafyLanguage, slots: context.periodSlots))
+                    LabeledContent(
+                        "节次",
+                        value: context.course.durationText(language: leafyLanguage, slots: context.periodSlots)
+                    )
                     LabeledContent("日期", value: dateText)
                 }
                 .listRowBackground(AppTheme.cardBackground)

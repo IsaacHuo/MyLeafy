@@ -288,8 +288,8 @@ struct TimetableWeatherAdviceSheet: View {
                             sharesExtremePoint ? "最高 / 最低" : "最高",
                             language: leafyLanguage
                         ))
-                            .microCaption()
-                            .foregroundStyle(AppTheme.secondaryText)
+                        .microCaption()
+                        .foregroundStyle(AppTheme.secondaryText)
                     }
                 }
 
@@ -373,7 +373,7 @@ struct TimetableWeatherAdviceSheet: View {
                 .interpolationMethod(.catmullRom)
                 .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
             }
-            .chartYScale(domain: 0...1)
+            .chartYScale(domain: 0 ... 1)
             .chartXAxis {
                 AxisMarks(values: timeValues) { value in
                     AxisGridLine().foregroundStyle(AppTheme.separator.opacity(0.45))
@@ -491,7 +491,7 @@ struct TimetableWeatherAdviceSheet: View {
         let lowerBound = min(-10, floor((temperatures.min() ?? -10) / 10) * 10)
         let upperBound = max(40, ceil((temperatures.max() ?? 40) / 10) * 10)
         return (
-            domain: lowerBound...upperBound,
+            domain: lowerBound ... upperBound,
             values: Array(stride(from: lowerBound, through: upperBound, by: 10))
         )
     }
@@ -522,7 +522,7 @@ struct TimetableWeatherAdviceSheet: View {
         guard hours.count > 1 else { return hours.map(\.date) }
 
         let lastIndex = hours.count - 1
-        let indices = (0..<4).map { position in
+        let indices = (0 ..< 4).map { position in
             Int((Double(position) * Double(lastIndex) / 3).rounded())
         }
         return Array(Set(indices)).sorted().map { hours[$0].date }

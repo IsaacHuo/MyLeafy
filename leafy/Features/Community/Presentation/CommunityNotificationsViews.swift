@@ -207,7 +207,8 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         }
     }
 
-    private func openCommunityNotification(_ notification: CommunityNotification, itemID: String) async -> NotificationOpenResult? {
+    private func openCommunityNotification(_ notification: CommunityNotification,
+                                           itemID: String) async -> NotificationOpenResult? {
         let scope = CampusOperationScope()
         guard let postID = notification.postID else {
             errorMessage = "这条通知没有关联帖子。"
@@ -238,7 +239,8 @@ private final class CommunityNotificationsViewModel: ObservableObject {
         }
     }
 
-    private func openSiteAnnouncement(_ announcement: SiteAnnouncement, itemID: String) async -> NotificationOpenResult? {
+    private func openSiteAnnouncement(_ announcement: SiteAnnouncement,
+                                      itemID: String) async -> NotificationOpenResult? {
         let scope = CampusOperationScope()
         do {
             if !announcement.isRead {
@@ -300,7 +302,12 @@ struct CommunityNotificationsSheet: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: AppSpacing.compact, leading: AppSpacing.page, bottom: AppSpacing.micro, trailing: AppSpacing.page))
+                .listRowInsets(EdgeInsets(
+                    top: AppSpacing.compact,
+                    leading: AppSpacing.page,
+                    bottom: AppSpacing.micro,
+                    trailing: AppSpacing.page
+                ))
 
                 if viewModel.isLoading && viewModel.items.isEmpty && !viewModel.isMutedAll {
                     Section {
@@ -348,7 +355,10 @@ struct CommunityNotificationsSheet: View {
                                 .leafyBody()
                                 .foregroundStyle(AppTheme.danger)
                                 .padding(14)
-                                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                                .background(
+                                    AppTheme.cardBackground,
+                                    in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                                )
                         }
 
                         ForEach(viewModel.items) { item in
@@ -383,7 +393,12 @@ struct CommunityNotificationsSheet: View {
                                 }
                                 .tint(AppTheme.danger)
                             }
-                            .listRowInsets(EdgeInsets(top: 4, leading: AppSpacing.page, bottom: 4, trailing: AppSpacing.page))
+                            .listRowInsets(EdgeInsets(
+                                top: 4,
+                                leading: AppSpacing.page,
+                                bottom: 4,
+                                trailing: AppSpacing.page
+                            ))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                         }
@@ -637,9 +652,11 @@ private struct CommunityPublishTaskDetailSheet: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(media.displayName)
                                         .leafyBody()
-                                    Text(media.validated ? "已校验" : media.errorMessage ?? "\(Int(media.progress * 100))%")
+                                    Text(media.validated ? "已校验" : media
+                                        .errorMessage ?? "\(Int(media.progress * 100))%")
                                         .microCaption()
-                                        .foregroundStyle(media.errorMessage == nil ? AppTheme.secondaryText : AppTheme.danger)
+                                        .foregroundStyle(media.errorMessage == nil ? AppTheme.secondaryText : AppTheme
+                                            .danger)
                                 }
                                 Spacer()
                             }

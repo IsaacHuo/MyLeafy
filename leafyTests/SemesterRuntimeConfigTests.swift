@@ -169,10 +169,26 @@ final class SemesterRuntimeConfigTests: XCTestCase {
     }
 
     func testSolarTermsCarrySeasonForDisplayColors() {
-        XCTAssertEqual(SchoolCalendarEvent(id: "spring", title: "立春", startDateString: "2026-02-04", endDateString: "2026-02-04", kind: .solarTerm).solarTermSeason, .spring)
-        XCTAssertEqual(SchoolCalendarEvent(id: "summer", title: "立夏", startDateString: "2026-05-05", endDateString: "2026-05-05", kind: .solarTerm).solarTermSeason, .summer)
-        XCTAssertEqual(SchoolCalendarEvent(id: "autumn", title: "立秋", startDateString: "2026-08-07", endDateString: "2026-08-07", kind: .solarTerm).solarTermSeason, .autumn)
-        XCTAssertEqual(SchoolCalendarEvent(id: "winter", title: "立冬", startDateString: "2026-11-07", endDateString: "2026-11-07", kind: .solarTerm).solarTermSeason, .winter)
+        XCTAssertEqual(
+            SchoolCalendarEvent(id: "spring", title: "立春", startDateString: "2026-02-04", endDateString: "2026-02-04",
+                                kind: .solarTerm).solarTermSeason,
+            .spring
+        )
+        XCTAssertEqual(
+            SchoolCalendarEvent(id: "summer", title: "立夏", startDateString: "2026-05-05", endDateString: "2026-05-05",
+                                kind: .solarTerm).solarTermSeason,
+            .summer
+        )
+        XCTAssertEqual(
+            SchoolCalendarEvent(id: "autumn", title: "立秋", startDateString: "2026-08-07", endDateString: "2026-08-07",
+                                kind: .solarTerm).solarTermSeason,
+            .autumn
+        )
+        XCTAssertEqual(
+            SchoolCalendarEvent(id: "winter", title: "立冬", startDateString: "2026-11-07", endDateString: "2026-11-07",
+                                kind: .solarTerm).solarTermSeason,
+            .winter
+        )
     }
 
     func testNationalCalendarEventDecodesSnakeCaseDates() throws {
@@ -246,7 +262,7 @@ final class SemesterRuntimeConfigTests: XCTestCase {
             "2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06",
             "2027-07", "2027-08", "2026-09", "2026-10", "2026-11", "2026-12"
         ])
-        XCTAssertEqual(snapshot.yearMonths.map(\.month), Array(1...12))
+        XCTAssertEqual(snapshot.yearMonths.map(\.month), Array(1 ... 12))
         let january = try XCTUnwrap(snapshot.yearMonths.first { $0.id == "2027-01" })
         XCTAssertTrue(january.isInSemester)
         XCTAssertTrue(january.isInVacation)
@@ -326,7 +342,9 @@ extension SemesterRuntimeConfigTests {
     func testRuntimeConfigRejectsInvalidDatesAndUnboundedWeeks() {
         for (date, weeks) in [("2026-02-30", 20), ("2026-09-07", Int.max)] {
             let value = SemesterRuntimeConfig(semesterID: "term", semesterStartDateString: date,
-                supportedWeeks: weeks, graduateTimetableTermCode: "47", calendarEvents: [], updatedAt: nil, isActive: true)
+                                              supportedWeeks: weeks, graduateTimetableTermCode: "47",
+                                              calendarEvents: [],
+                                              updatedAt: nil, isActive: true)
             XCTAssertFalse(value.isUsable)
         }
     }
@@ -334,8 +352,18 @@ extension SemesterRuntimeConfigTests {
     @MainActor
     func testRuntimeConfigResponseCannotWriteNewIdentityOrApplyOldCooldown() async {
         let previous = ActiveCampusContext.identity
-        let first = CampusIdentity(campusID: .bjfu, eduID: "config-a-" + UUID().uuidString, displayName: nil, portal: .undergraduate)
-        let second = CampusIdentity(campusID: .custom, eduID: "config-b-" + UUID().uuidString, displayName: nil, portal: .undergraduate)
+        let first = CampusIdentity(
+            campusID: .bjfu,
+            eduID: "config-a-" + UUID().uuidString,
+            displayName: nil,
+            portal: .undergraduate
+        )
+        let second = CampusIdentity(
+            campusID: .custom,
+            eduID: "config-b-" + UUID().uuidString,
+            displayName: nil,
+            portal: .undergraduate
+        )
         CampusIdentityStore.activate(first)
         defer {
             SemesterRuntimeConfigCache.clear()
@@ -343,15 +371,20 @@ extension SemesterRuntimeConfigTests {
         }
         let remote = SemesterRuntimeConfig.previousSpring
         let expected = SemesterRuntimeConfig(semesterID: remote.semesterID,
-            semesterStartDateString: remote.semesterStartDateString, supportedWeeks: remote.supportedWeeks,
-            graduateTimetableTermCode: remote.graduateTimetableTermCode, calendarEvents: remote.calendarEvents,
-            updatedAt: nil, isActive: true)
+                                             semesterStartDateString: remote.semesterStartDateString,
+                                             supportedWeeks: remote.supportedWeeks,
+                                             graduateTimetableTermCode: remote.graduateTimetableTermCode,
+                                             calendarEvents: remote.calendarEvents,
+                                             updatedAt: nil, isActive: true)
         let service = SemesterRuntimeConfigService(fetchActive: { _ in
             await MainActor.run { CampusIdentityStore.activate(second) }
             return expected
         })
         _ = await service.refreshFromRemoteIfAvailable(force: true)
-        XCTAssertNil(SemesterRuntimeConfigCache.load(), "The old identity response must not fill the new identity cache")
+        XCTAssertNil(
+            SemesterRuntimeConfigCache.load(),
+            "The old identity response must not fill the new identity cache"
+        )
         let current = await service.refreshFromRemoteIfAvailable()
         XCTAssertEqual(current, expected, "A different identity must receive its own refresh despite the old cooldown")
         XCTAssertEqual(SemesterRuntimeConfigCache.load(), expected)
@@ -364,11 +397,15 @@ extension SemesterRuntimeConfigTests {
         let reference = try XCTUnwrap(UserTimetableSettings.civilDate(from: "2026-04-01"))
         let nextMonth = try XCTUnwrap(UserTimetableSettings.civilDate(from: "2026-05-01"))
         let initial = TimetableTimeScopeSnapshot.make(currentWeek: 4, referenceDate: reference,
-            language: .zhHans, semesterConfig: config, configurations: [config], campusID: .custom)
+                                                      language: .zhHans, semesterConfig: config,
+                                                      configurations: [config], campusID: .custom)
         let changed = initial.displayingMonth(nextMonth, language: .zhHans)
         XCTAssertEqual(changed.weekStartDate, initial.weekStartDate)
         XCTAssertEqual(changed.weekEndDate, initial.weekEndDate)
         XCTAssertEqual(changed.yearMonths.map(\.id), initial.yearMonths.map(\.id))
-        XCTAssertNil(changed.vacationStartDate, "Custom campus navigation must not acquire the default school's vacation")
+        XCTAssertNil(
+            changed.vacationStartDate,
+            "Custom campus navigation must not acquire the default school's vacation"
+        )
     }
 }

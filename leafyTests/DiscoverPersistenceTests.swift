@@ -15,7 +15,12 @@ final class DiscoverPersistenceTests: XCTestCase {
         try context.save()
         other.score = "pending"
         let previousDate = grade.updatedAt
-        XCTAssertThrowsError(try ManualGradeStore.save(draft: .init(term: "new", courseName: "Changed", credit: "4", score: "90", type: "Elective"), editing: grade, in: context, save: fail))
+        XCTAssertThrowsError(try ManualGradeStore.save(
+            draft: .init(term: "new", courseName: "Changed", credit: "4", score: "90", type: "Elective"),
+            editing: grade,
+            in: context,
+            save: fail
+        ))
         XCTAssertEqual(grade.courseName, "Math")
         XCTAssertEqual(grade.updatedAt, previousDate)
         XCTAssertEqual(other.score, "pending")
@@ -26,7 +31,8 @@ final class DiscoverPersistenceTests: XCTestCase {
 
     func testManualGradeValidationRejectsInfinityAndNaN() {
         for credit in ["inf", "Infinity", "nan", "1e999"] {
-            XCTAssertThrowsError(try ManualGradeDraft(term: "term", courseName: "name", credit: credit, score: "80").validated())
+            XCTAssertThrowsError(try ManualGradeDraft(term: "term", courseName: "name", credit: credit, score: "80")
+                .validated())
         }
     }
 
@@ -38,12 +44,19 @@ final class DiscoverPersistenceTests: XCTestCase {
         try Data("old".utf8).write(to: old)
         try Data("new".utf8).write(to: replacement)
         let cleanup = LocalFileCleanup(queueURL: root.appendingPathComponent("cleanup.json"))
-        let imported = try CareerResumePersistence.importFile(from: old, replacing: nil, in: context, cleanup: cleanup).document
+        let imported = try CareerResumePersistence.importFile(from: old, replacing: nil, in: context, cleanup: cleanup)
+            .document
         let oldURL = try XCTUnwrap(CareerDocumentFileStore.fileURL(for: imported))
         defer { try? FileManager.default.removeItem(at: oldURL) }
         let other = Grade(term: "term", courseName: "other", credit: "1", score: "80", type: "")
         context.insert(other); try context.save(); other.score = "pending"
-        XCTAssertThrowsError(try CareerResumePersistence.importFile(from: replacement, replacing: imported, in: context, cleanup: cleanup, save: fail))
+        XCTAssertThrowsError(try CareerResumePersistence.importFile(
+            from: replacement,
+            replacing: imported,
+            in: context,
+            cleanup: cleanup,
+            save: fail
+        ))
         XCTAssertEqual(imported.originalFilename, "old.pdf")
         XCTAssertEqual(try Data(contentsOf: oldURL), Data("old".utf8))
         XCTAssertEqual(other.score, "pending")
@@ -56,11 +69,24 @@ final class DiscoverPersistenceTests: XCTestCase {
         try Data("old".utf8).write(to: source)
         let queue = root.appendingPathComponent("cleanup.json")
         let cleanup = LocalFileCleanup(queueURL: queue)
-        let imported = try CareerResumePersistence.importFile(from: source, replacing: nil, in: context, cleanup: cleanup).document
+        let imported = try CareerResumePersistence.importFile(
+            from: source,
+            replacing: nil,
+            in: context,
+            cleanup: cleanup
+        ).document
         let oldURL = try XCTUnwrap(CareerDocumentFileStore.fileURL(for: imported))
         try Data("new".utf8).write(to: source)
-        let failingCleanup = LocalFileCleanup(queueURL: queue, removeFile: { _ in throw CocoaError(.fileWriteNoPermission) })
-        let result = try CareerResumePersistence.importFile(from: source, replacing: imported, in: context, cleanup: failingCleanup)
+        let failingCleanup = LocalFileCleanup(
+            queueURL: queue,
+            removeFile: { _ in throw CocoaError(.fileWriteNoPermission) }
+        )
+        let result = try CareerResumePersistence.importFile(
+            from: source,
+            replacing: imported,
+            in: context,
+            cleanup: failingCleanup
+        )
         let newURL = try XCTUnwrap(CareerDocumentFileStore.fileURL(for: imported))
         defer { try? FileManager.default.removeItem(at: newURL) }
         XCTAssertNotNil(result.cleanupWarning)
@@ -77,8 +103,13 @@ final class DiscoverPersistenceTests: XCTestCase {
         let source = root.appendingPathComponent("honor.pdf")
         try Data("pdf".utf8).write(to: source)
         let cleanup = LocalFileCleanup(queueURL: root.appendingPathComponent("cleanup.json"))
-        let before = (try? FileManager.default.contentsOfDirectory(atPath: HonorRecordFileStore.directoryURL.path)) ?? []
-        XCTAssertThrowsError(try HonorRecordPersistence.importFiles([source, root.appendingPathComponent("missing.pdf")], in: context, cleanup: cleanup))
+        let before = (try? FileManager.default.contentsOfDirectory(atPath: HonorRecordFileStore.directoryURL.path)) ??
+            []
+        XCTAssertThrowsError(try HonorRecordPersistence.importFiles(
+            [source, root.appendingPathComponent("missing.pdf")],
+            in: context,
+            cleanup: cleanup
+        ))
         XCTAssertTrue(try context.fetch(FetchDescriptor<HonorRecord>()).isEmpty)
         let after = (try? FileManager.default.contentsOfDirectory(atPath: HonorRecordFileStore.directoryURL.path)) ?? []
         XCTAssertEqual(Set(before), Set(after))
@@ -94,25 +125,53 @@ final class DiscoverPersistenceTests: XCTestCase {
         var draft = MedicalLedgerDraft(entry: entry)
         draft.hospitalName = "New"
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
-        let image = UIGraphicsImageRenderer(size: CGSize(width: 3, height: 2), format: format).image { _ in UIColor.red.setFill(); UIRectFill(CGRect(x: 0, y: 0, width: 3, height: 2)) }
-        let photo = MedicalLedgerPendingPhoto(originalFilename: "receipt.jpg", jpegData: try XCTUnwrap(image.jpegData(compressionQuality: 1)), image: image)
-        let before = (try? FileManager.default.contentsOfDirectory(atPath: MedicalLedgerPhotoStore.directoryURL.path)) ?? []
-        XCTAssertThrowsError(try MedicalLedgerPersistence.save(draft: draft, pendingPhotos: [photo], editing: entry, in: context,
-            cleanup: LocalFileCleanup(queueURL: root.appendingPathComponent("cleanup.json")), save: fail))
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 3, height: 2), format: format)
+            .image { _ in UIColor.red.setFill(); UIRectFill(CGRect(
+                x: 0,
+                y: 0,
+                width: 3,
+                height: 2
+            )) }
+        let photo = MedicalLedgerPendingPhoto(
+            originalFilename: "receipt.jpg",
+            jpegData: try XCTUnwrap(image.jpegData(compressionQuality: 1)),
+            image: image
+        )
+        let before = (
+            try? FileManager.default.contentsOfDirectory(atPath: MedicalLedgerPhotoStore.directoryURL.path)
+        ) ??
+            []
+        XCTAssertThrowsError(try MedicalLedgerPersistence.save(
+            draft: draft,
+            pendingPhotos: [photo],
+            editing: entry,
+            in: context,
+            cleanup: LocalFileCleanup(queueURL: root.appendingPathComponent("cleanup.json")),
+            save: fail
+        ))
         XCTAssertEqual(entry.hospitalName, "Original")
         XCTAssertEqual(entry.totalExpense, 123.456)
         XCTAssertEqual(entry.note, " exact ")
         XCTAssertEqual(other.score, "pending")
         XCTAssertTrue(try context.fetch(FetchDescriptor<MedicalLedgerPhoto>()).isEmpty)
-        let after = (try? FileManager.default.contentsOfDirectory(atPath: MedicalLedgerPhotoStore.directoryURL.path)) ?? []
+        let after = (try? FileManager.default.contentsOfDirectory(atPath: MedicalLedgerPhotoStore.directoryURL.path)) ??
+            []
         XCTAssertEqual(Set(before), Set(after))
         XCTAssertEqual(draft.hospitalName, "New")
     }
 
     func testMedicalArchiveRejectsMissingReceiptInsteadOfReportingCompleteArchive() throws {
         let entry = MedicalLedgerEntry()
-        let photo = MedicalLedgerPhoto(entryID: entry.id.uuidString, originalFilename: "missing.jpg", localFilename: "missing.jpg")
-        XCTAssertThrowsError(try MedicalLedgerExporter.makeZipData(entries: [entry], photos: [photo], photoDataProvider: { _ in nil }))
+        let photo = MedicalLedgerPhoto(
+            entryID: entry.id.uuidString,
+            originalFilename: "missing.jpg",
+            localFilename: "missing.jpg"
+        )
+        XCTAssertThrowsError(try MedicalLedgerExporter.makeZipData(
+            entries: [entry],
+            photos: [photo],
+            photoDataProvider: { _ in nil }
+        ))
     }
 
     func testNotificationBatchFailureRemovesEveryAttemptedRequest() async {
@@ -122,10 +181,16 @@ final class DiscoverPersistenceTests: XCTestCase {
         var added: [String] = []
         var removed: [String] = []
         do {
-            _ = try await LocalNotificationBatch.install(requests, scope: CampusOperationScope(), isCurrent: { true }, add: {
-                added.append($0.identifier)
-                if $0.identifier == "second" { throw CocoaError(.fileWriteOutOfSpace) }
-            }, remove: { removed = $0 })
+            _ = try await LocalNotificationBatch.install(
+                requests,
+                scope: CampusOperationScope(),
+                isCurrent: { true },
+                add: {
+                    added.append($0.identifier)
+                    if $0.identifier == "second" { throw CocoaError(.fileWriteOutOfSpace) }
+                },
+                remove: { removed = $0 }
+            )
             XCTFail("The partial batch must fail")
         } catch { }
         XCTAssertEqual(added, ["first", "second"])
@@ -133,13 +198,23 @@ final class DiscoverPersistenceTests: XCTestCase {
     }
 
     func testNotificationBatchRejectsSupersededRunAfterAwait() async {
-        let request = UNNotificationRequest(identifier: "old-run", content: UNMutableNotificationContent(), trigger: nil)
+        let request = UNNotificationRequest(
+            identifier: "old-run",
+            content: UNMutableNotificationContent(),
+            trigger: nil
+        )
         var current = true
         var removed: [String] = []
         do {
-            _ = try await LocalNotificationBatch.install([request], scope: CampusOperationScope(), isCurrent: { current }, add: { _ in
-                current = false
-            }, remove: { removed = $0 })
+            _ = try await LocalNotificationBatch.install(
+                [request],
+                scope: CampusOperationScope(),
+                isCurrent: { current },
+                add: { _ in
+                    current = false
+                },
+                remove: { removed = $0 }
+            )
             XCTFail("A superseded run must be rejected")
         } catch { XCTAssertTrue(error is CancellationError) }
         XCTAssertEqual(removed, ["old-run"])
@@ -158,29 +233,59 @@ final class DiscoverPersistenceTests: XCTestCase {
     }
 
     func testDeletingProjectKeepingContentsRestoresOwnershipWhenSaveFails() throws {
-        let schema = Schema([LearningProject.self, LearningProjectTask.self, LearningMaterialDocument.self, StudyTimeRecord.self])
-        let context = ModelContext(try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]))
+        let schema = Schema([
+            LearningProject.self,
+            LearningProjectTask.self,
+            LearningMaterialDocument.self,
+            StudyTimeRecord.self
+        ])
+        let context = ModelContext(try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        ))
         context.autosaveEnabled = false
         let project = LearningProject(title: "Project")
         let task = LearningProjectTask(projectID: project.id.uuidString, title: "Task")
         context.insert(project); context.insert(task); try context.save()
         let previousDate = task.updatedAt
-        XCTAssertThrowsError(try LearningProjectContentRelocation.deleteProjectKeepingContents(project, materials: [], tasks: [task], records: [], modelContext: context, save: fail))
+        XCTAssertThrowsError(try LearningProjectContentRelocation.deleteProjectKeepingContents(
+            project,
+            materials: [],
+            tasks: [task],
+            records: [],
+            modelContext: context,
+            save: fail
+        ))
         XCTAssertEqual(task.projectID, project.id.uuidString)
         XCTAssertEqual(task.updatedAt, previousDate)
         XCTAssertFalse(project.isDeleted)
     }
 
     func testManualExamStorageUsesTwentyFourHourClockRegardlessOfDisplayLanguage() throws {
-        let date = try XCTUnwrap(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 20, minute: 5)))
+        let date = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 10,
+            day: 23,
+            hour: 20,
+            minute: 5
+        )))
         let clock = DateFormatters.examTime.string(from: date)
         XCTAssertEqual(clock, "20:05")
         XCTAssertNotNil(DateFormatters.examStart.date(from: "2026-10-23 " + clock))
     }
 
     private func memoryContext() throws -> ModelContext {
-        let schema = Schema([Grade.self, CareerResumeDocument.self, HonorRecord.self, MedicalLedgerEntry.self, MedicalLedgerPhoto.self])
-        let context = ModelContext(try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]))
+        let schema = Schema([
+            Grade.self,
+            CareerResumeDocument.self,
+            HonorRecord.self,
+            MedicalLedgerEntry.self,
+            MedicalLedgerPhoto.self
+        ])
+        let context = ModelContext(try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        ))
         context.autosaveEnabled = false
         return context
     }

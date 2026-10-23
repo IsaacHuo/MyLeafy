@@ -35,7 +35,7 @@ nonisolated struct TimetableZoomRenderWindow: Equatable, Sendable {
         let normalizedWeekStart = calendar.startOfDay(for: weekStartDate)
         let startDate = calendar.date(byAdding: .day, value: -7, to: normalizedWeekStart)
             ?? normalizedWeekStart
-        let days = (0..<dayCount).compactMap { ordinal -> TimetableZoomPreparedDay? in
+        let days = (0 ..< dayCount).compactMap { ordinal -> TimetableZoomPreparedDay? in
             guard let date = calendar.date(byAdding: .day, value: ordinal, to: startDate) else {
                 return nil
             }
@@ -66,14 +66,14 @@ nonisolated struct TimetableZoomGeometry: Equatable, Sendable {
 
     func laneWidth(dayOfWeek: Int) -> CGFloat {
         let weekWidth = hidesWeekends
-            ? ((1...5).contains(dayOfWeek) ? viewportWidth / 5 : 0)
+            ? ((1 ... 5).contains(dayOfWeek) ? viewportWidth / 5 : 0)
             : viewportWidth / 7
         return weekWidth + (viewportWidth / 3 - weekWidth) * resolvedProgress
     }
 
     func laneLeading(ordinal: Int) -> CGFloat {
         guard ordinal > 0 else { return 0 }
-        return (0..<ordinal).reduce(CGFloat.zero) { partial, candidate in
+        return (0 ..< ordinal).reduce(CGFloat.zero) { partial, candidate in
             partial + laneWidth(dayOfWeek: (candidate % 7) + 1)
         }
     }
@@ -119,7 +119,7 @@ nonisolated struct TimetableZoomGeometry: Equatable, Sendable {
         let clippedStart = max(0, min(startX, viewportWidth))
         let clippedEnd = max(0, min(endX, viewportWidth))
         guard clippedEnd > clippedStart else { return nil }
-        return clippedStart...clippedEnd
+        return clippedStart ... clippedEnd
     }
 }
 
@@ -219,7 +219,7 @@ final class TimetableContinuousViewportController {
     private(set) var windowRevision = 0
 
     #if DEBUG
-    @ObservationIgnored private(set) var gestureUpdateCount = 0
+        @ObservationIgnored private(set) var gestureUpdateCount = 0
     #endif
 
     var verticalOffset: CGFloat = 0
@@ -278,7 +278,7 @@ final class TimetableContinuousViewportController {
     }
 
     var threeDayDates: [Date] {
-        (-1...1).compactMap { offset in
+        (-1 ... 1).compactMap { offset in
             calendar.date(byAdding: .day, value: offset, to: centerDate)
                 .map { calendar.startOfDay(for: $0) }
         }
@@ -341,7 +341,7 @@ final class TimetableContinuousViewportController {
     func updateMagnification(_ magnification: CGFloat) {
         guard phase == .pinching else { return }
         #if DEBUG
-        gestureUpdateCount += 1
+            gestureUpdateCount += 1
         #endif
         let safeMagnification = max(magnification, 0.001)
         let delta = log(safeMagnification) / log(Self.fullMagnification)

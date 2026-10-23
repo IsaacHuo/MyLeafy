@@ -25,7 +25,13 @@ final class SharedAuditBoundaryTests: XCTestCase {
     }
 
     func testPostgraduateSourcesOnlyOpenAbsoluteHTTPLinks() {
-        for link in ["javascript:alert(1)", "file:///private/document.pdf", "/relative/path", "https:/missing-host", "mailto:hello@example.com"] {
+        for link in [
+            "javascript:alert(1)",
+            "file:///private/document.pdf",
+            "/relative/path",
+            "https:/missing-host",
+            "mailto:hello@example.com"
+        ] {
             XCTAssertNil(source(link).sourceURL, link)
         }
         XCTAssertEqual(source("https://example.edu/admissions?q=2027").sourceURL?.host, "example.edu")
@@ -34,8 +40,8 @@ final class SharedAuditBoundaryTests: XCTestCase {
 
     private func source(_ url: String) -> PostgraduateSource {
         PostgraduateSource(id: UUID(), title: "Admission", summary: "", sourceURLString: url,
-            sourceKindRawValue: "admission_notice", trustLevelRawValue: "official", school: nil,
-            unit: nil, major: nil, examYear: nil, publishedAt: nil, verifiedAt: nil,
-            status: "published", createdAt: nil, updatedAt: nil)
+                           sourceKindRawValue: "admission_notice", trustLevelRawValue: "official", school: nil,
+                           unit: nil, major: nil, examYear: nil, publishedAt: nil, verifiedAt: nil,
+                           status: "published", createdAt: nil, updatedAt: nil)
     }
 }

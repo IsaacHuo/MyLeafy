@@ -14,9 +14,14 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
         fetchEmptyClassroomsHTML: @escaping @Sendable (Date, Int, Int) async throws -> String = { date, start, end in
             try await ActiveCampusContext.networkManager.fetchEmptyClassrooms(date: date, start: start, end: end)
         },
-        fetchClassroomUsage: @escaping @Sendable (Date, String, String) async throws -> [ClassroomUsageSlot] = { date, building, room in
-            try await ActiveCampusContext.networkManager.fetchClassroomUsage(date: date, building: building, room: room)
-        },
+        fetchClassroomUsage: @escaping @Sendable (Date, String, String) async throws
+            -> [ClassroomUsageSlot] = { date, building, room in
+                try await ActiveCampusContext.networkManager.fetchClassroomUsage(
+                    date: date,
+                    building: building,
+                    room: room
+                )
+            },
         parseEmptyClassrooms: @escaping @Sendable (String, Int, Int) throws -> [EmptyClassroom] = { html, start, end in
             try HTMLParser.parseEmptyClassrooms(html: html, start: start, end: end)
         },
@@ -28,11 +33,12 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
                 ReviewDemoDataSeeder.emptyClassrooms(for: date, start: start, end: end)
             }
         },
-        demoClassroomUsage: @escaping @Sendable (Date, String, String) async -> [ClassroomUsageSlot] = { date, building, room in
-            await MainActor.run {
-                ReviewDemoDataSeeder.classroomUsage(for: date, building: building, room: room)
-            }
-        },
+        demoClassroomUsage: @escaping @Sendable (Date, String, String) async
+            -> [ClassroomUsageSlot] = { date, building, room in
+                await MainActor.run {
+                    ReviewDemoDataSeeder.classroomUsage(for: date, building: building, room: room)
+                }
+            },
         requiresReauthentication: @escaping @Sendable (Error) -> Bool = { error in
             ClassroomLookupReauthentication.requiresReauthentication(error)
         },
@@ -60,13 +66,25 @@ nonisolated struct LiveClassroomLookupService: ClassroomLookupServicing {
                 let html = try await fetchEmptyClassroomsHTML(request.date, 1, 12)
                 try scope.check()
                 let rooms = try parseEmptyClassrooms(html, request.startPeriod, request.endPeriod)
-                await cache.saveEmptyClassrooms(rooms, date: request.date, start: request.startPeriod, end: request.endPeriod, scope: scope)
+                await cache.saveEmptyClassrooms(
+                    rooms,
+                    date: request.date,
+                    start: request.startPeriod,
+                    end: request.endPeriod,
+                    scope: scope
+                )
                 try scope.check()
                 return .success(ClassroomLookupData(rooms: rooms))
             case .byRoom:
                 let usage = try await fetchClassroomUsage(request.date, request.building, request.room)
                 try scope.check()
-                await cache.saveClassroomUsage(usage, date: request.date, building: request.building, room: request.room, scope: scope)
+                await cache.saveClassroomUsage(
+                    usage,
+                    date: request.date,
+                    building: request.building,
+                    room: request.room,
+                    scope: scope
+                )
                 try scope.check()
                 return .success(ClassroomLookupData(usage: usage))
             }
@@ -140,7 +158,13 @@ nonisolated struct SchoolDataClassroomLookupCache: ClassroomLookupCaching {
         }
     }
 
-    func saveEmptyClassrooms(_ rooms: [EmptyClassroom], date: Date, start: Int, end: Int, scope: CampusOperationScope) async {
+    func saveEmptyClassrooms(
+        _ rooms: [EmptyClassroom],
+        date: Date,
+        start: Int,
+        end: Int,
+        scope: CampusOperationScope
+    ) async {
         await MainActor.run {
             guard scope.isCurrent, !Task.isCancelled else { return }
             SchoolDataCache.saveEmptyClassrooms(rooms, date: date, start: start, end: end)
@@ -153,7 +177,13 @@ nonisolated struct SchoolDataClassroomLookupCache: ClassroomLookupCaching {
         }
     }
 
-    func saveClassroomUsage(_ usage: [ClassroomUsageSlot], date: Date, building: String, room: String, scope: CampusOperationScope) async {
+    func saveClassroomUsage(
+        _ usage: [ClassroomUsageSlot],
+        date: Date,
+        building: String,
+        room: String,
+        scope: CampusOperationScope
+    ) async {
         await MainActor.run {
             guard scope.isCurrent, !Task.isCancelled else { return }
             SchoolDataCache.saveClassroomUsage(usage, date: date, building: building, room: room)

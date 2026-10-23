@@ -69,7 +69,7 @@ final class CommunityProfileModelTests: XCTestCase {
     func testCommunityProfileGradeOptionsStayWithinSupportedCohorts() {
         XCTAssertEqual(
             CommunityProfileOptions.grades,
-            (2022...2030).reversed().map { "\($0)级" }
+            (2022 ... 2030).reversed().map { "\($0)级" }
         )
     }
 
@@ -202,7 +202,8 @@ final class CommunityProfileModelTests: XCTestCase {
             nickname: "Leafy", bio: nil, major: nil, grade: nil, showsBadge: false,
             avatarPath: nil, coverPath: nil, resetCover: false
         )
-        let unchanged = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(unchangedCover)) as? [String: Any])
+        let unchanged = try XCTUnwrap(JSONSerialization
+            .jsonObject(with: JSONEncoder().encode(unchangedCover)) as? [String: Any])
         XCTAssertFalse(unchanged.keys.contains("cover_path"))
     }
 
@@ -292,7 +293,11 @@ final class CommunityProfileModelTests: XCTestCase {
         )
 
         XCTAssertEqual(cropped.size.width, CommunityImageUpload.profileCoverImageMaxPixelDimension, accuracy: 0.5)
-        XCTAssertEqual(cropped.size.height, (CommunityImageUpload.profileCoverImageMaxPixelDimension / aspectRatio).rounded(), accuracy: 0.5)
+        XCTAssertEqual(
+            cropped.size.height,
+            (CommunityImageUpload.profileCoverImageMaxPixelDimension / aspectRatio).rounded(),
+            accuracy: 0.5
+        )
     }
 
     private func makeTestImage(size: CGSize) -> UIImage {

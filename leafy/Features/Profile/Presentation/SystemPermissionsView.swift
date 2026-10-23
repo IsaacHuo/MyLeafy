@@ -10,7 +10,10 @@ import UserNotifications
 struct SystemPermissionsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.leafyThemeColorPreference) private var themeColorPreference
-    @State private var statuses = Dictionary(uniqueKeysWithValues: SystemPermission.allCases.map { ($0, SystemPermissionStatus.notDetermined) })
+    @State private var statuses = Dictionary(uniqueKeysWithValues: SystemPermission.allCases.map { (
+        $0,
+        SystemPermissionStatus.notDetermined
+    ) })
     @State private var locationRequester = LocationPermissionRequester()
 
     var body: some View {
@@ -154,7 +157,8 @@ private enum SystemPermission: CaseIterable, Identifiable {
         case .location:
             return SystemPermissionStatus(CLLocationManager().authorizationStatus)
         case .notifications:
-            return SystemPermissionStatus(await UNUserNotificationCenter.current().notificationSettings().authorizationStatus)
+            return SystemPermissionStatus(await UNUserNotificationCenter.current().notificationSettings()
+                .authorizationStatus)
         case .calendar:
             return SystemPermissionStatus(EKEventStore.authorizationStatus(for: .event))
         case .camera:
@@ -272,7 +276,6 @@ private enum SystemPermissionStatus: Equatable {
         @unknown default: self = .unavailable
         }
     }
-
 }
 
 @MainActor

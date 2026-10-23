@@ -67,7 +67,8 @@ final class ShareViewController: UIViewController {
             for provider in providers {
                 let item = try await stageProvider(provider, store: store, batchID: batchID)
                 items.append(item)
-                guard items.reduce(Int64(0), { $0 + $1.byteCount }) <= ExternalLearningMaterialImport.maximumBatchBytes else {
+                guard items.reduce(Int64(0), { $0 + $1.byteCount }) <= ExternalLearningMaterialImport.maximumBatchBytes
+                else {
                     throw ExternalLearningMaterialImportError.batchTooLarge
                 }
             }
@@ -103,7 +104,8 @@ final class ShareViewController: UIViewController {
         batchID: UUID
     ) async throws -> ExternalLearningMaterialImportItem {
         guard let typeIdentifier = supportedTypeIdentifier(for: provider) else {
-            throw ExternalLearningMaterialImportError.unsupportedFile(provider.suggestedName ?? ExternalImportL10n.text("学习资料"))
+            throw ExternalLearningMaterialImportError
+                .unsupportedFile(provider.suggestedName ?? ExternalImportL10n.text("学习资料"))
         }
 
         if typeIdentifier == UTType.fileURL.identifier {
@@ -133,7 +135,10 @@ final class ShareViewController: UIViewController {
         batchID: UUID
     ) async throws -> ExternalLearningMaterialImportItem {
         let suggestedName = provider.suggestedName
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ExternalLearningMaterialImportItem, Error>) in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<
+            ExternalLearningMaterialImportItem,
+            Error
+        >) in
             provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -149,7 +154,11 @@ final class ShareViewController: UIViewController {
                         from: url,
                         batchID: batchID,
                         sourceContentTypeIdentifier: typeIdentifier,
-                        originalFilename: Self.filename(suggestedName: suggestedName, typeIdentifier: typeIdentifier, fileURL: url)
+                        originalFilename: Self.filename(
+                            suggestedName: suggestedName,
+                            typeIdentifier: typeIdentifier,
+                            fileURL: url
+                        )
                     )
                     continuation.resume(returning: item)
                 } catch {
@@ -166,7 +175,10 @@ final class ShareViewController: UIViewController {
         batchID: UUID
     ) async throws -> ExternalLearningMaterialImportItem {
         let suggestedName = provider.suggestedName
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ExternalLearningMaterialImportItem, Error>) in
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<
+            ExternalLearningMaterialImportItem,
+            Error
+        >) in
             provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -178,7 +190,9 @@ final class ShareViewController: UIViewController {
                 }
 
                 guard UTType(typeIdentifier)?.conforms(to: .image) == true else {
-                    continuation.resume(throwing: ExternalLearningMaterialImportError.unsupportedFile(suggestedName ?? ExternalImportL10n.text("学习资料")))
+                    continuation
+                        .resume(throwing: ExternalLearningMaterialImportError
+                            .unsupportedFile(suggestedName ?? ExternalImportL10n.text("学习资料")))
                     return
                 }
 
@@ -202,7 +216,10 @@ final class ShareViewController: UIViewController {
         store: ExternalLearningMaterialImportStore,
         batchID: UUID
     ) async throws -> ExternalLearningMaterialImportItem {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ExternalLearningMaterialImportItem, Error>) in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<
+            ExternalLearningMaterialImportItem,
+            Error
+        >) in
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -235,7 +252,7 @@ final class ShareViewController: UIViewController {
 
     private func supportedTypeIdentifier(for provider: NSItemProvider) -> String? {
         for identifier in ExternalLearningMaterialImport.supportedContentTypeIdentifiers
-        where provider.hasItemConformingToTypeIdentifier(identifier) {
+            where provider.hasItemConformingToTypeIdentifier(identifier) {
             return identifier
         }
 
