@@ -1,5 +1,12 @@
 package com.myleafy.android.features.profile
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +33,8 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,6 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.myleafy.android.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -304,6 +318,7 @@ fun ProfileContent(
                     )
                 }
             }
+            item { ProfileDeveloperContactCard() }
             val hasIdentity = isGuest || when (state) {
                 is ProfileUiState.Community -> true
                 is ProfileUiState.Local -> !state.eduId.isNullOrBlank()
@@ -428,6 +443,62 @@ private fun ProfileDestinationRow(
         },
         onClick = onClick,
     )
+}
+
+@Composable
+private fun ProfileDeveloperContactCard() {
+    val context = LocalContext.current
+    val email = "huoweifang@foxmail.com"
+    val xiaohongshu = "https://xhslink.cn/o/3PFBj45O8EQ"
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true }
+                    .padding(LeafySpacing.card),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.developer_memoji),
+                    contentDescription = null,
+                    modifier = Modifier.size(72.dp),
+                    contentScale = ContentScale.Fit,
+                )
+                Spacer(Modifier.weight(1f))
+                Text("找到我", style = MaterialTheme.typography.titleSmall)
+                Icon(
+                    Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.mutedIcon),
+                    modifier = Modifier.padding(start = LeafySpacing.micro),
+                )
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("邮箱：$email") },
+                onClick = {
+                    expanded = false
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email")))
+                    } catch (failure: Exception) {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        clipboard?.setPrimaryClip(ClipData.newPlainText("email", email))
+                        Toast.makeText(context, "已复制邮箱：$email", Toast.LENGTH_LONG).show()
+                    }
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("小红书") },
+                onClick = {
+                    expanded = false
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(xiaohongshu)))
+                },
+            )
+        }
+    }
 }
 
 private fun schoolLabel(id: String) = when (id) {
