@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
@@ -415,15 +416,25 @@ private fun CommentLine(
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                when {
-                    comment.is_deleted_placeholder -> "（已删除）"
-                    comment.is_anonymous -> "匿名"
-                    else -> comment.author?.communityDisplayName() ?: "北林同学"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!comment.is_deleted_placeholder) {
+                    CommunityAvatar(
+                        name = if (comment.is_anonymous) "匿名" else comment.author?.communityDisplayName() ?: "北林同学",
+                        url = comment.author?.avatar_url ?: comment.author?.signed_avatar_url,
+                        size = 18.dp,
+                    )
+                }
+                Text(
+                    text = when {
+                        comment.is_deleted_placeholder -> "（已删除）"
+                        comment.is_anonymous -> "匿名"
+                        else -> comment.author?.communityDisplayName() ?: "北林同学"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = if (comment.is_deleted_placeholder) Modifier else Modifier.padding(start = 6.dp),
+                )
+            }
             if (!comment.is_deleted_placeholder && comment.reply_target_is_visible) {
                 comment.reply_to_author?.let { target ->
                     Text(

@@ -1,6 +1,7 @@
 package com.myleafy.android.shared.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 /**
  * 社区 DTO（Cloudflare API，snake_case 字段名与线格式一致，跨平台契约）。
@@ -53,12 +54,25 @@ data class PostImageDto(
 
 /** 帖子（posts）。 */
 @Serializable
+data class PostPinDto(
+    val id: String = "",
+    val scope: String = "",
+    val category: String? = null,
+    val priority: Int = 0,
+    val starts_at: String = "",
+    val ends_at: String? = null,
+    val status: String = "",
+)
+
+@Serializable
 data class PostDto(
     val id: String,
     val author_id: String,
     val title: String,
     val body: String,
     val category: String? = null,
+    val pin: PostPinDto? = null,
+    val attachments: List<JsonObject> = emptyList(),
     val is_anonymous: Boolean = false,
     val comment_count: Int = 0,
     val like_count: Int = 0,
