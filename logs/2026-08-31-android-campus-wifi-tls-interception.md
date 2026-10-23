@@ -33,3 +33,12 @@
 ## 剩余问题
 
 - 校园网络策略不由客户端控制；如果后续其他外部 HTTPS 服务出现同类问题，应先比对目标域名、实际证书、DNS 结果和所用网络，再判断是否为同一根因。
+
+## 2026-10-23 复现补充
+
+同一台 Xiaomi 24069RA21C、Android 16 在 `bjfu-wifi` 下再次确认：
+
+- `curl -sv https://api.myleafy.space/health` 收到 `subject: CN=*.bjfu.edu.cn`，`subjectAltName does not match hostname api.myleafy.space`。
+- 同一网络下 `curl https://www.baidu.com` 也收到 `*.bjfu.edu.cn`，说明是整条网络的 HTTPS 拦截/门户页，不是 MyLeafy 或单个后端的证书配置问题。
+- DNS 仍解析到 Cloudflare 地址，未设置系统代理或 Private DNS；切换网络后恢复。
+- 社区页现在会停止无意义重连，并明确提示“当前网络替换了 MyLeafy 的安全证书（bjfu-wifi 的登录/拦截页会返回 *.bjfu.edu.cn 证书）”；TLS 主机名校验未放宽。
