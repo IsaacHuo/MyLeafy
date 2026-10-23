@@ -1,5 +1,7 @@
 package com.myleafy.android.core.security
 
+import android.util.Log
+
 /**
  * Keystore 加密的结构化凭据；可可靠读取的旧分隔符记录在读取时迁移。
  */
@@ -21,21 +23,36 @@ class KeystoreSchoolLoginCredentialStore(
 
     private fun read(campusId: String, portal: String): StoredSchoolCredential? {
         val key = keyFor(campusId, portal)
-        val raw = secureStorage.read(key) ?: return null
+        val raw = when (val result = secureStorage.read(key)) {
+            SecureReadResult.Missing -> return null
+            is SecureReadResult.Found -> result.value
+            is SecureReadResult.Unreadable -> {
+                Log.e(TAG, "Dropping unreadable school credential for $campusId/$portal", result.cause)
+                runCatching { secureStorage.remove(key) }
+                return null
+            }
+        }
         val value = SchoolCredentialCodec.decode(raw)?.takeIf { it.campusId == campusId && it.portal == portal } ?: return null
         if (!raw.startsWith("{")) secureStorage.save(key, SchoolCredentialCodec.encode(value))
         return value
     }
 
     override fun delete(campusId: String) {
+        var failure: Throwable? = null
         listOf(PORTAL_UNDERGRAD, PORTAL_GRADUATE).forEach { portal ->
-            secureStorage.remove(keyFor(campusId, portal))
+            try {
+                secureStorage.remove(keyFor(campusId, portal))
+            } catch (error: Exception) {
+                failure = failure ?: error
+            }
         }
+        failure?.let { throw it }
     }
 
     private fun keyFor(campusId: String, portal: String) = "$PREFIX:$campusId:$portal"
 
     private companion object {
+        const val TAG = "SchoolCredentials"
         const val PREFIX = "school-login"
         const val PORTAL_UNDERGRAD = "undergraduate"
         const val PORTAL_GRADUATE = "graduate"
@@ -58,7 +75,16 @@ class KeystoreSchoolSessionCookieStore(
     }
 
     override fun load(scopeKey: String, portal: String): Map<String, String> {
-        val raw = secureStorage.read(keyFor(scopeKey, portal)) ?: return emptyMap()
+        val key = keyFor(scopeKey, portal)
+        val raw = when (val result = secureStorage.read(key)) {
+            SecureReadResult.Missing -> return emptyMap()
+            is SecureReadResult.Found -> result.value
+            is SecureReadResult.Unreadable -> {
+                Log.e(TAG, "Dropping unreadable school session for $scopeKey/$portal", result.cause)
+                runCatching { secureStorage.remove(key) }
+                return emptyMap()
+            }
+        }
         return raw.split(ENTRY_SEPARATOR)
             .filter { it.isNotEmpty() }
             .mapNotNull { entry ->
@@ -79,6 +105,7 @@ class KeystoreSchoolSessionCookieStore(
     private fun String.unescape() = replace(KV_SEPARATOR + KV_SEPARATOR, KV_SEPARATOR)
 
     private companion object {
+        const val TAG = "SchoolSession"
         const val PREFIX = "school-session"
         const val ENTRY_SEPARATOR = "\n"
         const val KV_SEPARATOR = "="

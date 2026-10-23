@@ -1,6 +1,8 @@
 package com.myleafy.android.features.timetable
 
 import com.myleafy.android.core.network.AcademicStage
+import com.myleafy.android.core.network.AcademicStep
+import com.myleafy.android.core.network.AcademicStepStatus
 import com.myleafy.android.core.network.SchoolNetworkError
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -76,9 +78,20 @@ data class TimetableWeekPage(
 
 sealed interface TimetableSyncState {
     data object Idle : TimetableSyncState
-    data class Syncing(val stage: AcademicStage = AcademicStage.FETCHING_TIMETABLE) : TimetableSyncState
-    data class Success(val count: Int, val message: String = "同步完成") : TimetableSyncState
-    data class Error(val message: String, val needsAuthentication: Boolean = false) : TimetableSyncState
+    data class Syncing(
+        val stage: AcademicStage = AcademicStage.FETCHING_TIMETABLE,
+        val steps: List<AcademicStep> = emptyList(),
+    ) : TimetableSyncState
+    data class Success(
+        val count: Int,
+        val message: String = "同步完成",
+        val steps: List<AcademicStep> = emptyList(),
+    ) : TimetableSyncState
+    data class Error(
+        val message: String,
+        val needsAuthentication: Boolean = false,
+        val steps: List<AcademicStep> = emptyList(),
+    ) : TimetableSyncState
 }
 
 sealed interface TimetableExportState {
@@ -208,14 +221,46 @@ class TimetableViewModel(
 
     fun refresh() {
         if (_syncState.value is TimetableSyncState.Syncing) return
+        val steps = mutableListOf<AcademicStep>()
+        fun record(stage: AcademicStage) {
+            for (index in steps.indices) {
+                if (steps[index].status == AcademicStepStatus.RUNNING) {
+                    steps[index] = steps[index].copy(status = AcademicStepStatus.COMPLETED)
+                }
+            }
+            val existing = steps.indexOfLast { it.key == stage.name }
+            if (existing >= 0) {
+                steps[existing] = steps[existing].copy(status = AcademicStepStatus.RUNNING, detail = null)
+            } else {
+                steps += AcademicStep(stage.name, stage.label, AcademicStepStatus.RUNNING)
+            }
+            _syncState.value = TimetableSyncState.Syncing(stage, steps.toList())
+        }
+        fun completedSteps() = steps.map {
+            if (it.status == AcademicStepStatus.RUNNING) it.copy(status = AcademicStepStatus.COMPLETED) else it
+        }
         _syncState.value = TimetableSyncState.Syncing()
         viewModelScope.launch {
-            val result = runCatching { repository.refresh(semesterId) { stage -> _syncState.value = TimetableSyncState.Syncing(stage) } }
+            val result = runCatching { repository.refresh(semesterId, ::record) }
             _syncState.value = result.fold(
                 onSuccess = {
-                    TimetableSyncState.Success(it.courseCount, it.message)
+                    TimetableSyncState.Success(it.courseCount, it.message, completedSteps())
                 },
-                onFailure = { if (it is kotlinx.coroutines.CancellationException) throw it; TimetableSyncState.Error("获取课表失败，已继续显示本地课表：${it.message ?: "请重试"}", it is SchoolNetworkError.AuthenticationExpired) },
+                onFailure = { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    val message = error.message ?: "请重试"
+                    TimetableSyncState.Error(
+                        message = "获取课表失败，已继续显示本地课表：$message",
+                        needsAuthentication = error is SchoolNetworkError.AuthenticationExpired,
+                        steps = steps.map {
+                            if (it.status == AcademicStepStatus.RUNNING) {
+                                it.copy(status = AcademicStepStatus.FAILED, detail = message)
+                            } else {
+                                it
+                            }
+                        },
+                    )
+                },
             )
         }
     }
@@ -323,7 +368,10 @@ class TimetableViewModel(
                 }
             }.fold(
                 onSuccess = { _exportState.value = TimetableExportState.Ready(it) },
-                onFailure = { _exportState.value = TimetableExportState.Error(it.message ?: "ICS 导出失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    _exportState.value = TimetableExportState.Error(it.message ?: "ICS 导出失败")
+                },
             )
         }
     }
@@ -342,7 +390,10 @@ class TimetableViewModel(
         viewModelScope.launch {
             _weatherState.value = runCatching { weatherRepository.currentWeather(forceRefresh) }.fold(
                 onSuccess = { WeatherUiState.Loaded(it) },
-                onFailure = { WeatherUiState.Error(it.message ?: "天气暂不可用") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    WeatherUiState.Error(it.message ?: "天气暂不可用")
+                },
             )
         }
     }

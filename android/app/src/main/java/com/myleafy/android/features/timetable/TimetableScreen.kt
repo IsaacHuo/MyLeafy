@@ -14,13 +14,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.rememberScrollableState
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import com.myleafy.android.ui.components.leafyPullRefresh
 import com.myleafy.android.ui.components.rememberLeafyPullRefreshState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -66,8 +69,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -78,6 +84,11 @@ import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.myleafy.android.core.network.AcademicStep
+import com.myleafy.android.core.network.AcademicStepStatus
+import com.myleafy.android.ui.components.AcademicProgressCard
+import com.myleafy.android.ui.components.AcademicStepList
+import com.myleafy.android.ui.theme.LeafyElevation
 import kotlinx.coroutines.flow.first
 import androidx.core.content.FileProvider
 import com.myleafy.android.core.data.local.CourseEntity
@@ -559,65 +570,85 @@ internal fun TimetableScreenContent(
     Box(modifier.fillMaxSize()
         .leafyPullRefresh(pullRefresh, enabled = canRefresh && syncState is TimetableSyncState.Idle)
         .scrollable(rememberScrollableState { 0f }, Orientation.Vertical, enabled = canRefresh)) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
-        if (initialization.visible) com.myleafy.android.ui.components.LeafyStatusBanner(
-            message = initialization.message, isError = initialization.failures.isNotEmpty(),
-            actionLabel = if (initialization.running != null) null else if (initialization.needsAuthentication) "重新登录" else if (initialization.failures.isNotEmpty()) "重试" else null,
-            onAction = if (initialization.running == null && initialization.failures.isNotEmpty()) onRetryInitialization else null,
-            onDismiss = if (initialization.running == null) onDismissInitialization else null,
-        )
-        com.myleafy.android.features.timetable.presentation.TimetableWeekHeader(
-            week = visiblePage.week, currentWeek = currentWeek,
-            startDate = visiblePage.weekRange.startDate, onChoose = { choosingWeek = true },
-        )
-        if (pullRefresh.progress > 0f) {
-            LinearProgressIndicator(progress = { pullRefresh.progress }, modifier = Modifier.fillMaxWidth())
-            Text(if (pullRefresh.progress >= 1f) "松开刷新" else "下拉刷新", style = MaterialTheme.typography.labelSmall)
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = LeafySpacing.micro)) {
+            if (initialization.visible) {
+                if (initialization.running != null && initialization.steps.isNotEmpty()) {
+                    com.myleafy.android.ui.components.AcademicProgressCard(
+                        title = "同步教务数据",
+                        steps = initialization.steps,
+                        modifier = Modifier.padding(bottom = LeafySpacing.micro),
+                        maxHeight = 180.dp,
+                    )
+                } else {
+                    com.myleafy.android.ui.components.LeafyStatusBanner(
+                        message = initialization.message, isError = initialization.failures.isNotEmpty(),
+                        actionLabel = if (initialization.running != null) null else if (initialization.needsAuthentication) "重新登录" else if (initialization.failures.isNotEmpty()) "重试" else null,
+                        onAction = if (initialization.running == null && initialization.failures.isNotEmpty()) onRetryInitialization else null,
+                        onDismiss = if (initialization.running == null) onDismissInitialization else null,
+                    )
+                }
+            }
+            com.myleafy.android.features.timetable.presentation.TimetableWeekHeader(
+                week = visiblePage.week, currentWeek = currentWeek,
+                startDate = visiblePage.weekRange.startDate, onChoose = { choosingWeek = true },
+            )
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                TimetableFixedAxis(visiblePage.weekRange.startDate.monthValue, Modifier.fillMaxHeight())
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clipToBounds().testTag("timetable-pager"),
+                    key = { state.pages[it].week },
+                ) { page ->
+                    TimetableGrid(
+                        snapshot = state.pages[page].grid,
+                        onEmptyCellClick = onEmptyCellClick,
+                        onItemClick = onItemClick,
+                        modifier = Modifier.fillMaxSize(),
+                        today = now.toLocalDate(),
+                        currentTime = now.toLocalTime(),
+                        showWeekends = state.showWeekends,
+                        showAxis = false,
+                        background = background,
+                    )
+                }
+            }
         }
-        TimetableSyncDialog(syncState, onRetrySync, onConsumeSync, onReauthenticate)
-        Row(Modifier.fillMaxWidth().weight(1f)) {
-        TimetableFixedAxis(visiblePage.weekRange.startDate.monthValue, Modifier.fillMaxHeight())
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .clipToBounds().testTag("timetable-pager"),
-            key = { state.pages[it].week },
-        ) { page ->
-            TimetableGrid(
-                snapshot = state.pages[page].grid,
-                onEmptyCellClick = onEmptyCellClick,
-                onItemClick = onItemClick,
-                modifier = Modifier.fillMaxSize(),
-                today = now.toLocalDate(),
-                currentTime = now.toLocalTime(),
-                showWeekends = state.showWeekends,
-                showAxis = false,
-                background = background,
+        if (pullRefresh.progress > 0f && syncState !is TimetableSyncState.Syncing) {
+            LeafyPullRefreshIndicator(
+                progress = pullRefresh.progress,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = LeafySpacing.micro),
             )
         }
+        if (syncState is TimetableSyncState.Syncing) {
+            SyncProgressOverlay(syncState)
+        }
+        TimetableSyncDialog(syncState, onRetrySync, onConsumeSync, onReauthenticate)
     }
-}
-}
-
 }
 
 @Composable
 private fun TimetableSyncDialog(syncState: TimetableSyncState, onRetry: () -> Unit, onConsume: () -> Unit, onReauthenticate: () -> Unit) {
-    val authenticationProgress = com.myleafy.android.ui.components.LocalSchoolRecoveryProgress.current
-    if (syncState is TimetableSyncState.Idle) return
-    val running = syncState is TimetableSyncState.Syncing
+    val message = when (syncState) {
+        is TimetableSyncState.Success -> syncState.message
+        is TimetableSyncState.Error -> syncState.message
+        else -> return
+    }
+    val steps = when (syncState) {
+        is TimetableSyncState.Success -> syncState.steps
+        is TimetableSyncState.Error -> syncState.steps
+        else -> emptyList()
+    }
     LeafyAlertDialog(
-        onDismissRequest = { if (!running) onConsume() },
-        title = { Text(if (running) "同步课表" else "提示") },
+        onDismissRequest = onConsume,
+        title = { Text("同步结果") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.card)) {
-                when (syncState) {
-                    is TimetableSyncState.Syncing -> { CircularProgressIndicator(); Text(authenticationProgress ?: syncState.stage.label) }
-                    is TimetableSyncState.Success -> Text(syncState.message)
-                    is TimetableSyncState.Error -> Text(syncState.message)
-                    TimetableSyncState.Idle -> Unit
+                Text(message)
+                if (steps.isNotEmpty()) {
+                    AcademicStepList(steps = steps, maxHeight = 220.dp)
                 }
             }
         },
@@ -632,6 +663,73 @@ private fun TimetableSyncDialog(syncState: TimetableSyncState, onRetry: () -> Un
         },
         dismissButton = { if (syncState is TimetableSyncState.Error) LeafyTextButton(onClick = onConsume) { Text("关闭") } },
     )
+}
+
+/**
+ * 运行中的同步卡片覆盖在课表上，不弹系统对话框：
+ * 步骤历史、当前阶段与认证恢复详情可以同时被看到，课表也仍然可读。
+ */
+@Composable
+private fun BoxScope.SyncProgressOverlay(syncState: TimetableSyncState.Syncing) {
+    val authenticationProgress = com.myleafy.android.ui.components.LocalSchoolRecoveryProgress.current
+    val steps = if (syncState.steps.isEmpty()) {
+        listOf(
+            AcademicStep(
+                key = syncState.stage.name,
+                label = authenticationProgress ?: syncState.stage.label,
+                status = AcademicStepStatus.RUNNING,
+            ),
+        )
+    } else {
+        syncState.steps.map { step ->
+            if (step.status == AcademicStepStatus.RUNNING && authenticationProgress != null) {
+                step.copy(detail = authenticationProgress)
+            } else {
+                step
+            }
+        }
+    }
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.10f))
+            .clickable(interactionSource = interaction, indication = null) {},
+        contentAlignment = Alignment.Center,
+    ) {
+        AcademicProgressCard(
+            title = "同步课表",
+            steps = steps,
+            modifier = Modifier.padding(horizontal = LeafySpacing.page),
+            maxHeight = 320.dp,
+        )
+    }
+}
+
+/** 下拉刷新只作为覆盖层出现，不参与 Column 测量，因此不会把周标题和网格顶下去。 */
+@Composable
+private fun LeafyPullRefreshIndicator(progress: Float, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier
+            .size(36.dp)
+            .graphicsLayer {
+                val scale = 0.72f + 0.28f * progress
+                scaleX = scale
+                scaleY = scale
+                alpha = 0.35f + 0.65f * progress
+            },
+        shape = CircleShape,
+        color = MaterialTheme.leafySurfaces.elevated,
+        shadowElevation = LeafyElevation.card,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(22.dp),
+                strokeWidth = 2.dp,
+            )
+        }
+    }
 }
 
 /**

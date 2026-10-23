@@ -23,7 +23,9 @@ internal fun TimetableNavigationScaffold(
     val page = MaterialTheme.leafySurfaces.page
     val surface = if (visible && background.enabled) LeafyNavigationSurface(
         color = MaterialTheme.leafySurfaces.elevated.copy(alpha = if (page.luminance() < 0.5f) 0.56f else 0.42f),
-        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.12f),
+        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(
+            alpha = com.myleafy.android.ui.theme.LeafyAlpha.cardBorder,
+        ),
         elevation = 0.dp,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) else null

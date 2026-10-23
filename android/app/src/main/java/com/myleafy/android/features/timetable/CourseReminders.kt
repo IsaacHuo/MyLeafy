@@ -34,7 +34,13 @@ object CourseReminderPlanner {
                 val date = config.semesterStartDate.plusWeeks((week - 1).toLong()).plusDays((course.dayOfWeek - 1).toLong())
                 val starts = date.atTime(time).atZone(TimetableGridProjection.campusZone).toInstant()
                 val fire = starts.minusSeconds(reminder.minutes * 60L)
-                if (!fire.isAfter(now)) null else CourseAlarm(digest("${course.scopeKey}|${reminder.courseKey}|$week|${reminder.anchorPeriod}"), reminder.courseKey, week, starts, fire)
+                if (!fire.isAfter(now)) null else CourseAlarm(
+                    digest("${course.scopeKey}|${reminder.courseKey}|$week|${reminder.anchorPeriod}|${reminder.minutes}"),
+                    reminder.courseKey,
+                    week,
+                    starts,
+                    fire,
+                )
             }
         }
     }.distinctBy { it.id }.sortedBy { it.firesAt }
@@ -64,20 +70,53 @@ class CourseReminderScheduler(private val context: Context, private val scopes: 
             val courses = timetable.coursesForSemester(config.semesterId).first()
             val reminders = dao.reminders(identity.scopeKey, config.semesterId).first()
             if (scopes.current.scopeKey != identity.scopeKey) return@withLock
-            preferences.getStringSet("scheduled", emptySet()).orEmpty().forEach { manager.cancel(pending(it)) }
-            check(preferences.edit().putStringSet("scheduled", emptySet()).commit()) { "无法保存提醒状态" }
+
+            val previous = preferences.getStringSet("scheduled", emptySet()).orEmpty().toSet()
+            val unavailable = identity.campusId == null || permissionProblem() != null
+            val drafts = if (unavailable) {
+                emptyList()
+            } else {
+                CourseReminderPlanner.alarms(courses, reminders, config).also {
+                    check(it.size <= MAX_ALARMS) { "待提醒课次过多，请减少启用提醒的课程" }
+                }
+            }
+            val nextIds = drafts.mapTo(mutableSetOf()) { it.id }
+
+            // 只取消本次不再存在的闹钟；先持久化再取消/排期，进程被杀后仍能清理残留。
+            withContext(Dispatchers.IO) {
+                (previous - nextIds).forEach { manager.cancel(pending(it)) }
+                check(preferences.edit().putStringSet("scheduled", nextIds).commit()) { "无法保存提醒状态" }
+            }
             mutableError.value = null
-            if (identity.campusId == null || permissionProblem() != null) return@withLock
-            val drafts = CourseReminderPlanner.alarms(courses, reminders, config)
-            check(drafts.size <= 450) { "待提醒课次过多，请减少启用提醒的课程" }
-            // Persist before scheduling, so a killed process can still cancel every partially scheduled alarm.
-            check(preferences.edit().putStringSet("scheduled", drafts.map { it.id }.toSet()).commit()) { "无法保存提醒状态" }
+            if (unavailable) return@withLock
+
+            var failures = 0
+            var lastFailure: String? = null
             drafts.forEach { draft ->
                 currentCoroutineContext().ensureActive()
                 if (scopes.current.scopeKey != identity.scopeKey) throw CancellationException("Identity changed")
-                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, draft.firesAt.toEpochMilli(), pending(draft.id,
-                    Intent().putExtra("scope", identity.scopeKey).putExtra("semester", config.semesterId)
-                        .putExtra("course", draft.courseKey).putExtra("week", draft.week).putExtra("fire", draft.firesAt.toEpochMilli())))
+                try {
+                    manager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        draft.firesAt.toEpochMilli(),
+                        pending(
+                            draft.id,
+                            Intent().putExtra("scope", identity.scopeKey)
+                                .putExtra("semester", config.semesterId)
+                                .putExtra("course", draft.courseKey)
+                                .putExtra("week", draft.week)
+                                .putExtra("fire", draft.firesAt.toEpochMilli()),
+                        ),
+                    )
+                } catch (failure: Exception) {
+                    if (failure is CancellationException) throw failure
+                    failures++
+                    lastFailure = failure.message
+                    android.util.Log.e("CourseReminders", "Unable to schedule alarm for ${draft.courseKey}", failure)
+                }
+            }
+            if (failures > 0) {
+                mutableError.value = "$failures 项课前提醒未能排期${lastFailure?.let { "：$it" } ?: "，请重试"}"
             }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
@@ -120,6 +159,7 @@ class CourseReminderScheduler(private val context: Context, private val scopes: 
     companion object {
         const val ACTION_DELIVER = "com.myleafy.android.COURSE_REMINDER"
         private const val CHANNEL = "course-reminders"
+        private const val MAX_ALARMS = 450
     }
 }
 

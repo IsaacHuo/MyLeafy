@@ -18,6 +18,14 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/** 一页根评论线程；cursor 必须原样回传，否则超过 20 条的评论会不可达。 */
+data class CommentThreadPage(
+    val threads: List<CommentThread>,
+    val hasMore: Boolean = false,
+    val nextCreatedAt: String? = null,
+    val nextId: String? = null,
+)
+
 /**
  * 社区仓储接口。Cloudflare 为权威来源（服务端授权 + campus 作用域）。
  */
@@ -44,7 +52,12 @@ interface CommunityRepository {
     suspend fun post(postId: String): PostDto?
 
     /** 评论线程（根 + 一层回复）。 */
-    suspend fun commentThreads(postId: String, limit: Int): List<CommentThread>
+    suspend fun commentThreads(
+        postId: String,
+        limit: Int,
+        afterCreatedAt: String? = null,
+        afterId: String? = null,
+    ): CommentThreadPage
 
     /** 点赞/取消点赞，返回更新后的帖子。 */
     suspend fun togglePostLike(postId: String): PostDto
@@ -170,10 +183,25 @@ class LiveCommunityRepository(
         return requireService().fetchPost(postId)
     }
 
-    override suspend fun commentThreads(postId: String, limit: Int): List<CommentThread> {
+    override suspend fun commentThreads(
+        postId: String,
+        limit: Int,
+        afterCreatedAt: String?,
+        afterId: String?,
+    ): CommentThreadPage {
         requireCommunityProfile()
-        val page: CommentThreadPageDto = requireService().fetchCommentThreads(postId, limit)
-        return groupCommentThreads(page.comments)
+        val page: CommentThreadPageDto = requireService().fetchCommentThreads(
+            postId = postId,
+            limit = limit,
+            afterCreatedAt = afterCreatedAt,
+            afterId = afterId,
+        )
+        return CommentThreadPage(
+            threads = groupCommentThreads(page.comments),
+            hasMore = page.has_more,
+            nextCreatedAt = page.next_cursor_created_at,
+            nextId = page.next_cursor_id,
+        )
     }
 
     override suspend fun togglePostLike(postId: String): PostDto {

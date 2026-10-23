@@ -19,10 +19,12 @@ val scheduleCampusZone: ZoneId = ZoneId.of("Asia/Shanghai")
 /** 标签聚合结果。 [name] 保留首次出现的原始拼写，[count] 为去重后的随记数。 */
 data class ScheduleMemoTagSummary(val name: String, val count: Int)
 
+private val combiningMarks = Regex("\\p{Mn}+")
+
 /** 大小写与变音符号无关的标签归一化，用于去重与排序。 */
 internal fun foldTagKey(tag: String): String =
     Normalizer.normalize(tag, Normalizer.Form.NFKD)
-        .replace(Regex("\\p{Mn}+"), "")
+        .replace(combiningMarks, "")
         .lowercase(Locale.ROOT)
 
 /** 从随记正文解析 `#标签`（与 iOS `ScheduleMemoTagParser` 同构）。 */

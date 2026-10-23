@@ -82,6 +82,7 @@ fun ScheduleTagsScreen(
     viewModel: ScheduleInsightsViewModel = insightsViewModel(),
 ) {
     val memos by viewModel.memos.collectAsStateWithLifecycle()
+    val readError by viewModel.readError.collectAsStateWithLifecycle()
     val tags = remember(memos) { ScheduleMemoTagAggregator.summarize(memos) }
     var selectedTag by rememberSaveable { mutableStateOf<String?>(null) }
     val filtered = remember(memos, selectedTag) {
@@ -96,6 +97,9 @@ fun ScheduleTagsScreen(
             contentPadding = PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
+            readError?.let { message ->
+                item { LeafyStatusBanner(message = message, isError = true) }
+            }
             if (selectedTag != null) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -172,6 +176,7 @@ fun ScheduleStatisticsScreen(
     viewModel: ScheduleInsightsViewModel = insightsViewModel(),
 ) {
     val memos by viewModel.memos.collectAsStateWithLifecycle()
+    val readError by viewModel.readError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val accent = MaterialTheme.colorScheme.primary.toArgb()
     val today = remember { LocalDate.now(scheduleCampusZone) }
@@ -198,6 +203,16 @@ fun ScheduleStatisticsScreen(
             }
         },
     ) { contentModifier ->
+        readError?.let { message ->
+            LeafyStatusBanner(
+                message = message,
+                isError = true,
+                modifier = Modifier.fillMaxWidth().padding(
+                    horizontal = LeafySpacing.page,
+                    vertical = LeafySpacing.micro,
+                ),
+            )
+        }
         if (statistics.memoCount == 0) {
             Box(modifier = contentModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 LeafyEmptyState(
@@ -480,6 +495,7 @@ fun ScheduleTrashScreen(
     viewModel: ScheduleInsightsViewModel = insightsViewModel(),
 ) {
     val trashed by viewModel.trashed.collectAsStateWithLifecycle()
+    val readError by viewModel.readError.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     var confirmEmpty by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<ScheduleMemoEntity?>(null) }
@@ -496,6 +512,9 @@ fun ScheduleTrashScreen(
         Column(modifier = contentModifier.fillMaxSize()) {
             message?.let { value ->
                 LeafyStatusBanner(message = value, isError = true, onDismiss = viewModel::consumeMessage)
+            }
+            readError?.let { value ->
+                LeafyStatusBanner(message = value, isError = true)
             }
             if (trashed.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -577,6 +596,7 @@ fun ScheduleReviewScreen(
     viewModel: ScheduleInsightsViewModel = insightsViewModel(),
 ) {
     val memos by viewModel.memos.collectAsStateWithLifecycle()
+    val readError by viewModel.readError.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableIntStateOf(0) }
     val today = remember { LocalDate.now(scheduleCampusZone) }
     val selection = remember(memos, page) {
@@ -589,6 +609,9 @@ fun ScheduleReviewScreen(
             contentPadding = PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
+            readError?.let { message ->
+                item { LeafyStatusBanner(message = message, isError = true) }
+            }
             item {
                 LeafyStatusBanner(
                     message = "重逢旧想法：优先回顾历年同日，再从旧随记中稳定选取。",
@@ -624,6 +647,7 @@ fun ScheduleExportScreen(
     viewModel: ScheduleInsightsViewModel = insightsViewModel(),
 ) {
     val memos by viewModel.memos.collectAsStateWithLifecycle()
+    val readError by viewModel.readError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     val exportText: () -> Unit = {
@@ -643,6 +667,9 @@ fun ScheduleExportScreen(
             contentPadding = PaddingValues(LeafySpacing.page),
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
+            readError?.let { message ->
+                item { LeafyStatusBanner(message = message, isError = true) }
+            }
             error?.let { message ->
                 item {
                     LeafyStatusBanner(message = message, isError = true, onDismiss = { error = null })

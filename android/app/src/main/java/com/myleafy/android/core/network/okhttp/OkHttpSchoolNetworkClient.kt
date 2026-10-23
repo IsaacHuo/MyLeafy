@@ -27,11 +27,17 @@ import com.myleafy.android.parsers.ParsedExamRecord
 import com.myleafy.android.parsers.ParsedGradeRecord
 import com.myleafy.android.parsers.ParsedTeachingPlanSection
 import com.myleafy.android.parsers.ParsedTrainingProgram
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.CookieJar
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -110,6 +116,16 @@ class OkHttpSchoolNetworkClient(
     /** 执行请求并解析响应 Set-Cookie。 */
     internal fun execute(request: Request): Response = client.newCall(request).execute()
 
+    /**
+     * 生产路径使用可取消的异步请求：协程取消时立即 cancel OkHttp call，
+     * 不再让切身份/退出页面后的请求继续占用线程直到 18 秒超时。
+     */
+    private suspend fun executeCancellable(request: Request): Response =
+        client.newCall(request).awaitResponse()
+
+    private suspend fun executeAuthenticationCancellable(request: Request): Response =
+        authenticationClient.newCall(request).awaitResponse()
+
     private val authenticationMutex = Mutex()
     private val authenticationGeneration = java.util.concurrent.atomic.AtomicLong()
 
@@ -121,7 +137,7 @@ class OkHttpSchoolNetworkClient(
             try {
                 val key = fetchLoginKey()
                 val request = requestBuilder("/verifycode.servlet").get().build()
-                val bytes = executeAuthentication(request).use {
+                val bytes = executeAuthenticationCancellable(request).use {
                     if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("验证码获取失败（HTTP ${it.code}）")
                     it.body?.bytes()?.takeIf { image -> image.isNotEmpty() } ?: throw SchoolNetworkError.Unexpected("验证码为空")
                 }
@@ -155,7 +171,7 @@ class OkHttpSchoolNetworkClient(
         val body = bodyText.toRequestBody("application/x-www-form-urlencoded".toMediaType())
         val request = requestBuilder("/Logon.do?method=logon", referer = baseUrl).post(body).build()
 
-        val response = executeAuthentication(request)
+        val response = executeAuthenticationCancellable(request)
         if (!response.isSuccessful) { val code = response.code; response.close(); throw SchoolNetworkError.Unexpected("学校连接失败（HTTP $code）") }
         val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
         response.close()
@@ -168,7 +184,7 @@ class OkHttpSchoolNetworkClient(
         }
         // Verify the candidate cookie jar before committing identity or touching the old session.
         val verification = requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()
-        executeAuthentication(verification).use {
+        executeAuthenticationCancellable(verification).use {
             if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
             val page = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
             if (!SchoolPageDetector.isAuthenticatedResponse(it.request.url.toString(), page)) {
@@ -189,7 +205,7 @@ class OkHttpSchoolNetworkClient(
 
     override suspend fun verifyAuthenticatedSession(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            execute(requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()).use { response ->
+            executeCancellable(requestBuilder("/jsxsd/framework/xsMain.jsp").get().build()).use { response ->
                 if (!response.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${response.code}）")
                 val html = SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
                 if (SchoolPageDetector.isAuthenticatedResponse(response.request.url.toString(), html)) Result.success(Unit)
@@ -238,7 +254,7 @@ class OkHttpSchoolNetworkClient(
                 if (!seen.add("${request.method}:${request.url}:$body")) continue
                 if (seen.size > 16) throw SchoolNetworkError.TimetableDataUnavailable
                 try {
-                    execute(request).use {
+                    executeCancellable(request).use {
                         if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("获取课表失败（HTTP ${it.code}）")
                         it.request.url.toString() to SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
                     }
@@ -270,7 +286,7 @@ class OkHttpSchoolNetworkClient(
             "/jsxsd/kscj/cjcx_list",
             referer = "${baseUrl}/jsxsd/framework/xsMain.jsp",
         ).get().build()
-        val html = execute(request).use {
+        val html = executeCancellable(request).use {
             SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
         }
         if (SchoolPageDetector.isLoginPage(html)) {
@@ -310,7 +326,7 @@ class OkHttpSchoolNetworkClient(
             currentCoroutineContext().ensureActive()
             val request = candidates.removeFirst()
             if (!seen.add(request.url.toString())) continue
-            val html = execute(request).use { response ->
+            val html = executeCancellable(request).use { response ->
                 if (!response.isSuccessful) return@use null
                 SchoolEncoding.decodeUtf8OrGb18030(response.body?.bytes() ?: byteArrayOf())
             } ?: continue
@@ -350,7 +366,7 @@ class OkHttpSchoolNetworkClient(
             "/jsxsd/xsks/xsksap_list",
             referer = "${baseUrl}/jsxsd/framework/xsMain.jsp",
         ).post(body).build()
-        val html = execute(request).use {
+        val html = executeCancellable(request).use {
             SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
         }
         if (SchoolPageDetector.isLoginPage(html)) {
@@ -372,7 +388,7 @@ class OkHttpSchoolNetworkClient(
             .add("jc", "01").add("jc2", "12").add("xq", day.toString()).add("xq2", day.toString())
         listOf("xqbh", "jxqbh", "jxlbh", "jsbh", "bjfh", "rnrs", "xnxqhmc", "jszt").forEach { form.add(it, "") }
         val request = requestBuilder("/jsxsd/kbxx/jsjy_query2", referer = "$baseUrl/jsxsd/kbxx/jsjy_query").post(form.build()).build()
-        val html = execute(request).use { SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()) }
+        val html = executeCancellable(request).use { SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()) }
         if (SchoolPageDetector.isLoginPage(html)) throw SchoolNetworkError.SessionExpired
         parser.parseClassroomAvailability(html)
     }
@@ -395,9 +411,9 @@ class OkHttpSchoolNetworkClient(
         }
     }
 
-    private fun fetchJsxsdPage(path: String): String {
+    private suspend fun fetchJsxsdPage(path: String): String {
         val request = requestBuilder(path, referer = "${baseUrl}/jsxsd/framework/xsMain.jsp").get().build()
-        val html = execute(request).use {
+        val html = executeCancellable(request).use {
             SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf())
         }
         if (SchoolPageDetector.isLoginPage(html)) {
@@ -416,9 +432,9 @@ class OkHttpSchoolNetworkClient(
         sessionState.clear()
     }
 
-    private fun fetchLoginKey(): String {
+    private suspend fun fetchLoginKey(): String {
         val request = requestBuilder("/Logon.do?method=logon&flag=sess").get().build()
-        return executeAuthentication(request).use {
+        return executeAuthenticationCancellable(request).use {
             if (!it.isSuccessful) throw SchoolNetworkError.Unexpected("学校连接失败（HTTP ${it.code}）")
             val text = SchoolEncoding.decodeUtf8OrGb18030(it.body?.bytes() ?: byteArrayOf()).trim()
             check(text.isNotBlank()) { "未获取到登录 key" }
@@ -442,4 +458,21 @@ class OkHttpSchoolNetworkClient(
 
     private fun notYet(stage: String): Nothing =
         throw NotImplementedError("$stage 尚未实现")
+}
+
+/**
+ * OkHttp 的 suspend 桥：把 call 的取消传播给底层连接。
+ * 与 BackendClient 使用同一模式，避免后台阻塞请求在页面退出后继续运行。
+ */
+private suspend fun Call.awaitResponse(): Response = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation { cancel() }
+    enqueue(object : Callback {
+        override fun onFailure(call: Call, failure: IOException) {
+            if (!continuation.isCancelled) continuation.resumeWithException(failure)
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            if (continuation.isCancelled) response.close() else continuation.resume(response)
+        }
+    })
 }

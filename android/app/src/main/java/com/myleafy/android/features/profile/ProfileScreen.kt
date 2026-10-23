@@ -133,7 +133,7 @@ fun ProfileContent(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.leafySurfaces.page,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = { LeafyRootTopBar(title = "我的") },
     ) { contentPadding ->
         Box(
@@ -333,7 +333,7 @@ private fun ProfileEntry(
         leadingContent = { ProfileAvatar(avatarLabel) },
         trailingContent = {
             if (onClick != null) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.mutedIcon))
             }
         },
         onClick = onClick,
@@ -386,7 +386,7 @@ private fun ProfileDestinationRow(
             }
         },
         trailingContent = {
-            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.mutedIcon))
         },
         onClick = onClick,
     )

@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -74,6 +75,7 @@ fun CommunityScreen(
             CommunityViewModel(
                 repository = container.communityRepository,
                 campusId = container.activeAppScopeStore.current.campusId?.rawValue.orEmpty(),
+                scopeKey = container.activeAppScopeStore.current.scopeKey,
             )
         },
     ),
@@ -82,7 +84,8 @@ fun CommunityScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
-        if (!uiState.isInitialLoading && !uiState.isRefreshing) viewModel.refresh()
+        // 一分钟内从详情返回不重复刷新；真正过期时 refresh() 也会按已加载深度取回分页。
+        if (!uiState.isInitialLoading && !uiState.isRefreshing) viewModel.refreshIfStale()
         viewModel.startSignals()
         onPauseOrDispose { viewModel.stopSignals() }
     }
@@ -117,7 +120,7 @@ fun CommunityContent(
     val pullRefreshState = rememberLeafyPullRefreshState(state.isRefreshing, onRefresh)
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.leafySurfaces.page,
+        containerColor = Color.Transparent,
         topBar = {
             LeafyRootTopBar(
                 title = "社区",
@@ -282,7 +285,15 @@ private fun CommunityFilterChip(
 fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(onClick = onClick, modifier = modifier.fillMaxWidth().testTag("community-post-${post.id}"),
         color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))) {
+        border = androidx.compose.foundation.BorderStroke(
+            com.myleafy.android.ui.theme.LeafyStroke.hairline,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.cardBorder),
+        ),
+        shadowElevation = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) {
+            com.myleafy.android.ui.theme.LeafyElevation.card
+        } else {
+            com.myleafy.android.ui.theme.LeafyElevation.flat
+        }) {
         Column {
             if (post.images.isNotEmpty()) CommunityPostCoverImage(post.images)
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

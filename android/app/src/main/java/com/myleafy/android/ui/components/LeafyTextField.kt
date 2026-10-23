@@ -42,7 +42,7 @@ fun LeafyTextField(
             focusedContainerColor = MaterialTheme.leafySurfaces.content,
             unfocusedContainerColor = MaterialTheme.leafySurfaces.content,
             disabledContainerColor = MaterialTheme.leafySurfaces.grouped,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.border),
         ),
     )
 }

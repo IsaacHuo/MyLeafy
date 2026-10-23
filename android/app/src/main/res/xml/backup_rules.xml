@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Keystore 密钥不会随 Auto Backup 迁移；把密文一起备份只会在换机后产生
+  一份永远解不开的凭据。学校凭据和教务 Cookie 因此不进入备份，
+  恢复后按“需要重新登录”处理。其余本机数据继续由系统备份。
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="myleafy_secure_store.xml" />
+</full-backup-content>

@@ -134,4 +134,14 @@ interface ScheduleEventDao {
 
     @Query("DELETE FROM schedule_events WHERE scopeKey = :scopeKey AND id = :id")
     suspend fun delete(scopeKey: String, id: String)
+
+    @Query("DELETE FROM schedule_event_reminders WHERE scopeKey = :scopeKey AND eventId = :id")
+    suspend fun deleteReminders(scopeKey: String, id: String)
+
+    /** 删除日程时级联提醒，避免留下永远无法投递的孤儿行。 */
+    @androidx.room.Transaction
+    suspend fun deleteWithReminders(scopeKey: String, id: String) {
+        deleteReminders(scopeKey, id)
+        delete(scopeKey, id)
+    }
 }

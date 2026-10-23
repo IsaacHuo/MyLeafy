@@ -26,16 +26,16 @@ internal fun TimetablePageScaffold(
 ) {
     Scaffold(
         modifier = modifier,
-        containerColor = if (background.enabled) Color.Transparent else MaterialTheme.leafySurfaces.page,
+        containerColor = Color.Transparent,
         snackbarHost = snackbarHost,
         topBar = {
             LeafyRootTopBar(
                 titleContent = titleContent, compact = true, actions = actions,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (background.enabled) Color.Transparent else MaterialTheme.leafySurfaces.page,
-                    scrolledContainerColor = if (background.enabled) Color.Transparent else MaterialTheme.leafySurfaces.elevated,
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.94f),
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = if (background.enabled) MaterialTheme.colorScheme.onSurface else Color.Unspecified,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
             )
         },

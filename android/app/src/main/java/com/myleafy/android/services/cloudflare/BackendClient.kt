@@ -1,5 +1,7 @@
 package com.myleafy.android.services.cloudflare
 
+import android.util.Log
+import com.myleafy.android.core.security.SecureReadResult
 import com.myleafy.android.core.security.SecureStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -25,7 +27,15 @@ interface BackendSessionStore {
 
 class SecureBackendSessionStore(private val storage: SecureStorage, origin: String, scope: String) : BackendSessionStore {
     private val key = "cloudflare:$origin:$scope"
-    override fun read() = storage.read(key)
+    override fun read(): String? = when (val result = storage.read(key)) {
+        SecureReadResult.Missing -> null
+        is SecureReadResult.Found -> result.value
+        is SecureReadResult.Unreadable -> {
+            Log.e("BackendSession", "Dropping unreadable backend session for $key", result.cause)
+            runCatching { storage.remove(key) }
+            null
+        }
+    }
     override fun save(token: String) = storage.save(key, token)
     override fun clear() = storage.remove(key)
 }

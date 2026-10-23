@@ -97,7 +97,7 @@ fun CampusScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.leafySurfaces.page,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             LeafyRootTopBar(
                 title = "校园",
@@ -471,7 +471,7 @@ private fun CampusToolRow(
             Icon(
                 androidx.compose.material.icons.Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.mutedIcon),
                 modifier = Modifier.size(LeafyIconSize.compact),
             )
         },

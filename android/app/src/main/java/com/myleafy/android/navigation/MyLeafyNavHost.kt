@@ -479,7 +479,8 @@ fun LeafyNavigationScaffold(
     val currentContent by rememberUpdatedState(content)
     // Keep the NavHost and open editors alive when rotation crosses the rail breakpoint.
     val stableContent = remember { movableContentOf { currentContent() } }
-    BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.leafySurfaces.page)) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        com.myleafy.android.ui.components.LeafyPageBackground(Modifier.matchParentSize())
         backgroundContent()
         if (maxWidth < 600.dp) {
             Column(Modifier.fillMaxSize()) {
@@ -488,7 +489,7 @@ fun LeafyNavigationScaffold(
                     modifier = Modifier.navigationBarsPadding().padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.micro),
                     shape = RoundedCornerShape(28.dp),
                     color = navigationSurface?.color ?: MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.96f),
-                    border = BorderStroke(1.dp, navigationSurface?.borderColor ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    border = BorderStroke(1.dp, navigationSurface?.borderColor ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.border)),
                     shadowElevation = navigationSurface?.elevation ?: 2.dp,
                 ) {
                     Row(Modifier.fillMaxWidth().selectableGroup().padding(vertical = 4.dp)) {

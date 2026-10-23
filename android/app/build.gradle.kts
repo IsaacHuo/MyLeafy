@@ -14,8 +14,12 @@ val releaseSigning = mapOf(
     "keyPassword" to System.getenv("MYLEAFY_RELEASE_KEY_PASSWORD"),
 )
 val isReleaseSigningConfigured = releaseSigning.values.all { !it.isNullOrBlank() }
+// 只有真正打包 APK/AAB 才强制签名；compileReleaseKotlin / lintRelease
+// 也需要在 CI 的无签名环境里运行。
 val requestsReleaseBuild = gradle.startParameter.taskNames.any { task ->
-    task.contains("Release", ignoreCase = true)
+    task.contains("assembleRelease", ignoreCase = true) ||
+        task.contains("bundleRelease", ignoreCase = true) ||
+        task.contains("packageRelease", ignoreCase = true)
 }
 if (requestsReleaseBuild) {
     require(isReleaseSigningConfigured) {
@@ -56,7 +60,8 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (isReleaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }

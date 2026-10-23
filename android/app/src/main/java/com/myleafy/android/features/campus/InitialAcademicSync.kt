@@ -10,8 +10,13 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-data class InitialSyncState(val running: String? = null, val completed: List<String> = emptyList(),
-    val failures: Map<String, String> = emptyMap(), val needsAuthentication: Boolean = false) {
+data class InitialSyncState(
+    val running: String? = null,
+    val completed: List<String> = emptyList(),
+    val failures: Map<String, String> = emptyMap(),
+    val needsAuthentication: Boolean = false,
+    val steps: List<com.myleafy.android.core.network.AcademicStep> = emptyList(),
+) {
     val visible get() = running != null || failures.isNotEmpty() || completed.isNotEmpty()
     val message get() = if (running != null) "正在同步$running…" else buildList {
         if (completed.isNotEmpty()) add("已同步${completed.joinToString("、")}")
@@ -70,10 +75,33 @@ class InitialAcademicSync(
                     }
                     val succeeded = mutableListOf<String>()
                     val failed = linkedMapOf<String, String>()
+                    val steps = mutableListOf<com.myleafy.android.core.network.AcademicStep>()
+
+                    fun completeRunningSteps() {
+                        for (index in steps.indices) {
+                            if (steps[index].status == com.myleafy.android.core.network.AcademicStepStatus.RUNNING) {
+                                steps[index] = steps[index].copy(
+                                    status = com.myleafy.android.core.network.AcademicStepStatus.COMPLETED,
+                                )
+                            }
+                        }
+                    }
+
                     for ((kind, label) in labels) {
                         if (kind in done) continue
                         ensureIdentity(identity.scopeKey)
-                        mutable.value = InitialSyncState(label, succeeded.toList(), failed.toMap())
+                        completeRunningSteps()
+                        steps += com.myleafy.android.core.network.AcademicStep(
+                            key = "initial:$kind",
+                            label = "同步$label",
+                            status = com.myleafy.android.core.network.AcademicStepStatus.RUNNING,
+                        )
+                        mutable.value = InitialSyncState(
+                            running = label,
+                            completed = succeeded.toList(),
+                            failures = failed.toMap(),
+                            steps = steps.toList(),
+                        )
                         try {
                             when (kind) {
                                 "timetable" -> timetable.refresh(semester)
@@ -83,16 +111,36 @@ class InitialAcademicSync(
                             ensureIdentity(identity.scopeKey)
                             dao.checkpoint(AcademicSyncCheckpoint(identity.scopeKey, semester, kind, System.currentTimeMillis()))
                             succeeded += label
+                            completeRunningSteps()
                         } catch (cancelled: CancellationException) { throw cancelled }
                         catch (error: Exception) {
-                            failed[label] = error.message ?: "同步失败，请重试"
+                            val message = error.message ?: "同步失败，请重试"
+                            failed[label] = message
+                            val index = steps.indexOfLast { it.key == "initial:$kind" }
+                            if (index >= 0) {
+                                steps[index] = steps[index].copy(
+                                    status = com.myleafy.android.core.network.AcademicStepStatus.FAILED,
+                                    detail = message,
+                                )
+                            }
                             if (error is SchoolNetworkError.AuthenticationExpired) {
-                                mutable.value = InitialSyncState(null, succeeded.toList(), failed.toMap(), true)
+                                mutable.value = InitialSyncState(
+                                    running = null,
+                                    completed = succeeded.toList(),
+                                    failures = failed.toMap(),
+                                    needsAuthentication = true,
+                                    steps = steps.toList(),
+                                )
                                 return@withLock
                             }
                         }
                     }
-                    mutable.value = InitialSyncState(null, succeeded.toList(), failed.toMap())
+                    mutable.value = InitialSyncState(
+                        running = null,
+                        completed = succeeded.toList(),
+                        failures = failed.toMap(),
+                        steps = steps.toList(),
+                    )
                     if (failed.isEmpty()) { delay(4_000); mutable.value = InitialSyncState() }
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: Exception) {

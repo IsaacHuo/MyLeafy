@@ -162,7 +162,7 @@ fun ScheduleScreen(
     }
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.leafySurfaces.page,
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         topBar = {
             LeafyRootTopBar(
                 title = "日迹",

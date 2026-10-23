@@ -157,6 +157,9 @@ data class CommentThreadDto(
     val parent_comment_id: String? = null,
     val reply_to_comment_id: String? = null,
     val reply_to_author_id: String? = null,
+    /** 服务端 comment-threads 已返回作者对象；缺失时才回退到通用昵称。 */
+    val author: ProfileDto? = null,
+    val reply_to_author: ProfileDto? = null,
     val reply_target_is_visible: Boolean = false,
     val like_count: Int = 0,
     val viewer_has_liked: Boolean = false,
@@ -192,3 +195,9 @@ fun groupCommentThreads(comments: List<CommentThreadDto>): List<CommentThread> {
         )
     }
 }
+
+/** 展示名优先取用户设置的 display_name，其次昵称。 */
+fun ProfileDto.communityDisplayName(): String =
+    display_name?.trim()?.takeIf { it.isNotEmpty() }
+        ?: nickname.trim().takeIf { it.isNotEmpty() }
+        ?: "同学"

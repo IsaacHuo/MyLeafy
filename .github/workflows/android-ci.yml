@@ -35,6 +35,12 @@ jobs:
       - name: Run Android lint
         run: ./gradlew :app:lintDebug
 
+      - name: Compile release Kotlin (R8 input)
+        run: ./gradlew :app:compileReleaseKotlin
+
+      - name: Run Android lint (release)
+        run: ./gradlew :app:lintRelease
+
       - name: Verify Roborazzi screenshots
         run: ./gradlew :app:verifyRoborazziDebug -Pscreenshot
 
@@ -48,3 +54,40 @@ jobs:
             android/app/build/outputs/roborazzi/**
             android/app/build/test-results/**
           if-no-files-found: ignore
+
+  instrumented:
+    name: Instrumented Room and navigation tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: cd android && ./gradlew :app:connectedDebugAndroidTest

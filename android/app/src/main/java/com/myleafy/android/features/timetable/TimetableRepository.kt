@@ -70,10 +70,30 @@ class LiveTimetableRepository(
             )
         }
         if (activeAppScopeStore.current.scopeKey != scopeKey) throw kotlinx.coroutines.CancellationException("Identity changed")
+
+        // 可信空结果是“学校当前没有课”，不是“用户要清空课表”。覆盖会连带清掉
+        // 备注关联和提醒，因此与 iOS 一样保留最近一次成功课表，由界面明确说明。
+        if (entities.isEmpty() && previous.isNotEmpty()) {
+            return TimetableRefreshResult(
+                courseCount = previous.map { it.courseName }.distinct().size,
+                arrangementCount = previous.size,
+                changed = false,
+                retainedExisting = true,
+            )
+        }
+
+        val changed = previous.sortedBy { it.id } != entities.sortedBy { it.id }
+        if (!changed) {
+            return TimetableRefreshResult(
+                courseCount = entities.map { it.courseName }.distinct().size,
+                arrangementCount = entities.size,
+                changed = false,
+            )
+        }
+
         onStage(AcademicStage.SAVING_TIMETABLE)
         persist(scopeKey, semesterId, entities)
         onRefreshed()
-        return TimetableRefreshResult(entities.map { it.courseName }.distinct().size, entities.size,
-            previous.sortedBy { it.id } != entities.sortedBy { it.id })
+        return TimetableRefreshResult(entities.map { it.courseName }.distinct().size, entities.size, changed = true)
     }
 }

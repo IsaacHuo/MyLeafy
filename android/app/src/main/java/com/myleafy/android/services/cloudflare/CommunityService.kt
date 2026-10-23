@@ -39,8 +39,19 @@ class CommunityService(private val client: BackendClient) {
         client.request<PostDto>("/v1/community/posts/$postId")
     } catch (failure: BackendError) { if (failure.status == 404) null else throw failure }
 
-    suspend fun fetchCommentThreads(postId: String, limit: Int = 20): CommentThreadPageDto =
-        client.request("/v1/community/posts/$postId/comment-threads", query = mapOf("limit" to limit.toString()))
+    suspend fun fetchCommentThreads(
+        postId: String,
+        limit: Int = 20,
+        afterCreatedAt: String? = null,
+        afterId: String? = null,
+    ): CommentThreadPageDto = client.request(
+        "/v1/community/posts/$postId/comment-threads",
+        query = mapOf(
+            "limit" to limit.toString(),
+            "after_created_at" to afterCreatedAt,
+            "after_id" to afterId,
+        ),
+    )
     suspend fun togglePostLike(postId: String): PostDto = client.request("/v1/community/posts/$postId/toggle-like", "POST")
     suspend fun togglePostFavorite(postId: String): PostDto = client.request("/v1/community/posts/$postId/toggle-favorite", "POST")
     suspend fun fetchNotifications(profileId: String, limit: Int = 50): List<NotificationDto> {

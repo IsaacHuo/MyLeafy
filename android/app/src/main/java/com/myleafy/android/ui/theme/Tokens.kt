@@ -20,13 +20,33 @@ object LeafySpacing {
 object LeafyElevation {
     val flat = 0.dp
     val resting = 1.dp
+    /** 内容卡片的极淡投影；与 iOS `leafyCardStyle()` 的 2pt 投影对齐。 */
+    val card = 2.dp
     val floating = 3.dp
     val modal = 6.dp
 }
 
 object LeafyStroke {
+    val thin = 0.5.dp
+    val hairline = 1.dp
     val progress = 2.dp
     val emphasis = 2.dp
+}
+
+/**
+ * 弱化层的统一透明度。散落的 0.12/0.35/0.45/0.55 会让同一语义在不同页面深浅不一。
+ */
+object LeafyAlpha {
+    /** 卡片描边，也是最弱的网格线。 */
+    const val cardBorder = 0.12f
+    /** 列表行分隔线。 */
+    const val divider = 0.35f
+    /** 输入框、导航栏等需要更明确边界的位置。 */
+    const val border = 0.35f
+    /** 次要图标（箭头、星标等）。 */
+    const val mutedIcon = 0.55f
+    /** 课程卡副文。 */
+    const val subtitle = 0.82f
 }
 
 object LeafyGesture {
@@ -39,7 +59,8 @@ object LeafyTimetableTokens {
     val minimumPeriodRowHeight = 1.dp
     val maximumPeriodRowHeight = 56.dp
     val gridGap = 2.dp
-    val cellCornerRadius = 8.dp
+    /** 与 iOS `AppRadius.small` 对齐；空白格与课程块共用。 */
+    val cellCornerRadius = 12.dp
     val dateIndicatorSize = 28.dp
     val currentTimeIndicator = 2.dp
 

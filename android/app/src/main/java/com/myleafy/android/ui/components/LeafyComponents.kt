@@ -1,6 +1,8 @@
 package com.myleafy.android.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,10 +81,12 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.semantics
+import com.myleafy.android.ui.theme.LeafyAlpha
 import com.myleafy.android.ui.theme.LeafyComponentSize
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafyIconSize
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyStroke
 import com.myleafy.android.ui.theme.leafySurfaces
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,8 +97,8 @@ fun LeafyRootTopBar(
     compact: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     colors: androidx.compose.material3.TopAppBarColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.leafySurfaces.page,
-        scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
+        containerColor = Color.Transparent,
+        scrolledContainerColor = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.94f),
     ),
 ) {
     LeafyRootTopBar(
@@ -122,8 +126,8 @@ fun LeafyRootTopBar(
     compact: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     colors: androidx.compose.material3.TopAppBarColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.leafySurfaces.page,
-        scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
+        containerColor = Color.Transparent,
+        scrolledContainerColor = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.94f),
     ),
 ) {
     TopAppBar(
@@ -192,8 +196,8 @@ fun LeafySecondaryScaffold(
                 actions = actions,
                 expandedHeight = leafyTopBarHeight(compact = true),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.leafySurfaces.page,
-                    scrolledContainerColor = MaterialTheme.leafySurfaces.elevated,
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.leafySurfaces.elevated.copy(alpha = 0.94f),
                 ),
             )
         },
@@ -270,12 +274,24 @@ fun LeafyContentSurface(
     Surface(
         modifier = modifier,
         color = if (elevated) MaterialTheme.leafySurfaces.elevated else MaterialTheme.leafySurfaces.content,
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = if (elevated) LeafyElevation.resting else LeafyElevation.flat,
-        shadowElevation = LeafyElevation.flat,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(
+            LeafyStroke.hairline,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = LeafyAlpha.cardBorder),
+        ),
+        tonalElevation = LeafyElevation.flat,
+        shadowElevation = leafyCardShadow(),
     ) {
         Column(content = content)
     }
+}
+
+/** 与 iOS 一致：浅色模式给卡片极淡投影，深色模式改用 1px 描边维持层级。 */
+@Composable
+private fun leafyCardShadow() = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) {
+    LeafyElevation.card
+} else {
+    LeafyElevation.flat
 }
 
 @Composable
@@ -292,7 +308,12 @@ fun LeafyToolRow(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().heightIn(min = minHeight),
         color = MaterialTheme.leafySurfaces.content,
-        shape = MaterialTheme.shapes.medium,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(
+            LeafyStroke.hairline,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = LeafyAlpha.cardBorder),
+        ),
+        shadowElevation = leafyCardShadow(),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = LeafySpacing.card, vertical = LeafySpacing.compact),
@@ -736,7 +757,7 @@ fun LeafySettingsDivider(modifier: Modifier = Modifier) {
         modifier = modifier.padding(
             start = LeafyComponentSize.settingsIconContainer + LeafySpacing.card + LeafySpacing.compact,
         ),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = LeafyAlpha.divider),
     )
 }
 
@@ -755,7 +776,15 @@ fun LeafySettingsGroup(
             Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             supportingText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.leafySurfaces.content) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.leafySurfaces.content,
+            border = BorderStroke(
+                LeafyStroke.hairline,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = LeafyAlpha.cardBorder),
+            ),
+            shadowElevation = leafyCardShadow(),
+        ) {
             Column(content = content)
         }
     }

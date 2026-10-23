@@ -70,6 +70,7 @@ class RoomScheduleRepository(
         val scopeKey = activeAppScopeStore.current.scopeKey
         val resolvedId = id ?: UUID.randomUUID().toString()
         val existing = id?.let { memoDao.memoById(scopeKey, it) }
+        val mergedTags = mergeMemoTags(tags, body)
         memoDao.upsert(
             ScheduleMemoEntity(
                 scopeKey = scopeKey,
@@ -77,7 +78,7 @@ class RoomScheduleRepository(
                 body = body,
                 kind = existing?.kind ?: "quickMemo",
                 title = title?.takeIf { it.isNotBlank() },
-                tags = tags.joinToString("\n"),
+                tags = ScheduleMemoTagParser.encode(mergedTags),
                 createdAt = existing?.createdAt ?: now,
                 updatedAt = now,
                 pinnedAt = existing?.pinnedAt,
@@ -138,5 +139,16 @@ class RoomScheduleRepository(
         return resolvedId
     }
 
-    override suspend fun deleteEvent(id: String) = eventDao.delete(activeAppScopeStore.current.scopeKey, id)
+    override suspend fun deleteEvent(id: String) =
+        eventDao.deleteWithReminders(activeAppScopeStore.current.scopeKey, id)
 }
+
+/**
+ * 编辑器填写的标签与正文 `#标签` 合并；按归一化 key 去重，保留第一次出现的写法。
+ * 与 iOS `ScheduleMemoTagParser.encoded(tags ?? tags(in: body))` 的语义一致。
+ */
+internal fun mergeMemoTags(explicitTags: List<String>, body: String): List<String> =
+    (explicitTags + ScheduleMemoTagParser.tagsIn(body))
+        .map { it.trim().removePrefix("#").trim() }
+        .filter { it.isNotEmpty() }
+        .distinctBy(::foldTagKey)

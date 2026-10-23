@@ -17,8 +17,11 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.myleafy.android.MainActivity
 import com.myleafy.android.MyLeafyApplication
 import com.myleafy.android.R
@@ -245,7 +248,9 @@ class ScheduleNotificationScheduler(
             exams = academicRepository.exams().first(),
             events = scheduleRepository.events().first(),
         )
-        workManager.cancelAllWorkByTag(NOTIFICATION_TAG)
+        // 先按稳定 name 覆盖入队，再清理本次不存在的 work。
+        // 反过来的“先 cancelAll 再重排”会留下一个零提醒窗口，恰好正在投递的提醒也会丢失。
+        val nextTags = drafts.mapTo(mutableSetOf()) { "$NOTIFICATION_TAG:${it.id}" }
         drafts.forEach { draft ->
             val delayMillis = Duration.between(Instant.now(), draft.fireAt).toMillis().coerceAtLeast(0L)
             val data = Data.Builder()
@@ -254,13 +259,24 @@ class ScheduleNotificationScheduler(
                 .putString(NotificationDeliveryWorker.KEY_EVENT_ID, draft.eventId)
                 .putString(NotificationDeliveryWorker.KEY_NOTIFICATION_ID, draft.id)
                 .build()
+            val tag = "$NOTIFICATION_TAG:${draft.id}"
             val request = OneTimeWorkRequestBuilder<NotificationDeliveryWorker>()
                 .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
                 .setInputData(data)
                 .addTag(NOTIFICATION_TAG)
+                .addTag(tag)
                 .build()
-            workManager.enqueueUniqueWork("$NOTIFICATION_TAG:${draft.id}", ExistingWorkPolicy.REPLACE, request)
+            workManager.enqueueUniqueWork(tag, ExistingWorkPolicy.REPLACE, request)
         }
+        val existing = withContext(Dispatchers.IO) {
+            workManager.getWorkInfosByTag(NOTIFICATION_TAG).get()
+        }
+        existing.filter { info ->
+            info.state != WorkInfo.State.SUCCEEDED &&
+                info.state != WorkInfo.State.FAILED &&
+                info.state != WorkInfo.State.CANCELLED &&
+                info.tags.none { it in nextTags }
+        }.forEach { workManager.cancelWorkById(it.id) }
     }
 
     companion object {

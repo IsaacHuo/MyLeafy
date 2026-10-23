@@ -32,6 +32,9 @@ object CommunityImageProcessing {
     private const val thumbnailMaxDimension = 480
     private const val fullMaxBytes = 800 * 1024
     private const val thumbnailMaxBytes = 120 * 1024
+    private const val SCALE_FACTOR = 0.82f
+    private const val MAX_SCALE_ATTEMPTS = 4
+    private const val MIN_COMPRESSED_DIMENSION = 320
 
     /** 解码、按 EXIF 方向归一，并输出 full/thumb 两档 JPEG。 */
     fun prepare(context: Context, uri: Uri, id: String): CommunityPostImageUpload {
@@ -44,13 +47,18 @@ object CommunityImageProcessing {
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
         }
         val full = scaleToFit(decoded, fullMaxDimension)
-        if (full !== decoded) decoded.recycle()
         val thumbnail = scaleToFit(full, thumbnailMaxDimension)
-        val fullBytes = encodeJpegWithinBudget(full, fullMaxBytes)
-        val thumbnailBytes = encodeJpegWithinBudget(thumbnail, thumbnailMaxBytes)
-        full.recycle()
-        if (thumbnail !== full) thumbnail.recycle()
-        return CommunityPostImageUpload(id = id, bytes = fullBytes, thumbnailBytes = thumbnailBytes)
+        return try {
+            CommunityPostImageUpload(
+                id = id,
+                bytes = encodeJpegWithinBudget(full, fullMaxBytes),
+                thumbnailBytes = encodeJpegWithinBudget(thumbnail, thumbnailMaxBytes),
+            )
+        } finally {
+            if (thumbnail !== full) thumbnail.recycle()
+            if (full !== decoded) full.recycle()
+            decoded.recycle()
+        }
     }
 
     private fun scaleToFit(bitmap: Bitmap, maxDimension: Int): Bitmap {
@@ -62,14 +70,36 @@ object CommunityImageProcessing {
         return Bitmap.createScaledBitmap(bitmap, width, height, true)
     }
 
+    /**
+     * 先降质量，仍超预算时继续缩小尺寸（与 iOS 的 0.82 递减一致）。
+     * 只返回能通过服务端单对象上限的字节；实在压不下去就明确失败，
+     * 让发布流程指出是哪张图，而不是等服务器返回一条原始错误。
+     */
     private fun encodeJpegWithinBudget(bitmap: Bitmap, maxBytes: Int): ByteArray {
-        var quality = 88
-        while (true) {
-            val stream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
-            val bytes = stream.toByteArray()
-            if (bytes.size <= maxBytes || quality <= 40) return bytes
-            quality -= 8
+        var candidate = bitmap
+        repeat(MAX_SCALE_ATTEMPTS + 1) {
+            var quality = 88
+            while (quality >= 40) {
+                val stream = ByteArrayOutputStream()
+                candidate.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+                val bytes = stream.toByteArray()
+                if (bytes.size <= maxBytes) return bytes
+                quality -= 8
+            }
+            if (candidate.width <= MIN_COMPRESSED_DIMENSION) {
+                throw IllegalStateException("图片压缩后仍超过大小限制，请换一张图片")
+            }
+            val scaled = Bitmap.createScaledBitmap(
+                candidate,
+                (candidate.width * SCALE_FACTOR).roundToInt().coerceAtLeast(1),
+                (candidate.height * SCALE_FACTOR).roundToInt().coerceAtLeast(1),
+                true,
+            )
+            if (scaled !== candidate) {
+                if (candidate !== bitmap) candidate.recycle()
+                candidate = scaled
+            }
         }
+        throw IllegalStateException("图片压缩后仍超过大小限制，请换一张图片")
     }
 }

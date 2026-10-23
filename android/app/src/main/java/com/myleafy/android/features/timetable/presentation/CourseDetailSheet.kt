@@ -46,12 +46,37 @@ internal fun compactWeeks(weeks: List<Int>): String {
     return "第${ranges.joinToString("、")}周"
 }
 
+/** 课程详情的窄依赖；默认从组合根取，截图/单测可以传入替身。 */
+data class CourseDetailDependencies(
+    val personalDao: com.myleafy.android.core.data.local.TimetablePersonalDao,
+    val reminderScheduler: com.myleafy.android.features.timetable.CourseReminderScheduler,
+    val currentScopeKey: () -> String,
+)
+
+@Composable
+private fun rememberCourseDetailDependencies(): CourseDetailDependencies {
+    val container = (LocalContext.current.applicationContext as MyLeafyApplication).container
+    return remember(container) {
+        CourseDetailDependencies(
+            personalDao = container.timetablePersonalDao,
+            reminderScheduler = container.courseReminderScheduler,
+            currentScopeKey = { container.activeAppScopeStore.current.scopeKey },
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntity>, onTeacher: (String) -> Unit, onDismiss: () -> Unit) {
+fun CourseDetailSheet(
+    course: CourseEntity,
+    week: Int,
+    courses: List<CourseEntity>,
+    onTeacher: (String) -> Unit,
+    onDismiss: () -> Unit,
+    dependencies: CourseDetailDependencies = rememberCourseDetailDependencies(),
+) {
     val context = LocalContext.current
-    val container = (context.applicationContext as MyLeafyApplication).container
-    val dao = container.timetablePersonalDao
+    val dao = dependencies.personalDao
     val key = course.stableCourseKey()
     val owner = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
@@ -91,22 +116,22 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
     val noteIntoView = remember { BringIntoViewRequester() }
     val reminderIntoView = remember { BringIntoViewRequester() }
     var focusedField by remember { mutableIntStateOf(0) }
-    var permissionProblem by remember { mutableStateOf(container.courseReminderScheduler.permissionProblem()) }
-    val schedulingError by container.courseReminderScheduler.error.collectAsStateWithLifecycle()
+    var permissionProblem by remember { mutableStateOf(dependencies.reminderScheduler.permissionProblem()) }
+    val schedulingError by dependencies.reminderScheduler.error.collectAsStateWithLifecycle()
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        permissionProblem = container.courseReminderScheduler.permissionProblem()
-        owner.launch { container.courseReminderScheduler.reconcile() }
+        permissionProblem = dependencies.reminderScheduler.permissionProblem()
+        owner.launch { dependencies.reminderScheduler.reconcile() }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        permissionProblem = container.courseReminderScheduler.permissionProblem()
-        owner.launch { container.courseReminderScheduler.reconcile() }
+        permissionProblem = dependencies.reminderScheduler.permissionProblem()
+        owner.launch { dependencies.reminderScheduler.reconcile() }
     }
     fun mutate(block: suspend () -> Unit) {
         if (saving) return
         saving = true; error = null; feedback = null
         owner.launch {
             try {
-                check(container.activeAppScopeStore.current.scopeKey == course.scopeKey) { "账号已切换，请重新打开课程" }
+                check(dependencies.currentScopeKey() == course.scopeKey) { "账号已切换，请重新打开课程" }
                 block()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) { error = failure.message ?: "保存失败，请重试" }
@@ -197,8 +222,8 @@ fun CourseDetailSheet(course: CourseEntity, week: Int, courses: List<CourseEntit
             }
             LeafyPrimaryButton(enabled = !saving && reminders != null && (!selectingCustom || custom.toIntOrNull() in 1..180), onClick = { mutate {
                 dao.save(CourseReminderEntity(course.scopeKey, course.sourceSemesterID, key, if (selectingCustom) custom.toInt() else minutes, anchor))
-                container.courseReminderScheduler.reconcile()
-                permissionProblem = container.courseReminderScheduler.permissionProblem()
+                dependencies.reminderScheduler.reconcile()
+                permissionProblem = dependencies.reminderScheduler.permissionProblem()
                 feedback = if (!selectingCustom && minutes == 0) "提醒已关闭" else "提醒配置已保存"
                 if ((selectingCustom || minutes > 0) && Build.VERSION.SDK_INT >= 33 && !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)

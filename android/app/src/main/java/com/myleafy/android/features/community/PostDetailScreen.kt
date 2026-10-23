@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -36,15 +38,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.shared.model.CommentThread
 import com.myleafy.android.shared.model.CommentThreadDto
+import com.myleafy.android.shared.model.communityDisplayName
 import com.myleafy.android.ui.components.LeafyContentSurface
 import com.myleafy.android.ui.components.LeafyActionIconButton
 import com.myleafy.android.ui.components.LeafyAlertDialog
 import com.myleafy.android.ui.components.LeafyErrorState
 import com.myleafy.android.ui.components.LeafyLoadingState
 import com.myleafy.android.ui.components.LeafyPrimaryButton
+import com.myleafy.android.ui.components.LeafySecondaryButton
 import com.myleafy.android.ui.components.LeafySecondaryScaffold
 import com.myleafy.android.ui.components.LeafyStatusBanner
 import com.myleafy.android.ui.components.LeafyTextButton
+import com.myleafy.android.ui.theme.LeafyIconSize
+import com.myleafy.android.ui.theme.LeafyStroke
 import com.myleafy.android.ui.theme.LeafySpacing
 
 private enum class ConfirmationKind { DELETE_POST, DELETE_COMMENT, REPORT_POST, REPORT_COMMENT, BLOCK_USER }
@@ -118,6 +124,7 @@ fun PostDetailScreen(
                 onLike = { writeAction(viewModel::toggleLike) },
                 onFavorite = { writeAction(viewModel::toggleFavorite) },
                 onComment = { body, parent, reply -> writeAction { viewModel.createComment(body, parent, reply) } },
+                onLoadMoreComments = viewModel::loadMoreComments,
                 onConfirm = { confirmation = it },
                 onClearMessage = viewModel::clearMessage,
                 modifier = contentModifier,
@@ -132,6 +139,7 @@ private fun PostDetailContent(
     onLike: () -> Unit,
     onFavorite: () -> Unit,
     onComment: (String, String?, String?) -> Unit,
+    onLoadMoreComments: () -> Unit,
     onConfirm: (PendingConfirmation) -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
@@ -146,7 +154,7 @@ private fun PostDetailContent(
                 Column(modifier = Modifier.padding(LeafySpacing.card)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (state.post.is_anonymous) "匿名" else state.post.author?.nickname ?: "北林同学",
+                            text = if (state.post.is_anonymous) "匿名" else state.post.author?.communityDisplayName() ?: "北林同学",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(1f),
@@ -248,6 +256,35 @@ private fun PostDetailContent(
                 onConfirm = onConfirm,
             )
         }
+        if (state.commentLoadError != null) {
+            item {
+                LeafyStatusBanner(
+                    message = state.commentLoadError,
+                    isError = true,
+                    actionLabel = "重试",
+                    onAction = onLoadMoreComments,
+                )
+            }
+        }
+        if (state.hasMoreComments || state.isLoadingMoreComments) {
+            item {
+                LeafySecondaryButton(
+                    onClick = onLoadMoreComments,
+                    enabled = !state.isLoadingMoreComments,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (state.isLoadingMoreComments) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(LeafyIconSize.compact),
+                            strokeWidth = LeafyStroke.progress,
+                        )
+                        Text("加载中…", modifier = Modifier.padding(start = LeafySpacing.micro))
+                    } else {
+                        Text("加载更多评论")
+                    }
+                }
+            }
+        }
         item { Spacer(Modifier.height(LeafySpacing.card)) }
     }
 }
@@ -315,10 +352,23 @@ private fun CommentLine(
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                if (comment.is_deleted_placeholder) "（已删除）" else if (comment.is_anonymous) "匿名" else "北林同学",
+                when {
+                    comment.is_deleted_placeholder -> "（已删除）"
+                    comment.is_anonymous -> "匿名"
+                    else -> comment.author?.communityDisplayName() ?: "北林同学"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (!comment.is_deleted_placeholder && comment.reply_target_is_visible) {
+                comment.reply_to_author?.let { target ->
+                    Text(
+                        text = "回复 ${target.communityDisplayName()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
             Text(
                 if (comment.is_deleted_placeholder) comment.body.ifBlank { "该评论已删除" } else comment.body,
                 style = MaterialTheme.typography.bodyMedium,

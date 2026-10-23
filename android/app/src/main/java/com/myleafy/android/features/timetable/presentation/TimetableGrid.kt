@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
@@ -45,8 +46,10 @@ import com.myleafy.android.features.timetable.domain.TimetableGridItem
 import com.myleafy.android.features.timetable.domain.TimetableGridItemType
 import com.myleafy.android.features.timetable.domain.TimetableGridSnapshot
 import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
+import com.myleafy.android.ui.theme.LeafyAlpha
 import com.myleafy.android.ui.theme.LeafyElevation
 import com.myleafy.android.ui.theme.LeafySpacing
+import com.myleafy.android.ui.theme.LeafyStroke
 import com.myleafy.android.ui.theme.LeafyTimetableTokens
 import com.myleafy.android.ui.theme.LeafyTimetableType
 import com.myleafy.android.ui.theme.leafyCourseColors
@@ -224,6 +227,7 @@ private fun TimetableGridLayout(
             snapshot.items.filter { it.dayIndex < visibleDayCount }.forEach { item ->
                 TimetableItemCard(
                     item = item,
+                    isToday = item.dayIndex == todayIndex,
                     onClick = { onItemClick(item) },
                     opacity = if (background.enabled) background.courseOpacityPercent / 100f else 1f,
                     modifier = Modifier
@@ -437,10 +441,11 @@ private fun EmptyGridCell(
         hasBackground -> MaterialTheme.leafySurfaces.content.copy(
             alpha = LeafyTimetableTokens.emptyCellFillAlphaOnBackground,
         )
-        else -> MaterialTheme.leafySurfaces.page
+        // 与 iOS 的 cardBackground(0.62) 对齐：空白格是“很淡的卡片”，不是页面挖空。
+        else -> MaterialTheme.leafySurfaces.content.copy(alpha = 0.55f)
     }
     val border = BorderStroke(
-        width = LeafySpacing.hairline,
+        width = LeafyStroke.hairline,
         color = MaterialTheme.colorScheme.outlineVariant.copy(
             alpha = if (hasBackground) {
                 LeafyTimetableTokens.emptyCellBorderAlphaOnBackground
@@ -463,6 +468,7 @@ private fun EmptyGridCell(
 @Composable
 private fun TimetableItemCard(
     item: TimetableGridItem,
+    isToday: Boolean,
     onClick: () -> Unit,
     opacity: Float,
     modifier: Modifier = Modifier,
@@ -491,7 +497,19 @@ private fun TimetableItemCard(
         shape = GridCellShape,
         color = containerColor.copy(alpha = opacity.coerceIn(0.35f, 1f)),
         contentColor = contentColor,
-        shadowElevation = LeafyElevation.flat,
+        border = BorderStroke(
+            LeafyStroke.hairline,
+            if (isToday) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = LeafyAlpha.cardBorder)
+            },
+        ),
+        shadowElevation = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) {
+            LeafyElevation.resting
+        } else {
+            LeafyElevation.flat
+        },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val density = LocalDensity.current
@@ -516,7 +534,7 @@ private fun TimetableItemCard(
                     maxLines = lines.title, overflow = TextOverflow.Ellipsis)
                 if (subtitle != null && lines.subtitle > 0) {
                     Text(text = subtitle, style = LeafyTimetableType.courseSubtitle,
-                        color = contentColor.copy(alpha = 0.82f), maxLines = lines.subtitle,
+                        color = contentColor.copy(alpha = LeafyAlpha.subtitle), maxLines = lines.subtitle,
                         overflow = TextOverflow.Ellipsis)
                 }
             }
