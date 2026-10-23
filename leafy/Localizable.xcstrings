@@ -328,6 +328,7 @@
       }
     },
     "%@ %@  %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -717,16 +718,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@，%2$@"
-          }
-        }
-      }
-    },
-    "%@，%@%@%@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@，%2$@%3$@%4$@"
           }
         }
       }
@@ -2095,6 +2086,7 @@
       }
     },
     "%lld 门课程 · %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -2199,7 +2191,9 @@
         }
       }
     },
-    "%lld°C" : {},
+    "%lld°C" : {
+
+    },
     "%lld月" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2221,8 +2215,12 @@
         }
       }
     },
-    "08:00" : {},
-    "09:50" : {},
+    "08:00" : {
+
+    },
+    "09:50" : {
+
+    },
     "12 位共享课表邀请码" : {
       "localizations" : {
         "en-US" : {
@@ -2243,7 +2241,9 @@
         }
       }
     },
-    "13:30" : {},
+    "13:30" : {
+
+    },
     "A" : {
       "localizations" : {
         "en-US" : {
@@ -2254,7 +2254,9 @@
         }
       }
     },
-    "Aa  字" : {},
+    "Aa  字" : {
+
+    },
     "App 图标资源不可用，无法生成分享卡片。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2569,7 +2571,9 @@
         }
       }
     },
-    "MyLeafy · %@" : {},
+    "MyLeafy · %@" : {
+
+    },
     "MyLeafy 也有安卓版" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2776,7 +2780,9 @@
         }
       }
     },
-    "一周课表视图" : {},
+    "一周课表视图" : {
+
+    },
     "一周适合看全局，三日视图适合看细节。Widget 则把近期安排放到主屏幕，让一次短暂的查看也有用。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2831,7 +2837,9 @@
         }
       }
     },
-    "三日放大视图" : {},
+    "三日放大视图" : {
+
+    },
     "三级标题" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3736,7 +3744,9 @@
         }
       }
     },
-    "体感温度" : {},
+    "体感温度" : {
+
+    },
     "体感温度（°C）" : {
       "localizations" : {
         "en-US" : {
@@ -4905,7 +4915,9 @@
         }
       }
     },
-    "分享诊断信息" : {},
+    "分享诊断信息" : {
+
+    },
     "分享邀请码" : {
       "localizations" : {
         "en-US" : {
@@ -5070,7 +5082,9 @@
         }
       }
     },
-    "创建于 %@" : {},
+    "创建于 %@" : {
+
+    },
     "删除" : {
       "localizations" : {
         "en-US" : {
@@ -5194,7 +5208,9 @@
         }
       }
     },
-    "删除后无法恢复。" : {},
+    "删除后无法恢复。" : {
+
+    },
     "删除后无法恢复。完成后 App 会清除本机数据并返回登录页。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5452,7 +5468,9 @@
         }
       }
     },
-    "删除这条日程？" : {},
+    "删除这条日程？" : {
+
+    },
     "删除这条荣誉记录？" : {
       "localizations" : {
         "en-US" : {
@@ -5873,8 +5891,12 @@
         }
       }
     },
-    "原数据库包含随记、备注和个人资料。完整备份验证成功后才会重建，个人数据不会自动恢复。" : {},
-    "原数据库已保留。随记、备注和个人资料尚未读取，请先重试。" : {},
+    "原数据库包含随记、备注和个人资料。完整备份验证成功后才会重建，个人数据不会自动恢复。" : {
+
+    },
+    "原数据库已保留。随记、备注和个人资料尚未读取，请先重试。" : {
+
+    },
     "原日程已不可用" : {
       "localizations" : {
         "en-US" : {
@@ -6021,7 +6043,9 @@
         }
       }
     },
-    "发布队列暂不可用" : {},
+    "发布队列暂不可用" : {
+
+    },
     "发现不当内容、骚扰、冒充、刷屏、恶意评分或隐私泄露时，可在“举报与反馈”中选择“社区安全”，也可通过联系邮箱说明情况。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6299,6 +6323,17 @@
         }
       }
     },
+    "可在设置中主动开启 iCloud，同步支持的数据；未开启时请使用已有导出能力妥善保存重要内容。具体范围与数据说明可以在设置和帮助中心查看。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can enable iCloud in Settings to sync supported data. When it is off, use the existing export options to keep important content safe. See Settings and Help for the supported scope and data information."
+          }
+        }
+      }
+    },
     "可继续查看其他日期或切换周次。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6514,7 +6549,9 @@
         }
       }
     },
-    "同步教学计划和培养方案" : {},
+    "同步教学计划和培养方案" : {
+
+    },
     "同步状态" : {
       "localizations" : {
         "en-US" : {
@@ -7159,8 +7196,12 @@
         }
       }
     },
-    "备份并创建新数据库" : {},
-    "备份并创建新的空数据库？" : {},
+    "备份并创建新数据库" : {
+
+    },
+    "备份并创建新的空数据库？" : {
+
+    },
     "备注" : {
       "localizations" : {
         "en-US" : {
@@ -7267,7 +7308,9 @@
         }
       }
     },
-    "复制邮箱" : {},
+    "复制邮箱" : {
+
+    },
     "外观" : {
       "localizations" : {
         "en-US" : {
@@ -7898,7 +7941,9 @@
         }
       }
     },
-    "官方学分更新于 %@" : {},
+    "官方学分更新于 %@" : {
+
+    },
     "官方学分积" : {
       "localizations" : {
         "en-US" : {
@@ -8343,7 +8388,9 @@
         }
       }
     },
-    "小红书" : {},
+    "小红书" : {
+
+    },
     "小组讨论" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8889,7 +8936,9 @@
         }
       }
     },
-    "已暂存最新课表，请补全到第 %lld 节的作息，保存后导入。" : {},
+    "已暂存最新课表，请补全到第 %lld 节的作息，保存后导入。" : {
+
+    },
     "已更新 %d 条内容" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9195,7 +9244,9 @@
         }
       }
     },
-    "开启同步会消耗电量和网络流量，使用移动网络时可能产生网络资费，具体以运营商套餐为准。" : {},
+    "开启同步会消耗电量和网络流量，使用移动网络时可能产生网络资费，具体以运营商套餐为准。" : {
+
+    },
     "开启后，课表、成绩考试、备注提醒、个人日程、随记及附件、课表与个性化设置，会同步到当前 Apple 账号的 iCloud。不同校园身份分别保存。" : {
       "localizations" : {
         "en-US" : {
@@ -9390,6 +9441,7 @@
       }
     },
     "当前假期" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -9789,6 +9841,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Last 30 days"
+          }
+        }
+      }
+    },
+    "当前通用入口本机课表数据已清空。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The local timetable data for this custom campus has been cleared."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前通用入口本机课表数据已清空。"
           }
         }
       }
@@ -10416,7 +10485,9 @@
         }
       }
     },
-    "打开日程编辑" : {},
+    "打开日程编辑" : {
+
+    },
     "打开日迹记录菜单" : {
       "localizations" : {
         "en-US" : {
@@ -10479,7 +10550,9 @@
         }
       }
     },
-    "打开这位教师的评价" : {},
+    "打开这位教师的评价" : {
+
+    },
     "打开链接" : {
       "localizations" : {
         "en-US" : {
@@ -11461,7 +11534,9 @@
         }
       }
     },
-    "教学与培养" : {},
+    "教学与培养" : {
+
+    },
     "教学楼" : {
       "localizations" : {
         "en-US" : {
@@ -11776,8 +11851,12 @@
         }
       }
     },
-    "无法打开本地数据" : {},
-    "无法打开邮件 App" : {},
+    "无法打开本地数据" : {
+
+    },
+    "无法打开邮件 App" : {
+
+    },
     "无法找到暂存文件 %@，请重新导入。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11960,7 +12039,9 @@
         }
       }
     },
-    "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。" : {},
+    "日程仅保存在当前设备。每条日程都会显示倒计时；日期在当前学年内时，还会同时显示在课表。" : {
+
+    },
     "日程信息" : {
       "localizations" : {
         "en-US" : {
@@ -11977,6 +12058,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Schedules are only saved locally. After enabling reminders, local notifications will be created according to the selected start time."
+          }
+        }
+      }
+    },
+    "日程已保存，但原记录未移除：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The event was saved, but the original record could not be removed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日程已保存，但原记录未移除：%@"
           }
         }
       }
@@ -12330,6 +12428,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pause recording"
+          }
+        }
+      }
+    },
+    "暂存文件清理失败：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staged files could not be removed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂存文件清理失败：%@"
           }
         }
       }
@@ -13255,7 +13370,9 @@
         }
       }
     },
-    "未确认 / %@" : {},
+    "未确认 / %@" : {
+
+    },
     "未绑定" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13461,8 +13578,12 @@
         }
       }
     },
-    "本地数据恢复" : {},
-    "本地文件清理未完成" : {},
+    "本地数据恢复" : {
+
+    },
+    "本地文件清理未完成" : {
+
+    },
     "本地缓存和本地身份已清除。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13594,6 +13715,17 @@
         }
       }
     },
+    "本机同步数据含有重复且不一致的标识，已保留现有数据，请先检查本地记录。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local sync data contains duplicate identifiers with different content. Existing data has been kept. Check your local records before trying again."
+          }
+        }
+      }
+    },
     "本机数据保留，其他设备将停止同步此云端空间。重新开启同步会再次上传本机数据。" : {
       "localizations" : {
         "en-US" : {
@@ -13615,7 +13747,9 @@
         }
       }
     },
-    "本机数据将与当前 Apple 账号中此校园身份的数据合并。文本冲突会保留副本，附件也会上传。同步会消耗电量和网络流量，使用移动网络时可能产生网络资费。" : {},
+    "本机数据将与当前 Apple 账号中此校园身份的数据合并。文本冲突会保留副本，附件也会上传。同步会消耗电量和网络流量，使用移动网络时可能产生网络资费。" : {
+
+    },
     "本次未查询到官方排名。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13704,8 +13838,12 @@
         }
       }
     },
-    "权限仅会在你使用对应功能或在此页面主动开启时请求。已关闭的权限需要在系统设置中重新开启。" : {},
-    "权限管理" : {},
+    "权限仅会在你使用对应功能或在此页面主动开启时请求。已关闭的权限需要在系统设置中重新开启。" : {
+
+    },
+    "权限管理" : {
+
+    },
     "材料" : {
       "localizations" : {
         "en-US" : {
@@ -14158,7 +14296,9 @@
         }
       }
     },
-    "概率下界" : {},
+    "概率下界" : {
+
+    },
     "欢迎使用 %@" : {
       "localizations" : {
         "en-US" : {
@@ -14941,7 +15081,9 @@
         }
       }
     },
-    "永久删除这条随记？" : {},
+    "永久删除这条随记？" : {
+
+    },
     "没有匹配的帖子" : {
       "localizations" : {
         "en-US" : {
@@ -15546,7 +15688,9 @@
         }
       }
     },
-    "温度下界" : {},
+    "温度下界" : {
+
+    },
     "滑动切换" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15564,6 +15708,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The full score goal has been achieved"
+          }
+        }
+      }
+    },
+    "演示备份缺少原始记录标识或学期，已保留备份和当前数据，尚未恢复。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The demo backup is missing original record identifiers or the semester. The backup and current data have been kept; nothing has been restored."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示备份缺少原始记录标识或学期，已保留备份和当前数据，尚未恢复。"
           }
         }
       }
@@ -16473,7 +16634,9 @@
         }
       }
     },
-    "稍后" : {},
+    "稍后" : {
+
+    },
     "空教室查询来自学校教务系统，请连接校园网并保持教务登录态后再查询。" : {
       "localizations" : {
         "en-US" : {
@@ -16667,7 +16830,9 @@
         }
       }
     },
-    "第 %lld 节" : {},
+    "第 %lld 节" : {
+
+    },
     "第 %lld 节开始前" : {
       "localizations" : {
         "en-US" : {
@@ -16678,8 +16843,12 @@
         }
       }
     },
-    "第 %lld 节开始时间" : {},
-    "第 %lld 节结束时间" : {},
+    "第 %lld 节开始时间" : {
+
+    },
+    "第 %lld 节结束时间" : {
+
+    },
     "第一周的星期一" : {
       "localizations" : {
         "en-US" : {
@@ -16982,6 +17151,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Solid color"
+          }
+        }
+      }
+    },
+    "线上账户已删除，但当前身份已变化，尚未清理新身份的数据。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The online account has been deleted, but your active identity has changed. Data for the new identity has been kept."
           }
         }
       }
@@ -17635,6 +17815,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exam: %@ %@ %@ @ %@"
+          }
+        }
+      }
+    },
+    "考试保存失败：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The exam could not be saved: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "考试保存失败：%@"
           }
         }
       }
@@ -18977,7 +19174,9 @@
         }
       }
     },
-    "请选择查询条件并开始查询" : {},
+    "请选择查询条件并开始查询" : {
+
+    },
     "读取中" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -19271,6 +19470,23 @@
         }
       }
     },
+    "课表数据已清空，但部分日程通知未清理：%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timetable data has been cleared, but some event notifications could not be removed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "课表数据已清空，但部分日程通知未清理：%@"
+          }
+        }
+      }
+    },
     "课表背景" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -19336,7 +19552,9 @@
         }
       }
     },
-    "调整学年、学期和第一周的星期一" : {},
+    "调整学年、学期和第一周的星期一" : {
+
+    },
     "调节" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -19809,6 +20027,7 @@
       }
     },
     "这一周没有课程安排。" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -19943,6 +20162,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This batch of external file temporary records has expired, please reopen from WeChat or QQ."
+          }
+        }
+      }
+    },
+    "这批外部文件暂存记录已损坏，请重新导入。" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This batch of staged files is damaged. Import it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这批外部文件暂存记录已损坏，请重新导入。"
           }
         }
       }
@@ -20290,7 +20526,9 @@
         }
       }
     },
-    "选择邮箱或小红书联系" : {},
+    "选择邮箱或小红书联系" : {
+
+    },
     "选项" : {
       "localizations" : {
         "en-US" : {
@@ -20322,7 +20560,9 @@
         }
       }
     },
-    "透明度" : {},
+    "透明度" : {
+
+    },
     "逐小时降水概率表示对应时段发生降水的可能性。" : {
       "localizations" : {
         "en-US" : {
@@ -20584,7 +20824,9 @@
         }
       }
     },
-    "邮箱：%@" : {},
+    "邮箱：%@" : {
+
+    },
     "邮箱或密码不正确。如果是第一次使用，请先注册并完成邮箱验证码。" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20797,6 +21039,22 @@
         }
       }
     },
+    "重试取消" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry cancellation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试取消"
+          }
+        }
+      }
+    },
     "重试同步" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20870,7 +21128,9 @@
         }
       }
     },
-    "错误详情" : {},
+    "错误详情" : {
+
+    },
     "长图无法读取" : {
       "localizations" : {
         "en-US" : {
@@ -21399,7 +21659,9 @@
         }
       }
     },
-    "验证备份并重建" : {},
+    "验证备份并重建" : {
+
+    },
     "验证码" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -21514,167 +21776,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Default rule is still 34 times, two weeks per group, 4 times per group; generic schools can adjust according to their own physical education requirements."
-          }
-        }
-      }
-    },
-    "可在设置中主动开启 iCloud，同步支持的数据；未开启时请使用已有导出能力妥善保存重要内容。具体范围与数据说明可以在设置和帮助中心查看。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You can enable iCloud in Settings to sync supported data. When it is off, use the existing export options to keep important content safe. See Settings and Help for the supported scope and data information."
-          }
-        }
-      }
-    },
-    "当前通用入口本机课表数据已清空。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The local timetable data for this custom campus has been cleared."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前通用入口本机课表数据已清空。"
-          }
-        }
-      }
-    },
-    "日程已保存，但原记录未移除：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The event was saved, but the original record could not be removed: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日程已保存，但原记录未移除：%@"
-          }
-        }
-      }
-    },
-    "暂存文件清理失败：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Staged files could not be removed: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂存文件清理失败：%@"
-          }
-        }
-      }
-    },
-    "演示备份缺少原始记录标识或学期，已保留备份和当前数据，尚未恢复。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The demo backup is missing original record identifiers or the semester. The backup and current data have been kept; nothing has been restored."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演示备份缺少原始记录标识或学期，已保留备份和当前数据，尚未恢复。"
-          }
-        }
-      }
-    },
-    "考试保存失败：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The exam could not be saved: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "考试保存失败：%@"
-          }
-        }
-      }
-    },
-    "课表数据已清空，但部分日程通知未清理：%@" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Timetable data has been cleared, but some event notifications could not be removed: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "课表数据已清空，但部分日程通知未清理：%@"
-          }
-        }
-      }
-    },
-    "这批外部文件暂存记录已损坏，请重新导入。" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This batch of staged files is damaged. Import it again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这批外部文件暂存记录已损坏，请重新导入。"
-          }
-        }
-      }
-    },
-    "重试取消" : {
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Retry cancellation"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重试取消"
-          }
-        }
-      }
-    },
-    "线上账户已删除，但当前身份已变化，尚未清理新身份的数据。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The online account has been deleted, but your active identity has changed. Data for the new identity has been kept."
-          }
-        }
-      }
-    },
-    "本机同步数据含有重复且不一致的标识，已保留现有数据，请先检查本地记录。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en-US" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Local sync data contains duplicate identifiers with different content. Existing data has been kept. Check your local records before trying again."
           }
         }
       }
