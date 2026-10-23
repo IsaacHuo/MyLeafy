@@ -342,8 +342,15 @@ extension TimetablePersonalSyncTests {
 
 extension TimetablePersonalSyncTests {
     func testWeeklyShareHeightUsesConfiguredPeriodCount() {
-        XCTAssertEqual(WeeklyTimetableGrid.totalHeight(rowHeight: 50, headerHeight: 42, columnSpacing: 3, totalPeriods: 24), 42 + 3 + 24 * 50 + 23 * 2)
-        XCTAssertEqual(WeeklyTimetableGrid.totalHeight(rowHeight: 50, headerHeight: 42, columnSpacing: 3, totalPeriods: 1), 95)
+        let fullDayHeight = WeeklyTimetableGrid.totalHeight(
+            rowHeight: 50, headerHeight: 42, columnSpacing: 3, totalPeriods: 24
+        )
+        let expectedFullDayHeight: CGFloat = 1291
+        XCTAssertEqual(fullDayHeight, expectedFullDayHeight)
+        let singlePeriodHeight = WeeklyTimetableGrid.totalHeight(
+            rowHeight: 50, headerHeight: 42, columnSpacing: 3, totalPeriods: 1
+        )
+        XCTAssertEqual(singlePeriodHeight, CGFloat(95))
     }
 }
 
