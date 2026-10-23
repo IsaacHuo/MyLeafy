@@ -20,6 +20,8 @@ Android 使用独立候选准备与管理员验收发布流程，以及 `android
 
 Android 1.2.4 正式 APK 的 GitHub asset SHA-256 为 `332b5d80aec17d63805e09c7896ba6181b2a1b6589c1372994f837730e0205f9`；同一 Release 附构建信息与校验文件。1.2.6 私有候选 APK 的 asset SHA-256 为 `4e80c223ac7043e0b937546e6ed0b0e548ba0de2b9d3d7f78e179cee8eecaa80`。这里核对的是发行元数据，未重新下载或安装 APK。
 
+当前主线另包含 **iOS 3.2.6 / build 1 的源码准备**（App、Widget、Share Extension 一致）。尚未据此执行 Apple 正式发布或创建正式 tag；不能覆盖上表的已核实商店记录。
+
 ## 其他正式 Android 源码锚点
 
 以下来自 GitHub 正式 Release 与 tag，更新说明和产物链接直接使用 Release，不再复制长篇摘要。历史真机结果只在有原始证据时补录。

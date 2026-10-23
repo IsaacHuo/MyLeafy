@@ -6,7 +6,9 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
-- **双端代码规范与仓库协作**：SwiftFormat 0.64.1、Spotless 8.10.4 / ktlint 1.8.0 已固定，全部自有 Swift/Kotlin/Gradle 源码完成纯排版收敛，风格检查进入现有 CI result；根配置变更具有双端范围回归。iOS 17 最低目标与 Android Debug 本地构建通过，199 个 Swift 修改文件的编译器解析字符串值一致；本轮完整自动化结果以精确提交 CI 为准，不替代真机/升级验收。AGENTS / CONTRIBUTING、模板、发布索引与跨端状态分工统一；后续验收/源码追溯/日迹组件拆分分别登记在 [#36–39](https://github.com/IsaacHuo/MyLeafy/issues?q=is%3Aissue+is%3Aopen)。本轮不改变业务、数据库、版本或生产审批。
+- **当前主线全量整合（2026-10-23）**：收齐 Android 对齐分支 `07fc257`、iOS Ponytail 审计及编辑器收尾 `39de81c`、代码规范化 `6ca686c`、iOS 3.2.6 / build 1 与本地化 `4dad1d6`，以及 Room 已发行 schema 升级、后台管理员名称、用户举报处理、日程时间文案、staging 重试和公开发行路由增量。旧课表背景和学校申请修复已被当前主线覆盖，未重新引入旧版本或已删除遥测。冲突按功能增量合并，双端源码重新按同一规则排版；额外拆分了现有高度断言，避免已知 Swift 类型推断超时。按所有者最新要求，本次只做合并、格式和静态检查，不重复构建、XCTest、Android 或浏览器测试；各独立分支的历史验证不能当作最终组合的运行通过。正式分发与生产部署仍保留各自人工审批。
+
+- **双端代码规范与仓库协作**：SwiftFormat 0.64.1、Spotless 8.10.4 / ktlint 1.8.0 已固定，全部自有 Swift/Kotlin/Gradle 源码完成纯排版收敛，风格检查进入现有 CI result；根配置变更具有双端范围回归。规范化独立分支曾完成 iOS 17 最低目标与 Android Debug 本地构建，199 个 Swift 修改文件的编译器解析字符串值一致；该记录不覆盖后续业务分支合并，最终组合验证边界见上文，不替代真机/升级验收。AGENTS / CONTRIBUTING、模板、发布索引与跨端状态分工统一；后续验收/源码追溯/日迹组件拆分分别登记在 [#36–39](https://github.com/IsaacHuo/MyLeafy/issues?q=is%3Aissue+is%3Aopen)。本轮不改变业务、数据库、版本或生产审批。
 
 - **Android 与 iOS 对齐优化（2026-10-23）**：本轮只改 Android，未改任何请求范围或产品能力。账号密码链路：备份规则排除 Keystore 密文、解密失败与“无凭据”分离、凭据/登出改为持久写、改学号清空旧密码、登录成功与自动填充保存解耦、验证码在回前台/网络恢复时重试、登录表单支持 Autofill 并收敛为单卡分组。课表拉取：可信空结果不再直接覆盖已有课表、同步过程改为步骤卡（运行/完成/失败原因）、下拉刷新改为覆盖层不再顶动网格、首次同步复用步骤模型、课前提醒排期移出主线程并只取消过期闹钟、教务请求可取消。视觉：统一 24dp 卡片 + 1px 描边 + 浅色投影、页面主题渐变、课程块 12dp + 今日描边、课表色改为同基色明度阶梯、中性色统一为绿灰族、alpha 语义 token 化、暗色 card/modal 层级分离。其他：评论 cursor 分页与作者昵称、Feed 进程内缓存与刷新深度、通知 work 先入队后清理、日迹读取失败保留上次数据、正文 `#标签` 生效、图片继续缩尺寸、点赞/收藏改用最新状态、删除日程级联提醒、CI 增加 instrumented job 与 release 编译/lint、release 开启 R8/shrinkResources。验证：JVM 186 项（179 通过、7 外部探测跳过）、lint 0 error、73 张 Roborazzi 基线重录并 verify 通过、R8 release 打包（临时测试签名）通过、isolated API 36 模拟器 instrumented 47 项全部通过；新增 CI instrumented job 待远端首次执行。真机、Release 帧时与基线 profile 未做。
 

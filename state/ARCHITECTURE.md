@@ -413,7 +413,7 @@ Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测
 | 旧 Edge Functions | Deno typecheck / 单元 / 契约测试 |
 | Web | `site/`（TypeScript typecheck、Vitest、Playwright） |
 
-统一入口为 `.github/workflows/ci.yml`，对 main、codex 分支、PR 和手动运行生成 `CI result`。范围由 `scripts/ci-changes.py` 按跨目录依赖选择，平台检查为 reusable workflows。任务分支检查相对 main 的累计变化；main 检查本次变化；手动检查全部。根 `.editorconfig` 选择双端，`.swiftformat` 和 Swift 格式脚本选择 iOS，Android 根工程统一配置 Spotless 8.10.4 / ktlint 1.8.0；所有格式检查只读，不在构建阶段改写源码。选中的检查失败或取消，汇总不能通过。main 已启用必需 CI result（限定 GitHub Actions），不强制 PR 或第二人审批。
+统一入口为 `.github/workflows/ci.yml`，对 main、codex 分支、PR 和手动运行生成 `CI result`。范围由 `scripts/ci-changes.py` 按跨目录依赖选择，平台检查为 reusable workflows。任务分支检查相对 main 的累计变化；main 检查本次变化；手动检查全部。根 `.editorconfig` 选择双端，`.swiftformat` 和 Swift 格式脚本选择 iOS，Android 根工程统一配置 Spotless 8.10.4 / ktlint 1.8.0；所有格式检查只读，不在构建阶段改写源码。Android 现有流程另含 release Kotlin / lint 与 API 36 Room、导航设备检查；2026-10-23 全量整合按所有者明确边界不重复执行，不能将流程定义当成执行证据。选中的检查失败或取消，汇总不能通过。main 已启用必需 CI result（限定 GitHub Actions），不强制 PR 或第二人审批。
 
 iOS CI 固定 macOS 26 / Xcode 26.6，构建前通过 `scripts/format-swift.sh --check` 使用校验过的 SwiftFormat 0.64.1；保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
 
