@@ -137,9 +137,12 @@ class RootNavigationSmokeTest {
         val pixels = composeRule.onRoot().captureToImage().toPixelMap()
         val page = pixels[pixels.width - 1, pixels.height / 2]
         val bottomMargin = pixels[pixels.width - 1, pixels.height - 1]
-        assertEquals(page.red, bottomMargin.red, 0.01f)
-        assertEquals(page.green, bottomMargin.green, 0.01f)
-        assertEquals(page.blue, bottomMargin.blue, 0.01f)
+        // 根页面现在有一层很淡的主题渐变，纵向两端允许极小亮度差；
+        // 真正要守住的是“系统栏留白不是黑窗”，而不是逐通道完全相等。
+        fun luminance(color: androidx.compose.ui.graphics.Color) =
+            color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f
+        assertEquals(luminance(page), luminance(bottomMargin), 0.06f)
+        org.junit.Assert.assertTrue(luminance(bottomMargin) > 0.5f)
     }
 
     @Test

@@ -32,7 +32,12 @@ class KeystoreSchoolLoginCredentialStore(
                 return null
             }
         }
-        val value = SchoolCredentialCodec.decode(raw)?.takeIf { it.campusId == campusId && it.portal == portal } ?: return null
+        val value = SchoolCredentialCodec.decode(raw)?.takeIf { it.campusId == campusId && it.portal == portal }
+        if (value == null) {
+            Log.e(TAG, "Dropping malformed school credential for $campusId/$portal")
+            runCatching { secureStorage.remove(key) }
+            return null
+        }
         if (!raw.startsWith("{")) secureStorage.save(key, SchoolCredentialCodec.encode(value))
         return value
     }

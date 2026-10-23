@@ -8,6 +8,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -52,8 +54,12 @@ class TimetableBackdropTest {
         try {
             compose.setContent {
                 MyLeafyTheme {
-                    Box {
-                        TimetableNavigationScaffold(background, tab, { tab = it }, Modifier.width(width), root) { Text("内容") }
+                    // 1dp=1px 让 840.dp 的宽屏断言不依赖测试设备像素密度；
+                    // 真实设备上 840.dp 会先被屏幕宽度夹住，无法验证 Rail。
+                    CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
+                        Box {
+                            TimetableNavigationScaffold(background, tab, { tab = it }, Modifier.width(width), root) { Text("内容") }
+                        }
                     }
                 }
             }
@@ -72,7 +78,8 @@ class TimetableBackdropTest {
             compose.onNodeWithTag("root-tab-timetable").assertDoesNotExist()
             compose.runOnIdle { root = true; width = 840.dp }
             compose.onNodeWithTag("root-tab-timetable").assertIsSelected()
-            org.junit.Assert.assertTrue(compose.onNodeWithTag("timetable-photo").fetchSemanticsNode().boundsInRoot.width > phoneWidth * 2)
+            val wideWidth = compose.onNodeWithTag("timetable-photo").fetchSemanticsNode().boundsInRoot.width
+            org.junit.Assert.assertTrue(wideWidth > phoneWidth * 2)
             assertEquals(original, photoColor())
             compose.runOnIdle { background = background.copy(photoPath = second.absolutePath) }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("timetable-photo").fetchSemanticsNodes().size == 1 && photoColor() == Color.Magenta }

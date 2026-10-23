@@ -100,6 +100,7 @@ class CommunityViewModel(
             lastLoadedAt = cached.savedAt
         }
         refreshIfStale()
+        refreshUnreadCount()
     }
 
     fun selectLatest(category: String?) {

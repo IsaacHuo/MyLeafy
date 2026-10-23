@@ -51,5 +51,5 @@
 - lint：0 error（Debug）。
 - Roborazzi：73 张基线重录并 verify 通过；已人工查看登录浅/深、200% 字体、课表浅/深、社区、我的、校园等代表图。
 - `assembleDebug`、`assembleDebugAndroidTest`、`compileReleaseKotlin`、R8 `assembleRelease`（临时测试签名）通过。
-- 未运行真实模拟器/真机的 instrumented 测试；新增 CI job 尚未在远端执行。
-- 未做 baseline profile、Release 真机帧时或与 iOS 同期性能对照；这些仍需独立设备与测量，不能由本轮构建结果推导。
+- isolated API 36 模拟器 instrumented 47 项全部通过（两次导航基线断言已改为不依赖设备像素密度与渐变逐通道相等）。CI instrumented job 尚未在远端首次执行。
+- 未做真机 instrumented、Release 帧时、baseline profile 或与 iOS 同期性能对照；这些仍需独立设备与测量，不能由本轮构建结果推导。
