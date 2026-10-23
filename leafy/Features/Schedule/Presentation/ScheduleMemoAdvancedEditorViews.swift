@@ -453,7 +453,6 @@ struct ScheduleMemoAdvancedEditorView: View {
             }
         }
         .task(id: imageRequest) { await imageLoader.load(imageRequest) }
-        .onDisappear { imageLoader.reset() }
         .interactiveDismissDisabled(hasChanges)
         .photosPicker(
             isPresented: $showsPhotoPicker,
