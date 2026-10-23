@@ -297,9 +297,11 @@ private struct SchoolReauthenticationSheet: View {
     @State private var isLoggingIn = false
     @State private var errorMessage: String?
     @State private var prefilledAccount: String?
+    @State private var captchaTask: Task<Void, Never>?
+    @State private var loginTask: Task<Void, Never>?
 
     private var canSubmit: Bool {
-        !isLoggingIn &&
+        !isLoggingIn && !isCaptchaLoading &&
         challenge != nil &&
         !account.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !password.isEmpty &&
@@ -371,6 +373,11 @@ private struct SchoolReauthenticationSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .onDisappear {
+                captchaTask?.cancel()
+                loginTask?.cancel()
+                clearSensitiveFields()
             }
             .onChange(of: account) { _, newValue in
                 handleAccountChange(newValue)
@@ -444,7 +451,8 @@ private struct SchoolReauthenticationSheet: View {
                 .leafyOneTimeCodeContentType()
 
             Button {
-                Task { await fetchCaptcha(resetError: true) }
+                captchaTask?.cancel()
+                captchaTask = Task { await fetchCaptcha(resetError: true) }
             } label: {
                 ZStack {
                     if let image = challenge?.image {
@@ -464,7 +472,7 @@ private struct SchoolReauthenticationSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(isCaptchaLoading)
+            .disabled(isCaptchaLoading || isLoggingIn)
             .leafyGlassSurface(
                 in: RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous),
                 isInteractive: true
@@ -479,7 +487,8 @@ private struct SchoolReauthenticationSheet: View {
 
     private var submitButton: some View {
         Button {
-            Task { await submitLogin() }
+            loginTask?.cancel()
+            loginTask = Task { await submitLogin() }
         } label: {
             HStack(spacing: 8) {
                 if isLoggingIn {
@@ -514,13 +523,16 @@ private struct SchoolReauthenticationSheet: View {
         defer { isCaptchaLoading = false }
 
         do {
-            challenge = try await SchoolAuthenticationService(client: networkManager)
+            let loaded = try await SchoolAuthenticationService(client: networkManager)
                 .fetchManualChallenge(portal: presentation.context.portal)
+            try Task.checkCancellation()
+            challenge = loaded
             captchaCode = ""
             if resetError {
                 errorMessage = nil
             }
         } catch {
+            guard !Task.isCancelled else { return }
             challenge = nil
             if case SchoolNetworkError.campusNetworkRequired = error {
                 errorMessage = L10n.text(
@@ -547,6 +559,7 @@ private struct SchoolReauthenticationSheet: View {
                 captcha: captchaCode
             )
 
+            try Task.checkCancellation()
             guard didLogin else {
                 showsCredentialFields = true
                 errorMessage = L10n.text("登录请求已发送，但未能确认登录成功。请重试。", language: leafyLanguage)
@@ -560,6 +573,7 @@ private struct SchoolReauthenticationSheet: View {
             dismiss()
             onAuthenticated()
         } catch {
+            guard !Task.isCancelled else { return }
             showsCredentialFields = true
             errorMessage = error.localizedDescription
             captchaCode = ""

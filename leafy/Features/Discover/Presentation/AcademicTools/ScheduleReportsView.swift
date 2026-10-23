@@ -27,11 +27,14 @@ struct ScheduleReportsView: View {
     var body: some View {
         configuredReports
         .onAppear {
-            let loaded = ScheduleReportSettingsStore.load()
-            settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: input)
-            settings.deriveEnabledState()
-            lastAppliedSettings = settings
-            ScheduleReportSettingsStore.save(settings)
+            do {
+                let loaded = try ScheduleReportSettingsStore.loadForEditing()
+                let checkedInput = try ScheduleReportDataSource.inputForScheduling(modelContext: modelContext)
+                settings = ScheduleReportPlanner.resolvingReminderSources(in: loaded, input: checkedInput)
+                settings.deriveEnabledState()
+                lastAppliedSettings = settings
+                try ScheduleReportSettingsStore.save(settings)
+            } catch { operationAlert = .failure(error.localizedDescription) }
         }
         .onDisappear { applyTask?.cancel() }
         .leafySheet(isPresented: $isEditorPresented) {
@@ -207,6 +210,7 @@ struct ScheduleReportsView: View {
         settings = updatedSettings
         applyTask?.cancel()
         applyTask = Task { @MainActor in
+            let scope = CampusOperationScope()
             if debounce {
                 do {
                     try await Task.sleep(for: .milliseconds(250))
@@ -217,21 +221,23 @@ struct ScheduleReportsView: View {
             guard !Task.isCancelled else { return }
             do {
                 let weather = await availableWeather()
+                try scope.check()
+                let checkedInput = try ScheduleReportDataSource.inputForScheduling(modelContext: modelContext)
                 let applied = try await ScheduleReportNotificationManager.updateNotifications(
                     settings: updatedSettings,
-                    input: input,
+                    input: checkedInput,
                     weather: weather
                 )
-                guard !Task.isCancelled else { return }
+                try scope.check()
                 settings = applied
                 lastAppliedSettings = applied
-                ScheduleReportSettingsStore.save(applied)
+                try ScheduleReportSettingsStore.save(applied)
                 ScheduleReportBackgroundRefreshCoordinator.shared.schedule()
             } catch is CancellationError {
                 return
             } catch {
+                if scope.wasCancelled(error) { return }
                 settings = lastAppliedSettings
-                ScheduleReportSettingsStore.save(lastAppliedSettings)
                 operationAlert = .failure(error.localizedDescription)
             }
         }

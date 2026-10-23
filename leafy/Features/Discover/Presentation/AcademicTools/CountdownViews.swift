@@ -240,10 +240,10 @@ struct CustomScheduleListView: View {
     private func delete(_ item: CustomScheduleListItem) {
         switch item {
         case .timetable(let reminder):
-            TimetableNotificationManager.cancelReminder(for: reminder)
-            modelContext.delete(reminder)
+            let notificationSnapshot = SyncedTimetableCellReminder(reminder).make()
             do {
-                try modelContext.save()
+                try LocalModelSave.delete(reminder, in: modelContext)
+                TimetableNotificationManager.cancelReminder(for: notificationSnapshot)
                 LeafyWidgetSnapshotBuilder.publish(
                     from: modelContext,
                     isAuthenticated: ActiveCampusContext.networkManager.hasCachedIdentity || ReviewDemoMode.isEnabled
@@ -253,12 +253,14 @@ struct CustomScheduleListView: View {
                 operationAlert = .failure(error.localizedDescription)
             }
         case .importantDate(let event, _):
-            var events = CustomScheduleStore.load()
-            events.removeAll { $0.id == event.id }
-            TimetableNotificationManager.cancelReminder(for: event)
-            CustomScheduleStore.save(events)
-            importantDateEvents = events
-            operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
+            do {
+                var events = try CustomScheduleStore.loadForSync()
+                events.removeAll { $0.id == event.id }
+                try CustomScheduleStore.save(events)
+                TimetableNotificationManager.cancelReminder(for: event)
+                importantDateEvents = events
+                operationAlert = .success(L10n.text("日程已删除。", language: leafyLanguage))
+            } catch { operationAlert = .failure(error.localizedDescription) }
         }
     }
 

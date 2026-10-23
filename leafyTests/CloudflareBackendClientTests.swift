@@ -89,6 +89,24 @@ final class CloudflareBackendClientTests: XCTestCase {
         catch let error as MyLeafyBackendError { XCTAssertEqual(error.status, 401) }
     }
 
+    func testSuccessfulResponseFromLoggedOutSessionIsDiscarded() async throws {
+        let started = expectation(description: "Authenticated request started")
+        let responseGate = DispatchSemaphore(value: 0)
+        let store = BackendMemorySessions(session: .init(token: "old", userID: UUID(), isAnonymous: false))
+        let client = try MyLeafyBackendClient(baseURL: URL(string: "https://api.example.com")!, network: backendNetwork { _ in
+            started.fulfill()
+            guard responseGate.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return (200, [:], Data("{\"ok\":true}".utf8))
+        }, storage: store)
+        let request = Task { () throws -> BackendReply in try await client.get("/v1/profile") }
+        await fulfillment(of: [started], timeout: 3)
+        try await client.signOut(localOnly: true)
+        responseGate.signal()
+        do { _ = try await request.value; XCTFail("Old response reached caller") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertNil(try store.load())
+    }
+
     func testUploadRequestUsesServerContractWithoutLegacyStoragePath() async throws {
         let store = BackendMemorySessions(session: MyLeafyBackendSession(token: "signed", userID: UUID(), isAnonymous: true))
         let client = try MyLeafyBackendClient(baseURL: URL(string: "https://api.example.com")!, storage: store)

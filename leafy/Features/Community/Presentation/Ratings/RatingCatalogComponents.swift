@@ -580,7 +580,7 @@ struct CatalogSuggestionSheet: View {
     private var canSubmit: Bool {
         !trimmedName.isEmpty &&
         !trimmedUnit.isEmpty &&
-        (context.type == .teacher || !trimmedTeacherName.isEmpty) &&
+        (context.type != .course || !trimmedTeacherName.isEmpty) &&
         isCreditValid &&
         !isSubmitting
     }
@@ -1077,95 +1077,6 @@ struct RatingLoadMoreButton: View {
     }
 }
 
-struct CommunityPostCard: View {
-    let post: CommunityMockPost
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(post.avatarColor.opacity(0.18))
-                    .frame(width: 42, height: 42)
-                    .overlay(
-                        Text(String(post.author.prefix(1)))
-                            .font(.headline)
-                            .foregroundStyle(post.avatarColor)
-                    )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(post.author)
-                        .leafyHeadline()
-                        .foregroundStyle(AppTheme.primaryText)
-                    Text(post.timestamp)
-                        .microCaption()
-                        .foregroundStyle(AppTheme.secondaryText)
-                }
-
-                Spacer()
-            }
-
-            Text(post.title)
-                .leafyHeadline()
-                .foregroundStyle(AppTheme.primaryText)
-
-            Text(post.body)
-                .leafyBody()
-                .foregroundStyle(AppTheme.secondaryText)
-
-            if !post.photoLabels.isEmpty {
-                CommunityPhotoGrid(labels: post.photoLabels)
-            }
-
-            HStack(spacing: 16) {
-                CommunityStat(icon: "heart", value: "\(post.likes)")
-                CommunityStat(icon: "message", value: "\(post.comments)")
-                CommunityStat(icon: "bookmark", value: post.tag)
-            }
-        }
-        .padding(18)
-        .leafyCardStyle()
-    }
-}
-
-struct CommunityPhotoGrid: View {
-    let labels: [String]
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6)
-    ]
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
-            ForEach(labels, id: \.self) { label in
-                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                    .fill(AppTheme.subtleGreenGradient)
-                    .frame(height: 88)
-                    .overlay(
-                        Text(label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppTheme.accentEmphasis)
-                    )
-            }
-        }
-    }
-}
-
-struct CommunityStat: View {
-    let icon: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-            Text(value)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(AppTheme.secondaryText)
-    }
-}
-
 extension TeacherProfile {
     var ratingStarBucket: Int? {
         guard ratingCount > 0 else { return nil }
@@ -1352,68 +1263,5 @@ struct DishCard: View {
         }
         .padding(18)
         .leafyCardStyle()
-    }
-}
-
-struct ComposerPlaceholderSheet: View {
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: AppSpacing.section) {
-                LeafySectionTitle("发布帖子", subtitle: "当前阶段先验证半屏模态和表单结构，发布行为继续使用 Mock。")
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("标题")
-                        .font(.headline)
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                        .fill(AppTheme.fill)
-                        .frame(height: 52)
-
-                    Text("正文")
-                        .font(.headline)
-                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
-                        .fill(AppTheme.fill)
-                        .frame(height: 160)
-                }
-                .padding(18)
-                .leafyCardStyle()
-
-                Spacer()
-            }
-            .padding(AppSpacing.page)
-            .background(LeafyPageBackground())
-            .navigationTitle("发布")
-            .leafyInlineNavigationTitle()
-        }
-    }
-}
-
-struct CommunityPostDetailSheet: View {
-    let post: CommunityMockPost
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.card) {
-                    CommunityPostCard(post: post)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("评论区")
-                            .font(.headline)
-                        ForEach(post.mockComments, id: \.self) { comment in
-                            Text(comment)
-                                .leafyBody()
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .leafyCardStyle()
-                        }
-                    }
-                }
-                .padding(AppSpacing.page)
-            }
-            .background(LeafyPageBackground())
-            .navigationTitle("帖子详情")
-            .leafyInlineNavigationTitle()
-        }
     }
 }

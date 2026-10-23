@@ -6,6 +6,7 @@ extension SchoolNetworkManager {
 
 
     func fetchExamSchedule() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地考试安排样例，不连接学校教务系统。")
         }
@@ -14,6 +15,7 @@ extension SchoolNetworkManager {
 
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
         let semesterConfig = await SemesterConfig.refreshRemoteIfAvailable()
+        try scope.check()
         guard let url = URL(string: "\(baseURL)/jsxsd/xsks/xsksap_list") else {
             throw URLError(.badURL)
         }
@@ -40,6 +42,7 @@ extension SchoolNetworkManager {
 
         for candidate in requests {
             let (html, response) = try await html(for: candidate)
+            try scope.check()
             lastHTML = html
             lastResponse = response
 
@@ -70,6 +73,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchTeachingPlan() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地教学计划样例，不连接学校教务系统。")
         }
@@ -83,6 +87,7 @@ extension SchoolNetworkManager {
 
         let request = makeRequest(url: url, referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
         let (html, response) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
                 throw SchoolNetworkError.sessionExpired
@@ -96,6 +101,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchGraduationRequirements() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地培养方案样例，不连接学校教务系统。")
         }
@@ -109,6 +115,7 @@ extension SchoolNetworkManager {
 
         let request = makeRequest(url: url, referer: URL(string: "\(baseURL)/jsxsd/framework/xsMain.jsp"))
         let (html, response) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
                 throw SchoolNetworkError.sessionExpired
@@ -122,6 +129,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchGradeRankings() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地排名样例，不连接学校教务系统。")
         }
@@ -135,6 +143,7 @@ extension SchoolNetworkManager {
         }
 
         let gradesHTML = try await fetchGrades()
+        try scope.check()
         if (try? HTMLParser.parseGradeRankings(html: gradesHTML)) != nil {
             return gradesHTML
         }
@@ -154,6 +163,7 @@ extension SchoolNetworkManager {
         for request in requests {
             do {
                 let (html, response) = try await html(for: request)
+                try scope.check()
                 lastHTML = html
                 lastResponse = response
 
@@ -165,6 +175,7 @@ extension SchoolNetworkManager {
                     return html
                 }
             } catch {
+                try scope.check()
                 lastTransportError = error
             }
         }
@@ -321,6 +332,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchEmptyClassrooms(date: Date, start: Int, end: Int) async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地空教室样例，不连接学校教务系统。")
         }
@@ -329,6 +341,7 @@ extension SchoolNetworkManager {
 
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
         let activeConfig = await SemesterConfig.refreshRemoteIfAvailable()
+        try scope.check()
         var schoolCalendar = Calendar(identifier: .gregorian)
         schoolCalendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         let selectedDay = schoolCalendar.startOfDay(for: date)
@@ -373,6 +386,7 @@ extension SchoolNetworkManager {
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = components.percentEncodedQuery?.data(using: .utf8)
         let (html, response) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html) {
             if await invalidateSessionIfNeeded() {
                 throw SchoolNetworkError.sessionExpired

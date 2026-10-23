@@ -201,13 +201,16 @@ extension SchoolNetworkManager {
     }
 
     func fetchTimetableHTML(using request: URLRequest, preferredSemesterID: String? = nil) async throws -> (String, HTTPURLResponse) {
+        let scope = CampusOperationScope()
         let (pageHTML, response) = try await html(for: request)
+        try scope.check()
         if isTimetablePage(pageHTML) {
             return (pageHTML, response)
         }
 
         if let followUpRequest = try resolveTimetableRequest(from: pageHTML, preferredSemesterID: preferredSemesterID) {
             let (resolvedHTML, resolvedResponse) = try await html(for: followUpRequest)
+            try scope.check()
             if isTimetablePage(resolvedHTML) {
                 return (resolvedHTML, resolvedResponse)
             }
@@ -218,12 +221,14 @@ extension SchoolNetworkManager {
            let responseURL = response.url {
             for candidate in try extractTimetableCandidateRequests(from: pageHTML, baseURL: responseURL) {
                 let (candidateHTML, candidateResponse) = try await html(for: candidate)
+                try scope.check()
                 if isTimetablePage(candidateHTML) {
                     return (candidateHTML, candidateResponse)
                 }
 
                 if let followUpRequest = try resolveTimetableRequest(from: candidateHTML, preferredSemesterID: preferredSemesterID) {
                     let (resolvedHTML, resolvedResponse) = try await html(for: followUpRequest)
+                    try scope.check()
                     if isTimetablePage(resolvedHTML) {
                         return (resolvedHTML, resolvedResponse)
                     }
@@ -326,19 +331,24 @@ extension SchoolNetworkManager {
     }
 
     func fetchTimetable() async throws -> FetchedTimetableDocument {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled { throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。") }
         if currentPortal == .graduate { return try await fetchGraduateTimetable() }
         let initial = try await fetchDefaultTimetable()
+        try scope.check()
         let options = try timetableTermOptions(in: initial.html, selector: "select[name=xnxq01id] option")
         for term in options {
             let document: FetchedTimetableDocument
             if term == resolvedTimetableSemesterID(from: initial.html) { document = initial }
             else { document = try await fetchDefaultTimetable(preferredSemesterID: term) }
-            let parsed = try HTMLParser.parseTimetableResult(html: document.html)
-            if !parsed.records.isEmpty { return document }
+            try scope.check()
+            let records = try await TimetableRefreshUseCase.parseRecords(html: document.html)
+            try scope.check()
+            if !records.isEmpty { return document }
         }
         // Some valid school responses omit term controls entirely.
-        _ = try HTMLParser.parseTimetableResult(html: initial.html)
+        _ = try await TimetableRefreshUseCase.parseRecords(html: initial.html)
+        try scope.check()
         return initial
     }
 
@@ -352,6 +362,7 @@ extension SchoolNetworkManager {
     }
 
     private func fetchDefaultTimetable(preferredSemesterID requestedTerm: String? = nil) async throws -> FetchedTimetableDocument {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地课表样例，不连接学校教务系统。")
         }
@@ -396,6 +407,7 @@ extension SchoolNetworkManager {
 
         for request in candidateRequests {
             let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(using: request, preferredSemesterID: preferredSemesterID)
+            try scope.check()
             lastHTML = candidateHTML
             lastResponse = candidateResponse
             persistLandingURL(candidateResponse.url)
@@ -414,6 +426,7 @@ extension SchoolNetworkManager {
 
         for mainCandidateURL in [mainURL, upperMainURL] {
             let (mainHTML, mainResponse) = try await html(from: mainCandidateURL)
+            try scope.check()
             lastHTML = mainHTML
             lastResponse = mainResponse
 
@@ -438,6 +451,7 @@ extension SchoolNetworkManager {
 
             for request in try extractTimetableCandidateRequests(from: mainHTML, baseURL: mainCandidateURL) {
                 let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(using: request, preferredSemesterID: preferredSemesterID)
+                try scope.check()
                 lastHTML = candidateHTML
                 lastResponse = candidateResponse
                 persistLandingURL(candidateResponse.url)
@@ -459,10 +473,12 @@ extension SchoolNetworkManager {
             let renderedBootstrap: RenderedTimetableBootstrap?
             do {
                 let bootstrapper = await MainActor.run { TimetableWebViewBootstrapper(manager: self) }
+                try scope.check()
                 renderedBootstrap = try await bootstrapper.bootstrap()
             } catch {
                 renderedBootstrap = nil
             }
+            try scope.check()
 
             if let renderedBootstrap {
                 lastHTML = renderedBootstrap.html
@@ -483,6 +499,7 @@ extension SchoolNetworkManager {
                     renderedSeen.insert(key)
 
                     let (candidateHTML, candidateResponse) = try await fetchTimetableHTML(using: request, preferredSemesterID: preferredSemesterID)
+                    try scope.check()
                     lastHTML = candidateHTML
                     lastResponse = candidateResponse
                     persistLandingURL(candidateResponse.url)
@@ -542,6 +559,7 @@ extension SchoolNetworkManager {
     }
 
     func fetchGrades() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式使用本地成绩样例，不连接学校教务系统。")
         }
@@ -556,6 +574,7 @@ extension SchoolNetworkManager {
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = "kksj=&kcxz=&kcmc=&xsfs=all".data(using: .utf8)
         let (html, _) = try await html(for: request)
+        try scope.check()
         if isLoginPage(html), await invalidateSessionIfNeeded() {
             throw SchoolNetworkError.sessionExpired
         }
@@ -563,6 +582,7 @@ extension SchoolNetworkManager {
     }
 
     private func fetchGraduateTimetable() async throws -> FetchedTimetableDocument {
+        let scope = CampusOperationScope()
         guard isLoggedIn else { throw URLError(.userAuthenticationRequired) }
         guard let url = URL(string: "\(graduateBaseURL)/student/pygl/py_kbcx_ew") else { throw URLError(.badURL) }
         func fetch(_ term: String?) async throws -> String {
@@ -571,6 +591,7 @@ extension SchoolNetworkManager {
             if let term { components.queryItems?.append(URLQueryItem(name: "termcode", value: term)) }
             let request = makeRequest(url: components.url!, referer: URL(string: "\(graduateBaseURL)/home/stulogin"))
             let (data, response) = try await self.data(for: preparedRequest(from: request))
+            try scope.check()
             if let response = response as? HTTPURLResponse { updatePersistedCookies(from: response, requestURL: request.url) }
             let raw = String(data: data, encoding: .utf8) ?? ""
             if raw.contains("stulogin") || isLoginPage(raw) {
@@ -583,14 +604,19 @@ extension SchoolNetworkManager {
             return decrypted
         }
         let initial = try await fetch(nil)
+        try scope.check()
         let options = try timetableTermOptions(in: initial, selector: "select[name=termcode] option, select[id=termcode] option")
         for term in options {
             let html = try await fetch(term)
-            if !(try HTMLParser.parseTimetableResult(html: html)).records.isEmpty {
+            try scope.check()
+            let records = try await TimetableRefreshUseCase.parseRecords(html: html)
+            try scope.check()
+            if !records.isEmpty {
                 return FetchedTimetableDocument(html: html, sourceSemesterID: term)
             }
         }
-        _ = try HTMLParser.parseTimetableResult(html: initial)
+        _ = try await TimetableRefreshUseCase.parseRecords(html: initial)
+        try scope.check()
         return FetchedTimetableDocument(html: initial, sourceSemesterID: "school-current")
     }
 }

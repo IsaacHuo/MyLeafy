@@ -59,6 +59,20 @@ final class FitnessTestShareTests: XCTestCase {
         XCTAssertTrue(snapshot.groups.isEmpty)
     }
 
+    func testFormatterRejectsNonFiniteAndOverflowValuesWithoutTrapping() {
+        for value in [Double.nan, .infinity, -.infinity, 1e300] {
+            for unit in [FitnessTestUnit.count, .milliliter, .minuteSecond, .centimeter] {
+                XCTAssertEqual(FitnessTestRecordFormatter.valueText(value: value, unit: unit), "--")
+            }
+        }
+    }
+
+    func testMinuteFormatterKeepsRoundingAndMinuteBoundary() {
+        XCTAssertEqual(FitnessTestRecordFormatter.minuteSecondText(seconds: 59.49), "0分59秒")
+        XCTAssertEqual(FitnessTestRecordFormatter.minuteSecondText(seconds: 59.5), "1分0秒")
+        XCTAssertEqual(FitnessTestRecordFormatter.minuteSecondText(seconds: -1), "0分0秒")
+    }
+
     private func record(
         id: UUID,
         item: FitnessTestItem,

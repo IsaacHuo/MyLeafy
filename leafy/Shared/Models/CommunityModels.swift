@@ -1202,10 +1202,16 @@ nonisolated struct CommunityCommentPage: Hashable, Sendable {
     let nextCursor: CommunityCommentCursor?
 }
 
-nonisolated struct CommunityCommentLikeState: Hashable, Sendable {
+nonisolated struct CommunityCommentLikeState: Codable, Hashable, Sendable {
     let commentID: UUID
     let likeCount: Int
     let viewerHasLiked: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case commentID = "comment_id"
+        case likeCount = "like_count"
+        case viewerHasLiked = "viewer_has_liked"
+    }
 }
 
 nonisolated struct CommunityNotification: Codable, Identifiable, Hashable, Sendable {

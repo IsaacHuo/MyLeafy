@@ -1802,3 +1802,31 @@ extension TimetableTableParserTests {
         }
     }
 }
+
+extension PerformanceRefactorTests {
+    @MainActor
+    func testSharedGradeFixturePreservesCourseCategoryHeaderSynonym() throws {
+        let grades = try HTMLParser.parseGrades(html: jwxtFixture("grades_with_rows.html"))
+        XCTAssertEqual(grades.count, 2)
+        let structures = try XCTUnwrap(grades.first { $0.courseCode == "DS-001" })
+        XCTAssertEqual(structures.type, "必修 · 专业核心")
+        XCTAssertEqual(structures.courseCategory, "专业核心")
+        let mathematics = try XCTUnwrap(grades.first { $0.courseCode == "MATH-001" })
+        XCTAssertEqual(mathematics.type, "必修 · 公共基础")
+        XCTAssertEqual(mathematics.courseCategory, "公共基础")
+    }
+
+    func testSharedClassroomFixturesUseCurrentMatrixTrustBoundary() throws {
+        let matrix = try HTMLParser.parseClassroomAvailability(html: jwxtFixture("empty_classrooms.html"))
+        XCTAssertEqual(Set(matrix.periods), Set(1...12))
+        XCTAssertEqual(try matrix.availableRooms().map { $0.building + ":" + $0.room },
+            ["学研A座:0304", "学研B座:0405", "二教:608"])
+        XCTAssertTrue(try HTMLParser.parseEmptyClassrooms(html: jwxtFixture("empty_classrooms_no_available.html")).isEmpty)
+        XCTAssertTrue(try HTMLParser.parseEmptyClassrooms(html: jwxtFixture("empty_classrooms_empty_table.html")).isEmpty)
+        XCTAssertThrowsError(try HTMLParser.parseEmptyClassrooms(html: jwxtFixture("empty_classrooms_malformed_rows.html"))) { error in
+            guard case HTMLParserError.tableRowsUnparseable("教室占用行") = error else {
+                return XCTFail("Unexpected shared matrix error: \(error)")
+            }
+        }
+    }
+}

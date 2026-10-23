@@ -45,8 +45,8 @@ actor CommunityImageProcessor: CommunityImageProcessing {
             data: encoded.data,
             mimeType: "image/jpeg",
             fileExtension: "jpg",
-            width: thumbnail.width,
-            height: thumbnail.height
+            width: encoded.width,
+            height: encoded.height
         )
         return CommunityImageProcessingResult(upload: upload, previewData: encoded.data)
     }
@@ -72,11 +72,11 @@ actor CommunityImageProcessor: CommunityImageProcessing {
     nonisolated private static func encodeJPEG(
         image: CGImage,
         maxBytes: Int
-    ) throws -> (data: Data, quality: CGFloat) {
+    ) throws -> (data: Data, width: Int, height: Int) {
         let qualities: [CGFloat] = [0.82, 0.76, 0.68, 0.60, 0.52, 0.44, 0.36]
         var candidateImage = image
         var smallestData: Data?
-        var smallestQuality = qualities.last ?? 0.36
+        var smallestSize = (width: image.width, height: image.height)
         var currentMaxDimension = CGFloat(max(image.width, image.height))
 
         for _ in 0..<4 {
@@ -87,11 +87,11 @@ actor CommunityImageProcessor: CommunityImageProcessing {
 
                 if smallestData == nil || data.count < (smallestData?.count ?? Int.max) {
                     smallestData = data
-                    smallestQuality = quality
+                    smallestSize = (candidateImage.width, candidateImage.height)
                 }
 
                 if data.count <= maxBytes {
-                    return (data, quality)
+                    return (data, candidateImage.width, candidateImage.height)
                 }
             }
 
@@ -105,7 +105,7 @@ actor CommunityImageProcessor: CommunityImageProcessing {
         guard let smallestData else {
             throw CommunityImageProcessingError.invalidImage
         }
-        return (smallestData, smallestQuality)
+        return (smallestData, smallestSize.width, smallestSize.height)
     }
 
     nonisolated private static func jpegData(from image: CGImage, quality: CGFloat) -> Data? {

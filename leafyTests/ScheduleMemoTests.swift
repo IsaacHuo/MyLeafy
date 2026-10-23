@@ -1,4 +1,5 @@
 import Foundation
+import Speech
 import SwiftData
 import XCTest
 @testable import Leafy
@@ -348,6 +349,50 @@ final class ScheduleMemoTests: XCTestCase {
         XCTAssertEqual(transaction.cancel(), [1, 2, 4])
     }
 
+    func testStoppingSpeechWhilePermissionIsPendingCannotRestartMicrophone() async {
+        let requested = expectation(description: "Speech permission pending")
+        var permission: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>?
+        var microphoneRequests = 0
+        let recognizer = ScheduleMemoSpeechRecognizer(
+            speechAuthorization: {
+                await withCheckedContinuation {
+                    permission = $0
+                    requested.fulfill()
+                }
+            },
+            microphonePermission: { microphoneRequests += 1; return false },
+            recognitionAvailable: { true }
+        )
+        let starting = Task { await recognizer.start() }
+        await fulfillment(of: [requested], timeout: 3)
+        await recognizer.stop()
+        permission?.resume(returning: .authorized)
+        await starting.value
+        XCTAssertEqual(recognizer.state, .idle)
+        XCTAssertEqual(microphoneRequests, 0)
+    }
+
+    func testStoppingSpeechDuringMicrophonePermissionIgnoresLateDenial() async {
+        let requested = expectation(description: "Microphone permission pending")
+        var permission: CheckedContinuation<Bool, Never>?
+        let recognizer = ScheduleMemoSpeechRecognizer(
+            speechAuthorization: { .authorized },
+            microphonePermission: {
+                await withCheckedContinuation {
+                    permission = $0
+                    requested.fulfill()
+                }
+            },
+            recognitionAvailable: { true }
+        )
+        let starting = Task { await recognizer.start() }
+        await fulfillment(of: [requested], timeout: 3)
+        await recognizer.stop()
+        permission?.resume(returning: false)
+        await starting.value
+        XCTAssertEqual(recognizer.state, .idle)
+    }
+
     func testFinalAudioDurationPreservesTimeCapturedBeforeRecorderStops() {
         XCTAssertEqual(
             ScheduleMemoAudioDuration.finalElapsed(
@@ -442,15 +487,24 @@ final class ScheduleMemoTests: XCTestCase {
         let setup = try AppModelContainerFactory.make()
         let context = setup.container.mainContext
         let memo = ScheduleMemo(body: "清理我")
+        let fileID = UUID().uuidString
         context.insert(memo)
-        context.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "unused.jpg"))
-        context.insert(ScheduleMemoAudio(memoID: memo.id, localFilename: "unused.m4a", duration: 1))
+        context.insert(ScheduleMemoImage(memoID: memo.id, sortOrder: 0, localFilename: "missing-\(fileID).jpg"))
+        context.insert(ScheduleMemoAttachment(memoID: memo.id, sortOrder: 0, originalFilename: "unused.pdf", localFilename: "missing-\(fileID).pdf", contentTypeIdentifier: "com.adobe.pdf"))
+        context.insert(ScheduleMemoAudio(memoID: memo.id, localFilename: "missing-\(fileID).m4a", duration: 1))
         try context.save()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MemoAccountCleanup-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
 
-        try AppSessionResetter.deleteAllModels(in: context)
+        let warning = try AppSessionResetter.deleteLocalRecords(
+            in: context, cleanup: LocalFileCleanup(queueURL: directory.appendingPathComponent("cleanup.json"))
+        )
 
+        XCTAssertNil(warning)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemo>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoImage>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoAttachment>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<ScheduleMemoAudio>()), 0)
     }
 

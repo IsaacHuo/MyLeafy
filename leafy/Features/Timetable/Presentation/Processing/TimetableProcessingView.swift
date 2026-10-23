@@ -44,10 +44,11 @@ nonisolated enum ManualCourseWeekSelection {
 
 struct ManualCourseEditorSheet: View {
     let item: ManualCourseEditorItem
-    let onSave: (Course) -> Void
+    let onSave: (Course) throws -> Void
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var operationAlert: LeafyOperationAlert?
     @State private var courseName = ""
     @State private var teacher = ""
     @State private var location = ""
@@ -159,6 +160,7 @@ struct ManualCourseEditorSheet: View {
                         .disabled(isSaveDisabled)
                 }
             }
+            .leafyOperationAlert($operationAlert)
             .onChange(of: startPeriod) { _, newValue in
                 if endPeriod < newValue {
                     endPeriod = newValue
@@ -171,7 +173,8 @@ struct ManualCourseEditorSheet: View {
         let trimmedName = courseName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
-        onSave(
+        do {
+            try onSave(
             Course(
                 courseName: trimmedName,
                 teacher: teacher.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -183,7 +186,8 @@ struct ManualCourseEditorSheet: View {
                 duration: Array(startPeriod...endPeriod)
             )
         )
-        dismiss()
+            dismiss()
+        } catch { operationAlert = .failure(error.localizedDescription) }
     }
 
     private func dayTitle(_ day: Int) -> String {
@@ -302,7 +306,7 @@ struct TimetableProcessingView: View {
         .leafyInlineNavigationTitle()
         .leafySheet(item: $editingManualCourse) { item in
             ManualCourseEditorSheet(item: item) { course in
-                saveManualCourse(course)
+                try saveManualCourse(course)
             }
             .presentationDetents([.large])
         }
@@ -317,7 +321,7 @@ struct TimetableProcessingView: View {
             isPresented: $isTimetableImportPresented,
             allowedContentTypes: [.commaSeparatedText, .plainText, .text]
         ) { result in
-            handleTimetableImport(result)
+            Task { await handleTimetableImport(result) }
         }
         .confirmationDialog(
             "清空当前通用入口本机课表？",
@@ -335,44 +339,38 @@ struct TimetableProcessingView: View {
     }
 
     @MainActor
-    private func saveManualCourse(_ course: Course) {
-        guard isCustomCampus else {
-            operationAlert = .failure("此操作仅用于通用入口。")
-            return
-        }
-
+    private func saveManualCourse(_ course: Course) throws {
+        guard isCustomCampus else { throw CocoaError(.userCancelled) }
         modelContext.insert(course)
-        do {
-            try modelContext.save()
-            TimetableCacheMetadata.lastSyncAt = Date()
-            TimetableCacheMetadata.lastFailureMessage = nil
-            SchoolDataRefreshNotifier.post(.timetable)
-            publishWidgetSnapshot()
-            operationAlert = .success(L10n.text("课程已添加。", language: leafyLanguage))
-        } catch {
-            operationAlert = .failure(error.localizedDescription)
-        }
+        try LocalModelSave.save(modelContext, undo: { modelContext.delete(course) })
+        TimetableCacheMetadata.lastSyncAt = Date()
+        TimetableCacheMetadata.lastFailureMessage = nil
+        SchoolDataRefreshNotifier.post(.timetable)
+        publishWidgetSnapshot()
+        operationAlert = .success(L10n.text("课程已添加。", language: leafyLanguage))
     }
 
     @MainActor
-    private func handleTimetableImport(_ result: Result<URL, Error>) {
+    private func handleTimetableImport(_ result: Result<URL, Error>) async {
         guard isCustomCampus else {
             operationAlert = .failure("此操作仅用于通用入口。")
             return
         }
 
+        let scope = CampusOperationScope()
         do {
             let url = try result.get()
-            let count = try CustomCampusImportService.importTimetable(
+            let imported = try await CustomCampusImportService.importTimetable(
                 from: url,
                 existingCourses: courses,
                 modelContext: modelContext
             )
-            TimetableCacheMetadata.lastFailureMessage = nil
+            try scope.check()
             SchoolDataRefreshNotifier.post(.timetable)
             publishWidgetSnapshot()
-            operationAlert = .success(L10n.text("已导入 %d 门课程。", language: leafyLanguage, count))
+            operationAlert = .success(imported.reminderWarning ?? L10n.text("已导入 %d 门课程。", language: leafyLanguage, imported.count))
         } catch {
+            guard !scope.wasCancelled(error) else { return }
             operationAlert = .failure(error.localizedDescription)
         }
     }
@@ -384,10 +382,13 @@ struct TimetableProcessingView: View {
             return
         }
 
-        TimetableNotificationManager.cancelAllCourseReminders(courses: courses)
-        TimetableNotificationManager.cancelAllCellReminders(cellReminders)
-        ScheduleReportNotificationManager.clearScheduledNotifications()
-
+        let removedCourses = courses
+        let removedCells = cellReminders
+        let courseNotificationIDs = removedCourses.flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) }
+        let cellKeys = removedCells.map(\.cellKey)
+        let undoPersonalData: () -> Void
+        do { undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: modelContext) }
+        catch { operationAlert = .failure(error.localizedDescription); return }
         for course in courses {
             modelContext.delete(course)
         }
@@ -405,13 +406,23 @@ struct TimetableProcessingView: View {
         }
 
         do {
-            try modelContext.save()
-            SchoolDataCache.clearDiscoverCaches()
+            try LocalModelSave.save(modelContext, undo: {
+                for course in removedCourses { modelContext.insert(course) }
+                for reminder in removedCells { modelContext.insert(reminder) }
+                undoPersonalData()
+            })
+            LiveTimetableCourseReminderScheduler().cancel(identifiers: courseNotificationIDs)
+            TimetableNotificationManager.cancelCellReminders(cellKeys: cellKeys)
+            var notificationWarning: String?
+            do { try ScheduleReportNotificationManager.clearScheduledNotifications() }
+            catch {
+                notificationWarning = L10n.text("课表数据已清空，但部分日程通知未清理：%@", language: leafyLanguage, error.localizedDescription)
+            }
             TimetableCacheMetadata.clear()
             CustomScheduleStore.clear()
             SchoolDataRefreshNotifier.post(.all)
             publishWidgetSnapshot()
-            operationAlert = .success("当前通用入口本机课表数据已清空。")
+            operationAlert = .success(notificationWarning ?? L10n.text("当前通用入口本机课表数据已清空。", language: leafyLanguage))
         } catch {
             operationAlert = .failure(error.localizedDescription)
         }

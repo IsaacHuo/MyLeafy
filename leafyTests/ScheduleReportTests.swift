@@ -24,7 +24,7 @@ final class ScheduleReportTests: XCTestCase {
         var settings = ScheduleReportSettings(isEnabled: true)
         settings.set(ScheduleReportModeSetting(isEnabled: true, hour: 32, minute: -5), for: .eveningReport)
         settings.scheduledNotificationIDs = ["one", "two"]
-        ScheduleReportSettingsStore.save(settings, defaults: defaults)
+        try ScheduleReportSettingsStore.save(settings, defaults: defaults)
 
         let key = ScheduleReportSettingsStore.scopedStorageKey(defaults: defaults)
         let loaded = ScheduleReportSettingsStore.load(defaults: defaults)

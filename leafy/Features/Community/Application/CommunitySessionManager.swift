@@ -12,10 +12,12 @@ final class CommunitySessionManager: ObservableObject {
     @Published var bootstrapError: String?
 
     private let repository: any CommunityIdentitySessionRepository
+    private var operationGeneration: UInt64 = 0
+    private var activeBootstrapID: UUID?
     private var activeBootstrapTask: Task<Void, Never>?
     private static let bootstrapTimeoutMessage = "社区身份初始化超时。请检查网络或稍后重试；帖子列表仍可浏览。"
 
-    private init(repository: any CommunityIdentitySessionRepository = CommunityBackendFactory.identity) {
+    init(repository: any CommunityIdentitySessionRepository = CommunityBackendFactory.identity) {
         self.repository = repository
     }
 
@@ -56,11 +58,17 @@ final class CommunitySessionManager: ObservableObject {
             return
         }
 
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         do {
-            profile = try await repository.fetchCurrentProfile()
+            let restored = try await repository.fetchCurrentProfile()
+            try check(scope, generation: generation)
+            guard profile == nil else { return }
+            profile = restored
             bootstrapError = nil
             CommunityDiagnostics.log.info("Community session restore finished; hasProfile=\((self.profile != nil), privacy: .public)")
         } catch {
+            guard !scope.wasCancelled(error), generation == operationGeneration, profile == nil else { return }
             bootstrapError = error.localizedDescription
             CommunityDiagnostics.log.error("Community session restore failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -73,8 +81,10 @@ final class CommunitySessionManager: ObservableObject {
             return
         }
 
+        let id = UUID()
+        activeBootstrapID = id
         let task = Task { @MainActor in
-            await self.performBootstrapCommunityUser(force: force)
+            await self.performBootstrapCommunityUser(force: force, id: id)
         }
         activeBootstrapTask = task
         await waitForBootstrapTask(task)
@@ -93,8 +103,10 @@ final class CommunitySessionManager: ObservableObject {
             return
         }
 
+        let id = UUID()
+        activeBootstrapID = id
         let task = Task { @MainActor in
-            await self.performBootstrapCommunityUser(force: force)
+            await self.performBootstrapCommunityUser(force: force, id: id)
         }
         activeBootstrapTask = task
 
@@ -104,6 +116,8 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     private func waitForBootstrapTask(_ task: Task<Void, Never>) async {
+        let generation = operationGeneration
+        let id = activeBootstrapID
         do {
             try await CommunityTimeout.run(
                 seconds: 25,
@@ -112,7 +126,9 @@ final class CommunitySessionManager: ObservableObject {
                 await task.value
             }
         } catch {
+            guard generation == operationGeneration, id == activeBootstrapID else { return }
             task.cancel()
+            activeBootstrapID = nil
             activeBootstrapTask = nil
             isBootstrapping = false
             bootstrapError = error.localizedDescription
@@ -120,13 +136,18 @@ final class CommunitySessionManager: ObservableObject {
         }
     }
 
-    private func performBootstrapCommunityUser(force: Bool) async {
+    private func performBootstrapCommunityUser(force: Bool, id: UUID) async {
         guard !Task.isCancelled else { return }
         CommunityDiagnostics.log.info("Community bootstrap started force=\(force, privacy: .public)")
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         isBootstrapping = true
         defer {
-            isBootstrapping = false
-            activeBootstrapTask = nil
+            if generation == operationGeneration, activeBootstrapID == id {
+                activeBootstrapID = nil
+                isBootstrapping = false
+                activeBootstrapTask = nil
+            }
         }
 
         let schoolManager = ActiveCampusContext.networkManager
@@ -143,7 +164,7 @@ final class CommunitySessionManager: ObservableObject {
             ) { [repository] in
                 try await repository.ensureAnonymousSession()
             }
-            guard !Task.isCancelled else { return }
+            try check(scope, generation: generation)
 
             guard currentAuthUserID != nil else {
                 profile = nil
@@ -174,12 +195,13 @@ final class CommunitySessionManager: ObservableObject {
                     campusID: campusID
                 )
             }
-            guard !Task.isCancelled else { return }
+            try check(scope, generation: generation)
 
             self.profile = profile
             self.bootstrapError = nil
             CommunityDiagnostics.log.info("Community bootstrap finished for profile \(profile.id.uuidString, privacy: .public)")
         } catch {
+            guard !scope.wasCancelled(error), generation == operationGeneration else { return }
             self.bootstrapError = error.localizedDescription
             CommunityDiagnostics.log.error("Community bootstrap failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -203,13 +225,15 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func signOut() async {
-        await repository.signOut(localOnly: false)
-
+        cancelInFlightWork()
         profile = nil
         bootstrapError = nil
+        await repository.signOut(localOnly: false)
     }
 
     func deleteCurrentAccount() async throws {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         if ReviewDemoMode.isEnabled {
             await bootstrapCommunityUser()
             guard currentAuthUserID != nil else {
@@ -226,8 +250,11 @@ final class CommunitySessionManager: ObservableObject {
             }
         }
 
+        try check(scope, generation: generation)
         try await repository.deleteCurrentAccount()
+        try check(scope, generation: generation)
         await repository.signOut(localOnly: true)
+        try check(scope, generation: generation)
 
         profile = nil
         bootstrapError = nil
@@ -240,6 +267,8 @@ final class CommunitySessionManager: ObservableObject {
     }
 
     func cancelInFlightWork() {
+        operationGeneration &+= 1
+        activeBootstrapID = nil
         activeBootstrapTask?.cancel()
         activeBootstrapTask = nil
         isBootstrapping = false
@@ -252,25 +281,34 @@ final class CommunitySessionManager: ObservableObject {
         cover: CommunityImageUpload? = nil,
         resetCoverToDefault: Bool = false
     ) async throws -> CommunityProfile {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         let updatedProfile = try await repository.updateProfile(
             input: input,
             avatar: avatar,
             cover: cover,
             resetCoverToDefault: resetCoverToDefault
         )
+        try check(scope, generation: generation)
         profile = updatedProfile
         bootstrapError = nil
         return updatedProfile
     }
 
     func requestEmailVerification(input: CommunityEmailBindingInput) async throws {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         let updatedProfile = try await repository.requestEmailVerification(input: input)
+        try check(scope, generation: generation)
         profile = updatedProfile
         bootstrapError = nil
     }
 
     func verifyEmailBinding(input: CommunityEmailVerificationInput) async throws {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         let updatedProfile = try await repository.verifyEmailBinding(input: input)
+        try check(scope, generation: generation)
         profile = updatedProfile
         bootstrapError = nil
     }
@@ -281,7 +319,10 @@ final class CommunitySessionManager: ObservableObject {
 
     @discardableResult
     func submitCampusMembershipRequest(schoolName: String) async throws -> CommunityProfile {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         let updatedProfile = try await repository.submitCampusMembershipRequest(schoolName: schoolName)
+        try check(scope, generation: generation)
         profile = updatedProfile
         bootstrapError = nil
         return updatedProfile
@@ -293,7 +334,10 @@ final class CommunitySessionManager: ObservableObject {
 
     @discardableResult
     func selectCommunityCampus(campusID: String) async throws -> CommunityProfile {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         let updatedProfile = try await repository.selectCommunityCampus(campusID: campusID)
+        try check(scope, generation: generation)
         profile = updatedProfile
         bootstrapError = nil
         return updatedProfile
@@ -305,12 +349,22 @@ final class CommunitySessionManager: ObservableObject {
 
     @discardableResult
     func submitCommunitySchoolChangeRequest(campusID: String) async throws -> CommunityCampusMembershipRequest {
+        let scope = CampusOperationScope()
+        let generation = operationGeneration
         let request = try await repository.submitCommunitySchoolChangeRequest(campusID: campusID)
+        try check(scope, generation: generation)
         if let updatedProfile = try await repository.fetchCurrentProfile() {
+            try check(scope, generation: generation)
             profile = updatedProfile
         }
+        try check(scope, generation: generation)
         bootstrapError = nil
         return request
+    }
+
+    private func check(_ scope: CampusOperationScope, generation: UInt64) throws {
+        try scope.check()
+        guard generation == operationGeneration else { throw CancellationError() }
     }
 }
 

@@ -64,7 +64,7 @@ struct ManualGradeDraft: Equatable {
         guard !normalized.courseName.isEmpty else {
             throw ManualGradeValidationError.missingCourseName
         }
-        guard let creditValue = Double(normalized.credit), creditValue >= 0 else {
+        guard let creditValue = Double(normalized.credit), creditValue.isFinite, creditValue >= 0 else {
             throw ManualGradeValidationError.invalidCredit
         }
         guard !normalized.score.isEmpty else {
@@ -100,7 +100,8 @@ enum ManualGradeStore {
     static func save(
         draft: ManualGradeDraft,
         editing grade: Grade?,
-        in modelContext: ModelContext
+        in modelContext: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }
     ) throws -> Grade {
         let validatedDraft = try draft.validated()
         let target: Grade
@@ -117,6 +118,8 @@ enum ManualGradeStore {
             modelContext.insert(target)
         }
 
+        let previous = ManualGradeDraft(term: target.term, courseName: target.courseName, credit: target.credit, score: target.score, type: target.type)
+        let previousUpdatedAt = target.updatedAt
         target.term = validatedDraft.term
         target.courseName = validatedDraft.courseName
         target.credit = validatedDraft.credit
@@ -124,23 +127,24 @@ enum ManualGradeStore {
         target.type = validatedDraft.type
         target.updatedAt = Date()
 
-        do {
-            try modelContext.save()
-            return target
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
+        try LocalModelSave.save(modelContext, undo: {
+            if grade == nil { modelContext.delete(target) }
+            else {
+                target.term = previous.term
+                target.courseName = previous.courseName
+                target.credit = previous.credit
+                target.score = previous.score
+                target.type = previous.type
+                target.updatedAt = previousUpdatedAt
+            }
+        }, using: save)
+        return target
     }
 
-    static func delete(_ grade: Grade, in modelContext: ModelContext) throws {
+    static func delete(_ grade: Grade, in modelContext: ModelContext,
+                       save: (ModelContext) throws -> Void = { try $0.save() }) throws {
         modelContext.delete(grade)
-        do {
-            try modelContext.save()
-        } catch {
-            modelContext.rollback()
-            throw error
-        }
+        try LocalModelSave.save(modelContext, undo: { modelContext.insert(grade) }, using: save)
     }
 }
 
@@ -478,9 +482,11 @@ struct GradesView: View {
         }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
-                ReviewDemoDataSeeder.seed(using: modelContext)
-                creditSummary = SchoolDataCache.loadGradeCreditSummary()
-                alertMessage = L10n.text("已刷新演示成绩数据。", language: leafyLanguage)
+                do {
+                    try ReviewDemoDataSeeder.seed(using: modelContext)
+                    creditSummary = SchoolDataCache.loadGradeCreditSummary()
+                    alertMessage = L10n.text("已刷新演示成绩数据。", language: leafyLanguage)
+                } catch { alertMessage = error.localizedDescription }
                 showAlert = true
             }
             return
@@ -1356,7 +1362,8 @@ struct GradeAnalyticsDetailView: View {
         guard !isLoadingRankings else { return }
         if ReviewDemoMode.isEnabled {
             await MainActor.run {
-                ReviewDemoDataSeeder.refreshSchoolCaches()
+                do { try ReviewDemoDataSeeder.refreshSchoolCaches() }
+                catch { rankingMessage = error.localizedDescription; return }
                 rankings = SchoolDataCache.loadGradeRankings()
                 creditSummary = SchoolDataCache.loadGradeCreditSummary()
                 rankingMessage = ""

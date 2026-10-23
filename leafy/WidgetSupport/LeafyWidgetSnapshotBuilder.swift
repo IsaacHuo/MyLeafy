@@ -14,7 +14,12 @@ enum LeafyWidgetSnapshotBuilder {
                 occurrenceNotes: try modelContext.fetch(FetchDescriptor<CourseOccurrenceNote>()),
                 reminders: try modelContext.fetch(FetchDescriptor<CourseReminderSetting>()),
                 cellReminders: try modelContext.fetch(FetchDescriptor<TimetableCellReminder>()),
-                schedules: CustomScheduleStore.load(), isAuthenticated: isAuthenticated, date: date
+                schedules: try CustomScheduleStore.loadForSync(),
+                examArrangements: isAuthenticated ? try SchoolDataCache.loadExamScheduleForEditing() : [],
+                weather: UserDefaultsCampusWeatherCache().currentTemperatureSnapshot(maxAge: 6 * 60 * 60, now: date).map {
+                    LeafyWidgetWeatherSnapshot(celsius: $0.temperature, observedAt: $0.observedAt)
+                },
+                isAuthenticated: isAuthenticated, date: date
             )
             Task { await WidgetSnapshotPublisher.shared.publish(archive) }
         } catch {
@@ -25,7 +30,8 @@ enum LeafyWidgetSnapshotBuilder {
 
     static func publishNeedsLogin(date: Date = Date()) {
         let archive = makeArchive(courses: [], notes: [], occurrenceNotes: [], reminders: [],
-                                  cellReminders: [], schedules: [], isAuthenticated: false, date: date)
+                                  cellReminders: [], schedules: [], examArrangements: [], weather: nil,
+                                  isAuthenticated: false, date: date)
         Task { await WidgetSnapshotPublisher.shared.publishNeedsLogin(archive) }
     }
 
@@ -38,11 +44,13 @@ enum LeafyWidgetSnapshotBuilder {
         cellReminders: [TimetableCellReminder] = [],
         schedules: [CustomScheduleEvent] = [],
         isAuthenticated: Bool,
-        date: Date
+        date: Date,
+        weather: LeafyWidgetWeatherSnapshot? = nil
     ) -> LeafyWidgetSnapshotArchive {
         makeArchive(courses: courses, notes: notes, occurrenceNotes: occurrenceNotes,
                     reminders: reminders, cellReminders: cellReminders,
-                    schedules: schedules, isAuthenticated: isAuthenticated, date: date)
+                    schedules: schedules, examArrangements: SchoolDataCache.loadExamSchedule(), weather: weather,
+                    isAuthenticated: isAuthenticated, date: date)
     }
     #endif
 
@@ -53,6 +61,8 @@ enum LeafyWidgetSnapshotBuilder {
         reminders: [CourseReminderSetting],
         cellReminders: [TimetableCellReminder],
         schedules: [CustomScheduleEvent],
+        examArrangements: [ExamArrangement],
+        weather: LeafyWidgetWeatherSnapshot?,
         isAuthenticated: Bool,
         date: Date
     ) -> LeafyWidgetSnapshotArchive {
@@ -111,14 +121,14 @@ enum LeafyWidgetSnapshotBuilder {
             }
         }
         items.sort { ($0.startsAt, $0.id) < ($1.startsAt, $1.id) }
-        let exams = isAuthenticated ? SchoolDataCache.loadExamSchedule().compactMap { exam -> LeafyWidgetExam? in
+        let exams = isAuthenticated ? examArrangements.compactMap { exam -> LeafyWidgetExam? in
             guard let start = exam.startsAt else { return nil }
             return LeafyWidgetExam(startsAt: start, endsAt: exam.endsAt ?? start,
                 text: L10n.text("考试：%@ · %@", language: language, exam.name, exam.date))
         }.sorted { $0.startsAt < $1.startsAt } : []
         let firstSlot = TimetablePeriodSchedule.slots.first
         let lastSlot = TimetablePeriodSchedule.slots.last
-        return LeafyWidgetSnapshotArchive(
+        var archive = LeafyWidgetSnapshotArchive(
             generatedAt: date, isAuthenticated: isAuthenticated,
             semesters: configs.map { config in
                 LeafyWidgetSemester(id: config.semesterID, startsAt: config.semesterStartDate,
@@ -132,6 +142,8 @@ enum LeafyWidgetSnapshotBuilder {
                 L10n.text("最近同步：%@", language: language, DateFormatters.headerWithTime.string(from: $0))
             }, lastFailureText: trimmed(TimetableCacheMetadata.lastFailureMessage)
         )
+        archive.weather = isAuthenticated ? weather : nil
+        return archive
     }
 
     private static func accentIndex(for key: String) -> Int {

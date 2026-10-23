@@ -5,6 +5,10 @@ import UniformTypeIdentifiers
 import UIKit
 
 struct TimetableTimeScopeSnapshot: Equatable {
+    private let configuration: SemesterRuntimeConfig
+    private let configurations: [SemesterRuntimeConfig]
+    private let campusID: CampusID
+    private let calendar: Calendar
     let referenceDate: Date
     let currentWeek: Int
     let weekStartDate: Date
@@ -111,6 +115,10 @@ struct TimetableTimeScopeSnapshot: Equatable {
         }()
 
         return TimetableTimeScopeSnapshot(
+            configuration: semesterConfig,
+            configurations: configurations ?? [semesterConfig],
+            campusID: campusID,
+            calendar: calendar,
             referenceDate: today,
             currentWeek: currentWeek,
             weekStartDate: weekStart,
@@ -142,6 +150,12 @@ struct TimetableTimeScopeSnapshot: Equatable {
             } ?? L10n.text("校历更新后显示", language: language),
             vacationCategory: vacationEvent?.academicCategory
         )
+    }
+
+    func displayingMonth(_ date: Date, language: AppLanguagePreference) -> Self {
+        Self.make(currentWeek: currentWeek, referenceDate: referenceDate, displayedMonthDate: date,
+            language: language, semesterConfig: configuration, configurations: configurations,
+            campusID: campusID, calendar: calendar)
     }
 
     private static func makeYearMonths(
@@ -357,6 +371,7 @@ struct TimetableTimeScopeView: View {
             )
         }
         .onChange(of: snapshot) { _, newSnapshot in
+            fixedYearMonths = newSnapshot.yearMonths
             displayedSnapshot = makeDisplayedSnapshot(
                 displayedMonthDate: displayedSnapshot.displayedMonthDate,
                 language: leafyLanguage,
@@ -619,12 +634,7 @@ struct TimetableTimeScopeView: View {
         baseSnapshot: TimetableTimeScopeSnapshot? = nil
     ) -> TimetableTimeScopeSnapshot {
         let sourceSnapshot = baseSnapshot ?? snapshot
-        return TimetableTimeScopeSnapshot.make(
-            currentWeek: sourceSnapshot.currentWeek,
-            referenceDate: sourceSnapshot.referenceDate,
-            displayedMonthDate: displayedMonthDate,
-            language: language
-        )
+        return sourceSnapshot.displayingMonth(displayedMonthDate, language: language)
     }
 }
 

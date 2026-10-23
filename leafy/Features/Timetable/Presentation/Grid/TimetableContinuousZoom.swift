@@ -602,6 +602,7 @@ private final class TimetableDisplayLinkTarget: NSObject {
     }
 
     @objc func tick(_ link: CADisplayLink) {
-        owner?.displayLinkDidFire(link)
+        guard let owner else { link.invalidate(); return }
+        owner.displayLinkDidFire(link)
     }
 }

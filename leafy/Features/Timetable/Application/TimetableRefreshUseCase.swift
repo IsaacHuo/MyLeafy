@@ -143,6 +143,7 @@ struct TimetableRefreshUseCase {
             }
         }
         let associations = try TimetableLocalDataReassociation(oldCourses: oldCourses, newCourses: newCourses, context: modelContext)
+        let undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: modelContext)
         do {
             try associations.apply(to: modelContext)
             let reminderPlan = try TimetableReminderRefreshPlan(
@@ -154,7 +155,9 @@ struct TimetableRefreshUseCase {
             try save(modelContext)
             return TimetablePersistResult(courses: newCourses, reminders: reminderPlan)
         } catch {
-            modelContext.rollback()
+            for course in newCourses where course.modelContext === modelContext { modelContext.delete(course) }
+            for course in oldCourses { modelContext.insert(course) }
+            undoPersonalData()
             throw error
         }
     }

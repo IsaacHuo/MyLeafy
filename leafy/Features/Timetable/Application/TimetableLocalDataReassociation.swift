@@ -23,6 +23,34 @@ struct TimetableLocalDataReassociation {
     init(oldCourses: [Course], newCourses: [Course], context: ModelContext) throws {
         self.oldCourses = oldCourses; self.newCourses = newCourses; self.context = context
     }
+    /// Capture the current editor values, including unsaved edits, before reassociation.
+    static func personalDataUndo(in context: ModelContext) throws -> () -> Void {
+        let inserted = Set(context.insertedModelsArray.map { ObjectIdentifier($0) })
+        let notes = try context.fetch(FetchDescriptor<CourseNote>()).map { note in
+            let previous = (note.courseKey, note.isUnassociated, note.sourceCourseTitle, note.updatedAt)
+            return { context.insert(note); note.courseKey = previous.0; note.isUnassociated = previous.1
+                note.sourceCourseTitle = previous.2; note.updatedAt = previous.3 }
+        }
+        let occurrences = try context.fetch(FetchDescriptor<CourseOccurrenceNote>()).map { note in
+            let previous = (note.courseKey, note.occurrenceKey, note.dayOfWeek, note.isUnassociated, note.sourceCourseTitle, note.updatedAt)
+            return { context.insert(note); note.courseKey = previous.0; note.occurrenceKey = previous.1
+                note.dayOfWeek = previous.2; note.isUnassociated = previous.3
+                note.sourceCourseTitle = previous.4; note.updatedAt = previous.5 }
+        }
+        let reminders = try context.fetch(FetchDescriptor<CourseReminderSetting>()).map { setting in
+            let previous = (setting.courseKey, setting.isUnassociated, setting.sourceCourseTitle, setting.updatedAt)
+            return { context.insert(setting); setting.courseKey = previous.0; setting.isUnassociated = previous.1
+                setting.sourceCourseTitle = previous.2; setting.updatedAt = previous.3 }
+        }
+        return {
+            for model in context.insertedModelsArray where !inserted.contains(ObjectIdentifier(model)) {
+                if model is CourseNote || model is CourseOccurrenceNote || model is CourseReminderSetting {
+                    context.delete(model)
+                }
+            }
+            for restore in notes + occurrences + reminders { restore() }
+        }
+    }
     private func targets(for old: Course) -> [Course] {
         let exact = newCourses.filter { $0.legacyStableCourseKey == old.legacyStableCourseKey && $0.classInfo == old.classInfo }
         if !exact.isEmpty && old.weeks.allSatisfy({ week in exact.contains { $0.weeks.contains(week) } }) { return exact }

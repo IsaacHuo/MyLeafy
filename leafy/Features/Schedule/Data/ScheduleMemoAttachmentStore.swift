@@ -226,14 +226,6 @@ enum ScheduleMemoAttachmentStore {
         try fileManager.removeItem(at: url)
     }
 
-    static func deleteAllFiles(
-        identity: CampusIdentity? = CampusIdentityStore.currentIdentity(),
-        directory: URL? = nil
-    ) throws {
-        let url = directory ?? directoryURL(identity: identity)
-        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
-        try deleteFile(at: url)
-    }
 
     static func directoryURL(identity: CampusIdentity? = CampusIdentityStore.currentIdentity()) -> URL {
         if let identity,

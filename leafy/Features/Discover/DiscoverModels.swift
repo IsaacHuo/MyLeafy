@@ -835,8 +835,8 @@ enum CustomScheduleStore {
         if key != storageKey { defaults.removeObject(forKey: storageKey) }
         return events
     }
-    static func save(_ events: [CustomScheduleEvent], defaults: UserDefaults = .standard) {
-        guard let data = try? JSONEncoder().encode(events) else { return }
+    static func save(_ events: [CustomScheduleEvent], defaults: UserDefaults = .standard) throws {
+        let data = try JSONEncoder().encode(events)
         let key = CampusScopedDefaults.key(storageKey, defaults: defaults)
         defaults.set(data, forKey: key)
         if key != storageKey { defaults.removeObject(forKey: storageKey) }
@@ -970,8 +970,14 @@ enum SchoolDataCache {
         load([ExamArrangement].self, forKey: examScheduleKey) ?? []
     }
 
-    static func saveExamSchedule(_ exams: [ExamArrangement], notifies: Bool = true) {
-        save(exams, forKey: examScheduleKey)
+    static func loadExamScheduleForEditing() throws -> [ExamArrangement] {
+        guard let data = UserDefaults.standard.data(forKey: scoped(examScheduleKey)) else { return [] }
+        return try JSONDecoder().decode([ExamArrangement].self, from: data)
+    }
+
+    static func saveExamSchedule(_ exams: [ExamArrangement], notifies: Bool = true) throws {
+        let data = try JSONEncoder().encode(exams)
+        UserDefaults.standard.set(data, forKey: scoped(examScheduleKey))
         UserDefaults.standard.set(Date(), forKey: scoped(lastExamSyncKey))
         if notifies {
             NotificationCenter.default.post(name: .schoolExamScheduleDidChange, object: nil)
@@ -984,13 +990,13 @@ enum SchoolDataCache {
         _ exams: [ExamArrangement],
         now: Date = Date(),
         notifies: Bool = true
-    ) -> [ExamArrangement] {
+    ) throws -> [ExamArrangement] {
         let merged = SchoolExamScheduleMerger.merge(
             remote: exams,
-            cached: loadExamSchedule(),
+            cached: try loadExamScheduleForEditing(),
             now: now
         )
-        saveExamSchedule(merged, notifies: notifies)
+        try saveExamSchedule(merged, notifies: notifies)
         return merged
     }
 
@@ -1191,6 +1197,15 @@ enum DateFormatters {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    /// Exam storage uses a locale-independent clock string, unlike display-only times.
+    static let examTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "HH:mm"
         return formatter
     }()
 

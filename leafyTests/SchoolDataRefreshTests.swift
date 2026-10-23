@@ -32,8 +32,8 @@ final class SchoolDataRefreshTests: XCTestCase {
     @MainActor
     func testCacheSavesPublishUnifiedRefreshEventsAndUpdateCaches() throws {
         activateTemporaryIdentity()
-        let events = observeSchoolDataRefreshEvents {
-            SchoolDataCache.saveExamSchedule([sampleExam()])
+        let events = try observeSchoolDataRefreshEvents {
+            try SchoolDataCache.saveExamSchedule([sampleExam()])
             SchoolDataCache.saveTeachingPlan([sampleTeachingPlan()])
             SchoolDataCache.saveGradeRankings([sampleGradeRanking()])
             SchoolDataCache.saveGradeCreditSummary(sampleCreditSummary())
@@ -55,10 +55,10 @@ final class SchoolDataRefreshTests: XCTestCase {
     }
 
     @MainActor
-    func testSilentCacheSavesUpdateCachesWithoutPublishingRefreshEvents() {
+    func testSilentCacheSavesUpdateCachesWithoutPublishingRefreshEvents() throws {
         activateTemporaryIdentity()
-        let events = observeSchoolDataRefreshEvents {
-            SchoolDataCache.saveExamSchedule([sampleExam()], notifies: false)
+        let events = try observeSchoolDataRefreshEvents {
+            try SchoolDataCache.saveExamSchedule([sampleExam()], notifies: false)
             SchoolDataCache.saveTeachingPlan([sampleTeachingPlan()], notifies: false)
             SchoolDataCache.saveGradeRankings([sampleGradeRanking()], notifies: false)
             SchoolDataCache.saveGradeCreditSummary(sampleCreditSummary(), notifies: false)
@@ -157,7 +157,7 @@ final class SchoolDataRefreshTests: XCTestCase {
         XCTAssertTrue(try context.fetch(FetchDescriptor<Grade>()).isEmpty)
     }
 
-    private func observeSchoolDataRefreshEvents(_ action: () -> Void) -> [SchoolDataRefreshEvent] {
+    private func observeSchoolDataRefreshEvents(_ action: () throws -> Void) rethrows -> [SchoolDataRefreshEvent] {
         var events: [SchoolDataRefreshEvent] = []
         let observer = NotificationCenter.default.addObserver(
             forName: .schoolDataDidRefresh,
@@ -167,8 +167,8 @@ final class SchoolDataRefreshTests: XCTestCase {
             guard let event = notification.object as? SchoolDataRefreshEvent else { return }
             events.append(event)
         }
-        action()
-        NotificationCenter.default.removeObserver(observer)
+        defer { NotificationCenter.default.removeObserver(observer) }
+        try action()
         return events
     }
 
@@ -290,5 +290,26 @@ final class SchoolDataRefreshTests: XCTestCase {
     private func futureDateString() -> String {
         let date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
         return DateFormatters.queryDate.string(from: date)
+    }
+}
+
+extension SchoolDataRefreshTests {
+    @MainActor
+    func testFailedGradeReplacementRetainsBothGradesAndUnrelatedPendingValues() throws {
+        let schema = Schema([Grade.self, CourseNote.self])
+        let container = try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let context = container.mainContext
+        context.autosaveEnabled = false
+        let old = Grade(term: "old", courseName: "old grade", credit: "2", score: "80", type: "必修")
+        let note = CourseNote(courseKey: "other", text: "saved")
+        context.insert(old); context.insert(note); try context.save()
+        note.text = "unsaved editor"
+        old.score = "unsaved grade"
+        let incoming = Grade(term: "new", courseName: "incoming", credit: "3", score: "90", type: "必修")
+        XCTAssertThrowsError(try SchoolDataSyncService.persistGrades([incoming], modelContext: context,
+            save: { _ in throw CocoaError(.fileWriteOutOfSpace) }))
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Grade>()).map(\.id), [old.id])
+        XCTAssertEqual(old.score, "unsaved grade")
+        XCTAssertEqual(note.text, "unsaved editor")
     }
 }

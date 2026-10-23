@@ -308,6 +308,19 @@ final class TimetableWeatherAdviceTests: XCTestCase {
         XCTAssertEqual(summary.suggestions.first?.id, "clear")
     }
 
+    @MainActor
+    func testCancelledWeatherFetchDoesNotReturnOrOverwriteFreshCache() async {
+        let cached = makeSnapshot(hours: [makeHour(date: classStartDate, temperature: 18, condition: "晴")])
+        let cache = InMemoryTimetableWeatherCache(snapshot: cached, savedAt: Date())
+        let service = WeatherKitTimetableWeatherService(locationProvider: StubTimetableLocationProvider(),
+            weatherFetcher: { _ in throw CancellationError() }, cache: cache)
+        do {
+            _ = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+            XCTFail("Cancellation must not become cached success")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(cache.currentWeather(maxAge: 60), cached)
+    }
+
     private var classStartDate: Date {
         TimetablePeriodSchedule.startDate(week: 1, dayOfWeek: 1, period: 1)!
     }
@@ -401,5 +414,36 @@ private final class InMemoryTimetableWeatherCache: TimetableWeatherCaching, @unc
             return nil
         }
         return snapshot
+    }
+}
+
+extension TimetableWeatherAdviceTests {
+    @MainActor
+    func testReusedWeatherServiceResolvesCurrentIdentityCacheAndRejectsOldResponse() async throws {
+        let previous = ActiveCampusContext.identity
+        let first = CampusIdentity(campusID: .bjfu, eduID: "weather-a-" + UUID().uuidString, displayName: nil, portal: .undergraduate)
+        let second = CampusIdentity(campusID: .custom, eduID: "weather-b-" + UUID().uuidString, displayName: nil, portal: .undergraduate)
+        let expected = makeSnapshot(hours: [])
+        let service = WeatherKitTimetableWeatherService(locationProvider: StubTimetableLocationProvider(), weatherFetcher: { _ in
+            await MainActor.run { CampusIdentityStore.activate(second) }
+            return expected
+        })
+        CampusIdentityStore.activate(first)
+        let firstKey = CampusScopedDefaults.key("timetableWeather.cache.v2")
+        let secondKey = CampusScopedDefaults.key("timetableWeather.cache.v2", identity: second)
+        defer {
+            UserDefaults.standard.removeObject(forKey: firstKey)
+            UserDefaults.standard.removeObject(forKey: secondKey)
+            if let previous { CampusIdentityStore.activate(previous) } else { CampusIdentityStore.clear() }
+        }
+        do {
+            _ = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+            XCTFail("The first identity response must be cancelled after switching identities")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertNil(service.cachedWeather(maxAge: 60))
+        _ = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
+        XCTAssertEqual(service.cachedWeather(maxAge: 60), expected)
+        CampusIdentityStore.activate(first)
+        XCTAssertNil(service.cachedWeather(maxAge: 60))
     }
 }

@@ -107,6 +107,92 @@ final class ExternalLearningMaterialImportTests: XCTestCase {
         XCTAssertEqual(projectMaterial.category, .other)
     }
 
+    func testOnlyUnavailableProviderRepresentationAllowsDataFallback() {
+        XCTAssertTrue(ExternalLearningMaterialImport.allowsDataRepresentationFallback(after: NSError(domain: NSItemProvider.errorDomain, code: -1000)))
+        XCTAssertTrue(ExternalLearningMaterialImport.allowsDataRepresentationFallback(after: NSError(domain: NSItemProvider.errorDomain, code: -1200)))
+        XCTAssertFalse(ExternalLearningMaterialImport.allowsDataRepresentationFallback(after: CocoaError(.fileWriteOutOfSpace)))
+        XCTAssertFalse(ExternalLearningMaterialImport.allowsDataRepresentationFallback(after: ExternalLearningMaterialImportError.fileTooLarge("large.png")))
+        XCTAssertFalse(ExternalLearningMaterialImport.allowsDataRepresentationFallback(after: URLError(.networkConnectionLost)))
+    }
+
+    func testFailedBatchRemovesEarlierCopiesAndKeepsSources() throws {
+        let root = temporaryDirectory()
+        let store = ExternalLearningMaterialImportStore(rootDirectory: root)
+        let first = root.appendingPathComponent("first.pdf")
+        let unsupported = root.appendingPathComponent("second.txt")
+        try Data("first".utf8).write(to: first)
+        try Data("second".utf8).write(to: unsupported)
+        let id = UUID()
+        XCTAssertThrowsError(try store.makeBatch(from: [first, unsupported], source: .openIn, id: id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.batchDirectoryURL(for: id).path))
+        XCTAssertEqual(try Data(contentsOf: first), Data("first".utf8))
+    }
+
+    func testDirectoryCannotBeImportedAsPDF() throws {
+        let root = temporaryDirectory()
+        let source = root.appendingPathComponent("fake.pdf")
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        XCTAssertThrowsError(try ExternalLearningMaterialImportStore(rootDirectory: root).makeBatch(from: [source], source: .openIn))
+    }
+
+    func testManifestRejectsWrongIdentityPathDuplicatesAndNegativeSizes() throws {
+        let root = temporaryDirectory()
+        let store = ExternalLearningMaterialImportStore(rootDirectory: root)
+        let id = UUID(), itemID = UUID()
+        let item = ExternalLearningMaterialImportItem(id: itemID, originalFilename: "source.pdf", stagedFilename: "file.pdf", contentTypeIdentifier: UTType.pdf.identifier, byteCount: 4)
+        let cases = [
+            ExternalLearningMaterialImportManifest(id: UUID(), source: .openIn, items: [item]),
+            ExternalLearningMaterialImportManifest(id: id, source: .openIn, items: [item, item]),
+            ExternalLearningMaterialImportManifest(id: id, source: .openIn, items: [.init(id: itemID, originalFilename: "source.pdf", stagedFilename: "../outside.pdf", contentTypeIdentifier: UTType.pdf.identifier, byteCount: 4)]),
+            ExternalLearningMaterialImportManifest(id: id, source: .openIn, items: [.init(id: itemID, originalFilename: "source.pdf", stagedFilename: "file.pdf", contentTypeIdentifier: UTType.pdf.identifier, byteCount: -1)])
+        ]
+        try store.prepareBatchDirectory(id)
+        let manifestURL = store.batchDirectoryURL(for: id).appendingPathComponent(ExternalLearningMaterialImport.manifestFilename)
+        for manifest in cases {
+            try JSONEncoder().encode(manifest).write(to: manifestURL)
+            XCTAssertThrowsError(try store.loadManifest(id: id))
+        }
+    }
+
+    func testPendingDiscoverySurfacesCorruptCommittedManifest() throws {
+        let root = temporaryDirectory()
+        let store = ExternalLearningMaterialImportStore(rootDirectory: root)
+        let batchID = UUID()
+        try store.prepareBatchDirectory(batchID)
+        // An unfinished provider batch has no manifest and is not presented yet.
+        XCTAssertTrue(try store.pendingManifests().isEmpty)
+        try Data("corrupt".utf8).write(to: store.batchDirectoryURL(for: batchID).appendingPathComponent(ExternalLearningMaterialImport.manifestFilename))
+        XCTAssertThrowsError(try store.pendingManifests())
+    }
+
+    func testStagedFileRejectsChangedSizeAndEscapingSymlink() throws {
+        let root = temporaryDirectory()
+        let store = ExternalLearningMaterialImportStore(rootDirectory: root)
+        let source = root.appendingPathComponent("source.pdf")
+        try Data("source".utf8).write(to: source)
+        let manifest = try store.makeBatch(from: [source], source: .openIn)
+        let item = manifest.items[0]
+        let staged = store.batchDirectoryURL(for: manifest.id).appendingPathComponent(item.stagedFilename)
+        try Data("changed size".utf8).write(to: staged)
+        XCTAssertThrowsError(try store.stagedFileURL(for: item, in: manifest))
+        try FileManager.default.removeItem(at: staged)
+        try FileManager.default.createSymbolicLink(at: staged, withDestinationURL: source)
+        XCTAssertThrowsError(try store.stagedFileURL(for: item, in: manifest))
+        XCTAssertEqual(try Data(contentsOf: source), Data("source".utf8))
+    }
+
+    func testFailedCleanupIsReportedAndExistingExpiryCanRetry() throws {
+        let root = temporaryDirectory()
+        let id = UUID()
+        let blocked = ExternalLearningMaterialImportStore(rootDirectory: root, fileManager: ImportCleanupFailingFileManager())
+        XCTAssertThrowsError(try blocked.makeBatch(from: [root.appendingPathComponent("bad.txt")], source: .openIn, id: id)) { error in
+            guard case ExternalLearningMaterialImportError.cleanupFailed = error else { return XCTFail("Cleanup failure was hidden") }
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: blocked.batchDirectoryURL(for: id).path))
+        ExternalLearningMaterialImportStore(rootDirectory: root).removeExpiredBatches(now: Date().addingTimeInterval(ExternalLearningMaterialImport.stagingLifetime + 60))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: blocked.batchDirectoryURL(for: id).path))
+    }
+
     func testLearningWorkspaceCallbackParsesBatchID() throws {
         let batchID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000777"))
         let url = ExternalLearningMaterialImport.callbackURL(for: batchID)
@@ -125,4 +211,8 @@ final class ExternalLearningMaterialImportTests: XCTestCase {
         }
         return url
     }
+}
+
+private final class ImportCleanupFailingFileManager: FileManager, @unchecked Sendable {
+    override func removeItem(at URL: URL) throws { throw CocoaError(.fileWriteNoPermission) }
 }

@@ -47,7 +47,11 @@ nonisolated struct PostgraduateSource: Codable, Identifiable, Hashable, Sendable
     let updatedAt: String?
 
     var sourceURL: URL? {
-        URL(string: sourceURLString)
+        guard let url = URL(string: sourceURLString),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              let host = url.host, !host.isEmpty else { return nil }
+        return url
     }
 
     var sourceKind: PostgraduateSourceKind {

@@ -15,11 +15,11 @@ enum MedicalLedgerPhotoStore {
         return jpegData
     }
 
-    static func importImageData(_ imageData: Data, originalFilename: String) throws -> StoredPhoto {
+    static func importImageData(_ imageData: Data, originalFilename: String, filename: String? = nil) throws -> StoredPhoto {
         let jpegData = try normalizedJPEGData(from: imageData)
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        let localFilename = "\(UUID().uuidString).jpg"
+        let localFilename = filename ?? "\(UUID().uuidString).jpg"
         let destination = directoryURL.appendingPathComponent(localFilename)
         try jpegData.write(to: destination, options: .atomic)
         return StoredPhoto(localFilename: localFilename, jpegData: jpegData)
@@ -30,28 +30,15 @@ enum MedicalLedgerPhotoStore {
         return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
     }
 
-    static func image(for photo: MedicalLedgerPhoto) -> UIImage? {
-        guard let url = fileURL(for: photo) else { return nil }
-        return UIImage(contentsOfFile: url.path(percentEncoded: false))
-    }
-
     static func fileData(for photo: MedicalLedgerPhoto) -> Data? {
         guard let url = fileURL(for: photo) else { return nil }
         return try? Data(contentsOf: url)
     }
 
-    static func deleteFile(named filename: String) throws {
-        let url = directoryURL.appendingPathComponent(filename)
-        if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
-            try FileManager.default.removeItem(at: url)
+    static var directoryURL: URL {
+        if AppRuntimeEnvironment.isRunningUnitTests {
+            return FileManager.default.temporaryDirectory.appendingPathComponent("LeafyMedicalPhotosTests", isDirectory: true)
         }
-    }
-
-    static func deleteAllFiles() {
-        try? FileManager.default.removeItem(at: directoryURL)
-    }
-
-    private static var directoryURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("MedicalLedgerPhotos", isDirectory: true)
@@ -152,7 +139,7 @@ enum MedicalLedgerExporter {
             ("manifest.json", try makeManifestData(entries: entries, photos: photos))
         ]
         for photo in photos.sorted(by: { $0.importedAt < $1.importedAt }) {
-            guard let data = photoDataProvider(photo) else { continue }
+            guard let data = photoDataProvider(photo) else { throw CocoaError(.fileReadNoSuchFile) }
             files.append((photoArchivePath(photo), data))
         }
         return ZipArchiveWriter.makeArchive(files: files)

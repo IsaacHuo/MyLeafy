@@ -189,25 +189,41 @@ enum TimetableBackgroundStore {
         blue: 211.0 / 255.0
     )
 
-    static func importImageData(_ data: Data, replacing oldFilename: String?) async throws -> TimetableBackgroundImportResult {
-        try await Task.detached(priority: .userInitiated) {
+    static func importImageData(_ data: Data) async throws -> TimetableBackgroundImportResult {
+        try Task.checkCancellation()
+        let directory = directoryURL
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
             let processed = try TimetableBackgroundImageProcessor.process(data)
+            try Task.checkCancellation()
             let filename = "background-\(UUID().uuidString.lowercased()).jpg"
-            let url = directoryURL.appendingPathComponent(filename)
-            let fileManager = FileManager.default
+            let url = directory.appendingPathComponent(filename)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Task.checkCancellation()
+            try processed.jpegData.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            return TimetableBackgroundImportResult(filename: filename, palette: processed.palette)
+        }
+        let result = try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: { task.cancel() }
+        if Task.isCancelled {
+            try discardImage(named: result.filename)
+            throw CancellationError()
+        }
+        return result
+    }
 
-            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            try processed.jpegData.write(to: url, options: [.atomic])
+    static func discardImage(named filename: String) throws {
+        try validateFilename(filename)
+        guard UserDefaults.standard.string(forKey: filenameKey) != filename else { return }
+        try removeBackgroundFile(named: filename)
+    }
 
-            if let oldFilename, !oldFilename.isEmpty, oldFilename != filename {
-                try? removeBackgroundFile(named: oldFilename)
-            }
-
-            return TimetableBackgroundImportResult(
-                filename: filename,
-                palette: processed.palette
-            )
-        }.value
+    nonisolated private static func validateFilename(_ filename: String) throws {
+        guard !filename.isEmpty, filename != ".", filename != "..",
+              !filename.contains("/"), !filename.contains("\\"), !filename.contains("\0") else {
+            throw CocoaError(.fileReadInvalidFileName)
+        }
     }
 
     nonisolated static func image(filename: String) async -> UIImage? {
@@ -217,7 +233,7 @@ enum TimetableBackgroundStore {
     }
 
     nonisolated private static func imageSynchronously(filename: String) -> UIImage? {
-        guard !filename.isEmpty else { return nil }
+        guard (try? validateFilename(filename)) != nil else { return nil }
         let url = directoryURL.appendingPathComponent(filename)
         guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
             return nil
@@ -285,6 +301,7 @@ enum TimetableBackgroundStore {
     }
 
     nonisolated private static func removeBackgroundFile(named filename: String) throws {
+        try validateFilename(filename)
         let url = directoryURL.appendingPathComponent(filename)
         if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
             try FileManager.default.removeItem(at: url)

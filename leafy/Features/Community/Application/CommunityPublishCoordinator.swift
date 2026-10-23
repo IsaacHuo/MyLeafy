@@ -374,6 +374,7 @@ final class CommunityPublishCoordinator: ObservableObject {
     private let notificationDismissedKey = "community.publish.notification.dismissed.ids"
     private let backend: any CommunityPublishBackend
     private var workers: [UUID: Task<Void, Never>] = [:]
+    private var workerIDs: [UUID: UUID] = [:]
     private var hasConfigured = false
 
     init(
@@ -398,6 +399,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             guard path.status == .satisfied else { return }
             Task { @MainActor [weak self] in
                 self?.resumeAutomaticallyRetryableTasks()
+                self?.resumePendingCancellations()
             }
         }
         networkMonitor.start(queue: networkMonitorQueue)
@@ -447,6 +449,7 @@ final class CommunityPublishCoordinator: ObservableObject {
             CommunityBackgroundTransferManager.shared.reconnect()
         }
         resumeAutomaticallyRetryableTasks()
+        resumePendingCancellations()
         startQueuedWork()
     }
 
@@ -595,19 +598,14 @@ final class CommunityPublishCoordinator: ObservableObject {
               !tasks[index].state.isTerminal else { return }
         let previous = tasks[index]
         tasks[index].state = .cancelling
+        tasks[index].errorMessage = nil
         tasks[index].updatedAt = Date()
         guard persistTasks() else { tasks[index] = previous; return }
         workers[taskID]?.cancel()
         workers[taskID] = nil
         CommunityBackgroundTransferManager.shared.cancel(publishTaskID: taskID)
-        Task {
-            if (try? await backend.pendingPostContext(postID: taskID)) != nil {
-                try? await backend.abortPendingPost(postID: taskID)
-            }
-            await MainActor.run {
-                self.finishCancellation(taskID: taskID)
-            }
-        }
+        workerIDs[taskID] = nil
+        startCancellation(taskID: taskID)
     }
 
     func handleIdentityChange() {
@@ -682,10 +680,53 @@ final class CommunityPublishCoordinator: ObservableObject {
 
     private func startWorker(taskID: UUID) {
         guard workers[taskID] == nil, let task = tasks.first(where: { $0.id == taskID }), isCurrentOwner(task), !queueUnreadable, !queueWriteFailed else { return }
+        let workerID = UUID()
+        workerIDs[taskID] = workerID
         workers[taskID] = Task { [weak self] in
             await self?.process(taskID: taskID)
-            await MainActor.run {
-                self?.workers[taskID] = nil
+            self?.finishWorker(taskID: taskID, workerID: workerID)
+        }
+    }
+
+    private func finishWorker(taskID: UUID, workerID: UUID) {
+        guard workerIDs[taskID] == workerID else { return }
+        workers[taskID] = nil
+        workerIDs[taskID] = nil
+    }
+
+    private func resumePendingCancellations() {
+        for task in tasks where task.state == .cancelling && isCurrentOwner(task) {
+            startCancellation(taskID: task.id)
+        }
+    }
+
+    private func startCancellation(taskID: UUID) {
+        guard workers[taskID] == nil, !queueUnreadable, !queueWriteFailed,
+              let task = tasks.first(where: { $0.id == taskID }),
+              task.state == .cancelling, isCurrentOwner(task) else { return }
+        let workerID = UUID()
+        workerIDs[taskID] = workerID
+        workers[taskID] = Task { [weak self] in
+            guard let self else { return }
+            defer { finishWorker(taskID: taskID, workerID: workerID) }
+            let scope = CampusOperationScope()
+            do {
+                let pending = try await backend.pendingPostContext(postID: taskID)
+                try scope.check()
+                if pending?.status == "published" {
+                    complete(taskID: taskID)
+                    return
+                }
+                if pending != nil {
+                    try await backend.abortPendingPost(postID: taskID)
+                    try scope.check()
+                }
+                finishCancellation(taskID: taskID)
+            } catch {
+                guard !scope.wasCancelled(error) else { return }
+                updateTask(taskID) {
+                    $0.errorMessage = error.localizedDescription
+                }
             }
         }
     }

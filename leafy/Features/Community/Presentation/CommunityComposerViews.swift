@@ -30,6 +30,7 @@ struct CommunityComposerSheet: View {
     @State private var pollHasDeadline = false
     @State private var pollClosesAt = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
     @State private var isSubmitting = false
+    @State private var imageLoadID = UUID()
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var draftImages: [CommunityDraftImage] = []
     @State private var draftAttachments: [CommunityDraftAttachment] = []
@@ -171,6 +172,7 @@ struct CommunityComposerSheet: View {
                 await preflightPostCreation()
             }
             .onDisappear {
+                imageLoadID = UUID()
                 draftSaveTask?.cancel()
             }
             .onChange(of: selectedItems) { _, newValue in
@@ -549,6 +551,9 @@ struct CommunityComposerSheet: View {
     }
 
     private func loadSelectedImages(from items: [PhotosPickerItem]) async {
+        let loadID = UUID()
+        imageLoadID = loadID
+        let scope = CampusOperationScope()
         errorMessage = nil
         var loaded: [CommunityDraftImage] = []
         if items.count > CommunityImageUpload.postImageLimit {
@@ -566,6 +571,8 @@ struct CommunityComposerSheet: View {
                     maxPixelDimension: CommunityImageUpload.postImageMaxPixelDimension,
                     maxBytes: CommunityImageUpload.postImageMaxBytes
                 )
+                try scope.check()
+                guard imageLoadID == loadID else { return }
                 guard let preview = ImageDataDecoder.decodedImage(
                     from: result.previewData,
                     targetSize: CGSize(width: 420, height: 420)
@@ -575,14 +582,17 @@ struct CommunityComposerSheet: View {
 
                 loaded.append(CommunityDraftImage(id: result.upload.id, image: preview, upload: result.upload))
             } catch {
+                guard !scope.wasCancelled(error), imageLoadID == loadID else { return }
                 errorMessage = L10n.text("加载图片失败：%@", language: leafyLanguage, error.localizedDescription)
             }
         }
 
+        guard scope.isCurrent, imageLoadID == loadID, !Task.isCancelled else { return }
         draftImages = loaded
     }
 
     private func removeDraftImage(_ id: UUID) {
+        imageLoadID = UUID()
         draftImages.removeAll { $0.id == id }
     }
 
@@ -649,7 +659,7 @@ struct CommunityComposerSheet: View {
     }
 
     private func cleanupComposerAttachments() {
-        for draft in draftAttachments {
+        for draft in draftAttachments where CommunityComposerAttachmentTypes.isStagedAttachment(draft.upload.localURL) {
             try? FileManager.default.removeItem(at: draft.upload.localURL)
         }
         draftAttachments.removeAll()

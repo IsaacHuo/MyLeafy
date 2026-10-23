@@ -2,121 +2,16 @@ import XCTest
 @testable import Leafy
 
 final class CommunityThreadsAndPublishQueueTests: XCTestCase {
-    func testCreatePostRPCParamsEncodeNullCategory() throws {
-        let params = CommunityCreatePostV4RPCParams(
-            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
-            requestID: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
-            title: "无分类帖子",
-            body: "正文",
-            category: nil,
-            isAnonymous: false,
-            imageCount: 0,
-            attachmentCount: 0
-        )
 
-        let data = try JSONEncoder().encode(params)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertEqual(object.count, 8)
-        XCTAssertTrue(object["p_category"] is NSNull)
-        XCTAssertEqual(object["p_request_id"] as? String, "22222222-2222-2222-2222-222222222222")
-    }
-
-    func testNotificationRPCParamsEncodeNullOptionalValues() throws {
-        let params = CommunityNotificationRPCParams(
-            recipientID: UUID(),
-            actorID: UUID(),
-            postID: UUID(),
-            commentID: nil,
-            type: .comment,
-            title: "新通知",
-            body: nil
-        )
-
-        let data = try JSONEncoder().encode(params)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertEqual(object.count, 7)
-        XCTAssertTrue(object["p_comment_id"] is NSNull)
-        XCTAssertTrue(object["p_body"] is NSNull)
-    }
-
-    func testTopLevelCommentRPCParamsEncodeNullReplyTargets() throws {
-        let params = CommunityCreateCommentV2RPCParams(
-            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
-            requestID: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
-            postID: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
-            body: "一级评论",
-            parentCommentID: nil,
-            replyToCommentID: nil,
-            isAnonymous: false
-        )
-
-        let data = try JSONEncoder().encode(params)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertEqual(object.count, 7)
-        XCTAssertTrue(object["p_parent_comment_id"] is NSNull)
-        XCTAssertTrue(object["p_reply_to_comment_id"] is NSNull)
-        XCTAssertEqual(object["p_request_id"] as? String, "22222222-2222-2222-2222-222222222222")
-    }
-
-
-
-    func testCommentLikeResponseDecodesSingleRow() throws {
-        let commentID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
-        let data = Data(
-            """
-            [{
-              "comment_id": "\(commentID.uuidString)",
-              "like_count": 4,
-              "viewer_has_liked": true
-            }]
-            """.utf8
-        )
-
-        let records = try JSONDecoder().decode([CommunityCommentLikeStateRecord].self, from: data)
-        let state = try CommunityCommentLikeResponseValidator.state(from: records)
-
-        XCTAssertEqual(state.commentID, commentID)
+    func testCommentLikeRESTResponseRequiresSingleObjectWithCompleteState() throws {
+        let id = UUID()
+        let payload = Data("{\"comment_id\":\"\(id)\",\"like_count\":4,\"viewer_has_liked\":true}".utf8)
+        let state = try JSONDecoder().decode(CommunityCommentLikeState.self, from: payload)
+        XCTAssertEqual(state.commentID, id)
         XCTAssertEqual(state.likeCount, 4)
         XCTAssertTrue(state.viewerHasLiked)
-    }
-
-    func testCommentLikeResponseRejectsUnexpectedRowCounts() throws {
-        let record = try JSONDecoder().decode(
-            CommunityCommentLikeStateRecord.self,
-            from: Data(
-                """
-                {
-                  "comment_id": "11111111-1111-1111-1111-111111111111",
-                  "like_count": 4,
-                  "viewer_has_liked": true
-                }
-                """.utf8
-            )
-        )
-
-        for records in [[], [record, record]] {
-            XCTAssertThrowsError(try CommunityCommentLikeResponseValidator.state(from: records)) { error in
-                XCTAssertEqual(error.localizedDescription, "评论点赞返回数据异常，请稍后重试。")
-            }
-        }
-    }
-
-    func testCommentLikeResponseRejectsInvalidFields() {
-        let data = Data(
-            """
-            [{
-              "comment_id": "11111111-1111-1111-1111-111111111111",
-              "like_count": 4
-            }]
-            """.utf8
-        )
-
-        XCTAssertThrowsError(
-            try JSONDecoder().decode([CommunityCommentLikeStateRecord].self, from: data)
-        )
+        XCTAssertThrowsError(try JSONDecoder().decode(CommunityCommentLikeState.self, from: Data("[{}]".utf8)))
+        XCTAssertThrowsError(try JSONDecoder().decode(CommunityCommentLikeState.self, from: Data("{\"comment_id\":\"\(id)\",\"like_count\":4}".utf8)))
     }
 
     func testCommentInteractionPolicyAllowsReplyingToOwnVisiblePublishedComment() {
@@ -294,10 +189,6 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
             firstRequestID
         )
     }
-
-
-
-
 
     @MainActor
     func testCommentLikeSuccessUsesServerState() async {
@@ -543,7 +434,6 @@ final class CommunityThreadsAndPublishQueueTests: XCTestCase {
             images: []
         )
     }
-
 
 }
 

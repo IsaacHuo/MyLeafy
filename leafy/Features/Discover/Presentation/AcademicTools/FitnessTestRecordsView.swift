@@ -208,9 +208,9 @@ struct FitnessTestRecordsView: View {
         item?.rawValue ?? "全部"
     }
 
-    private func insert(_ draft: FitnessTestRecordDraft) {
+    private func insert(_ draft: FitnessTestRecordDraft) -> Bool {
         let now = Date()
-        modelContext.insert(FitnessTestRecord(
+        let inserted = FitnessTestRecord(
             testedAt: draft.testedAt,
             itemRawValue: draft.item.rawValue,
             value: draft.value,
@@ -218,31 +218,36 @@ struct FitnessTestRecordsView: View {
             note: draft.note,
             createdAt: now,
             updatedAt: now
-        ))
-        save(successMessage: "体测记录已添加。")
+        )
+        modelContext.insert(inserted)
+        return save(successMessage: "体测记录已添加。", undo: { modelContext.delete(inserted) })
     }
 
-    private func update(_ record: FitnessTestRecord, with draft: FitnessTestRecordDraft) {
+    private func update(_ record: FitnessTestRecord, with draft: FitnessTestRecordDraft) -> Bool {
+        let previous = (record.testedAt, record.itemRawValue, record.value, record.unitRawValue, record.note, record.updatedAt)
         record.testedAt = draft.testedAt
         record.itemRawValue = draft.item.rawValue
         record.value = draft.value
         record.unitRawValue = draft.unit.rawValue
         record.note = draft.note
         record.updatedAt = Date()
-        save(successMessage: "体测记录已保存。")
+        return save(successMessage: "体测记录已保存。", undo: { record.testedAt = previous.0; record.itemRawValue = previous.1; record.value = previous.2; record.unitRawValue = previous.3; record.note = previous.4; record.updatedAt = previous.5 })
     }
 
     private func delete(_ record: FitnessTestRecord) {
         modelContext.delete(record)
-        save(successMessage: "体测记录已删除。")
+        save(successMessage: "体测记录已删除。", undo: { modelContext.insert(record) })
     }
 
-    private func save(successMessage: String) {
+    @discardableResult
+    private func save(successMessage: String, undo: () -> Void) -> Bool {
         do {
-            try modelContext.save()
+            try LocalModelSave.save(modelContext, undo: undo)
             operationAlert = .success(L10n.text(successMessage, language: leafyLanguage))
+            return true
         } catch {
             operationAlert = .failure(error.localizedDescription)
+            return false
         }
     }
 
@@ -541,7 +546,7 @@ private struct FitnessTestRecordDraft {
 
 private struct FitnessTestRecordEditorView: View {
     let record: FitnessTestRecord?
-    let onSave: (FitnessTestRecordDraft) -> Void
+    let onSave: (FitnessTestRecordDraft) -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
@@ -564,7 +569,8 @@ private struct FitnessTestRecordEditorView: View {
         if unit == .minuteSecond {
             return Double(minutes * 60 + seconds)
         }
-        return Double(valueText.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard let value = Double(valueText.trimmingCharacters(in: .whitespacesAndNewlines)), value.isFinite, value < Double(Int.max) else { return nil }
+        return value
     }
 
     private var isSaveDisabled: Bool {
@@ -572,10 +578,11 @@ private struct FitnessTestRecordEditorView: View {
         return numericValue <= 0
     }
 
-    init(record: FitnessTestRecord?, onSave: @escaping (FitnessTestRecordDraft) -> Void) {
+    init(record: FitnessTestRecord?, onSave: @escaping (FitnessTestRecordDraft) -> Bool) {
         let normalizedItem = record.map { FitnessTestItem.normalized($0.itemRawValue) } ?? .height
         let normalizedUnit = normalizedItem.defaultUnit
-        let value = record?.value ?? 0
+        let rawValue = record?.value ?? 0
+        let value = rawValue.isFinite && rawValue >= 0 && rawValue < Double(Int.max) ? rawValue : 0
 
         self.record = record
         self.onSave = onSave
@@ -637,14 +644,14 @@ private struct FitnessTestRecordEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
                         guard let numericValue else { return }
-                        onSave(FitnessTestRecordDraft(
+                        let saved = onSave(FitnessTestRecordDraft(
                             testedAt: testedAt,
                             item: item,
                             value: numericValue,
                             unit: unit,
                             note: trimmedNote
                         ))
-                        dismiss()
+                        if saved { dismiss() }
                     }
                     .disabled(isSaveDisabled)
                 }
@@ -670,6 +677,7 @@ private struct FitnessTestRecordEditorView: View {
     }
 
     private static func inputText(for value: Double, unit: FitnessTestUnit) -> String {
+        guard value.isFinite, value >= 0, value < Double(Int.max) else { return "" }
         switch unit {
         case .milliliter, .count:
             return String(Int(value.rounded()))

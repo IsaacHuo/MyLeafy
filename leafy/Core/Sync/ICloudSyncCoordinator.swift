@@ -19,7 +19,7 @@ final class ICloudSyncCoordinator: ObservableObject {
     @Published private(set) var pendingCount = 0
     private var context: ModelContext?
     private var identity: CampusIdentity?
-    private var journal = ICloudSyncJournal()
+    private(set) var journal = ICloudSyncJournal()
     private var journalURL: URL?
     private var engine: CKSyncEngine?
     private var task: Task<Void, Never>?
@@ -38,7 +38,7 @@ final class ICloudSyncCoordinator: ObservableObject {
     private var zoneID: CKRecordZone.ID { CKRecordZone.ID(zoneName: "personal-" + (identity?.scopeKey ?? "none")) }
     private var container: CKContainer { CKContainer(identifier: Self.containerIdentifier) }
 
-    private init() {
+    init() {
         guard !AppRuntimeEnvironment.isRunningUnitTests else { return }
         for name in [ModelContext.didSave, .customScheduleEventsDidChange,
                      .schoolDataDidRefresh, .semesterRuntimeConfigDidChange] {
@@ -56,6 +56,8 @@ final class ICloudSyncCoordinator: ObservableObject {
         guard identity != current || self.context !== context else { return }
         stop()
         self.context = context; identity = current; loaded = false
+        journal = ICloudSyncJournal(); journalURL = nil
+        failure = nil; failureDetails = nil; reportedError = nil
         guard let current, !ReviewDemoMode.isEnabled,
               let store = CampusStoreScope.scopedStoreURL(for: current) else { publish(); return }
         journalURL = store.deletingLastPathComponent().appendingPathComponent("ICloudSync/journal.json")
@@ -330,7 +332,7 @@ final class ICloudSyncCoordinator: ObservableObject {
         } else { record["asset"] = nil }
         return record
     }
-    private func receive(_ record: CKRecord) throws {
+    func receive(_ record: CKRecord) throws {
         guard record.recordID.zoneID == zoneID else { return }
         journal.refetch.insert(record.recordID.recordName)
         try persist()
@@ -384,7 +386,7 @@ final class ICloudSyncCoordinator: ObservableObject {
             try receive(record)
         }
     }
-    private func applyInbox() throws {
+    func applyInbox(save: (ModelContext) throws -> Void = { try $0.save() }) throws {
         guard let sourceContext = context, !journal.inbox.isEmpty else { return }
         let context = ModelContext(sourceContext.container)
         context.autosaveEnabled = false
@@ -392,22 +394,34 @@ final class ICloudSyncCoordinator: ObservableObject {
         defer { applying = false; observedPreferences = preferenceSnapshot() }
         // Files precede metadata so existing readers never observe a missing received attachment.
         let values = journal.inbox.values.sorted { ($0.filePath == nil ? 1 : 0, $0.key) < ($1.filePath == nil ? 1 : 0, $1.key) }
+        let latest = try ICloudLocalData.capture(context: context, journal: journal, onlyKeys: Set(journal.inbox.keys))
+        let latestByKey = Dictionary(uniqueKeysWithValues: latest.map { ($0.key, $0) })
+        if journal.captureBeforeMerge(latest, incoming: values) { try persist() }
         let notificationChange = values.contains { $0.key == "school/courses" || $0.key.hasPrefix("settings/timetable/") || $0.key.hasPrefix("CourseReminderSetting/") || $0.key.hasPrefix("TimetableCellReminder/") || $0.key.hasPrefix("CustomSchedule/") || $0.key.hasPrefix("ManualExam/") }
         let oldCourses = notificationChange ? try context.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot) : []
         let oldCells = notificationChange ? try context.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() } : []
         let oldEvents = notificationChange ? try CustomScheduleStore.loadForSync() : []
         var notificationsInvalidated = false
         for remote in values {
-            var chosen = remote
-            if let local = journal.records[remote.key], local.revision != remote.revision {
-                chosen = ICloudSyncValue.winner(local: local, remote: remote)
-                if journal.pending.contains(local.key), local.payload != remote.payload,
-                   !local.deleted, !remote.deleted, local.isPersonalText,
-                   let copy = try ICloudLocalData.conflictCopy(chosen == local ? remote : local, context: context) {
-                    journal.records[copy.key] = copy; journal.pending.insert(copy.key)
-                }
-            }
+            let before = journal
+            var committed = false
             do {
+                var chosen = remote
+                if let local = journal.records[remote.key], local.revision != remote.revision {
+                    let current = latestByKey[remote.key]
+                    let alreadyCommitted = !local.deleted && !remote.deleted
+                        && current?.deleted == false && current?.payload == remote.payload
+                        && current?.fileDigest == remote.fileDigest
+                    // A stale pending journal must not undo content already committed from the incoming value.
+                    if !alreadyCommitted {
+                        chosen = ICloudSyncValue.winner(local: local, remote: remote)
+                        if journal.pending.contains(local.key), local.payload != remote.payload,
+                           !local.deleted, !remote.deleted, local.isPersonalText,
+                           let copy = try ICloudLocalData.conflictCopy(chosen == local ? remote : local, context: context) {
+                            journal.records[copy.key] = copy; journal.pending.insert(copy.key)
+                        }
+                    }
+                }
                 if chosen == remote {
                     let files = try ICloudLocalData.requiredFiles(for: remote)
                     if try files.contains(where: { path in
@@ -428,7 +442,8 @@ final class ICloudSyncCoordinator: ObservableObject {
                     try ICloudLocalData.apply(remote, context: context)
                     journal.records[remote.key] = remote; journal.pending.remove(remote.key)
                 } else { journal.pending.insert(chosen.key) }
-                try context.save()
+                try save(context)
+                committed = true
                 if notificationChange && chosen == remote && !notificationsInvalidated {
                     TimetableNotificationManager.cancelAllCourseReminders(courses: oldCourses)
                     TimetableNotificationManager.cancelAllCellReminders(oldCells)
@@ -443,7 +458,12 @@ final class ICloudSyncCoordinator: ObservableObject {
                 }
                 journal.inbox.removeValue(forKey: remote.key)
                 try persist()
-            } catch { context.rollback(); throw error }
+            } catch {
+                context.rollback()
+                // A failed model commit must not acknowledge remote data or upload a phantom conflict copy.
+                if !committed { journal = before }
+                throw error
+            }
         }
         LeafyWidgetSnapshotBuilder.publish(from: context, isAuthenticated: true)
         NotificationCenter.default.post(name: .semesterRuntimeConfigDidChange, object: nil)
@@ -462,16 +482,20 @@ final class ICloudSyncCoordinator: ObservableObject {
         guard loaded, let identity, identity == ActiveCampusContext.identity else { return }
         let zone = zoneID
         stop(); journal.enabled = false
+        let token = generation
         do {
             try persist(); isBusy = true
-            defer { isBusy = false }
+            defer { if generation == token { isBusy = false } }
             do { _ = try await container.privateCloudDatabase.deleteRecordZone(withID: zone) }
             catch let error as CKError where error.code == .zoneNotFound { /* Already deleted. */ }
-            guard identity == ActiveCampusContext.identity else { return }
+            try check(token)
             journal.engineState = nil; journal.systemFields = [:]; journal.inbox = [:]; journal.refetch = []; journal.lastSuccess = nil
             journal.pending = Set(journal.records.keys)
             failure = nil; failureDetails = nil; try persist()
-        } catch { report(error) }
+        } catch {
+            guard generation == token, !(error is CancellationError) else { return }
+            report(error)
+        }
     }
 }
 

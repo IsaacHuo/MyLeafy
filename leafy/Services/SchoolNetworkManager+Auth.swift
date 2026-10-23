@@ -14,6 +14,7 @@ extension SchoolNetworkManager {
             throw SchoolNetworkError.featureUnavailable("演示模式不连接学校教务验证码。")
         }
 
+        let scope = CampusOperationScope()
         let previousCookies = persistedCookieValues
         do {
             switch portal {
@@ -26,6 +27,7 @@ extension SchoolNetworkManager {
             // A failed captcha request usually means the campus network/VPN is
             // unreachable. Preserve the previous session so connectivity is
             // not mistaken for a real logout.
+            try scope.check()
             persistedCookieValues = previousCookies
             for url in [URL(string: baseURL), URL(string: graduateBaseURL)].compactMap({ $0 }) {
                 syncPersistedCookiesToStorage(for: url)
@@ -35,6 +37,7 @@ extension SchoolNetworkManager {
     }
 
     private func fetchUndergraduateCaptcha() async throws -> (key: String, image: UIImage) {
+        let scope = CampusOperationScope()
         guard let codeUrl = URL(string: "\(baseURL)/Logon.do?method=logon&flag=sess") else {
             throw URLError(.badURL)
         }
@@ -43,6 +46,7 @@ extension SchoolNetworkManager {
 
         let codeRequest = makeRequest(url: codeUrl)
         let (keyData, keyResponse) = try await data(for: codeRequest)
+        try scope.check()
         if let httpResponse = keyResponse as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: codeUrl)
         }
@@ -56,6 +60,7 @@ extension SchoolNetworkManager {
 
         let verifyRequest = makeRequest(url: verifyUrl)
         let (imgData, verifyResponse) = try await data(for: preparedRequest(from: verifyRequest))
+        try scope.check()
         if let httpResponse = verifyResponse as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: verifyUrl)
         }
@@ -67,6 +72,7 @@ extension SchoolNetworkManager {
     }
 
     private func fetchGraduateCaptcha() async throws -> (key: String, image: UIImage) {
+        let scope = CampusOperationScope()
         guard let loginUrl = graduateURL(path: "/home/stulogin"),
               let verifyUrl = graduateURL(path: "/home/verificationcode?codetype=stucode") else {
             throw URLError(.badURL)
@@ -75,11 +81,13 @@ extension SchoolNetworkManager {
         clearPersistedCookies()
 
         let (loginHTML, loginResponse) = try await html(for: makeRequest(url: loginUrl))
+        try scope.check()
         updatePersistedCookies(from: loginResponse, requestURL: loginUrl)
 
         let publicKey = try extractGraduatePublicKey(from: loginHTML)
         let verifyRequest = makeRequest(url: verifyUrl, referer: loginUrl)
         let (imgData, verifyResponse) = try await data(for: preparedRequest(from: verifyRequest))
+        try scope.check()
         if let httpResponse = verifyResponse as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: verifyUrl)
         }
@@ -91,6 +99,7 @@ extension SchoolNetworkManager {
     }
 
     func refreshLoginKey() async throws -> String {
+        let scope = CampusOperationScope()
         if ReviewDemoMode.isEnabled {
             throw SchoolNetworkError.featureUnavailable("演示模式不连接学校教务登录。")
         }
@@ -101,6 +110,7 @@ extension SchoolNetworkManager {
 
         let request = makeRequest(url: codeUrl, method: "POST", referer: URL(string: baseURL))
         let (keyData, response) = try await data(for: preparedRequest(from: request))
+        try scope.check()
         if let httpResponse = response as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: codeUrl)
         }
@@ -142,8 +152,10 @@ extension SchoolNetworkManager {
     }
 
     private func performUndergraduateLogin(account: String, password: String, captcha: String) async throws -> Bool {
+        let scope = CampusOperationScope()
         let trimmedAccount = account.trimmingCharacters(in: .whitespacesAndNewlines)
         let effectiveKey = try await refreshLoginKey()
+        try scope.check()
         let encodedStr = encodeKey(key: effectiveKey, account: account, password: password)
 
         guard let loginUrl = URL(string: "\(baseURL)/Logon.do?method=logon") else {
@@ -162,6 +174,7 @@ extension SchoolNetworkManager {
         ])
 
         let (data, response) = try await data(for: preparedRequest(from: request))
+        try scope.check()
         guard let httpResponse = response as? HTTPURLResponse else {
             return false
         }
@@ -172,6 +185,7 @@ extension SchoolNetworkManager {
         let html = (try? decodedHTML(from: data)) ?? ""
         let loggedInFromResponse = isAuthenticatedResponse(url: httpResponse.url, html: html)
         let loggedInFromSessionCheck = await verifyAuthenticatedSession(retryCount: 2)
+        try scope.check()
 
         if loggedInFromResponse && loggedInFromSessionCheck {
             await MainActor.run {
@@ -206,6 +220,7 @@ extension SchoolNetworkManager {
     }
 
     private func performGraduateLogin(account: String, password: String, captcha: String, publicKey: String) async throws -> Bool {
+        let scope = CampusOperationScope()
         let trimmedAccount = account.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let loginUrl = graduateURL(path: "/home/stulogin_do"),
               let refererURL = graduateURL(path: "/home/stulogin"),
@@ -235,6 +250,7 @@ extension SchoolNetworkManager {
         ])
 
         let (data, response) = try await data(for: preparedRequest(from: request))
+        try scope.check()
         guard let httpResponse = response as? HTTPURLResponse else {
             return false
         }
@@ -250,6 +266,7 @@ extension SchoolNetworkManager {
         )
 
         let displayName = (try? await fetchGraduateDisplayName(from: nameURL)) ?? trimmedAccount
+        try scope.check()
         await MainActor.run {
             self.currentPortal = .graduate
             self.persistAuthenticatedIdentity(eduID: trimmedAccount, displayName: displayName)
@@ -495,12 +512,14 @@ extension SchoolNetworkManager {
         from url: URL,
         timeoutInterval: TimeInterval? = nil
     ) async throws -> String {
+        let scope = CampusOperationScope()
         var request = makeRequest(url: url, method: "POST", referer: graduateURL(path: "/home/stulogin"))
         if let timeoutInterval {
             request.timeoutInterval = timeoutInterval
         }
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await data(for: preparedRequest(from: request))
+        try scope.check()
         if let httpResponse = response as? HTTPURLResponse {
             updatePersistedCookies(from: httpResponse, requestURL: url)
         }
@@ -526,10 +545,12 @@ extension SchoolNetworkManager {
             return false
         }
 
-        for attempt in 0...retryCount {
+        let scope = CampusOperationScope()
+        for attempt in 0...max(0, retryCount) {
+            guard scope.isCurrent, !Task.isCancelled else { return false }
             do {
                 _ = try await fetchGraduateDisplayName(from: url)
-                return true
+                return scope.isCurrent && !Task.isCancelled
             } catch {
             }
 

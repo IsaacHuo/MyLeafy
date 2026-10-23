@@ -183,24 +183,3 @@ nonisolated struct CampusDiningLocation: Identifiable, Hashable, Sendable {
         location(for: fullName)?.displayName
     }
 }
-
-struct CommunitySectionView: View {
-    @Binding var selectedPost: CommunityMockPost?
-
-    private let posts = CommunityMockPost.samples
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.card) {
-            LeafySectionTitle("社区", subtitle: "当前阶段使用 Mock 数据，验证信息架构、帖子流与详情交互。")
-
-            ForEach(posts) { post in
-                Button {
-                    selectedPost = post
-                } label: {
-                    CommunityPostCard(post: post)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}

@@ -16,7 +16,11 @@ enum AppAccountDeletionCoordinator {
         remotely: () async throws -> Void,
         locally: () throws -> Void
     ) async throws -> Error? {
+        let ownerScope = ActiveCampusContext.identity?.scopeKey
         try await remotely()
+        guard ActiveCampusContext.identity?.scopeKey == ownerScope else {
+            throw AppLocalDataDeletionError(failures: [L10n.text("线上账户已删除，但当前身份已变化，尚未清理新身份的数据。")])
+        }
         do {
             try locally()
             return nil
@@ -28,10 +32,10 @@ enum AppAccountDeletionCoordinator {
 
 @MainActor
 enum AppSessionResetter {
-    static func returnToLogin(modelContext: ModelContext? = nil) {
+    static func returnToLogin(modelContext: ModelContext? = nil) throws {
         if ReviewDemoMode.isEnabled ||
             ReviewDemoDataSeeder.isDemoEduID(ActiveCampusContext.networkManager.authenticatedEduID) {
-            ReviewDemoDataSeeder.exit(using: modelContext)
+            try ReviewDemoDataSeeder.exit(using: modelContext)
         }
         ActiveCampusContext.networkManager.clearSession()
         LeafyWidgetSnapshotBuilder.publishNeedsLogin()
@@ -48,40 +52,14 @@ enum AppSessionResetter {
             }
         }
 
-        var courses: [Course] = []
-        var cellReminders: [TimetableCellReminder] = []
-        attempt("课程提醒数据") {
-            courses = try modelContext.fetch(FetchDescriptor<Course>())
-        }
-        attempt("课表格提醒数据") {
-            cellReminders = try modelContext.fetch(FetchDescriptor<TimetableCellReminder>())
-        }
+        try ICloudSyncCoordinator.shared.pauseForLocalCacheClear()
+        let courses = try modelContext.fetch(FetchDescriptor<Course>()).map(TimetableReminderRefreshPlan.courseSnapshot)
+        let cellReminders = try modelContext.fetch(FetchDescriptor<TimetableCellReminder>()).map { SyncedTimetableCellReminder($0).make() }
+        if let warning = try deleteLocalRecords(in: modelContext) { cleanupFailures.append(warning) }
         TimetableNotificationManager.cancelAllCourseReminders(courses: courses)
         TimetableNotificationManager.cancelAllCellReminders(cellReminders)
-        ScheduleReportNotificationManager.clearScheduledNotifications()
+        attempt("日程通知") { try ScheduleReportNotificationManager.clearScheduledNotifications() }
 
-        attempt("SwiftData") {
-            try deleteAllModels(in: modelContext)
-        }
-        attempt("求职文件") {
-            try CareerDocumentFileStore.deleteAllFiles()
-        }
-        attempt("学习资料") {
-            try LearningMaterialFileStore.deleteAllFiles()
-        }
-        attempt("综测材料") {
-            try ComprehensiveQualityEvidenceFileStore.deleteAllFiles()
-        }
-        MedicalLedgerPhotoStore.deleteAllFiles()
-        attempt("随记图片") {
-            try ScheduleMemoImageStore.deleteAllFiles()
-        }
-        attempt("随记附件") {
-            try ScheduleMemoAttachmentStore.deleteAllFiles()
-        }
-        attempt("随记录音") {
-            try ScheduleMemoAudioStore.deleteAllFiles()
-        }
         attempt("课表背景") {
             try TimetableBackgroundStore.deleteAllBackgroundFiles()
         }
@@ -118,36 +96,80 @@ enum AppSessionResetter {
         }
     }
 
-    static func deleteAllModels(in modelContext: ModelContext) throws {
-        try modelContext.delete(model: Course.self)
-        try modelContext.delete(model: Grade.self)
-        try modelContext.delete(model: CourseNote.self)
-        try modelContext.delete(model: CourseOccurrenceNote.self)
-        try modelContext.delete(model: CourseReminderSetting.self)
-        try modelContext.delete(model: TimetableCellReminder.self)
-        try modelContext.delete(model: FavoriteClassroom.self)
-        try modelContext.delete(model: FavoriteCampusLink.self)
-        try modelContext.delete(model: PostgraduateTarget.self)
-        try modelContext.delete(model: StudyTimeRecord.self)
-        try modelContext.delete(model: HonorRecord.self)
-        try modelContext.delete(model: LearningMaterialDocument.self)
-        try modelContext.delete(model: LearningProject.self)
-        try modelContext.delete(model: LearningProjectTask.self)
-        try modelContext.delete(model: CareerResumeDocument.self)
-        try modelContext.delete(model: CareerTask.self)
-        try modelContext.delete(model: CareerOpportunity.self)
-        try modelContext.delete(model: FitnessTestRecord.self)
-        try modelContext.delete(model: ComprehensiveQualityRecord.self)
-        try modelContext.delete(model: ComprehensiveQualityComponentEntry.self)
-        try modelContext.delete(model: ComprehensiveQualityEvidenceDocument.self)
-        try modelContext.delete(model: MedicalLedgerEntry.self)
-        try modelContext.delete(model: MedicalLedgerPhoto.self)
-        try modelContext.delete(model: ScheduleMemo.self)
-        try modelContext.delete(model: ScheduleMemoImage.self)
-        try modelContext.delete(model: ScheduleMemoAttachment.self)
-        try modelContext.delete(model: ScheduleMemoAudio.self)
-        try modelContext.save()
+    /// Database failures preserve records/files; a returned warning means deletion committed.
+    static func deleteLocalRecords(
+        in modelContext: ModelContext,
+        cleanup: LocalFileCleanup? = nil,
+        save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> String? {
+        let records = try localRecords(in: modelContext)
+        let files = records.compactMap { record -> LocalFileCleanup.File? in
+            switch record {
+            case let value as ScheduleMemoImage:
+                return .init(value, url: ScheduleMemoImageStore.directoryURL().appendingPathComponent(value.localFilename))
+            case let value as ScheduleMemoAttachment:
+                return ScheduleMemoAttachmentStore.fileURL(for: value).map { .init(value, url: $0) }
+            case let value as ScheduleMemoAudio:
+                return ScheduleMemoAudioStore.fileURL(named: value.localFilename).map { .init(value, url: $0) }
+            case let value as LearningMaterialDocument:
+                return .init(value, url: LearningMaterialFileStore.fileURL(named: value.localFilename))
+            case let value as HonorRecord:
+                return HonorRecordFileStore.fileURL(for: value).map { .init(value, url: $0) }
+            case let value as ComprehensiveQualityEvidenceDocument:
+                return .init(value, url: ComprehensiveQualityEvidenceFileStore.fileURL(named: value.localFilename))
+            case let value as MedicalLedgerPhoto:
+                return MedicalLedgerPhotoStore.fileURL(for: value).map { .init(value, url: $0) }
+            case let value as CareerResumeDocument:
+                return CareerDocumentFileStore.fileURL(for: value).map { .init(value, url: $0) }
+            default: return nil
+            }
+        }
+        let cleanup = cleanup ?? LocalFileCleanup()
+        try cleanup.enqueue(files)
+        records.forEach { modelContext.delete($0) }
+        try LocalModelSave.save(modelContext, undo: {
+            records.forEach { modelContext.insert($0) }
+        }, using: save)
+        do { try cleanup.retry(in: modelContext); return nil }
+        catch { return error.localizedDescription }
     }
+
+    private static func localRecords(in context: ModelContext) throws -> [any PersistentModel] {
+        var records: [any PersistentModel] = []
+        func append<T: PersistentModel>(_ type: T.Type) throws {
+            guard context.container.schema.entitiesByName[String(describing: type)] != nil else { return }
+            records.append(contentsOf: try context.fetch(FetchDescriptor<T>()))
+        }
+        try append(Course.self)
+        try append(Grade.self)
+        try append(CourseNote.self)
+        try append(CourseOccurrenceNote.self)
+        try append(CourseReminderSetting.self)
+        try append(TimetableCellReminder.self)
+        try append(FavoriteClassroom.self)
+        try append(FavoriteCampusLink.self)
+        try append(PostgraduateTarget.self)
+        try append(StudyTimeRecord.self)
+        try append(HonorRecord.self)
+        try append(LearningMaterialDocument.self)
+        try append(LearningProject.self)
+        try append(LearningProjectTask.self)
+        try append(CareerResumeDocument.self)
+        try append(CareerTask.self)
+        try append(CareerOpportunity.self)
+        try append(FitnessTestRecord.self)
+        try append(ComprehensiveQualityRecord.self)
+        try append(ComprehensiveQualityComponentEntry.self)
+        try append(ComprehensiveQualityEvidenceDocument.self)
+        try append(MedicalLedgerEntry.self)
+        try append(MedicalLedgerPhoto.self)
+        try append(ScheduleMemo.self)
+        try append(ScheduleMemoImage.self)
+        try append(ScheduleMemoAttachment.self)
+        try append(ScheduleMemoAudio.self)
+        return records
+    }
+
 }
 
 private struct AppLocalDataDeletionError: LocalizedError {

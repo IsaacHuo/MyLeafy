@@ -14,6 +14,7 @@ enum TimetableSingleContainerMigration {
         let removed = courses.filter { $0.sourceSemesterID != latest }
         let keys = Set(removed.flatMap { [$0.stableCourseKey, $0.legacyStableCourseKey] })
         let identifiers = removed.flatMap { TimetableNotificationManager.courseReminderIdentifiers(for: $0) }
+        let undoPersonalData = try TimetableLocalDataReassociation.personalDataUndo(in: context)
         do {
             for note in try context.fetch(FetchDescriptor<CourseNote>()) where keys.contains(note.courseKey) {
                 note.isUnassociated = true
@@ -31,6 +32,10 @@ enum TimetableSingleContainerMigration {
             try context.save()
             defaults.set(true, forKey: key)
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
-        } catch { context.rollback(); throw error }
+        } catch {
+            for course in removed { context.insert(course) }
+            undoPersonalData()
+            throw error
+        }
     }
 }

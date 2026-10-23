@@ -160,8 +160,10 @@ struct ContentView: View {
             communityNotificationBadgeViewModel.stop(reset: true)
             return
         }
+        let scope = CampusOperationScope()
         communitySessionManager.startBootstrapIfNeeded()
         await communitySessionManager.restoreProfileIfPossible()
+        guard scope.isCurrent, !Task.isCancelled, scenePhase == .active else { return }
         syncCommunityNotificationBadgeSubscription(profileID: communitySessionManager.currentUserID)
         await communityNotificationBadgeViewModel.refresh()
     }

@@ -321,3 +321,54 @@ final class SemesterRuntimeConfigTests: XCTestCase {
         ),
     ]
 }
+
+extension SemesterRuntimeConfigTests {
+    func testRuntimeConfigRejectsInvalidDatesAndUnboundedWeeks() {
+        for (date, weeks) in [("2026-02-30", 20), ("2026-09-07", Int.max)] {
+            let value = SemesterRuntimeConfig(semesterID: "term", semesterStartDateString: date,
+                supportedWeeks: weeks, graduateTimetableTermCode: "47", calendarEvents: [], updatedAt: nil, isActive: true)
+            XCTAssertFalse(value.isUsable)
+        }
+    }
+
+    @MainActor
+    func testRuntimeConfigResponseCannotWriteNewIdentityOrApplyOldCooldown() async {
+        let previous = ActiveCampusContext.identity
+        let first = CampusIdentity(campusID: .bjfu, eduID: "config-a-" + UUID().uuidString, displayName: nil, portal: .undergraduate)
+        let second = CampusIdentity(campusID: .custom, eduID: "config-b-" + UUID().uuidString, displayName: nil, portal: .undergraduate)
+        CampusIdentityStore.activate(first)
+        defer {
+            SemesterRuntimeConfigCache.clear()
+            if let previous { CampusIdentityStore.activate(previous) } else { CampusIdentityStore.clear() }
+        }
+        let remote = SemesterRuntimeConfig.previousSpring
+        let expected = SemesterRuntimeConfig(semesterID: remote.semesterID,
+            semesterStartDateString: remote.semesterStartDateString, supportedWeeks: remote.supportedWeeks,
+            graduateTimetableTermCode: remote.graduateTimetableTermCode, calendarEvents: remote.calendarEvents,
+            updatedAt: nil, isActive: true)
+        let service = SemesterRuntimeConfigService(fetchActive: { _ in
+            await MainActor.run { CampusIdentityStore.activate(second) }
+            return expected
+        })
+        _ = await service.refreshFromRemoteIfAvailable(force: true)
+        XCTAssertNil(SemesterRuntimeConfigCache.load(), "The old identity response must not fill the new identity cache")
+        let current = await service.refreshFromRemoteIfAvailable()
+        XCTAssertEqual(current, expected, "A different identity must receive its own refresh despite the old cooldown")
+        XCTAssertEqual(SemesterRuntimeConfigCache.load(), expected)
+    }
+}
+
+extension SemesterRuntimeConfigTests {
+    func testMonthNavigationKeepsProvidedSemesterAndCampusContext() throws {
+        let config = SemesterRuntimeConfig.previousSpring
+        let reference = try XCTUnwrap(UserTimetableSettings.civilDate(from: "2026-04-01"))
+        let nextMonth = try XCTUnwrap(UserTimetableSettings.civilDate(from: "2026-05-01"))
+        let initial = TimetableTimeScopeSnapshot.make(currentWeek: 4, referenceDate: reference,
+            language: .zhHans, semesterConfig: config, configurations: [config], campusID: .custom)
+        let changed = initial.displayingMonth(nextMonth, language: .zhHans)
+        XCTAssertEqual(changed.weekStartDate, initial.weekStartDate)
+        XCTAssertEqual(changed.weekEndDate, initial.weekEndDate)
+        XCTAssertEqual(changed.yearMonths.map(\.id), initial.yearMonths.map(\.id))
+        XCTAssertNil(changed.vacationStartDate, "Custom campus navigation must not acquire the default school's vacation")
+    }
+}

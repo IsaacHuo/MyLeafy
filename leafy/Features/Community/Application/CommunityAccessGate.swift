@@ -50,9 +50,12 @@ struct CommunityAccessGate {
         _ requirement: CommunityAccessRequirement,
         forceBootstrap: Bool = false
     ) async -> CommunityAccessResult {
+        let scope = CampusOperationScope()
         CommunityDiagnostics.log.info("Community access gate evaluating \(String(describing: requirement), privacy: .public) forceBootstrap=\(forceBootstrap, privacy: .public)")
         await sessionManager.restoreProfileIfPossible()
+        guard scope.isCurrent, !Task.isCancelled else { return .failed(CancellationError().localizedDescription) }
         await sessionManager.bootstrapCommunityUser(force: forceBootstrap)
+        guard scope.isCurrent, !Task.isCancelled else { return .failed(CancellationError().localizedDescription) }
 
         let isBuiltInBJFUCommunity = ActiveCampusContext.descriptor.id == .bjfu
             && ActiveCampusContext.identity?.isCustom != true
@@ -79,18 +82,19 @@ struct CommunityAccessGate {
         case .profileInteraction:
             return sessionManager.requiresProfileCompletion ? .requiresProfileCompletion : .allowed
         case .communityEntry:
-            return await termsResult()
+            return await termsResult(scope: scope)
         case .postCreation, .commentCreation:
             guard !sessionManager.requiresProfileCompletion else {
                 return .requiresProfileCompletion
             }
-            return await termsResult()
+            return await termsResult(scope: scope)
         }
     }
 
-    private func termsResult() async -> CommunityAccessResult {
+    private func termsResult(scope: CampusOperationScope) async -> CommunityAccessResult {
         do {
             let accepted = try await termsChecker.hasAcceptedCurrentTerms()
+            try scope.check()
             CommunityDiagnostics.log.info("Community access gate terms result accepted=\(accepted, privacy: .public)")
             return accepted ? .allowed : .requiresTermsAcceptance
         } catch {

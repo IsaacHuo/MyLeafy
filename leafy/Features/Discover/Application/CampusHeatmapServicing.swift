@@ -7,5 +7,5 @@ protocol CampusHeatmapServicing: Sendable {
 
 protocol CampusHeatmapCaching: Sendable {
     func load() async throws -> CachedCampusHeatmapData?
-    func save(_ data: CachedCampusHeatmapData) async throws
+    func save(_ data: CachedCampusHeatmapData, scope: CampusOperationScope) async throws
 }

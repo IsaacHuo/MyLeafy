@@ -137,6 +137,11 @@ enum CommunityComposerAttachmentTypes {
         return directory
     }
 
+    static func isStagedAttachment(_ url: URL) -> Bool {
+        guard let staging = try? stagingDirectory() else { return false }
+        return url.deletingLastPathComponent().standardizedFileURL == staging.standardizedFileURL
+    }
+
     static func contentType(for fileExtension: String) -> String {
         switch fileExtension {
         case "pdf":
@@ -451,6 +456,7 @@ final class CommunityPostDetailViewModel: ObservableObject {
     @Published private(set) var activeCommentLikeIDs: Set<UUID> = []
     @Published var errorMessage: String?
 
+    private var activeLoadID: UUID?
     private let postID: UUID
     private let repository: any CommunityPostDetailRepository
     private var commentRequestTracker: CommunityCommentRequestTracker
@@ -467,24 +473,36 @@ final class CommunityPostDetailViewModel: ObservableObject {
     }
 
     func load() async {
+        let scope = CampusOperationScope()
+        let loadID = UUID()
+        activeLoadID = loadID
         isLoading = true
-        defer { isLoading = false }
+        defer { if activeLoadID == loadID { isLoading = false } }
 
         do {
             if let refreshedPost = try await repository.fetchPost(postID: postID) {
+                try scope.check()
+                guard activeLoadID == loadID else { return }
                 post = refreshedPost
             }
+            try scope.check()
+            guard activeLoadID == loadID else { return }
             let page = try await repository.fetchCommentThreads(postID: postID, cursor: nil, limit: 20)
+            try scope.check()
+            guard activeLoadID == loadID else { return }
             commentThreads = page.threads
             nextCommentCursor = page.nextCursor
             errorMessage = nil
         } catch {
+            guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     func loadMoreComments() async {
-        guard !isLoadingMoreComments, let nextCommentCursor else { return }
+        let scope = CampusOperationScope()
+        let loadID = activeLoadID
+        guard !isLoading, !isLoadingMoreComments, let nextCommentCursor else { return }
         isLoadingMoreComments = true
         defer { isLoadingMoreComments = false }
 
@@ -494,16 +512,20 @@ final class CommunityPostDetailViewModel: ObservableObject {
                 cursor: nextCommentCursor,
                 limit: 20
             )
+            try scope.check()
+            guard activeLoadID == loadID else { return }
             let existingIDs = Set(commentThreads.map(\.id))
             commentThreads.append(contentsOf: page.threads.filter { !existingIDs.contains($0.id) })
             self.nextCommentCursor = page.nextCursor
             errorMessage = nil
         } catch {
+            guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     func submitComment(body: String, replyingTo target: CommunityComment? = nil) async -> Bool {
+        let scope = CampusOperationScope()
         guard !isSubmitting else { return false }
 
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -528,19 +550,23 @@ final class CommunityPostDetailViewModel: ObservableObject {
                 replyToCommentID: target?.id,
                 requestID: requestID
             )
+            try scope.check()
             let page = try await repository.fetchCommentThreads(postID: postID, cursor: nil, limit: 20)
+            try scope.check()
             commentThreads = page.threads
             nextCommentCursor = page.nextCursor
             commentRequestTracker.complete(requestID: requestID)
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func toggleCommentLike(_ comment: CommunityComment) async {
+        let scope = CampusOperationScope()
         guard !activeCommentLikeIDs.contains(comment.id) else { return }
         activeCommentLikeIDs.insert(comment.id)
 
@@ -558,6 +584,7 @@ final class CommunityPostDetailViewModel: ObservableObject {
         defer { activeCommentLikeIDs.remove(comment.id) }
         do {
             let state = try await repository.toggleCommentLike(commentID: comment.id)
+            try scope.check()
             replaceComment(
                 currentComment(id: comment.id)?.replacingLikeState(
                     state
@@ -565,89 +592,110 @@ final class CommunityPostDetailViewModel: ObservableObject {
             )
             errorMessage = nil
         } catch {
+            guard !scope.wasCancelled(error) else { return }
             replaceComment(original)
             errorMessage = error.localizedDescription
         }
     }
 
     func toggleLike() async -> CommunityPost? {
+        let scope = CampusOperationScope()
         guard !isLikeLoading else { return nil }
         isLikeLoading = true
         defer { isLikeLoading = false }
 
         do {
             let updatedPost = try await repository.togglePostLike(postID: postID)
+            try scope.check()
             post = updatedPost
             errorMessage = nil
             return updatedPost
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
     }
 
     func toggleFavorite() async -> CommunityPost? {
+        let scope = CampusOperationScope()
         guard !isFavoriteLoading else { return nil }
         isFavoriteLoading = true
         defer { isFavoriteLoading = false }
 
         do {
             let updatedPost = try await repository.togglePostFavorite(postID: postID)
+            try scope.check()
             post = updatedPost
             errorMessage = nil
             return updatedPost
         } catch {
+            guard !scope.wasCancelled(error) else { return nil }
             errorMessage = error.localizedDescription
             return nil
         }
     }
 
     func reportPost(reason: String) async -> Bool {
+        let scope = CampusOperationScope()
         do {
             try await repository.reportPost(postID: postID, reason: reason)
+            try scope.check()
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func deletePost() async -> Bool {
+        let scope = CampusOperationScope()
         do {
             try await repository.deletePost(postID: postID)
+            try scope.check()
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func blockPostAuthor() async -> Bool {
+        let scope = CampusOperationScope()
         do {
             try await repository.blockUser(userID: post.authorID, reason: "用户主动屏蔽")
+            try scope.check()
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func reportComment(_ comment: CommunityComment, reason: String) async {
+        let scope = CampusOperationScope()
         do {
             try await repository.reportComment(commentID: comment.id, reason: reason)
+            try scope.check()
             removeComment(id: comment.id)
             errorMessage = nil
         } catch {
+            guard !scope.wasCancelled(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     func blockCommentAuthor(_ comment: CommunityComment) async {
+        let scope = CampusOperationScope()
         do {
             try await repository.blockUser(userID: comment.authorID, reason: "用户主动屏蔽")
+            try scope.check()
             commentThreads = commentThreads.compactMap { thread in
                 guard thread.root.authorID != comment.authorID else { return nil }
                 return CommunityCommentThread(
@@ -657,6 +705,7 @@ final class CommunityPostDetailViewModel: ObservableObject {
             }
             errorMessage = nil
         } catch {
+            guard !scope.wasCancelled(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -2436,7 +2485,7 @@ struct CommunityPublishTaskRow: View {
                     Text(task.input.title)
                         .leafyBody()
                         .lineLimit(1)
-                    if let errorMessage = task.errorMessage, task.state == .failed {
+                    if let errorMessage = task.errorMessage {
                         Text(errorMessage)
                             .microCaption()
                             .foregroundStyle(.red)
@@ -2456,6 +2505,12 @@ struct CommunityPublishTaskRow: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                }
+
+                if task.state == .cancelling, task.errorMessage != nil {
+                    Button("重试取消") { coordinator.cancel(taskID: task.id) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                 }
 
                 if task.state != .published && task.state != .cancelled && task.state != .cancelling {

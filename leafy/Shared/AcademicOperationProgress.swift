@@ -184,25 +184,27 @@ typealias AcademicOperationProgressReporter = @MainActor @Sendable (AcademicOper
 @Observable
 final class AcademicOperationProgressController {
     private(set) var progress: AcademicOperationProgress?
+    private var runID = UUID()
 
     var isActive: Bool { progress != nil }
 
     func begin(_ kind: AcademicOperationKind) {
         if progress?.kind != kind {
+            runID = UUID()
             progress = AcademicOperationProgress(kind: kind)
         }
     }
 
     func reporter(for kind: AcademicOperationKind) -> AcademicOperationProgressReporter {
-        { [weak self] event in
-            self?.record(event, for: kind)
+        begin(kind)
+        let currentRun = runID
+        return { [weak self] event in
+            guard let self, self.runID == currentRun else { return }
+            self.record(event, for: kind)
         }
     }
 
     func record(_ event: AcademicOperationProgressEvent, for kind: AcademicOperationKind) {
-        begin(kind)
-        guard var progress else { return }
-
         let stage: AcademicOperationStage
         switch event {
         case .begin(let eventStage),
@@ -211,6 +213,8 @@ final class AcademicOperationProgressController {
             stage = eventStage
         }
         guard kind.allowedStages.contains(stage) else { return }
+        begin(kind)
+        guard var progress else { return }
 
         switch event {
         case .begin(let stage):
@@ -287,6 +291,7 @@ final class AcademicOperationProgressController {
     }
 
     func clear() {
+        runID = UUID()
         progress = nil
     }
 }

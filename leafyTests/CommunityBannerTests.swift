@@ -39,6 +39,24 @@ final class CommunityBannerTests: XCTestCase {
         XCTAssertNotEqual(first.dismissalKey, second.dismissalKey)
     }
 
+    @MainActor
+    func testSupersededBannerRequestCannotReplaceLatestBanner() async {
+        let firstStarted = expectation(description: "First banner pending")
+        let secondStarted = expectation(description: "Second banner pending")
+        let repository = SuspendedBannerRepository(started: ["first": firstStarted, "second": secondStarted])
+        let model = CommunityBannerViewModel(repository: repository)
+        let first = Task { await model.load(campusID: "first") }
+        await fulfillment(of: [firstStarted], timeout: 3)
+        let second = Task { await model.load(campusID: "second") }
+        await fulfillment(of: [secondStarted], timeout: 3)
+        let latest = makeBanner(id: UUID(), revision: 2)
+        repository.resume("second", banner: latest)
+        await second.value
+        repository.resume("first", banner: makeBanner(id: UUID(), revision: 1))
+        await first.value
+        XCTAssertEqual(model.banner, latest)
+    }
+
     private func makeBanner(id: UUID, revision: Int) -> CommunityBanner {
         CommunityBanner(
             id: id,
@@ -53,5 +71,29 @@ final class CommunityBannerTests: XCTestCase {
             publishedAt: nil,
             expiresAt: nil
         )
+    }
+}
+
+@MainActor
+private final class SuspendedBannerRepository: CommunityBannerRepository {
+    let started: [String: XCTestExpectation]
+    private var pending: [String: CheckedContinuation<CommunityBanner?, Error>] = [:]
+    init(started: [String: XCTestExpectation]) { self.started = started }
+    func fetchActiveBanner(campusID: String) async throws -> CommunityBanner? {
+        try Task.checkCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                pending[campusID] = $0
+                started[campusID]?.fulfill()
+            }
+        } onCancel: { [self] in
+            Task { @MainActor in self.cancel(campusID) }
+        }
+    }
+    func resume(_ campusID: String, banner: CommunityBanner) {
+        pending.removeValue(forKey: campusID)?.resume(returning: banner)
+    }
+    private func cancel(_ campusID: String) {
+        pending.removeValue(forKey: campusID)?.resume(throwing: CancellationError())
     }
 }

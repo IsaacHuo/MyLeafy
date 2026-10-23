@@ -115,7 +115,9 @@ final class LocalCommunityPostDraftRepository: CommunityPostDraftRepository {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
             try applyFileProtection(to: directory)
 
-            let existingDraft = try? decodeManifest(at: directory.appendingPathComponent("manifest.json"))
+            let manifestURL = directory.appendingPathComponent("manifest.json")
+            let existingDraft = fileManager.fileExists(atPath: manifestURL.path)
+                ? try decodeManifest(at: manifestURL) : nil
             if let existingDraft, existingDraft.ownerProfileID != ownerProfileID {
                 throw CommunityPostDraftError.ownerMismatch
             }
@@ -182,7 +184,6 @@ final class LocalCommunityPostDraftRepository: CommunityPostDraftRepository {
             encoder.dateEncodingStrategy = .millisecondsSince1970
             encoder.outputFormatting = [.sortedKeys]
             let data = try encoder.encode(draft)
-            let manifestURL = directory.appendingPathComponent("manifest.json")
             try data.write(to: manifestURL, options: .atomic)
             try applyFileProtection(to: manifestURL)
             try removeOrphanedMedia(in: directory, draft: draft)

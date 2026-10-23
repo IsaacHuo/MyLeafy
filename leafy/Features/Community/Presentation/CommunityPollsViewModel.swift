@@ -9,6 +9,7 @@ final class CommunityPollsViewModel: ObservableObject {
     @Published private(set) var activePollIDs: Set<UUID> = []
     @Published var errorMessage: String?
 
+    private var activeLoadID: UUID?
     private let repository: any CommunityPollRepository
 
     init(repository: any CommunityPollRepository = CommunityBackendFactory.repository) {
@@ -17,8 +18,11 @@ final class CommunityPollsViewModel: ObservableObject {
 
     func load() async {
         CommunityDiagnostics.log.info("Community polls load started")
+        let scope = CampusOperationScope()
+        let loadID = UUID()
+        activeLoadID = loadID
         isLoading = true
-        defer { isLoading = false }
+        defer { if activeLoadID == loadID { isLoading = false } }
 
         do {
             try await CommunityTimeout.run(
@@ -28,6 +32,7 @@ final class CommunityPollsViewModel: ObservableObject {
                 try await repository.ensureAnonymousSession()
             }
 
+            try scope.check()
             let loadedPolls = try await CommunityTimeout.run(
                 seconds: 10,
                 message: L10n.text("投票加载超时，请检查网络后重试。")
@@ -35,16 +40,20 @@ final class CommunityPollsViewModel: ObservableObject {
                 try await repository.fetchPolls(limit: 30)
             }
 
+            try scope.check()
+            guard activeLoadID == loadID else { return }
             polls = loadedPolls
             errorMessage = nil
             CommunityDiagnostics.log.info("Community polls load finished with \(loadedPolls.count) polls")
         } catch {
+            guard !scope.wasCancelled(error), activeLoadID == loadID else { return }
             CommunityDiagnostics.log.error("Community polls load failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
 
     func createPoll(input: CreatePollInput) async -> Bool {
+        let scope = CampusOperationScope()
         if let validationError = input.validationError {
             errorMessage = L10n.text(validationError)
             return false
@@ -52,42 +61,50 @@ final class CommunityPollsViewModel: ObservableObject {
 
         do {
             let poll = try await repository.createPoll(input: input)
+            try scope.check()
             polls.insert(poll, at: 0)
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func vote(pollID: UUID, optionID: UUID) async -> Bool {
+        let scope = CampusOperationScope()
         guard !activePollIDs.contains(pollID) else { return false }
         activePollIDs.insert(pollID)
         defer { activePollIDs.remove(pollID) }
 
         do {
             let updatedPoll = try await repository.votePoll(pollID: pollID, optionID: optionID)
+            try scope.check()
             replacePoll(updatedPoll)
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func requestDeletion(poll: CommunityPoll, reason: String?) async -> Bool {
+        let scope = CampusOperationScope()
         guard !activePollIDs.contains(poll.id) else { return false }
         activePollIDs.insert(poll.id)
         defer { activePollIDs.remove(poll.id) }
 
         do {
             let updatedPoll = try await repository.requestPollDeletion(pollID: poll.id, reason: reason)
+            try scope.check()
             replacePoll(updatedPoll)
             errorMessage = nil
             return true
         } catch {
+            guard !scope.wasCancelled(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }

@@ -13,6 +13,11 @@ nonisolated struct ScheduleMemoImageRequest: Equatable, Sendable {
     let sources: [Source]
     let revision: Date
 
+    init(sources: [Source], revision: Date) {
+        self.sources = sources
+        self.revision = revision
+    }
+
     @MainActor
     init(images: [ScheduleMemoImage], revision: Date, directory: URL? = nil) {
         let directory = directory ?? ScheduleMemoImageStore.directoryURL()

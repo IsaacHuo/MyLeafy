@@ -19,15 +19,19 @@ extension CloudflareCommunityRepository: CommunityDirectMediaUploading {
         return result.id
     }
     func validateAndAttachPostImage(postID: UUID, imageID: UUID, fullPath: String, thumbnailPath: String, sortOrder: Int) async throws {
+        let scope = await CampusOperationScope()
         struct Receipt: Decodable { let receipt_id: UUID }
         struct Attach: Encodable { let receipt_id: UUID; let id: UUID; let sort_order: Int }
         let receipt: Receipt = try await request("/v1/files/validate-images", body: ["post_id":postID.uuidString,"full_path":fullPath,"thumbnail_path":thumbnailPath])
+        try await scope.check()
         try await perform("/v1/files/attach-image", body: Attach(receipt_id: receipt.receipt_id, id: imageID, sort_order: sortOrder))
     }
     func validateAndAttachPostAttachment(postID: UUID, attachmentID: UUID, objectPath: String, displayName: String, sortOrder: Int) async throws {
+        let scope = await CampusOperationScope()
         struct Receipt: Decodable { let receipt_id: UUID }
         struct Attach: Encodable { let receipt_id: UUID; let id: UUID; let sort_order: Int }
         let receipt: Receipt = try await request("/v1/files/validate-attachment", body: ["post_id":postID.uuidString,"object_path":objectPath,"display_name":displayName])
+        try await scope.check()
         try await perform("/v1/files/attach-attachment", body: Attach(receipt_id: receipt.receipt_id, id: attachmentID, sort_order: sortOrder))
     }
     func attachmentDownloadURL(attachmentID: UUID) async throws -> CommunityAttachmentDownload {
@@ -37,7 +41,9 @@ extension CloudflareCommunityRepository: CommunityDirectMediaUploading {
     func requireCapabilities(for mediaKinds: Set<CommunityPublishMediaKind>) async throws {
         // Versioned API contract owns media support; profile authorization is
         // checked before creating any background upload task.
+        let scope = await CampusOperationScope()
         guard let profile = try await fetchCurrentProfile(), profile.isProfileComplete else { throw CommunityServiceError.profileCompletionRequired }
+        try await scope.check()
         guard try await hasAcceptedCurrentTerms() else { throw CommunityServiceError.termsAcceptanceRequired }
     }
 
