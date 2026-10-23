@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development entitlement verified in signed app; repaired iCloud runtime acceptance pending)
+Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emulator and Xiaomi device; iOS 17 signed device build from 2026-10-16; repaired iCloud runtime acceptance pending)
 
 ## Current Focus
 
