@@ -51,7 +51,7 @@ class SecureStorage(context: Context) {
         return try {
             SecureReadResult.Found(decrypt(encrypted))
         } catch (failure: Exception) {
-            Log.e(TAG, "Unable to decrypt secure value for key=$key", failure)
+            Log.e(TAG, "Unable to decrypt a secure value", failure)
             SecureReadResult.Unreadable(failure)
         }
     }

@@ -85,7 +85,7 @@ class KeystoreSchoolSessionCookieStore(
             SecureReadResult.Missing -> return emptyMap()
             is SecureReadResult.Found -> result.value
             is SecureReadResult.Unreadable -> {
-                Log.e(TAG, "Dropping unreadable school session for $scopeKey/$portal", result.cause)
+                Log.e(TAG, "Dropping an unreadable school session for portal $portal", result.cause)
                 runCatching { secureStorage.remove(key) }
                 return emptyMap()
             }

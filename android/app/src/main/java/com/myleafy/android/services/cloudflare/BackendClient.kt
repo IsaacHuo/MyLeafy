@@ -31,7 +31,7 @@ class SecureBackendSessionStore(private val storage: SecureStorage, origin: Stri
         SecureReadResult.Missing -> null
         is SecureReadResult.Found -> result.value
         is SecureReadResult.Unreadable -> {
-            Log.e("BackendSession", "Dropping unreadable backend session for $key", result.cause)
+            Log.e("BackendSession", "Dropping an unreadable backend session", result.cause)
             runCatching { storage.remove(key) }
             null
         }
