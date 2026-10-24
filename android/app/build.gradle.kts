@@ -15,7 +15,7 @@ val releaseSigning = mapOf(
 )
 val isReleaseSigningConfigured = releaseSigning.values.all { !it.isNullOrBlank() }
 // 只有真正打包 APK/AAB 才强制签名；compileReleaseKotlin / lintRelease
-// 也需要在 CI 的无签名环境里运行�?
+// 也需要在 CI 的无签名环境里运行。
 val requestsReleaseBuild = gradle.startParameter.taskNames.any { task ->
     task.contains("assembleRelease", ignoreCase = true) ||
         task.contains("bundleRelease", ignoreCase = true) ||
@@ -107,7 +107,7 @@ android {
         }
     }
 
-    // 解析回归测试直接复用仓库�?contracts/ 下的教务 Fixture（单一事实来源�?
+    // 解析回归测试直接复用仓库根 contracts/ 下的教务 Fixture（单一事实来源）
     sourceSets {
         getByName("test") {
             resources.srcDir(rootProject.file("../contracts"))
