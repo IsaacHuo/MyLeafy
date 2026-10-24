@@ -273,13 +273,13 @@ React 运营后台 → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 
 | 扩展 | 位置 | 说明 |
 |---|---|---|
-| Widget | `leafyWidget/` + `LeafyWidgetShared/` + `leafy/WidgetSupport/` | “MyLeafy 课表”小号/中号混合日安排、大号七列本周网格，通过 App Group 共享带日期的课程与个人日程，App Intent 切换小中号今/明 |
+| Widget | `leafyWidget/` + `LeafyWidgetShared/` + `leafy/WidgetSupport/` | “MyLeafy 课表”小号/中号混合日安排、大号与 iOS 27+ 竖向超大号七列本周网格，通过 App Group 共享带日期的课程与个人日程，App Intent 切换小中号今/明 |
 | Share | `LeafyShareExtension/` | 系统分享，消费显式共享模型 |
 | External Import | `LeafyExternalImportShared/` | 外部学习资料导入共享逻辑 |
 
 Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnapshotPublisher` / `LeafyWidgetSnapshotBuilder` 写入的展示数据。共享 archive v2 按已知学期展开课程实例，并纳入课表格子日程 `TimetableCellReminder` 与个人日程 `CustomScheduleStore` 的真实起止时间和稳定 ID；随记不进入 archive。发布入口统一从 ModelContext 和本机日程存储读取完整数据；课表格子日程在编辑器保存、删除及日程列表删除成功后直接发布，不依赖记录数量变化。其他日程变更、学期配置和考试变化也触发发布，内容签名忽略生成时间但包含项目、身份和学期数据，较旧的排队发布不能覆盖较新的身份状态。旧格式快照不再读取，需打开 App 重建。
 
-Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测时间；无天气、未认证、异常值或超过 6 小时显示占位，不请求旧 Supabase 天气地址。timeline 包含天气过期边界。Widget provider 按当前日期投影今天、明天及本自然周，在项目起止和午夜生成 timeline entries；周一切换自然周。小中号优先进行中与待开始项目、按可用高度限量显示并标明剩余数量；大号按真实时间混排七天，跨天日程逐日裁切，时间冲突最多两条可读轨道，密集区域显示数量入口。无结束时间的日程用 45 分钟投影，不展示虚构结束时间。课程链接进入课表详情，日程及更多链接通过 `leafy://schedules` 进入个人日程。
+Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测时间；无天气、未认证、异常值或超过 6 小时显示占位，不请求旧 Supabase 天气地址。timeline 包含天气过期边界。Widget provider 按当前日期投影今天、明天及本自然周，在项目起止和午夜生成 timeline entries；周一切换自然周。小中号通过日期侧栏展示所选日，保留今/明切换，优先进行中与待开始项目、按可用高度限量显示并标明剩余数量；大号与 iOS 27+ 竖向超大号共用七列真实时间网格，后者底部显示当前/下一项安排或今日结束状态；跨天日程逐日裁切，时间冲突最多两条可读轨道，密集区域显示数量入口。无结束时间的日程用 45 分钟投影，不展示虚构结束时间。课程链接进入课表详情，日程及更多链接通过 `leafy://schedules` 进入个人日程。
 
 ## 10. Cloudflare 与 Web/运营后台边界
 

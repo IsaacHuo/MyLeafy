@@ -9,11 +9,11 @@ permissions:
 jobs:
   build:
     name: iOS 17 build
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 45
     env:
       TEST_RUNNER_LEAFY_UNIT_TESTING: "1"
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

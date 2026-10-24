@@ -69,6 +69,16 @@
         }
       }
     },
+    "下一项" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up next"
+          }
+        }
+      }
+    },
     "个人日程" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -238,6 +248,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tomorrow"
+          }
+        }
+      }
+    },
+    "明日安排已结束" : {
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow’s schedule has ended"
           }
         }
       }
