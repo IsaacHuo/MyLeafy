@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import OSLog
 import PhotosUI
@@ -27,6 +28,12 @@ struct ProfileView: View {
     @AppStorage(TimetableBackgroundStore.filenameKey) private var timetableBackgroundFilename = ""
 
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
+    @ObservedObject private var iCloudSync = ICloudSyncCoordinator.shared
+    @State private var lastTimetableSync = TimetableCacheMetadata.lastSyncAt
+    @State private var menuTimetableSettings = UserTimetableSettingsStore.load()
+    @State private var hasActiveTimetableShare: Bool?
+    @State private var sharingStatusScope: String?
+    @State private var sharingStatusFailed = false
     @State private var sessionOperationAlert: LeafyOperationAlert?
     @State private var showingLogoutAlert = false
     @State private var showingDeleteAccountConfirmation = false
@@ -257,6 +264,21 @@ struct ProfileView: View {
         .safeAreaPadding(.bottom, AppSpacing.compact)
         .frame(maxWidth: 760, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .top)
+        .task(id: sharingStatusTaskKey) {
+            refreshLocalMenuStatus()
+            await refreshSharingMenuStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: RunLoop.main)) { _ in
+                refreshLocalMenuStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .schoolDataDidRefresh).receive(on: RunLoop.main)) { _ in
+            refreshLocalMenuStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .semesterRuntimeConfigDidChange)
+            .receive(on: RunLoop.main)) { _ in
+                refreshLocalMenuStatus()
+        }
     }
 
     private var settingsRows: ProfileSettingsRows {
@@ -266,6 +288,10 @@ struct ProfileView: View {
             )
         return ProfileSettingsRows(
             isCommunityEnabled: isCommunityEnabled,
+            lastSyncValue: lastSyncMenuValue,
+            semesterValue: semesterMenuValue,
+            iCloudValue: iCloudMenuValue,
+            sharingValue: sharingMenuValue,
             personalizationValue: personalizationDetail,
             timetableBackgroundValue: timetableBackgroundDetail,
             hidesWeekends: $timetableHidesWeekends
@@ -463,25 +489,86 @@ struct ProfileView: View {
     }
 
     private var personalizationDetail: String {
-        let themeTitle = themeColorPreference.title(language: leafyLanguage)
-        let appearanceTitle = AppAppearancePreference.storedValue(appAppearancePreferenceRaw)
-            .title(language: leafyLanguage)
-        return "\(themeTitle) · \(appearanceTitle)"
+        themeColorPreference.title(language: leafyLanguage)
     }
 
     private var timetableBackgroundDetail: String {
         guard timetableBackgroundIsEnabled,
-              let kind = TimetableBackgroundKind(rawValue: timetableBackgroundKindRaw) else {
+              let kind = TimetableBackgroundKind(rawValue: timetableBackgroundKindRaw),
+              kind != .photo || !timetableBackgroundFilename.isEmpty else {
             return L10n.text("已关闭", language: leafyLanguage)
         }
-        switch kind {
-        case .photo:
-            guard !timetableBackgroundFilename.isEmpty else {
-                return L10n.text("等待选择照片", language: leafyLanguage)
-            }
-            return L10n.text("照片", language: leafyLanguage)
-        case .solid:
-            return L10n.text("纯色", language: leafyLanguage)
+        return L10n.text("已打开", language: leafyLanguage)
+    }
+
+    private var lastSyncMenuValue: String {
+        guard let date = lastTimetableSync else { return L10n.text("未同步", language: leafyLanguage) }
+        let parts = UserTimetableSettings.calendar.dateComponents([.month, .day, .hour, .minute], from: date)
+        return String(format: "%d/%d %02d:%02d", parts.month ?? 0, parts.day ?? 0,
+                      parts.hour ?? 0, parts.minute ?? 0)
+    }
+
+    private var semesterMenuValue: String {
+        let settings = menuTimetableSettings
+        let parts = UserTimetableSettings.calendar.dateComponents([.month, .day], from: settings.firstMonday)
+        let firstWeek = String(format: "%d/%d", parts.month ?? 0, parts.day ?? 0)
+        return L10n.text("%d–%02d · 第%d学期 · 首周%@", language: leafyLanguage,
+                         settings.academicYear, (settings.academicYear + 1) % 100, settings.term, firstWeek)
+    }
+
+    private var iCloudMenuValue: String {
+        let key: String
+        if !iCloudSync.isEnabled { key = "未同步" }
+        else if iCloudSync.isBusy { key = "同步中" }
+        else if iCloudSync.failure != nil { key = "同步异常" }
+        else if iCloudSync.pendingCount > 0 { key = "待同步" }
+        else { key = iCloudSync.lastSuccess == nil ? "未同步" : "已同步" }
+        return L10n.text(key, language: leafyLanguage)
+    }
+
+    private var sharingStatusTaskKey: String {
+        "\(ActiveCampusContext.identity?.scopeKey ?? "none")/\(sessionManager.currentUserID?.uuidString ?? "none")/\(sessionManager.requiresProfileCompletion)/\(navigationPath.count)"
+    }
+
+    private var sharingMenuValue: String {
+        let key: String
+        if sessionManager.currentUserID == nil {
+            key = sessionManager.isBootstrapping ? "读取中" : (sessionManager.bootstrapError == nil ? "待确认" : "暂不可用")
+        } else if sessionManager.requiresProfileCompletion { key = "待确认" }
+        else if sharingStatusScope != sharingStatusTaskKey { key = "待确认" }
+        else if sharingStatusFailed { key = "暂不可用" }
+        else if let hasActiveTimetableShare { key = hasActiveTimetableShare ? "已共享" : "未共享" }
+        else { key = "读取中" }
+        return L10n.text(key, language: leafyLanguage)
+    }
+
+    private func refreshLocalMenuStatus() {
+        lastTimetableSync = TimetableCacheMetadata.lastSyncAt
+        menuTimetableSettings = UserTimetableSettingsStore.load()
+    }
+
+    @MainActor
+    private func refreshSharingMenuStatus() async {
+        guard navigationPath.isEmpty, isCommunityEnabled else { return }
+        let key = sharingStatusTaskKey
+        sharingStatusScope = key; sharingStatusFailed = false; hasActiveTimetableShare = nil
+        guard let ownerID = sessionManager.currentUserID else { return }
+        guard !sessionManager.requiresProfileCompletion else { return }
+        let scope = CampusOperationScope()
+        do {
+            async let members = TimetableSharingService.shared.fetchMyShareMembers()
+            async let invites = TimetableSharingService.shared.fetchMyInvites()
+            let (loadedMembers, loadedInvites) = try await(members, invites)
+            try scope.check()
+            guard key == sharingStatusTaskKey else { return }
+            hasActiveTimetableShare = TimetableSharingService.hasActiveSharing(
+                members: loadedMembers, invites: loadedInvites, ownerID: ownerID
+            )
+        } catch {
+            guard !scope.wasCancelled(error), key == sharingStatusTaskKey else { return }
+            sharingStatusFailed = true
+            Self.navigationLog
+                .error("Sharing menu status unavailable: \(error.localizedDescription, privacy: .private)")
         }
     }
 

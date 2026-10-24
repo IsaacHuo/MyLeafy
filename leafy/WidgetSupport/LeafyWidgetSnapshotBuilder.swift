@@ -28,7 +28,8 @@ enum LeafyWidgetSnapshotBuilder {
 
     static func cachedWeatherSnapshot(userDefaults: UserDefaults = .standard) -> LeafyWidgetWeatherSnapshot? {
         UserDefaultsTimetableWeatherCache(userDefaults: userDefaults).currentWeather(maxAge: 6 * 60 * 60)
-            .map { LeafyWidgetWeatherSnapshot(celsius: $0.temperature, observedAt: $0.observedAt) }
+            .map { LeafyWidgetWeatherSnapshot(celsius: $0.temperature, observedAt: $0.observedAt,
+                                              condition: $0.condition) }
     }
 
     static func publishNeedsLogin(date: Date = Date()) {

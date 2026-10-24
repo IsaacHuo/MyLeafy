@@ -1890,6 +1890,23 @@
         }
       }
     },
+    "%d–%02d · 第%d学期 · 首周%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$d–%2$02d · Term %3$d · Week 1: %4$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d–%02d · 第%d学期 · 首周%@"
+          }
+        }
+      }
+    },
     "%d–%d 学年 · 第 %d 学期" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6434,6 +6451,23 @@
         }
       }
     },
+    "同步中" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步中"
+          }
+        }
+      }
+    },
     "同步失败：%@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6518,6 +6552,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sync official rankings"
+          }
+        }
+      }
+    },
+    "同步异常" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync issue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步异常"
           }
         }
       }
@@ -8651,6 +8702,23 @@
         }
       }
     },
+    "已共享" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shared"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已共享"
+          }
+        }
+      }
+    },
     "已关闭" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8782,6 +8850,23 @@
         }
       }
     },
+    "已同步" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synced"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已同步"
+          }
+        }
+      }
+    },
     "已完成教务实名" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8885,6 +8970,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deadline"
+          }
+        }
+      }
+    },
+    "已打开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已打开"
           }
         }
       }
@@ -10010,6 +10112,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pending review"
+          }
+        }
+      }
+    },
+    "待确认" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not checked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待确认"
           }
         }
       }
@@ -11753,6 +11872,23 @@
         }
       }
     },
+    "新学期开始前，请检查首周周一日期" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the first Monday before the new semester"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新学期开始前，请检查首周周一日期"
+          }
+        }
+      }
+    },
     "新建学习空间" : {
       "localizations" : {
         "en-US" : {
@@ -12424,6 +12560,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Leave unlinked"
+          }
+        }
+      }
+    },
+    "暂不可用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂不可用"
           }
         }
       }
@@ -13203,6 +13356,23 @@
         }
       }
     },
+    "未共享" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not shared"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未共享"
+          }
+        }
+      }
+    },
     "未分类" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13221,6 +13391,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No old cache files available for backup."
+          }
+        }
+      }
+    },
+    "未同步" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not synced"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未同步"
           }
         }
       }

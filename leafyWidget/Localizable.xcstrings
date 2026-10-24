@@ -200,6 +200,23 @@
         }
       }
     },
+    "多云" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cloudy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "多云"
+          }
+        }
+      }
+    },
     "当天没有安排" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -342,6 +359,23 @@
         }
       }
     },
+    "晴" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "晴"
+          }
+        }
+      }
+    },
     "本周安排" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -371,6 +405,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "See classes and personal events, with a weekly view in the large widget."
+          }
+        }
+      }
+    },
+    "毛毛雨" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drizzle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "毛毛雨"
           }
         }
       }
@@ -437,6 +488,91 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Now"
+          }
+        }
+      }
+    },
+    "阴" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overcast"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阴"
+          }
+        }
+      }
+    },
+    "雨" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rain"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雨"
+          }
+        }
+      }
+    },
+    "雪" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snow"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雪"
+          }
+        }
+      }
+    },
+    "雷雨" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thunderstorms"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雷雨"
+          }
+        }
+      }
+    },
+    "雾" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foggy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雾"
           }
         }
       }

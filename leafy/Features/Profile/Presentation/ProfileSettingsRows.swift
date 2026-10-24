@@ -5,6 +5,10 @@ import UIKit
 struct ProfileSettingsRows: View {
     @Environment(\.leafyLanguage) private var language
     let isCommunityEnabled: Bool
+    let lastSyncValue: String
+    let semesterValue: String
+    let iCloudValue: String
+    let sharingValue: String
     let personalizationValue: String
     let timetableBackgroundValue: String
     @Binding var hidesWeekends: Bool
@@ -12,20 +16,21 @@ struct ProfileSettingsRows: View {
     var body: some View {
         Section(L10n.text("课表", language: language)) {
             NavigationLink(value: ProfileRoute.cacheSync) {
-                ProfileMenuRow(icon: "arrow.triangle.2.circlepath", title: "重新同步")
+                ProfileMenuRow(icon: "arrow.triangle.2.circlepath", title: "重新同步", value: lastSyncValue)
             }
             .profileCompactMenuRow()
             NavigationLink(value: ProfileRoute.timetableSettings) {
-                ProfileMenuRow(icon: "calendar.badge.clock", title: "课表设置")
+                ProfileMenuRow(icon: "calendar.badge.clock", title: "课表设置", value: semesterValue)
             }
+            .accessibilityHint(L10n.text("新学期开始前，请检查首周周一日期", language: language))
             .profileCompactMenuRow()
             NavigationLink(value: ProfileRoute.iCloudSync) {
-                ProfileMenuRow(icon: "icloud", title: "iCloud 同步")
+                ProfileMenuRow(icon: "icloud", title: "iCloud 同步", value: iCloudValue)
             }
             .profileCompactMenuRow()
             if isCommunityEnabled {
                 NavigationLink(value: ProfileRoute.timetableSharing) {
-                    ProfileMenuRow(icon: "person.2.fill", title: "共享课表")
+                    ProfileMenuRow(icon: "person.2.fill", title: "共享课表", value: sharingValue)
                 }
                 .profileCompactMenuRow()
             }
@@ -69,17 +74,16 @@ struct ProfileMenuRow: View {
                 .foregroundStyle(AppTheme.primaryText)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
+            Spacer(minLength: 8)
             if isLoading {
                 ProgressView().controlSize(.small)
             } else {
                 if let value, !value.isEmpty {
                     Text(value)
-                        .font(.body)
+                        .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                         .lineLimit(1)
-                        .layoutPriority(-1)
                 }
                 if showsDisclosure { LeafyDisclosureIndicator() }
             }

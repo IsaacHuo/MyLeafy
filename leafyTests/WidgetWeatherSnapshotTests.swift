@@ -12,9 +12,34 @@ final class WidgetWeatherSnapshotTests: XCTestCase {
 
         let snapshot = try XCTUnwrap(LeafyWidgetSnapshotBuilder.cachedWeatherSnapshot(userDefaults: defaults))
         XCTAssertEqual(snapshot.celsius, 22.6)
+        XCTAssertEqual(snapshot.conditionText(at: now), "多云")
         XCTAssertEqual(snapshot.observedAt.timeIntervalSince1970, observedAt.timeIntervalSince1970, accuracy: 0.001)
         XCTAssertEqual(snapshot.temperatureText(at: now), "23°")
         XCTAssertEqual(snapshot.temperatureText(at: observedAt.addingTimeInterval(6 * 3600)), "--°")
+        XCTAssertNil(snapshot.conditionText(at: observedAt.addingTimeInterval(6 * 3600)))
+    }
+
+    func testWeatherWithoutConditionRemainsDecodable() throws {
+        let data = Data(#"{"celsius":14,"observedAt":100}"#.utf8)
+        let weather = try JSONDecoder().decode(LeafyWidgetWeatherSnapshot.self, from: data)
+        XCTAssertNil(weather.condition)
+        XCTAssertEqual(weather.temperatureText(at: weather.observedAt), "14°")
+    }
+
+    func testConditionRequiresValidWeatherAndDoesNotInventUnknownConditions() {
+        let now = Date(timeIntervalSince1970: 100)
+        let valid = LeafyWidgetWeatherSnapshot(celsius: 14, observedAt: now, condition: " 多云 ")
+        XCTAssertEqual(valid.conditionText(at: now), "多云")
+        XCTAssertNil(valid.conditionText(at: now.addingTimeInterval(6 * 3600)))
+        XCTAssertNil(LeafyWidgetWeatherSnapshot(celsius: .nan, observedAt: now, condition: "多云")
+            .conditionText(at: now))
+        XCTAssertNil(LeafyWidgetWeatherSnapshot(celsius: 14, observedAt: now, condition: "天气")
+            .conditionText(at: now))
+        var archive = makeWidgetSignatureArchive(generatedAt: now)
+        archive.weather = valid
+        XCTAssertEqual(archive.weatherConditionText(at: now), "多云")
+        archive.isAuthenticated = false
+        XCTAssertNil(archive.weatherConditionText(at: now))
     }
 
     @MainActor

@@ -43,6 +43,14 @@ nonisolated enum TimetableSharingError: LocalizedError {
 
 nonisolated enum TimetableSharingService {
     static let shared: any TimetableSharing = CloudflareTimetableSharingService()
+    static func hasActiveSharing(members: [TimetableShareMember], invites: [TimetableInvite],
+                                 ownerID: UUID, now: Date = Date()) -> Bool {
+        members.contains { $0.ownerID == ownerID && $0.revokedAt == nil }
+            || invites.contains {
+                $0.ownerID == ownerID && $0.acceptedBy == nil && ($0.expiresDate.map { $0 > now } ?? false)
+            }
+    }
+
     static func normalizeInviteCode(_ code: String) -> String {
         let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
         return code.uppercased().filter { allowed.contains($0) }

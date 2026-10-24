@@ -15,7 +15,7 @@ struct LeafyWeekWidgetView: View {
         let startMinute = min(Double(archive.defaultStartMinute), allSegments.map(\.startMinute).min() ?? 1440)
         let endMinute = max(Double(archive.defaultEndMinute), allSegments.map(\.endMinute).max() ?? 0)
         let uniqueCount = Set(allSegments.map { $0.item.id }).count
-        VStack(alignment: .leading, spacing: isExtraLarge ? 10 : 7) {
+        VStack(alignment: .leading, spacing: isExtraLarge ? 6 : 7) {
             header(dates: dates)
             if uniqueCount == 0, days.contains(where: { $0.status == .needsUpdate }) {
                 LeafyWidgetQuietState(status: .needsUpdate, palette: palette)
@@ -38,7 +38,8 @@ struct LeafyWeekWidgetView: View {
             }
         }
         .foregroundStyle(palette.primary)
-        .padding(isExtraLarge ? 16 : 14)
+        .padding(.horizontal, isExtraLarge ? 12 : 14)
+        .padding(.vertical, isExtraLarge ? 10 : 14)
     }
 
     private func header(dates: [Date]) -> some View {
@@ -53,8 +54,11 @@ struct LeafyWeekWidgetView: View {
             }
             Spacer(minLength: 0)
             if isExtraLarge {
-                Text(archive.temperatureText(at: now))
+                let temperature = archive.temperatureText(at: now)
+                let condition = archive.weatherConditionText(at: now).map(LeafyWidgetL10n.text)
+                Text(condition.map { "\(temperature) \($0)" } ?? temperature)
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(palette.secondary)
+                    .lineLimit(1).layoutPriority(1)
             }
         }
     }
@@ -65,23 +69,18 @@ struct LeafyWeekWidgetView: View {
         return Group {
             if let next {
                 Link(destination: next.destination) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 6) {
                         Text(LeafyWidgetL10n.text(next.isActive(at: now) ? "进行中" : "下一项"))
-                            .font(.system(size: 11, weight: .medium)).foregroundStyle(palette.secondary)
-                        Capsule().fill(palette.brand).frame(width: 3, height: 30).widgetAccentable()
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 7) {
-                                Text(LeafyWidgetAgendaItem.time(next.startsAt))
-                                    .font(.system(size: 12, weight: .medium)).monospacedDigit()
-                                Text(next.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                            }
-                            if !next.locationText.isEmpty {
-                                Text(next.locationText).font(.system(size: 10))
-                                    .foregroundStyle(palette.secondary).lineLimit(1)
-                            }
+                            .font(.system(size: 10, weight: .medium)).foregroundStyle(palette.secondary)
+                        Text(LeafyWidgetAgendaItem.time(next.startsAt))
+                            .font(.system(size: 10, weight: .medium)).monospacedDigit()
+                        Text(next.title).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                        if !next.locationText.isEmpty {
+                            Text(next.locationText).font(.system(size: 9))
+                                .foregroundStyle(palette.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
-                        Image(systemName: "arrow.right").font(.system(size: 13)).foregroundStyle(palette.secondary)
+                        Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(palette.secondary)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(
@@ -96,13 +95,13 @@ struct LeafyWeekWidgetView: View {
                                 .foregroundStyle(palette.brand)
                             Text(LeafyWidgetL10n.text(today.status == .needsUpdate ? "打开 App 更新小组件"
                                     : (today.items.isEmpty ? "当天没有安排" : "今日安排已结束")))
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium)).lineLimit(1)
                             Spacer(minLength: 0)
                         }
                     }
             }
         }
-        .frame(height: 40, alignment: .leading)
+        .frame(height: 18, alignment: .leading)
     }
 
     private func shortDate(_ date: Date) -> String {
@@ -113,7 +112,7 @@ struct LeafyWeekWidgetView: View {
     private func weekGrid(days: [LeafyWidgetDaySnapshot], segments: [[LeafyWidgetDaySegment]],
                           startMinute: Double, endMinute: Double) -> some View {
         GeometryReader { geometry in
-            let headerHeight: CGFloat = isExtraLarge ? 44 : 36
+            let headerHeight: CGFloat = isExtraLarge ? 38 : 36
             let height = max(geometry.size.height - headerHeight, 1)
             let range = max(endMinute - startMinute, 1)
             HStack(alignment: .top, spacing: 2) {
@@ -207,7 +206,7 @@ private struct LeafyWeekDayColumn: View {
                                          geometry.size.height - y), 1)
                     Link(destination: block.hiddenCount > 0 ? LeafyWidgetRoute.schedules.url : block.segment.item
                         .destination) {
-                            LeafyWeekBlockLabel(block: block, now: now, height: height,
+                            LeafyWeekBlockLabel(block: block, now: now, height: height, isExtraLarge: isExtraLarge,
                                                 palette: palette)
                         }
                         .frame(width: width, height: height)
@@ -223,6 +222,7 @@ private struct LeafyWeekBlockLabel: View {
     let block: LeafyWidgetWeekBlock
     let now: Date
     let height: CGFloat
+    let isExtraLarge: Bool
     let palette: LeafyWidgetPalette
 
     private var item: LeafyWidgetAgendaItem { block.segment.item }
@@ -247,6 +247,14 @@ private struct LeafyWeekBlockLabel: View {
             if block.hiddenCount > 0 {
                 Text("+\(block.hiddenCount)")
                     .font(.system(size: 10, weight: .semibold)).lineLimit(1)
+            } else if isExtraLarge, item.kind == .course, !item.locationText.isEmpty {
+                ViewThatFits(in: .vertical) {
+                    roomFirstLabel(titleLines: 4)
+                    roomFirstLabel(titleLines: 3)
+                    roomFirstLabel(titleLines: 2)
+                    roomFirstLabel(titleLines: 1)
+                    roomFirstLabel(titleLines: 0)
+                }
             } else {
                 ViewThatFits(in: .vertical) {
                     itemLabel(showLocation: true).fixedSize(horizontal: false, vertical: true)
@@ -254,8 +262,8 @@ private struct LeafyWeekBlockLabel: View {
                 }
             }
         }
-        .padding(.horizontal, 3)
-        .padding(.vertical, height >= 26 ? 3 : 1)
+        .padding(.horizontal, isExtraLarge ? 2 : 3)
+        .padding(.vertical, height >= 26 ? (isExtraLarge ? 2 : 3) : 1)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(palette.primary)
         .multilineTextAlignment(.leading)
@@ -272,6 +280,21 @@ private struct LeafyWeekBlockLabel: View {
             ? LeafyWidgetL10n.text("还有 %d 项安排", block.hiddenCount)
             : "\(item.title), \(item.timeText), \(item.locationText)")
         .accessibilityValue(item.isActive(at: now) ? LeafyWidgetL10n.text("进行中") : "")
+    }
+
+    private func roomFirstLabel(titleLines: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if titleLines > 0 {
+                Text(item.title).font(.system(size: 10, weight: .semibold))
+                    .lineLimit(titleLines).truncationMode(.tail)
+            }
+            Text(item.locationText)
+                .font(.system(size: block.laneCount > 1 ? 8 : 9, weight: .medium))
+                .foregroundStyle(palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func itemLabel(showLocation: Bool) -> some View {

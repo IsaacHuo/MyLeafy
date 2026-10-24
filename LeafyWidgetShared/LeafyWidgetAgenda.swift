@@ -62,6 +62,7 @@ nonisolated struct LeafyWidgetExam: Codable, Hashable, Sendable {
 nonisolated struct LeafyWidgetWeatherSnapshot: Codable, Hashable, Sendable {
     var celsius: Double
     var observedAt: Date
+    var condition: String? = nil
 
     var expiresAt: Date { observedAt.addingTimeInterval(6 * 60 * 60) }
 
@@ -70,6 +71,13 @@ nonisolated struct LeafyWidgetWeatherSnapshot: Codable, Hashable, Sendable {
         guard rounded.isFinite, rounded > Double(Int.min), rounded < Double(Int.max),
               date >= observedAt, date < expiresAt else { return "--°" }
         return "\(Int(rounded))°"
+    }
+
+    func conditionText(at date: Date) -> String? {
+        guard temperatureText(at: date) != "--°",
+              let text = condition?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty, text != "天气" else { return nil }
+        return text
     }
 }
 
@@ -89,6 +97,10 @@ nonisolated struct LeafyWidgetSnapshotArchive: Codable, Hashable, Sendable {
 
     func temperatureText(at date: Date) -> String {
         isAuthenticated ? weather?.temperatureText(at: date) ?? "--°" : "--°"
+    }
+
+    func weatherConditionText(at date: Date) -> String? {
+        isAuthenticated ? weather?.conditionText(at: date) : nil
     }
 
     static var calendar: Calendar {
