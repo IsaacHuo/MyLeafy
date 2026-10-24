@@ -20,6 +20,7 @@ struct LeafyWidgetPalette {
     let tertiary: Color
     let courseAccents: [Color]
     let isFullColor: Bool
+    let isDark: Bool
     let onAccent: Color
 
     var rule: Color { primary.opacity(isFullColor ? 0.08 : 0.18) }
@@ -33,11 +34,13 @@ struct LeafyWidgetPalette {
         let tertiaryText = Self.mix(base, with: .black, amount: 0.44)
 
         isFullColor = renderingMode == .fullColor
+        isDark = colorScheme == .dark
         surface = colorScheme == .dark ? Color(white: 0.08) : .white
         surfaceTint = Self.color(Self.mix(base, with: colorScheme == .dark
                 ? .black : .white, amount: colorScheme == .dark ? 0.88 : 0.96))
-        brand = isFullColor ? Self.color(colorScheme == .dark ? base : emphasis) : .white
-        onAccent = isFullColor ? Self.contrastingText(on: colorScheme == .dark ? base : emphasis) : .white
+        let controlColor = colorScheme == .dark ? base : Self.mix(emphasis, with: .black, amount: 0.04)
+        brand = isFullColor ? Self.color(controlColor) : .white
+        onAccent = isFullColor ? Self.contrastingText(on: controlColor) : .white
         primary = !isFullColor || colorScheme == .dark ? .white : Self.color(textBase)
         secondary = !isFullColor || colorScheme == .dark ? .white.opacity(0.78) : Self.color(secondaryText)
         tertiary = !isFullColor || colorScheme == .dark ? .white.opacity(0.58) : Self.color(tertiaryText)

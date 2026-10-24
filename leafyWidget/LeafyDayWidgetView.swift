@@ -12,7 +12,12 @@ struct LeafyDayWidgetView: View {
         GeometryReader { geometry in
             let snapshot = archive.snapshot(for: entry.selectedDayOffset, relativeTo: entry.date)
             let rowHeight: CGFloat = isSmall ? 30 : 27
-            let capacity = min(isSmall ? 3 : 4, max(Int((geometry.size.height - 66) / rowHeight), 1))
+            let rowLimit = isSmall ? 3 : 4
+            let listHeight = max(geometry.size.height - (isSmall ? 24 : 28) - 29, 0)
+            let capacityWithoutFooter = min(rowLimit, max(Int(listHeight / rowHeight), 1))
+            let remainingCount = snapshot.items.filter { $0.effectiveEnd > entry.date }.count
+            let needsFooter = remainingCount > capacityWithoutFooter || (!isSmall && snapshot.nextExamText != nil)
+            let capacity = min(rowLimit, max(Int((listHeight - (needsFooter ? 17 : 0)) / rowHeight), 1))
             HStack(spacing: isSmall ? 8 : 12) {
                 dateRail(date: snapshot.date)
                 Rectangle().fill(palette.rule).frame(width: 0.5)
@@ -31,8 +36,7 @@ struct LeafyDayWidgetView: View {
             Text(date.formatted(.dateTime.weekday(.abbreviated)
                     .locale(LeafyWidgetLanguagePreference.current.locale)))
                 .font(.system(size: isSmall ? 10 : 12, weight: .medium))
-            Text(date.formatted(.dateTime.day()
-                    .locale(LeafyWidgetLanguagePreference.current.locale)))
+            Text(String(LeafyWidgetSnapshotArchive.calendar.component(.day, from: date)))
                 .font(.system(size: isSmall ? 24 : 30, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(palette.onAccent)
@@ -133,14 +137,9 @@ private struct LeafyAgendaRow: View {
         Group {
             if isSmall {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 3) {
-                        Text(item.timeText)
-                            .font(.system(size: 9, weight: .medium)).monospacedDigit().lineLimit(1)
-                        if item.isActive(at: now) {
-                            Image(systemName: "clock.fill").font(.system(size: 8))
-                        } else if item.kind == .schedule {
-                            Image(systemName: "calendar").font(.system(size: 8))
-                        }
+                    ViewThatFits(in: .horizontal) {
+                        smallTimeLabel(item.timeText)
+                        smallTimeLabel(LeafyWidgetAgendaItem.time(item.startsAt))
                     }
                     .foregroundStyle(item.isActive(at: now) ? palette.brand : palette.secondary)
                     Text(item.title).font(.system(size: 11, weight: .semibold)).lineLimit(1)
@@ -153,7 +152,7 @@ private struct LeafyAgendaRow: View {
                         Text(LeafyWidgetAgendaItem.time(item.startsAt))
                             .font(.system(size: 11, weight: .medium)).monospacedDigit()
                         if let end = item.endsAt {
-                            Text(LeafyWidgetAgendaItem.time(end))
+                            Text("–\(LeafyWidgetAgendaItem.time(end))")
                                 .font(.system(size: 9)).monospacedDigit().foregroundStyle(palette.secondary)
                         }
                     }
@@ -186,6 +185,18 @@ private struct LeafyAgendaRow: View {
     private var accentBar: some View {
         Capsule().fill(accent).frame(width: 2.5, height: isSmall ? 23 : 22).widgetAccentable()
     }
+
+    private func smallTimeLabel(_ text: String) -> some View {
+        HStack(spacing: 3) {
+            Text(text).font(.system(size: 9, weight: .medium)).monospacedDigit()
+            if item.isActive(at: now) {
+                Image(systemName: "clock.fill").font(.system(size: 8))
+            } else if item.kind == .schedule {
+                Image(systemName: "calendar").font(.system(size: 8))
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
 }
 
 private struct LeafyWidgetDaySwitchControl: View {
@@ -206,7 +217,8 @@ private struct LeafyWidgetDaySwitchControl: View {
         Button(intent: LeafySelectWidgetDayIntent(dayOffset: offset)) {
             Text(LeafyWidgetL10n.text(title))
                 .font(.system(size: isSmall ? 10 : 11, weight: .semibold))
-                .frame(width: isSmall ? 29 : 34, height: 20)
+                .lineLimit(1).minimumScaleFactor(0.9)
+                .frame(width: isSmall ? 31 : 36, height: 20)
                 .foregroundStyle(selectedDayOffset == offset ? palette.onAccent : palette.secondary)
                 .background {
                     if selectedDayOffset == offset {

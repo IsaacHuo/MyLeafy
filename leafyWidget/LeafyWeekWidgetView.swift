@@ -143,7 +143,7 @@ struct LeafyWeekWidgetView: View {
         VStack(spacing: 2) {
             Text(date.formatted(.dateTime.weekday(.narrow).locale(LeafyWidgetLanguagePreference.current.locale)))
                 .font(.system(size: 10, weight: .medium)).foregroundStyle(palette.secondary)
-            Text(date.formatted(.dateTime.day().locale(LeafyWidgetLanguagePreference.current.locale)))
+            Text(String(LeafyWidgetSnapshotArchive.calendar.component(.day, from: date)))
                 .font(.system(size: isExtraLarge ? 12 : 11, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(isToday ? palette.onAccent : palette.primary)
                 .frame(width: isExtraLarge ? 23 : 21, height: isExtraLarge ? 23 : 21)
@@ -208,7 +208,7 @@ private struct LeafyWeekDayColumn: View {
                     Link(destination: block.hiddenCount > 0 ? LeafyWidgetRoute.schedules.url : block.segment.item
                         .destination) {
                             LeafyWeekBlockLabel(block: block, now: now, height: height,
-                                                isExtraLarge: isExtraLarge, palette: palette)
+                                                palette: palette)
                         }
                         .frame(width: width, height: height)
                         .offset(x: CGFloat(block.lane) * (width + 2), y: y)
@@ -223,7 +223,6 @@ private struct LeafyWeekBlockLabel: View {
     let block: LeafyWidgetWeekBlock
     let now: Date
     let height: CGFloat
-    let isExtraLarge: Bool
     let palette: LeafyWidgetPalette
 
     private var item: LeafyWidgetAgendaItem { block.segment.item }
@@ -232,30 +231,35 @@ private struct LeafyWeekBlockLabel: View {
             ? palette.courseAccents[item.accentIndex % palette.courseAccents.count] : palette.brand
     }
 
+    private var titleLineLimit: Int {
+        let iconSpace: CGFloat = item.kind == .schedule && height >= 42 ? 12 : 0
+        return max(1, min(4, Int((height - 6 - iconSpace) / 12)))
+    }
+
+    private var fillOpacity: Double {
+        guard palette.isFullColor else { return item.isActive(at: now) ? 0.18 : 0.10 }
+        let normal = palette.isDark ? 0.22 : (item.kind == .course ? 0.64 : 0.18)
+        return item.isActive(at: now) ? normal + 0.12 : normal
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        Group {
             if block.hiddenCount > 0 {
                 Text("+\(block.hiddenCount)")
                     .font(.system(size: 10, weight: .semibold)).lineLimit(1)
             } else {
-                if item.kind == .schedule, height >= 42 {
-                    Image(systemName: "calendar").font(.system(size: 8))
+                ViewThatFits(in: .vertical) {
+                    itemLabel(showLocation: true).fixedSize(horizontal: false, vertical: true)
+                    itemLabel(showLocation: false)
                 }
-                Text(item.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .lineLimit(height >= 52 ? 4 : (height >= 34 ? 2 : 1))
-                    .truncationMode(.tail)
-                if height >= (isExtraLarge ? 88 : 74), block.laneCount == 1, !item.locationText.isEmpty {
-                    Text(item.locationText).font(.system(size: 8)).foregroundStyle(palette.secondary).lineLimit(2)
-                }
-                Spacer(minLength: 0)
             }
         }
         .padding(.horizontal, 3)
-        .padding(.vertical, height >= 26 ? 4 : 2)
+        .padding(.vertical, height >= 26 ? 3 : 1)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(palette.primary)
-        .background(accent.opacity(item.isActive(at: now) ? 0.30 : (palette.isFullColor ? 0.16 : 0.10)),
+        .multilineTextAlignment(.leading)
+        .background(accent.opacity(fillOpacity),
                     in: RoundedRectangle(cornerRadius: 5))
         .overlay(alignment: .leading) {
             if item.kind == .schedule || item.isActive(at: now) {
@@ -268,5 +272,21 @@ private struct LeafyWeekBlockLabel: View {
             ? LeafyWidgetL10n.text("还有 %d 项安排", block.hiddenCount)
             : "\(item.title), \(item.timeText), \(item.locationText)")
         .accessibilityValue(item.isActive(at: now) ? LeafyWidgetL10n.text("进行中") : "")
+    }
+
+    private func itemLabel(showLocation: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if item.kind == .schedule, height >= 42 {
+                Image(systemName: "calendar").font(.system(size: 8))
+            }
+            Text(item.title)
+                .font(.system(size: 10, weight: .semibold))
+                .lineLimit(showLocation ? 4 : titleLineLimit)
+                .truncationMode(.tail)
+            if showLocation, block.laneCount == 1, !item.locationText.isEmpty {
+                Text(item.locationText).font(.system(size: 8)).foregroundStyle(palette.secondary).lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }

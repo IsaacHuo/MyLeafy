@@ -1,4 +1,3 @@
-import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -143,6 +142,7 @@ struct LeafyWidgetQuietState: View {
                     .lineLimit(isCompact ? 2 : 3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .multilineTextAlignment(.leading)
         }
     }
 

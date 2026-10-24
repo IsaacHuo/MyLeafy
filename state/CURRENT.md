@@ -6,7 +6,7 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
-- **iOS Widget 视觉升级（2026-10-24）**：按所有者选定第三版接入日期侧栏、紧凑周网格和浅色课程块；小中号保留今/明，iOS 27+ 新增竖向超大号与当前/下一项安排摘要。共用原 App Group archive v2 和周布局，最低 iOS 17 不变，构建链路升级 Xcode 27.1。验证进行中，概念图不代表运行通过；证据与待真机验收边界见 [设计说明](../docs/design/ios-widget-visual-upgrade.md)，跟踪 [#45](https://github.com/IsaacHuo/MyLeafy/issues/45)。
+- **iOS Widget 视觉升级（2026-10-24）**：按所有者选定第三版接入日期侧栏、紧凑周网格和浅色课程块；小中号保留今/明，iOS 27+ 新增竖向超大号与当前/下一项安排摘要。共用原 App Group archive v2 和周布局，最低 iOS 17 不变，构建链路升级 Xcode 27.1。本地 App/测试包最低目标构建及 18 项定向测试已通过；按最新要求不再启动/操作本地 Simulator，真机视觉由所有者验收。完整 CI 的 9 项未修改区域失败另记 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，不能以定向通过替代 CI 或正式发布；证据与边界见 [设计说明](../docs/design/ios-widget-visual-upgrade.md)，跟踪 [#45](https://github.com/IsaacHuo/MyLeafy/issues/45)。
 
 - **当前主线全量整合（2026-10-23）**：收齐 Android 对齐分支 `07fc257`、iOS Ponytail 审计及编辑器收尾 `39de81c`、代码规范化 `6ca686c`、iOS 3.2.6 / build 1 与本地化 `4dad1d6`，以及 Room 已发行 schema 升级、后台管理员名称、用户举报处理、日程时间文案、staging 重试和公开发行路由增量。旧课表背景和学校申请修复已被当前主线覆盖，未重新引入旧版本或已删除遥测。冲突按功能增量合并，双端源码重新按同一规则排版；额外拆分了现有高度断言，避免已知 Swift 类型推断超时。按所有者最新要求，本次只做合并、格式和静态检查，不重复构建、XCTest、Android 或浏览器测试；各独立分支的历史验证不能当作最终组合的运行通过。正式分发与生产部署仍保留各自人工审批。
 
