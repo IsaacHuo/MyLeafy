@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "–%@" : {
+
+    },
     "%@ · %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -28,12 +31,32 @@
         }
       }
     },
+    "%@, %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%@, %@, %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@, %3$@"
+          }
+        }
+      }
+    },
+    "%@, %@, %@, %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, %3$@, %4$@"
           }
         }
       }
@@ -70,6 +93,7 @@
       }
     },
     "下一项" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
@@ -253,6 +277,7 @@
       }
     },
     "明日安排已结束" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
