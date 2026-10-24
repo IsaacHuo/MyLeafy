@@ -32,11 +32,11 @@
 
 ## 验证与验收
 
-本地仅运行任务范围 SwiftFormat、只读风格/diff/配置检查和 Xcode 27.1 编译；build-for-testing 只生成测试产物，不执行 XCTest，不操作 Simulator。任务使用独立 DerivedData、单构建任务和关闭索引存储。新增 DuoAdaptiveLayoutTests 覆盖窄列阈值、输入高度预算、节次位置重映射、翻周/缩放动画中断、旧手势隔离及闲置尺寸连续变化；本轮不执行这些用例。按所有者最新要求，本轮以本地构建通过收尾，不推送分支、不触发或等待远端 CI；真机视觉与折叠/分屏交互由所有者验收。
+本地仅运行任务范围 SwiftFormat、只读风格/diff/配置检查和 Xcode 27.1 编译；build-for-testing 只生成测试产物，不执行 XCTest，不操作 Simulator。任务使用独立 DerivedData、单构建任务和关闭索引存储。新增 DuoAdaptiveLayoutTests 覆盖窄列阈值、输入高度预算、节次位置重映射、翻周/缩放动画中断、旧手势隔离及闲置尺寸连续变化；本轮不执行这些用例。原独立任务按当时要求以本地构建通过收尾；所有者随后要求将其与小组件升级一起整合到 main，累计代码与远程检查见 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)；真机视觉与折叠/分屏交互由所有者验收。
 
 CI 使用 xcode-27 runner 并显式选择 Xcode 27.1，保留 iOS 17 最低目标、固定 SwiftFormat 和离线 XCTest。发布前确认 Archive 仍使用 iOS 27.1 或更新 SDK；本任务不生成 Archive、不调整版本、不提交商店。
 
-最终普通 Simulator build 已成功（App、Widget、分享扩展，arm64/x86_64；Xcode/iOS SDK 27.1，最低目标 iOS 17）；Info.plist、任务范围 SwiftFormat 和 diff 检查通过。新增 8 个回归用例曾随测试目标编译通过，未执行测试；其后收尾代码以普通 App/扩展构建验证。代码仅保留本地任务分支，未推送、未合入 main、未触发远端 CI。构建服务中断/等待的尝试不作为成功证据，本轮编译结果在 CURRENT 中记录。以下人工验收全部待完成，Issue [#44](https://github.com/IsaacHuo/MyLeafy/issues/44) 保留待验收状态，不能按构建成功关闭：
+最终普通 Simulator build 已成功（App、Widget、分享扩展，arm64/x86_64；Xcode/iOS SDK 27.1，最低目标 iOS 17）；Info.plist、任务范围 SwiftFormat 和 diff 检查通过。新增 8 个回归用例曾随测试目标编译通过，未执行测试；其后收尾代码以普通 App/扩展构建验证。独立任务当时仅保留本地分支，后续整合状态见 CURRENT 与 PR #46；原本地编译结果不等于组合提交的 CI 或运行通过。构建服务中断/等待的尝试不作为成功证据，本轮编译结果在 CURRENT 中记录。以下人工验收全部待完成，Issue [#44](https://github.com/IsaacHuo/MyLeafy/issues/44) 保留待验收状态，不能按构建成功关闭：
 
 - Duo 内外屏、内屏横竖屏及左右分屏：三 Tab、校园领域、二级导航和当前弹层保持；按钮不被竖栏、相机区或系统区遮挡。
 - 课表普通显示、翻周途中、缩放途中改变尺寸：日期/周次合理连续，旧动画不回写，节次与课程命中区域一致，滚动不越界。

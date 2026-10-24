@@ -27,7 +27,7 @@
 
 ## iOS iPhone Duo 自适应补充（2026-10-24）
 
-仅 iOS 新增基于窗口尺寸的课表、社区窄列、评分筛选、日迹输入及分享扩展调整，沿用三 Tab 与校园左栏；Android 与共享契约未改，不产生新的双端对齐承诺。iOS CI 使用 Xcode 27.1 / iOS 27.1 SDK，最低目标仍为 iOS 17。本轮以本地构建通过为交付边界，静态检查/编译结果见 CURRENT；未触发远端 CI，本地不运行 XCTest 或操作 Simulator，Duo 折叠、分屏、键盘和真机视觉仍待 [#44](https://github.com/IsaacHuo/MyLeafy/issues/44) 验收。没有 TestFlight/App Store 发布结论。
+仅 iOS 新增基于窗口尺寸的课表、社区窄列、评分筛选、日迹输入及分享扩展调整，沿用三 Tab 与校园左栏；Android 与共享契约未改，不产生新的双端对齐承诺。iOS CI 使用 Xcode 27.1 / iOS 27.1 SDK，最低目标仍为 iOS 17。本轮以本地构建通过为交付边界，静态检查/编译结果见 CURRENT；原独立任务未触发远端 CI，现与小组件升级累计整合于 PR #46；整合期间不重复本地 XCTest 或操作 Simulator，Duo 折叠、分屏、键盘和真机视觉仍待 [#44](https://github.com/IsaacHuo/MyLeafy/issues/44) 验收。没有 TestFlight/App Store 发布结论。
 
 ## 验证证据与保留边界
 
