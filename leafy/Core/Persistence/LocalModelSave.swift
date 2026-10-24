@@ -11,6 +11,8 @@ enum LocalModelSave {
         catch {
             // Undo only this operation; rollback() also discards other open editors.
             undo()
+            // Reinserted deletions remain filtered from fetches until pending changes are processed.
+            context.processPendingChanges()
             throw error
         }
     }

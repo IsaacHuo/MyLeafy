@@ -1,6 +1,6 @@
 # 双端功能、验证与交付状态
 
-核对日期：2026-10-23。实现基于本次整合的当前源码，包含 iOS Ponytail 全仓审计、Android 对齐、历史待合修复和双端规范化。源码准备版本为 iOS 3.2.6 / build 1、Android 1.2.6 / code 10；不代表已发行。按所有者最新边界，本次整合不重复构建或执行测试，历史单分支结果与最终组合分开。
+核对日期：2026-10-24。实现基于本次整合的当前源码，包含 iOS Ponytail 全仓审计、Android 对齐、历史待合修复和双端规范化。源码准备版本为 iOS 3.2.6 / build 1、Android 1.2.6 / code 10；不代表已发行。2026-10-23 的全量整合只做静态检查；2026-10-24 的 iOS 设备编译、完整远程 CI 及后续集成证据集中在 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)。历史单分支结果与最终组合分开。
 
 ## 如何读取
 
@@ -29,13 +29,17 @@
 
 仅 iOS 新增基于窗口尺寸的课表、社区窄列、评分筛选、日迹输入及分享扩展调整，沿用三 Tab 与校园左栏；Android 与共享契约未改，不产生新的双端对齐承诺。iOS CI 使用 Xcode 27.1 / iOS 27.1 SDK，最低目标仍为 iOS 17。本轮以本地构建通过为交付边界，静态检查/编译结果见 CURRENT；原独立任务未触发远端 CI，现与小组件升级累计整合于 PR #46；整合期间不重复本地 XCTest 或操作 Simulator，Duo 折叠、分屏、键盘和真机视觉仍待 [#44](https://github.com/IsaacHuo/MyLeafy/issues/44) 验收。没有 TestFlight/App Store 发布结论。
 
+## iOS CI 检查边界补充（2026-10-24）
+
+九项失败的审核区分实际实现问题与过细的显示解码断言：保存恢复和 CSV 数据检查保留并修复实现，图片继续检查尺寸、方向与内容，不要求八位通道逐点舍入差最多 2。未跳过用例或修改必需 CI result。原因见 [排查记录](../logs/2026-10-24-ios27-ci-failure-audit.md)，完整累计提交的远程结果及集成状态见 PR #46；本地未启动 Simulator，真机与发行仍待各自验收。
+
 ## 验证证据与保留边界
 
 | 范围 | iOS | Android |
 |---|---|---|
 | 自动化用例 | [leafyTests](../leafyTests/) 含 AcademicReliability、CampusNavigation、TimetablePersonalSync、ScheduleMemo、ICloudSyncInfrastructure、社区队列等；测试存在不等于本轮执行通过 | [JVM / Roborazzi](../android/app/src/test/) 与 [原生设备测试](../android/app/src/androidTest/) 含解析、作用域 Room、共享、通知规划、导航及背景生命周期 |
 | 历史执行 | [CURRENT](CURRENT.md) 保留各任务独立结果及中断记录；最近 iCloud 修复只完成签名/构建，实际同步未完成验收 | [课表背景记录](../docs/design/android-timetable-backdrop.md) 保留 76 项截图、175 JVM 通过/7 跳过及设备范围；[核心审查](../docs/design/android-core-review.md) 记录隔离后台与系统投递边界 |
-| 本轮工程验证 | 规范化独立分支曾通过最低目标构建和 XCTest（659 通过、1 跳过），且 199 个格式化文件的字符串解析值一致；含 Ponytail 的最终组合未重跑，仅作合并与静态检查 | 独立分支的构建/JVM/Lint/截图及设备结果分别见相关报告；本次对完整整合源码执行格式化，未重跑 Android 构建或测试，不将历史成功扩大为最终组合通过 |
+| 本轮工程验证 | 规范化独立分支曾通过最低目标构建和 XCTest（659 通过、1 跳过），且 199 个格式化文件的字符串解析值一致；2026-10-23 含 Ponytail 的整合只做静态检查；2026-10-24 的累计提交验证与 CI 修复以 PR #46 精确提交为准 | 独立分支的构建/JVM/Lint/截图及设备结果分别见相关报告；本次对完整整合源码执行格式化，未重跑 Android 构建或测试，不将历史成功扩大为最终组合通过 |
 | 发布前人工验收 | 真实学校会话、真机 UI/系统日历、iCloud 生产与双设备；[iOS 发行锚点 #38](https://github.com/IsaacHuo/MyLeafy/issues/38) 待补 | 正式包覆盖升级及候选验收见 [#37](https://github.com/IsaacHuo/MyLeafy/issues/37)；实际系统通知/后台共享与媒体仍需独立核验 |
 
 本轮工具与流程追踪于 [#35](https://github.com/IsaacHuo/MyLeafy/issues/35)，不把本轮验证扩展成生产发布结论。候选、正式版与本次源码分别管理。

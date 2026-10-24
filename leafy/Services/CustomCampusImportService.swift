@@ -194,10 +194,9 @@ nonisolated enum CustomCampusCSVParser {
                     insideQuotes = true
                 case ",":
                     record.append(field); field = ""; closedQuotes = false
-                case "\n", "\r":
+                case "\n", "\r", "\r\n":
                     record.append(field); records.append(record)
                     field = ""; record = []; closedQuotes = false
-                    if character == "\r", index + 1 < characters.count, characters[index + 1] == "\n" { index += 1 }
                 default:
                     guard !closedQuotes || character.isWhitespace else {
                         throw CustomCampusImportError.invalidRow(records.count + 1, "引号后存在多余内容。")

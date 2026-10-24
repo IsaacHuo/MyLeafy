@@ -162,6 +162,7 @@ struct TimetableRefreshUseCase {
             for course in newCourses where course.modelContext === modelContext { modelContext.delete(course) }
             for course in oldCourses { modelContext.insert(course) }
             undoPersonalData()
+            modelContext.processPendingChanges()
             throw error
         }
     }

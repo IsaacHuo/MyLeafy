@@ -6,11 +6,13 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
+- **iOS CI 失败审核（2026-10-24）**：九项失败分为七项 SwiftData 撤销删除后状态未及时收敛、一项 CSV 的 CRLF 记录边界遗漏，以及一项图片显示解码逐通道误差检查过细。补齐操作撤销后的待定变化处理，保留数据恢复断言；CSV 支持三种换行并保持字段原文；图片检查改为固定颜色、sRGB 下的尺寸与色块方向/内容验证。未修改必需 CI result、跳过用例或改变数据格式。原生离线探针通过，iOS 编译、远程完整 CI 与主线集成结果见 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，根因及边界见 [排查记录](../logs/2026-10-24-ios27-ci-failure-audit.md)，跟踪 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)。
+
 - **iOS Widget 天气同步（2026-10-24）**：修复 App 定位天气可用、桌面温度仍空的缓存来源与更新通知断链。Widget 读取当前身份的课表天气缓存，保持原始观测时间和六小时有效期；定位天气成功写入缓存后通知 App 重建快照及请求时间线刷新，不新增 Widget 定位/联网或改动持久化格式。跟踪 [#48](https://github.com/IsaacHuo/MyLeafy/issues/48)，设备目标构建（App、Widget、分享扩展，arm64/iOS 17，未签名、未运行）及设备测试目标编译通过，离线回归未在本地执行，证据见 Widget 设计说明；不启动本地 Simulator，桌面真实刷新由所有者验收。
 
-- **iOS 本地增量整合（2026-10-24）**：本地 main 按所有者要求快进收齐小组件升级与 iPhone Duo 自适应，两边功能完整保留，重叠的 Xcode 27.1 配置统一。整合期间不重复本地构建、运行 XCTest 或启动 Simulator；独立分支的历史结果不扩大为组合运行通过。累计提交与远程 CI 结果集中在 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，远程 main 推送因必需 CI result 尚未通过被服务器拒绝，完整组合已保存在远程任务分支；已知 9 项失败保留 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，真机视觉由所有者验收，不代表正式发布。
+- **iOS 本地增量整合（2026-10-24）**：本地 main 按所有者要求快进收齐小组件升级与 iPhone Duo 自适应，两边功能完整保留，重叠的 Xcode 27.1 配置统一。整合期间不重复本地构建、运行 XCTest 或启动 Simulator；独立分支的历史结果不扩大为组合运行通过。累计提交与远程 CI 结果集中在 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，此前远程 main 推送被必需 CI result 拒绝，完整组合保存在远程任务分支，后续检查及集成状态以 PR 为准；9 项历史失败跟踪于 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，真机视觉由所有者验收，不代表正式发布。
 
-- **iOS Widget 视觉升级（2026-10-24）**：按所有者选定第三版接入日期侧栏、紧凑周网格和浅色课程块；小中号保留今/明，iOS 27+ 新增竖向超大号与当前/下一项安排摘要。共用原 App Group archive v2 和周布局，最低 iOS 17 不变，构建链路升级 Xcode 27.1。本地 App/测试包最低目标构建及 18 项定向测试已通过；按最新要求不再启动/操作本地 Simulator，真机视觉由所有者验收。完整 CI 的 9 项未修改区域失败另记 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，不能以定向通过替代 CI 或正式发布；证据与边界见 [设计说明](../docs/design/ios-widget-visual-upgrade.md)，跟踪 [#45](https://github.com/IsaacHuo/MyLeafy/issues/45)。
+- **iOS Widget 视觉升级（2026-10-24）**：按所有者选定第三版接入日期侧栏、紧凑周网格和浅色课程块；小中号保留今/明，iOS 27+ 新增竖向超大号与当前/下一项安排摘要。共用原 App Group archive v2 和周布局，最低 iOS 17 不变，构建链路升级 Xcode 27.1。本地 App/测试包最低目标构建及 18 项定向测试已通过；按最新要求不再启动/操作本地 Simulator，真机视觉由所有者验收。首次完整 CI 的 9 项失败及后续修复另记 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，不能以定向通过替代 CI 或正式发布；证据与边界见 [设计说明](../docs/design/ios-widget-visual-upgrade.md)，跟踪 [#45](https://github.com/IsaacHuo/MyLeafy/issues/45)。
 
 - **iOS iPhone Duo 自适应（2026-10-24）**：沿用三 Tab/校园左栏，课表改按 Size Class 与容器尺寸处理，调整尺寸时结束旧动画并保留最近可见日期和缩放目标；社区窄列切单列、评分筛选栏换排、日迹输入尺寸预算与分享扩展安全区滚动已接入，图片显示/渲染尺度不再读取主屏。iOS CI 切换 xcode-27 / Xcode 27.1，最低目标仍为 iOS 17。新增离线回归代码，本地只做静态检查与编译，不运行 XCTest 或操作 Simulator；按所有者最新要求以本地构建通过收尾，最终普通 Simulator 构建（App、Widget、分享扩展，arm64/x86_64）通过，配置和任务范围风格/diff 检查通过；8 个新增回归用例此前随测试目标编译通过但未执行，原独立任务未触发远端 CI，现已纳入上述整合分支；人工折叠、左右分屏、键盘、大字号和真机视觉由所有者验收。详见 `docs/design/ios-iphone-duo-adaptation.md`，跟踪 [#44](https://github.com/IsaacHuo/MyLeafy/issues/44)，不代表商店发布。
 

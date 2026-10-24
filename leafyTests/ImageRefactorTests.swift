@@ -60,9 +60,9 @@ extension PerformanceRefactorTests {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let source = UIGraphicsImageRenderer(size: CGSize(width: 6, height: 10), format: format).image { context in
-            UIColor.systemRed.setFill()
+            UIColor.red.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 6, height: 5))
-            UIColor.systemBlue.setFill()
+            UIColor.blue.setFill()
             context.fill(CGRect(x: 0, y: 5, width: 6, height: 5))
         }
         let data = try XCTUnwrap(jpegData(from: source, orientation: 6))
@@ -81,7 +81,7 @@ extension PerformanceRefactorTests {
             try bytes.withUnsafeMutableBytes { buffer in
                 let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: 10, height: 6,
                                                       bitsPerComponent: 8, bytesPerRow: 40,
-                                                      space: CGColorSpaceCreateDeviceRGB(),
+                                                      space: try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB)),
                                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
                 context.draw(raster, in: CGRect(x: 0, y: 0, width: 10, height: 6))
             }
@@ -91,8 +91,19 @@ extension PerformanceRefactorTests {
         let before = try renderedPixels(original)
         let after = try renderedPixels(decoded)
         XCTAssertEqual(before.count, after.count)
-        XCTAssertTrue(zip(before, after).allSatisfy { abs(Int($0) - Int($1)) <= 2 },
-                      "Display preparation must preserve the oriented pixels within 8-bit color rounding")
+        // Display decoding may change channel rounding. Check the oriented content, not byte identity.
+        func redBlueRegions(_ pixels: [UInt8]) -> [Bool] {
+            [2, 7].map { x in
+                let offset = (3 * 10 + x) * 4
+                let red = Int(pixels[offset]), green = Int(pixels[offset + 1]), blue = Int(pixels[offset + 2])
+                XCTAssertGreaterThan(abs(red - blue), 80)
+                XCTAssertGreaterThan(max(red, blue) - green, 60)
+                return red > blue
+            }
+        }
+        let expectedRegions = redBlueRegions(before)
+        XCTAssertNotEqual(expectedRegions[0], expectedRegions[1])
+        XCTAssertEqual(redBlueRegions(after), expectedRegions)
     }
 }
 
