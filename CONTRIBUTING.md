@@ -25,16 +25,18 @@ MyLeafy 使用一个 Monorepo、`main + codex/*` 短期分支和统一 `CI resul
 
 [代码规范与工具](docs/engineering/code-style.md) 定义固定版本、范围及命令。Swift 用 `bash scripts/format-swift.sh [任务路径...]`，Android 在 android 内运行 `./gradlew spotlessApply spotlessCheck`。不要格式化他人的未提交工作；纯格式化和功能修改分开提交。
 
-CI 只检查源码；风格检查失败时按同一工具修复。范围选择覆盖相关跨目录依赖：共享 contracts 触发相关客户端和后端；Swift 主 App 变化仍触发后端契约扫描；工作流修改验证全部范围。手动 CI 检查全部范围。
+日常 CI 只检查受影响平台的基础静态项，不运行编译、XCTest、模拟器、截图、浏览器、数据库容器或部署。范围继续覆盖共享 contracts、Swift 客户端契约扫描与后台接口；平台工作流只选择所属平台，公共 CI/选择规则变更选择全部基础检查。每个仓库分支 push 运行一次基础 CI，PR 直接复用源提交检查，不再重复触发 pull_request；同分支新 push 自动取消过时执行。重复同提交运行的取消检查会阻塞 GitHub，不能只依赖跨事件取消；被取消的整轮流程不生成失败汇总，当前有效运行的失败/缺失/意外跳过仍阻止合入。
 
-| 范围 | 自动验证 |
-|---|---|
-| 仓库 | 私有文件/密钥、分层边界、CI 范围选择规则 |
-| iOS | 固定 SwiftFormat；Xcode 27.1（xcode-27 runner）、iOS 17 最低目标构建、离线 XCTest；中文环境与显式英文用例 |
-| Android | 固定 Spotless / ktlint；现有 Gradle/JVM toolchain、Debug 构建、JVM、Android Lint、Roborazzi |
-| Backend | 锁定 Node/npm 依赖、类型、客户端契约、业务/迁移/发行脚本、Worker dry-run |
-| 官网/admin | 类型、单元、生产构建、Chromium/WebKit/iPad WebKit 浏览器流程 |
-| 旧 Supabase | Deno 类型/业务契约、本地数据库迁移和权限 |
+| 范围 | 日常基础 CI | 手动 Full validation |
+|---|---|---|
+| 仓库 | 私有文件/密钥、分层、diff、CI 选择及结果门禁测试 | 同样检查 |
+| iOS | SwiftFormat、项目/plist/entitlements；Xcode 27.1 工具链 | iOS 17 最低目标 build-for-testing 一次，再 test-without-building；同 DerivedData/编译参数，离线 XCTest 及 xcresult |
+| Android | Spotless / ktlint | Debug/JVM/Lint、release 编译/Lint、Roborazzi 与 API 36 原生设备回归 |
+| Backend | TypeScript 类型、客户端契约 | 业务、迁移、发行脚本与 Worker dry-run |
+| 官网/admin | TypeScript 类型 | 单元、生产构建、Chromium/WebKit/iPad WebKit |
+| 旧 Supabase | Deno 静态检查 | Edge Functions 与本地数据库迁移/权限 |
+
+Full validation 只用 workflow_dispatch，选择平台或 all（默认），固定验证该次事件的源码 SHA，不发布、不作为日常必需检查，不安排夜间任务。Android 候选和 Cloudflare staging 也只手动触发；候选保留正式包构建验证，staging 前置完整后端/网站验证。生产审批和同提交/同产物规则保持。发布前运行相关平台完整验证并保留实际证据；快速 CI 不代替这一步。
 
 测试代码存在、测试编译成功、测试执行通过要分别表述；本地、CI、Simulator、真机和真实学校会话各自标明。自动测试使用合成数据和离线样本，不依赖学生账号、验证码或校园网。真机覆盖升级和产品交互按发布清单人工验收。
 

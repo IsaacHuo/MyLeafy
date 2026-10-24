@@ -55,7 +55,7 @@ MyLeafy 是 iOS、Android、Cloudflare 后端与官网/运营后台共用的 Mon
 | 官网/admin | site 内 `npm ci`、`npm run typecheck`、`npm test`；交互改动验证相关 Playwright 流程 |
 
 - 本地运行与风险相称的构建和测试，遵守用户对当前任务的验证限制。iOS 构建使用任务专用 DerivedData，避免并行 Xcode 构建，关闭索引存储。
-- CI 是只读风格检查，不在构建阶段改写源码；SwiftFormat、Spotless、ktlint 均固定版本，本地与 CI 走同一入口。不通过放宽规则或重录截图掩盖失败。
+- 日常 CI 只做受影响平台的格式、配置、类型/契约与基础安全检查；完整编译/回归由 Full validation 手动按平台运行，快速 CI 通过不代表完整验证。CI 不改写源码；SwiftFormat、Spotless、ktlint 均固定版本，本地与 CI 走同一入口。不通过放宽规则或重录截图掩盖失败。
 - 分开报告静态检查、构建、自动化测试、Simulator、真机和真实学校会话；测试代码存在不代表执行通过，CI 通过不代表产品已发布。
 - 自动测试使用离线样本和隔离服务，不使用真实学生凭据或改写生产数据。
 
@@ -72,7 +72,7 @@ MyLeafy 是 iOS、Android、Cloudflare 后端与官网/运营后台共用的 Mon
 
 Issue 的 Done 表示该 Issue 定义的验收条件已满足；代码合入后仍待产品验收时进入 Acceptance。跨端总 Issue 只能在各子项满足约定条件后关闭，单端先完成不能关闭整个需求。合入、自动化通过、真机验收、正式发布是独立事实。
 
-- Android：main CI 准备私有正式签名候选；超级管理员在 Android 版本页下载、覆盖升级验收后授权正式发布，复用同一 APK。
+- Android：main 基础 CI 通过后手动准备私有正式签名候选；超级管理员在 Android 版本页下载、覆盖升级验收后授权正式发布，复用同一 APK。
 - iOS：Xcode Archive → TestFlight / App Store Connect；Apple 正式发布后运行 **Record released iOS version** 记录已发布二进制对应的源码、version/build 和不可变 tag。
 - Cloudflare：staging 验收指定提交，production 需要所有者在 GitHub Actions 批准。代码恢复与数据库恢复分别决定。
 

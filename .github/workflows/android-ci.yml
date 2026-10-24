@@ -2,13 +2,18 @@ name: Android CI
 
 on:
   workflow_call:
+    inputs:
+      full:
+        description: Run compilation and the complete regression suite
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   verify:
-    name: Assemble, test and lint
+    name: ${{ inputs.full && 'Assemble, test and lint' || 'Kotlin and Gradle checks' }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -34,25 +39,31 @@ jobs:
           }
 
       - name: Assemble debug APK
+        if: inputs.full
         run: ./gradlew :app:assembleDebug
 
       - name: Run JVM tests
+        if: inputs.full
         run: ./gradlew :app:testDebugUnitTest
 
       - name: Run Android lint
+        if: inputs.full
         run: ./gradlew :app:lintDebug
 
       - name: Compile release Kotlin (R8 input)
+        if: inputs.full
         run: ./gradlew :app:compileReleaseKotlin
 
       - name: Run Android lint (release)
+        if: inputs.full
         run: ./gradlew :app:lintRelease
 
       - name: Verify Roborazzi screenshots
+        if: inputs.full
         run: ./gradlew :app:verifyRoborazziDebug -Pscreenshot
 
       - name: Upload Roborazzi reports
-        if: ${{ always() }}
+        if: ${{ always() && inputs.full }}
         uses: actions/upload-artifact@v4
         with:
           name: roborazzi-${{ github.sha }}
@@ -63,6 +74,7 @@ jobs:
           if-no-files-found: ignore
 
   instrumented:
+    if: inputs.full
     name: Instrumented Room and navigation tests
     runs-on: ubuntu-24.04
     permissions:

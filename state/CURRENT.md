@@ -6,6 +6,8 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
+- **快速迭代 CI/CD（2026-10-24）**：日常必需 CI result 改为受影响平台的格式、配置、类型/契约和基础安全检查；编译/完整回归仅通过 Full validation 手动选平台/all，Android 候选与 staging 取消跟随 main CI 的自动触发。staging 前置完整后端/网站验证，生产审批与同提交/同产物规则保留。源分支并发组取消旧执行，当前有效运行仍严格验证所选检查。目标约 1–2 分钟（不含排队），实测结果以 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46) 精确提交为准。保留基线 60113cf 的完整 CI（774 通过、1 跳过），不重复执行；本轮跟踪 [#49](https://github.com/IsaacHuo/MyLeafy/issues/49)，基础 CI 通过不代表完整回归或发布。
+
 - **iOS CI 失败审核（2026-10-24）**：九项失败分为七项 SwiftData 撤销删除后状态未及时收敛、一项 CSV 的 CRLF 记录边界遗漏，以及一项图片显示解码逐通道误差检查过细。补齐操作撤销后的待定变化处理，保留数据恢复断言；CSV 支持三种换行并保持字段原文；图片检查改为固定颜色、sRGB 下的尺寸与色块方向/内容验证。未修改必需 CI result、跳过用例或改变数据格式。原生离线探针通过，iOS 编译、远程完整 CI 与主线集成结果见 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，根因及边界见 [排查记录](../logs/2026-10-24-ios27-ci-failure-audit.md)，跟踪 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)。
 
 - **iOS Widget 天气同步（2026-10-24）**：修复 App 定位天气可用、桌面温度仍空的缓存来源与更新通知断链。Widget 读取当前身份的课表天气缓存，保持原始观测时间和六小时有效期；定位天气成功写入缓存后通知 App 重建快照及请求时间线刷新，不新增 Widget 定位/联网或改动持久化格式。跟踪 [#48](https://github.com/IsaacHuo/MyLeafy/issues/48)，设备目标构建（App、Widget、分享扩展，arm64/iOS 17，未签名、未运行）及设备测试目标编译通过，离线回归未在本地执行，证据见 Widget 设计说明；不启动本地 Simulator，桌面真实刷新由所有者验收。

@@ -1,9 +1,5 @@
 name: Prepare Android candidate
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: write
@@ -14,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   prepare:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: android-candidates
@@ -25,11 +21,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
       - name: Resolve candidate and reuse existing bytes
         id: candidate
         env:
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SOURCE_SHA: ${{ github.sha }}
         run: python backend/scripts/android-candidate.py select --source "$SOURCE_SHA" --output "$RUNNER_TEMP/candidate"
       - uses: actions/setup-java@v6
         if: steps.candidate.outputs.skip != 'true'

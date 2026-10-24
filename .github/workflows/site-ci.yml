@@ -2,13 +2,18 @@ name: Site CI
 
 on:
   workflow_call:
+    inputs:
+      full:
+        description: Run compilation and the complete regression suite
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   site:
-    name: Unit tests and production build
+    name: ${{ inputs.full && 'Unit tests and production build' || 'Website and admin types' }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -27,19 +32,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check types
+        if: ${{ !inputs.full }}
+        run: npm run typecheck
+
       - name: Run unit tests
+        if: inputs.full
         run: npm test
 
       - name: Build website and admin
+        if: inputs.full
         run: npm run build
 
       - name: Install browser runtimes and system dependencies
+        if: inputs.full
         run: npx playwright install --with-deps chromium webkit
 
       - name: Browser acceptance tests
+        if: inputs.full
         run: npm run test:e2e
       - name: Preserve browser diagnostics
-        if: always()
+        if: ${{ always() && inputs.full }}
         uses: actions/upload-artifact@v4
         with:
           name: site-tests-${{ github.sha }}

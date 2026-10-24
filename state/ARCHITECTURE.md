@@ -413,18 +413,18 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 |---|---|
 | iOS 单元/契约测试 | `leafyTests/`（XCTest，Domain/Application/Presentation 分层覆盖） |
 | Android 单元/导航/截图测试 | `android/app/src/test/`（JVM 契约与 Roborazzi golden，截图以 JUnit category 隔离）、`android/app/src/test/screenshots/`（受版本控制基准图）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航/照片背景生命周期测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 或共享格式配置变化时执行固定 Spotless/ktlint 检查、assemble、JVM tests、lint 与 Roborazzi verify，失败时上传实际图和差异产物 |
-| Android 发布 | `android-prepare.yml` 对 main CI 通过的新 versionCode 准备正式签名私有 draft 候选，D1 0011 保存候选身份；admin 下载验收，超级管理员保存发布授权并调用 `android-release.yml`。工作流领取与自身 run 绑定的授权，核验原 APK，不重新构建；同一 APK/校验/build-info 发布到 R2/GitHub，回读后登记 D1 0010。正式上传/登记必须匹配授权，撤回保留历史审计。生产接通状态见 CURRENT |
+| Android 发布 | `android-prepare.yml` 仅手动对 main 基础 CI 通过的新 versionCode 准备正式签名私有 draft 候选，D1 0011 保存候选身份；admin 下载验收，超级管理员保存发布授权并调用 `android-release.yml`。工作流领取与自身 run 绑定的授权，核验原 APK，不重新构建；同一 APK/校验/build-info 发布到 R2/GitHub，回读后登记 D1 0010。正式上传/登记必须匹配授权，撤回保留历史审计。生产接通状态见 CURRENT |
 | 教务解析回归 | 固定 HTML 样本测试 |
 | Cloudflare 后端 | `backend/tests/`（D1 事务、权限、幂等、文件、身份、迁移） |
 | 旧 Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |
 | 旧 Edge Functions | Deno typecheck / 单元 / 契约测试 |
 | Web | `site/`（TypeScript typecheck、Vitest、Playwright） |
 
-统一入口为 `.github/workflows/ci.yml`，对 main、codex 分支、PR 和手动运行生成 `CI result`。范围由 `scripts/ci-changes.py` 按跨目录依赖选择，平台检查为 reusable workflows。任务分支检查相对 main 的累计变化；main 检查本次变化；手动检查全部。根 `.editorconfig` 选择双端，`.swiftformat` 和 Swift 格式脚本选择 iOS，Android 根工程统一配置 Spotless 8.10.4 / ktlint 1.8.0；所有格式检查只读，不在构建阶段改写源码。Android 现有流程另含 release Kotlin / lint 与 API 36 Room、导航设备检查；2026-10-23 全量整合按所有者明确边界不重复执行，不能将流程定义当成执行证据。选中的检查失败或取消，汇总不能通过。main 已启用必需 CI result（限定 GitHub Actions），不强制 PR 或第二人审批。
+日常入口 `.github/workflows/ci.yml` 在全部仓库分支 push 时生成一次基础 `CI result`，PR 直接复用源提交检查。`scripts/ci-changes.py` 保留跨目录依赖，平台工作流改动只选所属平台，公共 CI/选择规则改动选全部基础检查。任务分支相对 main 检查累计改动；不再重复触发 pull_request；同仓库/源分支并发组取消旧提交运行，避免同一提交的取消检查阻塞保护。取消整轮流程不再生成失败汇总；当前有效运行由 `scripts/ci-result.py` 拒绝失败、缺失和意外跳过的已选检查。main 继续只要求该检查，不强制 PR 或第二人审批。
 
-iOS CI 使用 xcode-27 runner 并固定选择 Xcode 27.1，构建前通过 `scripts/format-swift.sh --check` 使用校验过的 SwiftFormat 0.64.1；保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
+基础检查为仓库安全/分层/diff、CI 规则、SwiftFormat 0.64.1 与项目配置、Spotless 8.10.4 / ktlint 1.8.0、TypeScript 类型/客户端契约、Deno 静态检查；全部只读。日常不编译客户端，不启动 XCTest、模拟器、Roborazzi、Playwright、数据库容器或部署。平台 reusable workflows 的布尔输入 `full` 默认为 false；`.github/workflows/full-validation.yml` 只手动按平台或 all（默认）以事件 SHA 调用 full=true，汇总为独立 Full validation result，不加入日常合入门禁，不安排夜间运行。完整验证保留原编译、回归及诊断。iOS 固定 Xcode 27.1 / iOS 17 最低目标，统一 DerivedData 和编译参数，build-for-testing 后 test-without-building，避免重复编译。
 
-Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；Pages 的 _routes.json 明确包含 /api/releases/android/*，避免发行代理被静态页面吞掉；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
+Cloudflare staging 仅手动准备 main 的同一提交，基础检查与完整后端/网站验证成功后才部署；production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；Pages 的 _routes.json 明确包含 /api/releases/android/*，避免发行代理被静态页面吞掉；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
 
 iOS `release.yml` 仅在 Apple 正式发布后记录源码、版本/build 与 annotated tag，不生成未签名归档。完整操作入口为 `docs/operations/delivery.md`。
 

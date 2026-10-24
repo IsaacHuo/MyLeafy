@@ -1,0 +1,77 @@
+name: Full validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to validate completely (does not publish)
+        type: choice
+        default: all
+        options: [all, ios, android, backend, site, supabase]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-validation-${{ github.ref }}-${{ inputs.platform }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      ios: ${{ steps.scope.outputs.ios }}
+      android: ${{ steps.scope.outputs.android }}
+      backend: ${{ steps.scope.outputs.backend }}
+      site: ${{ steps.scope.outputs.site }}
+      supabase: ${{ steps.scope.outputs.supabase }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: scope
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          python scripts/ci-changes.py --scope "$PLATFORM"
+          echo "Validated source: $GITHUB_SHA; platform: $PLATFORM" >> "$GITHUB_STEP_SUMMARY"
+  safety:
+    uses: ./.github/workflows/repository-safety.yml
+  ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    uses: ./.github/workflows/ios-ci.yml
+    with:
+      full: true
+  android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    uses: ./.github/workflows/android-ci.yml
+    with:
+      full: true
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend-ci.yml
+    with:
+      full: true
+  site:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    uses: ./.github/workflows/site-ci.yml
+    with:
+      full: true
+  supabase:
+    needs: changes
+    if: needs.changes.outputs.supabase == 'true'
+    uses: ./.github/workflows/supabase-ci.yml
+    with:
+      full: true
+  result:
+    name: Full validation result
+    if: ${{ always() && !cancelled() }}
+    needs: [changes, safety, ios, android, backend, site, supabase]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: python scripts/ci-result.py
