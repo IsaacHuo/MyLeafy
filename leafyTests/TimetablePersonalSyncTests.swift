@@ -429,9 +429,12 @@ extension TimetablePersonalSyncTests {
     }
 
     func testCSVPreservesQuotedCommasQuotesAndMultilineFields() throws {
-        let csv = "term,courseName,credit,score,type\r\nterm,\"A, B\"\"C\nD\",1,90,type\r\n"
-        let result = try CustomCampusCSVParser.parseGrades(csv)
-        XCTAssertEqual(result.first?.courseName, "A, B\"C\nD")
+        for newline in ["\n", "\r\n", "\r"] {
+            let csv = "term,courseName,credit,score,type\(newline)term,\"A, B\"\"C\(newline)D\",1,90,type\(newline)"
+            let result = try CustomCampusCSVParser.parseGrades(csv)
+            XCTAssertEqual(result.count, 1)
+            XCTAssertEqual(result.first?.courseName, "A, B\"C\(newline)D")
+        }
     }
 
     func testUserPeriodValidationRejectsOverflowBeforeArithmetic() {

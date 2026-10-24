@@ -111,6 +111,7 @@ struct CommunityProfileEditorSheet: View {
 }
 
 struct CommunityProfileEditorView: View {
+    @Environment(\.displayScale) private var displayScale
     @ObservedObject private var sessionManager = CommunitySessionManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
@@ -458,7 +459,8 @@ struct CommunityProfileEditorView: View {
             )
             mediaDraft.avatarPreview = ImageDataDecoder.decodedImage(
                 from: upload.data,
-                targetSize: CGSize(width: 128, height: 128)
+                targetSize: CGSize(width: 128, height: 128),
+                scale: displayScale
             ) ?? image
             mediaDraft.avatarUpload = upload
             errorMessage = nil
@@ -674,6 +676,7 @@ private struct CommunityCampusChangeSheet: View {
 }
 
 private struct CommunityProfileCoverEditorView: View {
+    @Environment(\.displayScale) private var displayScale
     @Environment(\.dismiss) private var dismiss
     @Environment(\.leafyLanguage) private var leafyLanguage
 
@@ -846,7 +849,8 @@ private struct CommunityProfileCoverEditorView: View {
             )
             coverPreview = ImageDataDecoder.decodedImage(
                 from: upload.data,
-                targetSize: CGSize(width: 720, height: 320)
+                targetSize: CGSize(width: 720, height: 320),
+                scale: displayScale
             ) ?? image
             coverUpload = upload
             resetCoverToDefault = false
@@ -858,6 +862,7 @@ private struct CommunityProfileCoverEditorView: View {
 }
 
 struct CommunityAvatarView: View {
+    @Environment(\.displayScale) private var displayScale
     @AppStorage("appThemeColorPreference") private var appThemeColorPreferenceRaw = AppThemeColorPreference.green
         .rawValue
 
@@ -926,7 +931,8 @@ struct CommunityAvatarView: View {
             guard requestID == avatarTaskID, !Task.isCancelled,
                   let image = ImageDataDecoder.decodedImage(
                       from: data,
-                      targetSize: CGSize(width: size, height: size)
+                      targetSize: CGSize(width: size, height: size),
+                      scale: displayScale
                   )
             else { return }
             try? CommunityAvatarCache.shared.save(data: data, for: profile)

@@ -219,11 +219,7 @@ struct ProfileView: View {
             }
             .listRowBackground(AppTheme.cardBackground)
 
-            Section {
-                settingsRows
-            } header: {
-                Text(L10n.text("课表与偏好", language: leafyLanguage))
-            }
+            settingsRows
 
             Section(L10n.text("帮助与资源", language: leafyLanguage)) {
                 helpAndResourcesRows
@@ -232,11 +228,6 @@ struct ProfileView: View {
 
             Section(L10n.text("关于 MyLeafy", language: leafyLanguage)) {
                 aboutRows
-            }
-            .listRowBackground(AppTheme.cardBackground)
-
-            Section(L10n.text("我的更多作品", language: leafyLanguage)) {
-                moreWorksRows
             }
             .listRowBackground(AppTheme.cardBackground)
 
@@ -250,11 +241,17 @@ struct ProfileView: View {
                 }
             }
             .listRowBackground(AppTheme.cardBackground)
+            Section(L10n.text("我的更多作品", language: leafyLanguage)) {
+                moreWorksRows
+            }
+            .listRowBackground(AppTheme.cardBackground)
+
             Section {
                 ProfileDeveloperContactCard()
             }
         }
         .leafyInsetGroupedListStyle()
+        .environment(\.defaultMinListRowHeight, 54)
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
         .safeAreaPadding(.bottom, AppSpacing.compact)
@@ -268,10 +265,9 @@ struct ProfileView: View {
                 "Preparing profile settings routes; communityEnabled=\(isCommunityEnabled, privacy: .public) customCampus=\(isCustomCampus, privacy: .public)"
             )
         return ProfileSettingsRows(
-            isCustomCampus: isCustomCampus,
             isCommunityEnabled: isCommunityEnabled,
-            personalizationDetail: personalizationDetail,
-            timetableBackgroundDetail: timetableBackgroundDetail,
+            personalizationValue: personalizationDetail,
+            timetableBackgroundValue: timetableBackgroundDetail,
             hidesWeekends: $timetableHidesWeekends
         )
     }
@@ -281,39 +277,34 @@ struct ProfileView: View {
         NavigationLink {
             LeafyGuideAndDataSecurityView()
         } label: {
-            profileRow(
-                icon: "questionmark.circle.fill",
-                title: "帮助中心",
-                detail: "使用指南、常见问题与数据安全"
-            )
+            ProfileMenuRow(icon: "questionmark.circle.fill", title: "帮助中心")
         }
+        .profileCompactMenuRow()
 
         Button {
             feedbackInitialIssueType = "问题反馈"
             feedbackInitialBody = ""
             showingFeedbackSheet = true
         } label: {
-            profileRow(
-                icon: "bubble.left.and.bubble.right.fill",
-                title: "反馈与举报",
-                detail: "功能建议、问题反馈与内容举报",
-                showsDisclosure: true
-            )
+            ProfileMenuRow(icon: "bubble.left.and.bubble.right.fill", title: "反馈与举报", showsDisclosure: true)
         }
+        .profileCompactMenuRow()
 
         if !isCustomCampus {
             NavigationLink {
                 CampusLinksView()
             } label: {
-                profileRow(icon: "building.columns.fill", title: "常用链接", detail: "教务系统等常用网站")
+                ProfileMenuRow(icon: "building.columns.fill", title: "常用链接")
             }
+            .profileCompactMenuRow()
         }
 
         NavigationLink {
             SystemPermissionsView()
         } label: {
-            profileRow(icon: "hand.raised.fill", title: "权限管理", detail: "查看并管理系统权限")
+            ProfileMenuRow(icon: "hand.raised.fill", title: "权限管理")
         }
+        .profileCompactMenuRow()
     }
 
     @ViewBuilder
@@ -321,38 +312,34 @@ struct ProfileView: View {
         Button {
             Task { await checkForUpdate() }
         } label: {
-            profileRow(
-                icon: "arrow.down.circle.fill",
-                title: "检查更新",
-                detail: isCheckingForUpdate ? "检查中" : "跳转到 App Store",
-                showsDisclosure: true
-            )
+            ProfileMenuRow(icon: "arrow.down.circle.fill", title: "检查更新",
+                           showsDisclosure: true, isLoading: isCheckingForUpdate)
         }
         .disabled(isCheckingForUpdate)
+        .profileCompactMenuRow()
 
         Button {
             Task { await openReviewPage() }
         } label: {
-            profileRow(
-                icon: "star.bubble.fill",
-                title: "给 \(AppBrand.displayName) 评分",
-                detail: isOpeningReviewPage ? "打开中" : "前往 App Store",
-                showsDisclosure: true
-            )
+            ProfileMenuRow(icon: "star.bubble.fill", title: "给 \(AppBrand.displayName) 评分",
+                           showsDisclosure: true, isLoading: isOpeningReviewPage)
         }
         .disabled(isOpeningReviewPage)
+        .profileCompactMenuRow()
 
         NavigationLink {
             AboutMyLeafyView()
         } label: {
-            profileRow(icon: "info.circle.fill", title: "了解 MyLeafy", detail: "简介与设计理念")
+            ProfileMenuRow(icon: "info.circle.fill", title: "了解 MyLeafy")
         }
+        .profileCompactMenuRow()
 
         NavigationLink {
             AndroidDownloadShareView()
         } label: {
-            profileRow(icon: "square.and.arrow.up.fill", title: "分享安卓版", detail: "发给用安卓手机的同学")
+            ProfileMenuRow(icon: "square.and.arrow.up.fill", title: "分享安卓版")
         }
+        .profileCompactMenuRow()
     }
 
     private var moreWorksRows: some View {
@@ -369,6 +356,7 @@ struct ProfileView: View {
             NavigationLink(L10n.text("绑定邮箱", language: leafyLanguage)) {
                 ProfileEmailBindingView()
             }
+            .profileCompactMenuRow()
         }
 
         logoutButton
@@ -383,6 +371,7 @@ struct ProfileView: View {
             showingLogoutAlert = true
         }
         .disabled(isDeletingAccount)
+        .profileCompactMenuRow()
     }
 
     private var deleteAccountButton: some View {
@@ -397,6 +386,7 @@ struct ProfileView: View {
         .disabled(isDeletingAccount)
         .accessibilityHint(L10n.text("永久删除社区账户和当前设备上的 MyLeafy 数据", language: leafyLanguage))
         .accessibilityIdentifier("profile.delete-account")
+        .profileCompactMenuRow()
     }
 
     private var logoutButtonTitle: String {
@@ -579,16 +569,6 @@ struct ProfileView: View {
                 }
             }
         }
-    }
-
-    private func profileRow(
-        icon: String,
-        title: String,
-        detail: String,
-        tint: Color = AppTheme.accent,
-        showsDisclosure: Bool = false
-    ) -> ProfileMenuRow {
-        ProfileMenuRow(icon: icon, title: title, detail: detail, tint: tint, showsDisclosure: showsDisclosure)
     }
 
     private var poemeryPromotionRow: some View {

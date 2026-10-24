@@ -2,6 +2,11 @@ name: Cloudflare backend CI
 
 on:
   workflow_call:
+    inputs:
+      full:
+        description: Run compilation and the complete regression suite
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,8 +27,13 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run check:contracts
-      - run: npm test
-      - run: npm run test:migration
-      - run: node --test tests/deployment-platform.test.mjs
-      - run: python -m unittest discover -s scripts -p 'test_*.py'
-      - run: npx wrangler deploy --env staging --dry-run
+      - if: inputs.full
+        run: npm test
+      - if: inputs.full
+        run: npm run test:migration
+      - if: inputs.full
+        run: node --test tests/deployment-platform.test.mjs
+      - if: inputs.full
+        run: python -m unittest discover -s scripts -p 'test_*.py'
+      - if: inputs.full
+        run: npx wrangler deploy --env staging --dry-run

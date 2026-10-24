@@ -38,6 +38,7 @@ private struct TimetableZoomDayRenderPayload: Identifiable {
 }
 
 struct TimetableView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.modelContext) private var modelContext
     @Environment(\.leafyControlScale) private var leafyControlScale
@@ -101,6 +102,7 @@ struct TimetableView: View {
     @State private var timetableBackgroundLoadTask: Task<Void, Never>?
     @State private var timetableBackgroundConfiguration = TimetableBackgroundConfiguration.load()
     @GestureState private var isTimetablePagingDragActive = false
+    @GestureState private var isTimetableMagnificationActive = false
     @State private var continuousViewport: TimetableContinuousViewportController
     @State private var continuousRenderWindow: TimetableZoomRenderWindow
     @State private var continuousDayPayloads: [TimetableZoomDayRenderPayload] = []
@@ -140,10 +142,10 @@ struct TimetableView: View {
     private var timetableDaySpacing: CGFloat { 5 * leafyControlScale }
     private var timetableWeekSpacing: CGFloat { 6 * leafyControlScale }
     private var allowsTimetableAgendaFallback: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        horizontalSizeClass == .regular
     }
     private var showsToolbarRefreshButton: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        horizontalSizeClass == .regular
     }
 
     private static func makeAcademicYearTimetable(
@@ -388,6 +390,9 @@ struct TimetableView: View {
             }
             .onChange(of: isTimetablePagingDragActive) { _, isActive in
                 if !isActive { continuousViewport.cancelPaging(reducesMotion: accessibilityReduceMotion) }
+            }
+            .onChange(of: isTimetableMagnificationActive) { _, isActive in
+                if !isActive { continuousViewport.cancelMagnification() }
             }
             .onChange(of: timetableHidesWeekends) { _, _ in
                 handleWeekendVisibilityChange()
@@ -1313,7 +1318,11 @@ struct TimetableView: View {
                 continuousTimetable(gridSnapshot: gridSnapshot, metrics: metrics)
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
                     .onAppear { timetableViewportSize = geometry.size }
-                    .onChange(of: geometry.size) { _, size in timetableViewportSize = size }
+                    .onChange(of: geometry.size) { _, size in
+                        guard size.width > 0, size.height > 0 else { return }
+                        continuousViewport.resizeViewport()
+                        timetableViewportSize = size
+                    }
             }
         }
         .simultaneousGesture(timetableMagnificationGesture)
@@ -1347,6 +1356,7 @@ struct TimetableView: View {
 
     private var timetableMagnificationGesture: some Gesture {
         MagnifyGesture(minimumScaleDelta: 0.04)
+            .updating($isTimetableMagnificationActive) { _, isActive, _ in isActive = true }
             .onChanged { value in
                 if continuousViewport.phase != .pinching {
                     continuousViewport.beginMagnification(

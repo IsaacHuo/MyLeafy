@@ -4217,6 +4217,23 @@
         }
       }
     },
+    "偏好" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preferences"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "偏好"
+          }
+        }
+      }
+    },
     "停止共享" : {
       "localizations" : {
         "en-US" : {

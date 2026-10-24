@@ -364,6 +364,7 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
 
         func updateLayout() {
             let signature = LayoutSignature(parent: parent)
+            let previousSignature = lastLayoutSignature
             let didChangeLayout = signature != lastLayoutSignature
             lastLayoutSignature = signature
 
@@ -398,6 +399,18 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 axisScrollView.setContentOffset(.zero, animated: false)
                 bodyScrollView.setContentOffset(.zero, animated: false)
             } else if didChangeLayout {
+                // A deceleration or UIKit scroll animation still targets the old geometry.
+                isAnimatingToTarget = false
+                let previousPitch = previousSignature.map { $0.rowHeight + $0.rowSpacing }
+                    ?? (parent.rowHeight + parent.rowSpacing)
+                let y = TimetableScrollGeometry.rebasedVerticalOffset(
+                    bodyScrollView.contentOffset.y,
+                    previousPitch: previousPitch,
+                    newPitch: parent.rowHeight + parent.rowSpacing
+                )
+                bodyScrollView.setContentOffset(
+                    CGPoint(x: bodyScrollView.contentOffset.x, y: bodyYOffset(y)), animated: false
+                )
                 queueLayoutRealignment()
                 scheduleDeferredScrollRetry()
             }
@@ -737,6 +750,14 @@ struct TimetableScrollContainer<Corner: View, Header: View, Axis: View, GridBody
                 allowsVerticalScroll = parent.allowsVerticalScroll
             }
         }
+    }
+}
+
+nonisolated enum TimetableScrollGeometry {
+    static func rebasedVerticalOffset(_ offset: CGFloat, previousPitch: CGFloat, newPitch: CGFloat) -> CGFloat {
+        guard offset.isFinite, previousPitch.isFinite, newPitch.isFinite,
+              previousPitch > 0, newPitch > 0 else { return 0 }
+        return max(offset, 0) / previousPitch * newPitch
     }
 }
 

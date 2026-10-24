@@ -273,13 +273,13 @@ React 运营后台 → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 
 | 扩展 | 位置 | 说明 |
 |---|---|---|
-| Widget | `leafyWidget/` + `LeafyWidgetShared/` + `leafy/WidgetSupport/` | “MyLeafy 课表”小号/中号混合日安排、大号七列本周网格，通过 App Group 共享带日期的课程与个人日程，App Intent 切换小中号今/明 |
+| Widget | `leafyWidget/` + `LeafyWidgetShared/` + `leafy/WidgetSupport/` | “MyLeafy 课表”小号/中号混合日安排、大号与 iOS 27+ 竖向超大号七列本周网格，通过 App Group 共享带日期的课程与个人日程，App Intent 切换小中号今/明 |
 | Share | `LeafyShareExtension/` | 系统分享，消费显式共享模型 |
 | External Import | `LeafyExternalImportShared/` | 外部学习资料导入共享逻辑 |
 
 Widget 与扩展不直接访问主 App SwiftData 上下文，消费 `WidgetSnapshotPublisher` / `LeafyWidgetSnapshotBuilder` 写入的展示数据。共享 archive v2 按已知学期展开课程实例，并纳入课表格子日程 `TimetableCellReminder` 与个人日程 `CustomScheduleStore` 的真实起止时间和稳定 ID；随记不进入 archive。发布入口统一从 ModelContext 和本机日程存储读取完整数据；课表格子日程在编辑器保存、删除及日程列表删除成功后直接发布，不依赖记录数量变化。其他日程变更、学期配置和考试变化也触发发布，内容签名忽略生成时间但包含项目、身份和学期数据，较旧的排队发布不能覆盖较新的身份状态。旧格式快照不再读取，需打开 App 重建。
 
-Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测时间；无天气、未认证、异常值或超过 6 小时显示占位，不请求旧 Supabase 天气地址。timeline 包含天气过期边界。Widget provider 按当前日期投影今天、明天及本自然周，在项目起止和午夜生成 timeline entries；周一切换自然周。小中号优先进行中与待开始项目、按可用高度限量显示并标明剩余数量；大号按真实时间混排七天，跨天日程逐日裁切，时间冲突最多两条可读轨道，密集区域显示数量入口。无结束时间的日程用 45 分钟投影，不展示虚构结束时间。课程链接进入课表详情，日程及更多链接通过 `leafy://schedules` 进入个人日程。
+Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 24 小时制，与周时间轴保持一致，不在英文界面省略上午/下午后产生歧义。Widget archive 可选天气来自主 App 当前身份的 `timetableWeather.cache.v2` 定位天气缓存及原观测时间；课表天气查询成功后发出天气变更通知，App 重建共享快照并请求刷新时间线，不读取分享图的校园天气缓存；无天气、未认证、异常值或超过 6 小时显示占位，不请求旧 Supabase 天气地址。timeline 包含天气过期边界。Widget provider 按当前日期投影今天、明天及本自然周，在项目起止和午夜生成 timeline entries；周一切换自然周。小中号通过日期侧栏展示所选日，保留今/明切换，优先进行中与待开始项目、按可用高度限量显示并标明剩余数量；大号与 iOS 27+ 竖向超大号共用七列真实时间网格，后者底部显示当前/下一项安排或今日结束状态；跨天日程逐日裁切，时间冲突最多两条可读轨道，密集区域显示数量入口。无结束时间的日程用 45 分钟投影，不展示虚构结束时间。课程链接进入课表详情，日程及更多链接通过 `leafy://schedules` 进入个人日程。
 
 ## 10. Cloudflare 与 Web/运营后台边界
 
@@ -357,7 +357,7 @@ Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测
 ### iOS 本地数据与任务可靠性
 
 - 学校请求绑定校园身份、门户与会话代次。退出、身份变化、门户变化或前后台取消使旧任务失效，旧响应不能写 Cookie、教务缓存、通知或 Widget；预取使用独立 run ID，旧任务收尾不能清掉替代任务，取消不写失败冷却。学校 Cookie 存储随 URLSession 隔离，不使用进程共享 Cookie 仓。
-- 用户备注、提醒、随记置顶与教室收藏保存失败时只撤销本次修改，保留输入和其他编辑器待保存内容；成功提示和 Widget 发布在保存成功后执行，通知排期失败独立提示。
+- 用户备注、提醒、随记置顶与教室收藏保存失败时只撤销本次修改，保留输入和其他编辑器待保存内容；撤销删除后处理待定变化，使恢复记录立即可见，不以整体回滚或额外提交代替。成功提示和 Widget 发布在保存成功后执行，通知排期失败独立提示。
 - 手工成绩、课程/成绩替换、学习空间、职业简历、荣誉、医疗、综素保存与缓存清理同样采用操作范围撤销。跨 JSON/SwiftData 转换先提交目标，源清理失败单独提示；严格编辑读取在缓存损坏时停止，禁止当空数据覆盖。Demo 备份完整校验后才恢复，保留课程/成绩原 UUID、课程来源学期及成绩编辑时间；提交成功后才移除备份或关闭 Demo。
 - 账号删除远端完成后复验发起身份，本地清理不能作用于替代身份。文件清理按当前同类模型全部文件名检查引用（不限同一 UUID），简历替换共用此队列。
 - 随记新建、录音、录音备注与高级编辑共用 `ScheduleMemoPersistence`，失败只移除本次插入并恢复本次字段/资源；高级编辑移除媒体先写 `LocalFileCleanup` 意图，再提交，最后清理。提交后的清理警告与保存失败分开，不能重复提交已保存内容。
@@ -370,7 +370,7 @@ Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测
 - 录音启动请求持有代次，页面退出取消并使请求失效；旧权限结果不得启动录音或覆盖下一次请求状态。
 - 共享 XCTest Scheme 和 CI 设置 `LEAFY_UNIT_TESTING=1`；单测宿主为空根界面，不挂载生产生命周期、后台任务与文件清理。默认学校传输和正式后台组合根在单测中拒绝请求，业务测试注入隔离服务和存储。
 
-- 我的页“课表与偏好”以重新同步为第一项；“找到我”卡片通过系统选择弹窗打开开发者邮箱或小红书。时间视图的课表设置入口带明确的文字层级和右箭头。
+- 我的根列表菜单采用系统 Body（标准 17pt）、54pt 最小行高、28pt 图标与上下 10pt 留白；无说明字幕，个性化/背景现有状态在右侧单行显示，大字号可自然增高，开关保持原生语义。课表与偏好分成独立组，账户先于更多作品；诗境保留原展示卡片高度及说明，不套用紧凑菜单样式，资料/联系卡和安全提示不压缩。课表组以重新同步为第一项；“找到我”卡片通过系统选择弹窗打开开发者邮箱或小红书。时间视图的课表设置入口带明确的文字层级和右箭头。
 
 ### iOS iCloud 与日程导出
 
@@ -393,6 +393,13 @@ Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测
 - 成绩页不提供下拉刷新或空状态拉取按钮，进入页面只读取本地缓存，主动拉取统一使用右上角按钮；按钮触发后的既有会话恢复保留。GPA 正文支持括号标签和内联元素，注释旧值、排名表数字和算术均分不作为官方 GPA / 加权均分。
 - 翻页拖动与吸附动画分别使用 `paging` / `pageSettling`。新拖动取消旧显示链接，按最近可见页重定位并保留偏移；跨页接管时新窗口与 payload 一起更新，其余拖动帧不重建窗口。手势取消、跳周和回到今天均须释放交互状态。
 
+### iOS 可变窗口与 iPhone Duo
+
+- 原生 TabView / NavigationStack / Sheet 由 iOS 27.1 SDK 提供竖栏与屏幕适配；容器尺寸和 Size Class 决定布局，前景遵守各边独立安全区，不以设备型号或主屏尺寸分流根界面。
+- 课表尺寸变化结束旧显示链接，保留最近可见周与缩放目标，隔离尚未结束的旧手势；UIKit 滚动按节次行距重定位并约束新范围。普通尺寸变化不重建导航、草稿或网络模型。
+- 社区每列不足 128pt（随显示密度放大）或辅助功能字号时按原顺序显示单列，最多双列；评分搜索窄屏上下排列。日迹输入区持续接收容器宽高，为按钮与外侧留白预留空间。带尺寸的 UI 图片解码使用发起视图的 displayScale，分享图固定 3x 输出并保留模板尺寸。
+- 分享扩展在安全区内滚动，尺寸变化不重启导入。构建、CI 与人工折叠/分屏验收相互独立，具体边界见 `docs/design/ios-iphone-duo-adaptation.md`。
+
 ### iOS 产品介绍与密集课表
 
 - “了解 MyLeafy”是本地主题合集与图文详情，使用固定界面示例；无博客或源码仓库入口，不访问用户数据或联网。
@@ -406,18 +413,18 @@ Widget archive 可选天气来自主 App 当前身份的成功缓存及原观测
 |---|---|
 | iOS 单元/契约测试 | `leafyTests/`（XCTest，Domain/Application/Presentation 分层覆盖） |
 | Android 单元/导航/截图测试 | `android/app/src/test/`（JVM 契约与 Roborazzi golden，截图以 JUnit category 隔离）、`android/app/src/test/screenshots/`（受版本控制基准图）与 `android/app/src/androidTest/`（scoped Room + Compose 根导航/照片背景生命周期测试）；`.github/workflows/android-ci.yml` 在 Android/contracts 或共享格式配置变化时执行固定 Spotless/ktlint 检查、assemble、JVM tests、lint 与 Roborazzi verify，失败时上传实际图和差异产物 |
-| Android 发布 | `android-prepare.yml` 对 main CI 通过的新 versionCode 准备正式签名私有 draft 候选，D1 0011 保存候选身份；admin 下载验收，超级管理员保存发布授权并调用 `android-release.yml`。工作流领取与自身 run 绑定的授权，核验原 APK，不重新构建；同一 APK/校验/build-info 发布到 R2/GitHub，回读后登记 D1 0010。正式上传/登记必须匹配授权，撤回保留历史审计。生产接通状态见 CURRENT |
+| Android 发布 | `android-prepare.yml` 仅手动对 main 基础 CI 通过的新 versionCode 准备正式签名私有 draft 候选，D1 0011 保存候选身份；admin 下载验收，超级管理员保存发布授权并调用 `android-release.yml`。工作流领取与自身 run 绑定的授权，核验原 APK，不重新构建；同一 APK/校验/build-info 发布到 R2/GitHub，回读后登记 D1 0010。正式上传/登记必须匹配授权，撤回保留历史审计。生产接通状态见 CURRENT |
 | 教务解析回归 | 固定 HTML 样本测试 |
 | Cloudflare 后端 | `backend/tests/`（D1 事务、权限、幂等、文件、身份、迁移） |
 | 旧 Supabase 数据库 | `supabase/tests/`（migration replay、RLS、拒绝路径） |
 | 旧 Edge Functions | Deno typecheck / 单元 / 契约测试 |
 | Web | `site/`（TypeScript typecheck、Vitest、Playwright） |
 
-统一入口为 `.github/workflows/ci.yml`，对 main、codex 分支、PR 和手动运行生成 `CI result`。范围由 `scripts/ci-changes.py` 按跨目录依赖选择，平台检查为 reusable workflows。任务分支检查相对 main 的累计变化；main 检查本次变化；手动检查全部。根 `.editorconfig` 选择双端，`.swiftformat` 和 Swift 格式脚本选择 iOS，Android 根工程统一配置 Spotless 8.10.4 / ktlint 1.8.0；所有格式检查只读，不在构建阶段改写源码。Android 现有流程另含 release Kotlin / lint 与 API 36 Room、导航设备检查；2026-10-23 全量整合按所有者明确边界不重复执行，不能将流程定义当成执行证据。选中的检查失败或取消，汇总不能通过。main 已启用必需 CI result（限定 GitHub Actions），不强制 PR 或第二人审批。
+日常入口 `.github/workflows/ci.yml` 在全部仓库分支 push 时生成一次基础 `CI result`，PR 直接复用源提交检查。`scripts/ci-changes.py` 保留跨目录依赖，平台工作流改动只选所属平台，公共 CI/选择规则改动选全部基础检查。任务分支相对 main 检查累计改动；不再重复触发 pull_request；同仓库/源分支并发组取消旧提交运行，避免同一提交的取消检查阻塞保护。取消整轮流程不再生成失败汇总；当前有效运行由 `scripts/ci-result.py` 拒绝失败、缺失和意外跳过的已选检查。main 继续只要求该检查，不强制 PR 或第二人审批。
 
-iOS CI 固定 macOS 26 / Xcode 26.6，构建前通过 `scripts/format-swift.sh --check` 使用校验过的 SwiftFormat 0.64.1；保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
+基础检查为仓库安全/分层/diff、CI 规则、SwiftFormat 0.64.1 与项目配置、Spotless 8.10.4 / ktlint 1.8.0、TypeScript 类型/客户端契约、Deno 静态检查；全部只读。日常不编译客户端，不启动 XCTest、模拟器、Roborazzi、Playwright、数据库容器或部署。平台 reusable workflows 的布尔输入 `full` 默认为 false；`.github/workflows/full-validation.yml` 只手动按平台或 all（默认）以事件 SHA 调用 full=true，汇总为独立 Full validation result，不加入日常合入门禁，不安排夜间运行。完整验证保留原编译、回归及诊断。iOS 固定 Xcode 27.1 / iOS 17 最低目标，统一 DerivedData 和编译参数，build-for-testing 后 test-without-building，避免重复编译。
 
-Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；Pages 的 _routes.json 明确包含 /api/releases/android/*，避免发行代理被静态页面吞掉；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
+Cloudflare staging 仅手动准备 main 的同一提交，基础检查与完整后端/网站验证成功后才部署；production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；Pages 的 _routes.json 明确包含 /api/releases/android/*，避免发行代理被静态页面吞掉；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
 
 iOS `release.yml` 仅在 Apple 正式发布后记录源码、版本/build 与 annotated tag，不生成未签名归档。完整操作入口为 `docs/operations/delivery.md`。
 

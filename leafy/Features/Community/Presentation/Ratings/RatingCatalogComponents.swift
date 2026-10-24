@@ -20,7 +20,7 @@ struct TeacherFilterToolbar: View {
     let clearFilters: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        RatingFilterToolbarLayout(isExpanded: isExpanded) {
             searchControl
                 .animation(.snappy, value: isExpanded)
 
@@ -29,6 +29,7 @@ struct TeacherFilterToolbar: View {
                     .padding(.horizontal, 1)
             }
             .leafyTransparentHorizontalScrollRail()
+            .frame(height: 40 * leafyControlScale)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -82,7 +83,8 @@ struct TeacherFilterToolbar: View {
             .accessibilityLabel(search.isEmpty ? "收起筛选" : "清空搜索")
         }
         .padding(.horizontal, 12)
-        .frame(width: 220 * leafyControlScale, height: 40 * leafyControlScale)
+        .frame(maxWidth: 220 * leafyControlScale)
+        .frame(height: 40 * leafyControlScale)
         .leafyGlassSurface(
             in: Capsule(),
             fallbackFill: AppTheme.cardElevated.opacity(0.96),
@@ -173,7 +175,7 @@ struct CourseFilterToolbar: View {
     let clearFilters: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        RatingFilterToolbarLayout(isExpanded: isExpanded) {
             searchControl
                 .animation(.snappy, value: isExpanded)
 
@@ -182,6 +184,7 @@ struct CourseFilterToolbar: View {
                     .padding(.horizontal, 1)
             }
             .leafyTransparentHorizontalScrollRail()
+            .frame(height: 40 * leafyControlScale)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -235,7 +238,8 @@ struct CourseFilterToolbar: View {
             .accessibilityLabel(search.isEmpty ? "收起筛选" : "清空搜索")
         }
         .padding(.horizontal, 12)
-        .frame(width: 220 * leafyControlScale, height: 40 * leafyControlScale)
+        .frame(maxWidth: 220 * leafyControlScale)
+        .frame(height: 40 * leafyControlScale)
         .leafyGlassSurface(
             in: Capsule(),
             fallbackFill: AppTheme.cardElevated.opacity(0.96),
@@ -333,7 +337,7 @@ struct DishFilterToolbar: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        RatingFilterToolbarLayout(isExpanded: isExpanded) {
             searchControl
                 .animation(.snappy, value: isExpanded)
 
@@ -342,6 +346,7 @@ struct DishFilterToolbar: View {
                     .padding(.horizontal, 1)
             }
             .leafyTransparentHorizontalScrollRail()
+            .frame(height: 40 * leafyControlScale)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -395,7 +400,8 @@ struct DishFilterToolbar: View {
             .accessibilityLabel(search.isEmpty ? "收起筛选" : "清空搜索")
         }
         .padding(.horizontal, 12)
-        .frame(width: 220 * leafyControlScale, height: 40 * leafyControlScale)
+        .frame(maxWidth: 220 * leafyControlScale)
+        .frame(height: 40 * leafyControlScale)
         .leafyGlassSurface(
             in: Capsule(),
             fallbackFill: AppTheme.cardElevated.opacity(0.96),
@@ -1285,5 +1291,22 @@ struct DishCard: View {
         }
         .padding(18)
         .leafyCardStyle()
+    }
+}
+
+/// Keep the same text field subtree and bindings when the window changes shape.
+private struct RatingFilterToolbarLayout<Content: View>: View {
+    @Environment(\.leafyControlScale) private var controlScale
+    @State private var availableWidth: CGFloat = 0
+    let isExpanded: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        let layout = isExpanded && availableWidth < 340 * controlScale
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 10))
+        layout { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
     }
 }

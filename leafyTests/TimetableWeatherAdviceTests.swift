@@ -12,11 +12,15 @@ final class TimetableWeatherAdviceTests: XCTestCase {
             weatherFetcher: { _ in expected },
             cache: cache
         )
+        let changed = expectation(forNotification: .campusWeatherDidChange, object: nil) { _ in
+            cache.currentWeather(maxAge: 60) == expected
+        }
 
         let result = try await service.fetchCurrentWeather(requestsPermissionIfNeeded: false)
 
         XCTAssertEqual(result, expected)
         XCTAssertEqual(cache.currentWeather(maxAge: 60), expected)
+        await fulfillment(of: [changed], timeout: 1)
     }
 
     func testUserDefaultsWeatherCacheRoundTripsApparentTemperature() throws {

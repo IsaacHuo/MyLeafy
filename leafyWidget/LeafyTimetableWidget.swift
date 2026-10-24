@@ -1,4 +1,3 @@
-import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -64,6 +63,12 @@ struct LeafyTimetableProvider: TimelineProvider {
 }
 
 struct LeafyTimetableWidget: Widget {
+    static var supportedFamilies: [WidgetFamily] {
+        var families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
+        if #available(iOS 27, *) { families.append(.systemExtraLargePortrait) }
+        return families
+    }
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: LeafyWidgetConstants.widgetKind, provider: LeafyTimetableProvider()) { entry in
             LeafyWidgetEntryView(entry: entry)
@@ -71,25 +76,35 @@ struct LeafyTimetableWidget: Widget {
         }
         .configurationDisplayName(LeafyWidgetL10n.text("MyLeafy 课表"))
         .description(LeafyWidgetL10n.text("查看课程与个人日程，大号小组件展示本周安排。"))
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies(Self.supportedFamilies)
         .contentMarginsDisabled()
     }
 }
 
-private struct LeafyWidgetEntryView: View {
+struct LeafyWidgetEntryView: View {
     @Environment(\.widgetFamily) private var family
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: LeafyTimetableEntry
 
     private var palette: LeafyWidgetPalette {
-        LeafyWidgetPalette(theme: LeafyWidgetThemeStore.load(), colorScheme: colorScheme)
+        LeafyWidgetPalette(theme: LeafyWidgetThemeStore.load(), colorScheme: colorScheme,
+                           renderingMode: renderingMode)
     }
+
+    private var isExtraLarge: Bool {
+        if #available(iOS 27, *) { return family == .systemExtraLargePortrait }
+        return false
+    }
+
+    private var isWeekFamily: Bool { family == .systemLarge || isExtraLarge }
 
     var body: some View {
         Group {
             if let archive = entry.archive, archive.isAuthenticated {
-                if family == .systemLarge {
-                    LeafyWeekWidgetView(archive: archive, now: entry.date, palette: palette)
+                if isWeekFamily {
+                    LeafyWeekWidgetView(archive: archive, now: entry.date,
+                                        isExtraLarge: isExtraLarge, palette: palette)
                 } else {
                     LeafyDayWidgetView(entry: entry, archive: archive,
                                        isSmall: family == .systemSmall, palette: palette)
@@ -112,19 +127,22 @@ private struct LeafyWidgetEntryView: View {
 struct LeafyWidgetQuietState: View {
     let status: LeafyWidgetDaySnapshot.Status
     let palette: LeafyWidgetPalette
+    var isCompact = false
 
     var body: some View {
         Link(destination: status == .noEvents ? LeafyWidgetRoute.schedules.url : LeafyWidgetRoute.cacheSync.url) {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: status == .needsLogin ? "person.crop.circle.badge.exclamationmark" : "calendar")
-                    .font(.title3).foregroundStyle(palette.brand)
+                    .font(.system(size: isCompact ? 14 : 20)).foregroundStyle(palette.brand)
                 Text(LeafyWidgetL10n.text(title))
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.primary)
+                    .font(.system(size: isCompact ? 11 : 13, weight: .semibold)).foregroundStyle(palette.primary)
+                    .lineLimit(isCompact ? 2 : 3)
                 Text(LeafyWidgetL10n.text(message))
-                    .font(.system(size: 10)).foregroundStyle(palette.secondary)
-                    .lineLimit(3)
+                    .font(.system(size: isCompact ? 9 : 10)).foregroundStyle(palette.secondary)
+                    .lineLimit(isCompact ? 2 : 3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .multilineTextAlignment(.leading)
         }
     }
 
@@ -145,170 +163,6 @@ struct LeafyWidgetQuietState: View {
     }
 }
 
-private struct LeafyDayWidgetView: View {
-    let entry: LeafyTimetableEntry
-    let archive: LeafyWidgetSnapshotArchive
-    let isSmall: Bool
-    let palette: LeafyWidgetPalette
-
-    var body: some View {
-        GeometryReader { geometry in
-            let rowStride: CGFloat = isSmall ? 27 : 23
-            let available = geometry.size.height - 20 - 31 - 10 - 12
-            let capacity = min(isSmall ? 3 : 4, max(Int((available + 3) / rowStride), 1))
-            content(capacity: capacity)
-        }
-    }
-
-    private func content(capacity: Int) -> some View {
-        let snapshot = archive.snapshot(for: entry.selectedDayOffset, relativeTo: entry.date)
-        let remaining = snapshot.remainingItems(at: entry.date)
-        let displayed = Array(remaining.prefix(capacity))
-        return VStack(alignment: .leading, spacing: 5) {
-            header(date: snapshot.date)
-            if snapshot.status == .ready {
-                if remaining.isEmpty {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Image(systemName: "checkmark.circle").foregroundStyle(palette.brand)
-                        Text(LeafyWidgetL10n.text("今日安排已结束"))
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(LeafyWidgetL10n.text("全天共 %d 项", snapshot.items.count))
-                            .font(.system(size: 10)).foregroundStyle(palette.secondary)
-                    }
-                    .frame(maxHeight: .infinity, alignment: .center)
-                } else {
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(displayed) { item in
-                            Link(destination: item.destination) {
-                                LeafyAgendaRow(item: item, now: entry.date, isSmall: isSmall, palette: palette)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    footer(hiddenCount: remaining.count - displayed.count, snapshot: snapshot)
-                }
-            } else {
-                LeafyWidgetQuietState(status: snapshot.status, palette: palette)
-            }
-        }
-        .foregroundStyle(palette.primary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-    }
-
-    private func header(date: Date) -> some View {
-        HStack(alignment: .center, spacing: 4) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(LeafyWidgetL10n.text(entry.selectedDayOffset == 0 ? "今日安排" : "明日安排"))
-                    .font(.system(size: isSmall ? 13 : 15, weight: .bold))
-                    .lineLimit(1).minimumScaleFactor(0.85)
-                HStack(spacing: 4) {
-                    Text(date.formatted(.dateTime.month(.twoDigits).day(.twoDigits)
-                            .locale(LeafyWidgetLanguagePreference.current.locale)))
-                    if isSmall { Text(entry.temperatureText) }
-                }
-                .font(.system(size: 9, weight: .medium)).foregroundStyle(palette.secondary)
-            }
-            Spacer(minLength: 0)
-            LeafyWidgetDaySwitchControl(selectedDayOffset: entry.selectedDayOffset, palette: palette,
-                                        isSmall: isSmall)
-        }
-        .frame(height: 31)
-    }
-
-    @ViewBuilder
-    private func footer(hiddenCount: Int, snapshot: LeafyWidgetDaySnapshot) -> some View {
-        if hiddenCount > 0 {
-            Link(destination: LeafyWidgetRoute.schedules.url) {
-                Text(LeafyWidgetL10n.text("还有 %d 项安排", hiddenCount))
-                    .font(.system(size: 9, weight: .medium)).foregroundStyle(palette.secondary)
-                    .lineLimit(1)
-            }
-        } else if !isSmall, let exam = snapshot.nextExamText {
-            Text(exam).font(.system(size: 9)).foregroundStyle(palette.secondary).lineLimit(1)
-        }
-    }
-}
-
-private struct LeafyAgendaRow: View {
-    let item: LeafyWidgetAgendaItem
-    let now: Date
-    let isSmall: Bool
-    let palette: LeafyWidgetPalette
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 5) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(item.kind == .schedule ? palette.brand : palette
-                    .courseAccents[item.accentIndex % palette.courseAccents.count])
-                .frame(width: 3)
-                .widgetAccentable()
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 3) {
-                    if item.kind == .schedule {
-                        Image(systemName: "calendar").font(.system(size: 8))
-                    }
-                    if !isSmall, item.isActive(at: now) {
-                        Image(systemName: "clock.fill").font(.system(size: 8)).foregroundStyle(palette.brand)
-                    }
-                    Text(item.title).font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                    if !isSmall {
-                        if !item.locationText.isEmpty {
-                            Text(item.locationText).font(.system(size: 9))
-                                .foregroundStyle(palette.secondary).lineLimit(1)
-                                .layoutPriority(-1)
-                        }
-                        Spacer(minLength: 2)
-                        Text(item.timeText).font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(palette.secondary).lineLimit(1).layoutPriority(1)
-                    }
-                }
-                if isSmall {
-                    HStack(spacing: 4) {
-                        if item.isActive(at: now) {
-                            Text(LeafyWidgetL10n.text("进行中")).foregroundStyle(palette.brand)
-                        }
-                        Text(item.timeText)
-                    }
-                    .font(.system(size: 9)).foregroundStyle(palette.secondary).lineLimit(1)
-                }
-            }
-        }
-        .frame(height: isSmall ? 24 : 20, alignment: .top)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.title), \(item.timeText), \(item.locationText)")
-        .accessibilityValue(item.isActive(at: now) ? LeafyWidgetL10n.text("进行中") : "")
-    }
-}
-
-private struct LeafyWidgetDaySwitchControl: View {
-    let selectedDayOffset: Int
-    let palette: LeafyWidgetPalette
-    let isSmall: Bool
-
-    var body: some View {
-        HStack(spacing: 1) {
-            dayButton(title: "今", offset: 0)
-            dayButton(title: "明", offset: 1)
-        }
-        .padding(2)
-        .background(palette.surface.opacity(0.58), in: Capsule())
-    }
-
-    private func dayButton(title: String, offset: Int) -> some View {
-        Button(intent: LeafySelectWidgetDayIntent(dayOffset: offset)) {
-            Text(LeafyWidgetL10n.text(title))
-                .font(.system(size: isSmall ? 9 : 11, weight: .bold))
-                .frame(width: isSmall ? 19 : 26, height: 22)
-                .foregroundStyle(selectedDayOffset == offset ? palette.surface : palette.secondary)
-                .background(selectedDayOffset == offset ? palette.brand : .clear, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(LeafyWidgetL10n.text(offset == 0 ? "显示今天安排" : "显示明天安排"))
-        .accessibilityAddTraits(selectedDayOffset == offset ? .isSelected : [])
-    }
-}
-
 #Preview(as: .systemSmall) {
     LeafyTimetableWidget()
 } timeline: {
@@ -322,6 +176,13 @@ private struct LeafyWidgetDaySwitchControl: View {
 }
 
 #Preview(as: .systemLarge) {
+    LeafyTimetableWidget()
+} timeline: {
+    LeafyTimetableProvider().previewEntry()
+}
+
+@available(iOS 27, *)
+#Preview(as: .systemExtraLargePortrait) {
     LeafyTimetableWidget()
 } timeline: {
     LeafyTimetableProvider().previewEntry()

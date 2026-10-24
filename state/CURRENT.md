@@ -6,6 +6,20 @@ Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emu
 
 ## Current Focus
 
+- **iOS 我的原生密度菜单（2026-10-24）**：按真机对照反馈改用系统 Body（标准字号 17pt）、54pt 最小行高和上下各 10pt 留白，28pt 菜单图标；辅助功能字号可自然增高。课表（重新同步、课表设置、iCloud 同步、共享课表）与偏好（个性化、课表背景、隐藏周末）拆成两组，账户置于“我的更多作品”上方；诗境恢复原 34pt 品牌图标、说明及展示卡片留白，不作为紧凑功能行。状态仍在右侧单行，资料/联系卡和账户安全语义保持。格式检查、设备目标增量编译和最新基础 CI 结果见 PR #46；不启动本地 Simulator 或重复完整基线，真机效果由所有者验收，跟踪 [#49](https://github.com/IsaacHuo/MyLeafy/issues/49)。
+
+- **快速迭代 CI/CD（2026-10-24）**：日常必需 CI result 改为受影响平台的格式、配置、类型/契约和基础安全检查；编译/完整回归仅通过 Full validation 手动选平台/all，Android 候选与 staging 取消跟随 main CI 的自动触发。staging 前置完整后端/网站验证，生产审批与同提交/同产物规则保留。仓库分支 push 只运行一次基础 CI，PR 复用源提交检查，同分支新提交取消旧执行；当前有效运行仍严格验证所选检查。基础检查试运行实测约 1 分 30 秒，原完整 CI 约 19 分钟，未执行编译/模拟器/测试；最终采用单 push 检查避免重复事件的取消检查阻塞 GitHub。目标约 1–2 分钟（不含排队），最新结果以 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46) 精确提交为准。保留基线 60113cf 的完整 CI（774 通过、1 跳过），不重复执行；本轮跟踪 [#49](https://github.com/IsaacHuo/MyLeafy/issues/49)，基础 CI 通过不代表完整回归或发布。
+
+- **iOS CI 失败审核（2026-10-24）**：九项失败分为七项 SwiftData 撤销删除后状态未及时收敛、一项 CSV 的 CRLF 记录边界遗漏，以及一项图片显示解码逐通道误差检查过细。补齐操作撤销后的待定变化处理，保留数据恢复断言；CSV 支持三种换行并保持字段原文；图片检查改为固定颜色、sRGB 下的尺寸与色块方向/内容验证。未修改必需 CI result、跳过用例或改变数据格式。原生离线探针通过，iOS 编译、远程完整 CI 与主线集成结果见 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，根因及边界见 [排查记录](../logs/2026-10-24-ios27-ci-failure-audit.md)，跟踪 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)。
+
+- **iOS Widget 天气同步（2026-10-24）**：修复 App 定位天气可用、桌面温度仍空的缓存来源与更新通知断链。Widget 读取当前身份的课表天气缓存，保持原始观测时间和六小时有效期；定位天气成功写入缓存后通知 App 重建快照及请求时间线刷新，不新增 Widget 定位/联网或改动持久化格式。跟踪 [#48](https://github.com/IsaacHuo/MyLeafy/issues/48)，设备目标构建（App、Widget、分享扩展，arm64/iOS 17，未签名、未运行）及设备测试目标编译通过，离线回归未在本地执行，证据见 Widget 设计说明；不启动本地 Simulator，桌面真实刷新由所有者验收。
+
+- **iOS 本地增量整合（2026-10-24）**：本地 main 按所有者要求快进收齐小组件升级与 iPhone Duo 自适应，两边功能完整保留，重叠的 Xcode 27.1 配置统一。整合期间不重复本地构建、运行 XCTest 或启动 Simulator；独立分支的历史结果不扩大为组合运行通过。累计提交与远程 CI 结果集中在 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，此前远程 main 推送被必需 CI result 拒绝，完整组合保存在远程任务分支，后续检查及集成状态以 PR 为准；9 项历史失败跟踪于 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，真机视觉由所有者验收，不代表正式发布。
+
+- **iOS Widget 视觉升级（2026-10-24）**：按所有者选定第三版接入日期侧栏、紧凑周网格和浅色课程块；小中号保留今/明，iOS 27+ 新增竖向超大号与当前/下一项安排摘要。共用原 App Group archive v2 和周布局，最低 iOS 17 不变，构建链路升级 Xcode 27.1。本地 App/测试包最低目标构建及 18 项定向测试已通过；按最新要求不再启动/操作本地 Simulator，真机视觉由所有者验收。首次完整 CI 的 9 项失败及后续修复另记 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)，不能以定向通过替代 CI 或正式发布；证据与边界见 [设计说明](../docs/design/ios-widget-visual-upgrade.md)，跟踪 [#45](https://github.com/IsaacHuo/MyLeafy/issues/45)。
+
+- **iOS iPhone Duo 自适应（2026-10-24）**：沿用三 Tab/校园左栏，课表改按 Size Class 与容器尺寸处理，调整尺寸时结束旧动画并保留最近可见日期和缩放目标；社区窄列切单列、评分筛选栏换排、日迹输入尺寸预算与分享扩展安全区滚动已接入，图片显示/渲染尺度不再读取主屏。iOS CI 切换 xcode-27 / Xcode 27.1，最低目标仍为 iOS 17。新增离线回归代码，本地只做静态检查与编译，不运行 XCTest 或操作 Simulator；按所有者最新要求以本地构建通过收尾，最终普通 Simulator 构建（App、Widget、分享扩展，arm64/x86_64）通过，配置和任务范围风格/diff 检查通过；8 个新增回归用例此前随测试目标编译通过但未执行，原独立任务未触发远端 CI，现已纳入上述整合分支；人工折叠、左右分屏、键盘、大字号和真机视觉由所有者验收。详见 `docs/design/ios-iphone-duo-adaptation.md`，跟踪 [#44](https://github.com/IsaacHuo/MyLeafy/issues/44)，不代表商店发布。
+
 - **当前主线全量整合（2026-10-23）**：收齐 Android 对齐分支 `07fc257`、iOS Ponytail 审计及编辑器收尾 `39de81c`、代码规范化 `6ca686c`、iOS 3.2.6 / build 1 与本地化 `4dad1d6`，以及 Room 已发行 schema 升级、后台管理员名称、用户举报处理、日程时间文案、staging 重试和公开发行路由增量。旧课表背景和学校申请修复已被当前主线覆盖，未重新引入旧版本或已删除遥测。冲突按功能增量合并，双端源码重新按同一规则排版；额外拆分了现有高度断言，避免已知 Swift 类型推断超时。按所有者最新要求，本次只做合并、格式和静态检查，不重复构建、XCTest、Android 或浏览器测试；各独立分支的历史验证不能当作最终组合的运行通过。正式分发与生产部署仍保留各自人工审批。
 
 - **双端代码规范与仓库协作**：SwiftFormat 0.64.1、Spotless 8.10.4 / ktlint 1.8.0 已固定，全部自有 Swift/Kotlin/Gradle 源码完成纯排版收敛，风格检查进入现有 CI result；根配置变更具有双端范围回归。规范化独立分支曾完成 iOS 17 最低目标与 Android Debug 本地构建，199 个 Swift 修改文件的编译器解析字符串值一致；该记录不覆盖后续业务分支合并，最终组合验证边界见上文，不替代真机/升级验收。AGENTS / CONTRIBUTING、模板、发布索引与跨端状态分工统一；后续验收/源码追溯/日迹组件拆分分别登记在 [#36–39](https://github.com/IsaacHuo/MyLeafy/issues?q=is%3Aissue+is%3Aopen)。本轮不改变业务、数据库、版本或生产审批。

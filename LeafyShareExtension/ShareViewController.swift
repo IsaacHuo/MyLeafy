@@ -25,15 +25,39 @@ final class ShareViewController: UIViewController {
 
         let stack = UIStackView(arrangedSubviews: [statusLabel, doneButton])
         stack.axis = .vertical
-        stack.alignment = .center
+        stack.alignment = .fill
         stack.spacing = 18
         stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(container)
+        container.addSubview(stack)
+        let preferredHeight = container.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
+        preferredHeight.priority = .defaultLow
+        let minimumButtonHeight = doneButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        minimumButtonHeight.priority = UILayoutPriority(999) // UIStackView collapses the initially hidden button.
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
-            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            scrollView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            container.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            container.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            container.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            container.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            container.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
+            preferredHeight,
+            stack.leadingAnchor.constraint(equalTo: container.layoutMarginsGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.layoutMarginsGuide.trailingAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor, constant: 24),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -24),
+            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            minimumButtonHeight
         ])
     }
 

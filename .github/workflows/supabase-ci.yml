@@ -2,6 +2,11 @@ name: Supabase CI
 
 on:
   workflow_call:
+    inputs:
+      full:
+        description: Run compilation and the complete regression suite
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,9 +31,11 @@ jobs:
           deno check "${entrypoints[@]}"
 
       - name: Run Edge Function tests
+        if: inputs.full
         run: deno test --allow-env --allow-read --allow-sys supabase/functions
 
   database:
+    if: inputs.full
     name: Database migrations and tests
     runs-on: ubuntu-24.04
     steps:

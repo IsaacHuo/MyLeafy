@@ -34,8 +34,8 @@ nonisolated struct LeafyWidgetAgendaItem: Codable, Hashable, Identifiable, Senda
     }
 
     static func time(_ date: Date) -> String {
-        date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
-            .locale(LeafyWidgetLanguagePreference.current.locale))
+        let parts = LeafyWidgetSnapshotArchive.calendar.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
     }
 }
 

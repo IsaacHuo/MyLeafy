@@ -50,10 +50,13 @@ nonisolated enum LeafyWidgetLanguagePreference: String, Sendable {
 
 nonisolated enum LeafyWidgetL10n {
     static func text(_ key: String) -> String {
-        String(
+        let preference = LeafyWidgetLanguagePreference.current
+        let localizedBundle = Bundle.main.path(forResource: preference.localizationIdentifier, ofType: "lproj")
+            .flatMap(Bundle.init(path:)) ?? .main
+        return String(
             localized: String.LocalizationValue(key),
-            bundle: .main,
-            locale: LeafyWidgetLanguagePreference.current.locale
+            bundle: localizedBundle,
+            locale: preference.locale
         )
     }
 

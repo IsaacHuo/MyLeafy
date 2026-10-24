@@ -6,7 +6,7 @@ enum ImageDataDecoder {
     static func decodedImage(
         from data: Data,
         targetSize: CGSize? = nil,
-        scale: CGFloat = UIScreen.main.scale
+        scale: CGFloat = 1
     ) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
 

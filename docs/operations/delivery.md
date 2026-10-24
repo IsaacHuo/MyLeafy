@@ -1,15 +1,16 @@
 # MyLeafy 交付与发布
 
-主线通过检查后只准备测试环境与私有 Android 候选。正式发布入口各自独立：Android 在 admin，iOS 在 App Store Connect，Cloudflare 在 GitHub Actions。两端版本号独立。
+主线通过基础检查后不会自动准备环境或候选；手动准备测试环境与私有 Android 候选。正式发布入口各自独立：Android 在 admin，iOS 在 App Store Connect，Cloudflare 在 GitHub Actions。两端版本号独立。
 
 ## 工作流与首次配置
 
 | 工作流 | 触发/结果 | 人工决定 |
 |---|---|---|
-| CI | 任务分支、PR、main；按跨目录依赖检查，汇总 CI result | 通过当前提交后合入 main |
-| Prepare Android candidate | main CI 成功；仅未发行的新 versionCode 准备签名 APK | admin 下载验收 |
+| CI | 仓库分支 push（PR 复用）；只做受影响平台基础静态检查，汇总 CI result | 通过当前提交后合入 main |
+| Full validation | 手动选择平台/all，固定事件源码 SHA，完整编译/回归，不发布 | 发布前按相关平台保留完整证据 |
+| Prepare Android candidate | main 基础 CI 成功后手动运行；仅未发行的新 versionCode 准备签名 APK | admin 下载验收 |
 | Publish approved Android candidate | admin 保存授权后调用固定工作流；不重新构建 | 超级管理员确认已验收并发布 |
-| Prepare Cloudflare staging | main CI 成功且后端/网站有变化；手动运行可强制准备 | 在隔离环境验收 |
+| Prepare Cloudflare staging | main 基础 CI 成功后手动运行；先通过完整后端/网站验证 | 在隔离环境验收 |
 | Publish accepted Cloudflare version | 手动指定提交、成功 staging run 并确认验收 | production Environment 等待 IsaacHuo 批准 |
 | Recover Cloudflare services | 指定环境和部署报告，确认旧代码兼容当前数据库 | production 仍需批准 |
 | Record released iOS version | 手动确认 Apple 已发布，填写提交/版本/build | Apple 的发布决定仍在 App Store Connect |
@@ -24,14 +25,14 @@ GitHub Environments 为 `staging`、`production`、`android-candidates`、`andro
 4. production Worker Secret `GITHUB_RELEASE_TOKEN` 限定 `IsaacHuo/MyLeafy`，Contents 只读、Actions 读写。它用于读取私有 draft 和运行状态、发起固定发布工作流，永不发送给浏览器。Cloudflare 只能列出 Secret 名称；真实有效性由管理员下载/发布请求验证，且该 Secret 必须**实际部署到目标 Worker**——仅存储或更新、未部署到 `myleafy-api-production` 时后台仍会因读取私有候选失败。不要将其设置为 `VITE_` 变量。
 5. 继续使用现有 Android 四个签名 Secrets 与 `MYLEAFY_RELEASE_PUBLISH_TOKEN`。publisher token 仅能登记私有候选；正式上传/登记还必须匹配已保存、已领取的管理员授权。staging/production 的 publisher token 和 R2 bucket 保持独立。
 6. 首次 staging 人工确认可写后将 `backend_control` 置为 active。冒烟测试只生成/删除本次随机身份与数据，不改变全局开关、不清理其他验收数据。
-7. 通过完整 CI 后才设置 main 的必需检查 `CI result`。完成 staging 验收并由用户批准首次 production 部署后，新版 admin 和发行授权接口才在生产生效。
+7. main 的必需检查为基础 `CI result`，Full validation 手动运行并单独记录。完成 staging 验收并由用户批准首次 production 部署后，新版 admin 和发行授权接口才在生产生效。
 
 这些配置中的 Secret 值不进入文档、报告、日志或聊天。工作流存在不代表环境已配置，未部署的功能不能记为生产完成。
 
 ## Android：下载验收后发布
 
 1. 在任务分支同时更新 `android/app/build.gradle.kts` 的版本名/code 和 `android-release-notes.md`。code 必须高于全部历史发行，包括已撤回版本。
-2. main 的 CI 成功后准备候选。若该 code 已正式发行，本次准备直接跳过；若完整私有候选已存在，重试下载原 APK，核验后继续登记，不覆盖不同内容。上传中断时从原构建的私有 Actions artifact 恢复 APK 与清单（保留 90 天）；原文件不可用或哈希不一致时明确失败，不重新构建替换候选。
+2. main 的基础 CI 成功后，在 Actions 手动运行 Prepare Android candidate；它保留 JVM、release lint 和正式签名构建。若该 code 已正式发行，本次准备直接跳过；若完整私有候选已存在，重试下载原 APK，核验后继续登记，不覆盖不同内容。上传中断时从原构建的私有 Actions artifact 恢复 APK 与清单（保留 90 天）；原文件不可用或哈希不一致时明确失败，不重新构建替换候选。
 3. 登录 admin → Android 版本，查看“待发布”候选的版本、更新说明、来源、检查状态和大小。点击“下载验收”，使用正式候选从当前正式版覆盖升级。`.next` 调试包可并存，但不能代替正式包覆盖升级验收。
 4. 超级管理员点击“发布”，核对版本/摘要并勾选已验收。服务端原子保存候选身份、决定人和时间，调用固定 `android-release.yml`。重复点击复用一个进行中授权；网络结果不明时保留“发布中”，不会立即另开任务。
 5. Actions 领取匹配自身 run 的授权，读取原 APK，核对正式包名、版本、最低 API、正式证书、大小和 SHA-256；然后上传同一 APK、校验文件、构建信息到 R2 与正式 GitHub Release。文件回读一致后登记 D1，公开 latest/详情/下载返回正式记录。
@@ -44,7 +45,7 @@ GitHub Environments 为 `staging`、`production`、`android-candidates`、`andro
 
 ## Cloudflare：验收指定提交
 
-staging 与 production 的部署按环境分别串行，恢复使用同一串行锁。相关 main 提交检查通过后，staging 依次执行：Pages 权限预检、记录旧部署 ID 与 D1 恢复书签、迁移、Worker、隔离社区冒烟、网站、公开核对。只有 Worker `/health` 与网站 `/release.json` 同属 staging、同一提交，才从该提交计算变化；网站尚未部署或提交不一致时重新准备，避免中途失败后的再次运行错误跳过。Pages 使用 `.wrangler/deploy/config.json` 指向选定的环境配置，避免 Wrangler Pages 不支持的 `--config` 参数；生成文件不进 Git。
+staging 与 production 的部署按环境分别串行，恢复使用同一串行锁。相关 main 提交基础检查通过后，手动运行 Prepare Cloudflare staging。先完成同提交的完整后端测试/迁移检查及网站构建/浏览器验收，随后依次执行：Pages 权限预检、记录旧部署 ID 与 D1 恢复书签、迁移、Worker、隔离社区冒烟、网站、公开核对。只有 Worker `/health` 与网站 `/release.json` 同属 staging、同一提交，才从该提交计算变化；网站尚未部署或提交不一致时重新准备，避免中途失败后的再次运行错误跳过。Pages 使用 `.wrangler/deploy/config.json` 指向选定的环境配置，避免 Wrangler Pages 不支持的 `--config` 参数；生成文件不进 Git。
 
 验收完毕，在 Actions 运行 **Publish accepted Cloudflare version**：
 
@@ -58,9 +59,11 @@ production 等待用户批准。工作流读取该运行的部署报告，核对
 
 ## 发布前短清单
 
+需要单独回归时，在 Actions 的 Full validation 选择分支及平台（默认 all）；它固定当前事件 SHA，不发布。iOS 在 Archive 前保留同源码的完整验证证据。
+
 按每个平台候选单独执行并记录 version/build（Android code）、精确源码、检查链接、验收人/日期和待处理项。合入 main、CI 成功和候选生成都不代表以下产品验收完成；不适用项注明原因。
 
-- 来源：精确候选源码的必需 CI result 成功，未将失败或取消任务当成通过；Swift / Kotlin 风格检查与现有构建测试均通过。
+- 来源：精确候选源码的基础 CI result 成功，未将失败或取消任务当成通过；相关平台的手动完整验证及候选自身构建测试另行核对，不能以基础 CI 代替。
 - iOS：正式签名 Archive / TestFlight 的主 App、Widget、分享扩展 version/build 一致；按本版改动验证 SwiftData 升级、CloudKit 生产环境/双设备、通知、小组件和系统日历；未完成的实际设备结果明确保留。
 - 数据升级：从当前正式版覆盖升级，检查身份、课程、个人日程、随记/媒体、备注、提醒和设置。已有数据库与在用 API 契约必须有兼容或可验证迁移，失败可恢复，不能以全新安装成功代替升级验收。
 - 追溯：版本/build、精确源码、不可变 tag、发布说明、实际二进制一致；Android 同一 APK 的 SHA-256 / 正式证书核对，iOS 以 Apple 已发布归档/构建证据核对。缺失证据记录待核实，不用当前 main 补猜。
@@ -89,4 +92,4 @@ App 无法靠服务端回滚降级。Android 发布更高 code 修复，iOS 在 
 
 Apple 正式发布后运行 **Record released iOS version**。它核对 CI、main 来源和三个目标的版本，创建不可变 annotated `v<version>` tag 和源码记录 Release，不构建/上传未签名归档。重试仅接受同一提交/build 的已有记录，不移动正式 tag。在 `release-notes.md` 记录实际 Apple 构建和用户可见摘要。
 
-当前提交同时触发 push 与 PR CI 时，不因其中一项已通过而取消另一项必需检查；取消的依赖会让同名 CI result 保留失败状态并阻止 main 推送。遇到这一情况，保留提交并完整重跑受影响的当前提交工作流。排查记录见 logs/required-ci-checks.md。
+基础 CI 只由仓库分支 push 触发，PR 直接复用源提交检查；同分支新提交自动取消旧执行，不创建同一提交的重复 pull_request 运行。实测即使最新一轮成功，同提交另一轮 CANCELLED 的必需检查仍会阻塞 GitHub，不能依赖并发组单独消除重复事件。只等待精确当前提交的有效 CI result 实际成功；不要绕过保护或强推 main。旧行为见 logs/required-ci-checks.md。

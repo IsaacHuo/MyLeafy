@@ -6,6 +6,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct CommunityComposerSheet: View {
+    @Environment(\.displayScale) private var displayScale
     let onPosted: (String) -> Void
     let onDraftChanged: () -> Void
 
@@ -578,7 +579,8 @@ struct CommunityComposerSheet: View {
                 guard imageLoadID == loadID else { return }
                 guard let preview = ImageDataDecoder.decodedImage(
                     from: result.previewData,
-                    targetSize: CGSize(width: 420, height: 420)
+                    targetSize: CGSize(width: 420, height: 420),
+                    scale: displayScale
                 ) else {
                     continue
                 }
@@ -685,7 +687,8 @@ struct CommunityComposerSheet: View {
             draftImages = try payload.images.map { upload in
                 guard let preview = ImageDataDecoder.decodedImage(
                     from: upload.data,
-                    targetSize: CGSize(width: 420, height: 420)
+                    targetSize: CGSize(width: 420, height: 420),
+                    scale: displayScale
                 ) else {
                     throw CommunityPostDraftError.invalidImage(upload.id.uuidString)
                 }
@@ -760,7 +763,8 @@ struct CommunityComposerSheet: View {
             draftImages = try payload.images.map { upload in
                 guard let preview = ImageDataDecoder.decodedImage(
                     from: upload.data,
-                    targetSize: CGSize(width: 420, height: 420)
+                    targetSize: CGSize(width: 420, height: 420),
+                    scale: displayScale
                 ) else {
                     throw CommunityPostDraftError.invalidImage(upload.id.uuidString)
                 }

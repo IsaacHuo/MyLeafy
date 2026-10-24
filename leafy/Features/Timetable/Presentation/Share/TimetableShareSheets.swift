@@ -483,7 +483,7 @@ struct DayScheduleSummarySheet: View {
         )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = 3
 
         guard let image = renderer.uiImage else {
             shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前卡片。", language: leafyLanguage)
@@ -631,7 +631,7 @@ struct WeekScheduleSheet: View {
         )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = 3
 
         guard let image = renderer.uiImage else {
             shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前卡片。", language: leafyLanguage)

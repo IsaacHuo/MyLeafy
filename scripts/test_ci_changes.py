@@ -20,6 +20,21 @@ class SelectionTests(unittest.TestCase):
     def test_workflow_changes_validate_all_jobs(self):
         self.assertTrue(all(changes.affected(['.github/workflows/ci.yml']).values()))
 
+    def test_platform_workflow_changes_only_select_their_platform(self):
+        for name in changes.PLATFORMS:
+            with self.subTest(platform=name):
+                self.assertEqual(changes.affected([f'.github/workflows/{name}-ci.yml']),
+                                 changes.scope_selection(name))
+        self.assertEqual(changes.affected(['.github/workflows/cloudflare-staging.yml']),
+                         dict(ios=False, android=False, backend=True, site=True, supabase=False))
+
+    def test_manual_scope_is_explicit_and_rejects_unknown_platforms(self):
+        self.assertTrue(all(changes.scope_selection('all').values()))
+        for name in changes.PLATFORMS:
+            self.assertEqual(sum(changes.scope_selection(name).values()), 1)
+        with self.assertRaises(ValueError):
+            changes.scope_selection('unknown')
+
     def test_swift_formatting_configuration_selects_ios(self):
         for path in ('.swiftformat', 'scripts/format-swift.sh'):
             with self.subTest(path=path):

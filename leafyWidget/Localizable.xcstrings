@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "–%@" : {
+
+    },
     "%@ · %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -28,12 +31,32 @@
         }
       }
     },
+    "%@, %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%@, %@, %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@, %3$@"
+          }
+        }
+      }
+    },
+    "%@, %@, %@, %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, %3$@, %4$@"
           }
         }
       }
@@ -65,6 +88,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "MyLeafy schedule"
+          }
+        }
+      }
+    },
+    "下一项" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up next"
           }
         }
       }
@@ -238,6 +272,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tomorrow"
+          }
+        }
+      }
+    },
+    "明日安排已结束" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en-US" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomorrow’s schedule has ended"
           }
         }
       }

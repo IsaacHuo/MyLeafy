@@ -230,6 +230,8 @@ final class TimetableContinuousViewportController {
     @ObservationIgnored private var pagingStartOffset: CGFloat = 0
     @ObservationIgnored private var pagingTranslation: CGFloat = 0
     @ObservationIgnored private var pagingViewportWidth: CGFloat = 0
+    @ObservationIgnored private var ignoresPagingUntilEnd = false
+    @ObservationIgnored private var ignoresMagnificationUntilEnd = false
     @ObservationIgnored private var animatedValue: Double = 0
     @ObservationIgnored private var animatedVelocity: Double = 0
     @ObservationIgnored private var animationTarget: Double = 0
@@ -284,6 +286,30 @@ final class TimetableContinuousViewportController {
         }
     }
 
+    /// Resolve the old presentation before any geometry is computed with the new viewport.
+    /// Gesture translations still belong to the old geometry until that gesture ends.
+    func resizeViewport() {
+        ignoresPagingUntilEnd = ignoresPagingUntilEnd || phase == .paging
+        ignoresMagnificationUntilEnd = ignoresMagnificationUntilEnd || phase == .pinching
+        let targetZoom = animationKind == .zoom ? CGFloat(animationTarget) : (zoomProgress >= 0.5 ? 1 : 0)
+        let direction = (phase == .paging || phase == .pageSettling)
+            && pagingViewportWidth > 0 && abs(horizontalOffset) >= pagingViewportWidth * 0.5
+            ? allowedPageDirection(horizontalOffset < 0 ? 1 : -1) : 0
+        stopAnimation()
+        zoomProgress = targetZoom
+        completePage(direction: direction)
+        pagingStartOffset = 0
+        pagingTranslation = 0
+        pagingViewportWidth = 0
+    }
+
+    func cancelMagnification() {
+        ignoresMagnificationUntilEnd = false
+        guard phase == .pinching else { return }
+        zoomProgress = zoomProgress >= 0.5 ? 1 : 0
+        phase = .idle
+    }
+
     func updateBounds(rangeStart: Date, rangeEnd: Date) {
         let start = calendar.startOfDay(for: rangeStart)
         let end = calendar.startOfDay(for: rangeEnd)
@@ -316,7 +342,7 @@ final class TimetableContinuousViewportController {
     }
 
     func beginMagnification(centersToday: Bool, today: Date = Date()) {
-        guard phase != .paging else { return }
+        guard !ignoresMagnificationUntilEnd, phase != .paging else { return }
         if phase == .pageSettling {
             beginPaging(viewportWidth: pagingViewportWidth)
             horizontalOffset = 0
@@ -355,6 +381,7 @@ final class TimetableContinuousViewportController {
         velocity: CGFloat,
         reducesMotion: Bool
     ) {
+        ignoresMagnificationUntilEnd = false
         guard phase == .pinching else { return }
         let safeMagnification = max(magnification, 0.001)
         let rawProgressVelocity = velocity / (safeMagnification * log(Self.fullMagnification))
@@ -400,7 +427,7 @@ final class TimetableContinuousViewportController {
 
     @discardableResult
     func beginPaging(viewportWidth: CGFloat) -> Bool {
-        guard viewportWidth.isFinite, viewportWidth > 0,
+        guard !ignoresPagingUntilEnd, viewportWidth.isFinite, viewportWidth > 0,
               phase == .idle || phase == .pageSettling,
               zoomProgress <= 0.001 || zoomProgress >= 0.999 else { return false }
         let interruptedOffset = phase == .pageSettling ? horizontalOffset : 0
@@ -430,6 +457,7 @@ final class TimetableContinuousViewportController {
         viewportWidth: CGFloat,
         reducesMotion: Bool
     ) {
+        ignoresPagingUntilEnd = false
         guard phase == .paging, viewportWidth.isFinite, viewportWidth > 0 else { return }
         let projectedOffset = predictedTranslation.isFinite
             ? horizontalOffset + predictedTranslation - pagingTranslation : horizontalOffset
@@ -450,6 +478,7 @@ final class TimetableContinuousViewportController {
     }
 
     func cancelPaging(reducesMotion: Bool) {
+        ignoresPagingUntilEnd = false
         guard phase == .paging else { return }
         guard !reducesMotion else {
             completePage(direction: 0)
