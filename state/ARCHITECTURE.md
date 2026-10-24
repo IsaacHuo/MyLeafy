@@ -393,6 +393,13 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 - 成绩页不提供下拉刷新或空状态拉取按钮，进入页面只读取本地缓存，主动拉取统一使用右上角按钮；按钮触发后的既有会话恢复保留。GPA 正文支持括号标签和内联元素，注释旧值、排名表数字和算术均分不作为官方 GPA / 加权均分。
 - 翻页拖动与吸附动画分别使用 `paging` / `pageSettling`。新拖动取消旧显示链接，按最近可见页重定位并保留偏移；跨页接管时新窗口与 payload 一起更新，其余拖动帧不重建窗口。手势取消、跳周和回到今天均须释放交互状态。
 
+### iOS 可变窗口与 iPhone Duo
+
+- 原生 TabView / NavigationStack / Sheet 由 iOS 27.1 SDK 提供竖栏与屏幕适配；容器尺寸和 Size Class 决定布局，前景遵守各边独立安全区，不以设备型号或主屏尺寸分流根界面。
+- 课表尺寸变化结束旧显示链接，保留最近可见周与缩放目标，隔离尚未结束的旧手势；UIKit 滚动按节次行距重定位并约束新范围。普通尺寸变化不重建导航、草稿或网络模型。
+- 社区每列不足 128pt（随显示密度放大）或辅助功能字号时按原顺序显示单列，最多双列；评分搜索窄屏上下排列。日迹输入区持续接收容器宽高，为按钮与外侧留白预留空间。带尺寸的 UI 图片解码使用发起视图的 displayScale，分享图固定 3x 输出并保留模板尺寸。
+- 分享扩展在安全区内滚动，尺寸变化不重启导入。构建、CI 与人工折叠/分屏验收相互独立，具体边界见 `docs/design/ios-iphone-duo-adaptation.md`。
+
 ### iOS 产品介绍与密集课表
 
 - “了解 MyLeafy”是本地主题合集与图文详情，使用固定界面示例；无博客或源码仓库入口，不访问用户数据或联网。
@@ -415,7 +422,7 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 
 统一入口为 `.github/workflows/ci.yml`，对 main、codex 分支、PR 和手动运行生成 `CI result`。范围由 `scripts/ci-changes.py` 按跨目录依赖选择，平台检查为 reusable workflows。任务分支检查相对 main 的累计变化；main 检查本次变化；手动检查全部。根 `.editorconfig` 选择双端，`.swiftformat` 和 Swift 格式脚本选择 iOS，Android 根工程统一配置 Spotless 8.10.4 / ktlint 1.8.0；所有格式检查只读，不在构建阶段改写源码。Android 现有流程另含 release Kotlin / lint 与 API 36 Room、导航设备检查；2026-10-23 全量整合按所有者明确边界不重复执行，不能将流程定义当成执行证据。选中的检查失败或取消，汇总不能通过。main 已启用必需 CI result（限定 GitHub Actions），不强制 PR 或第二人审批。
 
-iOS CI 固定 macOS 26 / Xcode 26.6，构建前通过 `scripts/format-swift.sh --check` 使用校验过的 SwiftFormat 0.64.1；保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
+iOS CI 使用 xcode-27 runner 并固定选择 Xcode 27.1，构建前通过 `scripts/format-swift.sh --check` 使用校验过的 SwiftFormat 0.64.1；保留 iOS 17 最低目标构建并执行离线 XCTest，中文测试环境及显式英文用例；保留 xcresult 和可读摘要。网站 CI 包含 Chromium、WebKit、iPad WebKit 的登录、关键公开页面与 Android 版本流程。旧 Supabase 继续使用独立契约和数据库检查。
 
 Cloudflare 工作流将已验证 main 提交准备到 staging，production 手动指定同一提交和成功 staging 证据；审批前展示提交、迁移文件和检查摘要。按迁移→Worker→Pages 执行，保存旧/新部署 ID 与 D1 书签；恢复工作流使用同一环境串行锁，恢复 Worker/Pages，绝不自动恢复 D1。staging 冒烟只清理本次生成身份，不改变全局开关。官网下载区通过同域只读发行代理使用 PublicAPI 服务绑定，禁止写死生产 API 或在绑定失败时回退生产；Pages 的 _routes.json 明确包含 /api/releases/android/*，避免发行代理被静态页面吞掉；部署核对网站与该环境的发行信息一致。Pages 自动生产部署已关闭，GitHub 的 staging/production 凭据和项目变量已配置；首次受控部署与恢复演练状态见 CURRENT。
 

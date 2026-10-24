@@ -740,21 +740,23 @@ struct ScheduleMemoFeedView: View {
         if presentation == .daytraceRoot {
             daytraceRootFeed(using: mediaIndex)
         } else {
-            memoScrollView(using: mediaIndex)
-                .background(LeafyPageBackground())
-                .searchable(
-                    text: $searchText,
-                    placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "搜索随记"
-                )
-                .safeAreaInset(edge: .bottom) {
-                    ScheduleMemoComposer()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        filterMenu
+            GeometryReader { viewport in
+                memoScrollView(using: mediaIndex)
+                    .background(LeafyPageBackground())
+                    .searchable(
+                        text: $searchText,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "搜索随记"
+                    )
+                    .safeAreaInset(edge: .bottom) {
+                        ScheduleMemoComposer(availableSize: viewport.size)
                     }
-                }
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            filterMenu
+                        }
+                    }
+            }
         }
     }
 
@@ -1745,7 +1747,7 @@ private struct ScheduleMemoComposerOverlayModifier: ViewModifier {
         content
             .overlay {
                 GeometryReader { viewport in
-                    ScheduleMemoComposer(availableHeight: viewport.size.height)
+                    ScheduleMemoComposer(availableSize: viewport.size)
                         .background {
                             GeometryReader { proxy in
                                 Color.clear.preference(
@@ -1796,6 +1798,15 @@ private struct ScheduleMemoComposerTextHeightPreferenceKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+nonisolated enum ScheduleMemoComposerSizing {
+    static func fitsCompactControls(width: CGFloat) -> Bool { width >= 280 }
+
+    static func fullscreenHeight(availableHeight: CGFloat) -> CGFloat {
+        let budget = max(availableHeight - 16, 0)
+        return min(max(availableHeight * 0.8, 240), budget)
     }
 }
 
@@ -2040,10 +2051,12 @@ private struct ScheduleMemoComposer: View {
     @State private var errorTitle = "无法保存随记"
     @FocusState private var isEditorFocused: Bool
 
-    let availableHeight: CGFloat
+    let availableSize: CGSize
 
-    init(availableHeight: CGFloat = UIScreen.main.bounds.height) {
-        self.availableHeight = availableHeight
+    private var availableHeight: CGFloat { availableSize.height }
+    private var usesCompactControls: Bool {
+        presentation == .compact && ScheduleMemoComposerSizing
+            .fitsCompactControls(width: availableSize.width - AppSpacing.page * 2 - 16)
     }
 
     private static let editorFontSize: CGFloat = 20
@@ -2191,7 +2204,7 @@ private struct ScheduleMemoComposer: View {
     }
 
     private var fullscreenHeight: CGFloat {
-        min(max(availableHeight * 0.8, 240), availableHeight)
+        ScheduleMemoComposerSizing.fullscreenHeight(availableHeight: availableHeight)
     }
 
     private var compactEditorHeight: CGFloat {
@@ -2205,7 +2218,7 @@ private struct ScheduleMemoComposer: View {
     private var composerControlsHeight: CGFloat {
         switch presentation {
         case .compact:
-            compactEditorHeight
+            usesCompactControls ? compactEditorHeight : compactEditorHeight + 8 + 44
         case .expanded, .fullscreen:
             expandedEditorHeight + 8 + 44
         }
@@ -2213,8 +2226,8 @@ private struct ScheduleMemoComposer: View {
 
     private var composerControls: some View {
         ScheduleMemoComposerControlLayout(
-            presentation: presentation,
-            expandedEditorHeight: expandedEditorHeight
+            presentation: presentation == .compact && !usesCompactControls ? .expanded : presentation,
+            expandedEditorHeight: presentation == .compact ? compactEditorHeight : expandedEditorHeight
         ) {
             addButton
             editor
@@ -2231,7 +2244,7 @@ private struct ScheduleMemoComposer: View {
     }
 
     private var editorLeadingOffset: CGFloat {
-        presentation == .compact ? 0 : 9
+        usesCompactControls ? 0 : 9
     }
 
     private var focusedEditorVerticalOffset: CGFloat {
@@ -2356,6 +2369,10 @@ private struct ScheduleMemoComposer: View {
         .accessibilityLabel("保存随记")
     }
 
+    private var draftPreviewHeight: CGFloat {
+        min(104, max(44, availableHeight - composerControlsHeight - 44))
+    }
+
     @ViewBuilder
     private var draftPreview: some View {
         if !draftImages.isEmpty || !draftAttachments.isEmpty {
@@ -2366,7 +2383,7 @@ private struct ScheduleMemoComposer: View {
                             Image(uiImage: draft.image)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 104, height: 104)
+                                .frame(width: draftPreviewHeight, height: draftPreviewHeight)
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .clipped()
                             removeButton(label: "移除图片") {
@@ -2431,7 +2448,7 @@ private struct ScheduleMemoComposer: View {
             }
         }
         .padding(.vertical, 8)
-        .frame(width: 260)
+        .frame(idealWidth: 260, maxWidth: 260)
     }
 
     private func addMenuButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {

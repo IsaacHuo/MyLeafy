@@ -30,7 +30,7 @@ CI 只检查源码；风格检查失败时按同一工具修复。范围选择�
 | 范围 | 自动验证 |
 |---|---|
 | 仓库 | 私有文件/密钥、分层边界、CI 范围选择规则 |
-| iOS | 固定 SwiftFormat；Xcode 27.1、iOS 17 最低目标构建、离线 XCTest；中文环境与显式英文用例 |
+| iOS | 固定 SwiftFormat；Xcode 27.1（xcode-27 runner）、iOS 17 最低目标构建、离线 XCTest；中文环境与显式英文用例 |
 | Android | 固定 Spotless / ktlint；现有 Gradle/JVM toolchain、Debug 构建、JVM、Android Lint、Roborazzi |
 | Backend | 锁定 Node/npm 依赖、类型、客户端契约、业务/迁移/发行脚本、Worker dry-run |
 | 官网/admin | 类型、单元、生产构建、Chromium/WebKit/iPad WebKit 浏览器流程 |

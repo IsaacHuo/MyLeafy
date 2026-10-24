@@ -1293,7 +1293,7 @@ struct GradeAnalyticsDetailView: View {
             )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = 3
 
         guard let image = renderer.uiImage else {
             exportErrorMessage = L10n.text("请稍后重试，或先截图保存当前页面。", language: leafyLanguage)

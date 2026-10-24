@@ -1544,7 +1544,7 @@ struct LearningWorkspaceDetailView: View {
             generatedAt: Date()
         )
         let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = 3
 
         guard let image = renderer.uiImage else {
             shareErrorMessage = "请稍后重试，或先截图保存当前页面。"
@@ -2390,7 +2390,7 @@ struct StudyTimeRecordsView: View {
             generatedAt: Date()
         )
         let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = 3
 
         guard let image = renderer.uiImage else {
             shareErrorMessage = L10n.text("请稍后重试，或先截图保存当前页面。", language: leafyLanguage)

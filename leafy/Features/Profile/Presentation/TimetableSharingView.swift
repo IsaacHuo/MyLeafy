@@ -1052,6 +1052,7 @@ private struct AcceptTimetableInviteSheet: View {
 }
 
 private struct SharedTimetableGridDetailView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.leafyControlScale) private var leafyControlScale
     @Environment(\.leafyLanguage) private var leafyLanguage
     @Environment(\.colorScheme) private var colorScheme
@@ -1081,7 +1082,7 @@ private struct SharedTimetableGridDetailView: View {
     private var timetableDaySpacing: CGFloat { 5 * leafyControlScale }
     private var timetableWeekSpacing: CGFloat { 6 * leafyControlScale }
     private var allowsTimetableAgendaFallback: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        horizontalSizeClass == .regular
     }
     private var visibleDayRange: ClosedRange<Int> { 1 ... 7 }
 

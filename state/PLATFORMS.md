@@ -25,6 +25,10 @@
 | 个人数据云同步 | 已合入；[Core/Sync](../leafy/Core/Sync/) 的 CKSyncEngine，默认关闭，主动开启 | 未实现个人数据云同步；[同步中心](../android/app/src/main/java/com/myleafy/android/features/profile/ProfileSyncScreen.kt) 是学校数据刷新，不代表云同步 | iCloud 为平台特有；生产 schema / 双设备待 [#36](https://github.com/IsaacHuo/MyLeafy/issues/36)，跨端云同步待产品决定 |
 | 长尾校园工具 | 已合入；[Discover](../leafy/Features/Discover/) | 已合入选定范围；[campus](../android/app/src/main/java/com/myleafy/android/features/campus/) | 学习空间、职业规划、考研等不迁移 Android，按 ARCHITECTURE §11 的既有取舍，不创建虚假对齐任务 |
 
+## iOS iPhone Duo 自适应补充（2026-10-24）
+
+仅 iOS 新增基于窗口尺寸的课表、社区窄列、评分筛选、日迹输入及分享扩展调整，沿用三 Tab 与校园左栏；Android 与共享契约未改，不产生新的双端对齐承诺。iOS CI 使用 Xcode 27.1 / iOS 27.1 SDK，最低目标仍为 iOS 17。本轮以本地构建通过为交付边界，静态检查/编译结果见 CURRENT；未触发远端 CI，本地不运行 XCTest 或操作 Simulator，Duo 折叠、分屏、键盘和真机视觉仍待 [#44](https://github.com/IsaacHuo/MyLeafy/issues/44) 验收。没有 TestFlight/App Store 发布结论。
+
 ## 验证证据与保留边界
 
 | 范围 | iOS | Android |

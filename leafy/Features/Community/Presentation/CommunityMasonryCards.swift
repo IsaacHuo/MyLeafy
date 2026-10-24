@@ -233,6 +233,9 @@ struct CommunityMasonryColumns<Item> {
 }
 
 struct CommunityMasonryGrid<Item: Identifiable & Equatable, Content: View>: View {
+    @Environment(\.leafyControlScale) private var controlScale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var availableWidth: CGFloat = 0
     let items: [Item]
     var spacing: CGFloat = 10
     @ViewBuilder let content: (Item) -> Content
@@ -250,6 +253,30 @@ struct CommunityMasonryGrid<Item: Identifiable & Equatable, Content: View>: View
     }
 
     var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize
+                || CommunityMasonrySizing.columnCount(
+                    width: availableWidth,
+                    spacing: spacing,
+                    controlScale: controlScale
+                ) == 1 {
+                LazyVStack(alignment: .leading, spacing: spacing) {
+                    ForEach(items) { item in
+                        content(item)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                }
+            } else {
+                twoColumns
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+        .onChange(of: items) { _, newItems in
+            columns = CommunityMasonryColumns(items: newItems)
+        }
+    }
+
+    private var twoColumns: some View {
         HStack(alignment: .top, spacing: spacing) {
             LazyVStack(alignment: .leading, spacing: spacing) {
                 ForEach(Array(columns.left.enumerated()), id: \.element.id) { index, item in
@@ -269,9 +296,12 @@ struct CommunityMasonryGrid<Item: Identifiable & Equatable, Content: View>: View
             }
             .frame(maxWidth: .infinity, alignment: .top)
         }
-        .onChange(of: items) { _, newItems in
-            columns = CommunityMasonryColumns(items: newItems)
-        }
+    }
+}
+
+nonisolated enum CommunityMasonrySizing {
+    static func columnCount(width: CGFloat, spacing: CGFloat, controlScale: CGFloat) -> Int {
+        width >= 2 * 128 * max(controlScale, 1) + spacing ? 2 : 1
     }
 }
 

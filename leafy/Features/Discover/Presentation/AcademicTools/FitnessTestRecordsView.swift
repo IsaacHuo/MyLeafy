@@ -285,7 +285,7 @@ struct FitnessTestRecordsView: View {
             )
 
         let renderer = ImageRenderer(content: content)
-        renderer.scale = UIScreen.main.scale
+        renderer.scale = 3
 
         guard let image = renderer.uiImage else {
             operationAlert = .failure(
