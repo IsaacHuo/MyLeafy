@@ -16,18 +16,15 @@
 - 课表可信空结果保留、步骤式同步、下拉刷新覆盖层、提醒后台排期、可取消教务请求。
 - 24dp 卡片体系、主题渐变、课程色同族化、alpha/描边 token、暗色层级。
 - 评论 cursor 分页、Feed 缓存、通知 work 顺序、日迹读取错误保留、正文标签、图片继续缩尺寸、日程提醒级联、R8/CI 调整。
+- 课表设置：学年/学期标签、第一周周一、1–24 节作息；固定 20 周；DataStore 持久化并驱动动态网格。
 
 ## P0
 
-1. **课表设置引擎**：用户可编辑学期标签、第一周周一、1–24 节作息。
-   iOS：`TimetableSettingsView.swift`、`UserTimetableSettings.swift`。
-   Android：`SemesterConfig.kt` 固定 2026-2027-1，`TimetablePeriodSchedule` 固定 13 节。
-   影响课表、提醒、导出、Widget（Android 无 Widget）、课程详情日期。工作量 L。
-2. **社区草稿箱与自动保存**：iOS 有本地草稿、退出存入草稿箱、续编/删除。
+1. **社区草稿箱与自动保存**：iOS 有本地草稿、退出存入草稿箱、续编/删除。
    Android：`ComposePostScreen` 只有未保存确认。工作量 M。
-3. **社区评论/帖子内容类型**：投票、附件（PDF/Word/Excel/Markdown）、投票列表与发布。
+2. **社区评论/帖子内容类型**：投票、附件（PDF/Word/Excel/Markdown）、投票列表与发布。
    Android 目前只有文本与图片。工作量 L。
-4. **缓存清理与账户操作**：清除教务缓存 / 清除本地数据；绑定邮箱、删除账户。
+3. **缓存清理与账户操作**：清除教务缓存 / 清除本地数据；绑定邮箱、删除账户。
    Android 只有缓存计数和逐项同步。工作量 L。
 
 ## P1

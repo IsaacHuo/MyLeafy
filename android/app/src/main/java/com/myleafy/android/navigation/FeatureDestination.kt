@@ -101,6 +101,11 @@ enum class FeatureDestination(
         title = "评价相关",
         description = "评教、评课与评菜依赖社区身份和评价服务。",
     ),
+    TIMETABLE_SETTINGS(
+        route = "profile/timetable-settings",
+        title = "课表设置",
+        description = "设置学期、开学日期、节次与作息。",
+    ),
     PROFILE_SYNC(
         route = "profile/sync",
         title = "缓存与同步",

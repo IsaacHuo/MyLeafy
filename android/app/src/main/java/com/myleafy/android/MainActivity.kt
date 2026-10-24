@@ -12,12 +12,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myleafy.android.core.prefs.Settings
+import com.myleafy.android.features.timetable.domain.SemesterConfig
 import com.myleafy.android.ui.MyLeafyApp
 import com.myleafy.android.ui.theme.MyLeafyTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,9 @@ class MainActivity : ComponentActivity() {
             val navigationIntent by incomingIntent.collectAsStateWithLifecycle()
             val settings by (application as MyLeafyApplication).container.settingsStore.settings
                 .collectAsStateWithLifecycle(initialValue = Settings())
+            LaunchedEffect(settings.timetableSettings) {
+                SemesterConfig.applyUserSettings(settings.timetableSettings)
+            }
             val darkTheme = when (settings.themeMode) {
                 "light" -> false
                 "dark" -> true

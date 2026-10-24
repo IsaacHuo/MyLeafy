@@ -88,6 +88,7 @@ import com.myleafy.android.features.schedule.ScheduleTagsScreen
 import com.myleafy.android.features.schedule.ScheduleTrashScreen
 import com.myleafy.android.features.timetable.TimetableScreen
 import com.myleafy.android.features.timetable.TimetableIdentity
+import com.myleafy.android.features.timetable.TimetableSettingsScreen
 import com.myleafy.android.features.timetable.sharing.TimetableSharingScreen
 import com.myleafy.android.ui.components.FeaturePlaceholder
 import com.myleafy.android.ui.components.LeafyEmptyState
@@ -416,6 +417,9 @@ fun MyLeafyNavHost(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_PERSONALIZATION -> ProfilePreferencesScreen(
+                            onBack = { navController.popBackStack() },
+                        )
+                        FeatureDestination.TIMETABLE_SETTINGS -> TimetableSettingsScreen(
                             onBack = { navController.popBackStack() },
                         )
                         FeatureDestination.PROFILE_SYNC -> ProfileSyncScreen(

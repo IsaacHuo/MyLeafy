@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Edit
@@ -237,6 +238,13 @@ fun ProfileContent(
                 }
                 item {
                     LeafySettingsGroup(title = "数据") {
+                        ProfileDestinationRow(
+                            title = "课表设置",
+                            description = "学期、开学日期、节次与作息",
+                            icon = Icons.Outlined.CalendarMonth,
+                            onClick = { onFeatureClick(FeatureDestination.TIMETABLE_SETTINGS) },
+                        )
+                        LeafySettingsDivider()
                         ProfileDestinationRow(
                             title = "缓存与同步",
                             description = "检查本地数据与学校同步状态",

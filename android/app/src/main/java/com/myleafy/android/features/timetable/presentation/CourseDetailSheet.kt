@@ -12,6 +12,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -20,7 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.Lifecycle
@@ -154,93 +163,219 @@ fun CourseDetailSheet(
                 (if (focusedField == 1) noteIntoView else reminderIntoView).bringIntoView()
             }
         }
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("课程详情", style = MaterialTheme.typography.titleLarge)
                 LeafyTextButton(onClick = requestExit, enabled = !saving) { Text("完成") }
             }
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LeafyContentSurface(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(course.courseName, style = MaterialTheme.typography.titleLarge)
-                    Text(if (ordinal > 0) "第 $ordinal / ${occurrences.size} 次课 · 第 $week 周" else "第 $week 周", style = MaterialTheme.typography.bodyMedium)
-                    if (occurrences.isNotEmpty()) LinearProgressIndicator(progress = { (ordinal.toFloat() / occurrences.size).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                }
-            }
-            CourseDetailValue("教室", listOf(course.location, course.room).filter(String::isNotBlank).distinct().joinToString(" ").ifBlank { "未填写" })
-            CourseDetailValue("节次", "${date ?: "学期日期未确认"} · ${courseTimeDescription(course)}")
-            val teachers = course.teacher.split(Regex("[、,，;；/\\n]+")).map(String::trim).filter(String::isNotBlank).distinct()
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("教师", Modifier.widthIn(min = 44.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (teachers.isEmpty()) Text("未填写", style = MaterialTheme.typography.bodyMedium)
-                    else teachers.forEach { teacher ->
-                        Text("$teacher ›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.heightIn(min = 48.dp).wrapContentHeight().clickable(role = androidx.compose.ui.semantics.Role.Button) {
-                                if (!dirty && !saving) onTeacher(teacher) else error = "请先保存或放弃更改"
-                            })
+                    Text(
+                        text = if (ordinal > 0) "第 $ordinal / ${occurrences.size} 次课 · 第 $week 周" else "第 $week 周",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (occurrences.isNotEmpty()) {
+                        LinearProgressIndicator(
+                            progress = { (ordinal.toFloat() / occurrences.size).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
             }
-            CourseDetailValue("周次", compactWeeks(course.weeks))
-            if (course.classInfo.isNotBlank()) CourseDetailValue("班级", course.classInfo)
-            HorizontalDivider()
-            Text("课程备注", style = MaterialTheme.typography.titleMedium)
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf(week to "仅本次课", 0 to "所有这门课").forEachIndexed { index, (value, label) ->
-                    SegmentedButton(selected = noteWeek == value, enabled = !saving && notes != null,
-                        onClick = { if (value != noteWeek) { if (noteDirty) pendingScope = value else { edited = false; noteWeek = value } } },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
+            LeafyContentSurface(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    CourseDetailInfoRow(
+                        icon = Icons.Outlined.Place,
+                        label = "教室",
+                        value = listOf(course.location, course.room).filter(String::isNotBlank).distinct().joinToString(" ").ifBlank { "未填写" },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    CourseDetailInfoRow(
+                        icon = Icons.Outlined.Schedule,
+                        label = "节次",
+                        value = "${date ?: "学期日期未确认"} · ${courseTimeDescription(course)}",
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val teachers = course.teacher.split(Regex("[、,，;；/\\n]+")).map(String::trim).filter(String::isNotBlank).distinct()
+                    if (teachers.isEmpty()) {
+                        CourseDetailInfoRow(icon = Icons.Outlined.Person, label = "教师", value = "未填写")
+                    } else {
+                        teachers.forEach { teacher ->
+                            CourseDetailInfoRow(
+                                icon = Icons.Outlined.Person,
+                                label = "教师",
+                                value = teacher,
+                                trailing = {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                },
+                                onClick = {
+                                    if (!dirty && !saving) onTeacher(teacher) else error = "请先保存或放弃更改"
+                                },
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    CourseDetailInfoRow(icon = Icons.Outlined.CalendarMonth, label = "周次", value = compactWeeks(course.weeks))
+                    if (course.classInfo.isNotBlank()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        CourseDetailInfoRow(icon = Icons.Outlined.School, label = "班级", value = course.classInfo)
+                    }
                 }
             }
-            LeafyTextField(value = draft, onValueChange = { draft = it; edited = true }, enabled = !saving && notes != null,
-                label = { Text("作业、考试、分组或老师要求") }, minLines = 2, modifier = Modifier.fillMaxWidth().bringIntoViewRequester(noteIntoView).onFocusChanged { if (it.isFocused) focusedField = 1 else if (focusedField == 1) focusedField = 0 })
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LeafyPrimaryButton(enabled = !saving && notes != null, onClick = { mutate {
-                    if (draft.isBlank()) dao.deleteNote(course.scopeKey, course.sourceSemesterID, key, noteWeek)
-                    else dao.save(CourseNoteEntity(course.scopeKey, course.sourceSemesterID, key, noteWeek, draft.trim()))
-                    edited = false; feedback = "备注已保存"
-                } }) { Text(if (saving) "保存中…" else "保存备注") }
-                if (savedNote.isNotEmpty()) LeafyTextButton(enabled = !saving, onClick = { mutate {
-                    dao.deleteNote(course.scopeKey, course.sourceSemesterID, key, noteWeek); draft = ""; edited = false; feedback = "备注已删除"
-                } }) { Text("删除备注") }
+            LeafyContentSurface(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("课程备注", style = MaterialTheme.typography.titleMedium)
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        listOf(week to "仅本次课", 0 to "所有这门课").forEachIndexed { index, (value, label) ->
+                            SegmentedButton(
+                                selected = noteWeek == value,
+                                enabled = !saving && notes != null,
+                                onClick = {
+                                    if (value != noteWeek) {
+                                        if (noteDirty) pendingScope = value else {
+                                            edited = false
+                                            noteWeek = value
+                                        }
+                                    }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index, 2),
+                            ) { Text(label) }
+                        }
+                    }
+                    LeafyTextField(
+                        value = draft,
+                        onValueChange = { draft = it; edited = true },
+                        enabled = !saving && notes != null,
+                        label = { Text("作业、考试、分组或老师要求") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth().bringIntoViewRequester(noteIntoView).onFocusChanged {
+                            if (it.isFocused) focusedField = 1 else if (focusedField == 1) focusedField = 0
+                        },
+                    )
+                    LeafyPrimaryButton(
+                        enabled = !saving && notes != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            mutate {
+                                if (draft.isBlank()) dao.deleteNote(course.scopeKey, course.sourceSemesterID, key, noteWeek)
+                                else dao.save(CourseNoteEntity(course.scopeKey, course.sourceSemesterID, key, noteWeek, draft.trim()))
+                                edited = false
+                                feedback = "备注已保存"
+                            }
+                        },
+                    ) { Text(if (saving) "保存中…" else "保存备注") }
+                    if (savedNote.isNotEmpty()) {
+                        LeafyTextButton(
+                            enabled = !saving,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                mutate {
+                                    dao.deleteNote(course.scopeKey, course.sourceSemesterID, key, noteWeek)
+                                    draft = ""
+                                    edited = false
+                                    feedback = "备注已删除"
+                                }
+                            },
+                        ) { Text("删除备注") }
+                    }
+                    Text(
+                        text = if (noteWeek == 0) "适用于这门课的所有周次。" else "仅适用于本周这一次课。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            Text(if (noteWeek == 0) "适用于这门课的所有周次。" else "仅适用于本周这一次课。", style = MaterialTheme.typography.bodySmall)
-            HorizontalDivider()
-            Text("课前提醒", style = MaterialTheme.typography.titleMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0, 5, 20, 30).forEach { value -> FilterChip(selected = !selectingCustom && minutes == value,
-                    onClick = { minutes = value; selectingCustom = false }, enabled = !saving,
-                    label = { Text(if (value == 0) "关闭" else "$value 分钟") }) }
-                FilterChip(selected = selectingCustom, enabled = !saving, onClick = { selectingCustom = true }, label = { Text("自定义") })
+            LeafyContentSurface(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("课前提醒", style = MaterialTheme.typography.titleMedium)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 5, 20, 30).forEach { value ->
+                            FilterChip(
+                                selected = !selectingCustom && minutes == value,
+                                onClick = { minutes = value; selectingCustom = false },
+                                enabled = !saving,
+                                label = { Text(if (value == 0) "关闭" else "$value 分钟") },
+                            )
+                        }
+                        FilterChip(
+                            selected = selectingCustom,
+                            enabled = !saving,
+                            onClick = { selectingCustom = true },
+                            label = { Text("自定义") },
+                        )
+                    }
+                    if (selectingCustom) {
+                        LeafyTextField(
+                            value = custom,
+                            onValueChange = { custom = it },
+                            label = { Text("提前分钟数（1–180）") },
+                            singleLine = true,
+                            isError = custom.toIntOrNull() !in 1..180,
+                            modifier = Modifier.fillMaxWidth().bringIntoViewRequester(reminderIntoView).onFocusChanged {
+                                if (it.isFocused) focusedField = 2 else if (focusedField == 2) focusedField = 0
+                            },
+                        )
+                    }
+                    if (course.duration.size > 1 && (selectingCustom || minutes > 0)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            course.duration.distinct().sorted().forEach { period ->
+                                FilterChip(selected = anchor == period, onClick = { anchor = period }, label = { Text("第 $period 节开始前") })
+                            }
+                        }
+                    }
+                    LeafySecondaryButton(
+                        enabled = !saving && reminders != null && (!selectingCustom || custom.toIntOrNull() in 1..180),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            mutate {
+                                dao.save(CourseReminderEntity(course.scopeKey, course.sourceSemesterID, key, if (selectingCustom) custom.toInt() else minutes, anchor))
+                                dependencies.reminderScheduler.reconcile()
+                                permissionProblem = dependencies.reminderScheduler.permissionProblem()
+                                feedback = if (!selectingCustom && minutes == 0) "提醒已关闭" else "提醒配置已保存"
+                                if ((selectingCustom || minutes > 0) && Build.VERSION.SDK_INT >= 33 && !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
+                        },
+                    ) { Text("应用提醒") }
+                    if (reminder != null && reminder.minutes > 0 && permissionProblem != null) {
+                        LeafyStatusBanner(
+                            "提醒未启用 · $permissionProblem",
+                            isError = true,
+                            actionLabel = "设置",
+                            onAction = {
+                                val intent = if (Build.VERSION.SDK_INT >= 31 && !context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()) {
+                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                                } else {
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                }
+                                context.startActivity(intent)
+                            },
+                        )
+                    }
+                    if (reminder != null && reminder.minutes > 0 && permissionProblem == null && schedulingError == null) {
+                        Text("提醒已启用", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        text = "提醒只保存在本机，会为这门课尚未开始的周次创建本地通知。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            if (selectingCustom) LeafyTextField(value = custom, onValueChange = { custom = it }, label = { Text("提前分钟数（1–180）") }, singleLine = true,
-                isError = custom.toIntOrNull() !in 1..180, modifier = Modifier.fillMaxWidth().bringIntoViewRequester(reminderIntoView).onFocusChanged { if (it.isFocused) focusedField = 2 else if (focusedField == 2) focusedField = 0 })
-            if (course.duration.size > 1 && (selectingCustom || minutes > 0)) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                course.duration.distinct().sorted().forEach { period -> FilterChip(selected = anchor == period, onClick = { anchor = period }, label = { Text("第 $period 节开始前") }) }
-            }
-            LeafyPrimaryButton(enabled = !saving && reminders != null && (!selectingCustom || custom.toIntOrNull() in 1..180), onClick = { mutate {
-                dao.save(CourseReminderEntity(course.scopeKey, course.sourceSemesterID, key, if (selectingCustom) custom.toInt() else minutes, anchor))
-                dependencies.reminderScheduler.reconcile()
-                permissionProblem = dependencies.reminderScheduler.permissionProblem()
-                feedback = if (!selectingCustom && minutes == 0) "提醒已关闭" else "提醒配置已保存"
-                if ((selectingCustom || minutes > 0) && Build.VERSION.SDK_INT >= 33 && !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } }) { Text("应用提醒") }
-            if (reminder != null && reminder.minutes > 0 && permissionProblem != null) {
-                LeafyStatusBanner("提醒未启用 · $permissionProblem", isError = true, actionLabel = "设置", onAction = {
-                    val intent = if (Build.VERSION.SDK_INT >= 31 && !context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms())
-                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
-                    else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    context.startActivity(intent)
-                })
-            }
-            if (reminder != null && reminder.minutes > 0 && permissionProblem == null && schedulingError == null) {
-                Text("提醒已启用", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            Text("提醒只保存在本机，会为这门课尚未开始的周次创建本地通知。", style = MaterialTheme.typography.bodySmall)
             schedulingError?.let { LeafyStatusBanner(it, isError = true) }
             error?.let { LeafyStatusBanner(it, isError = true, onDismiss = { error = null }) }
-            feedback?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            feedback?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -250,10 +385,40 @@ fun CourseDetailSheet(
 }
 
 @Composable
-private fun CourseDetailValue(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, Modifier.widthIn(min = 44.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+private fun CourseDetailInfoRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            )
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = label,
+            modifier = Modifier.width(52.dp).padding(start = 10.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        trailing?.invoke()
     }
 }
 
