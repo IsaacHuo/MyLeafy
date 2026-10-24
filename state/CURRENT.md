@@ -6,7 +6,9 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 ## Current Focus
 
-- **快速迭代 CI/CD（2026-10-24）**：日常必需 CI result 改为受影响平台的格式、配置、类型/契约和基础安全检查；编译/完整回归仅通过 Full validation 手动选平台/all，Android 候选与 staging 取消跟随 main CI 的自动触发。staging 前置完整后端/网站验证，生产审批与同提交/同产物规则保留。源分支并发组取消旧执行，当前有效运行仍严格验证所选检查。目标约 1–2 分钟（不含排队），实测结果以 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46) 精确提交为准。保留基线 60113cf 的完整 CI（774 通过、1 跳过），不重复执行；本轮跟踪 [#49](https://github.com/IsaacHuo/MyLeafy/issues/49)，基础 CI 通过不代表完整回归或发布。
+- **iOS 我的原生密度菜单（2026-10-24）**：按真机对照反馈改用系统 Body（标准字号 17pt）、54pt 最小行高和上下各 10pt 留白，28pt 菜单图标；辅助功能字号可自然增高。课表（重新同步、课表设置、iCloud 同步、共享课表）与偏好（个性化、课表背景、隐藏周末）拆成两组，账户置于“我的更多作品”上方；诗境恢复原 34pt 品牌图标、说明及展示卡片留白，不作为紧凑功能行。状态仍在右侧单行，资料/联系卡和账户安全语义保持。格式检查、设备目标增量编译和最新基础 CI 结果见 PR #46；不启动本地 Simulator 或重复完整基线，真机效果由所有者验收，跟踪 [#49](https://github.com/IsaacHuo/MyLeafy/issues/49)。
+
+- **快速迭代 CI/CD（2026-10-24）**：日常必需 CI result 改为受影响平台的格式、配置、类型/契约和基础安全检查；编译/完整回归仅通过 Full validation 手动选平台/all，Android 候选与 staging 取消跟随 main CI 的自动触发。staging 前置完整后端/网站验证，生产审批与同提交/同产物规则保留。仓库分支 push 只运行一次基础 CI，PR 复用源提交检查，同分支新提交取消旧执行；当前有效运行仍严格验证所选检查。基础检查试运行实测约 1 分 30 秒，原完整 CI 约 19 分钟，未执行编译/模拟器/测试；最终采用单 push 检查避免重复事件的取消检查阻塞 GitHub。目标约 1–2 分钟（不含排队），最新结果以 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46) 精确提交为准。保留基线 60113cf 的完整 CI（774 通过、1 跳过），不重复执行；本轮跟踪 [#49](https://github.com/IsaacHuo/MyLeafy/issues/49)，基础 CI 通过不代表完整回归或发布。
 
 - **iOS CI 失败审核（2026-10-24）**：九项失败分为七项 SwiftData 撤销删除后状态未及时收敛、一项 CSV 的 CRLF 记录边界遗漏，以及一项图片显示解码逐通道误差检查过细。补齐操作撤销后的待定变化处理，保留数据恢复断言；CSV 支持三种换行并保持字段原文；图片检查改为固定颜色、sRGB 下的尺寸与色块方向/内容验证。未修改必需 CI result、跳过用例或改变数据格式。原生离线探针通过，iOS 编译、远程完整 CI 与主线集成结果见 [PR #46](https://github.com/IsaacHuo/MyLeafy/pull/46)，根因及边界见 [排查记录](../logs/2026-10-24-ios27-ci-failure-audit.md)，跟踪 [#47](https://github.com/IsaacHuo/MyLeafy/issues/47)。
 
