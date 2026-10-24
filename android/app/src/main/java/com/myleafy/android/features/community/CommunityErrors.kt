@@ -13,7 +13,7 @@ internal fun Throwable.toCommunityMessage(fallback: String): String {
     return when {
         causes.any { it is SSLPeerUnverifiedException } ||
             ("hostname" in normalized && "not verified" in normalized) ->
-            "当前网络拦截了社区安全连接，请切换网络或关闭会接管流量的代理/VPN 后重试"
+            "当前网络替换了 MyLeafy 的安全证书（bjfu-wifi 的登录/拦截页会返回 *.bjfu.edu.cn 证书）。请先完成校园网登录，或切换到移动数据/全局 VPN 后重试。"
         causes.any { it is UnknownHostException } ->
             "无法解析社区服务地址，请检查网络或 DNS 设置后重试"
         causes.any { it is SocketTimeoutException || it is ConnectException } ->
@@ -27,4 +27,13 @@ internal fun Throwable.toCommunityMessage(fallback: String): String {
         raw.isBlank() -> fallback
         else -> "$fallback：$raw"
     }
+}
+
+/** TLS 主机名/证书被替换属于不可恢复的网络环境问题，重连不会自愈。 */
+internal fun Throwable.isPermanentTlsFailure(): Boolean {
+    val causes = generateSequence(this) { it.cause }.toList()
+    val normalized = causes.mapNotNull { it.message }.joinToString("\n").lowercase()
+    return causes.any { it is SSLPeerUnverifiedException } ||
+        ("hostname" in normalized && "not verified" in normalized) ||
+        ("certificate" in normalized && "not verified" in normalized)
 }

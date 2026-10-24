@@ -54,8 +54,17 @@ class CoreVisualReviewTest {
                                 "grades" -> LeafySecondaryScaffold("成绩查询", {}) { GradesContent(state, it) { analysisOpened++ } }
                                 "analysis" -> LeafySecondaryScaffold("成绩分析", {}) { GradeAnalysisContent(state, it) }
                                 else -> LeafySecondaryScaffold("校园", {}) {
-                                    CampusDashboard(CampusSyncState.Error("同步失败，请重试"), CampusID.bjfu, {}, {},
-                                        { gradesOpened++ }, {}, {}, {}, it)
+                                    CampusDashboard(
+                                        syncState = CampusSyncState.Error("同步失败，请重试"),
+                                        campusId = CampusID.bjfu,
+                                        onRetrySync = {},
+                                        onConsumeSync = {},
+                                        onGradesClick = { gradesOpened++ },
+                                        onExamsClick = {},
+                                        onClassroomClick = {},
+                                        onFeatureClick = {},
+                                        modifier = it,
+                                    )
                                 }
                             }
                         }
@@ -73,6 +82,13 @@ class CoreVisualReviewTest {
         variants.forEach { next ->
             compose.runOnIdle { variant = next }
             compose.waitForIdle()
+            if (next.page == "campus" &&
+                compose.onAllNodesWithTag("campus-domain-Teaching").fetchSemanticsNodes().isNotEmpty()
+            ) {
+                // 宽屏仍是侧栏 + 内容，核心页面评审继续覆盖学校教学列表。
+                compose.onNodeWithTag("campus-domain-Teaching").performClick()
+                compose.waitForIdle()
+            }
             capture("${next.page}-${next.width}-${next.font}-${if (next.dark) "dark" else "light"}")
             when (next.page) {
                 "login" -> compose.onNode(hasScrollAction()).performScrollToNode(hasText("登录")).also {

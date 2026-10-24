@@ -1,10 +1,14 @@
 package com.myleafy.android.features.timetable.domain
 
+import kotlinx.serialization.Serializable
+
 /**
- * 节次时间表（对应 iOS `TimetablePeriodSchedule`，13 节固定时段）。
+ * 节次时间表（对应 iOS `TimetablePeriodSchedule`）。
+ * 默认 13 节；用户可在课表设置中调整为 1–24 节并修改每节起止时间。
  */
 object TimetablePeriodSchedule {
 
+    @Serializable
     data class Slot(
         val period: Int,
         val startHour: Int,
@@ -18,7 +22,7 @@ object TimetablePeriodSchedule {
         val endMinutes: Int get() = endHour * 60 + endMinute
     }
 
-    val slots: List<Slot> = listOf(
+    val defaultSlots: List<Slot> = listOf(
         Slot(1, 8, 0, 8, 45),
         Slot(2, 8, 50, 9, 35),
         Slot(3, 9, 50, 10, 35),
@@ -34,11 +38,19 @@ object TimetablePeriodSchedule {
         Slot(13, 21, 0, 21, 45),
     )
 
+    var slots: List<Slot> = defaultSlots
+        private set
+
+    fun apply(periods: List<Slot>) {
+        if (periods.isEmpty()) return
+        slots = periods.sortedBy { it.period }.mapIndexed { index, slot -> slot.copy(period = index + 1) }
+    }
+
     fun slot(period: Int): Slot? = slots.firstOrNull { it.period == period }
 
     /** 当前时间所属节次（不到开始时间则返回之后的第一个节次）。 */
     fun periodForFocus(minutesOfDay: Int): Slot? =
-        slots.firstOrNull { minutesOfDay <= it.endMinutes } ?: slots.last()
+        slots.firstOrNull { minutesOfDay <= it.endMinutes } ?: slots.lastOrNull()
 
     /** 当前时间落在其中的节次。 */
     fun period(minutesOfDay: Int): Slot? =

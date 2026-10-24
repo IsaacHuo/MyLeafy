@@ -157,6 +157,24 @@ object SemesterConfig {
     var current: SemesterRuntimeConfig = SemesterRuntimeConfig.builtIn
         internal set
 
+    var userSettings: TimetableUserSettings = TimetableUserSettings()
+        private set
+
+    /**
+     * 应用用户设置。只调整显示用的开学日期和节次，不改变已拉取课程的存储学期 ID，
+     * 避免用户在调整开学日期时把现有课表切到另一个空学期。
+     */
+    fun applyUserSettings(value: TimetableUserSettings) {
+        userSettings = value
+        current = current.copy(
+            semesterStartDate = value.firstMonday,
+            supportedWeeks = timetableWeekCapacity,
+        )
+        TimetablePeriodSchedule.apply(value.periods)
+    }
+
+    val semesterLabel: String get() = userSettings.summary
+
     val timelineConfigurations: List<SemesterRuntimeConfig>
         get() = (SemesterRuntimeConfig.builtInTimeline + listOf(current))
             .distinctBy { it.semesterId }

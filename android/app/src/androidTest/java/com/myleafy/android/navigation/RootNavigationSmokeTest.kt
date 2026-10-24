@@ -2,8 +2,10 @@ package com.myleafy.android.navigation
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -94,12 +96,19 @@ class RootNavigationSmokeTest {
                 }
                 screen.recycle()
             }
-            listOf("campus", "schedule", "profile").forEach { route ->
+            listOf("campus", "profile").forEach { route ->
                 composeRule.onNodeWithTag("root-tab-$route").performClick()
                 composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
                 composeRule.onNodeWithTag("root-tab-timetable").performClick()
                 waitForPhoto()
             }
+            // 日迹是校园二级页面，仍然不能覆盖课表照片背景。
+            composeRule.onNodeWithTag("root-tab-campus").performClick()
+            composeRule.onNodeWithText("日迹记录").performClick()
+            composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
+            composeRule.runOnUiThread { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+            composeRule.onNodeWithTag("root-tab-timetable").performClick()
+            waitForPhoto()
             composeRule.onNodeWithTag("root-tab-profile").performClick()
             composeRule.onNodeWithText("课表背景").performScrollTo().performClick()
             composeRule.onNodeWithTag("timetable-photo").assertDoesNotExist()
@@ -162,27 +171,29 @@ class RootNavigationSmokeTest {
         composeRule.onNodeWithTag("timetable-pager").performTouchInput { swipeLeft() }
         composeRule.waitForIdle()
         val selected = week()
-        composeRule.onNodeWithTag("root-tab-schedule").performClick()
-        composeRule.onNodeWithText("随记", substring = false).performClick()
+        composeRule.onNodeWithTag("root-tab-campus").performClick()
         composeRule.onNodeWithTag("root-tab-timetable").performClick()
         assertEquals(selected, week())
-        composeRule.onNodeWithTag("root-tab-schedule").performClick()
-        composeRule.onNodeWithText("随记", substring = false).assertIsSelected()
     }
 
     @Test
     fun secondaryDestinationHidesBottomBarAndBackRestoresIt() {
         activateCommunityScope()
-        composeRule.onNodeWithTag("root-tab-community").performClick()
+        composeRule.onNodeWithTag("root-tab-campus").performClick()
+        composeRule.onNodeWithTag("campus-tool-community").performClick()
         composeRule.onNodeWithContentDescription("搜索社区").performClick()
 
         composeRule.onNodeWithText("搜索社区").assertIsDisplayed()
-        composeRule.onNodeWithTag("root-tab-community").assertDoesNotExist()
+        composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
 
         composeRule.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()
         }
-        composeRule.onNodeWithTag("root-tab-community").assertIsSelected()
+        composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
+        composeRule.runOnUiThread {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
     }
 
     @Test
@@ -214,14 +225,14 @@ class RootNavigationSmokeTest {
     }
 
     @Test
-    fun communityTabRemainsVisibleWithoutCapabilityButShowsGuardedState() {
+    fun campusLifeHidesCommunityEntryWithoutCapability() {
         val application = composeRule.activity.application as MyLeafyApplication
         application.container.activeAppScopeStore.activateGuest()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("root-tab-community").assertExists().performClick()
-        composeRule.onNodeWithText("社区暂不可用").assertIsDisplayed()
-        composeRule.onNodeWithText("当前校园入口暂不提供社区服务。").assertIsDisplayed()
+        composeRule.onNodeWithTag("root-tab-campus").performClick()
+        composeRule.onNodeWithTag("campus-tool-schedule").assertExists()
+        composeRule.onNodeWithTag("campus-tool-community").assertDoesNotExist()
     }
 
     @After
@@ -231,35 +242,43 @@ class RootNavigationSmokeTest {
     }
 
     @Test
-    fun everyCampusToolOpensAndReturnsToItsOriginalCategory() {
+    fun everyCampusToolOpensAndReturnsToCampus() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
         fun back() {
             composeRule.onNodeWithContentDescription("返回").performClick()
             composeRule.waitForIdle()
         }
-        val tools = linkedMapOf(
-            "学校教学" to listOf("成绩查询", "考试安排", "教学与培养", "校历与作息", "综素测算", "荣誉记录"),
-            "自习安排" to listOf("空闲教室"),
-            "体育相关" to listOf("阳光长跑", "体测记录", "场馆开放"),
+        // 手机端是一个纵向全量列表：工具直接可见，不再先选领域。
+        val tools = listOf(
+            "community",
+            "schedule",
+            "grades",
+            "exams",
+            "training",
+            "calendar",
+            "comprehensive",
+            "honors",
+            "classroom",
+            "run",
+            "fitness",
+            "venues",
+            "medical",
+            "ratings",
         )
-        for ((category, entries) in tools) {
-            composeRule.onNodeWithText(category).performScrollTo().performClick()
-            for (title in entries) {
-                composeRule.onNodeWithText(title).performScrollTo().performClick()
-                composeRule.waitForIdle()
-                composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
-                back()
-                composeRule.onNodeWithText(category).assertIsSelected()
-            }
+        tools.forEach { key ->
+            openCampusTool(key)
+            composeRule.onNodeWithTag("root-tab-campus").assertDoesNotExist()
+            back()
+            composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
         }
-        composeRule.onNodeWithTag("root-tab-timetable").performClick()
-        composeRule.onNodeWithTag("root-tab-campus").performClick()
-        composeRule.onNodeWithText("体育相关").assertIsSelected()
-        composeRule.onNodeWithText("医疗事项").performScrollTo().performClick()
-        composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
-        composeRule.onNodeWithText("评价相关").performScrollTo().performClick()
-        composeRule.onNodeWithTag("root-tab-campus").assertIsSelected()
+    }
+
+    private fun openCampusTool(key: String) {
+        val tag = "campus-tool-$key"
+        composeRule.onNodeWithTag("campus-all-tools").performScrollToNode(hasTestTag(tag))
+        composeRule.onNodeWithTag(tag).performClick()
+        composeRule.waitForIdle()
     }
 
     private fun activateCommunityScope() {
@@ -312,7 +331,7 @@ class RootNavigationSmokeTest {
     @Test fun allComprehensiveCollegeRulesRenderWithoutCrashing() {
         activateCommunityScope()
         composeRule.onNodeWithTag("root-tab-campus").performClick()
-        composeRule.onNodeWithText("综素测算").performScrollTo().performClick()
+        openCampusTool("comprehensive")
         com.myleafy.android.features.campus.ComprehensiveQualityRuleCatalog.participatingCollegeNames.forEach { name ->
             composeRule.onNodeWithTag("comprehensive-colleges").performScrollToNode(hasText(name))
             composeRule.onNodeWithText(name).performClick()

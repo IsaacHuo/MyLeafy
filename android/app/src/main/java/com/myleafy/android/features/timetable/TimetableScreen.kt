@@ -86,6 +86,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.network.AcademicStep
 import com.myleafy.android.core.network.AcademicStepStatus
+import com.myleafy.android.core.prefs.Settings as AppSettings
 import com.myleafy.android.ui.components.AcademicProgressCard
 import com.myleafy.android.ui.components.AcademicStepList
 import com.myleafy.android.ui.theme.LeafyElevation
@@ -168,6 +169,12 @@ fun TimetableScreen(
         if (reauthenticated) { onConsumeReauthentication(); viewModel.refresh() }
     }
     val context = LocalContext.current
+    val appSettings by remember(context) {
+        (context.applicationContext as com.myleafy.android.MyLeafyApplication).container.settingsStore.settings
+    }.collectAsStateWithLifecycle(initialValue = AppSettings())
+    LaunchedEffect(appSettings.timetableSettings) {
+        SemesterConfig.applyUserSettings(appSettings.timetableSettings)
+    }
     val initialSync = (context.applicationContext as com.myleafy.android.MyLeafyApplication).container.initialAcademicSync
     val initialSyncState by initialSync.state.collectAsStateWithLifecycle()
     val activity = context.findActivity()

@@ -33,22 +33,6 @@ class RootShellScreenshotTest {
     @Test @Config(qualifiers = "w600dp-h900dp-xxhdpi") fun profileRail600() = profile()
     @Test @Config(qualifiers = "w840dp-h900dp-xxhdpi") fun profileRail840Dark() = profile(dark = true)
 
-    @Test fun communityCompactLight() {
-        composeRule.setContent {
-            LeafyScreenshotTheme {
-                LeafyNavigationScaffold(RootTab.COMMUNITY, {}) {
-                    CommunityContent(
-                        state = CommunityUiState(posts = listOf(postFixture(id = "shell", title = "校园里的小发现", category = "校园生活")), isInitialLoading = false),
-                        onPostClick = {}, onComposeClick = {}, onSearchClick = {}, onNotificationsClick = {},
-                        onRefresh = {}, onSelectHot = {}, onSelectLatest = {},
-                    )
-                }
-            }
-        }
-        composeRule.onNodeWithTag("root-tab-community").assertIsSelected()
-        composeRule.onRoot().captureRoboImage()
-    }
-
     private fun profile(dark: Boolean = false, fontScale: Float = 1f) {
         composeRule.setContent {
             LeafyScreenshotTheme(darkTheme = dark, fontScale = fontScale) {

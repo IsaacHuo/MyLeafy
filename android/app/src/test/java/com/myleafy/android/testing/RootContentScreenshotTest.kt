@@ -1,4 +1,5 @@
 package com.myleafy.android.testing
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 
 import android.app.Application
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.myleafy.android.features.campus.CampusDashboard
@@ -141,9 +143,11 @@ class RootContentScreenshotTest {
             }
         }
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
+        composeRule.waitForIdle()
 
         composeRule
-            .onNode(hasScrollAction())
+            .onNodeWithTag("campus-content")
             .performScrollToNode(hasText("校历与作息"))
         composeRule.onNodeWithText("校历与作息").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(FeatureDestination.CAMPUS_CALENDAR, destination) }
@@ -163,6 +167,11 @@ class RootContentScreenshotTest {
             }
         }
         composeRule.waitForIdle()
+        // 手机端展示全量纵向列表；平板端沿用侧栏，截图覆盖学校教学。
+        if (composeRule.onAllNodesWithTag("campus-domain-Teaching").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("campus-domain-Teaching").performClick()
+            composeRule.waitForIdle()
+        }
         capture()
     }
 

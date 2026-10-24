@@ -23,7 +23,7 @@
   Android 正式版通过 <a href="https://myleafy.space">官网</a>与 <a href="https://github.com/IsaacHuo/MyLeafy/releases">GitHub Releases</a> 下载。
 </p>
 
-MyLeafy 以课表和学业数据为核心，提供教务查询、个人记录、校园社区与共享课表。iOS 使用课表、校园、我的三个根 Tab，校园内包含社区、日迹和学校教学；Android 保留课表、社区、日迹、校园、我的五个根 Tab。两端独立发版，功能范围、验证证据和平台差异见[跨端状态](state/PLATFORMS.md)。
+MyLeafy 以课表和学业数据为核心，提供教务查询、个人记录、校园社区与共享课表。iOS 与 Android 均使用课表、校园、我的三个根 Tab，校园内包含社区、日迹和学校教学。两端独立发版，功能范围、验证证据和平台差异见[跨端状态](state/PLATFORMS.md)。
 
 学校教务是课表、成绩等学校数据的权威来源；个人记录按校园身份本地保存。新版双端业务访问 Cloudflare，已安装旧版使用的 Supabase 服务继续保留。iOS 可主动开启限定范围的 iCloud 同步，实际生产与双设备验收单独记录；不代表 Android 已有同等云同步。
 

@@ -14,7 +14,7 @@
 | 能力 | iOS 实现与源码 | Android 实现与源码 | 差异与后续 |
 |---|---|---|---|
 | 登录、免登录与教务恢复 | 已合入；[Auth](../leafy/Features/Auth/)、[学校会话](../leafy/Services/SchoolAuthenticationService.swift)，含本科/研究生及本地入口边界 | 已合入；[Auth](../android/app/src/main/java/com/myleafy/android/features/auth/)、[初始同步](../android/app/src/main/java/com/myleafy/android/features/campus/InitialAcademicSync.kt)，本科与免登录 | 刻意保留登录范围差异；学校真实会话各端独立验收 |
-| 根导航与校园能力 | 已合入；[App](../leafy/App/)、[Campus](../leafy/Core/Campus/)，三 Tab + 校园左栏 | 已合入；[navigation](../android/app/src/main/java/com/myleafy/android/navigation/)，五 Tab + 自适应导航 | 刻意保留，非待对齐任务 |
+| 根导航与校园能力 | 已合入；[App](../leafy/App/)、[Campus](../leafy/Core/Campus/)，三 Tab + 校园左栏 | 已合入；[navigation](../android/app/src/main/java/com/myleafy/android/navigation/)，三 Tab + 校园领域入口 | 已对齐；社区/日迹在校园内，Android 保留原生返回与自适应导航 |
 | 课表、个人日程、备注/提醒与背景 | 已合入；[Timetable](../leafy/Features/Timetable/)、[Schedule](../leafy/Features/Schedule/)，固定 20 周容器与独立个人数据 | 已合入；[timetable](../android/app/src/main/java/com/myleafy/android/features/timetable/)，原生网格、背景、关联备注与 AlarmManager 提醒 | 新版 iOS 个人数据/课表容器规则与 Android 关联处理有差异；是否对齐待产品决定，本轮不迁移数据 |
 | 成绩、考试、教学/培养与空教室 | 已合入；[Parsers](../leafy/Parsers/)、[AcademicTools](../leafy/Features/Discover/Presentation/AcademicTools/) | 已合入；[parsers](../android/app/src/main/java/com/myleafy/android/parsers/)、[campus](../android/app/src/main/java/com/myleafy/android/features/campus/) | 共享学校 fixtures 与数据语义；页面范围及失败保留缓存分别验证 |
 | 日迹、随记/个人日程与统计 | 已合入；[Schedule](../leafy/Features/Schedule/)，含媒体、回收站和本机统计 | 已合入；[schedule](../android/app/src/main/java/com/myleafy/android/features/schedule/)，含标签、统计、回顾、回收站与导出 | 核心能力已存在，编辑器/媒体细节非完全等同；iOS 文件职责整理见 [#39](https://github.com/IsaacHuo/MyLeafy/issues/39) |

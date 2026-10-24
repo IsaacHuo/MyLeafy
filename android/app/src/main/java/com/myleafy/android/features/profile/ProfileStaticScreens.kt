@@ -1,8 +1,15 @@
 package com.myleafy.android.features.profile
 
+import android.Manifest
+import android.app.AlarmManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -113,19 +124,38 @@ fun PermissionsInfoScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
         ) {
             item {
-                InfoCard(
-                    InfoBlock(
-                        "网络访问",
-                        "用于连接用户主动选择的学校系统与 MyLeafy 社区服务。网络权限由 Android 在安装时授予，不读取联系人、短信或通话记录。",
-                    ),
+                PermissionCard(
+                    title = "通知",
+                    detail = "用于课程、考试和个人日程提醒。只有主动启用提醒时才会请求通知权限。",
+                    granted = NotificationManagerCompat.from(context).areNotificationsEnabled(),
                 )
             }
             item {
-                InfoCard(
-                    InfoBlock(
-                        "通知",
-                        "未来用于课程、考试和个人日程提醒。Android 13 及以上会在真正启用提醒时请求通知权限；当前骨架不会提前请求。",
-                    ),
+                PermissionCard(
+                    title = "位置",
+                    detail = "只在课表天气中读取大致位置，用于向天气服务请求当前城市的天气；不上传到 MyLeafy 后台。",
+                    granted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                    ) == PackageManager.PERMISSION_GRANTED,
+                )
+            }
+            item {
+                PermissionCard(
+                    title = "精确提醒",
+                    detail = "课前提醒需要系统“闹钟和提醒”权限；关闭后提醒仍会保存，但不会按时投递。",
+                    granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+                    } else {
+                        true
+                    },
+                )
+            }
+            item {
+                PermissionCard(
+                    title = "安装更新",
+                    detail = "仅用于下载并安装 MyLeafy 的新版本；不会安装其他应用。",
+                    granted = context.packageManager.canRequestPackageInstalls(),
                 )
             }
             item {
@@ -235,6 +265,64 @@ fun AboutMyLeafyScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 }
             }
             item {
+                var expandedStory by rememberSaveable { mutableStateOf<Int?>(null) }
+                val stories = listOf(
+                    Triple("看清每一天", "让时间、地点和接下来的安排一目了然。", listOf(
+                        "打开课表，就能确认今天上什么课、在哪里，以及接下来有什么安排。课程和个人日程共享时间视图，发生重叠时也能各自看清。",
+                        "一周适合看全局，三日视图适合看细节。",
+                    )),
+                    Triple("安排与记录，各得其所", "放好计划，也留住生活中的小事。", listOf(
+                        "日程用来安排将来，随记用来留下当下。它们放在同一个日迹空间里，各自保持清楚的用途。",
+                        "从一条短记录开始，通过标签、搜索和回顾重新找到它。",
+                    )),
+                    Triple("校园事务，有条理", "把分散的信息，放在容易找到的地方。", listOf(
+                        "成绩、考试、培养要求和空闲教室，属于不同的校园任务。按事情来组织入口，让需要的信息更容易找到。",
+                        "社区为同学交流留出空间。具体工具和社区能力取决于当前校园支持；教务结果仍以学校系统为准。",
+                    )),
+                    Triple("细节，让使用更舒适", "清晰的排版，克制的颜色，自然的交互。", listOf(
+                        "设计先服务于阅读。标题、辅助信息和操作有各自的层级，颜色帮助辨认，留白帮助集中注意。",
+                        "主题、深浅色和文字大小让同一套界面适合不同的使用习惯。",
+                    )),
+                    Triple("数据边界，说清楚", "哪些留在设备，哪些由你主动分享。", listOf(
+                        "教务缓存、课程备注、随记和个人记录保存在当前设备。学校账号和密码用于学校登录，不作为社区内容上传。",
+                        "主动发布的帖子、评论、反馈和共享课表进入 MyLeafy 服务。共享课表只发布允许分享的课程字段，不包含成绩、备注和提醒。",
+                    )),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact)) {
+                    stories.forEachIndexed { index, (title, subtitle, paragraphs) ->
+                        val open = expandedStory == index
+                        LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        expandedStory = if (open) null else index
+                                    }
+                                    .padding(LeafySpacing.card),
+                            ) {
+                                Text(title, style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(LeafySpacing.tiny))
+                                Text(
+                                    subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (open) {
+                                    Spacer(Modifier.height(LeafySpacing.compact))
+                                    paragraphs.forEach { paragraph ->
+                                        Text(
+                                            paragraph,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.padding(bottom = LeafySpacing.micro),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            item {
                 ExternalLinkButton(
                     label = "项目官网",
                     uri = "https://myleafy.space/",
@@ -262,6 +350,33 @@ fun AboutMyLeafyScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     icon = Icons.Outlined.Email,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PermissionCard(title: String, detail: String, granted: Boolean) {
+    LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(LeafySpacing.card)) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (granted) "已允许" else "未允许",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                )
+            }
+            Spacer(Modifier.height(LeafySpacing.micro))
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

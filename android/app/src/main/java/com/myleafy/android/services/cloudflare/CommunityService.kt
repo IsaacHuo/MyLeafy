@@ -53,6 +53,12 @@ class CommunityService(private val client: BackendClient) {
         ),
     )
     suspend fun togglePostLike(postId: String): PostDto = client.request("/v1/community/posts/$postId/toggle-like", "POST")
+    suspend fun toggleCommentLike(commentId: String, requestId: String): CommentLikeResultDto =
+        client.request(
+            "/v1/community/comments/$commentId/toggle-like",
+            "POST",
+            buildJsonObject { put("request_id", requestId) },
+        )
     suspend fun togglePostFavorite(postId: String): PostDto = client.request("/v1/community/posts/$postId/toggle-favorite", "POST")
     suspend fun fetchNotifications(profileId: String, limit: Int = 50): List<NotificationDto> {
         val notifications = client.request<List<NotificationDto>>("/v1/notifications", query = mapOf("limit" to limit.toString()))

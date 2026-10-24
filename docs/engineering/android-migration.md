@@ -1,6 +1,6 @@
 # Android 对齐方案与取舍
 
-Android 使用 Kotlin、Compose、Room、WorkManager、OkHttp，保留五个根 Tab；当前实现和行为约束以 [ARCHITECTURE](../../state/ARCHITECTURE.md) 为准，验证状态见 [CURRENT](../../state/CURRENT.md)。
+Android 使用 Kotlin、Compose、Room、WorkManager、OkHttp，根 Tab 与 iOS 对齐为课表、校园、我的；当前实现和行为约束以 [ARCHITECTURE](../../state/ARCHITECTURE.md) 为准，验证状态见 [CURRENT](../../state/CURRENT.md)。
 
 ## 对齐基准
 

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,10 +21,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Badge
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -39,6 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
+import java.time.LocalDate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
@@ -48,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
 import com.myleafy.android.shared.model.PostDto
+import com.myleafy.android.shared.model.communityDisplayName
 import com.myleafy.android.ui.components.LeafyEmptyState
 import com.myleafy.android.ui.components.LeafyErrorState
 import com.myleafy.android.ui.components.LeafyActionIconButton
@@ -66,6 +74,7 @@ val communityCategories = listOf("学习交流", "校园生活", "活动社团",
 
 @Composable
 fun CommunityScreen(
+    onBack: (() -> Unit)? = null,
     onPostClick: (String) -> Unit = {},
     onComposeClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
@@ -92,6 +101,7 @@ fun CommunityScreen(
 
     CommunityContent(
         state = uiState,
+        onBack = onBack,
         onPostClick = onPostClick,
         onComposeClick = onComposeClick,
         onSearchClick = onSearchClick,
@@ -107,6 +117,7 @@ fun CommunityScreen(
 @Composable
 fun CommunityContent(
     state: CommunityUiState,
+    onBack: (() -> Unit)? = null,
     onPostClick: (String) -> Unit,
     onComposeClick: () -> Unit,
     onSearchClick: () -> Unit,
@@ -124,6 +135,13 @@ fun CommunityContent(
         topBar = {
             LeafyRootTopBar(
                 title = "社区",
+                navigationIcon = onBack?.let {
+                    {
+                        LeafyActionIconButton(onClick = it) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    }
+                },
                 actions = {
                     LeafyActionIconButton(onClick = onSearchClick) {
                         Icon(Icons.Outlined.Search, contentDescription = "搜索社区")
@@ -287,7 +305,11 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
         color = MaterialTheme.leafySurfaces.content, shape = MaterialTheme.shapes.large,
         border = androidx.compose.foundation.BorderStroke(
             com.myleafy.android.ui.theme.LeafyStroke.hairline,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.cardBorder),
+            if (post.pin != null) {
+                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = com.myleafy.android.ui.theme.LeafyAlpha.cardBorder)
+            },
         ),
         shadowElevation = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) {
             com.myleafy.android.ui.theme.LeafyElevation.card
@@ -300,18 +322,118 @@ fun CommunityPostCard(post: PostDto, onClick: () -> Unit, modifier: Modifier = M
                 Text(post.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (post.images.isEmpty() && post.body.isNotBlank()) Text(post.body, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(if (post.is_anonymous) "匿名" else post.author?.nickname ?: "北林同学", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    post.category?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
-                    Text(post.created_at.substringBefore('T').replace('-', '.'), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CommunityAvatar(
+                        name = if (post.is_anonymous) "匿名" else post.author?.communityDisplayName() ?: "北林同学",
+                        url = post.author?.avatar_url ?: post.author?.signed_avatar_url,
+                        size = 20.dp,
+                    )
+                    Text(
+                        text = if (post.is_anonymous) "匿名" else post.author?.communityDisplayName() ?: "北林同学",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${post.like_count} 赞", style = MaterialTheme.typography.labelSmall)
-                    Text("${post.comment_count} 评论", style = MaterialTheme.typography.labelSmall)
-                    if (post.viewer_has_favorited) Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    if (post.pin != null) {
+                        Text("置顶", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                    }
+                    post.category?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Text(
+                        text = relativeDateLabel(post.created_at),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ThumbUp,
+                            contentDescription = "赞",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = "${post.like_count}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.testTag("community-like-count-${post.id}"),
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = "评论",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = "${post.comment_count}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.testTag("community-comment-count-${post.id}"),
+                        )
+                    }
+                    if (post.viewer_has_favorited) {
+                        Text("已收藏", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun CommunityAvatar(
+    name: String,
+    url: String?,
+    size: androidx.compose.ui.unit.Dp = 32.dp,
+) {
+    Surface(
+        modifier = Modifier.size(size),
+        shape = CircleShape,
+        color = MaterialTheme.leafySurfaces.accentSoft,
+    ) {
+        val initial = name.trim().take(1).ifBlank { "同" }
+        if (!url.isNullOrBlank()) {
+            SubcomposeAsyncImage(
+                model = url,
+                contentDescription = name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                loading = {},
+                error = {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(initial, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                },
+            )
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Text(initial, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
+}
+
+private fun relativeDateLabel(iso: String): String {
+    val date = runCatching { LocalDate.parse(iso.substringBefore('T')) }.getOrNull()
+        ?: return iso.substringBefore('T').replace('-', '.')
+    val today = LocalDate.now()
+    return when {
+        date == today -> "今天"
+        date == today.minusDays(1) -> "昨天"
+        date.year == today.year -> "${date.monthValue}/${date.dayOfMonth}"
+        else -> "${date.year}/${date.monthValue}/${date.dayOfMonth}"
     }
 }

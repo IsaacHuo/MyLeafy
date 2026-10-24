@@ -83,8 +83,8 @@ class ProfileEditViewModel(private val repository: ProfileRepository) : ViewMode
         }
     }
 
-    fun updateNickname(value: String) = update(_uiState.value.copy(nickname = value))
-    fun updateBio(value: String) = update(_uiState.value.copy(bio = value))
+    fun updateNickname(value: String) = update(_uiState.value.copy(nickname = value.take(8)))
+    fun updateBio(value: String) = update(_uiState.value.copy(bio = value.take(80)))
     fun updateMajor(value: String) = update(_uiState.value.copy(major = value))
     fun updateGrade(value: String) = update(_uiState.value.copy(grade = value))
 
@@ -162,6 +162,7 @@ fun ProfileEditScreen(
                         value = state.nickname,
                         onValueChange = viewModel::updateNickname,
                         label = { Text("昵称（必填）") },
+                        supportingText = { Text("${state.nickname.length}/8") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -170,6 +171,7 @@ fun ProfileEditScreen(
                         value = state.bio,
                         onValueChange = viewModel::updateBio,
                         label = { Text("简介") },
+                        supportingText = { Text("${state.bio.length}/80") },
                         minLines = 3,
                         modifier = Modifier.fillMaxWidth(),
                     )

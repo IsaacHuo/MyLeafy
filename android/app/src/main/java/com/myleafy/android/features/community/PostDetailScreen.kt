@@ -14,8 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myleafy.android.core.di.appViewModelFactory
@@ -124,6 +127,7 @@ fun PostDetailScreen(
                 onLike = { writeAction(viewModel::toggleLike) },
                 onFavorite = { writeAction(viewModel::toggleFavorite) },
                 onComment = { body, parent, reply -> writeAction { viewModel.createComment(body, parent, reply) } },
+                onCommentLike = viewModel::toggleCommentLike,
                 onLoadMoreComments = viewModel::loadMoreComments,
                 onConfirm = { confirmation = it },
                 onClearMessage = viewModel::clearMessage,
@@ -139,12 +143,14 @@ private fun PostDetailContent(
     onLike: () -> Unit,
     onFavorite: () -> Unit,
     onComment: (String, String?, String?) -> Unit,
+    onCommentLike: (String) -> Unit,
     onLoadMoreComments: () -> Unit,
     onConfirm: (PendingConfirmation) -> Unit,
     onClearMessage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var commentInput by remember { mutableStateOf("") }
+    var replyTarget by remember { mutableStateOf<CommentThreadDto?>(null) }
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = LeafySpacing.card),
         verticalArrangement = Arrangement.spacedBy(LeafySpacing.compact),
@@ -163,6 +169,8 @@ private fun PostDetailContent(
                             isOwner = state.post.author_id == state.currentProfileId,
                             canBlock = !state.post.is_anonymous && state.post.author_id != state.currentProfileId,
                             authorId = state.post.author_id,
+                            postId = state.post.id,
+                            postTitle = state.post.title,
                             enabled = state.pendingModerationTarget == null,
                             onConfirm = onConfirm,
                         )
@@ -227,19 +235,37 @@ private fun PostDetailContent(
         }
         item {
             Text("评论", style = MaterialTheme.typography.titleMedium)
+            replyTarget?.let { target ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "回复 ${target.author?.communityDisplayName() ?: "同学"}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    LeafyTextButton(onClick = { replyTarget = null }) { Text("取消") }
+                }
+            }
             Spacer(Modifier.height(LeafySpacing.micro))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LeafyTextField(
                     value = commentInput,
                     onValueChange = { commentInput = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("写评论…") },
-                    singleLine = true,
+                    placeholder = { Text(if (replyTarget == null) "写评论…" else "回复…") },
+                    minLines = 1,
+                    maxLines = 3,
                 )
                 Spacer(Modifier.width(LeafySpacing.micro))
                 LeafyPrimaryButton(
                     onClick = {
-                        onComment(commentInput, null, null)
+                        val target = replyTarget
+                        onComment(commentInput, target?.parent_comment_id ?: target?.id, target?.id)
+                        commentInput = ""
+                        replyTarget = null
                     },
                     enabled = commentInput.isNotBlank() && !state.isCommentPending && state.pendingModerationTarget == null,
                 ) { Text(if (state.isCommentPending) "发送中" else "发送") }
@@ -253,6 +279,9 @@ private fun PostDetailContent(
                 thread,
                 state.currentProfileId,
                 menusEnabled = state.pendingModerationTarget == null,
+                pendingLikes = state.commentLikePending,
+                onReply = { replyTarget = it },
+                onCommentLike = onCommentLike,
                 onConfirm = onConfirm,
             )
         }
@@ -294,14 +323,28 @@ private fun PostMenu(
     isOwner: Boolean,
     canBlock: Boolean,
     authorId: String,
+    postId: String,
+    postTitle: String,
     enabled: Boolean,
     onConfirm: (PendingConfirmation) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     LeafyActionIconButton(onClick = { expanded = true }, enabled = enabled) {
         Icon(Icons.Outlined.MoreVert, contentDescription = "帖子操作")
     }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(text = { Text("分享帖子") }, onClick = {
+            expanded = false
+            val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(
+                    android.content.Intent.EXTRA_TEXT,
+                    "$postTitle\nmyleafy://community-post?id=$postId",
+                )
+            }
+            context.startActivity(android.content.Intent.createChooser(share, "分享帖子"))
+        })
         if (isOwner) {
             DropdownMenuItem(text = { Text("删除帖子") }, onClick = {
                 expanded = false
@@ -327,15 +370,34 @@ private fun CommentThreadCard(
     thread: CommentThread,
     currentProfileId: String,
     menusEnabled: Boolean,
+    pendingLikes: Set<String>,
+    onReply: (CommentThreadDto) -> Unit,
+    onCommentLike: (String) -> Unit,
     onConfirm: (PendingConfirmation) -> Unit,
 ) {
     LeafyContentSurface(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(LeafySpacing.compact)) {
-            CommentLine(thread.root, currentProfileId, menusEnabled, onConfirm)
+            CommentLine(
+                comment = thread.root,
+                currentProfileId = currentProfileId,
+                menuEnabled = menusEnabled,
+                pendingLike = thread.root.id in pendingLikes,
+                onReply = onReply,
+                onCommentLike = onCommentLike,
+                onConfirm = onConfirm,
+            )
             thread.replies.forEach { reply ->
                 Row(modifier = Modifier.padding(start = LeafySpacing.page, top = LeafySpacing.micro)) {
                     Text("↳", color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(end = LeafySpacing.tiny))
-                    CommentLine(reply, currentProfileId, menusEnabled, onConfirm)
+                    CommentLine(
+                        comment = reply,
+                        currentProfileId = currentProfileId,
+                        menuEnabled = menusEnabled,
+                        pendingLike = reply.id in pendingLikes,
+                        onReply = onReply,
+                        onCommentLike = onCommentLike,
+                        onConfirm = onConfirm,
+                    )
                 }
             }
         }
@@ -347,19 +409,32 @@ private fun CommentLine(
     comment: CommentThreadDto,
     currentProfileId: String,
     menuEnabled: Boolean,
+    pendingLike: Boolean,
+    onReply: (CommentThreadDto) -> Unit,
+    onCommentLike: (String) -> Unit,
     onConfirm: (PendingConfirmation) -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                when {
-                    comment.is_deleted_placeholder -> "（已删除）"
-                    comment.is_anonymous -> "匿名"
-                    else -> comment.author?.communityDisplayName() ?: "北林同学"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!comment.is_deleted_placeholder) {
+                    CommunityAvatar(
+                        name = if (comment.is_anonymous) "匿名" else comment.author?.communityDisplayName() ?: "北林同学",
+                        url = comment.author?.avatar_url ?: comment.author?.signed_avatar_url,
+                        size = 18.dp,
+                    )
+                }
+                Text(
+                    text = when {
+                        comment.is_deleted_placeholder -> "（已删除）"
+                        comment.is_anonymous -> "匿名"
+                        else -> comment.author?.communityDisplayName() ?: "北林同学"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = if (comment.is_deleted_placeholder) Modifier else Modifier.padding(start = 6.dp),
+                )
+            }
             if (!comment.is_deleted_placeholder && comment.reply_target_is_visible) {
                 comment.reply_to_author?.let { target ->
                     Text(
@@ -374,6 +449,40 @@ private fun CommentLine(
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (comment.is_deleted_placeholder) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
             )
+            if (!comment.is_deleted_placeholder) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(LeafySpacing.micro),
+                ) {
+                    LeafyTextButton(onClick = { onReply(comment) }) { Text("回复") }
+                    LeafyTextButton(
+                        onClick = { onCommentLike(comment.id) },
+                        enabled = !pendingLike,
+                    ) {
+                        Icon(
+                            imageVector = if (comment.viewer_has_liked) {
+                                Icons.Filled.Favorite
+                            } else {
+                                Icons.Outlined.FavoriteBorder
+                            },
+                            contentDescription = if (comment.viewer_has_liked) "取消点赞" else "点赞评论",
+                            tint = if (comment.viewer_has_liked) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(LeafyIconSize.compact),
+                        )
+                        if (comment.like_count > 0) {
+                            Text(
+                                text = comment.like_count.toString(),
+                                modifier = Modifier.padding(start = LeafySpacing.tiny),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                }
+            }
         }
         if (!comment.is_deleted_placeholder) {
             var expanded by remember { mutableStateOf(false) }

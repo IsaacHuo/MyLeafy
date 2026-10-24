@@ -28,7 +28,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -79,24 +81,69 @@ class CommunitySearchViewModel(
 
     private var request: kotlinx.coroutines.Job? = null
     private var generation = 0
+
+    /** 输入停顿 350ms 后自动查询；空输入立即清空结果，保持旧结果不闪空。 */
     fun updateQuery(value: String) {
-        generation++; request?.cancel()
+        val query = value.trim()
+        val version = ++generation
+        request?.cancel()
         _uiState.value = CommunitySearchUiState(query = value)
+        if (query.isEmpty()) return
+        request = viewModelScope.launch {
+            kotlinx.coroutines.delay(350)
+            if (version != generation) return@launch
+            executeSearch(query = query, cursor = null, append = false, version = version)
+        }
     }
-    fun search() = load(false)
-    fun loadMore() = load(true)
-    private fun load(append: Boolean) {
+
+    fun search() {
+        val query = _uiState.value.query.trim()
+        if (query.isEmpty()) return
+        val version = ++generation
+        request?.cancel()
+        _uiState.value = _uiState.value.copy(isLoading = true, hasSearched = true, error = null)
+        request = viewModelScope.launch {
+            executeSearch(query = query, cursor = null, append = false, version = version)
+        }
+    }
+
+    fun loadMore() {
         val snapshot = _uiState.value
         val query = snapshot.query.trim()
-        if (query.isEmpty() || snapshot.isLoading || snapshot.loadingMore || append && snapshot.nextCursor == null) return
-        request?.cancel(); val version = ++generation
-        _uiState.value = snapshot.copy(isLoading = !append, loadingMore = append, hasSearched = true, error = null)
+        val cursor = snapshot.nextCursor ?: return
+        if (query.isEmpty() || snapshot.isLoading || snapshot.loadingMore) return
+        val version = ++generation
+        request?.cancel()
+        _uiState.value = snapshot.copy(loadingMore = true, error = null)
         request = viewModelScope.launch {
-            try {
-                val page = repository.feedPage(FeedQuery(limit = 20, campus_id = campusId, search = query, cursor = if (append) snapshot.nextCursor else null))
-                if (version != generation) return@launch
-                _uiState.value = _uiState.value.copy(posts = (if (append) snapshot.posts + page.posts else page.posts).distinctBy { it.id }, nextCursor = page.next_cursor, isLoading = false, loadingMore = false)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (failure: Exception) { if (version == generation) _uiState.value = _uiState.value.copy(isLoading = false, loadingMore = false, error = failure.toCommunityMessage("搜索失败")) }
+            executeSearch(query = query, cursor = cursor, append = true, version = version)
+        }
+    }
+
+    private suspend fun executeSearch(query: String, cursor: String?, append: Boolean, version: Int) {
+        val snapshot = _uiState.value
+        try {
+            val page = repository.feedPage(
+                FeedQuery(limit = 20, campus_id = campusId, search = query, cursor = cursor),
+            )
+            if (version != generation) return
+            _uiState.value = _uiState.value.copy(
+                posts = (if (append) snapshot.posts + page.posts else page.posts).distinctBy { it.id },
+                nextCursor = page.next_cursor,
+                isLoading = false,
+                loadingMore = false,
+                hasSearched = true,
+            )
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            if (version == generation) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    loadingMore = false,
+                    error = failure.toCommunityMessage("搜索失败"),
+                )
+            }
         }
     }
 }
@@ -115,13 +162,15 @@ fun CommunitySearchScreen(
     ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     LeafySecondaryScaffold(title = "搜索社区", onBack = onBack) { contentModifier ->
         Column(modifier = contentModifier.fillMaxSize().padding(horizontal = LeafySpacing.card)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LeafyTextField(
                     value = state.query,
                     onValueChange = viewModel::updateQuery,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
                     singleLine = true,
                     placeholder = { Text("搜索帖子标题和正文") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),

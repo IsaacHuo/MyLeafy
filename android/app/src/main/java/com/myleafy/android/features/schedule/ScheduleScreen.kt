@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.Add
@@ -95,6 +96,7 @@ internal enum class ScheduleSection(val label: String) {
 
 @Composable
 fun ScheduleScreen(
+    onBack: (() -> Unit)? = null,
     onFeatureClick: (FeatureDestination) -> Unit = {},
     initialSection: String? = null,
     initialEventId: String? = null,
@@ -166,6 +168,13 @@ fun ScheduleScreen(
         topBar = {
             LeafyRootTopBar(
                 title = "日迹",
+                navigationIcon = onBack?.let {
+                    {
+                        LeafyActionIconButton(onClick = it) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    }
+                },
                 actions = {
                     Box {
                         LeafyActionIconButton(onClick = { menuExpanded = true }) {

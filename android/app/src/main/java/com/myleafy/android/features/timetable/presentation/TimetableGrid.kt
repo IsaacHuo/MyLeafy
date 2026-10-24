@@ -58,7 +58,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.math.roundToInt
 
-private const val PeriodCount = 13
 private val GridCellShape = RoundedCornerShape(LeafyTimetableTokens.cellCornerRadius)
 
 /**
@@ -101,12 +100,13 @@ fun TimetableGrid(
     BoxWithConstraints(modifier = modifier.fillMaxSize().testTag("timetable-grid")) {
         val visibleDayCount = if (showWeekends) 7 else 5
         val contentWidth = maxWidth
+        val periodCount = TimetablePeriodSchedule.slots.size.coerceAtLeast(1)
         // The timetable is a single viewport: rows compress to the available height
         // instead of turning the whole grid into a vertically scrolling surface.
-        val minimumBodyHeight = LeafyTimetableTokens.minimumPeriodRowHeight * PeriodCount
-        val periodRowHeight = ((maxHeight - headerHeight).coerceAtLeast(minimumBodyHeight) / PeriodCount)
+        val minimumBodyHeight = LeafyTimetableTokens.minimumPeriodRowHeight * periodCount
+        val periodRowHeight = ((maxHeight - headerHeight).coerceAtLeast(minimumBodyHeight) / periodCount)
             .coerceAtMost(LeafyTimetableTokens.maximumPeriodRowHeight)
-        val contentHeight = headerHeight + periodRowHeight * PeriodCount
+        val contentHeight = headerHeight + periodRowHeight * periodCount
         Box(
             modifier = Modifier
                 .fillMaxSize(),
@@ -125,6 +125,7 @@ fun TimetableGrid(
                     onItemClick = onItemClick,
                     headerHeight = headerHeight,
                     periodRowHeight = periodRowHeight,
+                    periodCount = periodCount,
                     visibleDayCount = visibleDayCount,
                     axisWidth = axisWidth,
                     background = background,
@@ -140,10 +141,11 @@ fun TimetableGrid(
 internal fun timetableAxisWidth(): Dp {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val periodWidth = (1..PeriodCount).maxOf {
+    val periodCount = TimetablePeriodSchedule.slots.size.coerceAtLeast(1)
+    val periodWidth = (1..periodCount).maxOf {
         measurer.measure(it.toString(), LeafyTimetableType.axisPeriod).size.width
     }
-    val timeWidth = (1..PeriodCount).flatMap { period ->
+    val timeWidth = (1..periodCount).flatMap { period ->
         TimetablePeriodSchedule.slot(period)?.let { listOf(it.startText, it.endText) }.orEmpty()
     }.maxOf { measurer.measure(it, LeafyTimetableType.axisTime).size.width }
     return maxOf(LeafyTimetableTokens.axisWidth, with(density) { maxOf(periodWidth, timeWidth).toDp() } + 6.dp)
@@ -182,6 +184,7 @@ private fun TimetableGridLayout(
     onItemClick: (TimetableGridItem) -> Unit,
     headerHeight: Dp,
     periodRowHeight: Dp,
+    periodCount: Int,
     visibleDayCount: Int,
     axisWidth: Dp,
     background: TimetableBackgroundSettings,
@@ -206,7 +209,7 @@ private fun TimetableGridLayout(
                     modifier = Modifier.layoutId(GridSlot.Header(day)),
                 )
             }
-            for (period in 1..PeriodCount) {
+            for (period in 1..periodCount) {
                 if (axisWidth > 0.dp) PeriodAxis(
                     period = period,
                     rowHeight = periodRowHeight,
@@ -320,13 +323,14 @@ private fun TimetableGridLayout(
 internal fun TimetableFixedAxis(month: Int, modifier: Modifier = Modifier) {
     val header = timetableHeaderHeight()
     BoxWithConstraints(modifier.width(timetableAxisWidth()).testTag("timetable-fixed-axis")) {
-        val row = ((maxHeight - header).coerceAtLeast(LeafyTimetableTokens.minimumPeriodRowHeight * PeriodCount) / PeriodCount)
+        val periodCount = TimetablePeriodSchedule.slots.size.coerceAtLeast(1)
+        val row = ((maxHeight - header).coerceAtLeast(LeafyTimetableTokens.minimumPeriodRowHeight * periodCount) / periodCount)
             .coerceAtMost(LeafyTimetableTokens.maximumPeriodRowHeight)
         Layout(content = {
             Box(Modifier.testTag("timetable-month").semantics(mergeDescendants = true) {}, contentAlignment = Alignment.Center) {
                 Text("${month}月", style = LeafyTimetableType.axisTime)
             }
-            for (period in 1..PeriodCount) PeriodAxis(period, row)
+            for (period in 1..periodCount) PeriodAxis(period, row)
         }) { children, constraints ->
             val headerPx = header.roundToPx()
             val geometry = TimetableGridGeometry(constraints.maxHeight, headerPx, LeafyTimetableTokens.maximumPeriodRowHeight.toPx())

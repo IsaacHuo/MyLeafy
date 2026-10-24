@@ -1,6 +1,6 @@
 # Current State
 
-Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development entitlement verified in signed app; repaired iCloud runtime acceptance pending)
+Last verified: 2026-10-23 (Android three-tab/parity batch verified on API 36 emulator and Xiaomi device; iOS 17 signed device build from 2026-10-16; repaired iCloud runtime acceptance pending)
 
 工程与文档核对：2026-10-23。上述 Last verified 仍保留原有 iOS 签名/真机范围，不代表本轮重新验收云同步或产品发布。跨端主要能力、独立验证及交付差异见 [PLATFORMS](PLATFORMS.md)。
 
@@ -23,6 +23,8 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 - **当前主线全量整合（2026-10-23）**：收齐 Android 对齐分支 `07fc257`、iOS Ponytail 审计及编辑器收尾 `39de81c`、代码规范化 `6ca686c`、iOS 3.2.6 / build 1 与本地化 `4dad1d6`，以及 Room 已发行 schema 升级、后台管理员名称、用户举报处理、日程时间文案、staging 重试和公开发行路由增量。旧课表背景和学校申请修复已被当前主线覆盖，未重新引入旧版本或已删除遥测。冲突按功能增量合并，双端源码重新按同一规则排版；额外拆分了现有高度断言，避免已知 Swift 类型推断超时。按所有者最新要求，本次只做合并、格式和静态检查，不重复构建、XCTest、Android 或浏览器测试；各独立分支的历史验证不能当作最终组合的运行通过。正式分发与生产部署仍保留各自人工审批。
 
 - **双端代码规范与仓库协作**：SwiftFormat 0.64.1、Spotless 8.10.4 / ktlint 1.8.0 已固定，全部自有 Swift/Kotlin/Gradle 源码完成纯排版收敛，风格检查进入现有 CI result；根配置变更具有双端范围回归。规范化独立分支曾完成 iOS 17 最低目标与 Android Debug 本地构建，199 个 Swift 修改文件的编译器解析字符串值一致；该记录不覆盖后续业务分支合并，最终组合验证边界见上文，不替代真机/升级验收。AGENTS / CONTRIBUTING、模板、发布索引与跨端状态分工统一；后续验收/源码追溯/日迹组件拆分分别登记在 [#36–39](https://github.com/IsaacHuo/MyLeafy/issues?q=is%3Aissue+is%3Aopen)。本轮不改变业务、数据库、版本或生产审批。
+
+- **Android 三根 Tab 与校园入口（2026-10-23）**：根导航收敛为 `课表 / 校园 / 我的`，与 iOS 一致；社区与日迹移入校园一级领域「校园生活」，不再占用根 Tab。社区仍按 capability 门控，免登录只显示日迹记录；社区/日迹作为二级页面保留返回箭头，底部导航隐藏，深链与通知路由保持可用。社区 TLS 主机名校验失败（校园网返回 `*.bjfu.edu.cn` 证书）现在停止无意义重连并显示可操作提示，不再停留在加载态，TLS 校验未放宽。同一批次补齐个人资料与关于页：真实头像、昵称/简介 8/80 限制与计数、找到我卡片、五个 MyLeafy 主题、权限实时状态、免登录退出文案与 iOS 对齐的分组标签；社区支持评论回复/点赞、输入防抖搜索、帖子深链分享、卡片/评论头像、置顶标识与相对日期。手机校园页取消横向领域胶囊，改为按领域分组的纵向全量工具列表，工具一次点击直达；平板保留侧栏 + 内容。社区卡片日期改为 `M/d`，赞/评论合并为同一行并使用紧凑图标。资料页先显示本机身份与设置，不阻塞等待社区资料。个人页「数据」新增「课表设置」，可编辑学年/学期标签、第一周星期一和 1–24 节作息，固定 20 周；设置持久化到 DataStore，并驱动课表网格、周次投影和课程详情。课程详情按 iOS 重新分层：信息卡、备注卡、提醒卡，统一字号与全宽按钮。TabBar 玻璃实验已回退，保留原胶囊承托。验证：Spotless、JVM 191 项、lint、release 编译、Roborazzi verify 通过；API 36 模拟器导航/校园定向 instrumented 用例通过；全量 50 项仍有 1 项既有 IME 键盘用例在当前模拟器超时，与本轮 UI 改动无关。
 
 - **Android 与 iOS 对齐优化（2026-10-23）**：本轮只改 Android，未改任何请求范围或产品能力。账号密码链路：备份规则排除 Keystore 密文、解密失败与“无凭据”分离、凭据/登出改为持久写、改学号清空旧密码、登录成功与自动填充保存解耦、验证码在回前台/网络恢复时重试、登录表单支持 Autofill 并收敛为单卡分组。课表拉取：可信空结果不再直接覆盖已有课表、同步过程改为步骤卡（运行/完成/失败原因）、下拉刷新改为覆盖层不再顶动网格、首次同步复用步骤模型、课前提醒排期移出主线程并只取消过期闹钟、教务请求可取消。视觉：统一 24dp 卡片 + 1px 描边 + 浅色投影、页面主题渐变、课程块 12dp + 今日描边、课表色改为同基色明度阶梯、中性色统一为绿灰族、alpha 语义 token 化、暗色 card/modal 层级分离。其他：评论 cursor 分页与作者昵称、Feed 进程内缓存与刷新深度、通知 work 先入队后清理、日迹读取失败保留上次数据、正文 `#标签` 生效、图片继续缩尺寸、点赞/收藏改用最新状态、删除日程级联提醒、CI 增加 instrumented job 与 release 编译/lint、release 开启 R8/shrinkResources。验证：JVM 186 项（179 通过、7 外部探测跳过）、lint 0 error、73 张 Roborazzi 基线重录并 verify 通过、R8 release 打包（临时测试签名）通过、isolated API 36 模拟器 instrumented 47 项全部通过；新增 CI instrumented job 待远端首次执行。真机、Release 帧时与基线 profile 未做。
 
@@ -56,7 +58,7 @@ Last verified: 2026-10-16 (iOS 17 signed device build; CloudKit Development enti
 
 - **iOS 工程可靠性**：持久库失败保留原文件并进入恢复页，显式重建校验完整备份；身份/门户/会话代次隔离学校请求与预取，保存失败撤销本次修改，文件删除延迟清理，学习资料批次一次提交且可安全重试，考试异常行拒绝整批覆盖，社区发布持久化后才入队并绑定身份，录音权限迟到失效。单测宿主不再挂载生产根界面，默认正式传输拒绝测试请求。iOS 17 最低目标构建通过，完整离线 XCTest 602 项中 601 通过、1 跳过；性能候选尚无 ETTrace、memgraph 或真机测量结论。
 
-- **Android 现有功能 UI 打磨**：课表周次入口、日期换排、课程文字分配、轻网格与累计像素对齐已落地；校园时区分钟更新只在 RESUMED 收集，恢复/午夜即时校准。短屏大字号先省略结束时间，连开始时间也放不下时保留节次与完整朗读。共享字体、分组、提示、深色弹层推广至五个根页面；成绩坐标/单点/零值、横滑柱图、综素成对字段、教学/场馆展开行、体测分秒提示、日迹卡片与社区辅助信息已调整。Room v9、API、身份隔离与业务计算未变。详见 `docs/design/android-experience-polish.md`。
+- **Android 现有功能 UI 打磨**：课表周次入口、日期换排、课程文字分配、轻网格与累计像素对齐已落地；校园时区分钟更新只在 RESUMED 收集，恢复/午夜即时校准。短屏大字号先省略结束时间，连开始时间也放不下时保留节次与完整朗读。共享字体、分组、提示、深色弹层推广至三个根页面；成绩坐标/单点/零值、横滑柱图、综素成对字段、教学/场馆展开行、体测分秒提示、日迹卡片与社区辅助信息已调整。Room v9、API、身份隔离与业务计算未变。详见 `docs/design/android-experience-polish.md`。
 - **本轮验证**：JVM 182 项中 175 通过、7 外部探测跳过；Debug/测试 APK 构建与 lint 通过，118 warning、2 hint、0 error。Roborazzi 63 项通过，61 张基线验证通过；44 张原基线改变、9 张新增，变化图片已审阅。只读隔离 API 36 模拟器完整 45 项中 44 通过；场馆标题与地点同文导致测试定位歧义，改为可点击标题后该项复跑通过。GPU 模拟器同数据前后冷启动 5 次中位数 2800/2807ms；自动化帧时只作诊断，不据此宣称真机性能提升。候选版本为 1.2.3/code 7，正式版本仍为用户已发布的 1.2.2/code 6。
 - **大字号编辑补充**：同一隔离模拟器临时使用系统 200% 字号，课程备注、实际键盘避让与未保存退出流程单项通过，检查后恢复原字号。未穷举各页全部字号组合，真机 TalkBack、通知实际投递、密集课表 Release 帧时和同期 iOS 真机比较仍待现场核验。
 

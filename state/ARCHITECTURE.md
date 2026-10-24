@@ -234,7 +234,7 @@ React 运营后台 → Pages /api/admin/*（HttpOnly Cookie、CSRF、Origin）
 - 层级详情使用 `NavigationStack`；轻量编辑/筛选/详情使用 sheet。
 - `AppNavigationCoordinator` 统一处理根 Tab、校园领域、共享课表邀请码、社区帖子、Widget 深链、日程报告入口。
 - “我的”的课表与偏好入口使用 `ProfileRoute` 值导航（同步、共享课表、个性化、课表背景），由同一 NavigationStack 映射目的地。`ProfileSettingsRows` / `ProfileMenuRow` / 周末开关采用具名视图类型，不在根列表泛型中嵌入完整设置页目标；根路径清空后清除上次邀请的暂存值。启动与资料导航阶段日志使用 `Startup` / `ProfileNavigation` 类别。
-- Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 社区 / 日迹 / 校园 / 我的`。启动先恢复本机身份；无身份显示「北京林业大学 / 免登录入口」，完成选择后进入课表。免登录仍保留五个根 Tab，社区只展示门槛说明，不初始化社区请求。根目的地在小于 600dp 时使用轻透圆角底部导航，宽屏使用 Material 3 Adaptive Navigation Suite 的 Navigation Rail，二级目的地隐藏根导航；两种导航复用目的地集合、选择状态与状态恢复。根 Tab 以课表路由作为返回栈锚点，首次选择入口后也保留各 Tab 的状态。
+- Android 使用 `MyLeafyNavHost` + `RootTab` 呈现 `课表 / 校园 / 我的`（与 iOS 根导航一致）。启动先恢复本机身份；无身份显示「北京林业大学 / 免登录入口」，完成选择后进入课表。校园社区与日迹记录作为校园一级领域「校园生活」中的入口，不再占用根 Tab；免登录仍保留三个根 Tab，校园生活只显示日迹记录，不初始化社区请求。根目的地在小于 600dp 时使用圆角底部导航，校园页采用按领域分组的纵向全量工具列表；宽屏使用 Material 3 Adaptive Navigation Suite 的 Navigation Rail，校园页为侧栏 + 内容。二级目的地隐藏根导航；两种导航复用目的地集合、选择状态与状态恢复。根 Tab 以课表路由作为返回栈锚点，首次选择入口后也保留各 Tab 的状态。个人页「课表设置」可编辑学年/学期标签、第一周星期一和 1–24 节作息；固定 20 周，设置只影响显示、周次投影和网格节次，不改变已拉取课程的存储学期。设置持久化在 DataStore，并由 `SemesterConfig.applyUserSettings` / `TimetablePeriodSchedule.apply` 同步到运行态。
 - Android 根窗口与导航外层明确绘制主题背景，系统导航栏透明且图标随应用主题变化，圆角导航周边不暴露黑色窗口底。课表根目的地启用个性化背景时，`TimetableNavigationScaffold` 在根展示槽一次绘制整页背景，贯通系统栏后方、顶栏、时间轴与轻透底栏/Rail；其余 Tab、二级目的地和关闭背景时恢复默认表面。顶部/左缘/底部以连续主题渐变保护文字，详情 Sheet、菜单和对话框保留独立表面。根 Tab 不执行横向整页动画，二级详情进场约 240ms。
 - Android 二级真实页面与 `FeatureDestination` 占位页面统一使用 48dp 紧凑返回式 Top App Bar。占位页只表达未接入状态，不生成业务数据；资料编辑、缓存同步、个性化、帮助中心、权限说明、反馈、关于与内置校历均为真实页面。
 - Android `MyLeafyTheme` 是 Compose 视觉语义的单一入口：`LeafyTypography`、`LeafySpacing`、`LeafyElevation`、`LeafyIconSize`、`LeafyMotion`、`LeafySurfaceColors` 与 `LeafyCourseColors` 由共享组件消费；progress/gesture 等状态值使用语义 Token，课表几何、校园断点和验证码尺寸使用功能级 Token。根壳拥有导航区域 Insets，页面 Scaffold 拥有状态栏/TopBar Insets，编辑表单与 Sheet 拥有 navigation bar/IME Insets；应用 padding 后必须消费，避免系统栏遮挡或重复留白。课表照片由应用私有文件读取，显示中的 Bitmap 所有权交给 Compose/运行时，不在 composable disposal 中手动回收。
@@ -295,7 +295,7 @@ Widget 文案显式读取 App Group 所选语言的资源；时间文本使用 2
 
 - iOS 根导航顺序固定为 `课表 / 校园 / 我的`；底部 Tab 使用原生 `TabView`，不叠加透明度伪造淡入过渡；iOS 26 使用系统 Liquid Glass 增强，低版本保留稳定回退。校园左栏从校园社区、日迹记录、学校教学开始，后续领域沿用原顺序和能力规则。社区入口按校园 capability 隐藏，无社区时默认日迹。
 - iOS 免登录（guest）入口完全本地：不创建 MyLeafy 账号，不连接 MyLeafy 云端后台；可主动开启 Apple iCloud 私有同步，未开启时完全本地；初始日期使用 App 内置默认（1–20 周容器），课程、成绩与考试由用户手动添加/导入；随记、日程等按 `guest` 身份作用域存于本机，退出登录后数据保留。
-- Android 免登录不建立学校/后台会话或订阅；匿名 Cloudflare 版本检查与用户主动下载是版本管理联网例外，不上传身份和本地记录。Android 的 guest/无社区 capability 身份仍显示全部五个根入口，但社区页只展示门槛说明，不得初始化后台客户端、订阅或教务同步。Android 个人日程同时呈现在课表与日迹列表，可导出 ICS，但不申请系统日历写入权限。
+- Android 免登录不建立学校/后台会话或订阅；匿名 Cloudflare 版本检查与用户主动下载是版本管理联网例外，不上传身份和本地记录。Android 的 guest/无社区 capability 身份仍显示三个根入口，校园「校园生活」只保留日迹入口，社区只展示门槛说明，不得初始化后台客户端、订阅或教务同步。Android 个人日程同时呈现在课表与日迹列表，可导出 ICS，但不申请系统日历写入权限。
 - Android 窗口宽度只能改变根导航和校园领域选择的 chrome；不得改变 `RootTab` 顺序、默认目的地、深链、返回栈、状态恢复、capability 门控或任何业务数据请求。
 - 校园右侧的普通内容/详情保持透明导航背景，iOS 26+ 移除正文上下的额外滚动边缘遮罩；返回、刷新和标题常驻，按钮与 Tab Bar 保留自身玻璃表面。社区整组头部、日迹顶部控件、教学与培养分区切换条随纵向浏览方向显隐，12pt 阈值，保留布局占位；回顶、切换分区或返回时显示，非用户滚动和回弹不触发。隐藏控件关闭交互和辅助功能访问。其他 Tab 和弹窗不使用这一校园样式。
 - 日迹顶部直接提供 `随记 / 日程 / 推送`；首次进入默认日程，校园入口和根 Tab 往返保留本次分区选择，明确深链优先；侧栏“记录”分组把 `记录日迹` 放在 `每日回顾` 上方；日程使用个人日程列表，不另设自然年周视图。

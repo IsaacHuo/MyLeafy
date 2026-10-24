@@ -6,8 +6,14 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.myleafy.android.features.timetable.domain.TimetablePeriodSchedule
+import com.myleafy.android.features.timetable.domain.TimetableUserSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private val Context.settingsDataStore by preferencesDataStore(name = "myleafy_settings")
 
@@ -19,6 +25,7 @@ data class Settings(
     val textScale: String = "system",
     val hideWeekends: Boolean = false,
     val timetableBackground: TimetableBackgroundSettings = TimetableBackgroundSettings(),
+    val timetableSettings: TimetableUserSettings = TimetableUserSettings(),
 )
 
 data class TimetableBackgroundSettings(
@@ -40,6 +47,8 @@ data class TimetableBackgroundSettings(
  */
 class SettingsStore(private val context: Context) {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     val settings: Flow<Settings> = context.settingsDataStore.data.map { prefs ->
         Settings(
             campusId = prefs[Keys.CAMPUS_ID] ?: DEFAULT_CAMPUS_ID,
@@ -59,6 +68,7 @@ class SettingsStore(private val context: Context) {
                 overlayPercent = prefs[Keys.BACKGROUND_OVERLAY] ?: 30,
                 courseOpacityPercent = prefs[Keys.BACKGROUND_COURSE_OPACITY] ?: 92,
             ),
+            timetableSettings = decodeTimetableSettings(prefs[Keys.TIMETABLE_SETTINGS]),
         )
     }
 
@@ -100,11 +110,49 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setTimetableSettings(value: TimetableUserSettings) {
+        require(value.isValid) { value.validationError ?: "课表设置无效" }
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.TIMETABLE_SETTINGS] = encodeTimetableSettings(value)
+        }
+    }
+
     suspend fun clearIdentity() {
         context.settingsDataStore.edit { prefs ->
             prefs.remove(Keys.EDU_ID)
         }
     }
+
+    private fun encodeTimetableSettings(value: TimetableUserSettings): String =
+        json.encodeToString(
+            StoredTimetableSettings(
+                academicYear = value.academicYear,
+                term = value.term,
+                firstMonday = value.firstMonday.toString(),
+                periods = value.periods,
+            ),
+        )
+
+    private fun decodeTimetableSettings(raw: String?): TimetableUserSettings {
+        if (raw.isNullOrBlank()) return TimetableUserSettings()
+        return runCatching {
+            val stored = json.decodeFromString<StoredTimetableSettings>(raw)
+            TimetableUserSettings(
+                academicYear = stored.academicYear,
+                term = stored.term,
+                firstMonday = java.time.LocalDate.parse(stored.firstMonday),
+                periods = stored.periods.ifEmpty { TimetablePeriodSchedule.defaultSlots },
+            ).takeIf { it.isValid }
+        }.getOrNull() ?: TimetableUserSettings()
+    }
+
+    @Serializable
+    private data class StoredTimetableSettings(
+        val academicYear: Int,
+        val term: Int,
+        val firstMonday: String,
+        val periods: List<TimetablePeriodSchedule.Slot>,
+    )
 
     private object Keys {
         val CAMPUS_ID = stringPreferencesKey("campus_id")
@@ -122,6 +170,7 @@ class SettingsStore(private val context: Context) {
         val BACKGROUND_BLUR = intPreferencesKey("timetable_background_blur")
         val BACKGROUND_OVERLAY = intPreferencesKey("timetable_background_overlay")
         val BACKGROUND_COURSE_OPACITY = intPreferencesKey("timetable_background_course_opacity")
+        val TIMETABLE_SETTINGS = stringPreferencesKey("timetable_settings")
     }
 
     private companion object {

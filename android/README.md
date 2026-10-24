@@ -8,7 +8,7 @@ Kotlin、Compose / Material 3、Room、DataStore、Navigation Compose、WorkMana
 
 `app/src/main/java/com/myleafy/android/` 下：
 
-- `navigation/`：RootTab、MyLeafyNavHost 与深链；课表、社区、日迹、校园、我的五个根入口。
+- `navigation/`：RootTab、MyLeafyNavHost 与深链；课表、校园、我的三个根入口，社区与日迹从校园「校园生活」进入。
 - `features/`：auth、timetable、community、schedule、campus、profile。
 - `core/`：校园作用域、Room、依赖、网络、偏好和凭据。
 - `parsers/`、`services/`、`shared/model/`：学校 HTML 解析、学校/Cloudflare 服务与 DTO。

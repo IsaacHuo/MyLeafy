@@ -35,7 +35,7 @@ git     → What changed.                       （普通改动历史）
 
 | 文档 | 内容 |
 |---|---|
-| [App 产品设计](design/app-design.md) | 产品目标、iOS 三 Tab / Android 五 Tab、核心页面和全局状态 |
+| [App 产品设计](design/app-design.md) | 产品目标、三 Tab 根导航、核心页面和全局状态 |
 | [UI 风格规范](design/ui-style-guide.md) | 主题、字体、间距、白色日迹卡片、Tag 胶囊、评分星级、组件、动效和可访问性 |
 | [UI 实现总结](design/ui-implementation.md) | 当前 iOS 页面与组件的设计实现 |
 
