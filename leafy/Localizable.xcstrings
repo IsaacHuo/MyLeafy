@@ -1890,19 +1890,19 @@
         }
       }
     },
-    "%d–%02d · 第%d学期 · 首周%@" : {
+    "%@ · 第%d学期 · 开学日%@" : {
       "extractionState" : "manual",
       "localizations" : {
         "en-US" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$d–%2$02d · Term %3$d · Week 1: %4$@"
+            "value" : "%1$@ · Term %2$d · Starts %3$@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%d–%02d · 第%d学期 · 首周%@"
+            "value" : "%@ · 第%d学期 · 开学日%@"
           }
         }
       }

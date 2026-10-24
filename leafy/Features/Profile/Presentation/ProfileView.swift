@@ -511,9 +511,10 @@ struct ProfileView: View {
     private var semesterMenuValue: String {
         let settings = menuTimetableSettings
         let parts = UserTimetableSettings.calendar.dateComponents([.month, .day], from: settings.firstMonday)
-        let firstWeek = String(format: "%d/%d", parts.month ?? 0, parts.day ?? 0)
-        return L10n.text("%d–%02d · 第%d学期 · 首周%@", language: leafyLanguage,
-                         settings.academicYear, (settings.academicYear + 1) % 100, settings.term, firstWeek)
+        let startDate = String(format: "%d/%d", parts.month ?? 0, parts.day ?? 0)
+        let academicYear = String(format: "%02d-%02d", settings.academicYear % 100, (settings.academicYear + 1) % 100)
+        return L10n.text("%@ · 第%d学期 · 开学日%@", language: leafyLanguage,
+                         academicYear, settings.term, startDate)
     }
 
     private var iCloudMenuValue: String {
